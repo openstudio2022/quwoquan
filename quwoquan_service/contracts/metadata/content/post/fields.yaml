@@ -101,6 +101,16 @@ entities:
         tag_ref: true
         description: 路径制 tagRef 列表；唯一真相源为数据工程 publish/v1/tags（四分组路径 id），已废弃扁平 tag_taxonomy.yaml
 
+      - name: entityRefs
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: 关联的实体主页 id 列表（地点/事物/机构等），承载 post↔entity 的交集 content 维度关联
+
       - name: mediaUrls
         type: "[]string"
         constraints: [NULLABLE]

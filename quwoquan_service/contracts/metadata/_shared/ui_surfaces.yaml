@@ -257,3 +257,32 @@ surfaces:
     operation_ids:
       - GetHomepageDetail
       - CreateHomepageStatusReport
+
+  - id: circleDetail
+    owner: circle
+    route_id: circleDetail
+    path_template: /circle/{id}
+    description: 圈子/组织详情壳层（统一对象页 + 你认识的人有 N 个在这交集卡）
+    operation_ids:
+      - GetCircle
+      - GetCircleFeed
+      - ListCircleMembers
+      - ListCircleGroups
+      - GetCircleStats
+      - JoinCircle
+      - LeaveCircle
+
+  - id: userProfile
+    owner: user
+    route_id: userProfile
+    path_template: /user/{username}
+    description: 用户主页壳层（我的 / TA的，统一对象页 + 你们的交集卡）
+    operation_ids:
+      - GetUserProfile
+      - GetSubAccountProfile
+      - ListUserWorks
+      - ListUserLifeItems
+      - ListUserLikes
+      - GetRelationshipCapability
+      - FollowUser
+      - UnfollowUser

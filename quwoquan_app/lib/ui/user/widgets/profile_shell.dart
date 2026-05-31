@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +8,9 @@ import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart'
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -23,11 +24,16 @@ import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_header.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_resonance_card.dart';
+import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_stats_row.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
 
+part 'profile_shell_builders.dart';
+
+/// 用户主页壳层（V3 统一对象页骨架 ObjectPageShell + full 吸顶模式）。
+/// 几何/滚动/吸顶由 ObjectPageShell 收口；本壳提供用户主页业务插槽与二级页签。
+/// 历史残留 ProfileResonanceCard(假数据 resonanceCount:128) 已移除；
+/// 统一交集卡 ObjectIntersectionCard 待 profile detail intersectionReasons 真实下发后接入（会话5）。
 class ProfileShell extends ConsumerStatefulWidget {
   const ProfileShell({
     super.key,
@@ -53,38 +59,15 @@ class ProfileShell extends ConsumerStatefulWidget {
 class _ProfileShellState extends ConsumerState<ProfileShell> {
   static const double _profileCardRadius = AppSpacing.radiusTwenty;
   static const double _profileSurfaceBridge = _profileCardRadius;
-  late final ScrollController _scrollController;
-  final GlobalKey _summarySectionKey = GlobalKey();
-  final GlobalKey _primaryTabKey = GlobalKey();
   final GlobalKey _worksSecondaryTabKey = GlobalKey();
   final GlobalKey _interactionSecondaryTabKey = GlobalKey();
 
   late String _activeTabId;
-  double _pullOffset = 0;
-  double _rawPullOffset = 0;
-  double _scrollOffset = 0;
-  double _summarySectionHeight = 0;
 
   @override
   void initState() {
     super.initState();
     _activeTabId = UserProfileUIConfig.defaultTabId;
-    _scrollController = ScrollController()..addListener(_onScrollChanged);
-  }
-
-  @override
-  void dispose() {
-    _scrollController
-      ..removeListener(_onScrollChanged)
-      ..dispose();
-    super.dispose();
-  }
-
-  void _onScrollChanged() {
-    if (!_scrollController.hasClients) return;
-    final nextOffset = max(0.0, _scrollController.offset);
-    if ((nextOffset - _scrollOffset).abs() < 0.5) return;
-    setState(() => _scrollOffset = nextOffset);
   }
 
   void _showGreetDialog(BuildContext context) {
@@ -179,6 +162,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     return true;
   }
 
+  /// 二级页签是否在可视区（保守口径：viewport 顶部恒减去一级吸顶页签高度）。
+  /// 几何已统一到 ObjectPageShell，本判断仅依赖二级页签 renderObject 实际位置。
   bool _isSecondaryTabVisible(GlobalKey key) {
     final renderObject = key.currentContext?.findRenderObject();
     if (renderObject is! RenderBox ||
@@ -188,10 +173,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     }
     final top = renderObject.localToGlobal(Offset.zero).dy;
     final bottom = top + renderObject.size.height;
-    final pinnedPrimaryInset = _primaryTabPinnedProgress(context) > 0.01
-        ? _primaryTabBarHeight(context)
-        : 0.0;
-    final viewportTop = _toolbarExtent(context) + pinnedPrimaryInset;
+    final viewportTop = _toolbarExtent(context) + _primaryTabBarHeight(context);
     final viewportBottom =
         MediaQuery.sizeOf(context).height -
         MediaQuery.viewPaddingOf(context).bottom;
@@ -223,160 +205,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       default:
         return InteractionSubTab.likes;
     }
-  }
-
-  double _springDampedOffset(double raw, double maxPull) {
-    if (raw <= 0 || maxPull <= 0) return 0;
-    final damping = maxPull / 1.2;
-    return (maxPull * (1 - exp(-raw / damping))).clamp(0.0, maxPull);
-  }
-
-  bool _handleScrollNotification(ScrollNotification notification) {
-    if (notification.metrics.axis != Axis.vertical) {
-      return false;
-    }
-    if (notification is ScrollUpdateNotification ||
-        notification is OverscrollNotification ||
-        notification is ScrollEndNotification) {
-      final pixels = notification.metrics.pixels;
-      if (pixels < 0) {
-        final maxPull =
-            _maxStretchBackgroundHeight(context) -
-            _baseBackgroundHeight(context);
-        final nextRaw = -pixels;
-        final nextPull = _springDampedOffset(nextRaw, maxPull);
-        if ((nextRaw - _rawPullOffset).abs() < 0.5 &&
-            (nextPull - _pullOffset).abs() < 0.5) {
-          return false;
-        }
-        setState(() {
-          _rawPullOffset = nextRaw;
-          _pullOffset = nextPull;
-        });
-      } else if (_rawPullOffset != 0 || _pullOffset != 0) {
-        setState(() {
-          _pullOffset = 0;
-          _rawPullOffset = 0;
-        });
-      }
-    }
-    return false;
-  }
-
-  double _baseBackgroundHeight(BuildContext context) {
-    return MediaQuery.sizeOf(context).height *
-        max(
-          UserProfileUIConfig.headerLayout.baseHeightRatio,
-          AppSpacing.profileHeaderBaseHeightRatio,
-        );
-  }
-
-  double _maxStretchBackgroundHeight(BuildContext context) {
-    return MediaQuery.sizeOf(context).height *
-        max(
-          UserProfileUIConfig.headerLayout.maxStretchHeightRatio,
-          AppSpacing.profileHeaderMaxStretchHeightRatio,
-        );
-  }
-
-  double _currentBackgroundHeight(BuildContext context) {
-    final base = _baseBackgroundHeight(context);
-    final maxStretch = _maxStretchBackgroundHeight(context);
-    return (base + _pullOffset).clamp(base, maxStretch);
-  }
-
-  double _backgroundSpacerHeight(BuildContext context) {
-    return max(0.0, _currentBackgroundHeight(context) - _rawPullOffset);
-  }
-
-  double _summaryTopAtRest(BuildContext context) {
-    return _baseBackgroundHeight(context);
-  }
-
-  double _summaryTrackerTop(BuildContext context) {
-    return _backgroundSpacerHeight(context) - _scrollOffset + _rawPullOffset;
-  }
-
-  Widget _buildConstrainedContent(Widget child) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxWidth = AppSpacing.adaptiveFeedMaxContentWidth(
-          constraints.maxWidth,
-        );
-        return Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
-
-  BorderSide _profileSeparatorSide(Color border, {double alpha = 0.16}) {
-    return BorderSide(
-      color: border.withValues(alpha: alpha),
-      width: AppSpacing.hairline,
-    );
-  }
-
-  Widget _buildPrimaryTabContentSurface(
-    BuildContext context, {
-    required Color bg,
-    required Color border,
-    required bool isDark,
-    required double bottomPadding,
-    required double inlinePrimaryTabOpacity,
-  }) {
-    final sectionBorder = border.withValues(alpha: isDark ? 0.22 : 0.08);
-    final sectionShadow = isDark
-        ? AppColors.black.withValues(alpha: 0.12)
-        : AppColors.black.withValues(alpha: 0.03);
-    return Container(
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(_profileCardRadius),
-          bottomRight: Radius.circular(_profileCardRadius),
-        ),
-        border: Border.all(color: sectionBorder, width: AppSpacing.hairline),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: sectionShadow,
-            blurRadius: AppSpacing.twenty,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(height: _profileSurfaceBridge),
-          _buildPrimaryTabBarSurface(
-            bg: bg,
-            border: border,
-            pinned: false,
-            opacity: inlinePrimaryTabOpacity,
-          ),
-          Padding(
-            padding: EdgeInsets.only(bottom: bottomPadding),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: max(
-                  0.0,
-                  MediaQuery.sizeOf(context).height -
-                      _toolbarExtent(context) -
-                      AppSpacing.bottomNavHeight,
-                ),
-              ),
-              child: _buildInlineTabContent(context, isDark),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
@@ -425,40 +253,17 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         _compactToolbarHeight(context);
   }
 
-  double _pinTransitionDistance() {
-    return max(
-      AppSpacing.buttonHeight,
-      ProfileHeader.avatarOuterDiameter * 0.55,
-    );
-  }
-
-  double _primaryTabTopAtRest(BuildContext context) {
-    return _summaryTopAtRest(context) + _summarySectionHeight;
-  }
-
-  double _identityPinnedProgress(BuildContext context) {
-    final avatarBottom =
-        _baseBackgroundHeight(context) +
-        ProfileHeader.avatarOuterDiameter -
-        ProfileHeader.avatarOverlapPx;
-    final threshold = max(0.0, avatarBottom - _toolbarExtent(context));
-    final raw = ((_scrollOffset - threshold) / _pinTransitionDistance()).clamp(
-      0.0,
-      1.0,
-    );
-    return _curveTransform(raw, UserProfileUIConfig.scrollMotion.collapseCurve);
-  }
-
-  double _primaryTabPinnedProgress(BuildContext context) {
-    final threshold = max(
-      0.0,
-      _primaryTabTopAtRest(context) - _toolbarExtent(context),
-    );
-    final raw = ((_scrollOffset - threshold) / _pinTransitionDistance()).clamp(
-      0.0,
-      1.0,
-    );
-    return _curveTransform(raw, UserProfileUIConfig.scrollMotion.collapseCurve);
+  Curve _curveForName(String raw) {
+    switch (raw) {
+      case 'easeOutBack':
+        return Curves.easeOutBack;
+      case 'easeOutCubic':
+        return Curves.easeOutCubic;
+      case 'easeOutQuart':
+        return Curves.easeOutQuart;
+      default:
+        return Curves.easeOut;
+    }
   }
 
   String? _firstNonEmptyString(Iterable<String?> values) {
@@ -471,9 +276,15 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     return null;
   }
 
+  BorderSide _profileSeparatorSide(Color border, {double alpha = 0.16}) {
+    return BorderSide(
+      color: border.withValues(alpha: alpha),
+      width: AppSpacing.hairline,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    _scheduleSectionMeasurement();
     final isDark = ref.watch(isDarkProvider);
     final personaManagementEnabled = ref.watch(
       personaManagementFeatureFlagProvider,
@@ -512,606 +323,63 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       profile?.backgroundUrl,
       ...state.creations.map((post) => post.authorBackgroundUrl),
     ]);
-    final identityPinnedProgress = _identityPinnedProgress(context);
-    final primaryPinnedProgress = _primaryTabPinnedProgress(context);
-    final toolbarBackgroundOpacity = max(
-      identityPinnedProgress,
-      primaryPinnedProgress * 0.82,
-    );
-    final inlinePrimaryTabOpacity = (1 - (primaryPinnedProgress * 6)).clamp(
-      0.0,
-      1.0,
-    );
-    final statusIconsDark = toolbarBackgroundOpacity > 0.12;
-    final bottomPadding = isMine
-        ? AppSpacing.bottomNavHeight + MediaQuery.viewPaddingOf(context).bottom
-        : MediaQuery.viewPaddingOf(context).bottom + AppSpacing.interGroupLg;
+    final bottomPadding = isMine ? AppSpacing.bottomNavHeight : 0.0;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle(
-        statusBarColor: AppColors.transparent,
-        statusBarIconBrightness: statusIconsDark
-            ? (isDark ? Brightness.light : Brightness.dark)
-            : Brightness.light,
-        statusBarBrightness: statusIconsDark
-            ? (isDark ? Brightness.dark : Brightness.light)
-            : Brightness.dark,
-      ),
-      child: AppScaffold(
-        backgroundColor: bg,
-        body: Stack(
-          children: [
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: SizedBox(
-                key: const ValueKey<String>('profile-shell-background-layer'),
-                height: _currentBackgroundHeight(context),
-                child: _buildBackgroundLayer(
-                  context,
-                  backgroundUrl: backgroundUrl,
-                  backgroundColor: backgroundBridge,
-                ),
-              ),
-            ),
-            TabSwipeSwitchRegion(
-              onSwipe: _handleTabSwipe,
-              child: NotificationListener<ScrollNotification>(
-                onNotification: _handleScrollNotification,
-                child: CustomScrollView(
-                  controller: _scrollController,
-                  cacheExtent: MediaQuery.sizeOf(context).height * 4,
-                  physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics(),
-                  ),
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: SizedBox(height: _backgroundSpacerHeight(context)),
-                    ),
-                    SliverToBoxAdapter(
-                      child: _buildConstrainedContent(
-                        _buildSummarySection(
-                          context,
-                          isDark: isDark,
-                          personaManagementEnabled: personaManagementEnabled,
-                          avatarUrl: avatarUrl,
-                          displayName: displayName,
-                          bio: bio,
-                          state: state,
-                          notifier: notifier,
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: _buildConstrainedContent(
-                        Transform.translate(
-                          offset: const Offset(0, -_profileSurfaceBridge),
-                          child: _buildPrimaryTabContentSurface(
-                            context,
-                            bg: profileSurface,
-                            border: border,
-                            isDark: isDark,
-                            bottomPadding: bottomPadding,
-                            inlinePrimaryTabOpacity: inlinePrimaryTabOpacity,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            _buildToolbarOverlay(
-              context,
-              fg: fg,
-              border: border,
-              displayName: displayName,
-              avatarUrl: avatarUrl,
-              opacity: identityPinnedProgress,
-              backgroundOpacity: toolbarBackgroundOpacity,
-            ),
-            Positioned(
-              top: _summaryTrackerTop(context),
-              left: 0,
-              right: 0,
-              child: IgnorePointer(
-                child: _buildConstrainedContent(
-                  SizedBox(
-                    key: const ValueKey<String>('profile-shell-summary-card'),
-                    height: AppSpacing.one,
-                  ),
-                ),
-              ),
-            ),
-            if (UserProfileUIConfig.scrollMotion.primaryTabStickyBelowToolbar)
-              Positioned(
-                top: _toolbarExtent(context),
-                left: 0,
-                right: 0,
-                child: Offstage(
-                  offstage: primaryPinnedProgress <= 0.01,
-                  child: IgnorePointer(
-                    ignoring: primaryPinnedProgress <= 0,
-                    child: Opacity(
-                      opacity: primaryPinnedProgress,
-                      child: _buildConstrainedContent(
-                        _buildPrimaryTabBarSurface(
-                          bg: profileSurface,
-                          border: border,
-                          pinned: true,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
+    return AppScaffold(
+      backgroundColor: bg,
+      body: ObjectPageShell(
+        keyPrefix: 'profile-shell',
+        pinMode: ObjectPagePinMode.full,
+        cardRadius: _profileCardRadius,
+        toolbarContentHeight: _compactToolbarHeight(context),
+        collapseCurve: _curveForName(
+          UserProfileUIConfig.scrollMotion.collapseCurve,
+        ),
+        enablePinnedTabOverlay:
+            UserProfileUIConfig.scrollMotion.primaryTabStickyBelowToolbar,
+        identityPinExtent:
+            ProfileHeader.avatarOuterDiameter - ProfileHeader.avatarOverlapPx,
+        summaryTrackerKey: const ValueKey<String>('profile-shell-summary-card'),
+        onSwipe: _handleTabSwipeDragEnd,
+        backgroundBuilder: (c, pull) => _buildBackgroundLayer(
+          c,
+          backgroundUrl: backgroundUrl,
+          backgroundColor: backgroundBridge,
+        ),
+        summaryBuilder: (c) => _buildSummarySection(
+          c,
+          isDark: isDark,
+          personaManagementEnabled: personaManagementEnabled,
+          avatarUrl: avatarUrl,
+          displayName: displayName,
+          bio: bio,
+          state: state,
+          notifier: notifier,
+        ),
+        toolbarBuilder: (c, identity, bgOpacity) => _buildToolbarOverlay(
+          c,
+          isDark: isDark,
+          fg: fg,
+          border: border,
+          displayName: displayName,
+          avatarUrl: avatarUrl,
+          opacity: identity,
+          backgroundOpacity: bgOpacity,
+        ),
+        tabBarBuilder: (c, pinned, opacity) => _buildPrimaryTabBarSurface(
+          bg: profileSurface,
+          border: border,
+          pinned: pinned,
+          opacity: opacity,
+        ),
+        tabBodyBuilder: (c) => Padding(
+          padding: EdgeInsets.only(bottom: bottomPadding),
+          child: _buildInlineTabContent(c, isDark),
         ),
       ),
     );
   }
 
-  void _scheduleSectionMeasurement() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final summaryHeight =
-          _summarySectionKey.currentContext?.size?.height ?? 0;
-      if ((summaryHeight - _summarySectionHeight).abs() < 0.5) {
-        return;
-      }
-      setState(() {
-        _summarySectionHeight = summaryHeight;
-      });
-    });
-  }
-
-  Widget _buildSummarySection(
-    BuildContext context, {
-    required bool isDark,
-    required bool personaManagementEnabled,
-    required String? avatarUrl,
-    required String displayName,
-    required String? bio,
-    required ProfileState state,
-    required ProfileNotifier notifier,
-  }) {
-    final summarySurface =
-        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
-    final summaryBorder =
-        SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
-    final displayCapability = state.displayCapability;
-    final summaryShadow = isDark
-        ? AppColors.black.withValues(alpha: 0.18)
-        : AppColors.black.withValues(alpha: 0.05);
-    return Container(
-      key: _summarySectionKey,
-      child: Container(
-        decoration: BoxDecoration(
-          color: summarySurface,
-          borderRadius: BorderRadius.circular(_profileCardRadius),
-          border: Border.all(color: summaryBorder, width: AppSpacing.hairline),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: summaryShadow,
-              blurRadius: AppSpacing.twenty,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.feedContentHorizontal(context),
-            0,
-            AppSpacing.feedContentHorizontal(context),
-            AppSpacing.containerLg,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ProfileHeader(
-                isDark: isDark,
-                avatarUrl: avatarUrl,
-                displayName: displayName,
-                bio: bio,
-              ),
-              SizedBox(height: AppSpacing.md),
-              ProfileResonanceCard(
-                mode: widget.mode,
-                isDark: isDark,
-                resonanceCount: 128,
-                onTap: () => context.push(AppRoutePaths.profileResonance),
-              ),
-              SizedBox(height: AppSpacing.sm),
-              ProfileStatsRow(
-                isDark: isDark,
-                profile: state.profile,
-                onStatTap: (type) => context.push(
-                  '${AppRoutePaths.profileStats(type: type)}&userId=${Uri.encodeComponent(widget.userId)}',
-                ),
-              ),
-              SizedBox(height: AppSpacing.sm),
-              if (widget.mode == ProfileMode.other &&
-                  displayCapability == null) ...[
-                SizedBox(height: AppSpacing.xl + AppSpacing.md),
-              ] else ...[
-                ProfileActionBar(
-                  mode: widget.mode,
-                  isDark: isDark,
-                  capability: displayCapability,
-                  onEditProfile: () => context.push(AppRoutePaths.profileEdit),
-                  onManagePersonas: personaManagementEnabled
-                      ? () => context.push(AppRoutePaths.profilePersonas)
-                      : null,
-                  onFollow: notifier.toggleFollow,
-                  onMessage: () =>
-                      context.push(AppRoutePaths.chatDetail(id: widget.userId)),
-                  onGreet: () => _showGreetDialog(context),
-                  onVoiceCall: () => _startCall(context, 'voice'),
-                  onVideoCall: () => _startCall(context, 'video'),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackgroundLayer(
-    BuildContext context, {
-    required String? backgroundUrl,
-    required Color backgroundColor,
-  }) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          bottom: -_profileSurfaceBridge,
-          child: backgroundUrl != null && backgroundUrl.isNotEmpty
-              ? Image.network(
-                  backgroundUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      ColoredBox(color: backgroundColor),
-                )
-              : ColoredBox(color: backgroundColor.withValues(alpha: 0.75)),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          bottom: -_profileSurfaceBridge,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.black.withValues(alpha: 0.08),
-                  AppColors.black.withValues(alpha: 0.04),
-                  backgroundColor.withValues(alpha: 0.12),
-                ],
-                stops: const [0.0, 0.56, 1.0],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildToolbarOverlay(
-    BuildContext context, {
-    required Color fg,
-    required Color border,
-    required String displayName,
-    required String? avatarUrl,
-    required double opacity,
-    required double backgroundOpacity,
-  }) {
-    final topPadding = AppSpacing.appChromeTopSafeInset(
-      MediaQuery.viewPaddingOf(context).top,
-      context,
-    );
-    final sideSlotWidth =
-        AppSpacing.appChromeActionButtonSize + AppSpacing.containerXs;
-    final trailingSlotWidth = widget.mode == ProfileMode.mine
-        ? AppSpacing.appChromeActionButtonSize * 3 +
-              AppSpacing.intraGroupXs * 2 +
-              AppSpacing.containerXs
-        : sideSlotWidth;
-    final resolvedOpacity = backgroundOpacity.clamp(0.0, 1.0);
-    final compactForeground = resolvedOpacity > 0.12
-        ? fg
-        : CupertinoColors.white;
-    final toolbarChrome = Color.lerp(
-      AppColors.transparent,
-      AppColors.iosSystemBackground(context),
-      resolvedOpacity,
-    )!;
-    final actionBackground =
-        AppNavigationSemanticConstants.chromeActionBackground(
-          surface: AppChromeSurface.overlay,
-        );
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        padding: EdgeInsets.only(top: topPadding),
-        decoration: BoxDecoration(
-          color: toolbarChrome,
-          border: resolvedOpacity > 0.02
-              ? Border(bottom: _profileSeparatorSide(border))
-              : null,
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final maxWidth = AppSpacing.adaptiveFeedMaxContentWidth(
-              constraints.maxWidth,
-            );
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: SizedBox(
-                  height: _compactToolbarHeight(context),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: sideSlotWidth,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child:
-                              (widget.mode == ProfileMode.other ||
-                                  widget.onBack != null)
-                              ? ProfileIosIconButton(
-                                  icon: CupertinoIcons.back,
-                                  onPressed:
-                                      widget.onBack ?? () => context.pop(),
-                                  backgroundColor: actionBackground,
-                                  foregroundColor: compactForeground,
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      ),
-                      Expanded(
-                        child: Opacity(
-                          opacity: opacity,
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              return Center(
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxWidth: constraints.maxWidth,
-                                  ),
-                                  child: Row(
-                                    key: const ValueKey<String>(
-                                      'profile-shell-compact-identity',
-                                    ),
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      CircleAvatar(
-                                        radius: AppSpacing.avatarUserSm / 2,
-                                        backgroundColor: actionBackground,
-                                        backgroundImage:
-                                            avatarUrl != null &&
-                                                avatarUrl.isNotEmpty
-                                            ? NetworkImage(avatarUrl)
-                                            : null,
-                                        child:
-                                            avatarUrl == null ||
-                                                avatarUrl.isEmpty
-                                            ? Icon(
-                                                CupertinoIcons
-                                                    .person_crop_circle_fill,
-                                                size: AppSpacing.iconMedium,
-                                                color: compactForeground,
-                                              )
-                                            : null,
-                                      ),
-                                      SizedBox(width: AppSpacing.containerSm),
-                                      Flexible(
-                                        child: Text(
-                                          displayName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: AppTypography.iosNavTitle,
-                                            fontWeight: AppTypography.medium,
-                                            color: compactForeground,
-                                            letterSpacing: -0.24,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: trailingSlotWidth,
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: widget.mode == ProfileMode.mine
-                              ? Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const GlobalTopActions(
-                                      showQuickAction: false,
-                                      surface: AppChromeSurface.overlay,
-                                    ),
-                                    SizedBox(width: AppSpacing.intraGroupXs),
-                                    ProfileIosIconButton(
-                                      icon: AppNavigationSemanticConstants
-                                          .settingsActionIcon,
-                                      onPressed: () =>
-                                          context.push(AppRoutePaths.settings),
-                                      backgroundColor: actionBackground,
-                                      foregroundColor: compactForeground,
-                                    ),
-                                  ],
-                                )
-                              : ProfileIosIconButton(
-                                  icon: CupertinoIcons.ellipsis,
-                                  onPressed: () => _showMoreOptions(context),
-                                  backgroundColor: actionBackground,
-                                  foregroundColor: compactForeground,
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPrimaryTabBarSurface({
-    required Color bg,
-    required Color border,
-    required bool pinned,
-    double opacity = 1.0,
-  }) {
-    final tabs = UserProfileUIConfig.profileTabs
-        .map(
-          (tab) => TabItem(
-            id: tab.id,
-            label: UITextConstants.contentLabelForKey(tab.labelKey),
-          ),
-        )
-        .toList(growable: false);
-    final surface = Container(
-      key: pinned
-          ? const ValueKey<String>('profile-shell-primary-tabs-pinned')
-          : const ValueKey<String>('profile-shell-primary-tabs-inline'),
-      clipBehavior: pinned ? Clip.none : Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: bg,
-        border: Border(bottom: _profileSeparatorSide(border, alpha: 0.1)),
-      ),
-      child: SizedBox(
-        key: pinned ? null : _primaryTabKey,
-        height: _primaryTabBarHeight(context),
-        child: CenteredScrollableTabBar(
-          tabs: tabs,
-          activeTab: _activeTabId,
-          onTabChange: _onPrimaryTabChange,
-          onHorizontalDragEnd: _handleTabSwipeDragEnd,
-          transparentBackground: true,
-        ),
-      ),
-    );
-    if (pinned) {
-      return surface;
-    }
-    return IgnorePointer(
-      ignoring: opacity <= 0.02,
-      child: Opacity(opacity: opacity, child: surface),
-    );
-  }
-
-  Widget _buildInlineTabContent(BuildContext context, bool isDark) {
-    final content = switch (_activeTabId) {
-      'circles' => ProfileCirclesTab(
-        mode: widget.mode,
-        userId: widget.userId,
-        isDark: isDark,
-        inlineScroll: true,
-      ),
-      'interaction' => ProfileInteractionTab(
-        mode: widget.mode,
-        userId: widget.userId,
-        isDark: isDark,
-        inlineScroll: true,
-        secondaryTabBarKey: _interactionSecondaryTabKey,
-        onSecondaryHorizontalDragEnd: _handleTabSwipeDragEnd,
-      ),
-      _ => ProfileWorksTab(
-        mode: widget.mode,
-        userId: widget.userId,
-        isDark: isDark,
-        inlineScroll: true,
-        secondaryTabBarKey: _worksSecondaryTabKey,
-        onSecondaryHorizontalDragEnd: _handleTabSwipeDragEnd,
-      ),
-    };
-    return KeyedSubtree(
-      key: ValueKey<String>('profile-tab-body-$_activeTabId'),
-      child: content,
-    );
-  }
-
-  Curve _curveForName(String raw) {
-    switch (raw) {
-      case 'easeOutBack':
-        return Curves.easeOutBack;
-      case 'easeOutCubic':
-        return Curves.easeOutCubic;
-      case 'easeOutQuart':
-        return Curves.easeOutQuart;
-      default:
-        return Curves.easeOut;
-    }
-  }
-
-  double _curveTransform(double value, String raw) {
-    return _curveForName(raw).transform(value.clamp(0.0, 1.0));
-  }
-
-  Future<void> _showMoreOptions(BuildContext context) async {
-    final action = await showAppActionSheet<_ProfileMoreAction>(
-      context,
-      title: '更多操作',
-      sections: const [
-        AppActionSheetSection<_ProfileMoreAction>(
-          items: [
-            AppActionSheetItem<_ProfileMoreAction>(
-              value: _ProfileMoreAction.share,
-              label: '分享',
-              icon: CupertinoIcons.share,
-            ),
-          ],
-        ),
-        AppActionSheetSection<_ProfileMoreAction>(
-          items: [
-            AppActionSheetItem<_ProfileMoreAction>(
-              value: _ProfileMoreAction.block,
-              label: '拉黑',
-              icon: CupertinoIcons.person_crop_circle_badge_xmark,
-            ),
-            AppActionSheetItem<_ProfileMoreAction>(
-              value: _ProfileMoreAction.report,
-              label: '举报',
-              icon: CupertinoIcons.flag,
-              isDestructive: true,
-            ),
-          ],
-        ),
-      ],
-    );
-    if (!context.mounted || action == null) return;
-    switch (action) {
-      case _ProfileMoreAction.share:
-        AppToast.show(context, '分享能力待接入');
-      case _ProfileMoreAction.block:
-        AppToast.show(context, '拉黑能力待接入');
-      case _ProfileMoreAction.report:
-        AppToast.show(context, '举报能力待接入');
-    }
-  }
 }
 
 enum _ProfileMoreAction { share, block, report }

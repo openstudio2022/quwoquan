@@ -66,9 +66,42 @@ abstract class TagRepository {
     String? objectType,
     int limit = TagApiDefaults.relatedLimit,
   });
+
+  // ── 交集核心（V3 对象页交集卡对象对直打）──────────────────────
+  /// 计算两个对象的共享 tagRef（交集锚点 + 强度 + 来源）。
+  /// 对象页「你和这里的交集 / 你们的交集」消费此结果（先 Mock 后真打 tag-service）。
+  Future<List<SharedTagView>> sharedTags({
+    required String objectAId,
+    required String objectAType,
+    required String objectBId,
+    required String objectBType,
+    int limit = TagApiDefaults.graphLimit,
+  });
 }
 
 // ── DTO / Value Objects ──────────────────────────────────────────
+
+/// 交集锚点（tag-service /v1/tag/shared-tags 返回项，对齐 service.yaml SharedTagView）。
+class SharedTagView {
+  final String tagRef;
+  final String label;
+  final double strength;
+  final String source;
+
+  const SharedTagView({
+    required this.tagRef,
+    required this.label,
+    this.strength = 0.0,
+    this.source = '',
+  });
+
+  factory SharedTagView.fromJson(Map<String, dynamic> json) => SharedTagView(
+    tagRef: json['tagRef'] as String? ?? '',
+    label: json['label'] as String? ?? '',
+    strength: (json['strength'] as num?)?.toDouble() ?? 0.0,
+    source: json['source'] as String? ?? '',
+  );
+}
 
 class TagDimension {
   final String group;

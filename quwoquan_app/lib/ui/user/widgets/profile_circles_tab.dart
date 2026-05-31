@@ -6,7 +6,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/circle_compact_card.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
+import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 
 class ProfileCirclesTab extends ConsumerWidget {
   const ProfileCirclesTab({

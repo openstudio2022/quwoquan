@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
+import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 
 /// 圈子紧凑卡片：头像（或封面）+ 名称 + 创作数，横向布局。
 class CircleCompactCard extends StatelessWidget {

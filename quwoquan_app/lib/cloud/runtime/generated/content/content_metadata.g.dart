@@ -11,6 +11,7 @@ class GeneratedPostRuntimeMetadata {
     'circleIds': <String>[],
     'commentCount': 0,
     'embedding': <double>[],
+    'entityRefs': <String>[],
     'favoriteCount': 0,
     'likeCount': 0,
     'mediaUrls': <String>[],

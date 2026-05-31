@@ -348,6 +348,41 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface circleDetail = AppUiSurface(
+    id: 'circleDetail',
+    owner: 'circle',
+    routeId: 'circleDetail',
+    pathTemplate: '/circle/{id}',
+    description: '圈子/组织详情壳层（统一对象页 + 你认识的人有 N 个在这交集卡）',
+    operationIds: <String>[
+      'GetCircle',
+      'GetCircleFeed',
+      'ListCircleMembers',
+      'ListCircleGroups',
+      'GetCircleStats',
+      'JoinCircle',
+      'LeaveCircle',
+    ],
+  );
+
+  static const AppUiSurface userProfile = AppUiSurface(
+    id: 'userProfile',
+    owner: 'user',
+    routeId: 'userProfile',
+    pathTemplate: '/user/{username}',
+    description: '用户主页壳层（我的 / TA的，统一对象页 + 你们的交集卡）',
+    operationIds: <String>[
+      'GetUserProfile',
+      'GetSubAccountProfile',
+      'ListUserWorks',
+      'ListUserLifeItems',
+      'ListUserLikes',
+      'GetRelationshipCapability',
+      'FollowUser',
+      'UnfollowUser',
+    ],
+  );
+
   static const List<AppUiSurface> all = <AppUiSurface>[
     chatList,
     startGroupChat,
@@ -372,6 +407,8 @@ class AppUiSurfaces {
     homepageClaim,
     homepageMaintenance,
     homepageStatusReport,
+    circleDetail,
+    userProfile,
   ];
 
   static const Map<String, AppUiSurface> byId = <String, AppUiSurface>{
@@ -398,5 +435,7 @@ class AppUiSurfaces {
     'homepageClaim': homepageClaim,
     'homepageMaintenance': homepageMaintenance,
     'homepageStatusReport': homepageStatusReport,
+    'circleDetail': circleDetail,
+    'userProfile': userProfile,
   };
 }

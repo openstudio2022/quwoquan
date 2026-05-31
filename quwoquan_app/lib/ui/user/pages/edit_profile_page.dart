@@ -10,7 +10,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
+import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 
 /// 编辑资料页（1:1 对应 EditProfilePage.tsx）
 /// 路由：/profile/edit
