@@ -14,9 +14,9 @@ gwt_acceptance:
   GWT1:
     title: environment ops cli and skill GWT
     given:
-    - `stackctl` 已封装环境打包、起停、校验、巡检、诊断、修复与发布入口。
+    - "`stackctl` 已封装环境打包、起停、校验、巡检、诊断、修复与发布入口。"
     when:
-    - Cursor / CLI / CI / workflow / project skill 通过 `stackctl` 调用环境能力。
+    - "Cursor / CLI / CI / workflow / project skill 通过 `stackctl` 调用环境能力。"
     then:
     - 统一命令面、报告目录与 JSON 契约保持一致，diagnose/repair 边界清晰。
     done_when:

@@ -138,6 +138,10 @@ run_app() {
     python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py || exit 1
     python3 quwoquan_service/scripts/gamma/verify_gamma_validation_profiles.py || exit 1
     python3 agent_ops/ci/verify_ci_profile_consistency.py || exit 1
+    # R03 文件行数预算（ratchet 只降不升，含 dart+go；pageflip 已登记豁免）
+    python3 quwoquan_app/scripts/runtime/verify_file_line_budget.py || exit 1
+    # R02 Repository 接口方法数预算（ratchet；伞组合接口免登记）
+    python3 quwoquan_app/scripts/runtime/verify_repository_interface_method_budget.py || exit 1
   else
     echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_native_edge_navigation, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_app_seed_manifests, verify_business_env_data_inventory, verify_pageflip_backward_mainline"
   fi
@@ -209,11 +213,7 @@ run_portal() {
 
 run_data() {
   echo "[gate] quwoquan_data"
-  python3 quwoquan_data/scripts/cli.py template lint
-  python3 quwoquan_data/scripts/cli.py template creator-lint
-  python3 quwoquan_data/scripts/cli.py template rec-contract
-  python3 quwoquan_data/scripts/cli.py template region-season-lint
-  python3 quwoquan_data/scripts/verify_content_quality.py
+  bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh
 }
 
 echo "[gate] repo quality gate (scope=$scope)"

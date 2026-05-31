@@ -155,7 +155,6 @@
 | `lib/ui/user/pages/edit_profile_page.dart` | user | GoRoute | full | | TBD | `isDarkProvider`。 |
 | `lib/ui/user/pages/persona_management_page.dart` | user | 壳内子视图 | full | | TBD | `isDarkProvider`。 |
 | `lib/ui/user/pages/sub_account_management_page.dart` | user | GoRoute | full | | TBD | `isDarkProvider`。 |
-| `lib/ui/user/pages/resonance_page.dart` | user | GoRoute | full | | TBD | `isDarkProvider`。 |
 | `lib/ui/user/pages/profile_stats_page.dart` | user | GoRoute | full | | TBD | `isDarkProvider`。 |
 | `lib/ui/user/pages/profile_comments_page.dart` | user | GoRoute | full | | TBD | `isDarkProvider`。 |
 

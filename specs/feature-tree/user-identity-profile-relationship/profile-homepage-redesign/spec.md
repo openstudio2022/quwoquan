@@ -1,5 +1,11 @@
 # 个人主页全面重构（我的 + 他人主页统一化）
 
+> 版本口径冻结（V5，参见 specs/changelog/CR-20260531-027）：本 spec 为 `profile-homepage-redesign` 能力的**唯一冻结口径**。本次 V5 在历史 `profile-commercial-readiness`（已上线收窄子集）基础上**全量补全**，并明确以下三处与历史口径的差异，**不向后兼容旧实现**：
+>
+> 1. **一级 Tab 为全量 4 个**：`[创作 | 圈子 | 互动 | 生活]`（commercial-readiness 曾去掉生活 Tab，V5 恢复并按新架构重做）。
+> 2. **profile 内容形式只有三类**：文章 / 图片 / 视频（均为 `contentIdentity=work` 作品）。**profile 不存在「微趣」概念**；`moment/micro`（点滴微动态）是 content/discovery 域的独立活跃概念，不进 profile 创作 Tab。历史 spec/commercial-readiness 中创作含「微趣」的表述在 V5 一律废止。
+> 3. **交集卡为真闭环**：`你们的交集` 卡由 tag-service `shared-tags` 真实倒排数据驱动（`object_tag_index` 打标管道），统一到 `IntersectionReason`；历史 `resonance`（共鸣）旧链路全部删除，不保留。
+
 ## 背景与动机
 
 当前个人主页存在严重的体验和工程质量问题：
@@ -37,14 +43,15 @@
 
 ### F2: 一级 Tab 重新设计
 
-一级 Tab：`[创作 | 圈子 | 互动 | 生活]`，默认选中「创作」。
+一级 Tab：`[创作 | 圈子 | 互动 | 生活]`，默认选中「创作」。一级 Tab 由 codegen `profile_tabs`（`user/user_profile/ui_config.yaml`）驱动，端侧不得硬编码 Tab id/文案。
 
-命名语义：「创作」包含用户所有原创内容（含微趣），「作品」仅指发现页的图片/视频/文章频道。「创作 ⊃ 作品 + 微趣」，避免与发现页「作品」Rail 语义冲突。
+命名语义：「创作」= 用户发布的全部原创**作品**（`contentIdentity=work`），内容形式为 文章 / 图片 / 视频 三类。**profile 不引入「微趣」(moment/micro) 概念**——点滴微动态属 content/discovery 域，profile 创作 Tab 不展示。
 
 ### F3: 创作 Tab（二级分类 + 可见性过滤）
 
-- 二级 SubTab：`[全部 | 微趣 | 图片 | 视频 | 文字]`
-  - 与发现页 `contentType` 对齐：`micro(moment) / image(photo) / video / article`
+- 二级 SubTab：`[全部 | 图片 | 视频 | 文字]`
+  - 与 `contentType` 对齐：`image(photo) / video / article`（三类作品形式，不含 moment）
+  - SubTab 由 codegen `profile_tabs.creations.sub_tabs` 驱动
 - 可见性过滤：点击已选中的「创作」Tab 弹出 popup
   - 我的主页：`[全部 | 公开 | 私密]`
   - 他人主页：`[全部 | 公开]`（无「私密」选项）
@@ -64,11 +71,13 @@
 - 方向切换：`[收到 | 发出]`（我的主页）/ 仅 `[Ta收到]` 公开部分（他人主页）
 - 互动列表：头像 + 用户名 + 互动内容摘要 + 时间
 
-### F6: 生活 Tab
+### F6: 生活 Tab（按新架构重做）
 
-- 子分类：`[足迹 | 书影音 | 味蕾 | 爱物]`
-- 网格/列表视图切换
-- 生活记录卡片
+- 子分类：`[足迹 | 书影音 | 味蕾 | 爱物]`，由 codegen `profile_tabs.lifestyle.sub_tabs` 驱动（端侧枚举与 sub_tab id 对齐，不硬编码）。
+- 数据源：`UserProfileRepository.listUserLifeItems`，元素为 **codegen `UserLifeItem` DTO**（`user/user_life_item` 域，端云一套字段），`category` 收敛为 `enum_ref: LifeItemCategory`（footprint/soul/taste/private）。
+- Mock 走 contract fixture seed（`user/test_fixtures` + seed manifest），**删除 `UserProfileMockData.lifeItemsFor` 硬编码假数据**。
+- 网格视图 + 生活记录卡片；所有文案语义化（`UITextConstants`/l10n），零硬编码中文。
+- 重做废止历史孤儿 `ProfileLifestyleTab` 手写模型与 `LifestyleSubTab` 脱离 ui_config 的实现。
 
 ### F7: 目录迁移与 features/ 清退
 
@@ -98,23 +107,39 @@
 - 可交互热区下限 44×44，主操作 48×48
 - 深色模式全面适配：背景渐变、工具栏折叠态、分界区衔接、所有前景色均通过语义 Token 跟随暗色切换
 
-### F11: 四层测试覆盖
+### F11: 四层测试覆盖（T1~T4）
 
-- L1a: 契约测试（UserProfile DTO schema、统计字段、圈子列表 DTO）
-- L1b: Widget 测试（ProfileShell mine/other 渲染、创作 Tab 子分类切换与可见性过滤、圈子 Tab 卡片渲染、空态）
-- L1c: Journey 测试（完整流程：打开→Tab切换→内容过滤→圈子跳转）
-- L4: Patrol E2E（真机 Tab 切换验证）
+- T1: 契约/单测（UserProfile DTO、`UserLifeItem` DTO + `LifeItemCategory` 枚举、`IntersectionReason` 5 维度闭集、tag `shared-tags` 契约字段、`ObjectTagIndexWriter` upsert 幂等）
+- T2: Widget/Provider（ProfileShell mine/other 渲染、创作 SubTab 切换与可见性过滤、圈子/互动/生活 Tab、交集卡 mine 不展示/other 有交集展示/无交集不占位、`ProfileActionBar` 五态、Mock 异常/边界）
+- T3: 端云集成（gamma 真打 `shared-tags` 对已打标对象非空并映射成 `IntersectionReason`、life-items Remote 字段对齐、relationship 五态；每条 T3 断言在 T2 有对应 Mock 断言）
+- T4: 端到端旅程（我的/他人主页完整旅程、交集卡点击→归因上报→跳转、四 Tab 切换与可见性过滤）
+
+### F12: 你们的交集卡（真闭环）
+
+- `ProfileShell` other 模式渲染 `ObjectIntersectionCard`，数据经 `objectSharedReasonsProvider` → `TagRepository.sharedTags`（真打 `/v1/tag/shared-tags`）→ `IntersectionReason`。
+- 云侧打通 `object_tag_index` 对象打标管道（tag-service 新增 `ObjectTagIndexWriter` + Mongo upsert + 离线批量导入工具），数据源为 `content/post.tagRefs`、`social/circle.tags`、`user/user_profile.interestTags`，使 gamma/prod 对真实对象出非空交集。
+- 交集卡 `onReasonTap` 上报 `BehaviorEvent.intersectionDimension/intersectionTagRefs`（统一归因，废止旧 `reasonType` 闭集）。
+- 无可解析交集时不占位（不造假）。
+
+### F13: resonance 旧链路彻底清理（不兼容）
+
+- 删除孤儿 `ResonancePage` + 路由 `/profile/resonance`（经 metadata 重生 `AppRoutePaths`）、`resonance_buddy_view_data.dart` + prototype 假数据、`UserProfileRepository.resonanceBuddyPreviewWireRows()` 抽象/Mock/Remote 三层、`myResonance` 文案 + l10n。
+- 删除孤儿 `ProfileMomentsTab`（profile 无微趣）、孤儿枚举 `ProfileTab`、user 侧 `activeWorkFormat/setWorkFormat` 残留状态。
+- 结构化 `profile_state_provider.dart` 空 catch（R17）。
+- 「我的交集/共鸣」语义统一由 `IntersectionReason` + `ObjectIntersectionCard` 表达，不保留第二数据通路。
 
 ## 不做什么（Out of Scope）
 
-- **O1**: 用户档案编辑页重构（`edit_profile_page.dart` 保持现有实现，仅迁移目录）
-- **O2**: 分身管理页重构（`persona_management_page.dart` 保持现有实现，仅迁移目录）
-- **O3**: 交集/共鸣详情页（`resonance_page.dart` 保持现有实现，仅迁移目录）
-- **O4**: 统计详情页（`profile_stats_page.dart` 保持现有实现，仅迁移目录）
-- **O5**: 圈子推荐算法（圈子 Tab 仅展示已加入列表，不含推荐）
-- **O6**: 生活 Tab 数据源重构（保持现有 `listUserLifeItems` 接口，不新增后端 API）
-- **O7**: 其他 features/ 目录迁移（create、assistant、settings、welcome 不在本次范围，后续批次处理）
-- **O8**: Go 云侧 UserProfile 服务实现（本次聚焦端侧重构 + metadata/codegen 对齐，Go 实现独立 story）
+- **O1**: 用户档案编辑页重构（`edit_profile_page.dart` 保持现有实现）
+- **O2**: 分身管理页重构（`persona_management_page.dart` 保持现有实现）
+- **O3**: 统计详情页重写（`profile_stats_page.dart` 保持现有实现）
+- **O4**: 圈子推荐算法（圈子 Tab 仅展示已加入列表，不含推荐）
+- **O5**: content/discovery 域的 moment/micro（点滴微动态）能力变更——profile 不引入微趣，但也不修改 content 域既有 moment 实现
+- **O6**: 其他 features/ 目录迁移（create、assistant、settings、welcome 不在本次范围）
+- **O7**: object_tag_index 的**事件驱动增量管道**完整落地（V5 落地 `ObjectTagIndexWriter` 接口 + 离线批量回填；MQ consumer / user `InterestTagsUpdated` 事件化作为收敛后续，见 CR-20260531-027）
+- **O8**: user-service / content-service / circle-service 既有 Go 业务逻辑重写（V5 仅在 tag-service 内新增打标写能力 + 跨源读取回填，不改三个源服务的写路径）
+
+> 说明：历史 spec 的 O3（resonance 仅迁移）、O6（生活 Tab 不重构）、O8（Go 云侧不实现）在 V5 **已反转为范围内**（见 F6/F12/F13），因为 V5 全量口径要求生活 Tab 重做、交集真闭环、resonance 清理。
 
 ## 适用范围与约束
 
@@ -159,14 +184,57 @@
 - **发现页** `discovery_page.dart`：双轨道 `[微趣, 作品]`，Tab 组件 `CenteredScrollableTabBar`，contentType 枚举 → 创作 SubTab 对齐
 - **圈子页** `circles_page.dart`：圈子卡片样式、分类导航 → 主页圈子 Tab 复用
 
+## 商用基线（V5 冻结）
+
+### SLO / KPI
+
+| 指标 | 目标 | 说明 |
+|---|---|---|
+| 主页首屏 TTI | P95 ≤ 1.5s（缓存命中 ≤ 600ms） | 进入 `/profile`、`/user/:id` 到首屏可交互 |
+| 背景拉伸回弹 | ≤ 300ms 无掉帧 | 弹簧阻尼回弹 |
+| Tab 切换响应 | P95 ≤ 200ms | 一级/二级 Tab |
+| 交集卡解析 | shared-tags 请求 P95 ≤ 500ms | 失败/空集时不占位、不阻塞首屏 |
+| 交集卡曝光率（KPI） | other 主页交集卡曝光占比可观测 | 北极星「交集」可见度 |
+| 交集行动转化（KPI） | 交集卡点击→关注/私信转化可归因 | 经 `intersectionDimension/intersectionTagRefs` |
+
+### 权限边界
+
+- mine：可见全部内容（含私密创作）、编辑资料、管理分身、设置入口。
+- other：仅可见公开内容；私密创作不下发；互动 Tab 仅「Ta 收到」公开部分；无编辑/管理入口。
+- 交集卡仅 other 模式展示，且 shared-tags 仅基于双方公开可计算的 tagRef 倒排，不泄露对方私密信号。
+- relationship 五态由 `follow_edge` 能力位驱动，含 `isBlocked/isBlockedBy` 时按规则禁用关注/私信/通话。
+
+### 数据生命周期
+
+- `UserLifeItem`：用户主动创建/编辑/删除；删除即从列表移除（无软删保留承诺）。
+- `interestTags`：声明式用户兴趣，用户可改；变更后经打标管道刷新 `object_tag_index`（离线批量周期回填，事件化为后续）。
+- `object_tag_index`：派生倒排数据，源对象删除/改标后由回填管道幂等 upsert 修正；非权威真相，可重建。
+- 行为归因事件（`BehaviorEvent`）：按现有 behavior 域保留策略与 TTL，不在本 spec 新增留存承诺。
+
+### 灰度与回滚
+
+- 灰度：交集卡真数据依赖 gamma/prod `object_tag_index` 打标产物；打标产物缺失时交集卡自动空兜底（契约正确、不报错），可独立于打标管道先行发布前端。
+- 一级 4 Tab / 生活 Tab / 创作 SubTab 由 codegen `profile_tabs` 驱动，支持配置层灰度（feature flag 留存口子）。
+- 回滚：V5 不向后兼容旧 resonance 实现；回滚以 git revert 整切片为单位（S2 云侧打标、S3-S5 端侧）；打标管道回滚仅影响交集卡数据（退化为空兜底），不影响主页其余功能。
+
+### 观测方案
+
+- 主页页面级埋点：`MyProfilePage`/`OtherProfilePage` 曝光、停留；Tab 切换、内容曝光归因（R20）。
+- 交集卡：曝光、`onReasonTap` 点击、解析空集率、shared-tags 请求耗时/失败率。
+- 云侧：tag-service `shared-tags` 请求量、命中非空率、P50/P95 延迟；打标管道导入对象数/tagRef 覆盖率。
+- referralSource：进入主页与从主页跳出均透传来源，保证归因链不断（R21）。
+
 ## 验收重点
 
 核心维度（详见 acceptance.yaml）：
 1. ProfileShell 统一组件 mine/other 差异正确
-2. 一级 Tab 结构 [创作|圈子|互动|生活] 渲染与交互
-3. 创作 Tab 二级分类与可见性过滤
+2. 一级 Tab 结构 [创作|圈子|互动|生活] 渲染与交互（codegen 驱动）
+3. 创作 Tab 二级分类（图片/视频/文字，无微趣）与可见性过滤
 4. 圈子 Tab 已加入圈子卡片展示与跳转
-5. features/ → ui/ 目录迁移完整
-6. 端云 DTO codegen 对齐
-7. 四层测试覆盖
-8. 视觉一致性：零硬编码，全语义 Token
+5. 生活 Tab 重做：codegen DTO + 4 sub_tab + contract seed + 零硬编码
+6. 端云 DTO codegen 对齐（含 `UserLifeItem`/`LifeItemCategory`）
+7. 你们的交集卡真闭环（shared-tags 真数据 + 归因）
+8. resonance 旧链路零残留
+9. 四层测试覆盖（T1~T4）
+10. 视觉一致性：零硬编码，全语义 Token
+11. SLO/KPI、权限、生命周期、灰度回滚、观测达成

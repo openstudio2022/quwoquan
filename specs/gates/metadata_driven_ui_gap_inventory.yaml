@@ -311,10 +311,6 @@ domains:
         status: compliant
         note: UserRepository.getPersonaManagementSummary；PersonaDtoSurface = PersonaManagementItemViewData；创建/更新分身走 UserProfileRepository + PersonaCreateRequestDto/PersonaUpdateRequestDto
         target_dto: PersonaDto
-      - path: quwoquan_app/lib/ui/user/pages/resonance_page.dart
-        status: compliant
-        note: 推荐趣友 ResonanceBuddyViewData 原型；非 Map
-        target_dto: UserWorkDto
       - path: quwoquan_app/lib/ui/user/pages/profile_stats_page.dart
         status: compliant
         note: listProfileCircles→listUserCircles 返回 CircleDto；关注/粉丝行为 ProfileSocialRelationRowViewData（手写读模型，见 repository_p2_notes）

@@ -2082,6 +2082,20 @@ features:
       domain: ''
       status: specified
       tags: []
+    - id: environment-ops-cli-and-skill
+      name: environment-ops-cli-and-skill
+      level: L3_story
+      path: runtime/runtime-config/environment-ops-cli-and-skill
+      domain: ''
+      status: in_progress
+      tags: []
+    - id: environment-topology-and-packaging
+      name: environment-topology-and-packaging
+      level: L3_story
+      path: runtime/runtime-config/environment-topology-and-packaging
+      domain: ''
+      status: in_progress
+      tags: []
   - id: runtime-context
     name: runtime-context
     level: L2_business_capability

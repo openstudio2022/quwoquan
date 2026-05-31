@@ -16,7 +16,7 @@
 | **选择器** | PublishLocationSelectorPage, PublishLocationSearchPage, PublishCircleSelectPage | 单选/多选 |
 | **设置** | SettingsPage, DeveloperSettingsPage, ChatSettingsPage, AssistantManagementPage | 配置/管理 |
 | **聊天** | ChatDetailPage, StartGroupChatPage | 对话与群组 |
-| **资料/分身** | PersonaManagementPage, ResonancePage, ProfileStatsPage | 个人数据管理 |
+| **资料/分身** | PersonaManagementPage, ProfileStatsPage | 个人数据管理 |
 | **发现/圈子 Tab** | DiscoveryPage, CirclesPage, ChatPage（Tab 容器） | 主 Tab 页 |
 
 ### 1.2 排除页面（存量事项）

@@ -56,6 +56,7 @@
 - 社交：`conversationId`、`messageId`、`rtcSessionId`
 - 实体：`entityType`、`entityId`、`bindPosition`
 - 学习：`runId`、`traceId`、`scorecardType`、`feedbackTarget`
+- 交集：`intersectionDimension`（identity/location/content/interest/relationship 五维之一）、`intersectionTagRef`（路径制 tagRef，唯一真相源 `quwoquan_data/publish/v1/tags`）
 
 ## 指标定义原则
 
@@ -112,6 +113,23 @@
 - 评论/群聊 `@小趣`：`xiaoqu.mention.triggered`，维度 `postId / commentId / conversationId / circleId / homepageId`。
 - 创作绑定实体：`content.homepage.attach`，维度 `postId / homepageId / bindPosition`。
 
+## 交集转化北极星指标（S6 增长商业化）
+
+「交集」是全 App 北极星。本节冻结交集转化漏斗的唯一口径，供推荐回流、ops 看板、实验分析共同消费。交集行动在 `content/post/behaviors.yaml` 以三个独立 `BehaviorAction` 区分，使漏斗可按动作类型切分：
+
+| 主口径 | 指标 | 分子 / 分母 | 下钻维度 | 说明 |
+| --- | --- | --- | --- | --- |
+| 新增可解释交集 | `explainable_intersection_count` | 计数：携带 `intersectionDimension` 曝光的交集卡/理由数 | `intersectionDimension`、`intersectionTagRef`、`surfaceId` | 交集解释层供给侧 |
+| 交集转化率（北极星） | `intersection_conversion_rate` | 交集行动数（follow + join_circle + add_contact）/ 新增可解释交集数 | `intersectionDimension`、`intersectionTagRef`、`action` | 唯一北极星，按维度/动作下钻 |
+| 关注转化 | `intersection_follow_rate` | `follow`（带 intersectionDimension）/ 新增可解释交集数 | `intersectionDimension`、`intersectionTagRef` | 三类行动之一：关注人 |
+| 进圈转化 | `intersection_join_circle_rate` | `join_circle` / 新增可解释交集数 | `intersectionDimension`、`circleId` | 三类行动之一：进圈子 |
+| 加联系人转化 | `intersection_add_contact_rate` | `add_contact` / 新增可解释交集数 | `intersectionDimension`、`authorId` | 三类行动之一：加联系人 |
+
+- 采样规则：全量；默认时间粒度按日（`DailyMetricsStore` `intersection` 维度累计）。
+- 服务端口径：`content-service` `BehaviorService.ProcessBatch` 对带 `intersectionDimension` 的信号按维度累计 `intersection` 日指标；推荐 HotPath 消费 `BehaviorSignal.IntersectionDimension/IntersectionTagRefs` 做交集回流。
+- 数据延迟：交集转化日指标 freshness ≤ 1 日；实时回流随 HotPath 同步。
+- 训练/实验：可用于实验桶切分（`product-ops-growth/experiment-bucketing-and-rollout`），按 `intersectionDimension` 评估交集策略 uplift。
+
 ## 验收标准
 
 - A1：体验/行为/QoE/社交/分享/实体/学习/实验/运营九大指标域完整登记。
@@ -119,3 +137,4 @@
 - A4：推荐、Assistant、运营可基于同一指标口径消费数据。
 - A7：新增指标必须经过字典治理与版本评审。
 - A8：形成可支撑 baseline 的指标词典与维度标准文档。
+- A9：交集转化北极星 `intersection_conversion_rate` 可按 `intersectionDimension` / `action` 下钻；三类交集行动（follow/join_circle/add_contact）端云字段一致且可区分漏斗。

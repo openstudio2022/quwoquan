@@ -972,10 +972,6 @@ files:
     imports_cupertino: true
     signals:
       divider: 2
-  - path: quwoquan_app/lib/ui/user/pages/resonance_page.dart
-    zone: ui
-    material_import: full
-    imports_cupertino: true
   - path: quwoquan_app/lib/ui/user/pages/sub_account_management_page.dart
     zone: ui
     material_import: none
@@ -1024,14 +1020,6 @@ files:
     zone: ui
     material_import: full
     imports_cupertino: false
-  - path: quwoquan_app/lib/ui/user/widgets/profile_moments_tab.dart
-    zone: ui
-    material_import: full
-    imports_cupertino: true
-  - path: quwoquan_app/lib/ui/user/widgets/profile_resonance_card.dart
-    zone: ui
-    material_import: none
-    imports_cupertino: true
   - path: quwoquan_app/lib/ui/user/widgets/profile_shell.dart
     zone: ui
     material_import: full

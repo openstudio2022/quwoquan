@@ -15,6 +15,22 @@ from agent_ops.deploy.lib.environment_topology import (
     load_environment_topology,
 )
 
+# 隔离校验对象是每个环境包的「生效配置」（env overlay），不是 config-provider-layering
+# 的 dev 默认基层，也不是共享的四环境拓扑清单：
+#   - default_app_runtime.yaml / default_config.yaml 是 default+env 分层的基层（打包契约
+#     verify_environment_packaging_contract 强制其随包存在），运行期被 env overlay 覆盖，
+#     其 dev 默认 URL（127.0.0.1 等）在 prod 不生效。
+#   - environment_topology_manifest.yaml 是所有环境包内容相同的共享多环境参考清单，
+#     天然含各环境 URL，并非「本环境包泄漏他环境」语义。
+# 故隔离/纯度校验只针对生效 env 配置（app_runtime.yaml / service config.yaml / report.json）。
+EXCLUDED_BASENAMES = frozenset(
+    {
+        "default_app_runtime.yaml",
+        "default_config.yaml",
+        "environment_topology_manifest.yaml",
+    }
+)
+
 
 def artifact_files(env_name: str) -> list[Path]:
     files: list[Path] = []
@@ -28,6 +44,7 @@ def artifact_files(env_name: str) -> list[Path]:
             for path in service_root.glob(f"*/{env_name}/**/*")
             if path.is_file()
         )
+    files = [path for path in files if path.name not in EXCLUDED_BASENAMES]
     deduped: dict[str, Path] = {str(path): path for path in files}
     return sorted(deduped.values())
 

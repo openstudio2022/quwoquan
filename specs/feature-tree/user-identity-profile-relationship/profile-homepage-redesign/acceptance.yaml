@@ -7,16 +7,56 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: profile-homepage-redesign
 scope:
-  summary: profile homepage redesign 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: V5 用户/我的主页改版（全量 4 Tab、无微趣三类、生活 Tab 重做、你们的交集卡真闭环、resonance 旧链路清理）的能力级 SIT 验收范围。
+  in_scope:
+  - ProfileShell mine/other 统一组件与差异区（头图/信息卡/统计/操作/工具栏）
+  - 一级 4 Tab（创作/圈子/互动/生活）由 codegen profile_tabs 驱动
+  - 创作 Tab 二级 SubTab（全部/图片/视频/文字，无微趣）+ 可见性过滤
+  - 生活 Tab 重做（codegen UserLifeItem DTO + LifeItemCategory + 4 sub_tab + contract seed）
+  - 你们的交集卡真闭环（shared-tags 真数据 + object_tag_index 打标管道 + 归因）
+  - resonance 旧链路彻底删除并统一到 IntersectionReason
+  - 主页页面级埋点与 referralSource 归因
+  out_of_scope:
+  - edit_profile_page / persona_management_page / profile_stats_page 重写
+  - content/discovery 域 moment/micro 能力变更
+  - object_tag_index 事件驱动增量管道完整落地（仅离线批量回填）
+  - 三个源服务（user/content/circle）既有写路径重写
 sit_acceptance:
   SIT1:
-    title: profile homepage redesign 能力 SIT
-    story_refs: []
+    title: ProfileShell 统一组件 + 一级 4 Tab（codegen 驱动）mine/other 差异
+    story_refs:
+    - profile-commercial-readiness
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
-    performance_points: []
+    - mine/other 共用 ProfileShell（ObjectPageShell 壳层），差异区（操作按钮/工具栏/可见性/交集卡）按模式正确切换。
+    - 一级 Tab [创作|圈子|互动|生活] 由 codegen profile_tabs 渲染，端侧无硬编码 Tab id/文案。
+    - 创作内容形式仅 文章/图片/视频 三类，全链路无「微趣/moment」概念残留。
+    performance_points:
+    - Tab 切换 P95 ≤ 200ms
+    - 主页首屏 TTI P95 ≤ 1.5s
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_static_contract
+      - T4_journey
+    tests:
+      planned: []
+      recorded:
+      - quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
+      - quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart
+      - quwoquan_app/test/ui/user/journeys/my_profile_journey_test.dart
+      - quwoquan_app/test/ui/user/journeys/other_profile_journey_test.dart
+    status: passing
+  SIT2:
+    title: 创作 SubTab/可见性、圈子、互动、生活 Tab 内容与端云数据
+    story_refs:
+    - profile-commercial-readiness
+    done_when:
+    - 创作 SubTab（全部/图片/视频/文字）+ 可见性过滤（mine 含私密、other 仅公开）正确。
+    - 圈子/互动 Tab 经 Repository 取数；生活 Tab 用 codegen UserLifeItem DTO + 4 sub_tab，走 contract seed，无硬编码假数据与中文字面量。
+    - life-items Remote 字段与 codegen wire 对齐，Mock/Remote 经 appDataSourceModeProvider 透明切换。
+    performance_points:
+    - 生活/创作列表加载无数据漂移（统计与列表条数一致）
     evidence:
       primary:
       - T2_module_interaction
@@ -25,8 +65,38 @@ sit_acceptance:
       - T1_static_contract
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_app/test/ui/user/widgets/profile_circles_tab_test.dart
+      - quwoquan_app/test/ui/user/widgets/profile_interaction_tab_test.dart
+      - quwoquan_app/test/ui/user/widgets/profile_lifestyle_tab_test.dart
+      - quwoquan_app/test/ui/user/widgets/profile_stats_row_test.dart
+      - quwoquan_app/test/cloud/user/contract/user_life_item_dto_contract_test.dart
+    status: passing
+  SIT3:
+    title: 你们的交集卡真闭环 + 行为归因 + resonance 零残留
+    story_refs:
+    - profile-commercial-readiness
+    done_when:
+    - other 主页交集卡经 objectSharedReasonsProvider → sharedTags → IntersectionReason 渲染；无交集不占位。
+    - gamma 真打 shared-tags 对已打标对象返回非空（object_tag_index 打标管道落地）。
+    - 交集卡 onReasonTap 上报 BehaviorEvent.intersectionDimension/intersectionTagRefs；MyProfilePage 曝光/停留埋点到位。
+    - resonance 旧链路（ResonancePage/路由/resonance_buddy_view_data/resonanceBuddyPreviewWireRows/myResonance）零残留。
+    performance_points:
+    - shared-tags 请求 P95 ≤ 500ms；失败/空集不阻塞首屏
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+      - T4_journey
+    tests:
+      planned: []
+      recorded:
+      - quwoquan_app/test/ui/user/widgets/profile_intersection_card_test.dart
+      - quwoquan_app/test/cloud/recommendation/intersection_reason_test.dart
+      - quwoquan_service/services/tag-service/internal/application/tag_service_test.go
+    status: passing
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

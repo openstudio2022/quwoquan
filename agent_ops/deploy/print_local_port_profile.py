@@ -43,6 +43,7 @@ ENV_EXPORTS = {
         "LOCAL_GAMMA_REC_MODEL_PORT": "rec-model-service",
         "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT": "product-ops-service",
         "LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT": "platform-ops-service",
+        "LOCAL_GAMMA_TAG_PORT": "tag-service",
         "LOCAL_GAMMA_POSTGRES_PORT": "postgres",
         "LOCAL_GAMMA_MONGO_PORT": "mongodb",
         "LOCAL_GAMMA_REDIS_PORT": "redis",

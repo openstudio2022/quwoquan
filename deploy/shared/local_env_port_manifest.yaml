@@ -75,6 +75,10 @@
       "plane": "service",
       "slotOffset": 260
     },
+    "tag-service": {
+      "plane": "service",
+      "slotOffset": 270
+    },
     "postgres": {
       "plane": "dataDebug",
       "slotOffset": 400

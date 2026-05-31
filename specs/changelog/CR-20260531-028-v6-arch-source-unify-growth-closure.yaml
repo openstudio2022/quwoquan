@@ -1,0 +1,124 @@
+id: CR-20260531-028
+title: V6 架构同源收口 + 历史残留总清算 + 增长商业化（交集）+ 交集闭环终验
+slug: v6-arch-source-unify-growth-closure
+revision: 2
+status: active
+
+affected_nodes:
+  - quwoquan_service/contracts/metadata/_shared
+  - quwoquan_service/contracts/metadata/content/post
+  - quwoquan_service/runtime/recommendation
+  - quwoquan_service/services/content-service
+  - quwoquan_app/lib/cloud/services/behavior
+  - quwoquan_app/lib/core/trackers
+  - quwoquan_app/lib/ui/content
+  - quwoquan_app/lib/ui/user
+  - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary
+  - specs/gates
+
+entries:
+  - timestamp: "2026-05-31T19:00:00+08:00"
+    summary: >-
+      V6 = 架构同源收口 + 历史残留总清算 + 增长商业化（围绕交集）+ 交集闭环终验。把 V1–V5 落地后的
+      全部残留与债务清零、把标签/投影/行为归因统一到唯一真相源、补齐交集转化可观测闭环，153 个未提交
+      WIP 全部纳入 V6 一并收口（absorb_into_v6）。
+      S0 基线冻结：建 session6-arch-growth-closure 分支，冻结 A 代码残留 / B git 分支 / C 同源缺口
+      三类清单 + V6 验收基线（G1–G9 + 军规零违规门）。
+      S1 标签真同源：物理删除扁平 tag_taxonomy.yaml + tag_ref_migration.yaml；domain_taxonomy.yaml
+      user_tag_ref 切路径制 tagRef（唯一真相源 quwoquan_data/publish/v1/tags）；重写
+      verify_tag_ref_source_of_truth.py（C1 强制物理删除 / C3 no_legacy_ids 校验可解析）+ 同步
+      verify_contract_metadata.sh。
+      S2 内容投影单轨：删 PostReadProjectionFacade，3 处调用内联 PostReadPresentation.fromPostBase；
+      PostReadUiBundle 迁 post_read_ui_bundle.dart；改写投影契约测试；pageflip 视觉零回归（字面等价）。
+      S3 resonance 清零：删 3 文件 + 清 specs 残句（page-layout-semantics / profile design /
+      inventory / 矩阵 / 网络图 allowlist），满足零残留判据。
+      S4 军规零违规：R17 空 catch 全清（lib 内 0）；R02 拆 Circle/Chat/UserProfile 上帝接口为伞组合
+      子接口（over-threshold allowlist 10→7）；R03 ratchet 漂移吸收；R04 map budget 维持。
+      S5 git 残留：本地 worktree/分支清理（local_only，远程删除待人工确认）。
+      S6 增长商业化：behaviors.yaml follow 补 intersectionDimension/intersectionTagRefs + 新增独立
+      BehaviorAction join_circle(4.0)/add_contact(4.5)；端云对齐（Go SignalWeights + BehaviorSignal +
+      BehaviorEventInput + RawBehaviorEvent + DailyMetrics intersection 维度累计 / Dart BehaviorAction
+      枚举 + trackJoinCircle/trackAddContact + _behaviorEventFromJson 交集字段 roundtrip 修复）；
+      analytics-metric-dictionary 补「交集转化率」北极星（按 dimension/action 下钻）+ A9 验收；
+      三方一致性门禁绿。
+      S7 交集闭环终验（static_only）：一致性静态校验 + gate 静态项；运行态 gate-full 顺延。
+      S8 文档归档：主规划回写 + 页面矩阵同步 + CR 记录 + roadmap 标明纯变现顺延。
+    reason: >-
+      用户决策（V6 独立会话）：对统一到新架构同源、清理历史残留分支「没有任何妥协坚决执行，不考虑兼容」；
+      153 WIP absorb_into_v6 一并收口；S4 重构 force_now（接受回归风险），S5 git local_only（远程
+      删除待人工确认），S7 终验 static_only（运行态 gate-full 顺延）。交集为全 App 北极星，增长商业化
+      收敛为「交集转化可观测闭环 + 北极星指标 + 实验地基」，重运营/变现 UI（会员/付费/创作者激励）顺延。
+    change_type:
+      - debt_cleanup
+      - feature
+      - metadata
+      - test
+      - baseline
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - 同源化破坏兼容（坚决执行，不考虑兼容）：物理删除 tag_taxonomy.yaml/tag_ref_migration.yaml、
+        删除 PostReadProjectionFacade、删除 resonance；依赖方已全部内联/迁移收口。
+      - 交集转化三方真相源严格对齐（behaviors.yaml ↔ Go SignalWeights ↔ Dart BehaviorAction），由
+        verify_behavior_action_consistency.py 守护；join_circle/add_contact 与 follow 区分漏斗。
+      - 服务端消费交集字段：BehaviorSignal/BehaviorEventInput/RawBehaviorEvent 透传
+        intersectionDimension/intersectionTagRefs；DailyMetricsStore 新增 intersection 维度累计支撑
+        北极星 intersection_conversion_rate。
+      - 修复既往 bug：RemoteBehaviorRepository._behaviorEventFromJson 入队重试时丢失交集归因，已补全。
+      - S5 远程历史分支删除（dev1.1 / feat/openspec / fix/* / merge-* / gamma-main / assistant-ios /
+        validation）= 待人工确认后续项；本会话仅本地清理 + 裁决记录。
+      - S7 运行态 gate-full（需 Colima/Gamma）顺延；本会话完成静态一致性 + 门禁静态项。
+      - 纯变现能力（会员/付费/创作者激励/邀请奖励 UI）= roadmap 明确 V6 之后顺延。
+
+  - timestamp: "2026-05-31T23:30:00+08:00"
+    summary: >-
+      V7 = V6 收口做实（零妥协收尾）。把 V6 顺延的 S5 远程清理与 S7 运行态终验全部做实，无新功能。
+      T1 静态门禁亲验：make gate 全链 [gate] OK；修复被 arg-order 掩盖的 gate 失败 + 5 个 flutter 测试漂移
+      （behavior 计数 / beta remote URL 解析 / avatar 端口 17100 / create_editor markdown 迁移 /
+      my_profile dispose 不再触碰 ref）+ 环境打包纯度。
+      T2 同源/残留零判据复核实证：标签单源（扁平文件 Glob=0 + 业务零引用 + 门禁过）、投影单轨（facade
+      无代码 + 统一 fromPostBase）、resonance（Go+Dart 零残留）、行为三方（behaviors↔Dart 严格 18，Go
+      附加 action 门禁认可）。
+      T3/T4 运行态终验做实（原 S7 顺延项）：拉起 Colima/local-gamma，make gate-local-gamma 全程
+      T3 passed + T4 passed（iPhone 17 Pro gamma-patrol-matrix）+ verify passed；make test-contract
+      0 失败 19 包 ok（testcontainers L2 无 rootless docker 优雅 skip）。修复 4 处运行态镜像阻塞：
+      start_media_origin media_root 对齐 /srv/media、Makefile 导出 LOCAL_GAMMA_USER_PORT=19210、
+      colima 隧道补 user_port、compose healthcheck start_period 10s→240s。证据归档
+      artifacts/v7-evidence/RUNTIME_GATE_EVIDENCE.md。
+      T4 git 远程实删（原 S5 待人工确认项）：人工核对 fix/08 隐私修复 5d40c6f7 → dev1.0 已独立更完整实现
+      （setting_service blockedKeywords round-trip + settings_contract_test TestPrivacySettings_BlockedKeywordsRoundTrip
+      + 迁移整合 005），判定不 cherry-pick；实删 7 个远程分支（dev1.1 / feat/openspec / fix/kustomize /
+      merge-dev10 / validation/pr-gate-timing / fix/gamma-main-gate-pr / fix/08）rc=0，叠加先前已删
+      assistant-ios，远程终态仅 dev1.0 + main。裁决与 SHA 记录见 specs/gates/v6_git_branch_cleanup_decisions.md。
+      T5 切分提交（数据/运行态工具/服务端/端侧/specs门禁/artifacts 证据）+ 合回 dev1.0 + 删 session6 + 文档归档。
+    reason: >-
+      用户决策（V7 独立会话）：deploy_gate_scope = fix_all_full_gate（零妥协，连同既有部署打包债一并修到
+      make gate 端到端绿）；S5 由 local_only 升级为远程实删；S7 由 static_only 升级为运行态 gate-full
+      T3/T4 实跑。
+    change_type:
+      - debt_cleanup
+      - test
+      - baseline
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - S5 做实：远程历史分支全部实删，终态远程仅 dev1.0 + main；fix/08 隐私修复经人工核对确认 dev1.0
+        已独立更完整实现，不 cherry-pick（避免 migration 014 与 greeting_requests 冲突回退）。
+      - S7 做实：local-gamma T3/T4 + test-contract 全绿；运行态镜像 4 处阻塞已修复并提交，使 gate-full
+        端到端可绿。
+      - 无新功能、无契约破坏；仅债务清理 + 运行态工具修复 + 测试漂移修复 + 文档归档。

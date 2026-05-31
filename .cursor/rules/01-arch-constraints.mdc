@@ -420,3 +420,30 @@ environments:
 
 - `agent_ops/scaffold/verify_engineering_directory.sh` 通过 `engineering_directory_manifest.yaml` 校验必要目录，`scripts` 已从 `required_directories` 中移除、替换为 `agent_ops`。
 - 如需添加仓库级脚本结构检查，在 `agent_ops/gate/gate_repo.sh` 中增加 `[ ! -d scripts ] || { echo "FAIL: scripts/ 禁止平铺"; exit 1; }` 等价校验。
+
+### 5.3 数据工程 CLI-first + Skill 范式（强制）
+
+> 适用 `quwoquan_data/**` 的内容生产/冷启动/校验能力。详见 [`.cursor/skills/quwoquan-data-content/SKILL.md`](.cursor/skills/quwoquan-data-content/SKILL.md)。
+
+所有新增数据工程能力必须遵循统一三段式范式：
+
+```
+[CLI prepare]  ->  [Agent semantic]  ->  [CLI validate + gate]
+```
+
+| 约束 | 要求 |
+|---|---|
+| 唯一入口 | 全部经 `qwq-data`（=`python3 quwoquan_data/scripts/cli.py <command>`）；脚本只做 IO 准备/拉取/落盘/打分/校验，语义加工在 Agent 会话内完成 |
+| 能力实现 | 新能力 = `<command>/handler.py`（`register_parser` + `handle_*`）+ 可选 `<command>/gate.py`；可复用逻辑沉到 `_common/` 库 |
+| Skill 暴露 | `SKILL.md` 只暴露 CLI 命令，禁止指向单场景孤立可执行脚本 |
+| 真相源 | 路径/错误码/字段/叙事契约/imagePolicy 先改 metadata/blueprint/schema，再跑 `template lint` 与业务逻辑 |
+| Stage 闭环 | 每个 stage 必落 stage result + gate report；失败写 repair report，按 `fallbackStage` 回退重跑直至全绿 |
+
+**禁止行为**：
+- 禁止在 `quwoquan_data/scripts/**` 新增可直接 `__main__` 运行的业务入口脚本（旧脚本只能保留薄壳委托 `qwq-data`，并逐步收敛）
+- 禁止为单个场景（如 `chuanxi`）编写专用脚本；能力必须泛化为 CLI 子命令 + 模板/蓝图驱动
+- 禁止 Skill 文档绕过 CLI 直接调用内部模块
+
+**门禁**：
+- `python3 quwoquan_data/scripts/verify/verify_cli_first.py`（ratchet 拦截新增直跑入口，基线见 `cli_first_allowlist.txt`）
+- `bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh`（已串联 cli-first + template lint 系列 + `verify --scope current`）

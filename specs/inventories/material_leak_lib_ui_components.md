@@ -159,7 +159,6 @@
 | `quwoquan_app/lib/ui/user/pages/persona_management_page.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/user/pages/profile_comments_page.dart` | ui | full | yes | `tab_controller`×2 |
 | `quwoquan_app/lib/ui/user/pages/profile_stats_page.dart` | ui | full | yes | `divider`×2 |
-| `quwoquan_app/lib/ui/user/pages/resonance_page.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/user/widgets/circle_card.dart` | ui | full | no | — |
 | `quwoquan_app/lib/ui/user/widgets/circle_compact_card.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/user/widgets/creation_visibility_popup.dart` | ui | full | no | — |
@@ -167,7 +166,6 @@
 | `quwoquan_app/lib/ui/user/widgets/profile_interaction_tab.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/user/widgets/profile_ios_components.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/user/widgets/profile_lifestyle_tab.dart` | ui | full | no | — |
-| `quwoquan_app/lib/ui/user/widgets/profile_moments_tab.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/user/widgets/profile_shell.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/welcome/pages/welcome_screen.dart` | ui | full | no | — |
 
@@ -284,6 +282,5 @@
 - `quwoquan_app/lib/ui/user/providers/profile_state_provider.dart`
 - `quwoquan_app/lib/ui/user/widgets/profile_action_bar.dart`
 - `quwoquan_app/lib/ui/user/widgets/profile_circles_tab.dart`
-- `quwoquan_app/lib/ui/user/widgets/profile_resonance_card.dart`
 - `quwoquan_app/lib/ui/user/widgets/profile_stats_row.dart`
 - `quwoquan_app/lib/ui/user/widgets/profile_works_tab.dart`

@@ -20,7 +20,7 @@ gwt_acceptance:
     then:
     - 四环境 schema、端口 profile、public/upstream URL 契约与 prod 包纯度均满足约束。
     done_when:
-    - `stackctl verify` 与 `make gate` 能自动阻断跨环境污染与非法环境枚举。
+    - "`stackctl verify` 与 `make gate` 能自动阻断跨环境污染与非法环境枚举。"
     edge_cases: []
     contract_refs: []
     performance_points: []

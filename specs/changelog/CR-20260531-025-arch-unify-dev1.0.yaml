@@ -1,7 +1,7 @@
 id: CR-20260531-025
 title: V4 architecture unification — consolidate all worktrees into single dev1.0 mainline
 slug: arch-unify-dev1.0
-revision: 1
+revision: 2
 status: active
 
 affected_nodes:
@@ -48,10 +48,18 @@ entries:
       - dev1.0 领先基线 9a002512 共 8 commit；tracked working tree 干净，仅构建/数据产物 untracked。
       - 验证全绿：go build 全 service + dart analyze lib 0 error + codegen 0 drift +
         verify_dart_semantic / ui_mock_isolation / tag_ref_source_of_truth 门禁。
-      - S4 内容双轨清理由 CR-022 硬切达成(单一同源)；超大文件 R03/ContentRepository R02
-        拆分为主线后续优化。
+      - S4 内容双轨清理由 CR-022 硬切达成(单一同源)。
       - 口碑聚合(poi projector)/校验(validateReviewPayload)/创作前端编辑页(publish_review_editor/
         publish_tag_selector) 作主线后续(契约已完整)，不搬 session2 旧 UI 实现避免旧债。
-      - tag-service Suggest/ListDimensions/Validate 后端(service.yaml 保留契约,当前 501)
-        与 gate-full(testcontainers + gamma 镜像) 为主线后续。
       - 分支清理：一周前(< 05-28)worktree/分支/stash 全清；今后只保留 dev1.0(及三天内活跃工作区)。
+      - >-
+        [rev2 更正] tag-service 501 实况：Suggest/ListDimensions/Validate rev1 已实现(非 501)；
+        本轮(CR-026)再闭合 search/related/search-by-tags/cooccurrence/related-objects，
+        保留 501 仅 feedback(写路径待架构评审)，即 6→1。
+      - >-
+        [rev2 更正] ContentRepository R02 实况：rev1 已拆 6 个 ≤10 子接口(达标模板)，
+        非「拆分为后续」；真正未拆为 Circle(34)/Chat(31)/UserProfile(27) 等，本轮(CR-026)
+        以 ratchet 门禁登记冻结。R03 超大文件同步 ratchet 登记。
+      - >-
+        [rev2 更正] tag-service 测试 + gate-full：本轮(CR-026)已把 tag-service go test 入
+        scripts/gate.sh、build 入 Makefile、并接入 local-gamma 拓扑(compose/Caddy/config-root/端口)。

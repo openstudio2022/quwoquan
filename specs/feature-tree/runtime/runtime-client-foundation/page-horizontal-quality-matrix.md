@@ -153,13 +153,12 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：作品/微趣 Tab `profileWorks`/`profileMoments`+readPresentation；资料 DTO；未登录态展示登录 CTA |
+| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：4 Tab（创作/圈子/互动/生活）由 codegen `UserProfileUIConfig.profileTabs` 驱动；创作 SubTab 全部/图片/视频/文字；生活 SubTab 由 `lifestyleSubTabs`(lifeCategory) 驱动 + `UserLifeItemDto`；资料 DTO；未登录态登录 CTA。**V5 埋点**：进入曝光 + dispose 停留（`contentBehaviorTracker`，contentType=user，referralSource=authorProfile）；other 模式交集卡 `onReasonTap` → `BehaviorEvent.intersectionDimension/intersectionTagRefs` 归因 |
 | `lib/ui/user/pages/login_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap` + `AuthLoginResultDto`；P3 Mock/Remote 由 `authRepositoryProvider` 切换；协议勾选前不调用一键登录 SDK |
 | `lib/ui/user/pages/legal_document_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 远端 WebView 展示用户协议/隐私政策；P2/P3 —，内容来自配置 URL；禁用 JS，保留返回与失败重试 |
 | `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：同 my_profile |
 | `lib/ui/user/pages/edit_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ProfileEditUpdatePayload |
 | `lib/ui/user/pages/persona_management_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | UserRepository summary / PersonaDtoSurface |
-| `lib/ui/user/pages/resonance_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | ResonanceBuddyViewData |
 | `lib/ui/user/pages/profile_stats_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | ProfileCircleViewData / ProfileSocialRelationRowViewData |
 | `lib/ui/user/pages/profile_comments_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | CommentDto |
 

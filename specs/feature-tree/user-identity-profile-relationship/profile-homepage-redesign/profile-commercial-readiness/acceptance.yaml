@@ -7,30 +7,43 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: profile-homepage-redesign
 scope:
-  summary: profile commercial readiness 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 个人主页商用就绪 Story——我的主页数据加载、统计行、名字可设置等上线 gap 的最小价值闭环（V5 全量口径下保留并对齐）。
+  in_scope:
+  - 我的主页进入时加载当前用户档案（displayName/avatar/background 非 me 占位）
+  - 统计行（圈子/关注/粉丝）与列表数据同源
+  - 用户名字可设置并即时刷新
+  out_of_scope:
+  - 一级 Tab 收窄（历史去掉生活 Tab 的口径已被 V5 全量口径覆盖反转）
+  - 创作可见性过滤去除（历史去除口径已被 V5 恢复）
 gwt_acceptance:
   GWT1:
-    title: profile commercial readiness GWT
+    title: 我的主页数据加载与统计行同源
     given:
-    - 前置条件明确。
+    - 已登录用户进入 /profile（ProfileMode.mine）。
     when:
-    - 用户或系统动作发生。
+    - MyProfilePage 首帧触发 userDataProvider.loadUser(currentUserId)。
     then:
-    - 可观察结果符合预期。
+    - displayName/avatar/background 来自 getUserProfile，非 me 占位。
+    - 统计行顺序圈子/关注/粉丝，数字与进入详情列表条数一致（同一 Repository 方法）。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 我的主页首屏展示真实档案与一致统计，Mock/Remote 经 appDataSourceModeProvider 透明切换。
+    edge_cases:
+    - 未登录 → 展示登录引导（_LoggedOutProfilePrompt）。
+    - 档案加载失败 → 结构化错误兜底，不崩溃、不显示 me。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    performance_points:
+    - 我的主页首屏 TTI P95 ≤ 1.5s（缓存命中 ≤ 600ms）
     evidence:
       primary:
       - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T3_app_api_integration
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
+      - quwoquan_app/test/ui/user/widgets/profile_stats_row_test.dart
       recorded: []
     status: pending
 execution:
