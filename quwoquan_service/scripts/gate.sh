@@ -371,10 +371,10 @@ ruby -ryaml -rdate -e '
   warnings = []
   blocking = []
 
-  # ── 5.1 每个节点目录必须具备四类文档 ──────────────────────────────
-  # design.md 仅在实施已开始（tasks.md 含任何 [x]）时强制要求；
-  # 纯规划阶段（全部 [ ]）缺少 design.md 仅输出 WARNING。
-  always_required = %w[spec.md tasks.md acceptance.yaml]
+  # ── 5.1 每个节点目录必须具备 L3 约定文档（spec.md + acceptance.yaml）──
+  # 新 L3 约定：design/plan/tasks 内容折入 spec.md，不再维护 tasks.md/design.md
+  # 治理文档（见 specs/feature-tree/00_FEATURE_TREE_STANDARD.md §六）。
+  always_required = %w[spec.md acceptance.yaml]
   Dir.glob("#{specs_root}/**/*.yaml").
     select { |f| File.basename(f) == "acceptance.yaml" }.
     each do |acceptance_path|
@@ -388,63 +388,51 @@ ruby -ryaml -rdate -e '
         end
       end
 
-      # design.md: 实施已开始则 BLOCKING，纯规划则 WARNING
-      design_path = File.join(node_dir, "design.md")
-      unless File.exist?(design_path)
-        tasks_path = File.join(node_dir, "tasks.md")
-        tasks_content = File.exist?(tasks_path) ? File.read(tasks_path) : ""
-        implementation_started = tasks_content.match?(/^- \[x\]/i)
-        if implementation_started
-          blocking << "feature tree node missing design.md (implementation started): #{node_rel}"
-        else
-          warnings << "feature tree node missing design.md (planning stage): #{node_rel}"
-        end
-      end
-
-      # ── 5.2 acceptance.yaml 结构检查 ────────────────────────────────
+      # ── 5.2 acceptance.yaml 结构检查（node.id / node.level）─────────
       doc = load_yaml(acceptance_path)
       if doc.nil?
         blocking << "acceptance.yaml parse error: #{acceptance_path}"
         next
       end
 
-      feature = doc["feature"].to_s
-      level   = doc["level"].to_s
+      node = doc["node"].is_a?(Hash) ? doc["node"] : {}
+      feature = node["id"].to_s
+      level   = node["level"].to_s
 
       if feature.empty?
-        blocking << "acceptance.yaml missing feature field: #{acceptance_path}"
+        blocking << "acceptance.yaml missing node.id field: #{acceptance_path}"
       end
       if level.empty?
-        blocking << "acceptance.yaml missing level field: #{acceptance_path}"
+        blocking << "acceptance.yaml missing node.level field: #{acceptance_path}"
       end
 
-      # ── 5.3 归档前状态检查：无 pending 项 ───────────────────────────
-      # 仅当 tasks.md 中所有当前交付任务均为 [x] 时才触发此检查（通过检测 archived 标记）
-      tasks_path = File.join(node_dir, "tasks.md")
-      tasks_content = File.exist?(tasks_path) ? File.read(tasks_path) : ""
-      all_tasks_done = !tasks_content.match?(/^- \[ \]/)  # 当前交付无未完成项
-
-      level_acceptance = doc["level_acceptance"] || {}
-      if all_tasks_done && level_acceptance.is_a?(Hash) && !level_acceptance.empty?
-        level_acceptance.each do |an, criterion|
+      # ── 5.3 归档前状态检查 + 5.4 recorded 测试链接验证（新 L3 约定）──
+      # 触发：节点标记 archived: true（替代旧 tasks.md 全 [x] 判据）。
+      # 验收项取分层块 gwt/sit/uat/domain_acceptance；测试取 tests.recorded（路径列表）。
+      node_archived = (doc["archived"] == true)
+      acc_block = doc["gwt_acceptance"] || doc["sit_acceptance"] ||
+                  doc["uat_acceptance"] || doc["domain_acceptance"] || {}
+      if acc_block.is_a?(Hash) && !acc_block.empty?
+        repo_root = File.expand_path("..", __dir__)
+        acc_block.each do |an, criterion|
           next unless criterion.is_a?(Hash)
           status = criterion["status"].to_s
-          if status == "pending"
-            blocking << "#{feature}/#{an}: status=pending but all tasks done; set to implemented/waived/deferred (#{acceptance_path})"
+
+          # 归档节点不得残留 pending 验收项
+          if node_archived && status == "pending"
+            blocking << "#{feature}/#{an}: status=pending but node archived; set to done/waived/deferred (#{acceptance_path})"
           end
 
-          # ── 5.4 tests 链接验证：implemented 项的 tests[] 文件必须存在 ──
-          if status == "implemented"
-            tests = criterion["tests"] || []
-            if tests.empty?
-              warnings << "#{feature}/#{an}: status=implemented but tests[] is empty (#{acceptance_path})"
+          # done/implemented 项的 recorded 测试文件必须存在
+          if %w[done implemented].include?(status)
+            tests = criterion["tests"].is_a?(Hash) ? criterion["tests"] : {}
+            recorded = tests["recorded"] || []
+            if recorded.empty?
+              warnings << "#{feature}/#{an}: status=#{status} but tests.recorded is empty (#{acceptance_path})"
             else
-              repo_root = File.expand_path("..", __dir__)
-              tests.each do |t|
-                next unless t.is_a?(Hash)
-                test_file = t["file"].to_s
+              recorded.each do |t|
+                test_file = t.is_a?(Hash) ? t["file"].to_s : t.to_s
                 next if test_file.empty?
-                # Search in both app and service directories
                 candidates = [
                   File.join(repo_root, "quwoquan_app", test_file),
                   File.join(repo_root, "quwoquan_service", test_file),
@@ -452,7 +440,7 @@ ruby -ryaml -rdate -e '
                 ]
                 exists = candidates.any? { |p| File.exist?(p) }
                 unless exists
-                  blocking << "#{feature}/#{an}: tests[].file not found: #{test_file}"
+                  blocking << "#{feature}/#{an}: tests.recorded file not found: #{test_file}"
                 end
               end
             end
@@ -518,14 +506,16 @@ ruby -ryaml -rdate -e '
           end
         end
 
-        # ④ cancelled/deprecated 节点的 tasks.md 不应有未完成的当前交付任务
+        # ④ cancelled/deprecated 节点不得残留 pending 验收项（新 L3 约定，替代旧 tasks.md 判据）
         if %w[cancelled deprecated].include?(status) && !rel_path.empty?
           abs_path = resolve_feature_dir.call(rel_path)
-          tasks_f = File.join(abs_path, "tasks.md")
-          if File.exist?(tasks_f)
-            tasks_content = File.read(tasks_f)
-            if tasks_content.match?(/^- \[ \]/)
-              warnings << "#{status} node still has unchecked tasks (consider clearing): #{rel_path}"
+          acc = File.join(abs_path, "acceptance.yaml")
+          if File.exist?(acc)
+            acc_doc = load_yaml(acc) || {}
+            acc_block = acc_doc["gwt_acceptance"] || acc_doc["sit_acceptance"] ||
+                        acc_doc["uat_acceptance"] || acc_doc["domain_acceptance"] || {}
+            if acc_block.is_a?(Hash) && acc_block.values.any? { |c| c.is_a?(Hash) && c["status"].to_s == "pending" }
+              warnings << "#{status} node still has pending acceptance items (consider clearing): #{rel_path}"
             end
           end
         end

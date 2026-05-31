@@ -58,7 +58,7 @@ def c1_zero_reference() -> None:
 def c2_fields_use_tag_ref() -> None:
     """对象标签字段已切路径制 tagRef。"""
     required = {
-        "content/post/fields.yaml": "post.tags",
+        "content/post/fields.yaml": "post.tagRefs",
         "social/circle/fields.yaml": "circle.tags",
         "entity/homepage/fields.yaml": "entity.categoryTags/highlightTags",
         "user/user_profile/fields.yaml": "user.interestTags",

@@ -74,7 +74,7 @@
             "media/image/post/fixture_photo_001/v1/cover.png",
             "media/image/post/fixture_photo_001/v1/image-2.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "galleryPost"
@@ -141,7 +141,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_photo_002/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -212,7 +212,7 @@
             "media/image/post/fixture_video_001/v1/cover.png",
             "media/image/post/fixture_video_001/v1/image-2.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "videoCoverPost"
@@ -285,7 +285,7 @@
             "media/image/post/fixture_article_001/v1/cover.png",
             "media/image/post/fixture_article_001/v1/image-2.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "articlePost"
@@ -321,8 +321,8 @@
         {
           "postId": "fixture_moment_001",
           "id": "fixture_moment_001",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_current",
@@ -378,7 +378,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_moment_001/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "momentPost"
@@ -445,7 +445,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -512,7 +512,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "heroPost"

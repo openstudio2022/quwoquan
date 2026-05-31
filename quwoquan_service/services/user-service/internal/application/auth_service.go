@@ -7,16 +7,19 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 
+	rtauth "quwoquan_service/runtime/auth"
 	runtimegovernance "quwoquan_service/runtime/governance"
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
 	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
+	"quwoquan_service/services/user-service/internal/generated"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 )
 
@@ -31,6 +34,7 @@ const (
 	personaStatusRetired  = "retired"
 	maxLoginFailCount     = 5
 	lockDurationMinutes   = 30
+	refreshTokenTTLHours  = 24 * 30
 )
 
 // AuthService handles OwnerAccount authentication and credential binding.
@@ -38,9 +42,29 @@ type AuthService struct {
 	profiles         userrepo.ProfileRepository
 	personas         userrepo.PersonaRepository
 	credentials      userrepo.CredentialRepository
+	userAuth         userrepo.UserAuthRepository
 	anonymousDevices userrepo.AnonymousDeviceBindingRepository
 	pcache           *cache.ProfileCache
 	shardDirectory   *ShardDirectory
+	oneTapResolver   OneTapPhoneResolver
+	otp              OtpCodeStore
+	otpDebugReveal   bool
+	accessSigner     *rtauth.Signer
+}
+
+type AuthServiceOption func(*AuthService)
+
+type OneTapPhoneResolver interface {
+	ResolvePhone(ctx context.Context, vendor, carrierToken string) (phone string, displayLabel string, err error)
+}
+
+// OtpCodeStore 抽象手机号验证码的存储与限频，实现位于 infrastructure/cache。
+// 它只负责发码冷却/配额与读写验证码；是否过期/匹配由 AuthService 判定。
+type OtpCodeStore interface {
+	AllowSend(ctx context.Context, phone string) (allowed bool, retryAfterSeconds int, err error)
+	SaveCode(ctx context.Context, phone, code string) error
+	ReadCode(ctx context.Context, phone string) (code string, found bool, err error)
+	ClearCode(ctx context.Context, phone string) error
 }
 
 func NewAuthService(
@@ -50,14 +74,59 @@ func NewAuthService(
 	anonymousDevices userrepo.AnonymousDeviceBindingRepository,
 	pcache *cache.ProfileCache,
 	shardDirectory *ShardDirectory,
+	opts ...AuthServiceOption,
 ) *AuthService {
-	return &AuthService{
+	svc := &AuthService{
 		profiles:         profiles,
 		personas:         personas,
 		credentials:      credentials,
 		anonymousDevices: anonymousDevices,
 		pcache:           pcache,
 		shardDirectory:   shardDirectory,
+		oneTapResolver:   TokenEncodedOneTapPhoneResolver{},
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(svc)
+		}
+	}
+	return svc
+}
+
+func WithUserAuthRepository(repo userrepo.UserAuthRepository) AuthServiceOption {
+	return func(s *AuthService) {
+		s.userAuth = repo
+	}
+}
+
+func WithOneTapPhoneResolver(resolver OneTapPhoneResolver) AuthServiceOption {
+	return func(s *AuthService) {
+		if resolver != nil {
+			s.oneTapResolver = resolver
+		}
+	}
+}
+
+// WithOtpCodeStore 注入手机号验证码存储。未注入时手机号登录会拒绝（缺少 OTP 校验能力）。
+func WithOtpCodeStore(store OtpCodeStore) AuthServiceOption {
+	return func(s *AuthService) {
+		s.otp = store
+	}
+}
+
+// WithOtpDebugReveal 在非生产环境下让 SendOtp 返回明文验证码，便于本地/CI 联调。
+// 生产必须为 false。
+func WithOtpDebugReveal(reveal bool) AuthServiceOption {
+	return func(s *AuthService) {
+		s.otpDebugReveal = reveal
+	}
+}
+
+// WithAccessTokenSigner 注入 access token 签发器；注入后 accessToken 为短期 JWT，
+// 可被各服务/网关本地验签。未注入时回退到不透明随机串（过渡期兼容）。
+func WithAccessTokenSigner(signer *rtauth.Signer) AuthServiceOption {
+	return func(s *AuthService) {
+		s.accessSigner = signer
 	}
 }
 
@@ -142,13 +211,16 @@ func (s *AuthService) issueLoginResult(
 		return nil, err
 	}
 
-	accessToken, err := generateToken()
+	accessToken, err := s.issueAccessToken(ownerID, activeSub)
 	if err != nil {
 		return nil, err
 	}
 	refreshToken, err := generateToken()
 	if err != nil {
 		return nil, err
+	}
+	if err := s.persistRefreshToken(ctx, ownerID, refreshToken); err != nil {
+		return nil, fmt.Errorf("persist refresh token: %w", err)
 	}
 
 	return &LoginResult{
@@ -162,6 +234,102 @@ func (s *AuthService) issueLoginResult(
 		LogicalShard:             profileIntField(profile, func(p *model.UserProfile) int { return p.LogicalShard }),
 		AnonymousRetentionPolicy: defaultString(profileField(profile, func(p *model.UserProfile) string { return p.AnonymousRetentionPolicy }), anonymousRetentionPolicyForCredentialType(credType)),
 	}, nil
+}
+
+func (s *AuthService) persistRefreshToken(ctx context.Context, ownerID, refreshToken string) error {
+	if s.userAuth == nil {
+		return nil
+	}
+	return s.userAuth.UpsertRefreshToken(
+		ctx,
+		strings.TrimSpace(ownerID),
+		strings.TrimSpace(refreshToken),
+		time.Now().UTC().Add(refreshTokenTTLHours*time.Hour),
+	)
+}
+
+func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (_ *LoginResult, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.RefreshToken")
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil, fmt.Errorf("refreshToken is required")
+	}
+	if s.userAuth == nil {
+		return nil, fmt.Errorf("refresh token store unavailable")
+	}
+	auth, err := s.userAuth.FindByRefreshToken(ctx, refreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("lookup refresh token: %w", err)
+	}
+	if auth == nil || strings.TrimSpace(auth.UserID) == "" {
+		return nil, fmt.Errorf("refresh token invalid")
+	}
+	if auth.RefreshTokenExpiresAt == nil || auth.RefreshTokenExpiresAt.Before(time.Now().UTC()) {
+		_ = s.userAuth.RevokeRefreshTokenValue(ctx, refreshToken)
+		return nil, fmt.Errorf("refresh token expired")
+	}
+	profile, err := s.profiles.FindByID(ctx, auth.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("load profile: %w", err)
+	}
+	credType := credentialPhone
+	if profile != nil && strings.TrimSpace(profile.IdentityOrigin) != "" {
+		credType = strings.TrimSpace(profile.IdentityOrigin)
+	}
+	return s.issueLoginResult(ctx, auth.UserID, credType, "")
+}
+
+func (s *AuthService) Logout(ctx context.Context, ownerID, refreshToken string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.Logout",
+		attribute.String("owner.id", strings.TrimSpace(ownerID)))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	if s.userAuth == nil {
+		return nil
+	}
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken != "" {
+		return s.userAuth.RevokeRefreshTokenValue(ctx, refreshToken)
+	}
+	ownerID = strings.TrimSpace(ownerID)
+	if ownerID == "" {
+		return nil
+	}
+	return s.userAuth.RevokeRefreshToken(ctx, ownerID)
+}
+
+func (s *AuthService) LoginWithOneTap(
+	ctx context.Context,
+	vendor string,
+	carrierToken string,
+	deviceID string,
+	platform string,
+	agreementVersion string,
+	privacyVersion string,
+) (_ *LoginResult, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.LoginWithOneTap",
+		attribute.String("one_tap.vendor", strings.TrimSpace(vendor)),
+		attribute.String("platform", strings.TrimSpace(platform)))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	resolver := s.oneTapResolver
+	if resolver == nil {
+		return nil, fmt.Errorf("one tap resolver unavailable")
+	}
+	phone, displayLabel, err := resolver.ResolvePhone(ctx, vendor, carrierToken)
+	if err != nil {
+		return nil, fmt.Errorf("resolve one tap phone: %w", err)
+	}
+	phone = normalizePhoneCredentialKey(phone)
+	if phone == "" {
+		return nil, fmt.Errorf("one tap phone is empty")
+	}
+	if strings.TrimSpace(displayLabel) == "" {
+		displayLabel = maskPhoneForDisplay(phone)
+	}
+	return s.LoginWithCredential(ctx, credentialPhone, phone, displayLabel)
 }
 
 func (s *AuthService) LoginAnonymously(
@@ -444,12 +612,144 @@ var (
 	ErrLastCredential     = fmt.Errorf("cannot unbind the last credential")
 )
 
+// TokenEncodedOneTapPhoneResolver is a local/dev resolver boundary. Production
+// deployments should replace it with a carrier vendor resolver through
+// WithOneTapPhoneResolver; the App still only receives AuthLoginResult.
+type TokenEncodedOneTapPhoneResolver struct{}
+
+func (TokenEncodedOneTapPhoneResolver) ResolvePhone(_ context.Context, _ string, carrierToken string) (string, string, error) {
+	token := strings.TrimSpace(carrierToken)
+	if token == "" {
+		return "", "", fmt.Errorf("carrierToken is required")
+	}
+	if strings.HasPrefix(token, "phone:") {
+		phone := normalizePhoneCredentialKey(strings.TrimPrefix(token, "phone:"))
+		return phone, maskPhoneForDisplay(phone), nil
+	}
+	return "", "", fmt.Errorf("one tap resolver requires carrier server exchange")
+}
+
+type StaticOneTapPhoneResolver map[string]string
+
+func (r StaticOneTapPhoneResolver) ResolvePhone(_ context.Context, _ string, carrierToken string) (string, string, error) {
+	phone := normalizePhoneCredentialKey(r[strings.TrimSpace(carrierToken)])
+	if phone == "" {
+		return "", "", fmt.Errorf("carrierToken not recognized")
+	}
+	return phone, maskPhoneForDisplay(phone), nil
+}
+
 func generateToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// issueAccessToken 在配置签发器时签发短期 JWT（principal=owner/persona），
+// 否则回退到不透明随机串。token_version 暂以 0 占位（吊销目前依赖 refresh 轮换）。
+func (s *AuthService) issueAccessToken(ownerID string, activeSub *model.Persona) (string, error) {
+	if s.accessSigner == nil {
+		return generateToken()
+	}
+	persona := ""
+	if activeSub != nil {
+		persona = activeSub.SubAccountID
+	}
+	return s.accessSigner.Sign(ownerID, persona, 0, "user")
+}
+
+// OtpSendResult 描述一次发码结果；DebugCode 仅在非生产开启 reveal 时填充。
+type OtpSendResult struct {
+	MaskedPhone      string `json:"maskedPhone"`
+	ExpiresInSeconds int    `json:"expiresInSeconds"`
+	DebugCode        string `json:"debugCode,omitempty"`
+}
+
+// SendOtp 校验号码、限频后生成并存储验证码（真实短信下发由网关/供应商对接，
+// 当前以日志/调试码替代）。
+func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResult, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.SendOtp")
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	normalized := normalizePhoneCredentialKey(phone)
+	if len(normalized) < 5 {
+		return nil, generated.AppErrorFromInvalidArgument("phone required")
+	}
+	if s.otp == nil {
+		return nil, generated.AppErrorFromInternalError("otp store unavailable")
+	}
+	allowed, retryAfter, err := s.otp.AllowSend(ctx, normalized)
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp allow-send: %v", err))
+	}
+	if !allowed {
+		return nil, generated.AppErrorFromRateLimited(
+			fmt.Sprintf("otp send throttled, retry after %ds", retryAfter))
+	}
+	code, err := generateOtpCode()
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError("otp generate")
+	}
+	if err := s.otp.SaveCode(ctx, normalized, code); err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp save: %v", err))
+	}
+	result := &OtpSendResult{
+		MaskedPhone:      maskPhoneForDisplay(normalized),
+		ExpiresInSeconds: int(otpCodeExpirySeconds),
+	}
+	if s.otpDebugReveal {
+		result.DebugCode = code
+	}
+	return result, nil
+}
+
+// verifyOtp 校验验证码：缺失/过期 -> 过期；不匹配 -> 不匹配；成功后立即清除。
+func (s *AuthService) verifyOtp(ctx context.Context, phone, code string) error {
+	if s.otp == nil {
+		return generated.AppErrorFromInternalError("otp store unavailable")
+	}
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return generated.AppErrorFromInvalidArgument("otpCode required")
+	}
+	stored, found, err := s.otp.ReadCode(ctx, phone)
+	if err != nil {
+		return generated.AppErrorFromInternalError(fmt.Sprintf("otp read: %v", err))
+	}
+	if !found {
+		return generated.AppErrorFromInvalidArgument("otp expired")
+	}
+	if stored != code {
+		return generated.AppErrorFromInvalidArgument("otp mismatch")
+	}
+	_ = s.otp.ClearCode(ctx, phone)
+	return nil
+}
+
+// LoginWithPhone 先校验验证码，再走统一的凭证登录链路。
+func (s *AuthService) LoginWithPhone(ctx context.Context, phone, otpCode, displayLabel string) (*LoginResult, error) {
+	normalized := normalizePhoneCredentialKey(phone)
+	if len(normalized) < 5 {
+		return nil, generated.AppErrorFromInvalidArgument("phone required")
+	}
+	if err := s.verifyOtp(ctx, normalized, otpCode); err != nil {
+		return nil, err
+	}
+	return s.LoginWithCredential(ctx, credentialPhone, normalized, displayLabel)
+}
+
+const otpCodeExpirySeconds = 5 * 60
+
+func generateOtpCode() (string, error) {
+	const digits = 6
+	max := big.NewInt(1000000)
+	n, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%0*d", digits, n.Int64()), nil
 }
 
 // SubAccountService handles SubAccount lifecycle within an OwnerAccount.
@@ -1426,6 +1726,23 @@ func hashInstallID(installID string) string {
 	}
 	sum := sha256.Sum256([]byte(normalized))
 	return hex.EncodeToString(sum[:])
+}
+
+func normalizePhoneCredentialKey(phone string) string {
+	trimmed := strings.TrimSpace(phone)
+	if trimmed == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(" ", "", "-", "", "(", "", ")", "")
+	return replacer.Replace(trimmed)
+}
+
+func maskPhoneForDisplay(phone string) string {
+	normalized := normalizePhoneCredentialKey(phone)
+	if len(normalized) <= 7 {
+		return normalized
+	}
+	return normalized[:3] + "****" + normalized[len(normalized)-4:]
 }
 
 func anonymousDisplayLabel(platform string) string {

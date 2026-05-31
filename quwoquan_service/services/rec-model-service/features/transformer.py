@@ -13,12 +13,12 @@ def build_candidate_features(req: ModelScoreRequest) -> list[dict[str, Any]]:
     """Build per-candidate feature dicts for scoring, aligned with feature_registry v2."""
     rows = []
     for c in req.candidates:
-        tags = c.tags or []
+        tags = c.tagRefs or []
         rows.append({
             "contentId": c.contentId or "",
             "contentType": c.contentType or "",
             "authorId": c.authorId or "",
-            "tags": tags,
+            "tagRefs": tags,
             "entityRefs": getattr(c, "entityRefs", None) or [],
             "ageHours": c.ageHours or 0.0,
             "viewCount": c.viewCount or 0,

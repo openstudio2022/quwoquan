@@ -29,7 +29,8 @@ fields:
   - { name: contentIdentity, type: enum, description: "内容身份层。moment/work，用于跨面统一过滤" }
   - { name: authorId, type: string }
   - { name: title, type: string }
-  - { name: tags, type: "[]string" }
+  - { name: tagRefs, type: "[]string" }
+  - { name: entityRefs, type: "[]string", description: "实体引用（POI/主页等），承载交集实体维度与推荐实体亲和" }
   - { name: coverUrl, type: string }
   - { name: likeCount, type: int }
   - { name: commentCount, type: int }
@@ -86,7 +87,7 @@ client_projection:
       nullable: false
       source: contentIdentity
       aliases: [contentIdentity, identity]
-      default: "((m['contentType']?.toString() == 'micro' || m['contentType']?.toString() == 'moment') ? 'moment' : 'work')"
+      default: "(m['contentType']?.toString() == 'micro' ? 'moment' : 'work')"
 
     - name: assistantUsePolicy
       dart_type: String
@@ -256,11 +257,11 @@ client_projection:
       aliases: [circleName]
       default: "null"
 
-    - name: tags
+    - name: tagRefs
       dart_type: List<String>
       nullable: true
-      source: tags
-      aliases: [tags]
+      source: tagRefs
+      aliases: [tagRefs]
       default: "null"
 
     - name: visibility

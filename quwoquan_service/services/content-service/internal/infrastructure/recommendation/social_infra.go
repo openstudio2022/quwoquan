@@ -270,7 +270,7 @@ func decodeCandidatesFromCursor(ctx context.Context, cursor *mongo.Cursor) ([]rt
 			ContentType  string    `bson:"contentType"`
 			AuthorID     string    `bson:"authorId"`
 			Title        string    `bson:"title"`
-			Tags         []string  `bson:"tags"`
+			Tags         []string  `bson:"tagRefs"`
 			EntityRefs   []string  `bson:"entityRefs"`
 			PublishedAt  time.Time `bson:"publishedAt"`
 			ViewCount    int64     `bson:"viewCount"`

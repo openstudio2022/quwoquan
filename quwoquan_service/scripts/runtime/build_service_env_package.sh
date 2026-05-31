@@ -40,6 +40,7 @@ fi
 cfg_root="quwoquan_service/services/${service}/configs"
 default_cfg="${cfg_root}/default/config.yaml"
 env_cfg="${cfg_root}/${env_name}/config.yaml"
+topology_manifest="deploy/shared/environment_topology_manifest.yaml"
 if [[ ! -f "$default_cfg" ]]; then
   echo "FAIL: default service config not found: $default_cfg" >&2
   exit 1
@@ -48,43 +49,75 @@ if [[ ! -f "$env_cfg" ]]; then
   echo "FAIL: env service config not found: $env_cfg" >&2
   exit 1
 fi
+if [[ ! -f "$topology_manifest" ]]; then
+  echo "FAIL: environment topology manifest not found: $topology_manifest" >&2
+  exit 1
+fi
 if [[ "$env_name" == prod* ]] && grep -E "test_fixtures|seedRefs|requiresSeedReset|APP_DATA_SOURCE=mock" "$env_cfg" >/dev/null; then
   echo "FAIL: production service config must not reference test seed: $env_cfg" >&2
   exit 1
 fi
-if [[ "$service" == "chat-service" ]]; then
-  python3 - "$env_name" "$env_cfg" <<'PY'
+python3 - "$service" "$env_name" "$env_cfg" "$topology_manifest" <<'PY'
+import json
 import re
 import sys
 from pathlib import Path
 
-env_name, cfg_path = sys.argv[1:3]
+service, env_name, cfg_path, topology_path = sys.argv[1:5]
 text = Path(cfg_path).read_text(encoding="utf-8")
-match = re.search(r"^\s*group_avatar_cdn_base_url:\s*[\"']?([^\"'\n]+)[\"']?\s*$", text, re.M)
-if not match:
-    raise SystemExit("chat-service config missing group_avatar_cdn_base_url")
-value = match.group(1).strip()
-if value.startswith("${"):
-    value = {
-        "prod": "https://avatar-cdn.quwoquan.com",
-    }.get(env_name, value)
-if not (value.startswith("http://") or value.startswith("https://")):
-    raise SystemExit("chat-service group_avatar_cdn_base_url must include http/https scheme")
-if env_name in {"gamma"} and not (value.endswith(".quwoquan-env.test") or ".quwoquan-env.test/" in value):
-    raise SystemExit("gamma chat-service group avatar CDN must use *.quwoquan-env.test or explicit env-test domain")
-if env_name in {"prod"}:
-    forbidden = (".example", ".test", "127.0.0.1", "10.0.2.2", "192.168.", "mock-cdn.example.com")
-    if value.startswith("http://") or any(token in value for token in forbidden):
-        raise SystemExit("prod chat-service group avatar CDN must be production HTTPS domain")
+topology = json.loads(Path(topology_path).read_text(encoding="utf-8"))
+env_cfg = ((topology.get("environments") or {}).get(env_name) or {})
+public_bases = env_cfg.get("publicBases") or {}
+
+for other_env, other_cfg in (topology.get("environments") or {}).items():
+    for key, value in (other_cfg.get("publicBases") or {}).items():
+        if not value or value not in text:
+            continue
+        if other_env != env_name:
+            raise SystemExit(
+                f"{service} config leaks {other_env} public base {value}"
+            )
+        if key in {"api", "realtime", "productOps"}:
+            raise SystemExit(
+                f"{service} config must not reference {key} public base {value}"
+            )
+
+if service == "chat-service":
+    match = re.search(r"^\s*group_avatar_cdn_base_url:\s*[\"']?([^\"'\n]+)[\"']?\s*$", text, re.M)
+    if not match:
+        raise SystemExit("chat-service config missing group_avatar_cdn_base_url")
+    value = match.group(1).strip()
+    if value.startswith("${"):
+        value = {
+            "prod": str(public_bases.get("mediaAvatar", "")),
+        }.get(env_name, value)
+    if not (value.startswith("http://") or value.startswith("https://")):
+        raise SystemExit("chat-service group_avatar_cdn_base_url must include http/https scheme")
+    expected = str(public_bases.get("mediaAvatar", "")).strip()
+    if expected and not value.startswith("${") and value != expected:
+        raise SystemExit(
+            f"chat-service group avatar CDN mismatch: {value} != {expected}"
+        )
+    if env_name in {"prod"}:
+        forbidden = tuple(env_cfg.get("forbiddenHostTokens") or ()) or (
+            ".example",
+            ".test",
+            "127.0.0.1",
+            "10.0.2.2",
+            "192.168.",
+            "mock-cdn.example.com",
+        )
+        if value.startswith("http://") or any(token in value for token in forbidden):
+            raise SystemExit("prod chat-service group avatar CDN must be production HTTPS domain")
 PY
-fi
 
 out_dir="artifacts/service-env-packages/${service}/${env_name}"
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
 cp "$default_cfg" "$out_dir/default_config.yaml"
 cp "$env_cfg" "$out_dir/config.yaml"
-python3 - "$service" "$env_name" "$out_dir/report.json" <<'PY'
+cp "$topology_manifest" "$out_dir/environment_topology_manifest.yaml"
+python3 - "$service" "$env_name" "$topology_manifest" "$out_dir/report.json" <<'PY'
 import json
 import re
 import sys
@@ -95,11 +128,14 @@ try:
 except ModuleNotFoundError:
     yaml = None
 
-service, env_name, report_path = sys.argv[1:4]
+service, env_name, topology_path, report_path = sys.argv[1:5]
 root = Path.cwd()
 module_mapping_path = root / "deploy/shared/module_package_mapping.yaml"
 catalog_path = root / "deploy/shared/reliable_task_module_catalog.yaml"
 retention_path = root / "deploy/shared/reliable_task_retention_policy.yaml"
+topology = json.loads(Path(topology_path).read_text(encoding="utf-8"))
+env_topology = ((topology.get("environments") or {}).get(env_name) or {})
+artifact_policy = ((env_topology.get("artifactPolicy") or {}).get("service") or {})
 
 module_package = None
 catalog_version = None
@@ -210,6 +246,8 @@ report = {
     "disabledModules": [],
     "catalogVersion": catalog_version,
     "retentionPolicyVersion": retention_version,
+    "topologySchemaVersion": topology.get("schemaVersion"),
+    "artifactPolicy": artifact_policy,
 }
 Path(report_path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY

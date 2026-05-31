@@ -132,7 +132,7 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackTagClick
-    payload_fields: [postId, tags]
+    payload_fields: [postId, tagRefs]
     ml_signal: moderate_positive
     signal_weight: 1.8
 
@@ -179,7 +179,7 @@ recommend_features:
       description: 内容类型（image/video/micro/article）
 
     - name: tag_count
-      source_field: tags
+      source_field: tagRefs
       type: int
       python_type: int
       transform: list_length

@@ -26,7 +26,7 @@ type RawBehaviorEvent struct {
 	SessionID       string   `bson:"sessionId"`
 	ContentID       string   `bson:"contentId"`
 	Action          string   `bson:"action"`
-	Tags            []string `bson:"tags,omitempty"`
+	Tags            []string `bson:"tagRefs,omitempty"`
 	Duration        float64  `bson:"duration,omitempty"`
 	AuthorID        string   `bson:"authorId,omitempty"`
 	ReferralSource  string   `bson:"referralSource,omitempty"`

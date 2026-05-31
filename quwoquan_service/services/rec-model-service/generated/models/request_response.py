@@ -13,7 +13,7 @@ class CandidateInput(BaseModel):
     contentId: str | None = None
     contentType: str | None = None
     authorId: str | None = None
-    tags: list[str] | None = None
+    tagRefs: list[str] | None = None
     entityRefs: list[str] | None = None
     ageHours: float | None = None
     viewCount: int | None = None

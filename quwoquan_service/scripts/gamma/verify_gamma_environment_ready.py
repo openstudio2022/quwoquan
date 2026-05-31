@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("GAMMA_BASE_URL", "http://127.0.0.1:18080"),
+        default=os.environ.get("GAMMA_BASE_URL", "http://127.0.0.1:19000"),
     )
     parser.add_argument(
         "--product-ops-base-url",

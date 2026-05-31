@@ -30,7 +30,7 @@ try:
 except ImportError:
     MongoClient = None
 
-CONTENT_TYPE_MAP = {"photo": 0, "video": 1, "article": 2, "moment": 3}
+CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "micro": 3}
 
 ITEM_NUMERIC = [
     "ageHours", "viewCount", "likeCount", "commentCount", "shareCount",
@@ -57,7 +57,7 @@ def _extract_feature_vector(row: dict, user_feat: dict, ctx_feat: dict) -> list[
     features.append(float(RECALL_PATH_MAP.get(row.get("recallPath", ""), -1)))
 
     tag_affinities = user_feat.get("tagAffinities", {})
-    item_tags = row.get("tags", [])
+    item_tags = row.get("tagRefs", [])
     tag_match = sum(tag_affinities.get(t, 0) for t in item_tags[:10])
     features.append(tag_match)
 
@@ -200,7 +200,7 @@ class ContentFeedScorer:
                 sc = float(predictions[i])
                 detail = {"model": "lgb", "raw_score": sc}
                 content_id = row["contentId"]
-                boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tags", []))
+                boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tagRefs", []))
                 sc += boost * 0.1
                 detail["sessionTagBoost"] = boost
                 observe_score_value(self._model_version, sc)
@@ -213,7 +213,7 @@ class ContentFeedScorer:
             for row in rows:
                 sc, detail = rule_score(row)
                 content_id = row["contentId"]
-                boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tags", []))
+                boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tagRefs", []))
                 sc += boost
                 detail["sessionTagBoost"] = boost
                 observe_score_value(self._model_version, sc)

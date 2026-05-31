@@ -101,7 +101,10 @@ type Post struct {
 	ContentIdentity           string         `json:"contentIdentity" bson:"contentIdentity"`
 	Title                     string         `json:"title" bson:"title"`
 	Body                      string         `json:"body" bson:"body"`
-	Tags                      []string       `json:"tags" bson:"tags"`
+	TagRefs                   []string       `json:"tagRefs" bson:"tagRefs"`
+	EntityRefs                []string       `json:"entityRefs" bson:"entityRefs"`
+	Rating                    int64          `json:"rating" bson:"rating"`
+	ReviewAspects             any            `json:"reviewAspects" bson:"reviewAspects"`
 	MediaUrls                 []string       `json:"mediaUrls" bson:"mediaUrls"`
 	CoverUrl                  string         `json:"coverUrl" bson:"coverUrl"`
 	ArticleDocument           map[string]any `json:"articleDocument" bson:"articleDocument"`

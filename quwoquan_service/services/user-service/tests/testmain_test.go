@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rtredis "quwoquan_service/runtime/redis"
 	runtimesync "quwoquan_service/runtime/sync"
 	httpadapter "quwoquan_service/services/user-service/internal/adapters/http"
@@ -28,6 +30,10 @@ var (
 	mongoDB     *mongo.Database
 	mr          *miniredis.Miniredis
 	redisClient rtredis.Client
+
+	testAccessSecret   = []byte("test-user-service-access-secret")
+	testAccessSigner   = rtauth.NewHS256Signer(testAccessSecret, 30*time.Minute)
+	testAccessVerifier = rtauth.NewHS256Verifier(testAccessSecret)
 )
 
 func TestMain(m *testing.M) {
@@ -104,6 +110,7 @@ func TestMain(m *testing.M) {
 		_ = followStore.EnsureIndexes(ctx)
 	}
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
+	userAuthStore := persistence.NewPgUserAuthStore(pgPool)
 	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
 	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
 	inviteStore := persistence.NewPgInviteStore(pgPool)
@@ -150,17 +157,25 @@ func TestMain(m *testing.M) {
 		anonymousDeviceBindingStore,
 		profileCache,
 		shardDirectory,
+		application.WithUserAuthRepository(userAuthStore),
+		application.WithOtpCodeStore(cache.NewOtpCodeCache(redisClient)),
+		application.WithOtpDebugReveal(true),
+		application.WithAccessTokenSigner(testAccessSigner),
+		application.WithOneTapPhoneResolver(application.StaticOneTapPhoneResolver{
+			"carrier_token_new":      "+8618013813901",
+			"carrier_token_existing": "+8618013813902",
+		}),
 	)
 	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
 	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
 	inviteService := application.NewInviteService(inviteStore, personaStore)
 
-	// 7. Handler
-	testHandler = httpadapter.NewUserHandler(
+	// 7. Handler（包裹统一鉴权中间件：Bearer JWT 验签后覆盖 X-Client-User-Id）
+	testHandler = rtauth.Middleware(testAccessVerifier)(httpadapter.NewUserHandler(
 		profileService, searchService, followService, blockService,
 		personaService, workService, lifeItemService, settingService,
 		authService, subAccountService, contactDiscoveryService, inviteService,
-	).Routes()
+	).Routes())
 
 	code := m.Run()
 

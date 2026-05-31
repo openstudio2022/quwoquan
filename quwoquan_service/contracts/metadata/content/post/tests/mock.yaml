@@ -32,10 +32,10 @@ dto_scenarios:
     input: { contentType: article }
     expected_type: ArticlePostDto
 
-  - name: dispatch_moment_by_content_type
-    description: micro contentType → MomentPostDto
+  - name: dispatch_micro_by_content_type
+    description: micro contentType → MicroPostDto
     input: { contentType: micro }
-    expected_type: MomentPostDto
+    expected_type: MicroPostDto
 
   - name: photo_aspect_ratio_computed
     description: width/height 有效时 aspectRatio != null
@@ -243,9 +243,9 @@ ui_config_scenarios:
   - name: card_config_all_types
     description: 四种内容类型都有卡片配置
     assertions:
-      - ContentUIConfig.cardConfigs.containsKey("photo")
+      - ContentUIConfig.cardConfigs.containsKey("image")
       - ContentUIConfig.cardConfigs.containsKey("video")
-      - ContentUIConfig.cardConfigs.containsKey("moment")
+      - ContentUIConfig.cardConfigs.containsKey("micro")
       - ContentUIConfig.cardConfigs.containsKey("article")
 
 # ── L1b Widget 测试场景 ───────────────────────────────────────────────

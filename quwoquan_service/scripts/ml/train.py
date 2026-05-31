@@ -47,7 +47,7 @@ USER_NUMERIC_FEATURES = [
 CONTEXT_NUMERIC_FEATURES = [
     "requestHour", "requestDayOfWeek",
 ]
-CONTENT_TYPE_MAP = {"photo": 0, "video": 1, "article": 2, "moment": 3}
+CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "micro": 3}
 
 
 def _extract_features(sample: dict) -> list[float]:
@@ -69,7 +69,7 @@ def _extract_features(sample: dict) -> list[float]:
     features.append(float(RECALL_PATH_MAP.get(item.get("recallPath", ""), -1)))
 
     tag_affinities = user.get("tagAffinities", {})
-    item_tags = item.get("tags", [])
+    item_tags = item.get("tagRefs", [])
     tag_match_score = sum(tag_affinities.get(t, 0) for t in item_tags[:10])
     features.append(tag_match_score)
 

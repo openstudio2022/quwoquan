@@ -4,6 +4,13 @@ routes:
   # 欢迎流：与 GoRouter + AppPageAccessNavigatorObserver 同源打 pageAccess（见 unified-app-page-access L3）
   - id: welcome
     path: /welcome
+  - id: login
+    path: /login
+    query_params: [reason, redirect]
+  - id: legalUserAgreement
+    path: /legal/user-agreement
+  - id: legalPrivacyPolicy
+    path: /legal/privacy-policy
   - id: home
     path: /
   - id: circles

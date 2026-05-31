@@ -72,7 +72,7 @@ gamma_cfg="$configs_root/gamma/config.yaml"
 prod_cfg="$configs_root/prod/config.yaml"
 current_cfg="$configs_root/config.yaml"
 
-mkdir -p "$(dirname "$default_cfg")" "$(dirname "$alpha_cfg")" "$(dirname "$beta_cfg")" "$(dirname "$gamma_cfg")" "$(dirname "$prod_gray_cfg")" "$(dirname "$prod_cfg")"
+mkdir -p "$(dirname "$default_cfg")" "$(dirname "$alpha_cfg")" "$(dirname "$beta_cfg")" "$(dirname "$gamma_cfg")" "$(dirname "$prod_cfg")"
 
 write_file() {
   local path="$1"

@@ -31,7 +31,7 @@ func (s *TagRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) (
 		limit = 30
 	}
 
-	filter := bson.M{"tags": bson.M{"$in": req.Tags}}
+	filter := bson.M{"tagRefs": bson.M{"$in": req.Tags}}
 	opts := options.Find().
 		SetSort(bson.D{{Key: "recScore", Value: -1}, {Key: "publishedAt", Value: -1}}).
 		SetLimit(int64(limit))

@@ -26,7 +26,7 @@ home_channels:
   - id: recommend
     label_key: home_tab_recommend
     template: intersection_rail_masonry
-    feed_query: { category: moment, identity: moment }
+    feed_query: { category: micro, identity: moment }
     mood_copy_key: home_mood_recommend
     order: 1
     runtime_overridable: true
@@ -261,7 +261,7 @@ article_template_recommendations:
 
 # ── 二、内容卡片展示配置 ────────────────────────────────────────────────
 card_config:
-  photo:
+  image:
     show_author_avatar: true
     show_author_name: true
     show_like_count: true
@@ -280,7 +280,7 @@ card_config:
     action_bar_items: [like, comment, favorite, share]
     progress_bar: true
 
-  moment:
+  micro:
     show_author_avatar: true
     show_author_name: true
     show_like_count: true
@@ -392,11 +392,6 @@ feature_flags:
     default: true
     runtime_overridable: false
     description: "美图页瀑布流布局（关闭则降级为等比网格）"
-
-  - flag: unified_surface_view
-    default: false
-    runtime_overridable: true
-    description: "统一展示模型 ContentSurfaceView 双读开关（开则四 surface 经统一 model 取数；关则走旧投影路径，可单独回退）"
 
 # ── 五、空状态 / 错误状态配置 ────────────────────────────────────────────
 empty_states:

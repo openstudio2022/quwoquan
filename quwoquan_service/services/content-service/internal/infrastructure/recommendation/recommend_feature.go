@@ -74,7 +74,7 @@ func (p *RecommendFeatureProjector) onPostCreated(ctx context.Context, event Pro
 	}
 
 	contentType := strVal(event.Payload, "contentType")
-	tags := anySlice(event.Payload, "tags")
+	tags := anySlice(event.Payload, "tagRefs")
 	if contentType == "" && len(tags) == 0 {
 		return nil
 	}
@@ -142,7 +142,7 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 		if !ok {
 			continue
 		}
-		tags := anySlice(ev, "tags")
+		tags := anySlice(ev, "tagRefs")
 		for _, t := range tags {
 			tagCounts[t]++
 		}
@@ -295,7 +295,7 @@ func (p *RecommendFeatureProjector) onContentReacted(ctx context.Context, event 
 	}
 
 	contentID := strVal(event.Payload, "contentId")
-	tags := anySlice(event.Payload, "tags")
+	tags := anySlice(event.Payload, "tagRefs")
 
 	inc := bson.M{}
 	if boolVal(event.Payload, "liked") {

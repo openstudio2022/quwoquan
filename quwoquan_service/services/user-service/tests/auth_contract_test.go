@@ -170,3 +170,244 @@ func TestAuth_AnonymousLogin_BackfillsDeviceBindingFromExistingCredential(t *tes
 		t.Fatalf("expected backfilled binding platform android, got %q", bindingPlatform)
 	}
 }
+
+func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	otpCode := requestOtpCode(t, "+8618013813909")
+	login := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/phone",
+		`{"phone":"+8618013813909","otpCode":"`+otpCode+`","deviceId":"ios-1","platform":"ios"}`,
+		nil,
+	)
+	if login.Code != http.StatusOK {
+		t.Fatalf("phone login: expected 200, got %d: %s", login.Code, login.Body.String())
+	}
+	loginBody := parseJSON(t, login)
+	ownerID, _ := loginBody["ownerId"].(string)
+	refreshToken, _ := loginBody["refreshToken"].(string)
+	if ownerID == "" || refreshToken == "" {
+		t.Fatalf("expected ownerId and refreshToken, got %#v", loginBody)
+	}
+
+	var storedToken string
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT refresh_token FROM user_auth WHERE user_id = $1`,
+		ownerID,
+	).Scan(&storedToken); err != nil {
+		t.Fatalf("query refresh token: %v", err)
+	}
+	if storedToken != refreshToken {
+		t.Fatalf("stored refresh token mismatch")
+	}
+
+	refresh := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/token/refresh",
+		`{"refreshToken":"`+refreshToken+`"}`,
+		nil,
+	)
+	if refresh.Code != http.StatusOK {
+		t.Fatalf("refresh: expected 200, got %d: %s", refresh.Code, refresh.Body.String())
+	}
+	refreshBody := parseJSON(t, refresh)
+	rotatedToken, _ := refreshBody["refreshToken"].(string)
+	if rotatedToken == "" || rotatedToken == refreshToken {
+		t.Fatalf("expected rotated refresh token, got %q", rotatedToken)
+	}
+
+	logout := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/logout",
+		`{"refreshToken":"`+rotatedToken+`","deviceId":"ios-1"}`,
+		authHeaders(ownerID),
+	)
+	if logout.Code != http.StatusOK {
+		t.Fatalf("logout: expected 200, got %d: %s", logout.Code, logout.Body.String())
+	}
+
+	reuse := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/token/refresh",
+		`{"refreshToken":"`+rotatedToken+`"}`,
+		nil,
+	)
+	if reuse.Code == http.StatusOK {
+		t.Fatalf("expected revoked token refresh to fail")
+	}
+}
+
+func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	rec := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/one-tap",
+		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","agreementVersion":"2026-05","privacyVersion":"2026-05"}`,
+		nil,
+	)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("one tap login: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := parseJSON(t, rec)
+	ownerID, _ := body["ownerId"].(string)
+	if ownerID == "" {
+		t.Fatalf("expected ownerId, got %#v", body)
+	}
+
+	var phone string
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT phone FROM user_profiles WHERE user_id = $1`,
+		ownerID,
+	).Scan(&phone); err != nil {
+		t.Fatalf("query profile phone: %v", err)
+	}
+	if phone != "+8618013813901" {
+		t.Fatalf("expected server resolved phone, got %q", phone)
+	}
+}
+
+func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	const phone = "+8618013813920"
+
+	// 未发码直接登录：验证码缺失，应被拒绝（非 200）。
+	noCode := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/phone",
+		`{"phone":"`+phone+`","otpCode":"123456","deviceId":"ios-1","platform":"ios"}`,
+		nil,
+	)
+	if noCode.Code == http.StatusOK {
+		t.Fatalf("phone login without sent otp: expected failure, got 200: %s", noCode.Body.String())
+	}
+
+	// 发码后用错误验证码：应被拒绝。
+	code := requestOtpCode(t, phone)
+	wrong := "000000"
+	if wrong == code {
+		wrong = "111111"
+	}
+	mismatch := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/phone",
+		`{"phone":"`+phone+`","otpCode":"`+wrong+`","deviceId":"ios-1","platform":"ios"}`,
+		nil,
+	)
+	if mismatch.Code == http.StatusOK {
+		t.Fatalf("phone login with wrong otp: expected failure, got 200: %s", mismatch.Body.String())
+	}
+
+	// 正确验证码：登录成功并签发 token。
+	login := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/phone",
+		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios"}`,
+		nil,
+	)
+	if login.Code != http.StatusOK {
+		t.Fatalf("phone login with valid otp: expected 200, got %d: %s", login.Code, login.Body.String())
+	}
+	loginBody := parseJSON(t, login)
+	if accessToken, _ := loginBody["accessToken"].(string); accessToken == "" {
+		t.Fatalf("expected accessToken on phone login, got %#v", loginBody)
+	}
+
+	// 验证码一次性：相同验证码不可复用。
+	reuse := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/phone",
+		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios"}`,
+		nil,
+	)
+	if reuse.Code == http.StatusOK {
+		t.Fatalf("phone login reusing consumed otp: expected failure, got 200: %s", reuse.Body.String())
+	}
+}
+
+func TestAuth_AccessToken_IsJWTAndDrivesIdentity(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	const phone = "+8618013813930"
+	otpCode := requestOtpCode(t, phone)
+	login := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/phone",
+		`{"phone":"`+phone+`","otpCode":"`+otpCode+`","deviceId":"ios-1","platform":"ios"}`,
+		nil,
+	)
+	if login.Code != http.StatusOK {
+		t.Fatalf("phone login: expected 200, got %d: %s", login.Code, login.Body.String())
+	}
+	loginBody := parseJSON(t, login)
+	ownerID, _ := loginBody["ownerId"].(string)
+	accessToken, _ := loginBody["accessToken"].(string)
+	if ownerID == "" || accessToken == "" {
+		t.Fatalf("expected ownerId and accessToken, got %#v", loginBody)
+	}
+
+	// access token 必须是可本地验签的 JWT，principal 与登录用户一致。
+	claims, err := testAccessVerifier.Verify(accessToken)
+	if err != nil {
+		t.Fatalf("access token is not a verifiable JWT: %v", err)
+	}
+	if claims.Subject != ownerID {
+		t.Fatalf("expected JWT subject %q, got %q", ownerID, claims.Subject)
+	}
+
+	// 仅携带 Bearer token、不传 X-Client-User-Id：身份必须由 token 推导。
+	me := doRequest(
+		t,
+		http.MethodGet,
+		"/v1/me",
+		"",
+		map[string]string{"Authorization": "Bearer " + accessToken},
+	)
+	if me.Code != http.StatusOK {
+		t.Fatalf("GET /v1/me with bearer only: expected 200, got %d: %s", me.Code, me.Body.String())
+	}
+
+	// 伪造 X-Client-User-Id 必须被 token principal 覆盖（防越权）。
+	spoof := doRequest(
+		t,
+		http.MethodGet,
+		"/v1/me",
+		"",
+		map[string]string{
+			"Authorization":    "Bearer " + accessToken,
+			"X-Client-User-Id": "attacker-owner-id",
+		},
+	)
+	if spoof.Code != http.StatusOK {
+		t.Fatalf("GET /v1/me with spoofed header: expected 200, got %d: %s", spoof.Code, spoof.Body.String())
+	}
+}
+
+func TestAuth_SendOtp_ThrottlesResend(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	const phone = "+8618013813921"
+	first := doRequest(t, http.MethodPost, "/v1/auth/otp/send", `{"phone":"`+phone+`"}`, nil)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first send otp: expected 200, got %d: %s", first.Code, first.Body.String())
+	}
+	// 冷却窗口内立即重发应被限频拒绝。
+	second := doRequest(t, http.MethodPost, "/v1/auth/otp/send", `{"phone":"`+phone+`"}`, nil)
+	if second.Code == http.StatusOK {
+		t.Fatalf("immediate resend: expected throttled failure, got 200: %s", second.Body.String())
+	}
+}

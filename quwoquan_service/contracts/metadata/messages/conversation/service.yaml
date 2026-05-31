@@ -15,6 +15,12 @@ api_routes:
     description: 会话列表（由 ConversationUserState 驱动排序，返回 maxSeq）
     query_params: [cursor, limit]
     response_entity: Conversation
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/chat/conversations/timestamps
@@ -40,6 +46,12 @@ api_routes:
     operation: GetConversation
     description: 会话详情（含 maxSeq、memberCount、membersRosterRevision、updatedAt）
     response_entity: Conversation
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   # ── 消息 ──────────────────────────────────────
   - method: GET
@@ -55,6 +67,12 @@ api_routes:
     description: 发送消息（clientMsgId 幂等 + seq 分配，返回 messageId + seq + timestamp）
     request_entity: Message
     writable_fields: [type, content, mediaUrl, media, cardPayload, replyToMessageId, mentions, clientMsgId, senderSubAccountId, senderDisplayNameSnapshot, senderAvatarUrlSnapshot, personaContextVersion]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/chat/conversations/{conversationId}/messages/{messageId}/recall

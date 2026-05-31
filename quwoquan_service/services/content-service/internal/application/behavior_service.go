@@ -32,7 +32,7 @@ type BehaviorEventInput struct {
 	Action          string   `json:"action"`
 	Type            string   `json:"type"`
 	ContentType     string   `json:"contentType"`
-	Tags            []string `json:"tags"`
+	Tags            []string `json:"tagRefs"`
 	Duration        float64  `json:"duration"`
 	DwellMs         float64  `json:"dwellMs"`
 	FeedPosition    int      `json:"feedPosition"`
@@ -123,7 +123,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		tags := eventInput.Tags
 		if len(tags) == 0 {
 			if post, ok := s.store.FindByID(ctx, contentID); ok {
-				tags = behaviorTagsFromAny(post.Tags)
+				tags = behaviorTagsFromAny(post.TagRefs)
 			}
 		}
 		feedPos := eventInput.FeedPosition
@@ -157,7 +157,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			"contentId":       contentID,
 			"action":          action,
 			"contentType":     signal.ContentType,
-			"tags":            append([]string(nil), tags...),
+			"tagRefs":         append([]string(nil), tags...),
 			"duration":        duration,
 			"timestamp":       occurredAt.Format(time.RFC3339),
 			"authorId":        signal.AuthorID,

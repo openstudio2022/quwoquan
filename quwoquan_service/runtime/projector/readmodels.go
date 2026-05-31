@@ -56,7 +56,7 @@ func (p *DiscoveryFeedProjector) upsertFeedItem(ctx context.Context, event event
 			"authorId":    event.Payload["authorId"],
 			"contentType": event.Payload["contentType"],
 			"title":       event.Payload["title"],
-			"tags":        event.Payload["tags"],
+			"tagRefs":     event.Payload["tagRefs"],
 			"publishedAt": event.OccurredAt,
 		},
 		map[string]any{
@@ -67,7 +67,7 @@ func (p *DiscoveryFeedProjector) upsertFeedItem(ctx context.Context, event event
 
 func (p *DiscoveryFeedProjector) updateFeedItem(ctx context.Context, event eventstore.StoredEvent) error {
 	set := map[string]any{}
-	for _, key := range []string{"title", "tags", "body"} {
+	for _, key := range []string{"title", "tagRefs", "body"} {
 		if v, ok := event.Payload[key]; ok {
 			set[key] = v
 		}
@@ -223,7 +223,7 @@ func (p *RecommendFeatureProjector) Project(ctx context.Context, event eventstor
 				"postId":      event.AggregateID,
 				"authorId":    event.Payload["authorId"],
 				"contentType": event.Payload["contentType"],
-				"tags":        event.Payload["tags"],
+				"tagRefs":     event.Payload["tagRefs"],
 				"publishedAt": event.OccurredAt,
 			},
 			map[string]any{

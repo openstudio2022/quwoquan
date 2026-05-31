@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 REGISTRY_PATH="${GAMMA_LOCAL_MEDIA_REGISTRY:-$ROOT_DIR/deploy/shared/media_slice_registry.json}"
 BIND_HOST="${GAMMA_LOCAL_MEDIA_BIND_HOST:-0.0.0.0}"
-PORT="${GAMMA_LOCAL_MEDIA_PORT:-18098}"
+PORT="${GAMMA_LOCAL_MEDIA_PORT:-19110}"
 PUBLIC_BASE_URL="${GAMMA_LOCAL_MEDIA_PUBLIC_BASE_URL:-}"
 REPORT_PATH="${GAMMA_LOCAL_MEDIA_REPORT:-$ROOT_DIR/artifacts/gamma-local-origin/report.json}"
 

@@ -90,7 +90,7 @@ entities:
         ops_exposure: read
         search_field: true
 
-      - name: tags
+      - name: tagRefs
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -100,6 +100,35 @@ entities:
         recommend_feature: true
         tag_ref: true
         description: 路径制 tagRef 列表；唯一真相源为数据工程 publish/v1/tags（四分组路径 id），已废弃扁平 tag_taxonomy.yaml
+
+      - name: entityRefs
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: 实体引用列表（POI/主页/景区等 entity 实例引用）；与 tagRefs 正交，承载交集实体维度归因与推荐实体亲和
+
+      - name: rating
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: 口碑整体评分 1–5；contentType==review 时必填（application 层条件校验），其余类型为空
+
+      - name: reviewAspects
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 口碑维度评分列表 [{aspectKey, score}]（如 环境/服务/性价比），可选；非 review 类型为空
 
       - name: mediaUrls
         type: "[]string"

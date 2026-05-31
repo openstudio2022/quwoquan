@@ -74,7 +74,7 @@
             "media/image/post/fixture_photo_001/v1/cover.png",
             "media/image/post/fixture_photo_001/v1/image-2.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "galleryPost"
@@ -141,7 +141,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_photo_002/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -208,7 +208,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_photo_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "heroPost"
@@ -279,7 +279,7 @@
             "media/image/post/fixture_video_001/v1/cover.png",
             "media/image/post/fixture_video_001/v1/image-2.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "videoCoverPost"
@@ -352,7 +352,7 @@
             "media/image/post/fixture_video_002/v1/cover.png",
             "media/image/post/fixture_video_002/v1/image-2.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "videoCoverPost"
@@ -425,7 +425,7 @@
             "media/image/post/fixture_article_001/v1/cover.png",
             "media/image/post/fixture_article_001/v1/image-2.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "articlePost"
@@ -522,7 +522,7 @@
             "media/image/post/fixture_article_002/v1/cover.png",
             "media/image/post/fixture_article_002/v1/image-2.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "articlePost"
@@ -558,8 +558,8 @@
         {
           "postId": "fixture_moment_001",
           "id": "fixture_moment_001",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_current",
@@ -615,7 +615,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_moment_001/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "momentPost"
@@ -625,8 +625,8 @@
         {
           "postId": "fixture_moment_002",
           "id": "fixture_moment_002",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_friend",
@@ -682,7 +682,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_moment_002/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "momentPost"
@@ -692,8 +692,8 @@
         {
           "postId": "fixture_moment_003",
           "id": "fixture_moment_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_weekend_1",
@@ -749,7 +749,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_moment_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "momentPost"
@@ -816,7 +816,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -895,7 +895,7 @@
             "media/image/post/fixture_post_photography_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_photography_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "galleryPost"
@@ -905,8 +905,8 @@
         {
           "postId": "fixture_post_photography_003",
           "id": "fixture_post_photography_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_photography_01",
@@ -962,7 +962,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "momentPost"
@@ -1033,7 +1033,7 @@
             "media/image/post/fixture_post_photography_004/v1/cover.jpg",
             "media/image/post/fixture_post_photography_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "articlePost"
@@ -1130,7 +1130,7 @@
             "media/image/post/fixture_post_photography_005/v1/cover.jpg",
             "media/image/post/fixture_post_photography_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "videoCoverPost"
@@ -1199,7 +1199,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -1278,7 +1278,7 @@
             "media/image/post/fixture_post_photography_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_photography_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "galleryPost"
@@ -1288,8 +1288,8 @@
         {
           "postId": "fixture_post_photography_008",
           "id": "fixture_post_photography_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_photography_06",
@@ -1345,7 +1345,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "momentPost"
@@ -1416,7 +1416,7 @@
             "media/image/post/fixture_post_photography_009/v1/cover.jpg",
             "media/image/post/fixture_post_photography_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "articlePost"
@@ -1513,7 +1513,7 @@
             "media/image/post/fixture_post_photography_010/v1/cover.jpg",
             "media/image/post/fixture_post_photography_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "videoCoverPost"
@@ -1582,7 +1582,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -1661,7 +1661,7 @@
             "media/image/post/fixture_post_photography_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_photography_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "galleryPost"
@@ -1671,8 +1671,8 @@
         {
           "postId": "fixture_post_photography_013",
           "id": "fixture_post_photography_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_photography_01",
@@ -1728,7 +1728,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "momentPost"
@@ -1799,7 +1799,7 @@
             "media/image/post/fixture_post_photography_014/v1/cover.jpg",
             "media/image/post/fixture_post_photography_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "articlePost"
@@ -1896,7 +1896,7 @@
             "media/image/post/fixture_post_photography_015/v1/cover.jpg",
             "media/image/post/fixture_post_photography_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "videoCoverPost"
@@ -1965,7 +1965,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -2044,7 +2044,7 @@
             "media/image/post/fixture_post_photography_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_photography_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "galleryPost"
@@ -2054,8 +2054,8 @@
         {
           "postId": "fixture_post_photography_018",
           "id": "fixture_post_photography_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_photography_06",
@@ -2111,7 +2111,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "momentPost"
@@ -2182,7 +2182,7 @@
             "media/image/post/fixture_post_photography_019/v1/cover.jpg",
             "media/image/post/fixture_post_photography_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "articlePost"
@@ -2279,7 +2279,7 @@
             "media/image/post/fixture_post_photography_020/v1/cover.jpg",
             "media/image/post/fixture_post_photography_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "videoCoverPost"
@@ -2348,7 +2348,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -2427,7 +2427,7 @@
             "media/image/post/fixture_post_photography_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_photography_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "galleryPost"
@@ -2437,8 +2437,8 @@
         {
           "postId": "fixture_post_photography_023",
           "id": "fixture_post_photography_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_photography_01",
@@ -2494,7 +2494,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "momentPost"
@@ -2565,7 +2565,7 @@
             "media/image/post/fixture_post_photography_024/v1/cover.jpg",
             "media/image/post/fixture_post_photography_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "articlePost"
@@ -2662,7 +2662,7 @@
             "media/image/post/fixture_post_photography_025/v1/cover.jpg",
             "media/image/post/fixture_post_photography_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "videoCoverPost"
@@ -2731,7 +2731,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -2810,7 +2810,7 @@
             "media/image/post/fixture_post_photography_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_photography_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "galleryPost"
@@ -2820,8 +2820,8 @@
         {
           "postId": "fixture_post_photography_028",
           "id": "fixture_post_photography_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_photography_06",
@@ -2877,7 +2877,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "momentPost"
@@ -2948,7 +2948,7 @@
             "media/image/post/fixture_post_photography_029/v1/cover.jpg",
             "media/image/post/fixture_post_photography_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "articlePost"
@@ -3045,7 +3045,7 @@
             "media/image/post/fixture_post_photography_030/v1/cover.jpg",
             "media/image/post/fixture_post_photography_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "videoCoverPost"
@@ -3114,7 +3114,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_photography_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -3193,7 +3193,7 @@
             "media/image/post/fixture_post_photography_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_photography_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "galleryPost"
@@ -3260,7 +3260,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "heroPost"
@@ -3339,7 +3339,7 @@
             "media/image/post/fixture_post_travel_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_travel_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "galleryPost"
@@ -3349,8 +3349,8 @@
         {
           "postId": "fixture_post_travel_003",
           "id": "fixture_post_travel_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_travel_01",
@@ -3406,7 +3406,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "momentPost"
@@ -3477,7 +3477,7 @@
             "media/image/post/fixture_post_travel_004/v1/cover.jpg",
             "media/image/post/fixture_post_travel_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "articlePost"
@@ -3574,7 +3574,7 @@
             "media/image/post/fixture_post_travel_005/v1/cover.jpg",
             "media/image/post/fixture_post_travel_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "videoCoverPost"
@@ -3643,7 +3643,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "heroPost"
@@ -3722,7 +3722,7 @@
             "media/image/post/fixture_post_travel_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_travel_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "galleryPost"
@@ -3732,8 +3732,8 @@
         {
           "postId": "fixture_post_travel_008",
           "id": "fixture_post_travel_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_travel_06",
@@ -3789,7 +3789,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "momentPost"
@@ -3860,7 +3860,7 @@
             "media/image/post/fixture_post_travel_009/v1/cover.jpg",
             "media/image/post/fixture_post_travel_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "articlePost"
@@ -3957,7 +3957,7 @@
             "media/image/post/fixture_post_travel_010/v1/cover.jpg",
             "media/image/post/fixture_post_travel_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "videoCoverPost"
@@ -4026,7 +4026,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "heroPost"
@@ -4105,7 +4105,7 @@
             "media/image/post/fixture_post_travel_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_travel_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "galleryPost"
@@ -4115,8 +4115,8 @@
         {
           "postId": "fixture_post_travel_013",
           "id": "fixture_post_travel_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_travel_01",
@@ -4172,7 +4172,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "momentPost"
@@ -4243,7 +4243,7 @@
             "media/image/post/fixture_post_travel_014/v1/cover.jpg",
             "media/image/post/fixture_post_travel_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "articlePost"
@@ -4340,7 +4340,7 @@
             "media/image/post/fixture_post_travel_015/v1/cover.jpg",
             "media/image/post/fixture_post_travel_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "videoCoverPost"
@@ -4409,7 +4409,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "heroPost"
@@ -4488,7 +4488,7 @@
             "media/image/post/fixture_post_travel_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_travel_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "galleryPost"
@@ -4498,8 +4498,8 @@
         {
           "postId": "fixture_post_travel_018",
           "id": "fixture_post_travel_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_travel_06",
@@ -4555,7 +4555,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "momentPost"
@@ -4626,7 +4626,7 @@
             "media/image/post/fixture_post_travel_019/v1/cover.jpg",
             "media/image/post/fixture_post_travel_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "articlePost"
@@ -4723,7 +4723,7 @@
             "media/image/post/fixture_post_travel_020/v1/cover.jpg",
             "media/image/post/fixture_post_travel_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "videoCoverPost"
@@ -4792,7 +4792,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "heroPost"
@@ -4871,7 +4871,7 @@
             "media/image/post/fixture_post_travel_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_travel_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "galleryPost"
@@ -4881,8 +4881,8 @@
         {
           "postId": "fixture_post_travel_023",
           "id": "fixture_post_travel_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_travel_01",
@@ -4938,7 +4938,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "momentPost"
@@ -5009,7 +5009,7 @@
             "media/image/post/fixture_post_travel_024/v1/cover.jpg",
             "media/image/post/fixture_post_travel_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "articlePost"
@@ -5106,7 +5106,7 @@
             "media/image/post/fixture_post_travel_025/v1/cover.jpg",
             "media/image/post/fixture_post_travel_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "videoCoverPost"
@@ -5175,7 +5175,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "heroPost"
@@ -5254,7 +5254,7 @@
             "media/image/post/fixture_post_travel_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_travel_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "galleryPost"
@@ -5264,8 +5264,8 @@
         {
           "postId": "fixture_post_travel_028",
           "id": "fixture_post_travel_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_travel_06",
@@ -5321,7 +5321,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "momentPost"
@@ -5392,7 +5392,7 @@
             "media/image/post/fixture_post_travel_029/v1/cover.jpg",
             "media/image/post/fixture_post_travel_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "articlePost"
@@ -5489,7 +5489,7 @@
             "media/image/post/fixture_post_travel_030/v1/cover.jpg",
             "media/image/post/fixture_post_travel_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "videoCoverPost"
@@ -5558,7 +5558,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_travel_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "heroPost"
@@ -5637,7 +5637,7 @@
             "media/image/post/fixture_post_travel_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_travel_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "travel",
             "galleryPost"
@@ -5704,7 +5704,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -5783,7 +5783,7 @@
             "media/image/post/fixture_post_citywalk_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_citywalk_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "galleryPost"
@@ -5793,8 +5793,8 @@
         {
           "postId": "fixture_post_citywalk_003",
           "id": "fixture_post_citywalk_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_citywalk_02",
@@ -5850,7 +5850,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "momentPost"
@@ -5921,7 +5921,7 @@
             "media/image/post/fixture_post_citywalk_004/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "articlePost"
@@ -6018,7 +6018,7 @@
             "media/image/post/fixture_post_citywalk_005/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "videoCoverPost"
@@ -6087,7 +6087,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -6166,7 +6166,7 @@
             "media/image/post/fixture_post_citywalk_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_citywalk_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "galleryPost"
@@ -6176,8 +6176,8 @@
         {
           "postId": "fixture_post_citywalk_008",
           "id": "fixture_post_citywalk_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_citywalk_07",
@@ -6233,7 +6233,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "momentPost"
@@ -6304,7 +6304,7 @@
             "media/image/post/fixture_post_citywalk_009/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "articlePost"
@@ -6401,7 +6401,7 @@
             "media/image/post/fixture_post_citywalk_010/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "videoCoverPost"
@@ -6470,7 +6470,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -6549,7 +6549,7 @@
             "media/image/post/fixture_post_citywalk_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_citywalk_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "galleryPost"
@@ -6559,8 +6559,8 @@
         {
           "postId": "fixture_post_citywalk_013",
           "id": "fixture_post_citywalk_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_citywalk_03",
@@ -6616,7 +6616,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "momentPost"
@@ -6687,7 +6687,7 @@
             "media/image/post/fixture_post_citywalk_014/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "articlePost"
@@ -6784,7 +6784,7 @@
             "media/image/post/fixture_post_citywalk_015/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "videoCoverPost"
@@ -6853,7 +6853,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -6932,7 +6932,7 @@
             "media/image/post/fixture_post_citywalk_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_citywalk_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "galleryPost"
@@ -6942,8 +6942,8 @@
         {
           "postId": "fixture_post_citywalk_018",
           "id": "fixture_post_citywalk_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_citywalk_08",
@@ -6999,7 +6999,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "momentPost"
@@ -7070,7 +7070,7 @@
             "media/image/post/fixture_post_citywalk_019/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "articlePost"
@@ -7167,7 +7167,7 @@
             "media/image/post/fixture_post_citywalk_020/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "videoCoverPost"
@@ -7236,7 +7236,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -7315,7 +7315,7 @@
             "media/image/post/fixture_post_citywalk_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_citywalk_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "galleryPost"
@@ -7325,8 +7325,8 @@
         {
           "postId": "fixture_post_citywalk_023",
           "id": "fixture_post_citywalk_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_citywalk_04",
@@ -7382,7 +7382,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "momentPost"
@@ -7453,7 +7453,7 @@
             "media/image/post/fixture_post_citywalk_024/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "articlePost"
@@ -7550,7 +7550,7 @@
             "media/image/post/fixture_post_citywalk_025/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "videoCoverPost"
@@ -7619,7 +7619,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -7698,7 +7698,7 @@
             "media/image/post/fixture_post_citywalk_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_citywalk_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "galleryPost"
@@ -7708,8 +7708,8 @@
         {
           "postId": "fixture_post_citywalk_028",
           "id": "fixture_post_citywalk_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_video",
@@ -7765,7 +7765,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "momentPost"
@@ -7836,7 +7836,7 @@
             "media/image/post/fixture_post_citywalk_029/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "articlePost"
@@ -7933,7 +7933,7 @@
             "media/image/post/fixture_post_citywalk_030/v1/cover.jpg",
             "media/image/post/fixture_post_citywalk_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "videoCoverPost"
@@ -8002,7 +8002,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_citywalk_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -8081,7 +8081,7 @@
             "media/image/post/fixture_post_citywalk_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_citywalk_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "galleryPost"
@@ -8148,7 +8148,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -8227,7 +8227,7 @@
             "media/image/post/fixture_post_food_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_food_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "galleryPost"
@@ -8237,8 +8237,8 @@
         {
           "postId": "fixture_post_food_003",
           "id": "fixture_post_food_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_food_02",
@@ -8294,7 +8294,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "momentPost"
@@ -8365,7 +8365,7 @@
             "media/image/post/fixture_post_food_004/v1/cover.jpg",
             "media/image/post/fixture_post_food_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "articlePost"
@@ -8462,7 +8462,7 @@
             "media/image/post/fixture_post_food_005/v1/cover.jpg",
             "media/image/post/fixture_post_food_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "videoCoverPost"
@@ -8531,7 +8531,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -8610,7 +8610,7 @@
             "media/image/post/fixture_post_food_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_food_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "galleryPost"
@@ -8620,8 +8620,8 @@
         {
           "postId": "fixture_post_food_008",
           "id": "fixture_post_food_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_food_07",
@@ -8677,7 +8677,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "momentPost"
@@ -8748,7 +8748,7 @@
             "media/image/post/fixture_post_food_009/v1/cover.jpg",
             "media/image/post/fixture_post_food_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "articlePost"
@@ -8845,7 +8845,7 @@
             "media/image/post/fixture_post_food_010/v1/cover.jpg",
             "media/image/post/fixture_post_food_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "videoCoverPost"
@@ -8914,7 +8914,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -8993,7 +8993,7 @@
             "media/image/post/fixture_post_food_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_food_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "galleryPost"
@@ -9003,8 +9003,8 @@
         {
           "postId": "fixture_post_food_013",
           "id": "fixture_post_food_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_food_03",
@@ -9060,7 +9060,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "momentPost"
@@ -9131,7 +9131,7 @@
             "media/image/post/fixture_post_food_014/v1/cover.jpg",
             "media/image/post/fixture_post_food_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "articlePost"
@@ -9228,7 +9228,7 @@
             "media/image/post/fixture_post_food_015/v1/cover.jpg",
             "media/image/post/fixture_post_food_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "videoCoverPost"
@@ -9297,7 +9297,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -9376,7 +9376,7 @@
             "media/image/post/fixture_post_food_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_food_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "galleryPost"
@@ -9386,8 +9386,8 @@
         {
           "postId": "fixture_post_food_018",
           "id": "fixture_post_food_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_food_08",
@@ -9443,7 +9443,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "momentPost"
@@ -9514,7 +9514,7 @@
             "media/image/post/fixture_post_food_019/v1/cover.jpg",
             "media/image/post/fixture_post_food_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "articlePost"
@@ -9611,7 +9611,7 @@
             "media/image/post/fixture_post_food_020/v1/cover.jpg",
             "media/image/post/fixture_post_food_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "videoCoverPost"
@@ -9680,7 +9680,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -9759,7 +9759,7 @@
             "media/image/post/fixture_post_food_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_food_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "galleryPost"
@@ -9769,8 +9769,8 @@
         {
           "postId": "fixture_post_food_023",
           "id": "fixture_post_food_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_food_04",
@@ -9826,7 +9826,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "momentPost"
@@ -9897,7 +9897,7 @@
             "media/image/post/fixture_post_food_024/v1/cover.jpg",
             "media/image/post/fixture_post_food_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "articlePost"
@@ -9994,7 +9994,7 @@
             "media/image/post/fixture_post_food_025/v1/cover.jpg",
             "media/image/post/fixture_post_food_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "videoCoverPost"
@@ -10063,7 +10063,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -10142,7 +10142,7 @@
             "media/image/post/fixture_post_food_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_food_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "galleryPost"
@@ -10152,8 +10152,8 @@
         {
           "postId": "fixture_post_food_028",
           "id": "fixture_post_food_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_weekend_2",
@@ -10209,7 +10209,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "momentPost"
@@ -10280,7 +10280,7 @@
             "media/image/post/fixture_post_food_029/v1/cover.jpg",
             "media/image/post/fixture_post_food_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "articlePost"
@@ -10377,7 +10377,7 @@
             "media/image/post/fixture_post_food_030/v1/cover.jpg",
             "media/image/post/fixture_post_food_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "videoCoverPost"
@@ -10446,7 +10446,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_food_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -10525,7 +10525,7 @@
             "media/image/post/fixture_post_food_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_food_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "galleryPost"
@@ -10592,7 +10592,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "heroPost"
@@ -10671,7 +10671,7 @@
             "media/image/post/fixture_post_coffee_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_coffee_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "galleryPost"
@@ -10681,8 +10681,8 @@
         {
           "postId": "fixture_post_coffee_003",
           "id": "fixture_post_coffee_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_coffee_02",
@@ -10738,7 +10738,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "momentPost"
@@ -10809,7 +10809,7 @@
             "media/image/post/fixture_post_coffee_004/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "articlePost"
@@ -10906,7 +10906,7 @@
             "media/image/post/fixture_post_coffee_005/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "videoCoverPost"
@@ -10975,7 +10975,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "heroPost"
@@ -11054,7 +11054,7 @@
             "media/image/post/fixture_post_coffee_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_coffee_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "galleryPost"
@@ -11064,8 +11064,8 @@
         {
           "postId": "fixture_post_coffee_008",
           "id": "fixture_post_coffee_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_coffee_07",
@@ -11121,7 +11121,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "momentPost"
@@ -11192,7 +11192,7 @@
             "media/image/post/fixture_post_coffee_009/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "articlePost"
@@ -11289,7 +11289,7 @@
             "media/image/post/fixture_post_coffee_010/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "videoCoverPost"
@@ -11358,7 +11358,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "heroPost"
@@ -11437,7 +11437,7 @@
             "media/image/post/fixture_post_coffee_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_coffee_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "galleryPost"
@@ -11447,8 +11447,8 @@
         {
           "postId": "fixture_post_coffee_013",
           "id": "fixture_post_coffee_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_coffee_03",
@@ -11504,7 +11504,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "momentPost"
@@ -11575,7 +11575,7 @@
             "media/image/post/fixture_post_coffee_014/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "articlePost"
@@ -11672,7 +11672,7 @@
             "media/image/post/fixture_post_coffee_015/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "videoCoverPost"
@@ -11741,7 +11741,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "heroPost"
@@ -11820,7 +11820,7 @@
             "media/image/post/fixture_post_coffee_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_coffee_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "galleryPost"
@@ -11830,8 +11830,8 @@
         {
           "postId": "fixture_post_coffee_018",
           "id": "fixture_post_coffee_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_coffee_08",
@@ -11887,7 +11887,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "momentPost"
@@ -11958,7 +11958,7 @@
             "media/image/post/fixture_post_coffee_019/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "articlePost"
@@ -12055,7 +12055,7 @@
             "media/image/post/fixture_post_coffee_020/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "videoCoverPost"
@@ -12124,7 +12124,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "heroPost"
@@ -12203,7 +12203,7 @@
             "media/image/post/fixture_post_coffee_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_coffee_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "galleryPost"
@@ -12213,8 +12213,8 @@
         {
           "postId": "fixture_post_coffee_023",
           "id": "fixture_post_coffee_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_coffee_04",
@@ -12270,7 +12270,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "momentPost"
@@ -12341,7 +12341,7 @@
             "media/image/post/fixture_post_coffee_024/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "articlePost"
@@ -12438,7 +12438,7 @@
             "media/image/post/fixture_post_coffee_025/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "videoCoverPost"
@@ -12507,7 +12507,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "heroPost"
@@ -12586,7 +12586,7 @@
             "media/image/post/fixture_post_coffee_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_coffee_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "galleryPost"
@@ -12596,8 +12596,8 @@
         {
           "postId": "fixture_post_coffee_028",
           "id": "fixture_post_coffee_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_friend",
@@ -12653,7 +12653,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "momentPost"
@@ -12724,7 +12724,7 @@
             "media/image/post/fixture_post_coffee_029/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "articlePost"
@@ -12821,7 +12821,7 @@
             "media/image/post/fixture_post_coffee_030/v1/cover.jpg",
             "media/image/post/fixture_post_coffee_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "videoCoverPost"
@@ -12890,7 +12890,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_coffee_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "heroPost"
@@ -12969,7 +12969,7 @@
             "media/image/post/fixture_post_coffee_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_coffee_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "coffee",
             "galleryPost"
@@ -13036,7 +13036,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "heroPost"
@@ -13115,7 +13115,7 @@
             "media/image/post/fixture_post_lifestyle_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_lifestyle_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "galleryPost"
@@ -13125,8 +13125,8 @@
         {
           "postId": "fixture_post_lifestyle_003",
           "id": "fixture_post_lifestyle_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_lifestyle_01",
@@ -13182,7 +13182,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "momentPost"
@@ -13253,7 +13253,7 @@
             "media/image/post/fixture_post_lifestyle_004/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "articlePost"
@@ -13350,7 +13350,7 @@
             "media/image/post/fixture_post_lifestyle_005/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "videoCoverPost"
@@ -13419,7 +13419,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "heroPost"
@@ -13498,7 +13498,7 @@
             "media/image/post/fixture_post_lifestyle_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_lifestyle_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "galleryPost"
@@ -13508,8 +13508,8 @@
         {
           "postId": "fixture_post_lifestyle_008",
           "id": "fixture_post_lifestyle_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_lifestyle_06",
@@ -13565,7 +13565,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "momentPost"
@@ -13636,7 +13636,7 @@
             "media/image/post/fixture_post_lifestyle_009/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "articlePost"
@@ -13733,7 +13733,7 @@
             "media/image/post/fixture_post_lifestyle_010/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "videoCoverPost"
@@ -13802,7 +13802,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "heroPost"
@@ -13881,7 +13881,7 @@
             "media/image/post/fixture_post_lifestyle_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_lifestyle_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "galleryPost"
@@ -13891,8 +13891,8 @@
         {
           "postId": "fixture_post_lifestyle_013",
           "id": "fixture_post_lifestyle_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_lifestyle_01",
@@ -13948,7 +13948,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "momentPost"
@@ -14019,7 +14019,7 @@
             "media/image/post/fixture_post_lifestyle_014/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "articlePost"
@@ -14116,7 +14116,7 @@
             "media/image/post/fixture_post_lifestyle_015/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "videoCoverPost"
@@ -14185,7 +14185,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "heroPost"
@@ -14264,7 +14264,7 @@
             "media/image/post/fixture_post_lifestyle_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_lifestyle_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "galleryPost"
@@ -14274,8 +14274,8 @@
         {
           "postId": "fixture_post_lifestyle_018",
           "id": "fixture_post_lifestyle_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_lifestyle_06",
@@ -14331,7 +14331,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "momentPost"
@@ -14402,7 +14402,7 @@
             "media/image/post/fixture_post_lifestyle_019/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "articlePost"
@@ -14499,7 +14499,7 @@
             "media/image/post/fixture_post_lifestyle_020/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "videoCoverPost"
@@ -14568,7 +14568,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "heroPost"
@@ -14647,7 +14647,7 @@
             "media/image/post/fixture_post_lifestyle_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_lifestyle_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "galleryPost"
@@ -14657,8 +14657,8 @@
         {
           "postId": "fixture_post_lifestyle_023",
           "id": "fixture_post_lifestyle_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_lifestyle_01",
@@ -14714,7 +14714,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "momentPost"
@@ -14785,7 +14785,7 @@
             "media/image/post/fixture_post_lifestyle_024/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "articlePost"
@@ -14882,7 +14882,7 @@
             "media/image/post/fixture_post_lifestyle_025/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "videoCoverPost"
@@ -14951,7 +14951,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "heroPost"
@@ -15030,7 +15030,7 @@
             "media/image/post/fixture_post_lifestyle_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_lifestyle_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "galleryPost"
@@ -15040,8 +15040,8 @@
         {
           "postId": "fixture_post_lifestyle_028",
           "id": "fixture_post_lifestyle_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_lifestyle_06",
@@ -15097,7 +15097,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "momentPost"
@@ -15168,7 +15168,7 @@
             "media/image/post/fixture_post_lifestyle_029/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "articlePost"
@@ -15265,7 +15265,7 @@
             "media/image/post/fixture_post_lifestyle_030/v1/cover.jpg",
             "media/image/post/fixture_post_lifestyle_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "videoCoverPost"
@@ -15334,7 +15334,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_lifestyle_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "heroPost"
@@ -15413,7 +15413,7 @@
             "media/image/post/fixture_post_lifestyle_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_lifestyle_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "lifestyle",
             "galleryPost"
@@ -15480,7 +15480,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -15559,7 +15559,7 @@
             "media/image/post/fixture_post_fitness_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_fitness_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "galleryPost"
@@ -15569,8 +15569,8 @@
         {
           "postId": "fixture_post_fitness_003",
           "id": "fixture_post_fitness_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_fitness_03",
@@ -15626,7 +15626,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "momentPost"
@@ -15697,7 +15697,7 @@
             "media/image/post/fixture_post_fitness_004/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "articlePost"
@@ -15794,7 +15794,7 @@
             "media/image/post/fixture_post_fitness_005/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "videoCoverPost"
@@ -15863,7 +15863,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -15942,7 +15942,7 @@
             "media/image/post/fixture_post_fitness_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_fitness_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "galleryPost"
@@ -15952,8 +15952,8 @@
         {
           "postId": "fixture_post_fitness_008",
           "id": "fixture_post_fitness_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_fitness_08",
@@ -16009,7 +16009,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "momentPost"
@@ -16080,7 +16080,7 @@
             "media/image/post/fixture_post_fitness_009/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "articlePost"
@@ -16177,7 +16177,7 @@
             "media/image/post/fixture_post_fitness_010/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "videoCoverPost"
@@ -16246,7 +16246,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -16325,7 +16325,7 @@
             "media/image/post/fixture_post_fitness_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_fitness_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "galleryPost"
@@ -16335,8 +16335,8 @@
         {
           "postId": "fixture_post_fitness_013",
           "id": "fixture_post_fitness_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_fitness_05",
@@ -16392,7 +16392,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "momentPost"
@@ -16463,7 +16463,7 @@
             "media/image/post/fixture_post_fitness_014/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "articlePost"
@@ -16560,7 +16560,7 @@
             "media/image/post/fixture_post_fitness_015/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "videoCoverPost"
@@ -16629,7 +16629,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -16708,7 +16708,7 @@
             "media/image/post/fixture_post_fitness_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_fitness_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "galleryPost"
@@ -16718,8 +16718,8 @@
         {
           "postId": "fixture_post_fitness_018",
           "id": "fixture_post_fitness_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_fitness_02",
@@ -16775,7 +16775,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "momentPost"
@@ -16846,7 +16846,7 @@
             "media/image/post/fixture_post_fitness_019/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "articlePost"
@@ -16943,7 +16943,7 @@
             "media/image/post/fixture_post_fitness_020/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "videoCoverPost"
@@ -17012,7 +17012,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -17091,7 +17091,7 @@
             "media/image/post/fixture_post_fitness_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_fitness_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "galleryPost"
@@ -17101,8 +17101,8 @@
         {
           "postId": "fixture_post_fitness_023",
           "id": "fixture_post_fitness_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_fitness_07",
@@ -17158,7 +17158,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "momentPost"
@@ -17229,7 +17229,7 @@
             "media/image/post/fixture_post_fitness_024/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "articlePost"
@@ -17326,7 +17326,7 @@
             "media/image/post/fixture_post_fitness_025/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "videoCoverPost"
@@ -17395,7 +17395,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -17474,7 +17474,7 @@
             "media/image/post/fixture_post_fitness_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_fitness_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "galleryPost"
@@ -17484,8 +17484,8 @@
         {
           "postId": "fixture_post_fitness_028",
           "id": "fixture_post_fitness_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_fitness_04",
@@ -17541,7 +17541,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "momentPost"
@@ -17612,7 +17612,7 @@
             "media/image/post/fixture_post_fitness_029/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "articlePost"
@@ -17709,7 +17709,7 @@
             "media/image/post/fixture_post_fitness_030/v1/cover.jpg",
             "media/image/post/fixture_post_fitness_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "videoCoverPost"
@@ -17778,7 +17778,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_fitness_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -17857,7 +17857,7 @@
             "media/image/post/fixture_post_fitness_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_fitness_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "galleryPost"
@@ -17924,7 +17924,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "heroPost"
@@ -18003,7 +18003,7 @@
             "media/image/post/fixture_post_pet_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_pet_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "galleryPost"
@@ -18013,8 +18013,8 @@
         {
           "postId": "fixture_post_pet_003",
           "id": "fixture_post_pet_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_pet_03",
@@ -18070,7 +18070,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "momentPost"
@@ -18141,7 +18141,7 @@
             "media/image/post/fixture_post_pet_004/v1/cover.jpg",
             "media/image/post/fixture_post_pet_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "articlePost"
@@ -18238,7 +18238,7 @@
             "media/image/post/fixture_post_pet_005/v1/cover.jpg",
             "media/image/post/fixture_post_pet_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "videoCoverPost"
@@ -18307,7 +18307,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "heroPost"
@@ -18386,7 +18386,7 @@
             "media/image/post/fixture_post_pet_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_pet_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "galleryPost"
@@ -18396,8 +18396,8 @@
         {
           "postId": "fixture_post_pet_008",
           "id": "fixture_post_pet_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_pet_08",
@@ -18453,7 +18453,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "momentPost"
@@ -18524,7 +18524,7 @@
             "media/image/post/fixture_post_pet_009/v1/cover.jpg",
             "media/image/post/fixture_post_pet_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "articlePost"
@@ -18621,7 +18621,7 @@
             "media/image/post/fixture_post_pet_010/v1/cover.jpg",
             "media/image/post/fixture_post_pet_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "videoCoverPost"
@@ -18690,7 +18690,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "heroPost"
@@ -18769,7 +18769,7 @@
             "media/image/post/fixture_post_pet_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_pet_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "galleryPost"
@@ -18779,8 +18779,8 @@
         {
           "postId": "fixture_post_pet_013",
           "id": "fixture_post_pet_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_pet_05",
@@ -18836,7 +18836,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "momentPost"
@@ -18907,7 +18907,7 @@
             "media/image/post/fixture_post_pet_014/v1/cover.jpg",
             "media/image/post/fixture_post_pet_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "articlePost"
@@ -19004,7 +19004,7 @@
             "media/image/post/fixture_post_pet_015/v1/cover.jpg",
             "media/image/post/fixture_post_pet_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "videoCoverPost"
@@ -19073,7 +19073,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "heroPost"
@@ -19152,7 +19152,7 @@
             "media/image/post/fixture_post_pet_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_pet_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "galleryPost"
@@ -19162,8 +19162,8 @@
         {
           "postId": "fixture_post_pet_018",
           "id": "fixture_post_pet_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_pet_02",
@@ -19219,7 +19219,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "momentPost"
@@ -19290,7 +19290,7 @@
             "media/image/post/fixture_post_pet_019/v1/cover.jpg",
             "media/image/post/fixture_post_pet_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "articlePost"
@@ -19387,7 +19387,7 @@
             "media/image/post/fixture_post_pet_020/v1/cover.jpg",
             "media/image/post/fixture_post_pet_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "videoCoverPost"
@@ -19456,7 +19456,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "heroPost"
@@ -19535,7 +19535,7 @@
             "media/image/post/fixture_post_pet_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_pet_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "galleryPost"
@@ -19545,8 +19545,8 @@
         {
           "postId": "fixture_post_pet_023",
           "id": "fixture_post_pet_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_pet_07",
@@ -19602,7 +19602,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "momentPost"
@@ -19673,7 +19673,7 @@
             "media/image/post/fixture_post_pet_024/v1/cover.jpg",
             "media/image/post/fixture_post_pet_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "articlePost"
@@ -19770,7 +19770,7 @@
             "media/image/post/fixture_post_pet_025/v1/cover.jpg",
             "media/image/post/fixture_post_pet_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "videoCoverPost"
@@ -19839,7 +19839,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "heroPost"
@@ -19918,7 +19918,7 @@
             "media/image/post/fixture_post_pet_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_pet_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "galleryPost"
@@ -19928,8 +19928,8 @@
         {
           "postId": "fixture_post_pet_028",
           "id": "fixture_post_pet_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_pet_04",
@@ -19985,7 +19985,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "momentPost"
@@ -20056,7 +20056,7 @@
             "media/image/post/fixture_post_pet_029/v1/cover.jpg",
             "media/image/post/fixture_post_pet_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "articlePost"
@@ -20153,7 +20153,7 @@
             "media/image/post/fixture_post_pet_030/v1/cover.jpg",
             "media/image/post/fixture_post_pet_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "videoCoverPost"
@@ -20222,7 +20222,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_pet_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "heroPost"
@@ -20301,7 +20301,7 @@
             "media/image/post/fixture_post_pet_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_pet_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "pet",
             "galleryPost"
@@ -20368,7 +20368,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "heroPost"
@@ -20447,7 +20447,7 @@
             "media/image/post/fixture_post_parenting_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_parenting_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "galleryPost"
@@ -20457,8 +20457,8 @@
         {
           "postId": "fixture_post_parenting_003",
           "id": "fixture_post_parenting_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_parenting_03",
@@ -20514,7 +20514,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "momentPost"
@@ -20585,7 +20585,7 @@
             "media/image/post/fixture_post_parenting_004/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "articlePost"
@@ -20682,7 +20682,7 @@
             "media/image/post/fixture_post_parenting_005/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "videoCoverPost"
@@ -20751,7 +20751,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "heroPost"
@@ -20830,7 +20830,7 @@
             "media/image/post/fixture_post_parenting_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_parenting_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "galleryPost"
@@ -20840,8 +20840,8 @@
         {
           "postId": "fixture_post_parenting_008",
           "id": "fixture_post_parenting_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_parenting_08",
@@ -20897,7 +20897,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "momentPost"
@@ -20968,7 +20968,7 @@
             "media/image/post/fixture_post_parenting_009/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "articlePost"
@@ -21065,7 +21065,7 @@
             "media/image/post/fixture_post_parenting_010/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "videoCoverPost"
@@ -21134,7 +21134,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "heroPost"
@@ -21213,7 +21213,7 @@
             "media/image/post/fixture_post_parenting_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_parenting_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "galleryPost"
@@ -21223,8 +21223,8 @@
         {
           "postId": "fixture_post_parenting_013",
           "id": "fixture_post_parenting_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_parenting_05",
@@ -21280,7 +21280,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "momentPost"
@@ -21351,7 +21351,7 @@
             "media/image/post/fixture_post_parenting_014/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "articlePost"
@@ -21448,7 +21448,7 @@
             "media/image/post/fixture_post_parenting_015/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "videoCoverPost"
@@ -21517,7 +21517,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "heroPost"
@@ -21596,7 +21596,7 @@
             "media/image/post/fixture_post_parenting_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_parenting_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "galleryPost"
@@ -21606,8 +21606,8 @@
         {
           "postId": "fixture_post_parenting_018",
           "id": "fixture_post_parenting_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_parenting_02",
@@ -21663,7 +21663,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "momentPost"
@@ -21734,7 +21734,7 @@
             "media/image/post/fixture_post_parenting_019/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "articlePost"
@@ -21831,7 +21831,7 @@
             "media/image/post/fixture_post_parenting_020/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "videoCoverPost"
@@ -21900,7 +21900,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "heroPost"
@@ -21979,7 +21979,7 @@
             "media/image/post/fixture_post_parenting_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_parenting_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "galleryPost"
@@ -21989,8 +21989,8 @@
         {
           "postId": "fixture_post_parenting_023",
           "id": "fixture_post_parenting_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_parenting_07",
@@ -22046,7 +22046,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "momentPost"
@@ -22117,7 +22117,7 @@
             "media/image/post/fixture_post_parenting_024/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "articlePost"
@@ -22214,7 +22214,7 @@
             "media/image/post/fixture_post_parenting_025/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "videoCoverPost"
@@ -22283,7 +22283,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "heroPost"
@@ -22362,7 +22362,7 @@
             "media/image/post/fixture_post_parenting_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_parenting_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "galleryPost"
@@ -22372,8 +22372,8 @@
         {
           "postId": "fixture_post_parenting_028",
           "id": "fixture_post_parenting_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_parenting_04",
@@ -22429,7 +22429,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "momentPost"
@@ -22500,7 +22500,7 @@
             "media/image/post/fixture_post_parenting_029/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "articlePost"
@@ -22597,7 +22597,7 @@
             "media/image/post/fixture_post_parenting_030/v1/cover.jpg",
             "media/image/post/fixture_post_parenting_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "videoCoverPost"
@@ -22666,7 +22666,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_parenting_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "heroPost"
@@ -22745,7 +22745,7 @@
             "media/image/post/fixture_post_parenting_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_parenting_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "parenting",
             "galleryPost"
@@ -22812,7 +22812,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -22891,7 +22891,7 @@
             "media/image/post/fixture_post_outdoor_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_outdoor_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "galleryPost"
@@ -22901,8 +22901,8 @@
         {
           "postId": "fixture_post_outdoor_003",
           "id": "fixture_post_outdoor_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_outdoor_03",
@@ -22958,7 +22958,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "momentPost"
@@ -23029,7 +23029,7 @@
             "media/image/post/fixture_post_outdoor_004/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "articlePost"
@@ -23126,7 +23126,7 @@
             "media/image/post/fixture_post_outdoor_005/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "videoCoverPost"
@@ -23195,7 +23195,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -23274,7 +23274,7 @@
             "media/image/post/fixture_post_outdoor_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_outdoor_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "galleryPost"
@@ -23284,8 +23284,8 @@
         {
           "postId": "fixture_post_outdoor_008",
           "id": "fixture_post_outdoor_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_outdoor_08",
@@ -23341,7 +23341,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "momentPost"
@@ -23412,7 +23412,7 @@
             "media/image/post/fixture_post_outdoor_009/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "articlePost"
@@ -23509,7 +23509,7 @@
             "media/image/post/fixture_post_outdoor_010/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "videoCoverPost"
@@ -23578,7 +23578,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -23657,7 +23657,7 @@
             "media/image/post/fixture_post_outdoor_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_outdoor_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "galleryPost"
@@ -23667,8 +23667,8 @@
         {
           "postId": "fixture_post_outdoor_013",
           "id": "fixture_post_outdoor_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_outdoor_05",
@@ -23724,7 +23724,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "momentPost"
@@ -23795,7 +23795,7 @@
             "media/image/post/fixture_post_outdoor_014/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "articlePost"
@@ -23892,7 +23892,7 @@
             "media/image/post/fixture_post_outdoor_015/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "videoCoverPost"
@@ -23961,7 +23961,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -24040,7 +24040,7 @@
             "media/image/post/fixture_post_outdoor_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_outdoor_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "galleryPost"
@@ -24050,8 +24050,8 @@
         {
           "postId": "fixture_post_outdoor_018",
           "id": "fixture_post_outdoor_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_outdoor_02",
@@ -24107,7 +24107,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "momentPost"
@@ -24178,7 +24178,7 @@
             "media/image/post/fixture_post_outdoor_019/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "articlePost"
@@ -24275,7 +24275,7 @@
             "media/image/post/fixture_post_outdoor_020/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "videoCoverPost"
@@ -24344,7 +24344,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -24423,7 +24423,7 @@
             "media/image/post/fixture_post_outdoor_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_outdoor_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "galleryPost"
@@ -24433,8 +24433,8 @@
         {
           "postId": "fixture_post_outdoor_023",
           "id": "fixture_post_outdoor_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_outdoor_07",
@@ -24490,7 +24490,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "momentPost"
@@ -24561,7 +24561,7 @@
             "media/image/post/fixture_post_outdoor_024/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "articlePost"
@@ -24658,7 +24658,7 @@
             "media/image/post/fixture_post_outdoor_025/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "videoCoverPost"
@@ -24727,7 +24727,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -24806,7 +24806,7 @@
             "media/image/post/fixture_post_outdoor_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_outdoor_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "galleryPost"
@@ -24816,8 +24816,8 @@
         {
           "postId": "fixture_post_outdoor_028",
           "id": "fixture_post_outdoor_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_outdoor_04",
@@ -24873,7 +24873,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "momentPost"
@@ -24944,7 +24944,7 @@
             "media/image/post/fixture_post_outdoor_029/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "articlePost"
@@ -25041,7 +25041,7 @@
             "media/image/post/fixture_post_outdoor_030/v1/cover.jpg",
             "media/image/post/fixture_post_outdoor_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "videoCoverPost"
@@ -25110,7 +25110,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_outdoor_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -25189,7 +25189,7 @@
             "media/image/post/fixture_post_outdoor_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_outdoor_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "galleryPost"
@@ -25256,7 +25256,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -25335,7 +25335,7 @@
             "media/image/post/fixture_post_tech_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_tech_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "galleryPost"
@@ -25345,8 +25345,8 @@
         {
           "postId": "fixture_post_tech_003",
           "id": "fixture_post_tech_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_tech_03",
@@ -25402,7 +25402,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "momentPost"
@@ -25473,7 +25473,7 @@
             "media/image/post/fixture_post_tech_004/v1/cover.jpg",
             "media/image/post/fixture_post_tech_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "articlePost"
@@ -25570,7 +25570,7 @@
             "media/image/post/fixture_post_tech_005/v1/cover.jpg",
             "media/image/post/fixture_post_tech_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "videoCoverPost"
@@ -25639,7 +25639,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -25718,7 +25718,7 @@
             "media/image/post/fixture_post_tech_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_tech_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "galleryPost"
@@ -25728,8 +25728,8 @@
         {
           "postId": "fixture_post_tech_008",
           "id": "fixture_post_tech_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_tech_08",
@@ -25785,7 +25785,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "momentPost"
@@ -25856,7 +25856,7 @@
             "media/image/post/fixture_post_tech_009/v1/cover.jpg",
             "media/image/post/fixture_post_tech_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "articlePost"
@@ -25953,7 +25953,7 @@
             "media/image/post/fixture_post_tech_010/v1/cover.jpg",
             "media/image/post/fixture_post_tech_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "videoCoverPost"
@@ -26022,7 +26022,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -26101,7 +26101,7 @@
             "media/image/post/fixture_post_tech_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_tech_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "galleryPost"
@@ -26111,8 +26111,8 @@
         {
           "postId": "fixture_post_tech_013",
           "id": "fixture_post_tech_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_tech_05",
@@ -26168,7 +26168,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "momentPost"
@@ -26239,7 +26239,7 @@
             "media/image/post/fixture_post_tech_014/v1/cover.jpg",
             "media/image/post/fixture_post_tech_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "articlePost"
@@ -26336,7 +26336,7 @@
             "media/image/post/fixture_post_tech_015/v1/cover.jpg",
             "media/image/post/fixture_post_tech_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "videoCoverPost"
@@ -26405,7 +26405,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -26484,7 +26484,7 @@
             "media/image/post/fixture_post_tech_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_tech_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "galleryPost"
@@ -26494,8 +26494,8 @@
         {
           "postId": "fixture_post_tech_018",
           "id": "fixture_post_tech_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_tech_02",
@@ -26551,7 +26551,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "momentPost"
@@ -26622,7 +26622,7 @@
             "media/image/post/fixture_post_tech_019/v1/cover.jpg",
             "media/image/post/fixture_post_tech_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "articlePost"
@@ -26719,7 +26719,7 @@
             "media/image/post/fixture_post_tech_020/v1/cover.jpg",
             "media/image/post/fixture_post_tech_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "videoCoverPost"
@@ -26788,7 +26788,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -26867,7 +26867,7 @@
             "media/image/post/fixture_post_tech_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_tech_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "galleryPost"
@@ -26877,8 +26877,8 @@
         {
           "postId": "fixture_post_tech_023",
           "id": "fixture_post_tech_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_tech_07",
@@ -26934,7 +26934,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "momentPost"
@@ -27005,7 +27005,7 @@
             "media/image/post/fixture_post_tech_024/v1/cover.jpg",
             "media/image/post/fixture_post_tech_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "articlePost"
@@ -27102,7 +27102,7 @@
             "media/image/post/fixture_post_tech_025/v1/cover.jpg",
             "media/image/post/fixture_post_tech_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "videoCoverPost"
@@ -27171,7 +27171,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -27250,7 +27250,7 @@
             "media/image/post/fixture_post_tech_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_tech_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "galleryPost"
@@ -27260,8 +27260,8 @@
         {
           "postId": "fixture_post_tech_028",
           "id": "fixture_post_tech_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_tech_04",
@@ -27317,7 +27317,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "momentPost"
@@ -27388,7 +27388,7 @@
             "media/image/post/fixture_post_tech_029/v1/cover.jpg",
             "media/image/post/fixture_post_tech_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "articlePost"
@@ -27485,7 +27485,7 @@
             "media/image/post/fixture_post_tech_030/v1/cover.jpg",
             "media/image/post/fixture_post_tech_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "videoCoverPost"
@@ -27554,7 +27554,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_tech_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -27633,7 +27633,7 @@
             "media/image/post/fixture_post_tech_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_tech_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "galleryPost"
@@ -27700,7 +27700,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "heroPost"
@@ -27779,7 +27779,7 @@
             "media/image/post/fixture_post_designwriting_002/v1/detail_2.jpg",
             "media/image/post/fixture_post_designwriting_002/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "galleryPost"
@@ -27789,8 +27789,8 @@
         {
           "postId": "fixture_post_designwriting_003",
           "id": "fixture_post_designwriting_003",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_designwriting_01",
@@ -27846,7 +27846,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_003/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "momentPost"
@@ -27917,7 +27917,7 @@
             "media/image/post/fixture_post_designwriting_004/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_004/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "articlePost"
@@ -28014,7 +28014,7 @@
             "media/image/post/fixture_post_designwriting_005/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_005/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "videoCoverPost"
@@ -28083,7 +28083,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "heroPost"
@@ -28162,7 +28162,7 @@
             "media/image/post/fixture_post_designwriting_007/v1/detail_2.jpg",
             "media/image/post/fixture_post_designwriting_007/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "galleryPost"
@@ -28172,8 +28172,8 @@
         {
           "postId": "fixture_post_designwriting_008",
           "id": "fixture_post_designwriting_008",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_designwriting_06",
@@ -28229,7 +28229,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_008/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "momentPost"
@@ -28300,7 +28300,7 @@
             "media/image/post/fixture_post_designwriting_009/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_009/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "articlePost"
@@ -28397,7 +28397,7 @@
             "media/image/post/fixture_post_designwriting_010/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_010/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "videoCoverPost"
@@ -28466,7 +28466,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "heroPost"
@@ -28545,7 +28545,7 @@
             "media/image/post/fixture_post_designwriting_012/v1/detail_2.jpg",
             "media/image/post/fixture_post_designwriting_012/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "galleryPost"
@@ -28555,8 +28555,8 @@
         {
           "postId": "fixture_post_designwriting_013",
           "id": "fixture_post_designwriting_013",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_designwriting_01",
@@ -28612,7 +28612,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_013/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "momentPost"
@@ -28683,7 +28683,7 @@
             "media/image/post/fixture_post_designwriting_014/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_014/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "articlePost"
@@ -28780,7 +28780,7 @@
             "media/image/post/fixture_post_designwriting_015/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_015/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "videoCoverPost"
@@ -28849,7 +28849,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "heroPost"
@@ -28928,7 +28928,7 @@
             "media/image/post/fixture_post_designwriting_017/v1/detail_2.jpg",
             "media/image/post/fixture_post_designwriting_017/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "galleryPost"
@@ -28938,8 +28938,8 @@
         {
           "postId": "fixture_post_designwriting_018",
           "id": "fixture_post_designwriting_018",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_designwriting_06",
@@ -28995,7 +28995,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_018/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "momentPost"
@@ -29066,7 +29066,7 @@
             "media/image/post/fixture_post_designwriting_019/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_019/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "articlePost"
@@ -29163,7 +29163,7 @@
             "media/image/post/fixture_post_designwriting_020/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_020/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "videoCoverPost"
@@ -29232,7 +29232,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_021/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "heroPost"
@@ -29311,7 +29311,7 @@
             "media/image/post/fixture_post_designwriting_022/v1/detail_2.jpg",
             "media/image/post/fixture_post_designwriting_022/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "galleryPost"
@@ -29321,8 +29321,8 @@
         {
           "postId": "fixture_post_designwriting_023",
           "id": "fixture_post_designwriting_023",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_designwriting_01",
@@ -29378,7 +29378,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_023/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "momentPost"
@@ -29449,7 +29449,7 @@
             "media/image/post/fixture_post_designwriting_024/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_024/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "articlePost"
@@ -29546,7 +29546,7 @@
             "media/image/post/fixture_post_designwriting_025/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_025/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "videoCoverPost"
@@ -29615,7 +29615,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_026/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "heroPost"
@@ -29694,7 +29694,7 @@
             "media/image/post/fixture_post_designwriting_027/v1/detail_2.jpg",
             "media/image/post/fixture_post_designwriting_027/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "galleryPost"
@@ -29704,8 +29704,8 @@
         {
           "postId": "fixture_post_designwriting_028",
           "id": "fixture_post_designwriting_028",
-          "contentType": "moment",
-          "type": "moment",
+          "contentType": "micro",
+          "type": "micro",
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_designwriting_06",
@@ -29761,7 +29761,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_028/v1/cover.png"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "momentPost"
@@ -29832,7 +29832,7 @@
             "media/image/post/fixture_post_designwriting_029/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_029/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "articlePost"
@@ -29929,7 +29929,7 @@
             "media/image/post/fixture_post_designwriting_030/v1/cover.jpg",
             "media/image/post/fixture_post_designwriting_030/v1/detail_1.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "videoCoverPost"
@@ -29998,7 +29998,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_designwriting_031/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "heroPost"
@@ -30077,7 +30077,7 @@
             "media/image/post/fixture_post_designwriting_032/v1/detail_2.jpg",
             "media/image/post/fixture_post_designwriting_032/v1/detail_3.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "designWriting",
             "galleryPost"
@@ -30144,7 +30144,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30211,7 +30211,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_002/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30278,7 +30278,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_003/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30345,7 +30345,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_004/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30412,7 +30412,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_005/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30479,7 +30479,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30546,7 +30546,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_007/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30613,7 +30613,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_008/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30680,7 +30680,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_009/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30747,7 +30747,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_010/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30814,7 +30814,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30881,7 +30881,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_012/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -30948,7 +30948,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_013/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -31015,7 +31015,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_014/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -31082,7 +31082,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_015/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -31149,7 +31149,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_photography_travel_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "photography",
             "heroPost"
@@ -31216,7 +31216,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31283,7 +31283,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_002/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31350,7 +31350,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_003/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31417,7 +31417,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_004/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31484,7 +31484,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_005/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31551,7 +31551,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31618,7 +31618,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_007/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31685,7 +31685,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_008/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31752,7 +31752,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_009/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31819,7 +31819,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_010/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31886,7 +31886,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -31953,7 +31953,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_012/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -32020,7 +32020,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_013/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -32087,7 +32087,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_014/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -32154,7 +32154,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_015/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -32221,7 +32221,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_citywalk_coffee_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "cityWalk",
             "heroPost"
@@ -32288,7 +32288,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -32355,7 +32355,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_002/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -32422,7 +32422,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_003/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -32489,7 +32489,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_004/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -32556,7 +32556,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_005/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -32623,7 +32623,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -32690,7 +32690,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_007/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -32757,7 +32757,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_008/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -32824,7 +32824,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_009/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -32891,7 +32891,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_010/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -32958,7 +32958,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -33025,7 +33025,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_012/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -33092,7 +33092,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_013/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -33159,7 +33159,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_014/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -33226,7 +33226,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_015/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -33293,7 +33293,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_food_lifestyle_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "food",
             "heroPost"
@@ -33360,7 +33360,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -33427,7 +33427,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_002/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -33494,7 +33494,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_003/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -33561,7 +33561,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_004/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -33628,7 +33628,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_005/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -33695,7 +33695,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -33762,7 +33762,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_007/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -33829,7 +33829,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_008/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -33896,7 +33896,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_009/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -33963,7 +33963,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_010/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -34030,7 +34030,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -34097,7 +34097,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_012/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -34164,7 +34164,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_013/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -34231,7 +34231,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_014/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -34298,7 +34298,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_015/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -34365,7 +34365,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_tech_designwriting_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "tech",
             "heroPost"
@@ -34432,7 +34432,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -34499,7 +34499,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_002/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -34566,7 +34566,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_003/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -34633,7 +34633,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_004/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -34700,7 +34700,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_005/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -34767,7 +34767,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -34834,7 +34834,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_007/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -34901,7 +34901,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_008/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -34968,7 +34968,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_009/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -35035,7 +35035,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_010/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -35102,7 +35102,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -35169,7 +35169,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_012/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -35236,7 +35236,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_013/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -35303,7 +35303,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_014/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -35370,7 +35370,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_015/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -35437,7 +35437,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_outdoor_pet_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "outdoor",
             "heroPost"
@@ -35504,7 +35504,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_001/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -35571,7 +35571,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_002/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -35638,7 +35638,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_003/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -35705,7 +35705,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_004/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -35772,7 +35772,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_005/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -35839,7 +35839,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_006/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -35906,7 +35906,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_007/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -35973,7 +35973,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_008/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -36040,7 +36040,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_009/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -36107,7 +36107,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_010/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -36174,7 +36174,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_011/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -36241,7 +36241,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_012/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -36308,7 +36308,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_013/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -36375,7 +36375,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_014/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -36442,7 +36442,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_015/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"
@@ -36509,7 +36509,7 @@
           "imageObjectKeys": [
             "media/image/post/fixture_post_cross_fitness_lifestyle_016/v1/cover.jpg"
           ],
-          "tags": [
+          "tagRefs": [
             "fixture",
             "fitness",
             "heroPost"

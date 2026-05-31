@@ -29,7 +29,7 @@ scenarios:
     assertions:
       - db.posts.FindOne({_id: result.id}) → document exists with correct fields
       - db.media_assets.Find({postId: result.id}) → assets created
-      - eventSpy.AssertPublished("PostCreated", {_id, authorId, contentType, tags})
+      - eventSpy.AssertPublished("PostCreated", {_id, authorId, contentType, tagRefs})
       - embedding mock called with correct input fields
 
   - name: create_post_all_types

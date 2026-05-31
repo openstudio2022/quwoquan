@@ -1,5 +1,5 @@
 version: 1
-read_model: MomentPost
+read_model: MicroPost
 
 description: |
   微趣类帖子 ReadModel（微趣频道）。
@@ -13,12 +13,12 @@ source_entities:
   - Post
 
 consumers:
-  - app (discovery/moment tab)
+  - app (discovery/micro tab)
 
 fields:
   - { name: postId,         type: ObjectId }
-  - { name: contentType,    type: enum,   description: "固定为 micro（客户端展示为 moment）" }
-  - { name: contentIdentity, type: enum,  description: "内容身份层。点滴固定为 moment" }
+  - { name: contentType,    type: enum,   description: "内容类型轴（ContentType），微趣固定为 micro" }
+  - { name: contentIdentity, type: enum,  description: "内容身份轴（ContentIdentity），点滴固定为 moment" }
   - { name: authorId,              type: string }
   - { name: authorNickname,        type: string, description: 作者昵称（反范式） }
   - { name: authorAvatarUrl,       type: string, description: 作者头像（反范式） }
@@ -34,19 +34,19 @@ fields:
   - { name: publishedAt,    type: timestamp }
 
 # App 端契约（client_projection）
-# 由 codegen_app_metadata 读取，生成 MomentPostDto（DO NOT EDIT 产物）
+# 由 codegen_app_metadata 读取，生成 MicroPostDto（DO NOT EDIT 产物）
 # base_class: PostBaseDto（手写抽象基类，见 post_base_dto.dart）
 client_projection:
-  dart_class: MomentPostDto
+  dart_class: MicroPostDto
   base_class: PostBaseDto
-  output_path: cloud/runtime/generated/content/moment_post_dto.g.dart
+  output_path: cloud/runtime/generated/content/micro_post_dto.g.dart
   dart_imports:
     - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
   computed_getters:
     - name: displayFormat
       dart_return_type: String
       nullable: false
-      description: "点滴的展示格式由当前素材组合推导。"
+      description: "微趣的展示格式由当前素材组合推导。"
       body: |
         if (videoUrl != null && videoUrl!.isNotEmpty) return 'video';
         if (imageUrls.isNotEmpty) return 'image';
@@ -74,8 +74,8 @@ client_projection:
       nullable: false
       source: contentType
       aliases: [contentType, category]
-      default: "'moment'"
-      description: "服务侧 micro，客户端统一展示为 moment"
+      default: "'micro'"
+      description: "内容类型轴（ContentType）；微趣帖固定为 micro"
 
     - name: identity
       dart_type: String
@@ -194,4 +194,4 @@ client_projection:
       aliases: [intersectionReasons]
       list_element_dart_class: IntersectionReason
       default: "null"
-      description: "交集理由（云侧推荐管线预生成，B1；端只读展示，无来源时为 null）"
+      description: "交集理由（云侧推荐管线预生成；端只读展示，无来源时为 null）"

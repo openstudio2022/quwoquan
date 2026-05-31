@@ -107,7 +107,7 @@ def generate_posts(rng: random.Random, count: int = 220) -> list[dict]:
             "postId": post_id,
             "contentType": ct,
             "authorId": author_id,
-            "tags": tags,
+            "tagRefs": tags,
             "entityRefs": entity_refs,
             "publishedAt": published_at,
             "viewCount": rng.randint(0, 5000),
@@ -228,7 +228,7 @@ def generate_events(
                 "context": {
                     "score": round(rng.uniform(0.1, 1.0), 4),
                     "authorId": post["authorId"],
-                    "tags": post["tags"][:5],
+                    "tagRefs": post["tagRefs"][:5],
                     "feedRequestId": f"req_{i:05d}",
                     "referralSource": rng.choice(REFERRAL_SOURCES),
                     "contentType": post["contentType"],
@@ -263,7 +263,7 @@ def generate_events(
                 "context": {
                     "score": round(rng.uniform(0.1, 1.0), 4),
                     "authorId": post["authorId"],
-                    "tags": post["tags"][:5],
+                    "tagRefs": post["tagRefs"][:5],
                     "duration": duration,
                     "feedRequestId": f"req_{i:05d}",
                     "referralSource": rng.choice(REFERRAL_SOURCES),

@@ -40,7 +40,7 @@ ITEM_FEATURE_KEYS = [
     "ageHours", "viewCount", "likeCount", "commentCount", "shareCount",
     "bodyLength", "tagCount", "qualityScore", "publishHour",
 ]
-CONTENT_TYPE_MAP = {"photo": 0, "video": 1, "article": 2, "moment": 3}
+CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "micro": 3}
 
 
 def _build_user_vector(sample: dict) -> list[float]:
