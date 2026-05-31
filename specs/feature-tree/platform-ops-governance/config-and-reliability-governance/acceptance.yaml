@@ -1,41 +1,35 @@
-version: 1
-feature: config-and-reliability-governance
-level: "L2_feature"
-template: A1-A8
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A3_service_governance
-  - A4_observability
-  - A7_contract_metadata_consistency
-  - A8_test_automation
-  notes: 配置治理、治理策略、发布灰度与环境依赖为本节点重点。
-global_acceptance:
-  A1_functional:
-    scenarios:
-    - given: 某领域接入 platform-control-plane
-      when: 平台读取服务目录、配置项、治理策略与依赖画像
-      then: 四类平台能力边界清晰且对象集合完整
-  A2_experience:
-  - 配置与治理入口统一，不增加研发自助平台使用负担
-  A3_service_governance:
-  - 高风险配置与治理策略支持灰度、回滚与危险动作确认
-  A4_observability:
-  - 配置发布、回滚与治理动作可审计、可检索、可告警
-  A5_product_ops:
-  - 与 product-ops 的边界清晰，ops.* 不混入 platform-ops
-  A6_security_privacy:
-  - 危险动作有审批记录，敏感配置与 secrets 不暴露
-  A7_contract_metadata_consistency:
-  - control_plane.yaml / config_schema.yaml 与 codegen 契约一致
-  A8_test_automation:
-  - 后续 design/dev 可落到 mock/unit/contract/integration/uat 验证
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+version: 2
+node:
+  id: config-and-reliability-governance
+  level: L2_business_capability
+  path: specs/feature-tree/platform-ops-governance/config-and-reliability-governance
+  title: config and reliability governance
+  parent_domain_service: platform-ops-governance
+  parent_business_capability: config-and-reliability-governance
+scope:
+  summary: config and reliability governance 验收范围。
+  in_scope: []
+  out_of_scope: []
+sit_acceptance:
+  SIT1:
+    title: config and reliability governance 能力 SIT
+    story_refs: []
+    done_when:
+    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

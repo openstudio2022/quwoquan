@@ -1,21 +1,41 @@
-version: 1
-feature: integration-service-foundation
-level: "L3_story"
-template: A1-A8
-status: specified
-level_acceptance:
-  A1:
-    criteria: integration-service 目录与配置结构符合规范
+version: 2
+node:
+  id: integration-service-foundation
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation
+  title: integration service foundation
+  parent_domain_service: runtime
+  parent_business_capability: runtime-external-integration
+scope:
+  summary: integration service foundation 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: integration service foundation GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
     status: pending
-    linked_tasks:
-    - 1
-    tests: []
-  A7:
-    criteria: service.yaml 与 fields/storage/events 契约一致
-    status: pending
-    linked_tasks:
-    - 2
-    tests: []
 execution:
-  local_gate: make verify && make -C quwoquan_service verify-metadata
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

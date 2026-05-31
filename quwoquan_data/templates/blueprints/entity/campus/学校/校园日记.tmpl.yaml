@@ -1,0 +1,34 @@
+templateId: 学校_校园日记
+version: 1
+subject: { kind: entity, type: 机构/学校 }
+vertical: campus
+category: life
+intent: 体验
+carrier: article
+styleFamily: 校园日记风
+audiences: [freshmanStudent]
+creatorPersona:
+  archetype: campus_blogger
+  preferredCreatorIds: [qwq_creator_campus_blogger_001]
+  requiredProfileTagRefs: [Topic/教育成长/校园生活, Format/内容角度/日记/校园日记]
+  allowedPerspective: [校园生活记录者, 第一人称经验]
+  mustNotClaim: [学校官方身份]
+editorialIntent: 通过一天或一个场景写出校园生活气，而不是做硬广。
+render: { articleTemplate: gentle, fontPreset: handwritten }
+structure:
+  required: [清晨或傍晚, 一条校园路线, 食堂或自习, 一个生活细节, 给新生的话]
+  optional: [社团, 操场, 图书馆]
+hooks: ["在{name}的一天，可以从这条路开始"]
+mustIncludeFacts: [校园路线, 生活场景, 主观体验边界]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 700, max: 1500 }
+imagePlan:
+  - { slot: 校园晨昏, imageLayout: fullWidth }
+  - { slot: 生活细节, gallery: carousel }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/机构/学校/example.md

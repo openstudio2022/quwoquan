@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from _common.paths import batch_inputs_dir, batch_assistant_tasks
+from _common.paths import batch_inputs_dir, batch_assistant_task
 from _common.io import write_json, write_assistant_task
 
 
@@ -28,7 +28,7 @@ def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Pa
         })
         refs.append(ref)
 
-    manifest_path = batch_assistant_tasks(task_id, batch_id, "download", "source_plan")
+    manifest_path = batch_assistant_task(task_id, batch_id, "download", "source_plan")
     results_dir = inputs_dir.parent.parent / "results" / "source_plan"
     write_assistant_task(manifest_path, step="source_plan", input_dir=inputs_dir, result_dir=results_dir, refs=refs)
     return inputs_dir
@@ -50,7 +50,7 @@ def prepare_source_screen(task_id: str, batch_id: str, fetched_sources: list[dic
         })
         refs.append(ref)
 
-    manifest_path = batch_assistant_tasks(task_id, batch_id, "download", "source_screen")
+    manifest_path = batch_assistant_task(task_id, batch_id, "download", "source_screen")
     results_dir = inputs_dir.parent.parent / "results" / "source_screen"
     write_assistant_task(manifest_path, step="source_screen", input_dir=inputs_dir, result_dir=results_dir, refs=refs)
     return inputs_dir

@@ -7,6 +7,22 @@ class AppRoutePaths {
   static const String welcome = '/welcome';
   static const String welcomeSegment = 'welcome';
 
+  static const String loginPathTemplate = '/login';
+  static String login({String? reason, String? redirect}) {
+    return _buildPath(loginPathTemplate, <String, String>{
+    }, <String, String?>{
+      'reason': reason,
+      'redirect': redirect,
+    });
+  }
+  static const String loginSegment = 'login';
+
+  static const String legalUserAgreement = '/legal/user-agreement';
+  static const String legalUserAgreementSegment = 'user-agreement';
+
+  static const String legalPrivacyPolicy = '/legal/privacy-policy';
+  static const String legalPrivacyPolicySegment = 'privacy-policy';
+
   static const String home = '/';
 
   static const String circles = '/circles';
@@ -194,9 +210,6 @@ class AppRoutePaths {
 
   static const String profileComments = '/profile/comments';
   static const String profileCommentsSegment = 'comments';
-
-  static const String profileResonance = '/profile/resonance';
-  static const String profileResonanceSegment = 'resonance';
 
   static const String profileStatsPathTemplate = '/profile/stats';
   static String profileStats({String? type}) {

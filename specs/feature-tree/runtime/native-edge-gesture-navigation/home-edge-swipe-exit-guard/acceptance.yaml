@@ -1,0 +1,62 @@
+version: 2
+node:
+  id: home-edge-swipe-exit-guard
+  level: L3_story
+  path: specs/feature-tree/runtime/native-edge-gesture-navigation/home-edge-swipe-exit-guard
+  title: home edge swipe exit guard
+  parent_domain_service: runtime
+  parent_business_capability: native-edge-gesture-navigation
+scope:
+  summary: 主页根页边缘滑动退出保护。
+  in_scope:
+  - first edge swipe guard prompt
+  - second edge swipe exit within guard window
+  - guard timeout reset
+  out_of_scope:
+  - unsaved form leave protection
+gwt_acceptance:
+  GWT_HOME_EXIT_GUARD:
+    title: 主页首次边缘滑动提示，二次边缘滑动退出
+    given:
+    - 用户位于主页根路由，当前没有可 pop 的子页面。
+    when:
+    - 用户第一次从屏幕左边缘或右边缘发起返回手势。
+    then:
+    - App 显示再次滑动退出提示，且不退出。
+    done_when:
+    - 第二次边缘滑动在保护窗口内退出或交给系统返回。
+    - 保护窗口超时后再次滑动重新显示提示。
+    edge_cases:
+    - 保护窗口超时。
+    - 用户切换 tab 后保护状态重置。
+    - 非根路由边缘滑动直接 pop。
+    platform_variants:
+      iOS:
+      - root route interactive gesture guarded by app shell
+      Android:
+      - predictive back or system back dispatcher guarded by app shell
+    contract_refs:
+    - Root route pop contract
+    - Exit guard state contract
+    performance_points:
+    - first prompt appears <= 100ms after gesture begins
+    - guard window is deterministic and testable
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting:
+      - T3_route_integration
+      - T4_user_journey
+    tests:
+      planned:
+      - quwoquan_app/test/app/navigation/home_edge_swipe_exit_guard_test.dart
+      - quwoquan_app/test/patrol/edge_swipe_navigation_e2e_test.dart
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

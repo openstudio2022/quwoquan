@@ -1,139 +1,35 @@
 version: 2
-feature: cross-domain-search-journey
-level: L2_journey
-source_path: global-search-experience/cross-domain-search-journey
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+node:
+  id: cross-domain-search-journey
+  level: L2_business_capability
+  path: specs/feature-tree/global-search-experience/cross-domain-search-journey
+  title: cross domain search journey
+  parent_domain_service: global-search-experience
+  parent_business_capability: cross-domain-search-journey
 scope:
-  summary: >
-    冻结全屏搜索首页初始态、实时联想、独立网络结果页、联系人/聊天记录直达、
-    圈子结果与圈子分类 facet、最近搜索、语音转词与小趣搜 assistant 结果的端到端旅程。
-  composed_scenarios:
-    - full-screen-search-shell-and-entry
-    - multi-domain-result-composition
-    - local-chat-search-contract
-    - circle-facet-search-and-filter
-    - recent-search-sync-and-voice-asr
-    - xiaoqu-entry-handoff
-  out_of_scope:
-    - AI 搜索结果混排
-    - 语音语义理解
-    - 密信账号隔离能力本身
-
-journey_acceptance:
-  J1:
-    title: 用户可从任一一级页面进入统一全屏搜索首页
-    journey: home/chat/circle-hub/assistant -> open full-screen search -> see history state -> input query
-    scenario_refs:
-      - full-screen-search-shell-and-entry
-      - recent-search-sync-and-voice-asr
-      - xiaoqu-entry-handoff
+  summary: cross domain search journey 验收范围。
+  in_scope: []
+  out_of_scope: []
+sit_acceptance:
+  SIT1:
+    title: cross domain search journey 能力 SIT
+    story_refs: []
     done_when:
-      - 首页、聊天页、圈子页、助手页进入同一全屏搜索首页
-      - 搜索首页包含搜索框、最近在搜双列卡片、展开与记录管理态
-      - 用户取消、返回与重新进入时，上下文行为稳定可预期
-    release_guardrails:
-      - 全局搜索保持唯一全屏浮层语义
-      - route、surface、page context 均可追溯到 metadata
+    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    performance_points: []
     evidence:
       primary:
-        - T2_module_interaction
-        - T4_user_journey
+      - T2_module_interaction
+      - T3_app_api_integration
       supporting:
-        - T1_schema
-        - T3_cross_service_integration
+      - T1_static_contract
     tests:
-      planned:
-        - global search shell widget journey test
-        - route and surface traceability test
-      recorded:
-        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
-        - flutter test test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/personal_assistant_conversation_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+      planned: []
+      recorded: []
     status: pending
-  J2:
-    title: 用户可得到实时联想并进入独立网络结果页
-    journey: input query -> receive suggestions -> expand sections or open network results -> enter target page
-    scenario_refs:
-      - multi-domain-result-composition
-      - local-chat-search-contract
-      - circle-facet-search-and-filter
-    done_when:
-      - 联想页按“最常使用 / 联系人 / 聊天记录 / 搜索网络结果”四段组织
-      - 联系人、聊天记录由端侧本地搜索提供，可页内展开更多，并稳定直达对应会话
-      - 网络结果页可在小趣搜与圈子分类 facet 间切换，并进入对应圈子或内容目标页
-      - "`circle.group` 云侧失败或返回 0 结果时，可回退端侧本地全量结果而不阻塞旅程"
-    release_guardrails:
-      - 不把小趣搜结果混入联想页实时分段
-      - 圈子分类仅以 circle facet 形式出现
-      - "页面层不直接依赖分域搜索方法名，只消费统一 `search(request)` 接口"
-    evidence:
-      primary:
-        - T3_cross_service_integration
-        - T4_user_journey
-      supporting:
-        - T1_schema
-        - T2_module_interaction
-    tests:
-      planned:
-        - grouped result composition integration test
-        - search result navigation journey test
-      recorded:
-        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
-        - make gate
-    status: pending
-  J3:
-    title: 用户可在搜索页完成记录复用、语音转词与小趣搜 continuation
-    journey: open search -> use recent history or voice -> continue search -> optionally switch to xiaoqu tab
-    scenario_refs:
-      - recent-search-sync-and-voice-asr
-      - xiaoqu-entry-handoff
-    done_when:
-      - 普通搜索 query 会记录到最近搜索并支持本地与云同步
-      - 语音入口将 ASR 文本写回搜索框并参与普通搜索
-      - 小趣搜不单独新增 AI query 记录，后续 assistant continuation 保存在 assistant 对话中
-    release_guardrails:
-      - 语音失败可退回手动输入
-      - 记录清除动作可本地与云端一致生效
-    evidence:
-      primary:
-        - T2_module_interaction
-        - T4_user_journey
-      supporting:
-        - T1_schema
-        - T3_cross_service_integration
-    tests:
-      planned:
-        - recent search sync test
-        - voice to query journey test
-        - xiaoqu tab regression test
-      recorded:
-        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
-        - flutter test test/ui/assistant/pages/personal_assistant_conversation_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
-    status: pending
-
-release_acceptance:
-  R1:
-    title: 全局搜索可整体验收并整体回滚
-    done_when:
-      - SLO、弱网、并发与容量假设已冻结并可验证
-      - 本期按整体验收后一把上线，不保留记录节点并行治理
-      - 发生严重故障时可整体回退到旧搜索实现或整版发布回滚
-    evidence:
-      primary:
-        - T3_cross_service_integration
-        - T4_release_rehearsal
-      supporting:
-        - T1_schema
-        - T2_module_interaction
-    tests:
-      planned:
-        - rollback rehearsal
-        - weak network degrade verification
-      recorded:
-        - make gate
-        - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/personal_assistant_conversation_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
-    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

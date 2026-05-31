@@ -7,14 +7,16 @@ ENV_FILE="$ROOT_DIR/.env.beta.local"
 APP_BETA="$ROOT_DIR/quwoquan_app/scripts/device/start_app_beta_manual.sh"
 OPS_PORTAL_DIR="$ROOT_DIR/apps/ops-portal"
 
+eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
+
 ACTION="${1:-up}"
 if [[ $# -gt 0 ]]; then
   shift
 fi
-GATEWAY_PORT="${GATEWAY_PORT:-18080}"
-PRODUCT_OPS_PORT="${PRODUCT_OPS_PORT:-18091}"
-PLATFORM_OPS_PORT="${PLATFORM_OPS_PORT:-18092}"
-OPS_PORTAL_PORT="${OPS_PORTAL_PORT:-18100}"
+GATEWAY_PORT="${GATEWAY_PORT}"
+PRODUCT_OPS_PORT="${PRODUCT_OPS_PORT}"
+PLATFORM_OPS_PORT="${PLATFORM_OPS_PORT}"
+OPS_PORTAL_PORT="${OPS_PORTAL_PORT}"
 CDN_DOMAIN="${CDN_DOMAIN:-cdn.beta.local}"
 DEVICE_ID="${DEVICE_ID:-}"
 START_APP="${START_APP:-1}"

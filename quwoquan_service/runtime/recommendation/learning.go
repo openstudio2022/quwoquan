@@ -60,7 +60,7 @@ func recImpressionContext(score float64, authorID string, tags []string) map[str
 	return map[string]any{
 		"score":    score,
 		"authorId": authorID,
-		"tags":     tags,
+		"tagRefs":  tags,
 	}
 }
 
@@ -69,7 +69,7 @@ func recEngagementContext(duration float64, recScore float64, tags []string, fee
 	return map[string]any{
 		"duration":       duration,
 		"recScore":       recScore,
-		"tags":           tags,
+		"tagRefs":        tags,
 		"feedRequestId":  feedRequestID,
 		"referralSource": referralSource,
 		"contentType":    contentType,

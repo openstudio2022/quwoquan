@@ -115,7 +115,9 @@ class RtcSignalingClient {
     } catch (e) {
       try {
         await pendingChannel?.sink.close();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 连接失败后清理半开的 channel，close 二次报错无副作用可忽略 */
+      }
       debugPrint('RtcSignaling: connect failed: $e');
       _connectionState.value = false;
       _scheduleReconnect();
@@ -172,7 +174,9 @@ class RtcSignalingClient {
   void _sendOutbound(Map<String, dynamic> message) {
     try {
       _channel?.sink.add(jsonEncode(message));
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 连接已断开时发送会抛错，丢失的帧由重连与重协商流程恢复 */
+    }
   }
 
   static Map<String, dynamic> _outboundAuthBody(

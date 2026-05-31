@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 
 class ContentShareAction {
   const ContentShareAction({required this.id, required this.label});
@@ -59,17 +59,16 @@ class ContentShareTemplateBuilder {
   }
 
   static ContentShareTemplate build({
-    required PostBaseDto post,
+    required ContentSurfaceView surfaceView,
     required bool enableIdentityTemplate,
     String visibility = 'public',
     List<String> circleNames = const <String>[],
-    List<String> tags = const <String>[],
   }) {
     final permission = _normalizeVisibility(visibility);
     if (permission == 'private') {
-      final blockedSeed = _shareSeedForPost(post);
+      final blockedSeed = _shareSeedForSurfaceView(surfaceView);
       return ContentShareTemplate(
-        profileId: post.identity,
+        profileId: surfaceView.contentIdentity,
         layout: 'blocked',
         permission: permission,
         deeplink: '',
@@ -86,10 +85,10 @@ class ContentShareTemplateBuilder {
       );
     }
 
-    final profile = _profileForIdentity(post.identity);
-    final shareSeed = _shareSeedForPost(post);
+    final profile = _profileForIdentity(surfaceView.contentIdentity);
+    final shareSeed = _shareSeedForSurfaceView(surfaceView);
     final deeplink = AppLinkTemplates.postAppDeepLink(
-      post.id,
+      surfaceView.postId,
       visibilityIsCircleVisible: permission == 'circle_visible',
     );
     final summary = _decorateSummary(
@@ -97,8 +96,9 @@ class ContentShareTemplateBuilder {
       includeCircleContext: profile.includeCircleContext,
       includeTimeContext: profile.includeTimeContext,
       circleNames: circleNames,
-      createdAt: post.createdAt,
+      createdAt: surfaceView.createdAt,
     );
+    final tags = surfaceView.tags;
     final tagSummary = profile.includeTags && tags.isNotEmpty
         ? '${summary.isEmpty ? '' : '$summary · '}#${tags.join(' #')}'
         : summary;
@@ -108,7 +108,7 @@ class ContentShareTemplateBuilder {
       layout: profile.layout,
       permission: permission,
       deeplink: deeplink,
-      landingPage: post.identity == 'moment'
+      landingPage: surfaceView.contentIdentity == 'moment'
           ? 'moment_landing'
           : 'work_landing',
       title: UITextConstants.contentLabelForKey(profile.titleKey),
@@ -156,43 +156,51 @@ class ContentShareTemplateBuilder {
     }
   }
 
-  static _ShareSeed _shareSeedForPost(PostBaseDto post) {
-    final read = PostReadPresentation.fromPostBase(post);
-    final cover =
-        read.coverUrl.isNotEmpty ? read.coverUrl : post.primaryVisualUrl;
-    if (post.isArticleLike) {
-      return _ShareSeed(
-        title: _clip(read.title, fallback: '作品'),
-        summary: _clip(read.body, maxLength: 48),
-        coverUrl: cover,
-      );
+  /// 统一展示 model 路径的分享种子（唯一种子来源）。
+  static _ShareSeed _shareSeedForSurfaceView(ContentSurfaceView view) {
+    final title = view.title ?? '';
+    final body = view.body ?? '';
+    final displayName = view.author.displayName;
+    final cover = view.cover?.url.isNotEmpty == true
+        ? view.cover!.url
+        : (view.video?.thumbnailUrl.isNotEmpty == true
+              ? view.video!.thumbnailUrl
+              : (view.images.isNotEmpty ? view.images.first.url : ''));
+    switch (view.kind) {
+      case ContentSurfaceKind.article:
+        return _ShareSeed(
+          title: _clip(title, fallback: UITextConstants.shareSeedWorkFallbackTitle),
+          summary: _clip(body, maxLength: 48),
+          coverUrl: cover,
+        );
+      case ContentSurfaceKind.video:
+        return _ShareSeed(
+          title: _clip(
+            body,
+            fallback: UITextConstants.shareSeedVideoWorkTitle(displayName),
+          ),
+          summary: _clip(body, maxLength: 48),
+          coverUrl: cover,
+        );
+      case ContentSurfaceKind.image:
+        return _ShareSeed(
+          title: _clip(
+            body,
+            fallback: UITextConstants.shareSeedImageWorkTitle(displayName),
+          ),
+          summary: _clip(body, maxLength: 48),
+          coverUrl: cover,
+        );
+      case ContentSurfaceKind.micro:
+        return _ShareSeed(
+          title: _clip(
+            body,
+            fallback: UITextConstants.shareSeedMomentTitle(displayName),
+          ),
+          summary: _clip(body, maxLength: 48),
+          coverUrl: cover,
+        );
     }
-    if (post.isVideoLike) {
-      return _ShareSeed(
-        title: _clip(read.body, fallback: '${read.displayName} 的视频作品'),
-        summary: _clip(read.body, maxLength: 48),
-        coverUrl: cover,
-      );
-    }
-    if (post.hasImages || post.mediaCoverUrl.isNotEmpty) {
-      return _ShareSeed(
-        title: _clip(read.body, fallback: '${read.displayName} 的图片作品'),
-        summary: _clip(read.body, maxLength: 48),
-        coverUrl: cover,
-      );
-    }
-    if (post.identity == 'moment') {
-      return _ShareSeed(
-        title: _clip(read.body, fallback: '${read.displayName} 的点滴'),
-        summary: _clip(read.body, maxLength: 48),
-        coverUrl: cover,
-      );
-    }
-    return _ShareSeed(
-      title: _clip(read.displayName, fallback: '内容分享'),
-      summary: '',
-      coverUrl: cover,
-    );
   }
 
   static String _decorateSummary({

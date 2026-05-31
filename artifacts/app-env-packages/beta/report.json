@@ -3,12 +3,29 @@
   "env": "beta",
   "runtimeEnv": "beta",
   "dataSource": "remote",
-  "gatewayBaseUrl": "http://127.0.0.1:18080",
-  "realtimeBaseUrl": "",
-  "avatarCdnBaseUrl": "http://127.0.0.1:18088",
-  "imageCdnBaseUrl": "http://127.0.0.1:18088",
-  "videoCdnBaseUrl": "http://127.0.0.1:18088",
-  "uploadBaseUrl": "http://127.0.0.1:18088",
+  "gatewayBaseUrl": "http://127.0.0.1:18000",
+  "realtimeBaseUrl": "ws://127.0.0.1:18000",
+  "avatarCdnBaseUrl": "http://127.0.0.1:18100",
+  "imageCdnBaseUrl": "http://127.0.0.1:18100",
+  "videoCdnBaseUrl": "http://127.0.0.1:18100",
+  "uploadBaseUrl": "http://127.0.0.1:18100",
   "currentUserId": "fixture_user_current",
-  "seedManifest": "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json"
+  "seedManifest": "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json",
+  "topologySchemaVersion": "environment-topology/v1",
+  "artifactPolicy": {
+    "runtimeEnv": "beta",
+    "dataSource": "remote",
+    "allowSeeds": false,
+    "allowLocalHosts": true,
+    "allowProdHosts": false,
+    "distribution": "internal-only"
+  },
+  "publicBases": {
+    "gatewayBaseUrl": "http://127.0.0.1:18000",
+    "realtimeBaseUrl": "ws://127.0.0.1:18000",
+    "mediaAvatarCdnBaseUrl": "http://127.0.0.1:18100",
+    "mediaImageCdnBaseUrl": "http://127.0.0.1:18100",
+    "mediaVideoCdnBaseUrl": "http://127.0.0.1:18100",
+    "mediaUploadBaseUrl": "http://127.0.0.1:18100"
+  }
 }

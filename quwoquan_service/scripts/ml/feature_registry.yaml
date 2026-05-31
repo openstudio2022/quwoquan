@@ -84,7 +84,7 @@ scenarios:
         type: categorical
       - name: authorId
         type: string
-      - name: tags
+      - name: tagRefs
         type: list_string
       - name: entityRefs
         type: list_string

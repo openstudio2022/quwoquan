@@ -88,7 +88,7 @@ services:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
       interval: 10s
       timeout: 3s
-      start_period: 10s
+      start_period: 240s
       retries: 5
 
   content-service:
@@ -127,7 +127,7 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s
-      start_period: 10s
+      start_period: 240s
       retries: 10
 
   chat-service:
@@ -155,7 +155,7 @@ services:
       RELIABLE_TASK_READY_INDEX_STREAM: reliabletask:chat:avatar:ready:local-gamma
       RELIABLE_TASK_READY_INDEX_GROUP: chat.group_avatar_worker.local-gamma
       RELIABLE_TASK_READY_INDEX_QUEUE: reliabletask.chat.avatar
-      CHAT_GROUP_AVATAR_CDN_BASE_URL: "${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:18080}}"
+      CHAT_GROUP_AVATAR_CDN_BASE_URL: "${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:19100}}"
       CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT: /var/lib/quwoquan/chat-media
       RUNTIME_SYNC_PATCH_TTL_HOURS: "720"
     depends_on:
@@ -174,7 +174,7 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s
-      start_period: 10s
+      start_period: 240s
       retries: 10
 
   user-service:
@@ -214,7 +214,7 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s
-      start_period: 10s
+      start_period: 240s
       retries: 10
 
   assistant-service:
@@ -253,7 +253,7 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s
-      start_period: 10s
+      start_period: 240s
       retries: 10
 
   product-ops-service:
@@ -290,7 +290,41 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s
-      start_period: 10s
+      start_period: 240s
+      retries: 10
+
+  tag-service:
+    image: "${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-docker.io/library/golang:1.24-bookworm}"
+    working_dir: /workspace
+    command: ["sh", "-lc", "cd services/tag-service/cmd/api && /usr/local/go/bin/go run ."]
+    environment:
+      PATH: /go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      GOPROXY: "${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}"
+      GOSUMDB: "${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}"
+      SERVICE_NAME: tag-service
+      APP_ENV: gamma
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
+      IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
+      TAG_SERVICE_ADDR: ":18092"
+      TAG_MONGO_URI: mongodb://mongodb:27017
+      TAG_MONGO_DATABASE: quwoquan_tag
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+    volumes:
+      - .:/workspace
+      - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
+      - local-gamma-go-cache:/go
+    ports:
+      - "${LOCAL_GAMMA_TAG_PORT:-18092}:18092"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18092/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
       retries: 10
 
   gamma-proxy:
@@ -306,10 +340,13 @@ services:
         condition: service_healthy
       product-ops-service:
         condition: service_healthy
+      tag-service:
+        condition: service_healthy
     environment:
       LOCAL_GAMMA_TLS_MODE: "${LOCAL_GAMMA_TLS_MODE:-internal}"
     ports:
-      - "${LOCAL_GAMMA_HTTP_PORT:-18080}:80"
+      - "${LOCAL_GAMMA_HTTP_PORT:-19000}:80"
+      - "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:80"
       - "${LOCAL_GAMMA_HTTPS_PORT:-443}:443"
       - "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019"
     volumes:

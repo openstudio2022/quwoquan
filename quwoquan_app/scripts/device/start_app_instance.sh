@@ -17,11 +17,12 @@ CONTRACT_FIXTURE_PROFILE=""
 CURRENT_USER_ID=""
 INSTANCE_NAMESPACE="${APP_INSTANCE_NAMESPACE:-manual}"
 SERVICE_MODE="${APP_INSTANCE_SERVICE_MODE:-app-only}"
+ROLLOUT_MODE="${APP_ROLLOUT_MODE:-}"
 
 usage() {
   cat <<EOF
 Usage:
-  scripts/start_app_instance.sh --env <alpha|beta|gamma> --device-id <id> [options]
+  scripts/start_app_instance.sh --env <alpha|beta|gamma|prod> --device-id <id> [options]
 
 Options:
   --gateway-base-url <url>        Override CLOUD_GATEWAY_BASE_URL.
@@ -34,6 +35,7 @@ Options:
   --current-user-id <id>          Override APP_CURRENT_USER_ID.
   --instance-namespace <name>     Diagnostic namespace for this app instance.
   --service-mode <mode>           Diagnostic mode (default: app-only).
+  --rollout-mode <mode>           Prod rollout diagnostic mode: gray-initial|carry-on|full.
   -h, --help                      Show this help.
 
 This script only starts the App instance and records runtime state under:
@@ -93,6 +95,10 @@ while [[ $# -gt 0 ]]; do
       SERVICE_MODE="${2:-}"
       shift 2
       ;;
+    --rollout-mode)
+      ROLLOUT_MODE="${2:-}"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -106,9 +112,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$ENV_NAME" in
-  alpha|beta|gamma) ;;
+  alpha|beta|gamma|prod) ;;
   *)
-    echo "FAIL: --env must be one of alpha|beta|gamma" >&2
+    echo "FAIL: --env must be one of alpha|beta|gamma|prod" >&2
     exit 2
     ;;
 esac
@@ -167,12 +173,15 @@ fi
 if [[ -n "$CURRENT_USER_ID" ]]; then
   define_cmd+=(--current-user-id "$CURRENT_USER_ID")
 fi
+if [[ -n "$ROLLOUT_MODE" ]]; then
+  define_cmd+=(--rollout-mode "$ROLLOUT_MODE")
+fi
 
 DEFINES_JSON="$("${define_cmd[@]}")"
 
 echo "[app-instance] env=$ENV_NAME device=$DEVICE_ID namespace=$INSTANCE_NAMESPACE mode=$SERVICE_MODE"
 
-python3 - "$APP_DIR" "$STATE_FILE" "$ENV_NAME" "$DEVICE_ID" "$INSTANCE_ID" "$INSTANCE_NAMESPACE" "$SERVICE_MODE" "$DEFINES_JSON" <<'PY'
+python3 - "$APP_DIR" "$STATE_FILE" "$ENV_NAME" "$DEVICE_ID" "$INSTANCE_ID" "$INSTANCE_NAMESPACE" "$SERVICE_MODE" "$ROLLOUT_MODE" "$DEFINES_JSON" <<'PY'
 import datetime as dt
 import json
 import os
@@ -181,7 +190,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-app_dir, state_file, env_name, device_id, instance_id, instance_namespace, service_mode, defines_json = sys.argv[1:9]
+app_dir, state_file, env_name, device_id, instance_id, instance_namespace, service_mode, rollout_mode, defines_json = sys.argv[1:10]
 defines = json.loads(defines_json or "{}")
 state_path = Path(state_file)
 state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -230,6 +239,7 @@ try:
         "instanceId": instance_id,
         "instanceNamespace": instance_namespace,
         "serviceMode": service_mode,
+        "rolloutMode": rollout_mode,
         "pid": child.pid,
         "pgid": os.getpgid(child.pid),
         "startedAt": utc_now(),

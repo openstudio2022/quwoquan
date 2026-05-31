@@ -1,79 +1,9 @@
-import 'package:quwoquan_app/ui/content/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-
-/// 文章详情投射视图 — 由 projectArticleDetailView 生成，供 ArticleDetailPage 消费。
+/// 文章富渲染辅助类型：文档来源枚举 + 卡片 / 内容块视图。
 ///
-/// 取代原来从 `Map<String, dynamic>` 中 article['stats']['likes']、
-/// article['author']['name'] 等写死字符串访问。
+/// 文章详情 / 沉浸阅读的富渲染载荷由 [ContentArticleRender]（content_surface_view.dart）
+/// 承载，并经 `projectArticleDetailView` 投影；本文件只保留其依赖的结构化子类型，
+/// 不再持有作者 / 统计 / 标题等公共字段（统一由 ContentSurfaceView 承载）。
 enum ArticleDetailDocumentSource { markdown, articleBlocks, cards, body, empty }
-
-class ArticleDetailView {
-  const ArticleDetailView({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.contentHtml,
-    required this.date,
-    required this.author,
-    required this.layoutMode,
-    required this.coverImage,
-    required this.images,
-    required this.stats,
-    required this.contentBlocks,
-    required this.cards,
-    required this.document,
-    required this.pages,
-    required this.template,
-    required this.fontPreset,
-    required this.documentSource,
-  });
-
-  final String id;
-  final String title;
-  final String description;
-  final String contentHtml;
-  final String date;
-  final ArticleAuthorView author;
-
-  /// 'hero'（单图）或 'carousel'（多图）
-  final String layoutMode;
-  final String coverImage;
-  final List<String> images;
-  final ArticleStatsView stats;
-  final List<ArticleContentBlockView> contentBlocks;
-  final List<ArticleCardView> cards;
-  final ArticleDocumentData document;
-  final List<ArticlePageData> pages;
-  final ArticleTemplatePreset template;
-  final ArticleFontPreset fontPreset;
-  final ArticleDetailDocumentSource documentSource;
-}
-
-class ArticleAuthorView {
-  const ArticleAuthorView({
-    required this.name,
-    required this.avatar,
-    required this.isOfficial,
-    this.badge,
-  });
-
-  final String name;
-  final String avatar;
-  final bool isOfficial;
-  final String? badge;
-}
-
-class ArticleStatsView {
-  const ArticleStatsView({
-    required this.likes,
-    required this.comments,
-    required this.bookmarks,
-  });
-
-  final int likes;
-  final int comments;
-  final int bookmarks;
-}
 
 class ArticleCardView {
   const ArticleCardView({

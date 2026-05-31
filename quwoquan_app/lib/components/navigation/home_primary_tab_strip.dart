@@ -1,59 +1,52 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-
-enum HomePrimaryTabStripStyle { regular, immersive }
 
 class HomePrimaryTabStrip extends StatelessWidget {
   const HomePrimaryTabStrip({
     super.key,
-    required this.activeTab,
-    required this.onTabChange,
+    required this.activeChannelId,
+    required this.onChannelChanged,
     required this.isDark,
-    this.style = HomePrimaryTabStripStyle.regular,
-    this.featuredIndicatorVisible = false,
-    this.featuredExpanded = false,
+    this.channels,
     this.onHorizontalDragEnd,
   });
 
-  static const String followingTabId = 'following';
-  static const String recommendedTabId = 'recommended';
-  static const String featuredTabId = 'featured';
-  static const String circlesTabId = 'circles';
-  static const String travelPhotographyTabId = 'travel_photography';
-  static const String campusTabId = 'campus';
-  static const String travelTabId = 'travel';
-  static const String photographyTabId = 'photography';
-  static const String techTabId = 'tech';
-  static const String carTabId = 'car';
-  static const String carFriendsTabId = carTabId;
+  static const String followingChannelId = 'following';
+  // 与 ContentUIConfig.homeChannels 的推荐频道 id 对齐（运营/远程覆盖真相源）。
+  static const String recommendedChannelId = 'recommend';
+  static const String featuredChannelId = 'featured';
+  static const String circlesChannelId = 'circles';
+  static const String travelPhotographyChannelId = 'travel_photography';
+  static const String campusChannelId = 'campus';
+  static const String travelChannelId = 'travel';
+  static const String photographyChannelId = 'photography';
+  static const String techChannelId = 'tech';
+  static const String carChannelId = 'car';
+  static const String carFriendsChannelId = carChannelId;
   static const Key stripKey = ValueKey<String>('home-primary-tab-strip');
 
-  static const List<String> homeTabIds = <String>[
-    followingTabId,
-    recommendedTabId,
-    campusTabId,
-    travelTabId,
-    photographyTabId,
-    techTabId,
-    carTabId,
+  static const List<String> homeChannelIds = <String>[
+    followingChannelId,
+    recommendedChannelId,
+    campusChannelId,
+    travelChannelId,
+    photographyChannelId,
+    techChannelId,
+    carChannelId,
   ];
 
-  static const List<String> immersiveTabIds = <String>[
-    followingTabId,
-    featuredTabId,
-  ];
+  static Key channelKey(String channelId) =>
+      ValueKey<String>('home-primary-tab-$channelId');
 
-  static Key tabKey(String tabId) =>
-      ValueKey<String>('home-primary-tab-$tabId');
-
-  final String activeTab;
-  final ValueChanged<String> onTabChange;
+  final String activeChannelId;
+  final ValueChanged<String> onChannelChanged;
   final bool isDark;
-  final HomePrimaryTabStripStyle style;
-  final bool featuredIndicatorVisible;
-  final bool featuredExpanded;
+
+  /// 首页频道（运营资产，来自 homeChannelsProvider：端默认 + 远程覆盖）。
+  /// 为空时回退发布自带默认 [homeChannelIds]（仅离线兜底）。
+  final List<HomeChannelConfig>? channels;
   final GestureDragEndCallback? onHorizontalDragEnd;
 
   static double _measureLabelWidth(BuildContext context, String label) {
@@ -72,15 +65,9 @@ class HomePrimaryTabStrip extends StatelessWidget {
     return painter.width;
   }
 
-  static double _slotWidth(
-    BuildContext context,
-    String label, {
-    bool reserveAccessorySlot = false,
-  }) {
+  static double _slotWidth(BuildContext context, String label) {
     final labelWidth = _measureLabelWidth(context, label);
-    final edgeReserve = reserveAccessorySlot
-        ? AppSpacing.primaryTabAccessoryReserve(context)
-        : AppSpacing.primaryTabSlotSidePadding(context);
+    final edgeReserve = AppSpacing.primaryTabSlotSidePadding(context);
     return (labelWidth + (edgeReserve * 2)).clamp(
       AppSpacing.minInteractiveSize,
       double.infinity,
@@ -90,9 +77,16 @@ class HomePrimaryTabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gap = AppSpacing.primaryTabGroupGap(context);
-    final tabs = style == HomePrimaryTabStripStyle.immersive
-        ? immersiveTabIds
-        : homeTabIds;
+    final labelByChannelId = <String, String>{
+      for (final channel in channels ?? const <HomeChannelConfig>[])
+        channel.id: UITextConstants.homeChannelLabel(channel.labelKey),
+    };
+    final regularChannelIds = (channels != null && channels!.isNotEmpty)
+        ? channels!.map((channel) => channel.id).toList(growable: false)
+        : homeChannelIds;
+    final channelIds = regularChannelIds;
+    String labelFor(String channelId) =>
+        labelByChannelId[channelId] ?? _labelForChannel(channelId);
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: onHorizontalDragEnd,
@@ -105,25 +99,16 @@ class HomePrimaryTabStrip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (var i = 0; i < tabs.length; i++) ...[
+              for (var i = 0; i < channelIds.length; i++) ...[
                 if (i > 0) SizedBox(width: gap),
                 _HomePrimaryTabStripItem(
-                  key: tabKey(tabs[i]),
-                  tabId: tabs[i],
-                  label: _labelForTab(tabs[i]),
-                  selected: activeTab == tabs[i],
-                  slotWidth: _slotWidth(
-                    context,
-                    _labelForTab(tabs[i]),
-                    reserveAccessorySlot: tabs[i] == featuredTabId,
-                  ),
+                  key: channelKey(channelIds[i]),
+                  channelId: channelIds[i],
+                  label: labelFor(channelIds[i]),
+                  selected: activeChannelId == channelIds[i],
+                  slotWidth: _slotWidth(context, labelFor(channelIds[i])),
                   isDark: isDark,
-                  style: style,
-                  reserveIndicatorSlot: tabs[i] == featuredTabId,
-                  showIndicator:
-                      tabs[i] == featuredTabId && featuredIndicatorVisible,
-                  indicatorExpanded: featuredExpanded,
-                  onTap: () => _handleTabTap(tabs[i]),
+                  onTap: () => _handleChannelTap(channelIds[i]),
                 ),
               ],
             ],
@@ -133,72 +118,55 @@ class HomePrimaryTabStrip extends StatelessWidget {
     );
   }
 
-  static String _labelForTab(String tabId) => switch (tabId) {
-    followingTabId => UITextConstants.homeTabFollowing,
-    recommendedTabId => UITextConstants.homeTabRecommended,
-    featuredTabId => UITextConstants.homeTabFeatured,
-    circlesTabId => UITextConstants.homeTabCircles,
-    travelPhotographyTabId => UITextConstants.circleScenarioTravelPhotography,
-    campusTabId => UITextConstants.circleScenarioCampus,
-    travelTabId => UITextConstants.homeTabTravel,
-    photographyTabId => UITextConstants.homeTabPhotography,
-    techTabId => UITextConstants.homeTabTech,
-    carFriendsTabId => UITextConstants.homeTabCarFriends,
+  static String _labelForChannel(String channelId) => switch (channelId) {
+    followingChannelId => UITextConstants.homeTabFollowing,
+    recommendedChannelId => UITextConstants.homeTabRecommended,
+    featuredChannelId => UITextConstants.homeTabFeatured,
+    circlesChannelId => UITextConstants.homeTabCircles,
+    travelPhotographyChannelId =>
+      UITextConstants.circleScenarioTravelPhotography,
+    campusChannelId => UITextConstants.circleScenarioCampus,
+    travelChannelId => UITextConstants.homeTabTravel,
+    photographyChannelId => UITextConstants.homeTabPhotography,
+    techChannelId => UITextConstants.homeTabTech,
+    carFriendsChannelId => UITextConstants.homeTabCarFriends,
     _ => UITextConstants.homeTabRecommended,
   };
 
-  void _handleTabTap(String tabId) {
-    if (tabId != activeTab) {
+  void _handleChannelTap(String channelId) {
+    if (channelId != activeChannelId) {
       HapticFeedback.selectionClick();
     }
-    onTabChange(tabId);
+    onChannelChanged(channelId);
   }
 }
 
 class _HomePrimaryTabStripItem extends StatelessWidget {
   const _HomePrimaryTabStripItem({
     super.key,
-    required this.tabId,
+    required this.channelId,
     required this.label,
     required this.selected,
     required this.slotWidth,
     required this.isDark,
-    required this.style,
     required this.onTap,
-    this.reserveIndicatorSlot = false,
-    this.showIndicator = false,
-    this.indicatorExpanded = false,
   });
 
-  final String tabId;
+  final String channelId;
   final String label;
   final bool selected;
   final double slotWidth;
   final bool isDark;
-  final HomePrimaryTabStripStyle style;
   final VoidCallback onTap;
-  final bool reserveIndicatorSlot;
-  final bool showIndicator;
-  final bool indicatorExpanded;
 
   @override
   Widget build(BuildContext context) {
-    final selectedColor = switch (style) {
-      HomePrimaryTabStripStyle.immersive => AppColors.worksTitle,
-      HomePrimaryTabStripStyle.regular => AppColorsFunctional.getColor(
-        isDark,
-        ColorType.foregroundPrimary,
-      ),
-    };
-    final unselectedColor = switch (style) {
-      HomePrimaryTabStripStyle.immersive => AppColors.worksTitle.withValues(
-        alpha: 0.72,
-      ),
-      HomePrimaryTabStripStyle.regular => AppColorsFunctional.getColor(
-        isDark,
-        ColorType.tabUnselected,
-      ),
-    };
+    final selectedColor = isDark
+        ? AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary)
+        : AppColors.primaryColor;
+    final unselectedColor = isDark
+        ? AppColorsFunctional.getColor(isDark, ColorType.tabUnselected)
+        : AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     final underlineColor = isDark
         ? AppColors.iosAccentDark
         : AppColors.primaryColor;
@@ -215,16 +183,8 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
       fontSize,
       selectedWeight,
     );
-    final indicatorColor = selected
-        ? selectedColor
-        : unselectedColor.withValues(alpha: 0.88);
-    final indicatorReserve = reserveIndicatorSlot
-        ? AppSpacing.primaryTabAccessoryReserve(context)
-        : 0.0;
     final showUnderline =
-        selected &&
-        style == HomePrimaryTabStripStyle.regular &&
-        tabId != HomePrimaryTabStrip.featuredTabId;
+        selected && channelId != HomePrimaryTabStrip.featuredChannelId;
 
     return SizedBox(
       width: slotWidth,
@@ -250,29 +210,6 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
                   style: textStyle,
                 ),
               ),
-              if (reserveIndicatorSlot)
-                Positioned.fill(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: SizedBox(
-                      width: indicatorReserve,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 180),
-                        opacity: showIndicator ? 1 : 0,
-                        child: AnimatedRotation(
-                          duration: const Duration(milliseconds: 220),
-                          turns: indicatorExpanded ? 0.5 : 0,
-                          curve: Curves.easeOutCubic,
-                          child: Icon(
-                            Icons.keyboard_arrow_down,
-                            color: indicatorColor,
-                            size: AppSpacing.iconSmall,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               Positioned(
                 left: 0,
                 right: 0,

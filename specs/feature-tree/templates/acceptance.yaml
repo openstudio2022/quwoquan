@@ -1,25 +1,32 @@
-feature: templates
-level: "L1_capability"
-archived: false
-level_acceptance:
-  - id: C1
-    description: >
-      模板目录作为 feature-tree 的作者模板节点成立：目录具备完整的
-      `spec.md`、`design.md`、`acceptance.yaml`、`plan.yaml`，
-      不再因为缺少基础文件而阻断 gate。
-    status: pending
+version: 2
+node:
+  id: templates
+  level: L1_domain_service
+  path: specs/feature-tree/templates
+  title: templates
+  parent_domain_service: templates
+scope:
+  summary: templates 验收范围。
+  in_scope: []
+  out_of_scope: []
+domain_acceptance:
+  DA1:
+    title: templates 领域边界验收
+    done_when:
+    - 领域边界、上下游依赖、工程映射和服务治理清晰。
+    boundary_points: []
+    evidence:
+      primary:
+      - T1_static_contract
+      - T3_service_contract
+      supporting: []
     tests:
-      - path: specs/feature-tree/templates/spec.md
-      - path: specs/feature-tree/templates/design.md
-      - path: specs/feature-tree/templates/acceptance.yaml
-      - path: specs/feature-tree/templates/plan.yaml
-
-  - id: C2
-    description: >
-      L2 Journey 与 L3 Scenario 的 acceptance / plan 模板可被继续复用，
-      且模板字段命名与 gate 校验口径保持一致，不引入第二套规格骨架。
+      planned: []
+      recorded: []
     status: pending
-    tests:
-      - path: specs/feature-tree/templates/l2_journey_acceptance.yaml
-      - path: specs/feature-tree/templates/l3_scenario_acceptance.yaml
-      - path: specs/feature-tree/templates/plan.yaml
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

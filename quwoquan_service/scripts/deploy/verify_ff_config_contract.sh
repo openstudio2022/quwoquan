@@ -7,15 +7,16 @@ cd "$ROOT"
 echo "[verify] ff config contract"
 
 # Minimal FF contract for config-release feature decomposition:
-# 1) tasks.md contains the 3-stage gate matrix and key command names.
+# 1) spec.md contains the 3-stage gate matrix and key command names
+#    (L3 convention: design/plan/gate content folds into spec.md; no tasks.md).
 # 2) acceptance.yaml contains env/version/gate related acceptance text.
 
 failures=0
 
 tasks_files=(
-  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering/tasks.md"
-  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering--environment-process-domain-mapping/tasks.md"
-  "$ROOT/specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance--risky-config-gray-release/tasks.md"
+  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering/spec.md"
+  "$ROOT/specs/feature-tree/runtime/runtime-config/config-provider-layering--environment-process-domain-mapping/spec.md"
+  "$ROOT/specs/feature-tree/platform-ops-governance/config-and-reliability-governance/config-source-governance--risky-config-gray-release/spec.md"
 )
 
 acceptance_files=(
@@ -26,7 +27,7 @@ acceptance_files=(
 
 for f in "${tasks_files[@]}"; do
   if [[ ! -f "$f" ]]; then
-    echo "[verify] FAIL: missing tasks file: $f" >&2
+    echo "[verify] FAIL: missing spec file: $f" >&2
     failures=$((failures + 1))
     continue
   fi

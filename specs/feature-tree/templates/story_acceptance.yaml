@@ -1,0 +1,73 @@
+version: 2
+node:
+  id: story-id
+  level: L3_story
+  path: specs/feature-tree/domain-service-id/business-capability-id/story-id
+  title: story title
+  parent_domain_service: domain-service-id
+  parent_business_capability: business-capability-id
+
+scope:
+  summary: minimum closed-loop value point
+  journey_scenarios:
+    - scenario-id
+  out_of_scope:
+    - item
+
+gwt_acceptance:
+  GWT1:
+    title: primary behavior
+    given:
+      - precondition
+    when:
+      - user or system action
+    then:
+      - observable result
+    done_when:
+      - minimum value is complete
+    edge_cases:
+      - empty state
+      - permission denied
+    platform_variants:
+      iOS:
+        - iOS-specific behavior
+      Android:
+        - Android-specific behavior
+    contract_refs:
+      - route, metadata, platform policy, or config contract
+    performance_points:
+      - story-level latency or jank target
+    evidence:
+      primary:
+        - T1_contract
+        - T2_module_interaction
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - contract or widget test
+      recorded: []
+    status: pending
+
+contract_acceptance:
+  CONTRACT1:
+    title: interface contract
+    metadata_refs:
+      - contracts/metadata/domain/entity/service.yaml
+    done_when:
+      - API path, operation, DTO, error and route/surface constants come from metadata
+    evidence:
+      primary:
+        - T1_metadata_contract
+      supporting: []
+    tests:
+      planned:
+        - metadata or DTO contract test
+      recorded: []
+    status: pending
+
+execution:
+  local_gate:
+    - make gate
+  full_gate:
+    - make gate-full

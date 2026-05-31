@@ -112,7 +112,17 @@ func (h *UserHandler) Routes() http.Handler {
 
 	// Auth & Credentials
 	mux.HandleFunc("POST /v1/auth/login", h.handleLogin)
+	mux.HandleFunc("POST /v1/auth/otp/send", h.handleSendOtp)
+	mux.HandleFunc("POST /v1/auth/login/phone", h.handleLoginWithPhone)
+	mux.HandleFunc("POST /v1/auth/login/wechat", h.handleLoginWithWechat)
+	mux.HandleFunc("POST /v1/auth/login/apple", h.handleLoginWithApple)
+	mux.HandleFunc("POST /v1/auth/login/one-tap", h.handleOneTapLogin)
 	mux.HandleFunc("POST /v1/auth/login/anonymous", h.handleAnonymousLogin)
+	mux.HandleFunc("POST /v1/auth/token/refresh", h.handleRefreshToken)
+	mux.HandleFunc("POST /v1/auth/logout", h.handleLogout)
+	mux.HandleFunc("GET /v1/owner/credentials", h.handleListCredentials)
+	mux.HandleFunc("POST /v1/owner/credentials/bind", h.handleBindCredential)
+	mux.HandleFunc("DELETE /v1/owner/credentials/{credType}", h.handleUnbindCredential)
 	mux.HandleFunc("GET /v1/user/credentials", h.handleListCredentials)
 	mux.HandleFunc("POST /v1/user/credentials", h.handleBindCredential)
 	mux.HandleFunc("DELETE /v1/user/credentials/{credType}", h.handleUnbindCredential)
@@ -1175,6 +1185,112 @@ func (h *UserHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *UserHandler) handleSendOtp(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	phone := strings.TrimSpace(anyString(body["phone"]))
+	if phone == "" {
+		writeInvalidArg(w, r, "phone required")
+		return
+	}
+	result, err := h.auth.SendOtp(r.Context(), phone)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) handleLoginWithPhone(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	phone := strings.TrimSpace(anyString(body["phone"]))
+	if phone == "" {
+		phone = strings.TrimSpace(anyString(body["credentialKey"]))
+	}
+	otpCode := strings.TrimSpace(anyString(body["otpCode"]))
+	label := strings.TrimSpace(anyString(body["displayLabel"]))
+	if phone == "" {
+		writeInvalidArg(w, r, "phone required")
+		return
+	}
+	result, err := h.auth.LoginWithPhone(r.Context(), phone, otpCode, label)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) handleLoginWithWechat(w http.ResponseWriter, r *http.Request) {
+	h.handleTypedCredentialLogin(w, r, "wechat", "wechatCode")
+}
+
+func (h *UserHandler) handleLoginWithApple(w http.ResponseWriter, r *http.Request) {
+	h.handleTypedCredentialLogin(w, r, "apple", "appleIdToken")
+}
+
+func (h *UserHandler) handleTypedCredentialLogin(w http.ResponseWriter, r *http.Request, credType, primaryField string) {
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	credKey := strings.TrimSpace(anyString(body[primaryField]))
+	if credKey == "" {
+		credKey = strings.TrimSpace(anyString(body["credentialKey"]))
+	}
+	label := strings.TrimSpace(anyString(body["displayLabel"]))
+	if credKey == "" {
+		writeInvalidArg(w, r, primaryField+" required")
+		return
+	}
+	result, err := h.auth.LoginWithCredential(r.Context(), credType, credKey, label)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) handleOneTapLogin(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	vendor := strings.TrimSpace(anyString(body["vendor"]))
+	carrierToken := strings.TrimSpace(anyString(body["carrierToken"]))
+	deviceID := strings.TrimSpace(anyString(body["deviceId"]))
+	platform := strings.TrimSpace(anyString(body["platform"]))
+	agreementVersion := strings.TrimSpace(anyString(body["agreementVersion"]))
+	privacyVersion := strings.TrimSpace(anyString(body["privacyVersion"]))
+	if carrierToken == "" {
+		writeInvalidArg(w, r, "carrierToken required")
+		return
+	}
+	result, err := h.auth.LoginWithOneTap(
+		r.Context(),
+		vendor,
+		carrierToken,
+		deviceID,
+		platform,
+		agreementVersion,
+		privacyVersion,
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *UserHandler) handleAnonymousLogin(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(r)
 	if err != nil {
@@ -1205,6 +1321,36 @@ func (h *UserHandler) handleAnonymousLogin(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	refreshToken := strings.TrimSpace(anyString(body["refreshToken"]))
+	if refreshToken == "" {
+		writeInvalidArg(w, r, "refreshToken required")
+		return
+	}
+	result, err := h.auth.RefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
+	body, _ := readBody(r)
+	ownerID := strings.TrimSpace(userIDFromHeader(r))
+	refreshToken := strings.TrimSpace(anyString(body["refreshToken"]))
+	if err := h.auth.Logout(r.Context(), ownerID, refreshToken); err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
 func (h *UserHandler) handleListCredentials(w http.ResponseWriter, r *http.Request) {

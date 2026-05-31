@@ -1,68 +1,41 @@
-version: 1
-feature: daily-merge-release-strategy
-level: "L3_story"
-archived: true
-archived_at: '2026-03-01T00:00:00.000000Z'
-template: A1-A5
-focus_groups: []
-tests:
-  contract:
-  - 场景：branch_strategy 明确 dev1.0/main PR 合流策略
-  - 场景：main 通过 required checks 阻断合入
-  - 场景：pre-release-gate 以 ECS gamma 主门禁支持 pull_request 到 main
+version: 2
+node:
+  id: daily-merge-release-strategy
+  level: L3_story
+  path: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy
+  title: daily merge release strategy
+  parent_domain_service: runtime
+  parent_business_capability: deliver-deploy-prod-pipeline
+scope:
+  summary: daily merge release strategy 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: daily merge release strategy GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: 分支策略文档明确「日常 PR→dev1.0」「main 仅由显式 PR + required checks 更新」
-    status: implemented
-    linked_tasks:
-    - T1
-    tests:
-    - file: deploy/shared/branch_strategy.md
-      functions:
-      - content
-  A2:
-    criteria: 03 / 04 / 05 作为 main 的 required checks 阻断合入
-    status: implemented
-    linked_tasks:
-    - T2
-    tests:
-    - file: deploy/shared/branch_strategy.md
-      functions:
-      - content
-    - file: .github/workflows/delivery-gate.yml
-      functions:
-      - pull_request branches main
-    - file: .github/workflows/pre-release-gate.yml
-      functions:
-      - pull_request branches main
-    - file: .github/workflows/app-env-device-matrix-self-hosted.yml
-      functions:
-      - pull_request branches main
-  A3:
-    criteria: PR 更新后触发 pre-release-gate（ECS gamma hosted pre + gamma self-hosted Android/iOS）
-    status: implemented
-    linked_tasks:
-    - T3
-    tests:
-    - file: .github/workflows/pre-release-gate.yml
-      functions:
-      - pull_request branches main
-  A4:
-    criteria: main 合入后 deploy-prod-auto Stage 1 自动执行
-    status: implemented
-    linked_tasks: []
-    tests:
-    - file: .github/workflows/deploy-prod-auto.yml
-      functions:
-      - push branches main
-  A5:
-    criteria: deliver_to_production_runbook、ci_cd_end_to_end_design 与 branch_strategy
-      一致
-    status: implemented
-    linked_tasks:
-    - T4
-    tests:
-    - file: agent_ops/gate/gate_repo.sh
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

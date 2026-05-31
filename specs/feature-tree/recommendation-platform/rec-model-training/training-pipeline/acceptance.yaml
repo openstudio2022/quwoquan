@@ -1,30 +1,41 @@
-version: 1
-feature: training-pipeline
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.recommendation-platform.component.rec-model-training.object.training-pipeline
-  parent_path: capability.recommendation-platform.component.rec-model-training
-  acceptance_inherits_from: capability.recommendation-platform
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A7_contract_metadata_consistency
-  - A8_test_automation
-  notes: 样本生成、数据集管理、特征工程、模型训练、模型注册全链路。
-global_acceptance:
-  A1_functional:
-    scenarios:
-    - given: rec_learning_events 有数据
-      when: SampleJoiner 运行
-      then: rec_training_samples 写入带 scenario 与特征的样本
-    - given: 指定 datasetId
-      when: train.py 运行
-      then: 产出模型文件并写入 ModelRegistry
-  A7_contract_metadata_consistency:
-  - 特征注册表与推理侧一致
-  A8_test_automation:
-  - 样本生成与训练可自动化或脚本化验证
+version: 2
+node:
+  id: training-pipeline
+  level: L3_story
+  path: specs/feature-tree/recommendation-platform/rec-model-training/training-pipeline
+  title: training pipeline
+  parent_domain_service: recommendation-platform
+  parent_business_capability: rec-model-training
+scope:
+  summary: training pipeline 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: training pipeline GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

@@ -33,6 +33,7 @@ class ArticleTypographyThumbnailStrip extends StatefulWidget {
   });
 
   final CreateEditorState editorState;
+
   /// 与上书 [ArticleReadOnlyBookDeck] 同一 [LayoutBuilder] 约束，保证分页宽度与主预览一致。
   final BoxConstraints layoutConstraints;
   final ArticleCanvasMetrics metrics;
@@ -75,7 +76,9 @@ class _ArticleTypographyThumbnailStripState
   void initState() {
     super.initState();
     _lastLayoutSignature = _layoutSignature;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleAllForCurrentTab());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _scheduleAllForCurrentTab(),
+    );
   }
 
   @override
@@ -87,15 +90,17 @@ class _ArticleTypographyThumbnailStripState
       _loading.clear();
       _queue.clear();
       _captureJob = null;
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _scheduleAllForCurrentTab());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scheduleAllForCurrentTab(),
+      );
       return;
     }
     if (oldWidget.activeTab != widget.activeTab ||
         oldWidget.metrics.aspectRatio != widget.metrics.aspectRatio ||
         oldWidget.layoutConstraints != widget.layoutConstraints) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _scheduleAllForCurrentTab());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scheduleAllForCurrentTab(),
+      );
     }
   }
 
@@ -114,13 +119,7 @@ class _ArticleTypographyThumbnailStripState
     }
     setState(() {
       _loading.add(key);
-      _queue.add(
-        _QueuedRasterJob(
-          key: key,
-          paper: paper,
-          font: font,
-        ),
-      );
+      _queue.add(_QueuedRasterJob(key: key, paper: paper, font: font));
     });
     _pumpQueue();
   }
@@ -147,69 +146,69 @@ class _ArticleTypographyThumbnailStripState
     }
     _busy = true;
     try {
-    while (_queue.isNotEmpty && mounted) {
-      final job = _queue.removeAt(0);
-      if (_bytes.containsKey(job.key)) {
-        setState(() => _loading.remove(job.key));
-        continue;
-      }
-      setState(() => _captureJob = job);
-      final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 2.0);
-      await WidgetsBinding.instance.endOfFrame;
-      await Future<void>.delayed(Duration.zero);
-      if (!mounted) {
-        break;
-      }
-      RenderRepaintBoundary? boundary;
-      for (var attempt = 0; attempt < 3; attempt += 1) {
-        final ro = _repaintKey.currentContext?.findRenderObject();
-        if (ro is RenderRepaintBoundary) {
-          boundary = ro;
-          break;
+      while (_queue.isNotEmpty && mounted) {
+        final job = _queue.removeAt(0);
+        if (_bytes.containsKey(job.key)) {
+          setState(() => _loading.remove(job.key));
+          continue;
         }
+        setState(() => _captureJob = job);
+        final dpr = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 2.0);
         await WidgetsBinding.instance.endOfFrame;
+        await Future<void>.delayed(Duration.zero);
         if (!mounted) {
           break;
         }
-      }
-      if (!mounted) {
-        break;
-      }
-      if (boundary == null) {
-        setState(() {
-          _loading.remove(job.key);
-          _captureJob = null;
-        });
-        continue;
-      }
-      try {
-        final image = await boundary.toImage(pixelRatio: dpr);
-        final bd = await image.toByteData(format: ui.ImageByteFormat.png);
-        image.dispose();
+        RenderRepaintBoundary? boundary;
+        for (var attempt = 0; attempt < 3; attempt += 1) {
+          final ro = _repaintKey.currentContext?.findRenderObject();
+          if (ro is RenderRepaintBoundary) {
+            boundary = ro;
+            break;
+          }
+          await WidgetsBinding.instance.endOfFrame;
+          if (!mounted) {
+            break;
+          }
+        }
         if (!mounted) {
           break;
         }
-        if (bd != null) {
-          setState(() {
-            _bytes[job.key] = bd.buffer.asUint8List();
-            _loading.remove(job.key);
-            _captureJob = null;
-          });
-        } else {
+        if (boundary == null) {
           setState(() {
             _loading.remove(job.key);
             _captureJob = null;
           });
+          continue;
         }
-      } catch (_) {
-        if (mounted) {
-          setState(() {
-            _loading.remove(job.key);
-            _captureJob = null;
-          });
+        try {
+          final image = await boundary.toImage(pixelRatio: dpr);
+          final bd = await image.toByteData(format: ui.ImageByteFormat.png);
+          image.dispose();
+          if (!mounted) {
+            break;
+          }
+          if (bd != null) {
+            setState(() {
+              _bytes[job.key] = bd.buffer.asUint8List();
+              _loading.remove(job.key);
+              _captureJob = null;
+            });
+          } else {
+            setState(() {
+              _loading.remove(job.key);
+              _captureJob = null;
+            });
+          }
+        } catch (_) {
+          if (mounted) {
+            setState(() {
+              _loading.remove(job.key);
+              _captureJob = null;
+            });
+          }
         }
       }
-    }
     } finally {
       _busy = false;
       if (mounted && _captureJob != null) {
@@ -341,7 +340,7 @@ class ArticleTypographyRasterCell extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
           border: Border.all(
             color: isSelected
-                ? CupertinoColors.activeBlue.resolveFrom(context)
+                ? AppColors.iosAccent(context)
                 : AppColors.white.withValues(alpha: 0.22),
             width: isSelected ? 2.5 : 0.5,
           ),
@@ -437,8 +436,8 @@ class _TypographyCapturePage extends StatelessWidget {
     final safeIdx = byId >= 0
         ? byId
         : (baselineIdx >= 0 && baselineIdx < resolvedPages.length
-            ? baselineIdx
-            : 0);
+              ? baselineIdx
+              : 0);
     final page = resolvedPages[safeIdx];
     final useCover = safeIdx == 0 && coverUrl.trim().isNotEmpty;
     final total = resolvedPages.length;

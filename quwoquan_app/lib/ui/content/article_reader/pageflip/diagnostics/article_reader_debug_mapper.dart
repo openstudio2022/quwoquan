@@ -34,10 +34,6 @@ class ArticleReaderDebugMapper {
       final anchor = input.renderFrame.flippingAnchor;
       final angle = input.renderFrame.angle;
       final visualGeometryDirection = input.renderFrame.visualGeometryDirection;
-      final pageSize = Size(
-        input.scene.layout.bounds.pageWidth,
-        input.scene.layout.bounds.height,
-      );
       final positionViewport = convertBookPointToViewport(
         anchor,
         input.scene.layout.bounds,
@@ -56,65 +52,10 @@ class ArticleReaderDebugMapper {
       sheetViewportPolygon = sheetLocalPolygon
           .map((p) => positionViewport + p)
           .toList(growable: false);
-      final leafFrame = input.renderFrame.backwardLeafFrame;
-      if (leafFrame != null) {
-        final foldLine = input.renderFrame.backwardProjectedFrame?.foldLine;
-        final freeEdgeLine =
-            input.renderFrame.backwardProjectedFrame?.projectedRightEdgeLine;
-        final pagePolygon = sheetLocalPolygon.length >= 3
-            ? sheetLocalPolygon
-            : <Offset>[
-                Offset.zero,
-                Offset(pageSize.width, 0),
-                Offset(pageSize.width, pageSize.height),
-                Offset(0, pageSize.height),
-              ];
-        if (foldLine != null) {
-          final localFoldLine = (
-            toLayerLocal(
-              point: foldLine.$1,
-              anchor: anchor,
-              angle: angle,
-              direction: visualGeometryDirection,
-            ),
-            toLayerLocal(
-              point: foldLine.$2,
-              anchor: anchor,
-              angle: angle,
-              direction: visualGeometryDirection,
-            ),
-          );
-          final localFreeEdgeLine = freeEdgeLine == null
-              ? null
-              : (
-                  toLayerLocal(
-                    point: freeEdgeLine.$1,
-                    anchor: anchor,
-                    angle: angle,
-                    direction: visualGeometryDirection,
-                  ),
-                  toLayerLocal(
-                    point: freeEdgeLine.$2,
-                    anchor: anchor,
-                    angle: angle,
-                    direction: visualGeometryDirection,
-                  ),
-                );
-          frontLocalPolygon = backwardFrontFlatPolygon(
-            pageSize: pageSize,
-            foldLine: foldLine,
-            freeEdgeLine: freeEdgeLine,
-          );
-          final faceGeometry = backwardFoldFaceGeometry(
-            pageSize: pageSize,
-            sheetLocalPolygon: pagePolygon,
-            foldLine: localFoldLine,
-            freeEdgeLine: localFreeEdgeLine,
-          );
-          backLocalPolygon = faceGeometry.verso;
-        }
-      } else {
+      if (angle.abs() <= 1.5707963267948966) {
         backLocalPolygon = sheetLocalPolygon;
+      } else {
+        frontLocalPolygon = sheetLocalPolygon;
       }
       if (input.renderFrame.bottomClipArea.length >= 3) {
         currentResidualViewportPolygon = input.renderFrame.bottomClipArea

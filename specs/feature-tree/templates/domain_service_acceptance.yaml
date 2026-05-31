@@ -1,0 +1,38 @@
+version: 2
+node:
+  id: domain-service-id
+  level: L1_domain_service
+  path: specs/feature-tree/domain-service-id
+  title: domain service title
+
+scope:
+  summary: domain boundary and service governance summary
+  app_modules: []
+  metadata_domains: []
+  services: []
+  test_paths: []
+
+domain_acceptance:
+  DA1:
+    title: domain boundary acceptance
+    done_when:
+      - domain-owned objects are explicit
+      - upstream and downstream dependencies are explicit
+      - app, metadata, service, deploy and test mappings are registered
+    evidence:
+      primary:
+        - T1_static_contract
+        - T3_service_contract
+      supporting:
+        - T4_affected_user_journey
+    tests:
+      planned:
+        - domain contract or gate check
+      recorded: []
+    status: pending
+
+execution:
+  local_gate:
+    - make gate
+  full_gate:
+    - make gate-full

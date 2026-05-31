@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "creatorProfileId",
+    "subAccountId",
+    "authorId",
+    "isSystemBuiltin",
+    "displayName",
+    "userHandle",
+    "headline",
+    "bio",
+    "creatorArchetype",
+    "publicProfileTagRefs",
+    "recommendationTagRefs",
+    "preferredBlueprintIds",
+    "voiceStyle",
+    "expertiseClaims",
+    "mustNotClaim"
+  ],
+  "properties": {
+    "creatorProfileId": { "type": "string" },
+    "subAccountId": { "type": "string" },
+    "authorId": { "type": "string" },
+    "isSystemBuiltin": { "type": "boolean" },
+    "displayName": { "type": "string" },
+    "userHandle": { "type": "string" },
+    "avatarObjectKey": { "type": "string" },
+    "headline": { "type": "string" },
+    "bio": { "type": "string" },
+    "creatorArchetype": { "type": "string" },
+    "publicProfileTagRefs": { "type": "array", "items": { "type": "string" } },
+    "recommendationTagRefs": { "type": "array", "items": { "type": "string" } },
+    "preferredBlueprintIds": { "type": "array", "items": { "type": "string" } },
+    "voiceStyle": { "type": "object" },
+    "expertiseClaims": { "type": "array", "items": { "type": "string" } },
+    "mustNotClaim": { "type": "array", "items": { "type": "string" } }
+  }
+}

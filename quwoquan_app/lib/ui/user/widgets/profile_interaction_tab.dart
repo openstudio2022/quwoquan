@@ -11,7 +11,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
+import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 
 class ProfileInteractionTab extends ConsumerStatefulWidget {
   const ProfileInteractionTab({
@@ -55,9 +55,9 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
   }
 
   Future<void> _load() async {
-    final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
-    final direction = notifier.state.interactionDirection;
-    final subTab = notifier.state.interactionSubTab;
+    final profileState = ref.read(profileNotifierProvider(widget.userId));
+    final direction = profileState.interactionDirection;
+    final subTab = profileState.interactionSubTab;
     _loadedDirection = direction;
     _loadedSubTab = subTab;
     final repo = ref.read(userProfileRepositoryProvider);
@@ -128,47 +128,49 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerRight,
-                    child:
-                        CupertinoSlidingSegmentedControl<InteractionDirection>(
-                          groupValue: state.interactionDirection,
-                          backgroundColor: AppColors.iosFill(context),
-                          thumbColor: AppColors.iosGroupedSurface(context),
-                          children: <InteractionDirection, Widget>{
-                            InteractionDirection.received: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm,
-                                vertical: AppSpacing.intraGroupXs,
-                              ),
-                              child: Text(
-                                '收到',
-                                style: TextStyle(
-                                  fontSize: AppTypography.iosCaption1,
-                                  fontWeight: AppTypography.medium,
-                                  color: fg,
-                                ),
-                              ),
+                    child: CupertinoSlidingSegmentedControl<InteractionDirection>(
+                      groupValue: state.interactionDirection,
+                      backgroundColor: AppColors.iosFill(context),
+                      thumbColor:
+                          SettingsSemanticConstants.conversationSheetCardSurface(
+                            widget.isDark,
+                          ),
+                      children: <InteractionDirection, Widget>{
+                        InteractionDirection.received: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: AppSpacing.intraGroupXs,
+                          ),
+                          child: Text(
+                            '收到',
+                            style: TextStyle(
+                              fontSize: AppTypography.iosCaption1,
+                              fontWeight: AppTypography.medium,
+                              color: fg,
                             ),
-                            InteractionDirection.sent: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm,
-                                vertical: AppSpacing.intraGroupXs,
-                              ),
-                              child: Text(
-                                '发出',
-                                style: TextStyle(
-                                  fontSize: AppTypography.iosCaption1,
-                                  fontWeight: AppTypography.medium,
-                                  color: fg,
-                                ),
-                              ),
-                            ),
-                          },
-                          onValueChanged: (value) {
-                            if (value != null) {
-                              notifier.setInteractionDirection(value);
-                            }
-                          },
+                          ),
                         ),
+                        InteractionDirection.sent: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: AppSpacing.intraGroupXs,
+                          ),
+                          child: Text(
+                            '发出',
+                            style: TextStyle(
+                              fontSize: AppTypography.iosCaption1,
+                              fontWeight: AppTypography.medium,
+                              color: fg,
+                            ),
+                          ),
+                        ),
+                      },
+                      onValueChanged: (value) {
+                        if (value != null) {
+                          notifier.setInteractionDirection(value);
+                        }
+                      },
+                    ),
                   ),
                 ),
               )
@@ -240,10 +242,14 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                 },
                 child: ProfileIosSectionCard(
                   padding: EdgeInsets.all(AppSpacing.containerSm),
-                  backgroundColor: AppColors.iosGroupedSurface(context),
-                  borderColor: AppColors.iosSeparator(
-                    context,
-                  ).withValues(alpha: 0.16),
+                  backgroundColor:
+                      SettingsSemanticConstants.conversationSheetCardSurface(
+                        widget.isDark,
+                      ),
+                  borderColor:
+                      SettingsSemanticConstants.conversationSheetCardBorderColor(
+                        widget.isDark,
+                      ),
                   child: Row(
                     children: <Widget>[
                       CircleAvatar(

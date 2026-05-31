@@ -31,7 +31,6 @@ class CommentConfig {
 
 extension CommentConfigExtension on CommentConfig {
   bool get canUserComment => enabled;
-  bool get isUserLoggedIn => true; // Stub
 }
 
 class CommentResponsive {

@@ -22,7 +22,8 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/search/services/search_network_results_media_wiring.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_summary_card.dart';
 
@@ -1077,10 +1078,9 @@ class _SearchNetworkResultsPageState
       final result = await context.push<Object?>(
         route,
         extra: MediaViewerExtra(
-          posts: <PostSummaryView>[
-            PostSummaryView.fromDto(
+          posts: <ContentSurfaceView>[
+            ContentSurfaceViewMapper.fromDto(
               dto,
-              surfaceId: PostReadSurfaceId.searchCard,
               wire: raw,
             ),
           ],

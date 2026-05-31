@@ -7,16 +7,25 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
+import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget _buildShell(String location) {
+Widget _buildShell(String location, {bool authenticated = true}) {
   return ProviderScope(
+    overrides: [
+      authSessionStoreProvider.overrideWithValue(
+        _TestAuthSessionStore(authenticated: authenticated),
+      ),
+    ],
     child: MaterialApp(
       localizationsDelegates: const [
         AppLocalizations.delegate,
@@ -33,9 +42,14 @@ Widget _buildShell(String location) {
   );
 }
 
-Widget _buildDarkShell(String location) {
+Widget _buildDarkShell(String location, {bool authenticated = true}) {
   return ProviderScope(
-    overrides: [isDarkProvider.overrideWith((ref) => true)],
+    overrides: [
+      isDarkProvider.overrideWith((ref) => true),
+      authSessionStoreProvider.overrideWithValue(
+        _TestAuthSessionStore(authenticated: authenticated),
+      ),
+    ],
     child: MaterialApp(
       localizationsDelegates: const [
         AppLocalizations.delegate,
@@ -50,6 +64,39 @@ Widget _buildDarkShell(String location) {
       ),
     ),
   );
+}
+
+class _TestAuthSessionStore implements AuthSessionStore {
+  const _TestAuthSessionStore({required this.authenticated});
+
+  final bool authenticated;
+
+  @override
+  Future<StoredAuthSession> read() async {
+    return StoredAuthSession(
+      accessToken: authenticated ? 'access-token' : '',
+      refreshToken: authenticated ? 'refresh-token' : '',
+      ownerId: authenticated ? 'user_001' : '',
+      activeSubAccountId: authenticated ? 'user_001' : '',
+      accountState: authenticated ? 'active' : '',
+      identityOrigin: authenticated ? 'phone' : '',
+      installId: 'install-id',
+      manualLoggedOut: false,
+      launchPromptDismissed: !authenticated,
+    );
+  }
+
+  @override
+  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+
+  @override
+  Future<void> updateActiveSubAccount(String subAccountId) async {}
+
+  @override
+  Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> markLaunchPromptDismissed() async {}
 }
 
 void _suppressExpectedErrors() {
@@ -80,6 +127,7 @@ void main() {
       expect(find.text('精品'), findsWidgets);
       expect(find.text('消息'), findsWidgets);
       expect(find.text('我'), findsWidgets);
+      expect(find.text(UITextConstants.bottomNavGuestProfile), findsNothing);
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
@@ -103,13 +151,13 @@ void main() {
       );
     });
 
-    testWidgets('圈子路由渲染独立圈子页', (tester) async {
+    testWidgets('圈子路由归并到首页频道', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.circles));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(MainAppShell), findsOneWidget);
-      expect(find.byType(CirclesHubPage), findsOneWidget);
+      expect(find.byType(HomePage), findsOneWidget);
     });
 
     testWidgets('深色模式下底部导航仍展示五栏', (tester) async {
@@ -125,6 +173,29 @@ void main() {
           matching: find.text('精品'),
         ),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('未登录时底部我的栏显示未登录', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(
+        _buildShell(AppRoutePaths.home, authenticated: false),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text(UITextConstants.bottomNavGuestProfile),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text(AppConceptConstants.profile),
+        ),
+        findsNothing,
       );
     });
 
@@ -200,6 +271,27 @@ void main() {
         (tester.getCenter(profileIcon).dy - iconCenterY).abs(),
         lessThan(1),
       );
+    });
+
+    testWidgets('底部导航背景与 post 表面色一致', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildShell(AppRoutePaths.home));
+      await tester.pumpAndSettle();
+
+      final navDecoration = tester.widget<DecoratedBox>(
+        find
+            .descendant(
+              of: find.byType(BottomNavigationWidget),
+              matching: find.byType(DecoratedBox),
+            )
+            .first,
+      );
+      final decoration = navDecoration.decoration as BoxDecoration;
+      expect(
+        decoration.color,
+        SettingsSemanticConstants.conversationSheetCardSurface(false),
+      );
+      expect(decoration.border, isNull);
     });
   });
 }

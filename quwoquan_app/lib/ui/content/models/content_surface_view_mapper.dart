@@ -1,0 +1,123 @@
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
+import 'package:quwoquan_app/ui/content/post_view_projection.dart';
+
+/// 统一展示模型的唯一映射器：`PostBaseDto (+ wire)` → [ContentSurfaceView]。
+///
+/// 标题/正文/封面/长文模板字段复用 metadata 对齐的 [PostReadPresentation]，
+/// 媒体/作者/统计复用 `PostBaseDto` 的契约派生 getter，确保四 surface 同源、
+/// 字段口径与 metadata 投影一致。禁止对 DTO 子类做 `is/as/whereType`。
+class ContentSurfaceViewMapper {
+  const ContentSurfaceViewMapper._();
+
+  static ContentSurfaceView fromDto(
+    PostBaseDto dto, {
+    Map<String, dynamic>? wire,
+    ContentSurfaceReferral referral = const ContentSurfaceReferral(),
+  }) {
+    final read = PostReadPresentation.fromPostBase(dto, wire: wire);
+
+    final title = read.title.trim().isEmpty ? null : read.title.trim();
+    final body = read.body.trim().isEmpty ? null : read.body.trim();
+
+    final projectedCoverUrl = resolveContentMediaUrl(read.coverUrl);
+    final coverUrl = projectedCoverUrl.isEmpty
+        ? dto.mediaCoverUrl
+        : projectedCoverUrl;
+    final cover = coverUrl.isEmpty
+        ? null
+        : ContentCoverRef(url: coverUrl, aspectRatio: dto.aspectRatio);
+
+    final images = dto.mediaImageUrls
+        .map((url) => ContentImageRef(url: url, aspectRatio: dto.aspectRatio))
+        .toList(growable: false);
+
+    final ContentVideoRef? video = dto.hasVideo
+        ? ContentVideoRef(
+            url: dto.mediaVideoUrl,
+            thumbnailUrl: dto.mediaThumbnailUrl.isEmpty
+                ? dto.primaryVisualUrl
+                : dto.mediaThumbnailUrl,
+            durationMs: dto.durationMs,
+            aspectRatio: dto.aspectRatio,
+          )
+        : null;
+
+    return ContentSurfaceView(
+      postId: dto.id,
+      kind: _kindFor(dto),
+      contentType: dto.type,
+      contentIdentity: dto.identity,
+      author: ContentAuthorRef(
+        id: dto.subAccountId,
+        displayName: dto.displayName,
+        avatarUrl: dto.avatarUrl,
+        backgroundUrl: dto.authorBackgroundUrl,
+      ),
+      stats: ContentStats(
+        like: dto.likeCount,
+        comment: dto.commentCount,
+        favorite: dto.favoriteCount,
+        share: dto.shareCount,
+      ),
+      createdAt: dto.createdAt,
+      title: title,
+      body: body,
+      cover: cover,
+      images: images,
+      video: video,
+      intersectionReasons:
+          dto.intersectionReasons ?? const <IntersectionReason>[],
+      tags: _tagsFrom(wire),
+      articleTemplate: read.articleTemplate,
+      articleFontPreset: read.articleFontPreset,
+      referral: referral,
+    );
+  }
+
+  /// 文章详情/沉浸水合路径：从 [ContentPostDetailPayload] 构建带富渲染载荷的统一视图。
+  ///
+  /// 公共字段（作者/统计/标题/封面）走 [fromDto] 同源口径；文章块/卡片/文档/分页
+  /// 由 [projectArticleDetailViewFromPayload] 直接投影为 [ContentArticleRender] 并
+  /// 挂载到 [ContentSurfaceView.article]。
+  static ContentSurfaceView fromArticleDetailPayload(
+    ContentPostDetailPayload payload, {
+    required String fallbackArticleId,
+    ContentSurfaceReferral referral = const ContentSurfaceReferral(),
+  }) {
+    final wire = payload.mergedArticleWireMap;
+    final dto = postBaseDtoFromMap(wire);
+    final base = fromDto(dto, wire: wire, referral: referral);
+    return base.copyWith(
+      article: projectArticleDetailViewFromPayload(
+        payload,
+        fallbackArticleId: fallbackArticleId,
+      ),
+    );
+  }
+
+  /// 媒体形态判别：仅用 `PostBaseDto` 的契约派生 getter（无 `is/as`）。
+  static ContentSurfaceKind _kindFor(PostBaseDto dto) {
+    if (dto.isVideoLike) {
+      return ContentSurfaceKind.video;
+    }
+    if (dto.isArticleLike) {
+      return ContentSurfaceKind.article;
+    }
+    if (dto.hasImages) {
+      return ContentSurfaceKind.image;
+    }
+    return ContentSurfaceKind.micro;
+  }
+
+  static List<String> _tagsFrom(Map<String, dynamic>? wire) {
+    final raw = wire?['tagRefs'];
+    if (raw is List) {
+      return raw.whereType<String>().toList(growable: false);
+    }
+    return const <String>[];
+  }
+}

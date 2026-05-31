@@ -19,7 +19,7 @@ import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagemen
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 
 /// 沉浸式图片查看器 - 基于Figma原型实现
 /// 支持与作者主页、评论和帖子的完整联动
@@ -28,7 +28,7 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
   final VoidCallback onClose;
   final List<MediaItem> mediaItems;
   final int initialIndex;
-  final List<PostSummaryView> posts;
+  final List<ContentSurfaceView> posts;
   final int initialPostIndex;
 
   /// username 必填；avatarUrl、displayName、backgroundUrl 可选，传入后作者页优先展示以与浏览页一致
@@ -40,18 +40,18 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
   })
   onUserClick;
   final Function(String, bool)? onFollowClick;
-  final Function(PostSummaryView)? onCommentsClick;
-  final Function(PostSummaryView)? onMoreClick;
-  final Function(PostSummaryView)? onLikeClick;
-  final Function(PostSummaryView)? onSaveClick;
-  final Function(PostSummaryView)? onShareClick;
+  final Function(ContentSurfaceView)? onCommentsClick;
+  final Function(ContentSurfaceView)? onMoreClick;
+  final Function(ContentSurfaceView)? onLikeClick;
+  final Function(ContentSurfaceView)? onSaveClick;
+  final Function(ContentSurfaceView)? onShareClick;
   final Set<String>? followingUsers;
   final Set<String>? savedPosts;
   final Set<String>? likedPosts;
-  final Function(PostSummaryView)? getPostLikesCount;
-  final Function(PostSummaryView)? getPostBookmarksCount;
-  final Function(PostSummaryView)? getPostCommentsCount;
-  final Function(PostSummaryView)? getPostSharesCount;
+  final Function(ContentSurfaceView)? getPostLikesCount;
+  final Function(ContentSurfaceView)? getPostBookmarksCount;
+  final Function(ContentSurfaceView)? getPostCommentsCount;
+  final Function(ContentSurfaceView)? getPostSharesCount;
   final bool isBlocked;
   final String? source; // 'feed' | 'userProfile'
   final Map<String, dynamic>? userProfileData;
@@ -229,31 +229,34 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
       ? _currentPostIndex
       : (_currentEntry?.postIndex ?? 0);
 
-  PostSummaryView? get _currentPost =>
+  ContentSurfaceView? get _currentPost =>
       (widget.posts.isNotEmpty && _effectivePostIndex < widget.posts.length)
       ? widget.posts[_effectivePostIndex]
       : null;
 
-  List<String> _collectPostImageUrls(PostSummaryView post) {
-    final images = (post.images ?? const <String>[])
-        .map((e) => e.trim())
+  /// 单值纵横比：封面 → 首图 → 视频，与旧投影 `dto.aspectRatio` 同源。
+  double? _postAspectRatio(ContentSurfaceView post) {
+    return post.cover?.aspectRatio ??
+        (post.images.isNotEmpty ? post.images.first.aspectRatio : null) ??
+        post.video?.aspectRatio;
+  }
+
+  List<String> _collectPostImageUrls(ContentSurfaceView post) {
+    final images = post.images
+        .map((e) => e.url.trim())
         .where((e) => e.isNotEmpty)
         .toList(growable: false);
     final valid = images
         .where((e) => e.startsWith('http://') || e.startsWith('https://'))
         .toList(growable: false);
     if (valid.isNotEmpty) return valid;
-    final thumb =
-        post.thumbnail?.trim() ??
-        post.thumbnailUrl?.trim() ??
-        post.coverUrl?.trim() ??
-        '';
+    final thumb = post.cover?.url.trim() ?? post.video?.thumbnailUrl.trim() ?? '';
     if (thumb.isNotEmpty) return <String>[thumb];
     return const <String>[];
   }
 
-  String? _usernameFromPost(PostSummaryView post) {
-    final username = post.authorId;
+  String? _usernameFromPost(ContentSurfaceView post) {
+    final username = post.author.id;
     return username.isNotEmpty ? username : null;
   }
 
@@ -302,8 +305,8 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   void _initializePostState() {
     final currentPost = _currentPost;
     if (currentPost != null) {
-      _isLiked = widget.likedPosts?.contains(currentPost.id) ?? false;
-      _isSaved = widget.savedPosts?.contains(currentPost.id) ?? false;
+      _isLiked = widget.likedPosts?.contains(currentPost.postId) ?? false;
+      _isSaved = widget.savedPosts?.contains(currentPost.postId) ?? false;
       final username = _usernameFromPost(currentPost);
       _isFollowing = username != null
           ? (widget.followingUsers?.contains(username) ?? false)
@@ -312,9 +315,10 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
       _savesCount = widget.getPostBookmarksCount?.call(currentPost) ?? 0;
       _commentsCount =
           widget.getPostCommentsCount?.call(currentPost) ??
-          currentPost.commentsCount;
+          currentPost.stats.comment;
       _sharesCount =
-          widget.getPostSharesCount?.call(currentPost) ?? currentPost.sharesCount;
+          widget.getPostSharesCount?.call(currentPost) ??
+          currentPost.stats.share;
       _startFollowDelay();
     }
   }
@@ -472,7 +476,9 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
 
       CommentViewer.showModal(
         context: context,
-        postId: currentPost.id.isNotEmpty ? currentPost.id : 'mock_post_id',
+        postId: currentPost.postId.isNotEmpty
+            ? currentPost.postId
+            : 'mock_post_id',
         initialComments: [],
         config: commentConfig,
         modalHeight: CommentModalHeight.adaptive,
@@ -503,23 +509,26 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     if (currentPost != null) {
       // 显示更多操作弹窗（1:1 PostActionSheet：复制链接、保存、举报等）
       final config = MediaPostMoreActionConfig(
-        onReward: () => debugPrint('Reward post: ${currentPost.id}'),
+        onReward: () => debugPrint('Reward post: ${currentPost.postId}'),
         onSave: () => _handleSaveClick(),
-        onMessage: () => debugPrint('Message user: ${currentPost.authorId}'),
+        onMessage: () =>
+            debugPrint('Message user: ${currentPost.author.id}'),
         onCopyLink: () {
-          final link = AppPublicContentLinks.postWebUrl(currentPost.id);
+          final link = AppPublicContentLinks.postWebUrl(currentPost.postId);
           Clipboard.setData(ClipboardData(text: link));
           if (mounted) {
             AppToast.show(context, UITextConstants.copyLink);
           }
         },
-        onViewOriginal: () => debugPrint('View original: ${currentPost.id}'),
+        onViewOriginal: () =>
+            debugPrint('View original: ${currentPost.postId}'),
         onFontSettings: () => debugPrint('Font settings'),
         onThemeToggle: () => debugPrint('Theme toggle'),
         onFeedback: () => debugPrint('Feedback'),
         onNotInterested: () => debugPrint('Not interested'),
-        onBlockUser: () => debugPrint('Block user: ${currentPost.authorId}'),
-        onReport: () => debugPrint('Report post: ${currentPost.id}'),
+        onBlockUser: () =>
+            debugPrint('Block user: ${currentPost.author.id}'),
+        onReport: () => debugPrint('Report post: ${currentPost.postId}'),
       );
 
       MoreActionPopup.show(context: context, config: config);
@@ -536,11 +545,11 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   void _handleAuthorTap() {
     final currentPost = _currentPost;
     if (currentPost == null) return;
-    final username = currentPost.authorId;
+    final username = currentPost.author.id;
     if (username.isEmpty) return;
-    final avatarUrl = currentPost.avatarUrl;
-    final displayName = currentPost.displayName;
-    final backgroundUrl = currentPost.backgroundImage;
+    final avatarUrl = currentPost.author.avatarUrl;
+    final displayName = currentPost.author.displayName;
+    final backgroundUrl = currentPost.author.backgroundUrl;
     widget.onUserClick(
       username,
       avatarUrl: avatarUrl.isEmpty ? null : avatarUrl,
@@ -578,28 +587,28 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     );
   }
 
-  String _getPostTitle(PostSummaryView? post) {
+  String _getPostTitle(ContentSurfaceView? post) {
     return post?.title ?? '';
   }
 
-  String _getPostCaption(PostSummaryView? post) {
+  String _getPostCaption(ContentSurfaceView? post) {
     return post?.body ?? '';
   }
 
-  String _getAuthorName(PostSummaryView? post) {
+  String _getAuthorName(ContentSurfaceView? post) {
     if (post == null) return UITextConstants.unknownUser;
-    final name = post.author.name;
+    final name = post.author.displayName;
     return name.isNotEmpty ? name : UITextConstants.unknownUser;
   }
 
-  String? _getAuthorAvatar(PostSummaryView? post) {
-    final avatar = post?.avatarUrl ?? post?.author.avatar;
+  String? _getAuthorAvatar(ContentSurfaceView? post) {
+    final avatar = post?.author.avatarUrl;
     return avatar?.isEmpty == true ? null : avatar;
   }
 
   Widget _buildMediaPage(
     BuildContext context,
-    PostSummaryView post,
+    ContentSurfaceView post,
     MediaItem mediaItem,
     bool isDark,
     bool isActive,
@@ -609,7 +618,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     final caption = _getPostCaption(post);
     final hasTextLayout = title.isNotEmpty || caption.isNotEmpty;
     final shouldShowCaption = showCaption && hasTextLayout;
-    final postId = post.id;
+    final postId = post.postId;
     final isExpanded = _expandedCaptions[postId] ?? false;
     final imageUrl = mediaItem.url;
 
@@ -721,7 +730,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
 
   Widget _buildMediaContent(
     BuildContext context,
-    PostSummaryView post,
+    ContentSurfaceView post,
     MediaItem mediaItem,
   ) {
     if (mediaItem.url.isEmpty) {
@@ -753,7 +762,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 2.0,
         heroAttributes: PhotoViewHeroAttributes(
-          tag: 'photo_${post.id}_${mediaItem.url}',
+          tag: 'photo_${post.postId}_${mediaItem.url}',
         ),
         onTapDown: (context, details, controllerValue) {
           _toggleControls();
@@ -825,7 +834,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
             final mediaItem = MediaItem(
               type: ContentTypeConstants.image,
               url: urls[imgIdx],
-              aspectRatio: post.aspectRatio,
+              aspectRatio: _postAspectRatio(post),
             );
             final isActive =
                 postIdx == _currentPostIndex && imgIdx == _currentImageIndex;
@@ -888,7 +897,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
                   final mediaItem = MediaItem(
                     type: ContentTypeConstants.image,
                     url: entry.imageUrl,
-                    aspectRatio: post.aspectRatio,
+                    aspectRatio: _postAspectRatio(post),
                   );
                   return _buildMediaPage(
                     context,

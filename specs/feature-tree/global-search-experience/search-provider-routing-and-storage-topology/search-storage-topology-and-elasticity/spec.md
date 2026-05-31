@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `global-search-experience`
-- `L2_feature`: `search-provider-routing-and-storage-topology`
-- `L3_scenario`: `search-storage-topology-and-elasticity`
+- `L1_domain_service`: `global-search-experience`
+- `L2_business_capability`: `search-provider-routing-and-storage-topology`
+- `L3_story`: `search-storage-topology-and-elasticity`
 
 ## 背景与动机
 

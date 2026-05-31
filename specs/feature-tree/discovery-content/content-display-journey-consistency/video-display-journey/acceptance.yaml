@@ -1,14 +1,41 @@
-version: 1
-feature: video-display-journey
-level: "L3_story"
-template: A1-A8
+version: 2
+node:
+  id: video-display-journey
+  level: L3_story
+  path: specs/feature-tree/discovery-content/content-display-journey-consistency/video-display-journey
+  title: video display journey
+  parent_domain_service: discovery-content
+  parent_business_capability: content-display-journey-consistency
+scope:
+  summary: video display journey 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: video display journey GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance:
-  A1: 列表、浏览器、作者详情数据与 post 一致
-  A2: 关注/赞/收藏跨页面一致，重入后保持
-  A3: 作者详情关注/取消后返回，浏览器展示更新
-  A4: 滑动顺序与列表一致，支持加载更多
-  A5: 能力与图片旅程一致
-  A6: Mock/Remote 切换后正确
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

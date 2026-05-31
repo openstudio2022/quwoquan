@@ -1,49 +1,41 @@
-version: 1
-feature: sse-server-and-change-stream
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-streaming.subfeature.sse-server-and-change-stream
-  parent_path: capability.runtime.feature.runtime-streaming
-  acceptance_inherits_from: capability.runtime.feature.runtime-streaming
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A3_service_governance
-  - A8_test_automation
-  notes: Core SSE Server + Change Stream 监听，支撑实时推送基础设施。
-global_acceptance:
-  A1_functional:
-    scenarios:
-    - given: 用户已认证
-      when: 建立 SSE 连接 GET /v1/stream/events
-      then: SSEServer 注册连接，按 userId 路由
-    - given: MongoDB 集合发生变更
-      when: ChangeStreamWatcher 监听
-      then: 触发 SSE 推送或内部事件分发
-    - given: 服务端向某 userId 推送事件
-      when: SSEServer.Push(userId, event)
-      then: 该用户所有 SSE 连接收到推送
-  A2_experience:
-  - SSE 连接建立延迟 < 200ms
-  A3_service_governance:
-  - SSE 连接数上限可配置
-  - Change Stream 监听支持 resume token
-  A4_observability:
-  - SSE 连接数、Change Stream 延迟可监控
-  A5_product_ops:
-  - N/A
-  A6_security_privacy:
-  - SSE 连接需认证，按 userId 隔离
-  A7_contract_metadata_consistency:
-  - 推送事件类型与 events.yaml 定义一致
-  A8_test_automation:
-  - SSE server 集成测试（连接/推送/断开）
-  - Change Stream watcher 集成测试（testcontainers mongo）
-tests:
-  integration:
-  - quwoquan_service/runtime/streaming/tests/sse_server_test.go
-  - quwoquan_service/runtime/streaming/tests/change_stream_test.go
+version: 2
+node:
+  id: sse-server-and-change-stream
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-streaming/sse-server-and-change-stream
+  title: sse server and change stream
+  parent_domain_service: runtime
+  parent_business_capability: runtime-streaming
+scope:
+  summary: sse server and change stream 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: sse server and change stream GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

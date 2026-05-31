@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -8,9 +9,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
+import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -19,9 +24,12 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_flip_host.dart';
 import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
+import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
 Map<String, MediaViewerPostWireRow> _viewerRawByPostId(
@@ -274,6 +282,102 @@ class _ConfigurableContentRepository extends MockContentRepository {
   }
 }
 
+class _PagedFeaturedContentRepository extends MockContentRepository {
+  _PagedFeaturedContentRepository();
+
+  final int pageSize = 2;
+  final Duration appendDelay = const Duration(seconds: 4);
+  int appendCallCount = 0;
+
+  List<PostBaseDto> _postsForCategory(String category) {
+    List<FeedItemDto> source;
+    switch (category) {
+      case 'photo':
+        source = ContentMockData.discoveryPhotoData
+            .take(4)
+            .toList(growable: false);
+        break;
+      case 'video':
+        source = ContentMockData.discoveryVideoData
+            .take(4)
+            .toList(growable: false);
+        break;
+      case 'article':
+        source = ContentMockData.discoveryArticleData
+            .take(4)
+            .toList(growable: false);
+        break;
+      default:
+        return const <PostBaseDto>[];
+    }
+    return source
+        .map((item) => postBaseDtoFromMap(item.toDiscoveryWireMap()))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
+    required String category,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+  }) async {
+    final posts = _postsForCategory(category);
+    if (posts.isEmpty) {
+      return super.listDiscoveryFeedPage(
+        category: category,
+        identity: identity,
+        type: type,
+        subCategory: subCategory,
+        limit: limit,
+        cursor: cursor,
+        sort: sort,
+        sessionId: sessionId,
+        feedRequestId: feedRequestId,
+      );
+    }
+    final offset = int.tryParse((cursor ?? '').trim()) ?? 0;
+    if (offset > 0 && appendDelay > Duration.zero) {
+      appendCallCount += 1;
+      await Future<void>.delayed(appendDelay);
+    }
+    final end = (offset + pageSize).clamp(0, posts.length);
+    return CursorPage<PostBaseDto>(
+      items: posts.sublist(offset, end),
+      nextCursor: end < posts.length ? '$end' : null,
+    );
+  }
+
+  @override
+  DiscoveryPresentationWire? discoveryPresentationWireForPost(String postId) {
+    final isArticle = ContentMockData.discoveryArticleData.any(
+      (item) => item.id == postId,
+    );
+    if (isArticle) {
+      final row = ContentMockData.discoveryArticleData.firstWhere(
+        (item) => item.id == postId,
+      );
+      return DiscoveryPresentationWire.fromRow(<String, dynamic>{
+        ...row.toDiscoveryWireMap(),
+        'id': row.id,
+        'type': 'article',
+        'contentType': 'article',
+        'title': row.title,
+        'body': row.summary ?? row.body,
+        'cards': const <Map<String, dynamic>>[
+          {'title': '第二页标题', 'body': '第二页正文'},
+        ],
+      });
+    }
+    return super.discoveryPresentationWireForPost(postId);
+  }
+}
+
 class _RemoteModeNotifier extends AppDataSourceModeNotifier {
   @override
   AppDataSourceMode build() => AppDataSourceMode.remote;
@@ -281,6 +385,8 @@ class _RemoteModeNotifier extends AppDataSourceModeNotifier {
 
 PhotoPostDto _photoPost({
   List<String> imageUrls = const ['https://example.com/photo.jpg'],
+  int? width,
+  int? height,
 }) {
   return PhotoPostDto(
     id: 'photo-1',
@@ -293,6 +399,30 @@ PhotoPostDto _photoPost({
     body: 'dto body',
     coverUrl: 'https://example.com/photo.jpg',
     imageUrls: imageUrls,
+    width: width,
+    height: height,
+    likeCount: 0,
+    commentCount: 0,
+    favoriteCount: 0,
+    shareCount: 0,
+    createdAt: DateTime.now(),
+  );
+}
+
+VideoPostDto _videoPost({int? width, int? height}) {
+  return VideoPostDto(
+    id: 'video-1',
+    type: 'video',
+    identity: 'work',
+    assistantUsePolicy: 'inherit',
+    authorId: 'author-video',
+    displayName: '视频作者',
+    avatarUrl: 'https://example.com/avatar-video.jpg',
+    body: 'video body',
+    videoUrl: 'https://example.com/video.mp4',
+    thumbnailUrl: 'https://example.com/video.jpg',
+    width: width,
+    height: height,
     likeCount: 0,
     commentCount: 0,
     favoriteCount: 0,
@@ -324,8 +454,8 @@ ArticlePostDto _articlePost() {
   );
 }
 
-MomentPostDto _textMoment() {
-  return MomentPostDto(
+MicroPostDto _textMoment({List<IntersectionReason>? intersectionReasons}) {
+  return MicroPostDto(
     id: 'moment-1',
     type: 'micro',
     identity: 'moment',
@@ -340,6 +470,7 @@ MomentPostDto _textMoment() {
     favoriteCount: 0,
     shareCount: 0,
     createdAt: DateTime.now(),
+    intersectionReasons: intersectionReasons,
   );
 }
 
@@ -411,7 +542,7 @@ class _DeferredPostWorksViewerState extends State<_DeferredPostWorksViewer> {
       showTopNavigation: false,
       externalPosts: _posts,
       externalPostViews: _posts
-          .map(PostSummaryView.fromDto)
+          .map(ContentSurfaceViewMapper.fromDto)
           .toList(growable: false),
       rawPostsById: _posts.isEmpty
           ? const <String, MediaViewerPostWireRow>{}
@@ -425,6 +556,199 @@ class _DeferredPostWorksViewerState extends State<_DeferredPostWorksViewer> {
 void main() {
   setUp(() {
     HttpOverrides.global = _FakeHttpOverrides();
+  });
+
+  test('沉浸媒体滑动顺滑性静态契约', () {
+    final viewerSource = File(
+      'lib/ui/discovery/widgets/works_immersive_viewer.dart',
+    ).readAsStringSync();
+    final videoPlayerSource = File(
+      'lib/components/media/video/player/video_player_widget.dart',
+    ).readAsStringSync();
+
+    expect(
+      viewerSource,
+      contains('double _pageWidthForConstraints(BoxConstraints constraints)'),
+      reason: '图片横滑分页距离必须来自实际 stage 宽度，而不是全屏宽度。',
+    );
+    expect(
+      viewerSource,
+      contains('Duration _settleDuration({'),
+      reason: '图片释放吸附应根据距离/速度动态收敛，避免固定时长拖沓。',
+    );
+    expect(
+      viewerSource,
+      contains('precacheImage(CachedNetworkImageProvider(url), context)'),
+      reason: '图片横滑应预热相邻图，降低快速滑动时 placeholder 闪动。',
+    );
+    expect(
+      viewerSource,
+      contains('allowImplicitScrolling: true'),
+      reason: '视频横滑应允许 PageView 提前构建相邻页以降低黑屏概率。',
+    );
+    expect(
+      viewerSource,
+      contains('class _KeepAliveStage'),
+      reason: '视频相邻页构建后应保活，避免来回滑动反复初始化。',
+    );
+    expect(
+      videoPlayerSource,
+      contains('void didUpdateWidget(covariant VideoPlayerWidget oldWidget)'),
+      reason: '视频播放器必须响应 autoPlay 变化，同步切页后的播放/暂停状态。',
+    );
+    expect(videoPlayerSource, contains('_syncPlaybackWithAutoPlay();'));
+  });
+
+  testWidgets('精品沉浸流尾部显示加载哨兵并预取下一批内容', (tester) async {
+    final repo = _PagedFeaturedContentRepository();
+    final analytics = _FakeAnalyticsService();
+    final container = ProviderContainer(
+      overrides: [
+        contentRepositoryProvider.overrideWithValue(repo),
+        analyticsProvider.overrideWithValue(analytics),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    var switchedToHome = false;
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, _) => MaterialApp(
+            theme: ThemeData.dark(),
+            home: Scaffold(
+              body: WorksImmersiveViewer(
+                showWorksToolbar: true,
+                showTopNavigation: true,
+                onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+                onAssistantTap: () {},
+                onSwitchToCircles: () => switchedToHome = true,
+                onSwitchToFollowing: () => switchedToHome = true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    expect(
+      container.read(discoveryFeedProvider('photo')).value?.items.length,
+      equals(2),
+    );
+    expect(
+      container.read(discoveryFeedProvider('video')).value?.items.length,
+      equals(2),
+    );
+    expect(
+      container.read(discoveryFeedProvider('article')).value?.items.length,
+      equals(2),
+    );
+
+    final verticalPager = find.byWidgetPredicate(
+      (widget) => widget is PageView && widget.scrollDirection == Axis.vertical,
+    );
+    var reachedSentinel = false;
+    for (var i = 0; i < 8; i += 1) {
+      await tester.fling(verticalPager, const Offset(0, -700), 1200);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 450));
+      reachedSentinel = find
+          .byKey(const ValueKey<String>('works-load-more-sentinel'))
+          .evaluate()
+          .isNotEmpty;
+      if (reachedSentinel) {
+        break;
+      }
+    }
+
+    expect(reachedSentinel, isTrue);
+    expect(repo.appendCallCount, greaterThan(0));
+    expect(switchedToHome, isFalse);
+
+    await tester.pump(const Duration(seconds: 5));
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    expect(
+      container.read(discoveryFeedProvider('photo')).value?.items.length,
+      equals(4),
+    );
+    expect(
+      container.read(discoveryFeedProvider('video')).value?.items.length,
+      equals(4),
+    );
+    expect(
+      container.read(discoveryFeedProvider('article')).value?.items.length,
+      equals(4),
+    );
+    expect(
+      find.byKey(const ValueKey<String>('works-load-more-sentinel')),
+      findsNothing,
+    );
+    expect(switchedToHome, isFalse);
+
+    // 滚动翻页会经 trackSkip 懒创建 ContentBehaviorTracker（周期性 flush 定时器，
+    // 生命周期绑定 container.onDispose）。在测试体结束前显式 dispose container，
+    // 使定时器在 pending-timer 不变量校验前被取消，避免 "Timer still pending"。
+    container.dispose();
+  });
+
+  testWidgets('精品顶部用作品形态分段替代关注/精品一级 tab', (tester) async {
+    final repo = _PagedFeaturedContentRepository();
+    final container = ProviderContainer(
+      overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, _) => MaterialApp(
+            theme: ThemeData.dark(),
+            home: Scaffold(
+              body: WorksImmersiveViewer(
+                showWorksToolbar: true,
+                showTopNavigation: true,
+                onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+                onAssistantTap: () {},
+                onSwitchToFollowing: () {},
+                onSwitchToCircles: () {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    // 形态分段常驻顶部，占用原关注/精品 tab 的同一居中位置。
+    expect(
+      find.byKey(const ValueKey<String>('works-format-tab-strip')),
+      findsOneWidget,
+    );
+    for (final id in <String>['all', 'image', 'video', 'note']) {
+      expect(
+        find.byKey(ValueKey<String>('works-format-tab-$id')),
+        findsOneWidget,
+        reason: '应展示作品形态分段项 $id',
+      );
+    }
+
+    // 不再出现「关注 / 精品」一级 tab。
+    expect(find.text('关注'), findsNothing);
+    expect(find.text('精品'), findsNothing);
+
+    container.dispose();
   });
 
   testWidgets('UnifiedMediaViewerPage 首帧后灌入互动快照且不抛 provider 生命周期异常', (
@@ -444,7 +768,9 @@ void main() {
             theme: ThemeData.dark(),
             home: UnifiedMediaViewerPage(
               extra: MediaViewerExtra(
-                posts: <PostSummaryView>[PostSummaryView.fromDto(post)],
+                posts: <ContentSurfaceView>[
+                  ContentSurfaceViewMapper.fromDto(post),
+                ],
                 dtoPosts: <PostBaseDto>[post],
                 initialIndex: 0,
                 category: 'photo',
@@ -498,6 +824,81 @@ void main() {
     container.dispose();
   });
 
+  testWidgets('UnifiedMediaViewerPage 文章底部工具栏沿统一安全轨道收口', (tester) async {
+    final post = _articlePost();
+    final container = ProviderContainer();
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(390, 844),
+            padding: EdgeInsets.only(top: 47, bottom: 34),
+            viewPadding: EdgeInsets.only(top: 47, bottom: 34),
+          ),
+          child: MaterialApp(
+            theme: ThemeData.dark(),
+            home: UnifiedMediaViewerPage(
+              extra: MediaViewerExtra(
+                posts: <ContentSurfaceView>[
+                  ContentSurfaceViewMapper.fromDto(post),
+                ],
+                dtoPosts: <PostBaseDto>[post],
+                initialIndex: 0,
+                category: 'article',
+                rawPostsById: _viewerRawByPostId({
+                  post.id: <String, dynamic>{
+                    'postId': post.id,
+                    'type': 'article',
+                    'contentType': 'article',
+                    'authorId': post.authorId,
+                    'authorNickname': post.displayName,
+                    'authorAvatarUrl': post.avatarUrl,
+                    'title': post.title,
+                    'body': post.body,
+                    'summary': post.summary,
+                    'coverUrl': post.coverUrl,
+                    'articleTemplate': post.articleTemplate,
+                    'articleFontPreset': post.articleFontPreset,
+                    'cards': const [
+                      {'title': '第二页标题', 'body': '第二页正文'},
+                    ],
+                  },
+                }),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final barFinder = find.byType(ImmersiveEngagementBar);
+    final railFinder = find.byKey(const ValueKey('immersive-engagement-rail'));
+    final barRect = tester.getRect(barFinder);
+    final railRect = tester.getRect(railFinder);
+    final barContext = tester.element(barFinder);
+    final expectedSideInset =
+        AppSpacing.containerMd +
+        AppSpacing.appChromeBottomSafeSideInset(barContext, 34);
+
+    expect(
+      (railRect.left - barRect.left - expectedSideInset).abs(),
+      lessThan(1),
+    );
+    expect(
+      (barRect.right - railRect.right - expectedSideInset).abs(),
+      lessThan(1),
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    container.dispose();
+  });
+
   testWidgets('photo post 在 unified viewer 中展示 raw title/body', (tester) async {
     final post = _photoPost(
       imageUrls: const [
@@ -517,7 +918,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -570,6 +971,87 @@ void main() {
     expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
   });
 
+  testWidgets('精品页竖向图片按宽高比铺入状态栏', (tester) async {
+    final post = _photoPost(width: 900, height: 1200);
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          topChromeSafeInset: AppSpacing.twenty,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    final canvasRect = tester.getRect(
+      find.byKey(ValueKey<String>('works-status-content-canvas-${post.id}')),
+    );
+    expect((canvasRect.top - viewerRect.top).abs(), lessThan(1));
+  });
+
+  testWidgets('精品页宽横图保留状态栏安全区', (tester) async {
+    final post = _photoPost(width: 1600, height: 900);
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          topChromeSafeInset: AppSpacing.twenty,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    final canvasRect = tester.getRect(
+      find.byKey(ValueKey<String>('works-status-content-canvas-${post.id}')),
+    );
+    expect(
+      canvasRect.top - viewerRect.top,
+      moreOrLessEquals(AppSpacing.twenty),
+    );
+  });
+
+  testWidgets('精品页视频可铺入状态栏', (tester) async {
+    final post = _videoPost(width: 1920, height: 1080);
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          topChromeSafeInset: AppSpacing.twenty,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    final canvasRect = tester.getRect(
+      find.byKey(ValueKey<String>('works-status-content-canvas-${post.id}')),
+    );
+    expect((canvasRect.top - viewerRect.top).abs(), lessThan(1));
+  });
+
   testWidgets('photo post 在 iPad 宽屏下顶部说明底部对齐到同一 media rail', (tester) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(1024, 1366);
@@ -587,7 +1069,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -696,7 +1178,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -746,7 +1228,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -777,11 +1259,16 @@ void main() {
 
     final bookRect = tester.getRect(find.byType(ArticleReadOnlyBookDeck));
     final toolbarRect = tester.getRect(find.byType(ImmersiveEngagementBar));
+    final screenWidth =
+        tester.view.physicalSize.width / tester.view.devicePixelRatio;
 
     expect(
       toolbarRect.top - bookRect.bottom,
       moreOrLessEquals(AppSpacing.containerMd, epsilon: 1),
     );
+    expect(bookRect.left, closeTo(0, 1));
+    expect(bookRect.top, closeTo(0, 1));
+    expect(bookRect.right, closeTo(screenWidth, 1));
   });
 
   testWidgets('text-only moment 使用文本画布展示 title/body', (tester) async {
@@ -792,11 +1279,11 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'moment',
+              'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
               'authorNickname': post.displayName,
@@ -817,6 +1304,50 @@ void main() {
     expect(find.textContaining('今天风有点大'), findsOneWidget);
   });
 
+  testWidgets('沉浸 caption 接入交集理由位（与 feed 同口径，只读 displayText）', (tester) async {
+    final post = _textMoment(
+      intersectionReasons: <IntersectionReason>[
+        IntersectionReason(
+          dimension: 'identity',
+          displayText: '你和 TA 都来自同一校园',
+          sharedCount: 2,
+          source: 'identity',
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'micro',
+              'contentType': 'micro',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '临时改地点提醒',
+              'body': post.body,
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('works-caption-intersection-reason')),
+      findsOneWidget,
+    );
+    expect(find.text('你和 TA 都来自同一校园'), findsOneWidget);
+  });
+
   testWidgets('text-only moment 在 iPad 宽屏下顶部内容底部共享 text rail', (tester) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(1024, 1366);
@@ -832,11 +1363,11 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'moment',
+              'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
               'authorNickname': post.displayName,
@@ -892,7 +1423,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -915,7 +1446,7 @@ void main() {
     expect(tester.getBottomRight(panel).dy, closeTo(screenHeight, 2.0));
   });
 
-  testWidgets('图片滑到边界后继续横滑会切换主 tab', (tester) async {
+  testWidgets('图片滑到边界后从内容区继续横滑不会切换主 tab', (tester) async {
     final post = _photoPost(
       imageUrls: const [
         'https://example.com/photo.jpg',
@@ -929,7 +1460,7 @@ void main() {
         WorksImmersiveViewer(
           showWorksToolbar: true,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           initialImageIndex: 1,
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
@@ -949,10 +1480,128 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(switchedToCircles, isTrue);
+    expect(switchedToCircles, isFalse);
   });
 
-  testWidgets('文章翻页到边界后继续横滑会切换主 tab', (tester) async {
+  testWidgets('图片首图从内容区继续横滑时会出现回弹并恢复原位', (tester) async {
+    final post = _photoPost(
+      imageUrls: const [
+        'https://example.com/photo.jpg',
+        'https://example.com/photo-2.jpg',
+      ],
+    );
+    var dismissed = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: false,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          initialImageIndex: 0,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onTapBack: () {
+            dismissed = true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final photoStage = find.byKey(const ValueKey<String>('works-photo-stage'));
+    final initialRect = tester.getRect(photoStage);
+    final gesture = await tester.startGesture(initialRect.center);
+    await gesture.moveBy(const Offset(24, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(48, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(48, 0));
+    await tester.pump();
+
+    final draggedTransform = tester
+        .widget<AnimatedContainer>(photoStage)
+        .transform;
+    expect(draggedTransform, isNotNull);
+    expect(draggedTransform!.storage[12], greaterThan(8));
+    expect(dismissed, isFalse);
+
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
+    await tester.pumpAndSettle();
+
+    final settledTransform = tester
+        .widget<AnimatedContainer>(photoStage)
+        .transform;
+    expect(settledTransform, isNotNull);
+    expect(settledTransform!.storage[12], closeTo(0, 0.5));
+    expect(dismissed, isFalse);
+  });
+
+  testWidgets('图片末图从内容区继续横滑时会出现回弹并恢复原位', (tester) async {
+    final post = _photoPost(
+      imageUrls: const [
+        'https://example.com/photo.jpg',
+        'https://example.com/photo-2.jpg',
+      ],
+    );
+    var dismissed = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: false,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          initialImageIndex: 1,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onTapBack: () {
+            dismissed = true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final photoStage = find.byKey(const ValueKey<String>('works-photo-stage'));
+    final initialRect = tester.getRect(photoStage);
+    final gesture = await tester.startGesture(initialRect.center);
+    await gesture.moveBy(const Offset(-24, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-48, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-48, 0));
+    await tester.pump();
+
+    final draggedTransform = tester
+        .widget<AnimatedContainer>(photoStage)
+        .transform;
+    expect(draggedTransform, isNotNull);
+    expect(draggedTransform!.storage[12], lessThan(-8));
+    expect(dismissed, isFalse);
+
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
+    await tester.pumpAndSettle();
+
+    final settledTransform = tester
+        .widget<AnimatedContainer>(photoStage)
+        .transform;
+    expect(settledTransform, isNotNull);
+    expect(settledTransform!.storage[12], closeTo(0, 0.5));
+    expect(dismissed, isFalse);
+  });
+
+  testWidgets('文章翻页到边界后从内容区继续横滑不会切换主 tab', (tester) async {
     final post = _articlePost();
     var switchedToCircles = false;
 
@@ -961,7 +1610,7 @@ void main() {
         WorksImmersiveViewer(
           showWorksToolbar: true,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -990,9 +1639,8 @@ void main() {
     _consumeImageLoadExceptions(tester);
     await tester.pumpAndSettle();
 
-    await tester.dragFrom(
+    await tester.tapAt(
       tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
-      const Offset(-260, -40),
     );
     await tester.pumpAndSettle();
     expect(find.text('第二页标题'), findsWidgets);
@@ -1003,10 +1651,476 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(switchedToCircles, isTrue);
+    expect(switchedToCircles, isFalse);
   });
 
-  testWidgets('文章阅读使用顶部页码且封面进入扉页式第一页', (tester) async {
+  testWidgets('多页文章在首页从内容区继续横滑时会出现回弹并恢复原位', (tester) async {
+    final post = _articlePost();
+    var dismissed = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': post.title,
+              'body': post.body,
+              'coverUrl': post.coverUrl,
+              'cards': const [
+                {'title': '第二页标题', 'body': '第二页正文'},
+              ],
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onTapBack: () {
+            dismissed = true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final stage = find.byKey(const ValueKey<String>('article-boundary-stage'));
+    final stageRect = tester.getRect(stage);
+    final gesture = await tester.startGesture(
+      Offset(stageRect.left + 120, stageRect.center.dy),
+    );
+    await gesture.moveBy(const Offset(24, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(48, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(48, 0));
+    await tester.pump();
+
+    final draggedTransform = tester.widget<AnimatedContainer>(stage).transform;
+    expect(draggedTransform, isNotNull);
+    expect(draggedTransform!.storage[12], greaterThan(8));
+    expect(dismissed, isFalse);
+
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
+    await tester.pumpAndSettle();
+
+    final settledTransform = tester.widget<AnimatedContainer>(stage).transform;
+    expect(settledTransform, isNotNull);
+    expect(settledTransform!.storage[12], closeTo(0, 0.5));
+    expect(dismissed, isFalse);
+  });
+
+  testWidgets('多页文章在末页从内容区继续横滑时会出现回弹并恢复原位', (tester) async {
+    final post = _articlePost();
+    var dismissed = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': post.title,
+              'body': post.body,
+              'coverUrl': post.coverUrl,
+              'cards': const [
+                {'title': '第二页标题', 'body': '第二页正文'},
+              ],
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onTapBack: () {
+            dismissed = true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('第二页标题'), findsWidgets);
+
+    final stage = find.byKey(const ValueKey<String>('article-boundary-stage'));
+    final stageRect = tester.getRect(stage);
+    final gesture = await tester.startGesture(
+      Offset(stageRect.right - 120, stageRect.center.dy),
+    );
+    await gesture.moveBy(const Offset(-24, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-48, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-48, 0));
+    await tester.pump();
+
+    final draggedTransform = tester.widget<AnimatedContainer>(stage).transform;
+    expect(draggedTransform, isNotNull);
+    expect(draggedTransform!.storage[12], lessThan(-8));
+    expect(dismissed, isFalse);
+
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
+    await tester.pumpAndSettle();
+
+    final settledTransform = tester.widget<AnimatedContainer>(stage).transform;
+    expect(settledTransform, isNotNull);
+    expect(settledTransform!.storage[12], closeTo(0, 0.5));
+    expect(dismissed, isFalse);
+  });
+
+  testWidgets('长正文文章顶部页码跟随真实排版页数而不是 fallback 单页', (tester) async {
+    final post = _articlePost();
+    final markdownSections = List<String>.generate(
+      14,
+      (index) =>
+          '## 小节${index + 1}\n\n这是一段用于沉浸式文章自动分页的长正文，需要被继续拆到后续页面中，不能仍然停留在 1/1。',
+    ).join('\n\n');
+    final articleMarkdown =
+        '---\n'
+        'title: ${post.title}\n'
+        'template: ${post.articleTemplate}\n'
+        'fontPreset: ${post.articleFontPreset}\n'
+        '---\n\n'
+        '$markdownSections\n';
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': post.title,
+              'body': post.body,
+              'summary': post.summary,
+              'coverUrl': post.coverUrl,
+              'articleTemplate': post.articleTemplate,
+              'articleFontPreset': post.articleFontPreset,
+              'articleMarkdown': articleMarkdown,
+              'articleMarkdownVersion': 'qwq-rich-md/1',
+              'articleAssetManifest': const <String, dynamic>{
+                'schemaVersion': 1,
+                'articleMarkdownVersion': 'qwq-rich-md/1',
+                'articleMarkdownDigest': 'fixture:test-long',
+                'assets': <Map<String, dynamic>>[],
+              },
+              'articleRenderProfile': <String, dynamic>{
+                'template': post.articleTemplate,
+                'fontPreset': post.articleFontPreset,
+              },
+              'cards': const <Map<String, dynamic>>[],
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('works-top-progress-label')),
+      findsOneWidget,
+    );
+    final progressLabel = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('works-top-progress-label')),
+    );
+    expect(progressLabel.data, isNot('1/1'));
+  });
+
+  testWidgets('单页文章从内容区横滑时只回弹不进入翻页宿主', (tester) async {
+    final post = _articlePost();
+    var dismissed = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '单页文章',
+              'body': '这是一页内就能装下的短正文。',
+              'summary': '这是一页内就能装下的短正文。',
+              'coverUrl': post.coverUrl,
+              'cards': const <Map<String, dynamic>>[],
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onTapBack: () {
+            dismissed = true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1/1'), findsOneWidget);
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
+
+    final stage = find.byKey(const ValueKey<String>('article-boundary-stage'));
+    final stageRect = tester.getRect(stage);
+    final gesture = await tester.startGesture(stageRect.center);
+    await gesture.moveBy(const Offset(24, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(48, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(48, 0));
+    await tester.pump();
+
+    final draggedTransform = tester.widget<AnimatedContainer>(stage).transform;
+    expect(draggedTransform, isNotNull);
+    expect(draggedTransform!.storage[12], greaterThan(8));
+    expect(dismissed, isFalse);
+
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
+    await tester.pumpAndSettle();
+
+    final settledTransform = tester.widget<AnimatedContainer>(stage).transform;
+    expect(settledTransform, isNotNull);
+    expect(settledTransform!.storage[12], closeTo(0, 0.5));
+    expect(dismissed, isFalse);
+  });
+
+  testWidgets('Android 下图片左边缘横滑会退出当前沉浸页', (tester) async {
+    final post = _photoPost(
+      imageUrls: const [
+        'https://example.com/photo.jpg',
+        'https://example.com/photo-2.jpg',
+      ],
+    );
+    var dismissed = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: false,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          initialImageIndex: 0,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onTapBack: () {
+            dismissed = true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final imageRect = tester.getRect(find.byType(CachedNetworkImage).first);
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    await tester.dragFrom(
+      Offset(imageRect.left + 6, viewerRect.center.dy),
+      const Offset(220, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(dismissed, isTrue);
+  });
+
+  testWidgets('视频从内容区横滑到首末边界时不会退出，仍由屏幕边缘手势返回', (tester) async {
+    final post = _videoPost(width: 1920, height: 1080);
+    var dismissed = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: false,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onTapBack: () {
+            dismissed = true;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+
+    await tester.dragFrom(
+      Offset(viewerRect.center.dx, viewerRect.center.dy),
+      const Offset(220, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(dismissed, isFalse);
+
+    await tester.dragFrom(
+      Offset(viewerRect.left + 6, viewerRect.center.dy),
+      const Offset(220, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(dismissed, isTrue);
+  });
+
+  testWidgets('iOS 下右边缘横滑不会触发沉浸式返回', (tester) async {
+    final post = _photoPost(
+      imageUrls: const ['https://example.com/photo-only.jpg'],
+    );
+    var dismissed = false;
+    final container = ProviderContainer();
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.iOS),
+          home: Scaffold(
+            body: MediaQuery(
+              data: const MediaQueryData(size: Size(390, 844)),
+              child: WorksImmersiveViewer(
+                showWorksToolbar: false,
+                showTopNavigation: false,
+                externalPosts: [post],
+                externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+                onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+                onAssistantTap: () {},
+                onTapBack: () {
+                  dismissed = true;
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    await tester.dragFrom(
+      Offset(viewerRect.right - 6, viewerRect.center.dy),
+      const Offset(-220, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(dismissed, isFalse);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    container.dispose();
+  });
+
+  testWidgets('Android 下文章右边缘横滑会退出当前沉浸页', (tester) async {
+    final post = _articlePost();
+    var dismissed = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': post.title,
+              'body': post.body,
+              'coverUrl': post.coverUrl,
+              'cards': const [
+                {'title': '第二页标题', 'body': '第二页正文'},
+              ],
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onTapBack: () {
+            dismissed = true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('第二页标题'), findsWidgets);
+
+    final deckRect = tester.getRect(find.byType(ArticleReadOnlyBookDeck));
+    final rightHotzoneRect = tester.getRect(
+      find.byKey(TestKeys.articlePageCurlHotzoneBottomRight),
+    );
+    expect(rightHotzoneRect.right, lessThan(deckRect.right));
+
+    await tester.dragFrom(
+      Offset(deckRect.right - 6, deckRect.bottom - 80),
+      const Offset(-220, -20),
+    );
+    await tester.pumpAndSettle();
+
+    expect(dismissed, isTrue);
+  });
+
+  testWidgets('文章阅读使用顶部页码且封面与标题正文共用第一页', (tester) async {
     final post = _articlePost();
 
     await tester.pumpWidget(
@@ -1015,7 +2129,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1035,16 +2149,27 @@ void main() {
                   'title: ${post.title}\n'
                   'template: ${post.articleTemplate}\n'
                   'fontPreset: ${post.articleFontPreset}\n'
+                  'cover_asset_id: cover\n'
                   '---\n\n'
+                  '# ${post.title}\n\n'
+                  ':::figure id="cover" layout="fullWidth" caption=""\n'
+                  'asset://cover\n'
+                  ':::\n\n'
                   '第一页前言。\n\n'
                   '第二段落继续展开说明。\n\n'
                   '第三段落把正文推到下一页。\n',
               'articleMarkdownVersion': 'qwq-rich-md/1',
-              'articleAssetManifest': const <String, dynamic>{
+              'articleAssetManifest': <String, dynamic>{
                 'schemaVersion': 1,
                 'articleMarkdownVersion': 'qwq-rich-md/1',
                 'articleMarkdownDigest': 'fixture:test',
-                'assets': <Map<String, dynamic>>[],
+                'assets': <Map<String, dynamic>>[
+                  {
+                    'assetId': 'cover',
+                    'cdnUrl': post.coverUrl,
+                    'role': 'cover',
+                  },
+                ],
               },
               'articleRenderProfile': <String, dynamic>{
                 'template': post.articleTemplate,
@@ -1077,13 +2202,61 @@ void main() {
     expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('article-frontispiece-image')),
-      findsWidgets,
+      findsNothing,
     );
-    final imageRect = tester.getRect(
-      find.byKey(const ValueKey<String>('article-frontispiece-image')).first,
-    );
-    expect(imageRect.height, greaterThan(0));
     expect(find.text(post.title), findsWidgets);
+    expect(find.textContaining('第一页前言'), findsWidgets);
+  });
+
+  testWidgets('文章阅读不显示底部 caption rail 且页码只保留顶部一处', (tester) async {
+    final post = _articlePost();
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': post.title,
+              'body': post.body,
+              'summary': post.summary,
+              'coverUrl': post.coverUrl,
+              'circleId': 'circle-design',
+              'circleName': '设计圈',
+              'articleTemplate': post.articleTemplate,
+              'articleFontPreset': post.articleFontPreset,
+              'cards': const [
+                {'title': '第二页标题', 'body': '第二页正文'},
+              ],
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('works-top-progress-label')),
+      findsOneWidget,
+    );
+    expect(find.text('1/2'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('works-caption-rail')),
+      findsNothing,
+    );
   });
 
   testWidgets('文章阅读支持页角热区翻页', (tester) async {
@@ -1095,7 +2268,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1124,10 +2297,12 @@ void main() {
     _consumeImageLoadExceptions(tester);
     await tester.pumpAndSettle();
 
+    expect(find.byType(ArticleReaderFlipHost), findsOneWidget);
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
 
+    final deckRect = tester.getRect(find.byType(ArticleReadOnlyBookDeck));
     await tester.dragFrom(
-      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      Offset(deckRect.right - 2, deckRect.bottom - 80),
       const Offset(-260, -40),
     );
     await tester.pumpAndSettle();
@@ -1151,7 +2326,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1204,7 +2379,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1296,7 +2471,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1341,113 +2516,6 @@ void main() {
     expect(structureFallback.properties['reason'], contains('body'));
   });
 
-  testWidgets('文章翻页会记录 flip commit 埋点', (tester) async {
-    final post = _articlePost();
-    final analytics = _FakeAnalyticsService();
-
-    await tester.pumpWidget(
-      _wrap(
-        WorksImmersiveViewer(
-          showWorksToolbar: true,
-          showTopNavigation: false,
-          externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: _viewerRawByPostId({
-            post.id: <String, dynamic>{
-              'postId': post.id,
-              'type': 'article',
-              'contentType': 'article',
-              'authorId': post.authorId,
-              'authorNickname': post.displayName,
-              'authorAvatarUrl': post.avatarUrl,
-              'title': post.title,
-              'body': '第一页正文',
-              'coverUrl': post.coverUrl,
-              'cards': const [
-                {'title': '第二页标题', 'body': '第二页正文'},
-              ],
-            },
-          }),
-          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
-          onAssistantTap: () {},
-        ),
-        overrides: [analyticsProvider.overrideWithValue(analytics)],
-      ),
-    );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
-
-    await tester.dragFrom(
-      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
-      const Offset(-260, -40),
-    );
-    await tester.pumpAndSettle();
-
-    final flipEvent = analytics.events.firstWhere(
-      (event) => event.eventName == 'article_page_flip_commit_ms',
-    );
-    expect(flipEvent.properties['mechanism'], equals('page_curl'));
-    expect(flipEvent.properties['direction'], equals('forward'));
-  });
-
-  testWidgets('文章回翻会记录 backward flip commit 埋点', (tester) async {
-    final post = _articlePost();
-    final analytics = _FakeAnalyticsService();
-
-    await tester.pumpWidget(
-      _wrap(
-        WorksImmersiveViewer(
-          showWorksToolbar: true,
-          showTopNavigation: false,
-          externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
-          rawPostsById: _viewerRawByPostId({
-            post.id: <String, dynamic>{
-              'postId': post.id,
-              'type': 'article',
-              'contentType': 'article',
-              'authorId': post.authorId,
-              'authorNickname': post.displayName,
-              'authorAvatarUrl': post.avatarUrl,
-              'title': post.title,
-              'body': '第一页正文',
-              'coverUrl': post.coverUrl,
-              'cards': const [
-                {'title': '第二页标题', 'body': '第二页正文'},
-              ],
-            },
-          }),
-          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
-          onAssistantTap: () {},
-        ),
-        overrides: [analyticsProvider.overrideWithValue(analytics)],
-      ),
-    );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
-
-    await tester.dragFrom(
-      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
-      const Offset(-260, -40),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.dragFrom(
-      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
-      const Offset(260, -40),
-    );
-    await tester.pumpAndSettle();
-
-    final flipEvents = analytics.events
-        .where((event) => event.eventName == 'article_page_flip_commit_ms')
-        .toList(growable: false);
-    expect(flipEvents, isNotEmpty);
-    expect(flipEvents.last.properties['mechanism'], equals('page_curl'));
-    expect(flipEvents.last.properties['direction'], equals('backward'));
-  });
-
   testWidgets('沉浸式阅读器中的文章回翻保持统一 book deck 宿主', (tester) async {
     final post = _articlePost();
 
@@ -1457,7 +2525,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,

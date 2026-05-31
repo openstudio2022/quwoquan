@@ -21,6 +21,12 @@ class IntegrationApiMetadata {
     'SearchLocations': 'GET',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'GetNearbyLocations': 'public',
+    'SearchLocations': 'public',
+  };
+
   static const String getNearbyLocationsOperation = 'GetNearbyLocations';
   static const String searchLocationsOperation = 'SearchLocations';
 

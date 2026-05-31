@@ -132,7 +132,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     final isDark = themeDark || effectiveForceDark;
     final shellBackground = effectiveForceDark
         ? AppColors.worksBackground
-        : AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
+        : SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final bottomNavHidden =
         ref.watch(bottomNavHiddenProvider).hidden ||
         isFeaturedActive ||
@@ -194,9 +194,23 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       ),
     );
     if (nextTab == MainTabDestination.create) {
+      if (!_ensureLoggedInFor(
+        AuthGateReason.createPost,
+        AppRoutePaths.createEntry,
+      )) {
+        return;
+      }
       unawaited(GlobalQuickActionSheet.show(context));
       return;
     }
+
+    if (nextTab == MainTabDestination.chat &&
+        !_ensureLoggedInFor(AuthGateReason.openChat, AppRoutePaths.chat)) {
+      return;
+    }
+
+    // 「我的」tab 允许游客直接进入：MyProfilePage 在未登录时渲染占位页 +
+    // 内嵌登录按钮，不在此处拦截，避免登录页关闭后无法原路返回。
 
     if (nextTab == MainTabDestination.featured) {
       _selectMainTab(nextTab);
@@ -234,6 +248,25 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         context.go(nextTab.routePath);
         break;
     }
+  }
+
+  /// 强入口（底栏 创作/消息/我的）登录拦截：不展示中间提示，直接上推全屏登录页，
+  /// 标题按入口对应的 [AuthGateReason] 变化，关闭后保留当前 tab。
+  bool _ensureLoggedInFor(AuthGateReason reason, String redirect) {
+    final auth = ref.read(authSessionControllerProvider);
+    if (auth.isAuthenticated) {
+      return true;
+    }
+    // 强入口未登录：先把底层归位到首页（底栏第一项），再上推全屏登录页。
+    // 这样无论登录成功（按 redirect 跳目标）还是关闭 / 稍后登录（回首页或原路返回），
+    // 都稳定回到首页，避免从 premium/featured 等内存态 tab 进入后关闭仍停留在原 tab。
+    if (_currentIndex != MainTabDestination.home.bottomNavIndex) {
+      _selectMainTab(MainTabDestination.home);
+    }
+    context.push(
+      AppRoutePaths.login(reason: reason.name, redirect: redirect),
+    );
+    return false;
   }
 
   Future<void> _logBrowseEvent({

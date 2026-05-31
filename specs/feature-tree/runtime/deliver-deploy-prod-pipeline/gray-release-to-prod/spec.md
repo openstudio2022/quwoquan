@@ -3,6 +3,7 @@
 ## 功能说明
 
 G5c 灰度到生产：在 pre-release-gate 通过后，将构建物按**可配置阶段**灰度部署到 prod，支持半自动（workflow_dispatch）与全自动（pre-release 触发）两种模式。
+生产只有 `prod` 一个环境；`gray-initial`、`carry-on`、`full` 是 rollout stage，不是 `prod-gray` 第二环境。
 
 ## 范围
 
@@ -11,6 +12,7 @@ G5c 灰度到生产：在 pre-release-gate 通过后，将构建物按**可配�
 - **Stage 2 Carry-on**：直接到 100%；需人工审批后 deploy → SLO
 - **配置驱动**：`gray_rollout_stages.yaml` 声明各阶段 replicas 与 auto 标志，随副本增加可扩展中间阶段
 - **已有能力**：`config_release_gray_rollout.sh`、`config_release_slo_gate.sh`、`config_release_rollback.sh` 已支持 STEP 5/25/50/100
+- **统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`
 
 ## 适用范围与约束
 
@@ -18,6 +20,7 @@ G5c 灰度到生产：在 pre-release-gate 通过后，将构建物按**可配�
 - **约束**：STEP 与脚本沿用 5/25/50/100；`STEP = (目标 replicas / total_replicas) * 100`
 - **不适用**：非 K8s 部署、非滚动发布场景
 - **前置**：`03/04/05` required checks 已通过（`04` 完成 ECS gamma hosted pre + gamma self-hosted 旅程）
+- **前置**：prod env package / service env package purity、artifact isolation、host allowlist 校验通过
 
 ## 与父/子节点关系
 
@@ -34,3 +37,5 @@ G5c 灰度到生产：在 pre-release-gate 通过后，将构建物按**可配�
 - A3：`gray_rollout_stages.yaml` 可配置 replicas 与 auto，workflow 按配置计算 STEP
 - A4：半自动 workflow_dispatch 支持 step 50 → 100（2 副本）
 - A5：deliver_to_production_runbook 与 deploy_prod_design 一致
+- A7：灰度与全量都在 `prod` 环境语义下执行，不引入 `prod-gray`
+- A8：`stackctl deploy/health/inspect/doctor` 可输出机器可读证据

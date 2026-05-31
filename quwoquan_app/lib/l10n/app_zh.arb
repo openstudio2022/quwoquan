@@ -326,7 +326,6 @@
   "assistantSkillCenterAllSkillsTitle": "全部技能",
   "personaManage": "管理分身",
   "personaPrimary": "主账号",
-  "myResonance": "我的交集",
   "profileEditLabel": "资料编辑",
   "profilePersonasLabel": "分身管理",
 
@@ -664,9 +663,6 @@
   "commentedOnTheirContent": "评论了 Ta 的内容",
   "noInteractionContent": "暂无互动内容",
   "emptyBio": "这个人很懒，什么都没有写",
-  "resonanceDetail": "交集详情",
-  "youHave": "你们有",
-  "resonanceSuffix": "个交集点",
   "articleContent": "文章内容",
   "photoContent": "图片内容",
   "videoContent": "视频内容",

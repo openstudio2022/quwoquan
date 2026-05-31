@@ -4,250 +4,53 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-l1="${1:-}"
-l2="${2:-}"
-l3="${3:-}"
+domain="${1:-}"
+capability="${2:-}"
+story="${3:-}"
 
-if [[ -z "$l1" || -z "$l2" || -z "$l3" ]]; then
-  echo "usage: bash agent_ops/scaffold/new_feature_fullstack.sh <l1_capability> <l2_journey> <l3_scenario>" 1>&2
-  echo "example: bash agent_ops/scaffold/new_feature_fullstack.sh runtime development-workflow-governance journey-scenario-governance" 1>&2
+if [[ -z "$domain" || -z "$capability" || -z "$story" ]]; then
+  echo "usage: bash agent_ops/scaffold/new_feature_fullstack.sh <domain-service> <business-capability> <story>" 1>&2
+  echo "example: bash agent_ops/scaffold/new_feature_fullstack.sh discovery-content feed-orchestration-recommendation unified-items-cursor" 1>&2
   exit 2
 fi
 
-journey_dir="specs/feature-tree/${l1}/${l2}"
-scenario_dir="${journey_dir}/${l3}"
-mkdir -p "$journey_dir" "$scenario_dir" "specs/changelog"
+template_dir="specs/feature-tree/templates"
+domain_dir="specs/feature-tree/${domain}"
+capability_dir="${domain_dir}/${capability}"
+story_dir="${capability_dir}/${story}"
 
-if [[ ! -f "$journey_dir/spec.md" ]]; then
-  cat >"$journey_dir/spec.md" <<EOF
-# L2 Journey：${l2}
+mkdir -p "$domain_dir" "$capability_dir" "$story_dir" "specs/changelog"
 
-## 背景与动机
+copy_if_missing() {
+  local src="$1"
+  local dst="$2"
+  if [[ ! -f "$dst" ]]; then
+    cp "$src" "$dst"
+  fi
+}
 
-TODO
+copy_if_missing "$template_dir/domain_service_spec.md" "$domain_dir/spec.md"
+copy_if_missing "$template_dir/domain_service_design.md" "$domain_dir/design.md"
+copy_if_missing "$template_dir/domain_service_acceptance.yaml" "$domain_dir/acceptance.yaml"
 
-## Journey 范围
+copy_if_missing "$template_dir/business_capability_spec.md" "$capability_dir/spec.md"
+copy_if_missing "$template_dir/business_capability_design.md" "$capability_dir/design.md"
+copy_if_missing "$template_dir/business_capability_acceptance.yaml" "$capability_dir/acceptance.yaml"
 
-TODO
+copy_if_missing "$template_dir/story_spec.md" "$story_dir/spec.md"
+copy_if_missing "$template_dir/story_acceptance.yaml" "$story_dir/acceptance.yaml"
 
-## 不做什么（Out of Scope）
-
-TODO
-
-## 约束
-
-TODO
-EOF
+if [[ -f "$story_dir/design.md" ]]; then
+  echo "[new_feature_fullstack] WARN: Story design.md is not allowed in new model: $story_dir/design.md" 1>&2
 fi
 
-if [[ ! -f "$journey_dir/design.md" ]]; then
-  cat >"$journey_dir/design.md" <<EOF
-# ${l2} 设计方案
-
-## 设计动因
-
-TODO
-
-## Journey 聚合策略
-
-TODO
-
-## 关键设计决策
-
-TODO
-EOF
+if [[ -f "$story_dir/plan.yaml" || -f "$story_dir/tasks.md" ]]; then
+  echo "[new_feature_fullstack] WARN: plan.yaml/tasks.md are not formal feature-tree docs in: $story_dir" 1>&2
 fi
 
-if [[ ! -f "$journey_dir/plan.yaml" ]]; then
-  cat >"$journey_dir/plan.yaml" <<EOF
-version: 1
-node: ${l1}/${l2}
-
-derived_from:
-  spec: spec.md
-  design: design.md
-  acceptance: acceptance.yaml
-  changelog: []
-
-slices:
-  - id: P1
-    title: freeze journey scope
-    goal: freeze journey boundaries and scenario split
-    depends_on: []
-    acceptance_refs: [J1]
-    planned_evidence: [T1_schema]
-    done_when:
-      - journey scope is frozen
-    status: planned
-EOF
-fi
-
-if [[ ! -f "$journey_dir/acceptance.yaml" ]]; then
-  cat >"$journey_dir/acceptance.yaml" <<EOF
-version: 2
-feature: "${l2}"
-level: "L2_journey"
-archived: false
-execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
-scope:
-  summary: "TODO"
-  composed_scenarios: ["${l3}"]
-  out_of_scope: []
-journey_acceptance:
-  J1:
-    title: "Journey 范围、边界与 Scenario 归属已冻结"
-    journey: "TODO"
-    scenario_refs: ["${l3}"]
-    done_when:
-      - "TODO"
-    release_guardrails: []
-    evidence:
-      primary: [T3_cross_service_integration]
-      supporting: [T1_schema]
-    tests:
-      planned: []
-      recorded: []
-    status: pending
-EOF
-fi
-
-if [[ ! -f "$scenario_dir/spec.md" ]]; then
-  cat >"$scenario_dir/spec.md" <<EOF
-# ${l3}
-
-## 背景与动机
-
-TODO
-
-## 目标用户
-
-TODO
-
-## 功能范围
-
-TODO
-
-## 不做什么（Out of Scope）
-
-TODO
-
-## 约束
-
-TODO
-
-## 对标输入与吸收结论
-
-TODO
-
-## 验收重点
-
-TODO
-EOF
-fi
-
-if [[ ! -f "$scenario_dir/design.md" ]]; then
-  cat >"$scenario_dir/design.md" <<EOF
-# ${l3} 设计方案
-
-## 设计动因
-
-TODO
-
-## 上游输入评审
-
-TODO
-
-## 方案对比
-
-### 方案 A
-TODO
-
-### 方案 B
-TODO
-
-## 选型决策
-
-TODO
-
-## 关键设计决策
-
-TODO
-EOF
-fi
-
-if [[ ! -f "$scenario_dir/plan.yaml" ]]; then
-  cat >"$scenario_dir/plan.yaml" <<EOF
-version: 1
-node: ${l1}/${l2}/${l3}
-
-derived_from:
-  spec: spec.md
-  design: design.md
-  acceptance: acceptance.yaml
-  changelog: []
-
-slices:
-  - id: P1
-    title: implement primary scenario path
-    goal: deliver the minimum scenario path
-    depends_on: []
-    acceptance_refs: [A1]
-    planned_evidence: [T1_schema, T2_app_mock]
-    done_when:
-      - primary scenario path works
-    status: planned
-EOF
-fi
-
-if [[ ! -f "$scenario_dir/acceptance.yaml" ]]; then
-  cat >"$scenario_dir/acceptance.yaml" <<EOF
-version: 2
-feature: "${l3}"
-level: "L3_scenario"
-archived: false
-execution:
-  local_gate: "make gate"
-  full_gate: "make gate-full"
-scope:
-  summary: "TODO"
-  journey_bindings: [J1]
-  in_scope: []
-  out_of_scope: []
-scenario_acceptance:
-  A1:
-    title: "Primary scenario"
-    scenario: "TODO"
-    journey_step: "TODO"
-    done_when:
-      - "TODO"
-    edge_cases: []
-    status: pending
-    linked_plan_items: [P1]
-    evidence:
-      primary: [T1_schema, T2_app_mock]
-      supporting: [T3_app_api_integration]
-    tests:
-      planned: []
-      recorded: []
-  A2:
-    title: "Fallback or boundary"
-    scenario: "TODO"
-    journey_step: "TODO"
-    done_when:
-      - "TODO"
-    edge_cases: []
-    status: pending
-    linked_plan_items: []
-    evidence:
-      primary: [T2_app_mock]
-      supporting: [T1_schema]
-    tests:
-      planned: []
-      recorded: []
-EOF
-fi
-
-echo "[new_feature_fullstack] created: $scenario_dir"
-echo "[new_feature_fullstack] next: create or update specs/changelog/CR-YYYYMMDD-NNN-<slug>.yaml"
+echo "[new_feature_fullstack] created or verified: $story_dir"
+echo "[new_feature_fullstack] next:"
+echo "  1. update specs/feature-tree/tree_index.yaml with L1_domain_service / L2_business_capability / L3_story"
+echo "  2. update specs/l1_index.yaml if this is a new domain service"
+echo "  3. update specs/feature-tree/journey_scenario_registry.yaml if this affects app-level Journey/Scenario"
+echo "  4. create or update specs/changelog/CR-YYYYMMDD-NNN-<slug>.yaml"

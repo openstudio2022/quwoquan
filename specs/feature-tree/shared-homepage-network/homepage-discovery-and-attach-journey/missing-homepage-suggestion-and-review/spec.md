@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `shared-homepage-network`
-- `L2_journey`: `homepage-discovery-and-attach-journey`
-- `L3_scenario`: `missing-homepage-suggestion-and-review`
+- `L1_domain_service`: `shared-homepage-network`
+- `L2_business_capability`: `homepage-discovery-and-attach-journey`
+- `L3_story`: `missing-homepage-suggestion-and-review`
 
 ## 背景与动机
 

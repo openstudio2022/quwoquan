@@ -355,7 +355,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 		ContentIdentity:     contentIdentity,
 		Title:               strings.TrimSpace(asString(payload["title"])),
 		Body:                strings.TrimSpace(asString(payload["body"])),
-		Tags:                asStringSlice(payload["tags"]),
+		TagRefs:                asStringSlice(payload["tagRefs"]),
 		EntityRefs:          asStringSlice(payload["entityRefs"]),
 		MediaUrls:           asStringSlice(payload["mediaUrls"]),
 		CoverUrl:            strings.TrimSpace(asString(payload["coverUrl"])),
@@ -455,7 +455,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 				"assistantUsePolicy": post.AssistantUsePolicy,
 				"circleIds":          asStringSlice(post.CircleIds),
 				"title":              post.Title,
-				"tags":               post.Tags,
+				"tagRefs":               post.TagRefs,
 				"coverUrl":           post.CoverUrl,
 			},
 			OccurredAt: now,
@@ -502,8 +502,8 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 	if summary, exists := payload["summary"]; exists {
 		post.Summary = strings.TrimSpace(asString(summary))
 	}
-	if tags, exists := payload["tags"]; exists {
-		post.Tags = asStringSlice(tags)
+	if tags, exists := payload["tagRefs"]; exists {
+		post.TagRefs = asStringSlice(tags)
 	}
 	if media, exists := payload["mediaUrls"]; exists {
 		post.MediaUrls = asStringSlice(media)
@@ -626,7 +626,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 				"circleIds":          asStringSlice(post.CircleIds),
 				"assistantUsePolicy": post.AssistantUsePolicy,
 				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
-				"tags":               asStringSlice(post.Tags),
+				"tagRefs":               asStringSlice(post.TagRefs),
 				"entityRefs":         asStringSlice(post.EntityRefs),
 			},
 			OccurredAt: now.Format(time.RFC3339),
@@ -647,7 +647,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 				"circleIds":          asStringSlice(post.CircleIds),
 				"assistantUsePolicy": post.AssistantUsePolicy,
 				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
-				"tags":               asStringSlice(post.Tags),
+				"tagRefs":               asStringSlice(post.TagRefs),
 				"entityRefs":         asStringSlice(post.EntityRefs),
 			},
 			OccurredAt: now,
@@ -715,7 +715,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
-		"tags":               asStringSlice(post.Tags),
+		"tagRefs":               asStringSlice(post.TagRefs),
 		"coverUrl":           post.CoverUrl,
 	}, now)
 	s.projectPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
@@ -729,7 +729,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
-		"tags":               asStringSlice(post.Tags),
+		"tagRefs":               asStringSlice(post.TagRefs),
 		"coverUrl":           post.CoverUrl,
 	}, now)
 	return post, nil
@@ -763,8 +763,8 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if summary, exists := payload["summary"]; exists {
 		post.Summary = strings.TrimSpace(asString(summary))
 	}
-	if tags, exists := payload["tags"]; exists {
-		post.Tags = asStringSlice(tags)
+	if tags, exists := payload["tagRefs"]; exists {
+		post.TagRefs = asStringSlice(tags)
 	}
 	if coverURL, exists := payload["coverUrl"]; exists {
 		post.CoverUrl = strings.TrimSpace(asString(coverURL))
@@ -810,7 +810,7 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		"title":              post.Title,
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
-		"tags":               asStringSlice(post.Tags),
+		"tagRefs":               asStringSlice(post.TagRefs),
 		"assistantUsePolicy": post.AssistantUsePolicy,
 	}, now)
 	s.projectPostEvent(ctx, "PostPromotedToWork", post, map[string]any{
@@ -825,7 +825,7 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		"title":              post.Title,
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
-		"tags":               asStringSlice(post.Tags),
+		"tagRefs":               asStringSlice(post.TagRefs),
 		"assistantUsePolicy": post.AssistantUsePolicy,
 	}, now)
 	return post, nil
@@ -939,7 +939,7 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
-		"tags":               asStringSlice(post.Tags),
+		"tagRefs":               asStringSlice(post.TagRefs),
 		"coverUrl":           post.CoverUrl,
 	}, now)
 	s.projectPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
@@ -953,7 +953,7 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
-		"tags":               asStringSlice(post.Tags),
+		"tagRefs":               asStringSlice(post.TagRefs),
 		"coverUrl":           post.CoverUrl,
 	}, now)
 	return map[string]any{
@@ -2738,7 +2738,7 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"title":              post.Title,
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
-		"tags":               asStringSlice(post.Tags),
+		"tagRefs":               asStringSlice(post.TagRefs),
 	}
 }
 
@@ -2769,7 +2769,7 @@ func asFloat64(v any) float64 {
 }
 
 func behaviorTagsFromPost(p *postmodel.Post) []string {
-	tags := asStringSlice(p.Tags)
+	tags := asStringSlice(p.TagRefs)
 	if len(tags) == 0 && p.ContentType != "" {
 		tags = []string{p.ContentType}
 	}

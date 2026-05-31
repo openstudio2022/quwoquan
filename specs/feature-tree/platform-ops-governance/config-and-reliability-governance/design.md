@@ -10,7 +10,7 @@
 
 ## 上游评审结论
 
-当前 `platform-ops/spec.md` 与本节点 `spec.md / acceptance.yaml / tasks.md` 已足以支撑进入下一轮 `/design`。  
+当前 `platform-ops/spec.md` 与本节点 `spec.md / acceptance.yaml / 树内任务文档` 已足以支撑进入下一轮 `/design`。  
 本节点后续详细设计需重点回答：
 - 配置包模型与发布模型
 - 治理策略模板与服务覆盖模型

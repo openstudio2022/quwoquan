@@ -1,6 +1,6 @@
 """从 post/entity 的 tagRefs 和正文中反向发现标签候选
 
-扫描 publish/v1 中所有 manifest.json 和 _entity.json，
+扫描 publish 主线中所有 manifest.json 和 _entity.json，
 找出引用了但不存在于 tags/ 树中的 tagRef（死引用），以及正文中出现但未打标的高频词。
 
 输出: tag_runtime/candidates.ndjson
@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, RUNTIME_ROOT, NOW_ISO
 
-TAGS_ROOT = PUBLISH_ROOT / "v1" / "tags"
+TAGS_ROOT = PUBLISH_ROOT / "tags"
 RUNTIME_TAG_DIR = RUNTIME_ROOT / "tag_runtime"
 CANDIDATES_FILE = RUNTIME_TAG_DIR / "candidates.ndjson"
 
@@ -38,7 +38,7 @@ def scan_dead_refs() -> list[dict]:
     """找出 manifest/entity 中引用了但标签树里不存在的 tagRef。"""
     existing = all_existing_tags()
     dead: list[dict] = []
-    v1_root = PUBLISH_ROOT / "v1"
+    v1_root = PUBLISH_ROOT
 
     for mf in v1_root.rglob("manifest.json"):
         try:
@@ -68,7 +68,7 @@ def scan_dead_refs() -> list[dict]:
 
 def scan_content_keywords() -> list[dict]:
     """从 article.md 正文中提取高频中文关键词作为候选。"""
-    v1_root = PUBLISH_ROOT / "v1"
+    v1_root = PUBLISH_ROOT
     word_counter: Counter[str] = Counter()
     zh_pattern = re.compile(r"[\u4e00-\u9fa5]{2,6}")
 

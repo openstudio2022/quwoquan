@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from _common.paths import batch_inputs_dir, batch_assistant_tasks
+from _common.paths import batch_inputs_dir, batch_assistant_task
 from _common.io import write_json, write_assistant_task
 
 
@@ -23,7 +23,7 @@ def prepare_quality_analysis(task_id: str, batch_id: str, sources: list[dict]) -
         })
         refs.append(ref)
 
-    manifest_path = batch_assistant_tasks(task_id, batch_id, "produce", "quality_analysis")
+    manifest_path = batch_assistant_task(task_id, batch_id, "produce", "quality_analysis")
     results_dir = inputs_dir.parent.parent / "results" / "quality_analysis"
     write_assistant_task(manifest_path, step="quality_analysis", input_dir=inputs_dir, result_dir=results_dir, refs=refs)
     return inputs_dir
@@ -45,7 +45,7 @@ def prepare_compose(task_id: str, batch_id: str, quality_results: list[dict]) ->
         })
         refs.append(ref)
 
-    manifest_path = batch_assistant_tasks(task_id, batch_id, "produce", "compose")
+    manifest_path = batch_assistant_task(task_id, batch_id, "produce", "compose")
     results_dir = inputs_dir.parent.parent / "results" / "compose"
     write_assistant_task(manifest_path, step="compose", input_dir=inputs_dir, result_dir=results_dir, refs=refs)
     return inputs_dir
@@ -67,7 +67,7 @@ def prepare_review(task_id: str, batch_id: str, compose_results: list[dict]) -> 
         })
         refs.append(ref)
 
-    manifest_path = batch_assistant_tasks(task_id, batch_id, "produce", "review")
+    manifest_path = batch_assistant_task(task_id, batch_id, "produce", "review")
     results_dir = inputs_dir.parent.parent / "results" / "review"
     write_assistant_task(manifest_path, step="review", input_dir=inputs_dir, result_dir=results_dir, refs=refs)
     return inputs_dir
@@ -89,7 +89,7 @@ def prepare_reverse_extract(task_id: str, batch_id: str, approved_posts: list[di
         })
         refs.append(ref)
 
-    manifest_path = batch_assistant_tasks(task_id, batch_id, "produce", "reverse_extract")
+    manifest_path = batch_assistant_task(task_id, batch_id, "produce", "reverse_extract")
     results_dir = inputs_dir.parent.parent / "results" / "reverse_extract"
     write_assistant_task(manifest_path, step="reverse_extract", input_dir=inputs_dir, result_dir=results_dir, refs=refs)
     return inputs_dir

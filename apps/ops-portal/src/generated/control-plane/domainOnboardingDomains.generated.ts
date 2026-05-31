@@ -835,6 +835,74 @@ export const domainOnboardingDomains = {
     "template_role": "backlog_candidate",
     "version": 1
   },
+  "tag": {
+    "acceptance_status": "integration_pass",
+    "blocking_gaps": [],
+    "control_planes": {
+      "platform": {
+        "config_prefixes": [
+          "sys.tag."
+        ],
+        "enabled": true,
+        "object_types": [
+          "service_catalog_entry",
+          "plane_binding",
+          "gate_rule"
+        ]
+      },
+      "product": {
+        "config_prefixes": [],
+        "enabled": false,
+        "object_types": []
+      }
+    },
+    "deployment": {
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "plane_binding_domain": "tag",
+      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+    },
+    "display_name": "Tag",
+    "domain": "tag",
+    "metadata_paths": [
+      "tag"
+    ],
+    "minimum_package": {
+      "codegen_targets": [
+        "go_runtime",
+        "python_runtime",
+        "ops_portal"
+      ],
+      "metadata_files": [
+        "contracts/metadata/tag/service.yaml"
+      ],
+      "test_evidence": {
+        "t1": [
+          "contracts/metadata/tag/service.yaml"
+        ],
+        "t2": [
+          "services/tag-service/internal/application/tag_service_test.go"
+        ],
+        "t3": [
+          "services/tag-service/tests/tag_contract_test.go"
+        ],
+        "t4": []
+      }
+    },
+    "replication": {
+      "copy_notes": [
+        "只读标签服务；复用 codegen_storage manifest 模式生成 domain/store/migrator。",
+        "标签真相源为数据工程 publish/v1/tags，tag-service 只读消费导入产物，不写不产事件。"
+      ],
+      "next_copy_targets": [],
+      "source_template": "entity"
+    },
+    "rollout_group": "wave_1_copy",
+    "service_names": [
+      "tag-service"
+    ],
+    "template_role": "replica_ready",
+    "version": 1
+  },
   "user": {
     "acceptance_status": "integration_pass",
     "blocking_gaps": [],

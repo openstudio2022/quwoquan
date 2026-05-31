@@ -76,7 +76,7 @@ def compute_diversity_metrics(rows: list[dict], scores: list[float], top_k: int 
             item = row.get("itemFeatures") or {}
             target_id = str(row.get("targetId", "") or "")
             author_id = str(item.get("authorId", "") or "")
-            tags = item.get("tags") or []
+            tags = item.get("tagRefs") or []
             topic = _primary_topic(tags)
             geo_bucket = _geo_bucket_from_ref(str(item.get("geoTagRef", "") or "")) or _geo_bucket(tags)
 

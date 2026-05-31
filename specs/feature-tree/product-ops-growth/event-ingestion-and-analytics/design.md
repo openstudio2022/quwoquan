@@ -106,7 +106,7 @@ flowchart TD
 ## 迁移路径
 
 ### Phase 0：规格冻结
-- 补齐 `spec.md / design.md / acceptance.yaml / plan.yaml / CR`。
+- 补齐 `spec.md / design.md / acceptance.yaml / 树内计划文档 / CR`。
 - 收敛 `event catalog`、`metric dictionary`、`schema governance`、`learning bridge` 文档。
 
 ### Phase 1：端侧双写
@@ -146,7 +146,7 @@ flowchart TD
 
 - `specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md`
 - `specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/acceptance.yaml`
-- `specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/plan.yaml`
+- `specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/树内计划文档`
 - `specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/*`
 - `specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/event-schema-governance/*`
 - `specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion*.md`

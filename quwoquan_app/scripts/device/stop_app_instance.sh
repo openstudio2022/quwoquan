@@ -15,7 +15,7 @@ Usage:
   scripts/stop_app_instance.sh [options]
 
 Options:
-  --env <alpha|beta|gamma>   Stop matching env instances.
+  --env <alpha|beta|gamma|prod>   Stop matching env instances.
   --device-id <id>           Stop matching device instance.
   --all                      Stop all recorded app instances.
   --quiet                    Suppress per-instance logs.

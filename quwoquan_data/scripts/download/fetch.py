@@ -13,7 +13,7 @@ def fetch_source(url: str, output_dir: Path) -> dict:
 
     parsed = urllib.parse.urlparse(url)
     conn_cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
-    conn = conn_cls(parsed.hostname, parsed.port)
+    conn = conn_cls(parsed.hostname, parsed.port, timeout=15)
 
     path = parsed.path or "/"
     if parsed.query:

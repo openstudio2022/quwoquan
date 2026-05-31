@@ -2,7 +2,10 @@
 
 > **总览**：正式环境语义统一为 **alpha → beta → gamma → prod**。`alpha` 与 `beta` 都是开发期本地验证；`gamma` 是云侧类生产集成验证；`prod` 是全量生产（**灰度放量与回滚由云侧发布策略、观测与审批在 prod 语义下完成，不单独拆分环境名**）。
 >
-> **拓扑唯一源**：[`process_domain_mapping.yaml`](process_domain_mapping.yaml)。`beta`、`gamma`、`prod` 的 domain→进程映射必须一致，避免本地集成验证与云侧发布拓扑漂移。
+> **拓扑唯一源**：
+> - 领域/进程归属：[`process_domain_mapping.yaml`](process_domain_mapping.yaml)
+> - 环境 topology / public bases / subnet / artifact policy：[`environment_topology_manifest.yaml`](environment_topology_manifest.yaml)
+> - 本地 host 暴露端口：[`local_env_port_manifest.yaml`](local_env_port_manifest.yaml)
 
 ## 1. 环境定义
 
@@ -14,6 +17,24 @@
 | `prod` | 全量生产（含按计划灰度与放量） | 生产集群 | `prod` | 全量生产拓扑 | `APP_RUNTIME_ENV=prod`、`APP_DATA_SOURCE=remote` |
 
 **配置约束**：服务公开 `APP_ENV` 只允许 `alpha|beta|gamma|prod`，运行时只读取同名配置目录。禁止通过 `local` / `integration` 目录做兼容映射。
+
+## 1.0 环境真相源与官方入口
+
+统一口径：
+
+- 四环境都必须声明完整 `edge / media / service / data` 子网、public base、host allowlist、artifact policy 与 mock boundary。
+- `alpha` 不是“删平面”的简化环境，而是“拓扑同构但边界 mock”。
+- 本地 host 暴露端口必须来自 `deploy/shared/local_env_port_manifest.yaml` 的 1000 端口块 + plane + 10 端口槽位模型。
+- 官方自动化入口统一为 `agent_ops/deploy/stackctl.py`（包装脚本：`agent_ops/deploy/stackctl.sh` / `agent_ops/deploy/stackctl`）。底层脚本可保留，但只作为实现细节。
+
+## 1.0.1 Artifact Policy
+
+| 环境 | App 包 | Service 包 | host allowlist | 纯度约束 |
+|---|---|---|---|---|
+| `alpha` | `APP_RUNTIME_ENV=alpha`、`APP_DATA_SOURCE=mock` | 允许 fixture/mock boundary | 仅本机/模拟器 host | 允许 seed manifest，不允许 prod host |
+| `beta` | `APP_RUNTIME_ENV=beta`、`APP_DATA_SOURCE=remote` | 允许本地联调 fixture | 仅本机/模拟器 host | 不允许 prod host；允许 beta local artifact |
+| `gamma` | `APP_RUNTIME_ENV=gamma`、`APP_DATA_SOURCE=remote` | hosted / local-gamma 共用 gamma 语义 | 仅 `*.quwoquan-env.test` | 不允许 local/test host 落入 hosted artifact |
+| `prod` | `APP_RUNTIME_ENV=prod`、`APP_DATA_SOURCE=remote` | 只读取 `prod` config / release snapshot | 仅正式生产域名 | 禁止 mock/seed/debug/local/test host 与跨环境 artifact 污染 |
 
 ## 1.1 多实例与单套服务口径
 
@@ -30,6 +51,21 @@
 - `beta` 服务端任意时刻只允许一套本地集成栈，新启动前必须停止旧栈并回收固定端口。
 - `gamma` 服务端任意时刻只允许一套 ECS gamma 或一套 local-gamma mirror；并行只允许多个端侧实例同时接入同一套 gamma。
 - 不得因本地脚本便利性把 beta 或 gamma 扩展成多套长期并行环境。
+
+## 1.2 本地端口 Profile
+
+| Profile | 端口块 | API Edge | Product Ops Edge | Media Edge | Media Origin | 示例服务槽位 |
+|---|---:|---:|---:|---:|---:|---|
+| `alpha-local` | `17000-17999` | `17000` | `17010` | `17100` | `17110` | `chat-service=17200`、`assistant-service=17230` |
+| `beta-local` | `18000-18999` | `18000` | `18010` | `18100` | `18110` | `chat-service=18200`、`assistant-service=18230` |
+| `gamma-local` | `19000-19999` | `19000` | `19010` | `19100` | `19110` | `content-service=19220`、`user-service=19210` |
+| `prod-sim` | `20000-20999` | `20000` | `20010` | `20100` | `20110` | 仅用于本地 prod 演练，不新增环境枚举 |
+
+规则：
+
+- canonical host 端口必须以 `0` 结尾。
+- plane 间不得串用槽位。
+- 脚本和 CLI 只读 manifest，不允许继续手写 `18080/18088/18180` 一类常量作为官方默认值。
 
 ## 2. 波次关系
 
@@ -51,7 +87,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 
 - **Docker Hub 429（未认证限流）**：`quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh` 默认将基础镜像指向 `docker.m.daocloud.io/library`；ECS 侧对应变量为 `GAMMA_ECS_CONTAINER_REGISTRY_MIRROR`。
 - **Colima / Docker VM 磁盘满**：执行 `docker builder prune -af`；避免将本地 `**/.venv/` 打进构建上下文。
-- **本地 beta / local-gamma 端口冲突**：`gate-local-gamma` 默认使用 `18180/18186`，避免与 beta 常用 `18080` 冲突。
+- **本地 beta / local-gamma 端口冲突**：统一由 `local_env_port_manifest.yaml` 分配；当前 beta 使用 `18000/18010/18100`，local-gamma 使用 `19000/19010/19100`，禁止再手写旧常量规避冲突。
 
 ## 3. GitHub Actions Secrets / Variables（按工作流）
 
@@ -80,15 +116,15 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 | 环境 | 命令 / 条件 | 通过判据 |
 |------|-------------|----------|
 | `alpha` | 单服务 `APP_ENV=alpha go test ./...`；端侧 `flutter test` | 单实例用例绿 |
-| `beta` | 本地启动单套网关与服务，App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 本地 Android/iOS 设备矩阵通过，且新启动前会 stop 旧 beta 栈 |
-| `gamma` | `04` PR 轻量 preflight 探针共享 gamma（readiness 阻断、smoke 告警）；`09` nightly 完整 ECS deploy + full semantic + Patrol UI + 全设备矩阵 | PR gate：readiness 绿；nightly/manual_full：hosted + self-hosted 全绿并带证据 |
-| `prod` | 生产发布流水线与 runbook 审批 | 灰度指标与回滚条件达标；全量观测稳定 |
+| `beta` | `python3 agent_ops/deploy/stackctl.py up --target beta-local`；App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 本地 Android/iOS 设备矩阵通过，且新启动前会 stop 旧 beta 栈 |
+| `gamma` | `python3 agent_ops/deploy/stackctl.py health --target gamma-hosted`；`09` nightly 完整 ECS deploy + full semantic + Patrol UI + 全设备矩阵 | PR gate：readiness 绿；nightly/manual_full：hosted + self-hosted 全绿并带证据 |
+| `prod` | `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted ...` 与 runbook 审批 | 灰度指标与回滚条件达标；全量观测稳定 |
 
 提交前本地左移：
 
 | 范围 | 命令 / 条件 | 通过判据 |
 |------|-------------|----------|
-| `local-gamma mirror` | `make gate-local-gamma` | `T1/T2` 本地门禁、`T3` 本地真实 API/存储、`T4` 共享 gamma patrol/chat-avatar 旅程通过并生成 `artifacts/local-gamma/report.json` |
+| `local-gamma mirror` | `make gate-local-gamma` / `python3 agent_ops/deploy/stackctl.py up --target gamma-local` | `T1/T2` 本地门禁、`T3` 本地真实 API/存储、`T4` 共享 gamma patrol/chat-avatar 旅程通过并生成 `artifacts/local-gamma/report.json` |
 
 ## 5. 相关文件索引
 

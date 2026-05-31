@@ -50,42 +50,35 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
     state = state.copyWith(status: VoiceSendStatus.uploading, error: null);
 
     try {
+      final ownerId = ref.read(currentUserIdProvider).trim();
       final task = UploadTask(
         localPath: result.filePath,
         category: MediaCategory.chatVoice,
         contentType: 'audio/mp4',
         fileSize: result.fileSize,
-        ownerId: 'current_user',
+        ownerId: ownerId.isEmpty ? 'current_user' : ownerId,
         fileName: result.filePath.split('/').last,
         completionMetadata: {'durationMs': result.durationMs},
       );
 
       final enqueued = await _uploadManager.enqueue(task);
+      if (enqueued.status == UploadStatus.failed) {
+        state = state.copyWith(
+          status: VoiceSendStatus.failed,
+          error: enqueued.error ?? '上传失败',
+        );
+        return;
+      }
+      if (enqueued.status == UploadStatus.completed) {
+        await _sendUploadedVoice(enqueued, result);
+        return;
+      }
 
       await for (final update in _uploadManager.onTaskUpdate) {
         if (update.localPath != enqueued.localPath) continue;
 
         if (update.status == UploadStatus.completed) {
-          state = state.copyWith(status: VoiceSendStatus.sending);
-
-          final mediaPayload = <String, dynamic>{
-            'url': update.cdnUrl ?? '',
-            'mediaId': update.assetId,
-            'mimeType': 'audio/mp4',
-            'fileSizeBytes': result.fileSize,
-            'durationMs': result.durationMs,
-            'waveform': result.waveform,
-            'codec': 'aac',
-          };
-
-          await _messageNotifier.sendMessage(
-            'audio',
-            '',
-            mediaUrl: update.cdnUrl,
-            media: mediaPayload,
-          );
-
-          state = state.copyWith(status: VoiceSendStatus.completed);
+          await _sendUploadedVoice(update, result);
           return;
         }
 
@@ -103,6 +96,32 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
         error: runtimeErrorDisplayMessage(e),
       );
     }
+  }
+
+  Future<void> _sendUploadedVoice(
+    UploadTask update,
+    VoiceRecordResult result,
+  ) async {
+    state = state.copyWith(status: VoiceSendStatus.sending);
+
+    final mediaPayload = <String, dynamic>{
+      'url': update.cdnUrl ?? '',
+      'mediaId': update.assetId,
+      'mimeType': 'audio/mp4',
+      'fileSizeBytes': result.fileSize,
+      'durationMs': result.durationMs,
+      'waveform': result.waveform,
+      'codec': 'aac',
+    };
+
+    await _messageNotifier.sendMessage(
+      'audio',
+      '',
+      mediaUrl: update.cdnUrl,
+      media: mediaPayload,
+    );
+
+    state = state.copyWith(status: VoiceSendStatus.completed);
   }
 
   void reset() {

@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `user-identity-profile-relationship`
-- `L2_journey`: `persona-follow-graph`
-- `L3_scenario`: `follow-relationship`
+- `L1_domain_service`: `user-identity-profile-relationship`
+- `L2_business_capability`: `persona-follow-graph`
+- `L3_story`: `follow-relationship`
 
 本场景冻结分身关系写入侧的业务边界。它对应的是 user 域独立业务对象 `FollowEdge` 的 command side，而不是 `UserProfile` 聚合本身。分身关系的建立、取消与幂等由 `FollowEdge` 负责；粉丝/关注列表读取和分页由 `social-graph-read` 负责。
 

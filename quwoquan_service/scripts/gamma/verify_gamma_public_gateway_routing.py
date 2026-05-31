@@ -7,7 +7,7 @@
   python3 quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py [--base-url URL]
 
 环境变量（与探针一致）:
-  GAMMA_BASE_URL — 默认 http://127.0.0.1:18080
+  GAMMA_BASE_URL — 默认 http://127.0.0.1:19000
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--base-url",
-        default=os.environ.get("GAMMA_BASE_URL", "http://127.0.0.1:18080").rstrip("/"),
+        default=os.environ.get("GAMMA_BASE_URL", "http://127.0.0.1:19000").rstrip("/"),
     )
     args = ap.parse_args()
     base = args.base_url.rstrip("/")

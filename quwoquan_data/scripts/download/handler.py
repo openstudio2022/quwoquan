@@ -2,8 +2,20 @@
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
+from pathlib import Path
+import sys
 
-from _common.paths import ensure_batch_layout, batch_command_root
+SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SCRIPTS_ROOT))
+
+from _common.io import write_json  # noqa: E402
+from _common.paths import ensure_batch_layout, batch_command_root  # noqa: E402
+from _common.content_evidence import anonymize_source_markdown, score_source_markdown  # noqa: E402
+from _common.stage_reports import write_gate_report, write_stage_result  # noqa: E402
+from download.source_inputs import curated_sources_for_entity, source_frontmatter  # noqa: E402
+from download.fetch import fetch_source  # noqa: E402
+from download.prepare import prepare_source_plan, prepare_source_screen  # noqa: E402
 
 
 def handle_download(args: argparse.Namespace) -> None:
@@ -26,7 +38,155 @@ def handle_download(args: argparse.Namespace) -> None:
     print(f"[download] Task: {task_id}, Batch: {batch_id}")
     print(f"[download] Target entities: {entity_ids}")
     print(f"[download] Work dir: {dl_root}")
-    print(f"[download] Ready for Agent: source_plan → fetch → source_screen")
+    print(f"[download] Steps: source_plan → fetch → source_screen")
+
+    entities = [{"entityId": entity_id, "canonicalName": entity_id, "entityType": "travel"} for entity_id in entity_ids]
+    prepare_source_plan(task_id, batch_id, entities)
+    for entity in entities:
+        planned_sources = [
+            {
+                "platform": source["platform"],
+                "url": source["url"],
+                "expectedContentType": "article",
+                "priority": index + 1,
+            }
+            for index, source in enumerate(curated_sources_for_entity(task_id, batch_id, entity["entityId"]))
+        ]
+        write_stage_result(
+            task_id,
+            batch_id,
+            "download",
+            "source_plan",
+            entity["entityId"],
+            {
+                "entityId": entity["entityId"],
+                "sources": planned_sources,
+            },
+        )
+        write_gate_report(
+            task_id=task_id,
+            batch_id=batch_id,
+            command="download",
+            step="source_plan",
+            ref=entity["entityId"],
+            passed=len(planned_sources) >= 2,
+            issues=[] if len(planned_sources) >= 2 else ["sourcePlan: fewer than 2 planned sources"],
+            evidence_summary={"plannedSourceCount": len(planned_sources)},
+            next_step="fetch",
+            fallback_stage="source_plan" if len(planned_sources) < 2 else None,
+        )
+
+    fetched_sources: list[dict] = []
+    quality_by_entity: dict[str, list[dict]] = defaultdict(list)
+    for entity_id in entity_ids:
+        entity_dir = dl_root / "sources" / entity_id
+        entity_dir.mkdir(parents=True, exist_ok=True)
+        for source in curated_sources_for_entity(task_id, batch_id, entity_id):
+            src_dir = entity_dir / source["source_id"]
+            src_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                meta = fetch_source(source["url"], src_dir)
+                source_md = Path(meta["sourceMdPath"]).read_text(encoding="utf-8")
+            except Exception as exc:
+                source_md = source_frontmatter(source, entity_id)
+                (src_dir / "source.md").write_text(source_md, encoding="utf-8")
+                meta = {"url": source["url"], "statusCode": 0, "error": str(exc), "sourceMdPath": str(src_dir / "source.md")}
+            else:
+                (src_dir / "source.md").write_text(source_md, encoding="utf-8")
+            clean_md = anonymize_source_markdown(source_md)
+            (src_dir / "source.clean.md").write_text(clean_md, encoding="utf-8")
+            assessment = score_source_markdown(source["source_id"], source_md, entity_name=entity_id)
+            write_json(
+                src_dir / "source.quality.json",
+                {
+                    "sourceId": source["source_id"],
+                    "entity": entity_id,
+                    "quality": assessment.quality,
+                    "score": assessment.score,
+                    "reasons": list(assessment.reasons),
+                    "excerpt": assessment.excerpt,
+                    "url": source["url"],
+                    "statusCode": meta.get("statusCode", 0),
+                },
+            )
+            quality_by_entity[entity_id].append(
+                {
+                    "sourceId": source["source_id"],
+                    "quality": assessment.quality,
+                    "score": assessment.score,
+                    "url": source["url"],
+                    "statusCode": meta.get("statusCode", 0),
+                }
+            )
+            fetched_sources.append(
+                {
+                    "sourceId": source["source_id"],
+                    "url": source["url"],
+                    "quality": assessment.quality,
+                    "score": assessment.score,
+                    "entityId": entity_id,
+                }
+            )
+
+    prepare_source_screen(task_id, batch_id, fetched_sources)
+    for source in fetched_sources:
+        issues: list[str] = []
+        if source["quality"] == "Reject":
+            issues.append("sourceScreen: source scored Reject")
+        write_stage_result(
+            task_id,
+            batch_id,
+            "download",
+            "source_screen",
+            source["sourceId"],
+            {
+                "sourceId": source["sourceId"],
+                "decision": "retain" if source["quality"] != "Reject" else "reject",
+                "qualityScore": source["score"],
+                "relevanceScore": source["score"],
+                "copyrightStatus": "internal_reference",
+                "reason": "quality gate auto-screen",
+                "entityId": source["entityId"],
+            },
+        )
+        write_gate_report(
+            task_id=task_id,
+            batch_id=batch_id,
+            command="download",
+            step="source_screen",
+            ref=source["sourceId"],
+            passed=not issues,
+            issues=issues,
+            evidence_summary={
+                "entityId": source["entityId"],
+                "quality": source["quality"],
+                "score": source["score"],
+            },
+            next_step="quality_analysis",
+            fallback_stage="fetch" if issues else None,
+        )
+    for entity_id, rows in quality_by_entity.items():
+        retained = [row for row in rows if row["quality"] != "Reject"]
+        issues: list[str] = []
+        if len(retained) < 1:
+            issues.append("sourceScreen: no retained source for entity")
+        write_gate_report(
+            task_id=task_id,
+            batch_id=batch_id,
+            command="download",
+            step="entity_source_bundle",
+            ref=entity_id,
+            passed=not issues,
+            issues=issues,
+            evidence_summary={
+                "sourceCount": len(rows),
+                "retainedCount": len(retained),
+                "qualities": [row["quality"] for row in rows],
+            },
+            next_step="quality_analysis",
+            fallback_stage="source_plan" if issues else None,
+        )
+    print(f"[download] Planned {len(entities)} entity/entities and fetched {len(fetched_sources)} source bundle(s)")
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:

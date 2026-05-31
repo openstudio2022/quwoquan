@@ -12,10 +12,19 @@ BASE="${ROOT}/quwoquan_service/contracts/metadata"
 [[ -d "$BASE" ]] || { echo "[verify] FAIL: missing $BASE"; exit 1; }
 
 # 1) Required shared files
-for f in _shared/types.yaml _shared/tag_taxonomy.yaml _shared/redis_keyspace.yaml; do
+for f in _shared/types.yaml _shared/redis_keyspace.yaml; do
   p="${BASE}/${f}"
   [[ -f "$p" ]] || { echo "[verify] FAIL: missing $p"; exit 1; }
   ruby -ryaml -e "YAML.load_file('$p')" || { echo "[verify] FAIL: invalid YAML $p"; exit 1; }
+done
+
+# Flat taxonomy fully retired (V6 同源收口): single source of truth =
+# quwoquan_data/publish/v1/tags (path-based tagRef). tag_taxonomy.yaml /
+# tag_ref_migration.yaml must NOT exist; enforced by verify_tag_ref_source_of_truth.py (C1).
+for retired in _shared/tag_taxonomy.yaml _shared/tag_ref_migration.yaml; do
+  if [[ -f "${BASE}/${retired}" ]]; then
+    echo "[verify] FAIL: retired flat taxonomy file still present: ${retired} (single source = publish/v1/tags)"; exit 1
+  fi
 done
 
 _verify_entity_dir() {

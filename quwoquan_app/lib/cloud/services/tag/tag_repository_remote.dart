@@ -1,6 +1,8 @@
 part of 'tag_repository.dart';
 
-/// Remote 实现 — 调用云侧 Tag API
+/// Remote 实现 — 调用云侧 Tag API。
+/// path / pageId 全部来自 codegen 真相源（TagApiMetadata / TagRequestPageIds），
+/// 不得硬编码 /api/v1/tags/* 路径（军规 R06/R09）。
 class RemoteTagRepository implements TagRepository {
   final CloudHttpClient _httpClient;
 
@@ -46,7 +48,10 @@ class RemoteTagRepository implements TagRepository {
   @override
   Future<List<TagDimension>> listDimensions() async {
     final data =
-        await _get('/api/v1/tags/dimensions', TagRequestPageIds.listDimensions)
+        await _get(
+              TagApiMetadata.listDimensionsPath,
+              TagRequestPageIds.listDimensions,
+            )
             as List;
     return data
         .map((e) => TagDimension.fromJson(e as Map<String, dynamic>))
@@ -62,7 +67,11 @@ class RemoteTagRepository implements TagRepository {
     final params = <String, String>{'q': query, 'limit': '$limit'};
     if (group != null) params['group'] = group;
     final data =
-        await _get('/api/v1/tags/suggest', TagRequestPageIds.suggest, params)
+        await _get(
+              TagApiMetadata.suggestTagsPath,
+              TagRequestPageIds.suggestTags,
+              params,
+            )
             as List;
     return data
         .map((e) => TagSuggestion.fromJson(e as Map<String, dynamic>))
@@ -72,8 +81,8 @@ class RemoteTagRepository implements TagRepository {
   @override
   Future<TagValidationResult> validateRefs(List<String> tagRefs) async {
     final data = await _post(
-      '/api/v1/tags/validate',
-      TagRequestPageIds.validate,
+      TagApiMetadata.validateTagRefsPath,
+      TagRequestPageIds.validateTagRefs,
       {'tagRefs': tagRefs},
     );
     return TagValidationResult.fromJson(data as Map<String, dynamic>);
@@ -88,7 +97,11 @@ class RemoteTagRepository implements TagRepository {
     final params = <String, String>{'q': query, 'limit': '$limit'};
     if (group != null) params['group'] = group;
     final data =
-        await _get('/api/v1/tags/search', TagRequestPageIds.search, params)
+        await _get(
+              TagApiMetadata.searchTagsPath,
+              TagRequestPageIds.searchTags,
+              params,
+            )
             as List;
     return data
         .map((e) => TagSearchResult.fromJson(e as Map<String, dynamic>))
@@ -100,9 +113,9 @@ class RemoteTagRepository implements TagRepository {
     String tagRef, {
     int limit = TagApiDefaults.relatedLimit,
   }) async {
-    final encoded = Uri.encodeComponent(tagRef);
     final data =
-        await _get('/api/v1/tags/$encoded/related', TagRequestPageIds.related, {
+        await _get(TagApiMetadata.relatedTagsPath, TagRequestPageIds.relatedTags, {
+              'tagRef': tagRef,
               'limit': '$limit',
             })
             as List;
@@ -121,7 +134,7 @@ class RemoteTagRepository implements TagRepository {
     if (objectType != null) body['objectType'] = objectType;
     final data =
         await _post(
-              '/api/v1/tags/search-by-tags',
+              TagApiMetadata.searchByTagsPath,
               TagRequestPageIds.searchByTags,
               body,
             )
@@ -136,8 +149,8 @@ class RemoteTagRepository implements TagRepository {
     final body = <String, dynamic>{'tagRef': tagRef, 'action': action};
     if (context != null) body['context'] = context;
     final data = await _post(
-      '/api/v1/tags/feedback',
-      TagRequestPageIds.feedback,
+      TagApiMetadata.tagFeedbackPath,
+      TagRequestPageIds.tagFeedback,
       body,
     );
     return (data as Map<String, dynamic>)['accepted'] == true;
@@ -153,8 +166,8 @@ class RemoteTagRepository implements TagRepository {
     if (tagRef != null) params['tagRef'] = tagRef;
     final data =
         await _get(
-              '/api/v1/tags/graph/cooccurrence',
-              TagRequestPageIds.cooccurrence,
+              TagApiMetadata.tagCooccurrencePath,
+              TagRequestPageIds.tagCooccurrence,
               params,
             )
             as List;
@@ -169,12 +182,11 @@ class RemoteTagRepository implements TagRepository {
     String? objectType,
     int limit = TagApiDefaults.graphLimit,
   }) async {
-    final encoded = Uri.encodeComponent(tagRef);
-    final params = <String, String>{'limit': '$limit'};
+    final params = <String, String>{'tagRef': tagRef, 'limit': '$limit'};
     if (objectType != null) params['objectType'] = objectType;
     final data = await _get(
-      '/api/v1/tags/graph/inverted-index/$encoded',
-      TagRequestPageIds.invertedIndex,
+      TagApiMetadata.invertedObjectsPath,
+      TagRequestPageIds.invertedObjects,
       params,
     );
     return TagInvertedResult.fromJson(data as Map<String, dynamic>);
@@ -186,18 +198,44 @@ class RemoteTagRepository implements TagRepository {
     String? objectType,
     int limit = TagApiDefaults.relatedLimit,
   }) async {
-    final encoded = Uri.encodeComponent(objectId);
-    final params = <String, String>{'limit': '$limit'};
+    final params = <String, String>{'objectId': objectId, 'limit': '$limit'};
     if (objectType != null) params['objectType'] = objectType;
     final data =
         await _get(
-              '/api/v1/tags/graph/related-objects/$encoded',
+              TagApiMetadata.relatedObjectsPath,
               TagRequestPageIds.relatedObjects,
               params,
             )
             as List;
     return data
         .map((e) => RelatedObject.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<SharedTagView>> sharedTags({
+    required String objectAId,
+    required String objectAType,
+    required String objectBId,
+    required String objectBType,
+    int limit = TagApiDefaults.graphLimit,
+  }) async {
+    final params = <String, String>{
+      'objectAId': objectAId,
+      'objectAType': objectAType,
+      'objectBId': objectBId,
+      'objectBType': objectBType,
+      'limit': '$limit',
+    };
+    final data =
+        await _get(
+              TagApiMetadata.sharedTagsPath,
+              TagRequestPageIds.sharedTags,
+              params,
+            )
+            as List;
+    return data
+        .map((e) => SharedTagView.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 }

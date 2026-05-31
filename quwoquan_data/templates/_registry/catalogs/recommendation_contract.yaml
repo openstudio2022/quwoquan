@@ -1,0 +1,31 @@
+version: 1
+requiredManifestFields:
+  - contentType
+  - authorId
+  - creatorProfileId
+  - creatorArchetype
+  - subjectRef
+  - entityRefs
+  - tagRefs
+  - qualitySignals
+bodyForbiddenFields:
+  - qualityScore
+  - templateId
+  - routingReason
+  - coldStartBoost
+  - isSystemBuiltin
+  - recommendationWeight
+qualitySignals:
+  - bodyLength
+  - requiredFactsCovered
+  - imageSlotCoverage
+  - entityRefCount
+  - tagCount
+styleTagSources:
+  - styleProfile.visualTone
+  - styleProfile.mediaTechnique
+  - styleProfile.writingGenre
+authorFeatureSources:
+  - creatorProfileId
+  - creatorArchetype
+  - authorId

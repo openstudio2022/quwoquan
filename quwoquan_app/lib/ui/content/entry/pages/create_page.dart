@@ -684,6 +684,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   Future<void> _pickImagesForCurrentEditor() async {
+    if (!await requireLogin(ref, context, AuthGateReason.mediaUpload)) {
+      return;
+    }
+    if (!mounted) return;
     // 文本编辑器走 node 级插入
     final state = ref.read(createEditorProvider);
     if (state.editorKind == CreateEditorKind.text) {
@@ -751,6 +755,10 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   Future<void> _pickVideoForMedia() async {
+    if (!await requireLogin(ref, context, AuthGateReason.mediaUpload)) {
+      return;
+    }
+    if (!mounted) return;
     final state = ref.read(createEditorProvider);
     if (state.imagePaths.isNotEmpty) {
       AppToast.show(context, '请先删空图片，再改为视频');
@@ -1127,6 +1135,11 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   }
 
   Future<void> _publish() async {
+    // 防御性二次拦截：发布是需登录写动作。创作页已被路由守卫保护，这里再兜底一次。
+    if (!await requireLogin(ref, context, AuthGateReason.createPost)) {
+      return;
+    }
+    if (!mounted) return;
     var state = ref.read(createEditorProvider);
     if (_isPublishing) {
       return;

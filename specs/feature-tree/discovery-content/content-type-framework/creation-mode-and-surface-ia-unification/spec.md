@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `discovery-content`
-- `L2_journey`: `content-type-framework`
-- `L3_scenario`: `creation-mode-and-surface-ia-unification`
+- `L1_domain_service`: `discovery-content`
+- `L2_business_capability`: `content-type-framework`
+- `L3_story`: `creation-mode-and-surface-ia-unification`
 
 本次重定稿用于替换该场景旧有的“身份切换 + 四 Tab + 六宫格入口”基线，冻结一版可直接进入 `/dev` 的创作体验规格：
 
@@ -13,7 +13,7 @@
 - 标题变成按需出现的升级入口，而不是默认重表单
 - 发布设置继续保留，但默认轻量折叠，不再压在首屏
 
-本场景与既有内容展示、发布链路、圈子分发、小趣使用能力保持兼容；若与过往版本 `spec.md/design.md/tasks.md` 冲突，以本次重定稿为准。
+本场景与既有内容展示、发布链路、圈子分发、小趣使用能力保持兼容；若与过往版本 `spec.md/design.md/树内任务文档` 冲突，以本次重定稿为准。
 
 ## 背景与动机
 
@@ -324,7 +324,7 @@
 - 现有位置选择器、圈子选择器、图片编辑器、发布仓储优先复用。
 - 媒体编辑器必须严格执行“图片与视频互斥、视频最多 1 个”。
 - 标题提示只能做轻提醒，不能以“世界级质量”为理由重新把轻内容做成重表单。
-- 进入 `/dev` 前，本 `spec.md`、对应 `design.md`、`acceptance.yaml`、`plan.yaml`、CR 必须全部同步完成。
+- 进入 `/dev` 前，本 `spec.md`、对应 `design.md`、`acceptance.yaml`、`树内计划文档`、CR 必须全部同步完成。
 
 ## 验收重点
 

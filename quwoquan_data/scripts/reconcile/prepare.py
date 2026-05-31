@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from _common.paths import batch_inputs_dir, batch_assistant_tasks, batch_command_root
+from _common.paths import batch_inputs_dir, batch_assistant_task, batch_command_root
 from _common.io import read_json, write_json, write_assistant_task
 
 
@@ -30,7 +30,7 @@ def prepare_patch_plan(task_id: str, batch_id: str) -> Path | None:
         "payload": diff_report,
     })
 
-    manifest_path = batch_assistant_tasks(task_id, batch_id, "reconcile", "patch_plan")
+    manifest_path = batch_assistant_task(task_id, batch_id, "reconcile", "patch_plan")
     results_dir = inputs_dir.parent.parent / "results" / "patch_plan"
     write_assistant_task(manifest_path, step="patch_plan", input_dir=inputs_dir, result_dir=results_dir, refs=[ref])
     return inputs_dir

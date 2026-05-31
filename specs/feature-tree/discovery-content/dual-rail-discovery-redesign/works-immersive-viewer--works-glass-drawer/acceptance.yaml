@@ -1,34 +1,41 @@
-feature: works-glass-drawer
-level: "L3_story"
-template: A1-A4
-archived: false
+version: 2
+node:
+  id: works-immersive-viewer--works-glass-drawer
+  level: L3_story
+  path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer--works-glass-drawer
+  title: works immersive viewer  works glass drawer
+  parent_domain_service: discovery-content
+  parent_business_capability: dual-rail-discovery-redesign
+scope:
+  summary: works immersive viewer  works glass drawer 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: works immersive viewer  works glass drawer GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make build && make test-contract
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: 右侧 40% 热区点击 → Drawer slide-in 动画（280ms），宽度 = 屏幕宽度 × 0.4
-    status: pending
-    linked_tasks:
-    - D2
-    - D3
-    tests: []
-  A2:
-    criteria: BackdropFilter sigmaX/sigmaY = 20，背景带深蓝倾向（#0A0E14 80% opacity）
-    status: pending
-    linked_tasks:
-    - D4
-    tests: []
-  A3:
-    criteria: Drawer 内评论列表滚动不触发外层 PageView 垂直或水平换页
-    status: pending
-    linked_tasks:
-    - D6
-    tests: []
-  A4:
-    criteria: 'Drawer 关闭后 BackdropFilter 完全卸载（Visibility maintainState: false），不持续占用
-      GPU'
-    status: pending
-    linked_tasks:
-    - D5
-    tests: []
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

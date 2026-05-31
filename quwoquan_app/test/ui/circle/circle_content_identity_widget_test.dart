@@ -48,17 +48,17 @@ void main() {
     expect(find.text('点滴'), findsOneWidget);
     expect(find.text('作品'), findsAtLeastNWidgets(1));
     expect(find.text('微趣'), findsNothing);
-    expect(find.text('笔记'), findsNothing);
+    expect(find.text('文章'), findsNothing);
 
     await tester.tap(find.text('作品').first);
     await tester.pumpAndSettle();
 
     expect(find.text('图片'), findsAtLeastNWidgets(1));
     expect(find.text('视频'), findsAtLeastNWidgets(1));
-    expect(find.text('笔记'), findsAtLeastNWidgets(1));
+    expect(find.text('文章'), findsAtLeastNWidgets(1));
   });
 
-  testWidgets('圈子作品切到笔记后，列表标签与筛选口径保持一致', (tester) async {
+  testWidgets('圈子作品切到文章后，列表标签与筛选口径保持一致', (tester) async {
     await tester.pumpWidget(
       _buildApp(
         const SizedBox(
@@ -77,10 +77,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('列表视图'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('笔记').first);
+    await tester.tap(find.text('文章').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('笔记'), findsAtLeastNWidgets(1));
+    expect(find.text('文章'), findsAtLeastNWidgets(1));
     expect(
       find.byKey(
         const ValueKey<String>('circle-article-list-circle_journal_cover'),

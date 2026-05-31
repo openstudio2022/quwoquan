@@ -1181,8 +1181,8 @@ class _SearchContentTypeSheetState extends State<_SearchContentTypeSheet> {
         return TestKeys.searchContentImageToggle;
       case SearchContentTypeFilter.video:
         return TestKeys.searchContentVideoToggle;
-      case SearchContentTypeFilter.moment:
-        return TestKeys.searchContentMomentToggle;
+      case SearchContentTypeFilter.micro:
+        return TestKeys.searchContentMicroToggle;
     }
   }
 

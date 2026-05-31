@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/single_page_mode_strategy.dart';
@@ -45,6 +47,73 @@ void main() {
       forwardOutput.renderBranchName,
       isNot(equals(backwardOutput.renderBranchName)),
       reason: 'direction-specific behavior must stay in local pipeline classes',
+    );
+  });
+
+  test('business article readers enter pageflip only through host adapters', () {
+    final libDir = Directory('lib').existsSync()
+        ? Directory('lib')
+        : Directory('quwoquan_app/lib');
+    expect(libDir.existsSync(), isTrue);
+
+    const allowedDirectDeckEntrypoints = <String>{
+      'lib/components/pageflip/src/debug/pageflip_diagnostics.dart',
+      'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
+      'lib/ui/content/article_reader/pageflip/host/article_reader_flip_host.dart',
+    };
+
+    final offenders = <String>[];
+    for (final entity in libDir.listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) {
+        continue;
+      }
+      final normalizedPath = entity.path.replaceAll('\\', '/');
+      final libRelativePath = normalizedPath.contains('quwoquan_app/lib/')
+          ? 'lib/${normalizedPath.split('quwoquan_app/lib/').last}'
+          : normalizedPath.contains('/lib/')
+          ? 'lib/${normalizedPath.split('/lib/').last}'
+          : normalizedPath;
+      if (allowedDirectDeckEntrypoints.contains(libRelativePath)) {
+        continue;
+      }
+      if (entity.readAsStringSync().contains('ArticleReadOnlyBookDeck(')) {
+        offenders.add(libRelativePath);
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          '业务页面必须通过 ArticleReaderFlipHost + ArticleReaderHostAdapter 接入；'
+          'diagnostics 入口才允许直连 deck 验证组件本体。',
+    );
+  });
+
+  test('article reader deck does not expose deprecated hard page flipping', () {
+    final appLib = Directory('lib').existsSync()
+        ? Directory('lib')
+        : Directory('quwoquan_app/lib');
+    final hostFile = File(
+      '${appLib.path}/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
+    );
+    expect(hostFile.existsSync(), isTrue);
+    final hostSource = hostFile.readAsStringSync();
+
+    expect(
+      hostSource,
+      isNot(contains('_buildHardFlippingPageLayer')),
+      reason: '文章阅读 deck 必须只走 soft/paperFold 主线，不能保留旧 3D 硬翻页入口。',
+    );
+    expect(
+      hostSource,
+      isNot(contains('rotateY(')),
+      reason: '截图中的侧翻残影来自 rotateY 硬翻页路径，article reader deck 中应不可达。',
+    );
+    expect(
+      hostSource,
+      contains('hardPagePolicy: StPageFlipHardPagePolicy.none'),
+      reason: 'coverUrl 只能决定扉页内容，不能再隐式启用 hard density。',
     );
   });
 }

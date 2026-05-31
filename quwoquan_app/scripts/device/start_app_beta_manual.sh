@@ -9,10 +9,13 @@ LOG_DIR="$ROOT_DIR/tmp/app_beta_manual"
 MANIFEST="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json"
 ASSISTANT_APP_CONFIG="$ROOT_DIR/quwoquan_app/assistant/config.json"
 
-ASSISTANT_PORT="${ASSISTANT_PORT:-18087}"
-CHAT_PORT="${CHAT_PORT:-18081}"
-GATEWAY_PORT="${GATEWAY_PORT:-18080}"
-MEDIA_PORT="${MEDIA_PORT:-18088}"
+eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
+
+ASSISTANT_PORT="${ASSISTANT_PORT}"
+CHAT_PORT="${CHAT_PORT}"
+GATEWAY_PORT="${GATEWAY_PORT}"
+MEDIA_PORT="${MEDIA_PORT}"
+MEDIA_ORIGIN_PORT="${MEDIA_ORIGIN_PORT}"
 CHAT_SEED_REFS="${CHAT_SEED_REFS:-chat_core,chat_settings_core,chat_contacts_core,chat_group_flow_core}"
 CHAT_MONGO_URI="${CHAT_MONGO_URI:-mongodb://localhost:27017}"
 CHAT_MONGO_DATABASE="${CHAT_MONGO_DATABASE:-quwoquan_chat_local}"
@@ -64,7 +67,7 @@ Options:
                              Android emulator usually: http://10.0.2.2:${GATEWAY_PORT}
   --local-public-host <host>  Host visible from the App device for gateway/media.
   --media-base-url <url>      Media CDN/upload base URL injected into Flutter app.
-                             Defaults to http://<local-public-host>:${MEDIA_PORT}
+                             Defaults to http://<local-public-host>:${MEDIA_PORT} (media-edge).
   --seed-verify <fast|full>   Seed verification mode before start (default: ${VERIFY_MODE}).
   --media-mode <symlink|copy> Media root preparation mode (default: ${MEDIA_PREP_MODE}).
   --full-matrix              Equivalent to --seed-verify full --media-mode copy.
@@ -600,6 +603,7 @@ beta_manual_record_metadata "flutter_device_id" "$FLUTTER_DEVICE_ID"
 beta_manual_record_metadata "device_kind" "$DEVICE_KIND"
 beta_manual_record_metadata "local_public_host" "$LOCAL_PUBLIC_HOST"
 beta_manual_record_metadata "media_port" "$MEDIA_PORT"
+beta_manual_record_metadata "media_origin_port" "$MEDIA_ORIGIN_PORT"
 beta_manual_record_metadata "media_avatar_cdn_base_url" "$MEDIA_AVATAR_CDN_BASE_URL"
 beta_manual_record_metadata "seed_verify_mode" "$VERIFY_MODE"
 beta_manual_record_metadata "media_prep_mode" "$MEDIA_PREP_MODE"
@@ -616,7 +620,8 @@ trap 'cleanup; exit 148' TSTP
 beta_manual_ensure_port_available "$ASSISTANT_PORT" "assistant-service"
 beta_manual_ensure_port_available "$CHAT_PORT" "chat-service"
 beta_manual_ensure_port_available "$GATEWAY_PORT" "gateway"
-beta_manual_ensure_port_available "$MEDIA_PORT" "media-static"
+beta_manual_ensure_port_available "$MEDIA_PORT" "media-edge"
+beta_manual_ensure_port_available "$MEDIA_ORIGIN_PORT" "media-origin"
 
 echo "[app-beta-manual] logs: $LOG_DIR"
 echo "[app-beta-manual] model: ${ASSISTANT_BETA_MODEL_REF:-unknown} (${ASSISTANT_MODEL_BASE_URL})"
@@ -652,20 +657,33 @@ from pathlib import Path
 root = Path(sys.argv[1])
 (root / "media/video/beta-sample.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
 PY
-echo "[app-beta-manual] starting local media static server on :$MEDIA_PORT"
+MEDIA_EDGE_LOG="$LOG_DIR/media-edge.log"
+echo "[app-beta-manual] starting local media origin on :$MEDIA_ORIGIN_PORT"
 beta_manual_start_process \
-  "media-static" \
+  "media-origin" \
   "$MEDIA_LOG" \
   "$ROOT_DIR" \
-  python3 -m http.server "$MEDIA_PORT" --bind 127.0.0.1 --directory "$MEDIA_DIR"
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "media current user avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixture_user_friend/v1/avatar.png" "media friend avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/group/fixture_conv_group/v1/composite.png" "media group avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/image/post/fixture_photo_001/v1/cover.png" "media post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/image/post/fixture_post_photography_001/v1/cover.jpg" "media mixed-format post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+  python3 -m http.server "$MEDIA_ORIGIN_PORT" --bind 127.0.0.1 --directory "$MEDIA_DIR"
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "media origin current user avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/user/fixture_user_friend/v1/avatar.png" "media origin friend avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/group/fixture_conv_group/v1/composite.png" "media origin group avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/image/post/fixture_photo_001/v1/cover.png" "media origin post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/image/post/fixture_post_photography_001/v1/cover.jpg" "media origin mixed-format post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+echo "[app-beta-manual] starting local media edge on :$MEDIA_PORT -> :$MEDIA_ORIGIN_PORT"
+beta_manual_start_process \
+  "media-edge" \
+  "$MEDIA_EDGE_LOG" \
+  "$ROOT_DIR" \
+  python3 agent_ops/deploy/lib/http_reverse_proxy.py \
+    --listen-host 127.0.0.1 \
+    --listen-port "$MEDIA_PORT" \
+    --target-base-url "http://127.0.0.1:${MEDIA_ORIGIN_PORT}"
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "media edge current user avatar fixture" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/image/post/fixture_photo_001/v1/cover.png" "media edge post cover fixture" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
 if [[ "$DEVICE_KIND" == "android_physical" && -n "$FLUTTER_DEVICE_ID" && "$LOCAL_PUBLIC_HOST" == "127.0.0.1" && -x "$(command -v adb 2>/dev/null || true)" ]]; then
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${GATEWAY_PORT}" "tcp:${GATEWAY_PORT}" >/dev/null 2>&1 || true
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_PORT}" "tcp:${MEDIA_PORT}" >/dev/null 2>&1 || true
+  adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_ORIGIN_PORT}" "tcp:${MEDIA_ORIGIN_PORT}" >/dev/null 2>&1 || true
   ADB_REVERSE_ENABLED=1
 fi
 echo "[app-beta-manual] starting assistant-service beta on :$ASSISTANT_PORT"
@@ -780,7 +798,7 @@ with urlopen(req, timeout=30) as resp:
     if resp.status != 200:
         raise SystemExit(f"user sync route unhealthy: {resp.status}")
 PY
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "host media avatar route" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "host media edge avatar route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "gateway current user avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/user/fixture_user_friend/v1/avatar.png" "gateway friend avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/group/fixture_conv_group/v1/composite.png" "gateway group avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
@@ -800,7 +818,7 @@ beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/integration/locati
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/app-messages" "notification fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/rtc/calls" "rtc fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 
-python3 - "$REPORT" "$MANIFEST" "$GATEWAY_BASE_URL" "$ASSISTANT_PORT" "$CHAT_PORT" "$DEVICE_KIND" "$LOCAL_PUBLIC_HOST" "$MEDIA_AVATAR_CDN_BASE_URL" "$MEDIA_IMAGE_CDN_BASE_URL" "$MEDIA_VIDEO_CDN_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "$ADB_REVERSE_ENABLED" "$RESTARTED_FROM_PREVIOUS" "$FLUTTER_DEVICE_ID" "$VERIFY_MODE" "$MEDIA_PREP_MODE" <<'PY'
+python3 - "$REPORT" "$MANIFEST" "$GATEWAY_BASE_URL" "$ASSISTANT_PORT" "$CHAT_PORT" "$DEVICE_KIND" "$LOCAL_PUBLIC_HOST" "$MEDIA_AVATAR_CDN_BASE_URL" "$MEDIA_IMAGE_CDN_BASE_URL" "$MEDIA_VIDEO_CDN_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "http://127.0.0.1:${MEDIA_ORIGIN_PORT}" "$ADB_REVERSE_ENABLED" "$RESTARTED_FROM_PREVIOUS" "$FLUTTER_DEVICE_ID" "$VERIFY_MODE" "$MEDIA_PREP_MODE" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -817,12 +835,13 @@ from pathlib import Path
     image_cdn,
     video_cdn,
     upload_base,
+    media_origin,
     adb_reverse,
     restarted_from_previous,
     flutter_device_id,
     seed_verify_mode,
     media_prep_mode,
-) = sys.argv[1:17]
+) = sys.argv[1:18]
 manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
 report = {
     "status": "ready",
@@ -838,6 +857,7 @@ report = {
     "imageCdnBaseUrl": image_cdn,
     "videoCdnBaseUrl": video_cdn,
     "uploadBaseUrl": upload_base,
+    "mediaOriginBaseUrl": media_origin,
     "seedVerifyMode": seed_verify_mode,
     "mediaPrepMode": media_prep_mode,
     "adbReverseEnabled": adb_reverse == "1",

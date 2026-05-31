@@ -2,5 +2,24 @@
   "status": "packaged",
   "service": "chat-service",
   "env": "alpha",
-  "configLayout": "default+env"
+  "configLayout": "default+env",
+  "modulePackage": "chat-service",
+  "enabledModules": [
+    "chat.api",
+    "chat.task_outbox_dispatcher",
+    "chat.group_avatar_worker",
+    "chat.roster_projection_worker",
+    "chat.inbox_projection_worker",
+    "chat.notification_outbox_dispatcher"
+  ],
+  "disabledModules": [],
+  "catalogVersion": 1,
+  "retentionPolicyVersion": 1,
+  "topologySchemaVersion": "environment-topology/v1",
+  "artifactPolicy": {
+    "allowFixtureRefs": true,
+    "allowReleaseSnapshot": false,
+    "secretScope": "alpha",
+    "distribution": "internal-only"
+  }
 }

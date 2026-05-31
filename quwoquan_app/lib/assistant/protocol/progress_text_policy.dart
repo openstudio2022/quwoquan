@@ -108,7 +108,9 @@ class ProgressTextPolicy {
       if (decoded is Map) {
         return ProgressTextPolicy.fromJson(decoded.cast<String, dynamic>());
       }
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 资产策略缺失或 JSON 损坏时回退到内置 defaults，保证策略始终可用 */
+    }
     return defaults;
   }
 }
@@ -423,7 +425,9 @@ class ReactPolicy {
       if (decoded is Map) {
         return ReactPolicy.fromJson(decoded.cast<String, dynamic>());
       }
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 资产策略缺失或 JSON 损坏时回退到内置 defaults，保证策略始终可用 */
+    }
     return defaults;
   }
 }

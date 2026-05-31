@@ -1,6 +1,7 @@
 # 生产部署设计：半自动与全自动
 
 > 目标：在现有 G5a（ECS gamma hosted pre）、G5b（self-hosted gamma 旅程）基础上，明确 G5c 灰度到 prod 的半自动与全自动方案。
+> 约束：生产只有 `prod` 一个环境；`gray-initial / carry-on / full` 是 rollout stage，不是 `prod-gray` 第二环境。
 > 前置：`03/04/05` required checks 已通过，其中 `04` 已完成 ECS gamma hosted pre + gamma self-hosted 旅程。
 
 ---
@@ -13,6 +14,7 @@
 | 灰度步进 | STEP ∈ {5, 25, 50, 100}，顺序不可逆；脚本已支持 |
 | SLO 决策 | continue(0) / pause(10) / rollback(20)；rollback 时脚本内会调用 `config_release_rollback.sh` |
 | 实际部署 | 当前 runbook 未绑定「谁执行 kubectl apply 到 prod」；设计里假定由 workflow 或下游系统根据 state/版本执行 apply |
+| 包纯度 | prod 只读取 `prod` env package / service env package；禁止任何 alpha/mock/seed/debug/local/test host 进入 prod artifact |
 
 ### 1.0 GitHub Environment `production`（`07. Deploy To Prod (Auto)`）
 
@@ -64,6 +66,7 @@ stages:
 ### 1.4 与 environment_matrix 中 D（灰度）/E（全量）的对应
 
 - **D（生产灰度）**、**E（生产全量）** 在 `process_domain_mapping` 中均为 **prod**；不引入第二套领域拓扑。
+- `environment_topology_manifest.yaml` 中 `rolloutStagePolicy.allowedStages = [gray-initial, carry-on, full]` 是 prod rollout 的唯一阶段枚举。
 - **D**：对应 `gray_rollout_stages.yaml` 中未达 `total_replicas` 或 `auto: true` 的步进（小流量/自动段）。
 - **E**：对应 `full` 阶段或 `replicas == total_replicas`，通常为放量完成与发版元数据锁定。
 - 与「大波段」关系：**C（gamma 主门禁）通过** 后再进入本节的 prod 步进，见 [environment_matrix.md](environment_matrix.md) 与 [ci_cd_end_to_end_design.md](ci_cd_end_to_end_design.md)。
@@ -90,6 +93,13 @@ stages:
 ### 2.3 Workflow 设计要点
 
 **触发**：`workflow_dispatch`，不随 pre-release 自动跑。
+
+**前置纯度门禁**：
+
+- `stackctl package --env prod --include-services`
+- `stackctl verify --env prod`
+- `verify_prod_package_purity.py`
+- `verify_env_artifact_isolation.py`
 
 **输入参数**（必填 + 选填）：
 
@@ -178,6 +188,7 @@ v*-rc* tag push / main merge
 
 - 由 pre-release tag 解析出 `TO_IMAGE` / `TO_CONFIG`（如从 `v1.0.0-rc.1` 得到 `v1.0.0.rc1`），或从 release 元数据/环境变量读取。
 - `FROM_IMAGE` / `FROM_CONFIG`：从当前 prod 状态读取（如从 `.release-state` 的 last 或从集群 annotation/label 拉取），或由 workflow 输入/缓存提供。
+- 对 prod 而言，所有版本输入都绑定 `APP_ENV=prod`，不允许通过 `prod-gray` 目录/镜像标签/环境变量表达灰度。
 
 **SLO 指标获取**：
 
@@ -190,6 +201,7 @@ v*-rc* tag push / main merge
 - **Stage 1 初始灰度全自动**：无审批要求，自动 deploy + SLO；部署 pod 数由 `gray_rollout_stages` 或等效配置决定。
 - **可选**：仅当 tag 匹配 `v*-rc.*` 且非 `*-rc.0` 时才自动灰度（例如 rc.1 起才自动上 prod）。
 - **通知**：每步结果（含 pause/rollback）通过 Slack/钉钉/邮件通知，并附带 run 链接与 SLO 数值。
+- **配置来源**：prod health / inspect / doctor / repair 统一经 `stackctl` 暴露，workflow 和人工 runbook 共用同一 JSON 报告契约。
 
 **回滚**：
 

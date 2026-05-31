@@ -120,11 +120,11 @@ def _build_item_features(feed_doc: dict) -> dict:
         return {}
     published_at = feed_doc.get("publishedAt", datetime.utcnow())
     age_hours = (datetime.utcnow() - published_at).total_seconds() / 3600 if isinstance(published_at, datetime) else 0
-    tags = feed_doc.get("tags", [])
+    tags = feed_doc.get("tagRefs", [])
     return {
         "contentType": feed_doc.get("contentType", ""),
         "authorId": feed_doc.get("authorId", ""),
-        "tags": tags,
+        "tagRefs": tags,
         "entityRefs": feed_doc.get("entityRefs", []),
         "geoTagRef": feed_doc.get("geoTagRef", ""),
         "ageHours": round(age_hours, 2),

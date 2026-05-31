@@ -1,25 +1,41 @@
-version: 1
-feature: scenario-router-and-models
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.recommendation-platform.component.rec-model-service.object.inference-api.leaf.scenario-router-and-models
-  parent_path: capability.recommendation-platform.component.rec-model-service.object.inference-api
-  acceptance_inherits_from: capability.recommendation-platform
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A7_contract_metadata_consistency
-  - A8_test_automation
-  notes: scenario 路由与 content_feed 模型推理可交付。
-global_acceptance:
-  A1_functional:
-    scenarios:
-    - given: content_feed 模型已加载
-      when: POST /v1/score scenario=content_feed
-      then: 返回 scores 与 candidates 对应
-  A8_test_automation:
-  - 推理 API 有接口测试
+version: 2
+node:
+  id: inference-api--scenario-router-and-models
+  level: L3_story
+  path: specs/feature-tree/recommendation-platform/rec-model-service/inference-api--scenario-router-and-models
+  title: inference api  scenario router and models
+  parent_domain_service: recommendation-platform
+  parent_business_capability: rec-model-service
+scope:
+  summary: inference api  scenario router and models 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: inference api  scenario router and models GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

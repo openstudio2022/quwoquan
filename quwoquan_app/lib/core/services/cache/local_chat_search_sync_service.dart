@@ -205,7 +205,9 @@ class LocalChatSearchSyncService {
         conversation: conversation,
         forceFull: forceFull,
       );
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 本地搜索索引同步失败不影响在线聊天，下次同步或全量重建会补齐 */
+    }
   }
 
   Future<void> ingestRealtimeMessage({
@@ -230,7 +232,9 @@ class LocalChatSearchSyncService {
             namespace: namespace,
             conversations: <ConversationCacheRecord>[conversation],
           );
-        } catch (_) {}
+        } catch (_) {
+          /* best-effort: 补拉会话元数据失败时仍以无会话上下文索引该消息，元数据后续同步补齐 */
+        }
       }
       final messageRecord = LocalChatSearchMessageRecord.fromMessageDto(
         message,
@@ -258,7 +262,9 @@ class LocalChatSearchSyncService {
           conversations: <ConversationCacheRecord>[updatedConversation],
         );
       }
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 实时消息入索引失败不影响消息展示，全量同步会重建本地搜索库 */
+    }
   }
 
   Future<void> markMessageRecalled({
@@ -274,7 +280,9 @@ class LocalChatSearchSyncService {
     if (conversationId.trim().isNotEmpty) {
       try {
         await syncConversation(conversationId: conversationId, forceFull: true);
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 撤回后重建会话索引失败不影响撤回本身，下次同步会补齐索引 */
+      }
     }
   }
 
@@ -290,7 +298,9 @@ class LocalChatSearchSyncService {
         namespace: namespace,
         conversationId: conversationId,
       );
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 从本地搜索库移除会话失败不影响主流程，残留索引会在全量重建时清理 */
+    }
   }
 
   Future<LocalSearchNamespace?> _resolveNamespace() async {

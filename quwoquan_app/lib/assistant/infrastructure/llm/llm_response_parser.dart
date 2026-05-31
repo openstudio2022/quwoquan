@@ -112,7 +112,9 @@ class LlmResponseParser {
     try {
       final decoded = jsonDecode(text);
       if (decoded is Map) return decoded.cast<String, dynamic>();
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 文本非合法 JSON 时返回 null，由上层走非结构化文本解析路径 */
+    }
     return null;
   }
 

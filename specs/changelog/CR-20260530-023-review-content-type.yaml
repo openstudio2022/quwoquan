@@ -1,0 +1,205 @@
+id: CR-20260530-023
+title: review content type (scheme A) + creation tagging IA freeze + tagRef source-of-truth confirm (Block B/C)
+slug: review-content-type
+revision: 4
+status: active
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-type-framework/review-content-type
+  - specs/feature-tree/discovery-content/content-type-framework/creation-tagging-ia
+  - specs/feature-tree/discovery-content/content-type-framework
+  - quwoquan_service/contracts/metadata/_shared/types.yaml
+  - quwoquan_service/contracts/metadata/content/post
+  - quwoquan_service/contracts/metadata/content/test_fixtures/scenarios
+
+entries:
+  - timestamp: "2026-05-30T16:40:00+08:00"
+    summary: >-
+      引入口碑（review）内容类型，建模选型冻结为方案 A：ContentType 新增枚举值 review。口碑=带评分(rating
+      1–5)+强 POI 绑定(primaryHomepageId 必填)+维度评分(reviewAspects) 的内容类型，复用 Post 聚合、
+      publish 写链路(CreatePost/UpdatePost/PromotePostToWork)、推荐召回管线与统一 ContentSurfaceView；
+      POI 星级聚合(ratingAverage/ratingCount/ratingDistribution)作读侧投影，不写 Post、不拆表、不新增第二套 model。
+      一人一 POI 一评由部分唯一索引保证（与 published 不可变一致，重复发布拒绝、删旧再发）。
+      已落 /prd(spec.md)+/design(并入 L3 spec 设计决策)+acceptance.yaml，注册 tree_index。
+      C1 metadata 落盘并过 make verify-metadata + codegen + codegen-app，Go content-service build 绿。
+    reason: >-
+      「交集」为产品北极星，口碑天然带 entityRef(POI)+tagRefs(维度)+评分，是交集最强真实信号之一。方案 B
+      （独立 review 实体）需再造写链路/召回/展示并最终仍投影回 ContentSurfaceView，与刚完成的 R24 收敛相悖，
+      故否决。方案 A 以最小契约增量（枚举追加 + 可空字段 + 部分唯一索引 + 读模型）让口碑进入统一内容主链。
+    change_type:
+      - baseline
+      - feature
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-type-framework/review-content-type/spec.md
+        sections:
+          - 范围
+          - 设计决策（冻结）
+      - path: specs/feature-tree/discovery-content/content-type-framework/review-content-type/acceptance.yaml
+        sections:
+          - GWT1
+          - GWT2
+          - GWT3
+          - GWT4
+          - GWT5
+          - GWT6
+      - path: specs/feature-tree/tree_index.yaml
+        sections:
+          - content-type-framework.children
+      - path: quwoquan_service/contracts/metadata/_shared/types.yaml
+        sections:
+          - enums.ContentType
+      - path: quwoquan_service/contracts/metadata/content/post/fields.yaml
+        sections:
+          - Post.rating
+          - Post.reviewAspects
+      - path: quwoquan_service/contracts/metadata/content/post/service.yaml
+        sections:
+          - CreatePost.writable_fields
+          - UpdatePost.writable_fields
+          - PromotePostToWork.writable_fields
+      - path: quwoquan_service/contracts/metadata/content/post/errors.yaml
+        sections:
+          - CONTENT.USER.review_rating_required
+          - CONTENT.USER.review_poi_required
+          - CONTENT.USER.review_duplicate_per_poi
+      - path: quwoquan_service/contracts/metadata/content/post/storage.yaml
+        sections:
+          - posts.idx_posts_review_author_poi
+          - posts.idx_posts_review_poi
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 纯增量契约：ContentType 末位追加 review、rating/reviewAspects 可空、部分唯一索引 + sparse 聚合索引，向后兼容无破坏性迁移。
+      - 错误码命名遵循 CONTENT.{USER|SYSTEM|MIDDLEWARE}.reason 约定（KIND=USER），review 三码归 USER/invalid_argument|conflict。
+      - C1 已完成（metadata + codegen + Go build 绿）；C1 仅落契约，业务逻辑/读模型/端侧分支为 review-content-type /dev 故事范围。
+      - 跟进项（review /dev S5/S6）：lib/core/trackers/content_engagement_tracker.dart 的本地 ContentType 枚举需补 review
+        并接入消费深度计算（其真相源注释指向 types.yaml，须随枚举追加同步）；ContentSurfaceView 增 rating?/reviewAspects?/poiSummary?
+        只读字段 + mapper review 分支；POI 聚合读模型与一人一 POI 一评写校验在云侧实现。
+      - 准入门清单 B1/B2/C1 状态已回写。
+
+  - timestamp: "2026-05-30T17:10:00+08:00"
+    summary: >-
+      冻结 B3 创作打标 IA（新建 L3 creation-tagging-ia）。决策：打标全类型可选不强制；入口内联各类型编辑页；
+      由自动打标（转发识别+内容识别）辅助，手动 UI 作确认/修正层（未确认不静默写入）；交互形态=首发 launch 子集芯片
+      + 自动建议多选≤5（零依赖 C2），C2 发布后 flag 灰度「搜索更多标签」（检索源唯一 publish/v1/tags）；首发标签子集
+      唯一引用 tag_ref_migration launch 项；tagRefs 经 CreatePost.writable_fields 注入（已通），验收以发布后
+      content.tagRefs 一致 + 进召回/IntersectionReason、打标→交集可还原为准。已落 spec.md+acceptance.yaml、注册 tree_index、结构门禁绿。
+    reason: >-
+      content.tagRefs 是「交集」归因核心输入，但创作流此前无打标入口导致 tagRefs 长期为空、交集稀疏；口碑（review）
+      进一步要求地点+维度标签。按用户冻结口径（可选+内联+自动打标辅助）落 IA，使打标→content.tagRefs→交集可还原。
+    change_type:
+      - baseline
+      - feature
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-tagging-ia/spec.md
+        sections:
+          - 范围
+          - 设计决策（冻结）
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-tagging-ia/acceptance.yaml
+        sections:
+          - GWT1
+          - GWT2
+          - GWT3
+          - GWT4
+          - GWT5
+          - GWT6
+      - path: specs/feature-tree/tree_index.yaml
+        sections:
+          - content-type-framework.children
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - B3 无 metadata 增量：tagRefs 字段 + CreatePost writable_fields 已就绪；若后续需 suggestedTagRefs 读契约再 metadata-first 增量。
+      - 自动打标模型/管线（reshare-derived + content-recognition）out of scope（属 ML/数据工程）；B3 只冻结端侧消费 suggestedTagRefs 的 IA 契约。
+      - 搜索补充依赖 C2 publish/v1/tags 发布，故首发态退化为芯片多选、搜索由 flag 灰度，B3 不被 C2 阻塞。
+      - 准入门清单 B3 状态已回写为冻结。
+
+  - timestamp: "2026-05-30T17:40:00+08:00"
+    summary: >-
+      C2 确认：tagRef 真相源 quwoquan_data/publish/v1/tags 路径制四分组树（Topic/Audience/Format/Entity，
+      activeVersion 1，2026-05-15）已发布。校验 _shared/tag_ref_migration.yaml 全部 status: launch 目标
+      （Topic/旅行·摄影·美食餐饮·地理、Entity/机构、Format/内容载体 共 6 个 tagRef）100% 命中树节点；
+      verify_tag_tree.py 0 错误（21 条非阻断 R4 兄弟子串 / R9 子节点偏少警告，均不在首发关键路径），
+      已串联门禁 verify_tag_ref_source_of_truth.py 绿。deferred 项按设计延后回填，不进首发召回。
+    reason: >-
+      创作打标（B3）的首发芯片集与搜索补充都以 publish/v1/tags 为唯一检索源；进 /dev 前需确认真相源已发布且
+      首发 launch 子集 100% 可解析，避免端侧打标 UI 落地后命中空标签。
+    change_type:
+      - baseline
+      - verification
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-type-framework/content-unification-admission-gate-checklist.md
+        sections:
+          - 现状盘点（C2 行）
+          - Block C
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers: []
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - 标签树早于本轮发布（publish_meta.json publishedAt 2026-05-15）；本条为 C2 覆盖确认 + 门禁复核里程碑，无新增标签数据。
+      - verify_tag_tree.py 为独立数据校验脚本（quwoquan_data/scripts/），未串联 make gate；tagRef 一致性由已串联的 verify_tag_ref_source_of_truth.py 保证。
+      - 跟进（非阻断）：可将 verify_tag_tree.py 串入数据域门禁以硬化树结构校验；R4/R9 警告项作为标签治理 backlog。
+
+  - timestamp: "2026-05-30T18:05:00+08:00"
+    summary: >-
+      C3 商用/环境前置汇总冻结 + env-seed 单一真相源回填。商用前置（SLO·KPI/弱网容量、权限可见性删除时效、覆盖矩阵、
+      迁移灰度回滚、path/operation/surface/route/decoder/tagRef 单一真相源）已逐项落 review-content-type spec
+      与 creation-tagging-ia spec，准入门清单 C3a~C3f 全部勾选。env-seed：app_{alpha,beta,gamma}_seed_manifest.json
+      三环境过 verify_app_seed_manifests.py（生产 seed 隔离 13 文件已检）、verify_business_env_data_inventory.py
+      （26 seedRefs）、verify_contract_mock_data_inventory.py 全绿。修复 E1 残留：content 三套 scenario fixture
+      （content_scenarios.json / .gamma-curated / .lite）的 contentType/type 由 moment 改 micro（共 77 处），
+      contentIdentity/identity 轴 moment 保留不动。
+    reason: >-
+      E1 双轴分离硬切（micro=类型 / moment=身份）未覆盖 content scenario fixture，导致 75 条 micro 内容仍以
+      contentType: moment 落盘；端侧 postBaseDtoFromMap 无 'moment' 分支会默认落到 PhotoPostDto，使「微趣」内容
+      被错配为图片卡。属带入 V2 的隐性 metadata/真相源债务，C3「单一真相源」必须清零。
+    change_type:
+      - baseline
+      - fix
+      - verification
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json
+        sections:
+          - "seedSets.*.posts[].contentType (moment→micro ×75)"
+          - "seedSets.*.posts[].type (moment→micro ×75)"
+      - path: quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.gamma-curated.json
+        sections:
+          - "contentType/type moment→micro ×1"
+      - path: quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.lite.json
+        sections:
+          - "contentType/type moment→micro ×1"
+      - path: specs/feature-tree/discovery-content/content-type-framework/content-unification-admission-gate-checklist.md
+        sections:
+          - Block C（C3a~C3f）
+          - Gate（条目 6/7）
+          - 现状盘点（C3 行）
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - identity 轴（contentIdentity/identity=moment）与 postType=momentPost 保留不变；仅类型轴 contentType/type 改 micro。
+      - 口碑 review fixture 不在本条范围，属 review-content-type /dev（env-seed-first 在故事内补 alpha mock + beta/gamma remote seed）。
+      - 三套 fixture JSON 已通过 json.load 合法性校验；三环境 seed manifest + 生产隔离门禁全绿。
+      - C3 仅做前置汇总与真相源回填，无业务逻辑实现；review/创作打标端侧实现仍属各自 /dev 故事。

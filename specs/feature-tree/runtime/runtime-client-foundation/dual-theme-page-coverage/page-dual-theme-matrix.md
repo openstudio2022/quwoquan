@@ -1,6 +1,6 @@
 # 全页面深色 / 浅色矩阵（S6）
 
-> **状态**：v1 代码审计基线（2026-03-29）；**S6 /baseline** 见 **`CR-20260330-012-s6-dual-theme-baseline.yaml`**。**实施策略 v3**：**L1（`AppColorsFunctional`/ThemeExtension）→ L2（高扇出组件）→ L3（Welcome/RTC/WebView 共享模块）**，少改 `*_page.dart`；详见 **`design.md`「减少散弹式修改」** 与 **`plan.yaml` v3**。**S7/S8** 在其它会话。  
+> **状态**：v1 代码审计基线（2026-03-29）；**S6 /baseline** 见 **`CR-20260330-012-s6-dual-theme-baseline.yaml`**。**实施策略 v3**：**L1（`AppColorsFunctional`/ThemeExtension）→ L2（高扇出组件）→ L3（Welcome/RTC/WebView 共享模块）**，少改 `*_page.dart`；详见 **`design.md`「减少散弹式修改」** 与 **`树内计划文档` v3**。**S7/S8** 在其它会话。  
 > **审计方法**：逐文件检索 `isDarkProvider` / `AppColorsFunctional` / `AppColors.ios*`（`resolveFrom`）/ `CupertinoTheme.of(context).brightness`；委托页追溯 **实际渲染** 子树（如 `ChatConversationPage`、`ProfileShell`）；对固定渐变/黑底沉浸按 `spec.md` S6-2 登记 **exempt** 或 **partial**。  
 > **列说明**：`dual_theme` = `full` | `partial` | `no` | `exempt`；`evidence` = 自检摘要（非截图）。  
 > **与横向质量矩阵**：P6 列与本表 `dual_theme` 对齐：`full`→`✓`，`exempt`→`—`，`partial`/`no`→`○`（待修复或登记技术债）。
@@ -155,7 +155,6 @@
 | `lib/ui/user/pages/edit_profile_page.dart` | user | GoRoute | full | | TBD | `isDarkProvider`。 |
 | `lib/ui/user/pages/persona_management_page.dart` | user | 壳内子视图 | full | | TBD | `isDarkProvider`。 |
 | `lib/ui/user/pages/sub_account_management_page.dart` | user | GoRoute | full | | TBD | `isDarkProvider`。 |
-| `lib/ui/user/pages/resonance_page.dart` | user | GoRoute | full | | TBD | `isDarkProvider`。 |
 | `lib/ui/user/pages/profile_stats_page.dart` | user | GoRoute | full | | TBD | `isDarkProvider`。 |
 | `lib/ui/user/pages/profile_comments_page.dart` | user | GoRoute | full | | TBD | `isDarkProvider`。 |
 
@@ -183,7 +182,7 @@
 | `dual_theme = exempt` | **3**（`circles_hub` T0、`unified_media_viewer`、`one_tap_movie_preview`） |
 | **partial 闭环优先级（建议）** | —（S6 W1–W5 `/dev` 已清零矩阵内 `partial`；新债须再登记） |
 
-> **说明**：`exempt` 与 `partial` 均须在发版前在 `plan.yaml`/issue 有截止或设计确认；禁止无文档永久豁免。
+> **说明**：`exempt` 与 `partial` 均须在发版前在 `树内计划文档`/issue 有截止或设计确认；禁止无文档永久豁免。
 
 ---
 
@@ -192,7 +191,7 @@
 | 日期 | 说明 |
 |------|------|
 | 2026-03-29 | 全量逐页代码审计首填；补齐 `app/shell`；排除 `chat_display_fallbacks` 误计；与 `page-horizontal-quality-matrix.md` P6 对齐。 |
-| 2026-03-30 | **/baseline S6**：CR-012；`plan.yaml` slices W1–W5 + matrix-sync；spec/design/acceptance 冻结；与 **S7/S8 正交**。 |
-| 2026-03-30 | **方案审视**：`plan.yaml` **v3**（L1/L2/L3）；`design.md` 增补「减少散弹式修改」；`spec` S6-3 对齐。 |
+| 2026-03-30 | **/baseline S6**：CR-012；`树内计划文档` slices W1–W5 + matrix-sync；spec/design/acceptance 冻结；与 **S7/S8 正交**。 |
+| 2026-03-30 | **方案审视**：`树内计划文档` **v3**（L1/L2/L3）；`design.md` 增补「减少散弹式修改」；`spec` S6-3 对齐。 |
 | 2026-03-30 | **/baseline 再确认**（本会话）：范围仅 **S6/P6**；**S7（P7）、S8（P8）** 由其它会话并行，不阻塞本 L3 的 `/dev` slice；仍以 **CR-20260330-012** 为唯一 baseline CR。 |
 | 2026-03-29 | **S6 `/dev`**：W1–W5 九处 `partial`→`full`（welcome/discovery/chat/create/RTC×4/assistant webview）；统计行与 P6 横向矩阵同步。 |

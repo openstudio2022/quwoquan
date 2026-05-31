@@ -156,7 +156,7 @@ ProfileShell (ConsumerStatefulWidget, TickerProviderStateMixin)
 │               │   │   ├── flexibleSpace: _ProfileHeader
 │               │   │   │   ├── 背景图 + 弹簧阻尼下拉拉伸
 │               │   │   │   ├── 头像（靠左，侵入背景 1/3）+ 用户名（同行 Row）+ bio
-│               │   │   │   ├── _ProfileResonanceCard
+│               │   │   │   ├── ObjectIntersectionCard（V5/S5；历史 _ProfileResonanceCard 假数据卡已删）
 │               │   │   │   ├── _ProfileStatsRow
 │               │   │   │   └── _ProfileActionBar(mode)（等宽双按钮）
 │               │   │   └── title: (collapsed时) 小头像 + 用户名（平滑过渡）
@@ -338,15 +338,13 @@ lib/ui/user/
 │   ├── other_profile_page.dart     # 入口：ProfileShell(mode: other)（重命名自 author_profile_page.dart）
 │   ├── edit_profile_page.dart      # 迁移（不重写）
 │   ├── persona_management_page.dart # 迁移（不重写）
-│   ├── resonance_page.dart         # 迁移（不重写）
-│   └── profile_stats_page.dart     # 迁移（不重写）
+│   └── profile_stats_page.dart     # 迁移（不重写）（resonance_page.dart 已按 F13 删除）
 ├── widgets/
 │   ├── profile_shell.dart          # ProfileShell 核心组件
 │   ├── profile_header.dart         # 背景 + 头像 + 用户信息
 │   ├── profile_action_bar.dart     # 操作按钮行
 │   ├── profile_stats_row.dart      # 统计行
-│   ├── profile_resonance_card.dart # 交集/共鸣卡片
-│   ├── profile_creations_tab.dart  # 创作 Tab 内容（SubTab + 过滤）
+│   ├── profile_creations_tab.dart  # 创作 Tab 内容（SubTab + 过滤）（profile_resonance_card.dart 已按 F13 删除，交集统一 ObjectIntersectionCard）
 │   ├── profile_circles_tab.dart    # 圈子 Tab 内容
 │   ├── profile_interaction_tab.dart # 互动 Tab 内容
 │   ├── profile_lifestyle_tab.dart  # 生活 Tab 内容
@@ -408,7 +406,7 @@ lib/ui/user/
 
 ## Story 与测试层映射
 
-本 L2 特性按以下 L4 Story 分解（design 阶段确定 story 边界，tasks.md 细化工程步骤）：
+本 L2 特性按以下 L4 Story 分解（design 阶段确定 story 边界，树内任务文档 细化工程步骤）：
 
 | Story | 范围 | 主要验收项 | 测试层 |
 |-------|------|-----------|--------|
@@ -640,4 +638,4 @@ double _springDampedOffset(double raw, double maxPull) {
 
 ## 存量带规划任务
 
-见 tasks.md 「搁置任务」和「未来演进任务」章节。
+见 树内任务文档 「搁置任务」和「未来演进任务」章节。

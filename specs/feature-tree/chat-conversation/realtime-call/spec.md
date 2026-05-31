@@ -1,6 +1,6 @@
 # L2 规格：realtime-call — 实时音视频通话
 
-> **层级**：L2_feature（隶属 L1 `chat-conversation`）
+> **层级**：L2_business_capability（隶属 L1 `chat-conversation`）
 > **状态**：specified
 > **依赖**：`gateway-orchestrator-foundation/realtime-gateway`（信令推送通道）
 

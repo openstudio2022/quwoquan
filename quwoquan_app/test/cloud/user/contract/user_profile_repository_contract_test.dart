@@ -48,7 +48,7 @@ void main() {
       expect(posts, isNotEmpty);
       expect(posts.length, 4);
       final types = posts.map((p) => p.type).toSet();
-      expect(types, containsAll(['photo', 'video', 'article', 'moment']));
+      expect(types, containsAll(['photo', 'video', 'article', 'micro']));
     });
 
     test('listUserWorks 返回作品集列表', () async {
@@ -62,13 +62,16 @@ void main() {
       }
     });
 
-    test('listUserLifeItems 返回生活记录列表', () async {
+    test('listUserLifeItems 返回生活记录列表（字段对齐 UserLifeItemDto）', () async {
+      const lifeCategories = {'footprint', 'soul', 'taste', 'private'};
       final items = await repo.listUserLifeItems('nature_photographer');
       expect(items, isNotEmpty);
       for (final item in items) {
         expect(item.id, isNotEmpty);
-        expect(item.name, isNotEmpty);
-        expect(item.categoryKey, isNotEmpty);
+        expect(item.title, isNotEmpty);
+        // category 为 LifeItemCategory 枚举值，子页过滤直接比对。
+        expect(lifeCategories, contains(item.category));
+        expect(item.imageUrl, isNotEmpty);
       }
     });
 

@@ -427,7 +427,7 @@ components:
         conversationId: { type: string }
         seq: { type: integer, format: int64 }
         clientMsgId: { type: string }
-        type: { type: string, enum: [text, image, video, card] }
+        type: { type: string, enum: [text, image, video, audio, card] }
         content: { type: string }
         senderId: { type: string }
         mediaUrl: { type: string }
@@ -442,7 +442,7 @@ components:
       type: object
       required: [type, clientMsgId]
       properties:
-        type: { type: string, enum: [text, image, video, card] }
+        type: { type: string, enum: [text, image, video, audio, card] }
         clientMsgId: { type: string, format: uuid }
         content: { type: string }
         mediaUrl: { type: string }

@@ -1,0 +1,66 @@
+templateId: 线路_跟团攻略
+version: 1
+subject: { kind: topic, type: 旅行/线路, minEntityRefs: 3, subjectTagRef: Topic/旅行/行程形态/跟团游 }
+vertical: travel
+category: travel
+intent: 跟团指南
+carrier: article
+styleFamily: 实用攻略风
+audiences: [groupTourTraveler, familyTraveler]
+creatorPersona:
+  archetype: pro_guide
+  preferredCreatorIds: [qwq_creator_pro_guide_001]
+  requiredProfileTagRefs: [Topic/旅行/行程形态/跟团游, Topic/旅行/出行方式/跟团巴士, Format/内容角度/攻略/行前指南]
+  allowedPerspective: [专业导览, 编辑部]
+  mustNotClaim: [官方旅行社背书, 成团保证, 零购物承诺]
+editorialIntent: 帮读者判断跟团产品、成团规则、行程强度与自费风险，给出可执行的选团与行前清单。
+render: { articleTemplate: gentle, fontPreset: clean }
+conditionAxes:
+  region: { applicable: true, slot: 地区与强度 }
+  season: { applicable: true, slot: 淡旺季与成团 }
+narrativeMode:
+  kind: route_decision
+  openingFocus: 出发前判断
+  transitionPolicy: route_progression
+  factsHeading: 这些事实会直接影响下单
+  closingFocus: decision
+evidenceRequirements:
+  fact:
+    required: true
+    categories: [transport, gathering, cost, refund, intensity]
+  emotion:
+    required: true
+    kinds: [like, pain]
+  mainline:
+    required: true
+    minSignals: 3
+continuityExpectations:
+  requireProgression: true
+  requireTransitions: true
+  forbidSlotStacking: true
+  minNarrativeParagraphs: 5
+routeCoverageExpectations:
+  minCoveredEntityRefs: 3
+  requireAllPrimaryNodes: true
+structure:
+  required: [产品类型, 行程概览, 成团与退改, 费用构成, 强度与适合人群, 避坑提醒]
+  optional: [购物与自费, 散团衔接]
+hooks: ["跟团走{name}，先看懂行程强度和隐藏费用", "这条线适不适合跟团，关键看天数和海拔"]
+mustIncludeFacts: [行程天数, 集合方式, 费用包含, 自费项目, 退改规则, 强度说明]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 零购物]
+wordCount: { min: 1200, max: 2200 }
+imagePlan:
+  - { slot: 行程概览, imageLayout: fullWidth }
+  - { slot: 节点图集, gallery: masonry }
+  - { slot: 费用说明, imageLayout: wrapRight }
+crossRefs: { minEntity: 3, minTag: 5 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin, recommendationWeight]
+openingTension: { required: true, focus: 出发动机与犹豫 }
+explicitFeelings: { requireLike: true, requireDislike: true }
+decisionPoints: { required: true, minPoints: 2 }
+tipsEmbeddingPolicy: { mode: inline, forbidStandaloneBlock: true }
+sopExampleRef: sop/article.md

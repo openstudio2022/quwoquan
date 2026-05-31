@@ -15,6 +15,3 @@ enum InteractionSubTab { likes, comments, shares }
 
 /// 互动方向。
 enum InteractionDirection { received, sent }
-
-/// 兼容旧状态结构保留。
-enum LifestyleSubTab { footprint, bookMovieMusic, taste, loveObject }

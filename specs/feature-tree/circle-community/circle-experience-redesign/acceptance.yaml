@@ -1,32 +1,35 @@
-feature: circle-experience-redesign
-level: "L2_feature"
-archived: false
-level_acceptance:
-- id: A1
-  description: '统一领域标签配置文件（domain_taxonomy.yaml）建立，包含至少 11 个领域 ID； 群组入口的分类与推荐、以及助理领域路由均引用同一套
-    ID。
-
-    '
-  status: pending
-  tests: []
-- id: A2
-  description: '群组列表页“推荐”频道基于同频推荐排序， 推荐结果与用户近 7 天活跃领域相关度 ≥ 60%； 推荐服务不可用时自动降级到按热度排序， 且结果可同时返回兴趣型圈子与组织型主页。
-
-    '
-  status: pending
-  tests: []
-- id: A3
-  description: '群组详情模板冻结完成：通用圈子模板使用“首页/内容/群/成员”， 组织主页模板使用“首页/内容/组织/成员”； 两套模板共享详情基础壳层与模块化首页， 单模块失败不影响其他模块。 详细验收见
-    L3 circle-homepage-redesign/acceptance.yaml。
-
-    '
-  status: pending
-  tests:
-  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
-- id: A4
-  description: '在特定领域群组内唤起助理时，助理自动路由到对应领域技能； 兴趣型圈子与组织型主页都通过 pageType
-    + domainContext 参数传递上下文，不因模板差异造成路由断裂。
-
-    '
-  status: pending
-  tests: []
+version: 2
+node:
+  id: circle-experience-redesign
+  level: L2_business_capability
+  path: specs/feature-tree/circle-community/circle-experience-redesign
+  title: circle experience redesign
+  parent_domain_service: circle-community
+  parent_business_capability: circle-experience-redesign
+scope:
+  summary: circle experience redesign 验收范围。
+  in_scope: []
+  out_of_scope: []
+sit_acceptance:
+  SIT1:
+    title: circle experience redesign 能力 SIT
+    story_refs: []
+    done_when:
+    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

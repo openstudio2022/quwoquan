@@ -1,7 +1,7 @@
 """学校实体批量生成
 
 从 runtime/seed/school_catalog/ 的 ndjson 读取学校数据，
-按实体事实源（_entity.json）+ page.md + publish manifest 的模式写入 publish/v1/entities/机构/学校/{name}/。
+按实体事实源（_entity.json）+ page.md + publish manifest 的模式写入 publish/entities/机构/学校/{name}/。
 
 用法:
   python3 bootstrap_school_entities.py                          # 全量生成
@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, RUNTIME_ROOT, NOW_ISO
 
 CATALOG_DIR = RUNTIME_ROOT / "seed" / "school_catalog"
-ENTITIES_ROOT = PUBLISH_ROOT / "v1" / "entities" / "机构" / "学校"
+ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "机构" / "学校"
 ADMIN_REGIONS_PCA_FILE = Path(__file__).resolve().parent.parent / "data" / "admin_regions" / "pca.json"
 MUNICIPALITIES = {"北京市", "天津市", "上海市", "重庆市"}
 

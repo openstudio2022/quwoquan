@@ -70,7 +70,7 @@ python3 scripts/check_image_commercial_matrix_prereqs.py --strict
 | Q2 | **beta** 非 dry-run | 同上，对接 beta 网关与 seed | 研发 |
 | Q3 | **cloud-gamma-pre** | CI artifact：probe + device JSON，`status=passed` | 平台 + 运维 |
 | Q4 | **cloud-gamma-prod-smoke** | 升级后 smoke JSON；失败条款进发布 Runbook | 运维 + 研发值班 |
-| Q5 | 归档 | 四条证据路径写入本段「当前执行证据」与 CR / `tasks.md` | 发布负责人 |
+| Q5 | 归档 | 四条证据路径写入本段「当前执行证据」与 CR / `树内任务文档` | 发布负责人 |
 
 **待补齐自动化（当前仓库gap，不计入矩阵 passed 直至落地）**：
 

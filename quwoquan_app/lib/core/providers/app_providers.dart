@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/home_channels_remote_override.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
@@ -24,7 +25,6 @@ import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/services/content/content_interaction_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
@@ -45,6 +45,8 @@ import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_sync_repository.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/auth/one_tap_login_channel.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/client_state_sync.dart';
@@ -227,6 +229,10 @@ final userDataProvider = NotifierProvider<UserDataNotifier, User?>(() {
 
 /// 当前用户 ID — 以 User 快照为准；环境包可显式注入测试/预置用户。
 final currentUserIdProvider = Provider<String>((ref) {
+  final authSession = ref.watch(authSessionControllerProvider);
+  if (authSession.activeSubAccountId.isNotEmpty) {
+    return authSession.activeSubAccountId;
+  }
   final profileUserId = ref.watch(userDataProvider)?.id;
   if (profileUserId != null && profileUserId.isNotEmpty) {
     return profileUserId;
@@ -239,6 +245,10 @@ final currentUserIdProvider = Provider<String>((ref) {
 /// 优先使用已加载用户快照里的 `ownerUserId`，否则回退到当前用户 id，
 /// 避免 remote 读链路在分身上下文尚未就绪时完全拿不到 `X-Client-User-Id`。
 final resolvedOwnerUserIdProvider = Provider<String>((ref) {
+  final authOwnerId = ref.watch(authSessionControllerProvider).ownerId.trim();
+  if (authOwnerId.isNotEmpty) {
+    return authOwnerId;
+  }
   final currentUser = ref.watch(userDataProvider);
   final ownerUserId =
       currentUser?.metadata?['ownerUserId']?.toString().trim() ?? '';
@@ -278,6 +288,9 @@ final appearanceSnapshotProvider = Provider<AppearanceSnapshot>((ref) {
 /// CloudHttpClient, ensuring every HTTP call is metered for L1 monitoring.
 final cloudHttpClientProvider = Provider<CloudHttpClient>((ref) {
   return CloudHttpClient(
+    authTokenProvider: ProviderBackedCloudAuthTokenProvider(
+      () => ref.read(authSessionControllerProvider).accessToken,
+    ),
     latencyObserver: (method, path, elapsedMs, statusCode) {
       AppLogService.instance.writeEvent(
         logType: AppLogType.perf,
@@ -519,6 +532,7 @@ class ContentRuntimeConfigState {
     required this.currentCanaryStage,
     required this.canaryStages,
     required this.clientStateSync,
+    this.homeChannels = ContentUIConfig.homeChannels,
   });
 
   final Map<String, bool> featureFlags;
@@ -526,6 +540,9 @@ class ContentRuntimeConfigState {
   final String currentCanaryStage;
   final List<ContentCanaryStage> canaryStages;
   final ClientStateSyncConfig clientStateSync;
+
+  /// 首页频道（运营资产）：端默认 [ContentUIConfig.homeChannels]，远程整体覆盖、失败回退默认。
+  final List<HomeChannelConfig> homeChannels;
 
   bool isEnabled(String flag) => featureFlags[flag] ?? false;
 
@@ -565,6 +582,7 @@ class ContentRuntimeConfigState {
   factory ContentRuntimeConfigState.fromClientParsed(
     ContentAppConfigClientParsed parsed, {
     required ContentRuntimeConfigState fallback,
+    List<HomeChannelConfig>? homeChannelsOverride,
   }) {
     final mergedFlags = <String, bool>{
       ...fallback.featureFlags,
@@ -594,6 +612,7 @@ class ContentRuntimeConfigState {
         parsed.clientStateSyncMap,
         fallback: fallback.clientStateSync,
       ),
+      homeChannels: homeChannelsOverride ?? fallback.homeChannels,
     );
   }
 }
@@ -620,9 +639,13 @@ class ContentRuntimeConfigNotifier extends Notifier<ContentRuntimeConfigState> {
       final remoteConfig = await ref
           .read(contentRepositoryProvider)
           .getAppConfig();
+      final channelsOverride = HomeChannelsRemoteOverride.fromAppConfigRoot(
+        remoteConfig.wireRoot,
+      );
       state = ContentRuntimeConfigState.fromClientParsed(
         remoteConfig.clientParsed,
         fallback: fallback,
+        homeChannelsOverride: channelsOverride,
       );
     } catch (_) {
       state = fallback;
@@ -637,6 +660,12 @@ final contentRuntimeConfigProvider =
 
 final contentFeatureFlagProvider = Provider.family<bool, String>((ref, flag) {
   return ref.watch(contentRuntimeConfigProvider).isEnabled(flag);
+});
+
+/// 首页频道（运营资产）：端默认 [ContentUIConfig.homeChannels] + `/v1/config/app` 远程覆盖，
+/// 失败/缺失回退默认；已按 order 升序。UI 通过本 provider 取频道，禁止硬编码频道列表。
+final homeChannelsProvider = Provider<List<HomeChannelConfig>>((ref) {
+  return ref.watch(contentRuntimeConfigProvider).homeChannels;
 });
 
 const String _personaManagementFeatureFlag = 'ops.user.persona_management_v1';
@@ -660,7 +689,9 @@ Future<Box<String>> _ensureClientInteractionStateBox() async {
   if (!Hive.isBoxOpen(_clientInteractionStateBoxName)) {
     try {
       await Hive.initFlutter();
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
+    }
     return Hive.openBox<String>(_clientInteractionStateBoxName);
   }
   return Hive.box<String>(_clientInteractionStateBoxName);
@@ -680,7 +711,9 @@ Future<Map<String, dynamic>?> _readPersistedInteractionMap(String key) async {
     if (decoded is Map) {
       return decoded.cast<String, dynamic>();
     }
-  } catch (_) {}
+  } catch (_) {
+    /* best-effort: 本地交互状态损坏时回退到 null，由调用方按未持久化态初始化 */
+  }
   return null;
 }
 
@@ -691,7 +724,9 @@ Future<void> _writePersistedInteractionMap(
   try {
     final box = await _ensureClientInteractionStateBox();
     await box.put(key, jsonEncode(value));
-  } catch (_) {}
+  } catch (_) {
+    /* best-effort: 本地交互状态持久化失败仅丢失离线缓存，云端同步仍为真相源 */
+  }
 }
 
 final personaManagementFeatureFlagProvider = Provider<bool>((ref) {
@@ -1550,6 +1585,30 @@ final contentRepositoryProvider = Provider<ContentRepository>((ref) {
   );
 });
 
+/// Content 子接口 Provider（R02）。
+///
+/// `ContentRepository` 由 6 个 ≤10 方法子接口组合，同一实例同时满足全部子接口。
+/// 新消费方应只依赖所需窄接口（Read/Write/Reaction/Comment/Media/Config），
+/// 减少对上帝接口的耦合。
+final contentReadRepositoryProvider = Provider<ContentReadRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+final contentWriteRepositoryProvider = Provider<ContentWriteRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+final contentReactionRepositoryProvider = Provider<ContentReactionRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+final contentCommentRepositoryProvider = Provider<ContentCommentRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+final contentMediaRepositoryProvider = Provider<ContentMediaRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+final contentConfigRepositoryProvider = Provider<ContentConfigRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+
 /// Homepage Repository（共享主页搜索、详情、认领与治理）
 final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
@@ -1726,6 +1785,10 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   );
 });
 
+final oneTapLoginClientProvider = Provider<OneTapLoginClient>((ref) {
+  return MethodChannelOneTapLoginClient();
+});
+
 /// Invite Repository（邀请归因）
 final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
@@ -1786,19 +1849,6 @@ final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {
     mock: () => const MockUserProfileRepository(),
   );
 });
-
-/// ContentInteraction Repository（like/unlike/favorite/unfavorite）
-final contentInteractionRepositoryProvider =
-    Provider<ContentInteractionRepository>((ref) {
-      final mode = ref.watch(appDataSourceModeProvider);
-      return cloudRepositoryImplForMode(
-        mode,
-        remote: () => RemoteContentInteractionRepository(
-          httpClient: ref.watch(cloudHttpClientProvider),
-        ),
-        mock: MockContentInteractionRepository.new,
-      );
-    });
 
 /// Block Repository（拉黑/取消拉黑用户）
 final blockRepositoryProvider = Provider<BlockRepository>((ref) {

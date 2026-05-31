@@ -136,6 +136,119 @@ void main() {
     );
   });
 
+  test('first page keeps title with body when there is no cover', () {
+    final doc = ArticleDocumentData(
+      title: '首屏标题',
+      body: '首段正文必须和标题同页。\n\n第二段正文进入连续分页。',
+    );
+    const metrics = ArticleCanvasMetrics(
+      aspectRatio: 0.72,
+      outerPadding: EdgeInsets.zero,
+      contentPadding: EdgeInsets.all(12),
+      headerReservedHeight: 0,
+      footerReservedHeight: 0,
+      wrapImageGap: 8,
+      wrapImageMaxWidth: 132,
+      fullWidthImageAspectRatio: 4 / 3,
+      journalImageAspectRatio: 1,
+      inlineImageSpacing: 8,
+    );
+    final pages = ArticleFlowLayoutEngine.buildPageSlicesForViewport(
+      document: doc,
+      metrics: metrics,
+      stageWidth: 420,
+      titleStyle: titleStyle,
+      bodyStyle: bodyStyle,
+      viewportSliceHeight: 220,
+    );
+
+    expect(pages.first.title, '首屏标题');
+    expect(pages.first.body, contains('首段正文'));
+    expect(
+      pages.first.fragments.map((fragment) => fragment.kind),
+      containsAll(<ArticleLayoutFragmentKind>[
+        ArticleLayoutFragmentKind.title,
+        ArticleLayoutFragmentKind.body,
+      ]),
+    );
+  });
+
+  test('first page keeps title cover and first paragraph together', () {
+    final doc = ArticleDocumentData(
+      title: '有封面标题',
+      body: '有封面时首段正文仍应出现在第一页。\n\n后续正文继续分页。',
+      assets: const <ArticleDocumentAsset>[
+        ArticleDocumentAsset(id: 'cover', offset: 0, imageUrl: '/cover.jpg'),
+      ],
+    );
+    const metrics = ArticleCanvasMetrics(
+      aspectRatio: 0.72,
+      outerPadding: EdgeInsets.zero,
+      contentPadding: EdgeInsets.all(12),
+      headerReservedHeight: 0,
+      footerReservedHeight: 0,
+      wrapImageGap: 8,
+      wrapImageMaxWidth: 132,
+      fullWidthImageAspectRatio: 4 / 3,
+      journalImageAspectRatio: 1,
+      inlineImageSpacing: 8,
+    );
+    final pages = ArticleFlowLayoutEngine.buildPageSlicesForViewport(
+      document: doc,
+      metrics: metrics,
+      stageWidth: 420,
+      titleStyle: titleStyle,
+      bodyStyle: bodyStyle,
+      viewportSliceHeight: 420,
+    );
+
+    expect(pages.first.title, '有封面标题');
+    expect(pages.first.body, contains('有封面时首段正文'));
+    expect(
+      pages.first.fragments.map((fragment) => fragment.kind),
+      containsAll(<ArticleLayoutFragmentKind>[
+        ArticleLayoutFragmentKind.title,
+        ArticleLayoutFragmentKind.fullWidthImage,
+        ArticleLayoutFragmentKind.body,
+      ]),
+    );
+  });
+
+  test('long paragraph is split into multiple body runs', () {
+    final doc = ArticleDocumentData(
+      title: '连续分页',
+      body: List<String>.generate(
+        80,
+        (index) => '第$index句正文用于验证单个超长段落也能继续分页。',
+      ).join(''),
+    );
+    const metrics = ArticleCanvasMetrics(
+      aspectRatio: 0.72,
+      outerPadding: EdgeInsets.zero,
+      contentPadding: EdgeInsets.all(12),
+      headerReservedHeight: 0,
+      footerReservedHeight: 0,
+      wrapImageGap: 8,
+      wrapImageMaxWidth: 132,
+      fullWidthImageAspectRatio: 4 / 3,
+      journalImageAspectRatio: 1,
+      inlineImageSpacing: 8,
+    );
+    final pages = ArticleFlowLayoutEngine.buildPageSlicesForViewport(
+      document: doc,
+      metrics: metrics,
+      stageWidth: 360,
+      titleStyle: titleStyle,
+      bodyStyle: bodyStyle,
+      viewportSliceHeight: 220,
+    );
+
+    final bodyPages = pages.where((page) => page.body.trim().isNotEmpty);
+    expect(bodyPages.length, greaterThan(1));
+    expect(pages.first.title, '连续分页');
+    expect(pages.first.body.trim(), isNotEmpty);
+  });
+
   test('wrap fragments keep independent body bindings', () {
     final doc = ArticleDocumentData(
       title: '标题',

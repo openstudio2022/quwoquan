@@ -1,46 +1,41 @@
-version: 1
-archived: true
-archived_at: '2026-03-01T07:10:00Z'
-feature: error-permission-display-semantics
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.error-permission-display-semantics
-  parent_path: capability.runtime.feature.runtime-client-foundation
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A7_contract_metadata_consistency
-  notes: 云端/网络错误与权限类统一展示语义；规范见 specs/ux/error-and-permission-semantics.md
-  A1:
-    criteria: 云端阻塞性错误使用内联占位，次要错误使用 SnackBar
-    status: implemented
-    linked_tasks:
-    - cloud-network-error-display-contract
+version: 2
+node:
+  id: error-permission-display-semantics
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics
+  title: error permission display semantics
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: error permission display semantics 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: error permission display semantics GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-    - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
-  A2:
-    criteria: 错误/权限展示均使用 AppTypography、AppSpacing、AppColors
-    status: implemented
-    linked_tasks:
-    - cloud-network-error-display-contract
-    - permission-card-display-contract
-    tests:
-    - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
-  A3:
-    criteria: 权限永久拒绝时展示「去设置」主操作
-    status: implemented
-    linked_tasks:
-    - permission-card-display-contract
-    tests:
-    - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
-  A7:
-    criteria: specs/ux/error-and-permission-semantics.md 与 07-error-permission-semantics.mdc
-      与特性树一致
-    status: implemented
-    linked_tasks: []
-    tests:
-    - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: flutter analyze lib/ui/content/entry/ lib/ui/discovery/
-  full_gate: make gate
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

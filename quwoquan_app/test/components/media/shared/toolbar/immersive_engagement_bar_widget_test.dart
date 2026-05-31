@@ -60,9 +60,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final heart = tester.getCenter(find.byIcon(FluentIcons.heart_24_regular));
-    final share = tester.getCenter(find.byIcon(FluentIcons.share_24_regular));
-    final comment = tester.getCenter(find.byType(AppBubbleIcon));
+    final heart = tester.getCenter(find.byType(AppMediaHeartIcon));
+    final share = tester.getCenter(find.byType(AppMediaShareIcon));
+    final comment = tester.getCenter(find.byType(AppMediaCommentIcon));
     final actionGroupRect = tester.getRect(
       find.byKey(const ValueKey('immersive-actions-group')),
     );

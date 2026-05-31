@@ -67,8 +67,6 @@ allowed:
     maxCount: 2
   - path: ui/user/pages/profile_stats_page.dart
     maxCount: 2
-  - path: ui/user/pages/resonance_page.dart
-    maxCount: 2
   - path: ui/user/widgets/circle_card.dart
     maxCount: 1
   - path: ui/user/widgets/circle_compact_card.dart

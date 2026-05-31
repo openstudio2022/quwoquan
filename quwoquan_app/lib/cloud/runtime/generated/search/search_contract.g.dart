@@ -94,7 +94,7 @@ enum SearchToolContentType {
   article('article'),
   image('image'),
   video('video'),
-  moment('moment'),
+  micro('micro'),
   ;
 
   const SearchToolContentType(this.wireValue);
@@ -109,8 +109,8 @@ enum SearchToolContentType {
         return SearchToolContentType.image;
       case 'video':
         return SearchToolContentType.video;
-      case 'moment':
-        return SearchToolContentType.moment;
+      case 'micro':
+        return SearchToolContentType.micro;
       default:
         return null;
     }
@@ -152,7 +152,7 @@ class SearchToolContract {
   static const List<String> optionalFields = <String>['mode', 'objectTypes', 'limit', 'conversationType', 'contentTypes', 'categoryId', 'subCategory'];
   static const List<String> internalOptionalFields = <String>['queryVariants', 'searchPlans'];
   static const List<String> conversationTypes = <String>['direct', 'group'];
-  static const List<String> contentTypes = <String>['article', 'image', 'video', 'moment'];
+  static const List<String> contentTypes = <String>['article', 'image', 'video', 'micro'];
   static const List<String> allFields = <String>[
     ...requiredFields,
     ...optionalFields,

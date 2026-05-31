@@ -854,7 +854,8 @@ class RemoteContentRepository implements ContentRepository {
   bool get usesCloudAssistantEdgeSync => true;
 
   @override
-  Map<String, dynamic>? discoveryPresentationWireForPost(String postId) => null;
+  DiscoveryPresentationWire? discoveryPresentationWireForPost(String postId) =>
+      null;
 
   @override
   List<PostBaseDto> embeddedDiscoveryArticlePostsForFollowingMix() =>

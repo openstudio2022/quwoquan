@@ -8,6 +8,40 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      cloud_provider:
+        description: 'Cloud provider'
+        required: false
+        default: 'aliyun'
+      from_image:
+        description: 'Current prod image (empty = resolve from .release-state)'
+        required: false
+      to_image:
+        description: 'Target image version'
+        required: false
+      from_config:
+        description: 'Current prod config (empty = resolve from .release-state)'
+        required: false
+      to_config:
+        description: 'Target config version'
+        required: false
+      error_rate:
+        description: 'SLO error rate'
+        required: false
+        default: '0.005'
+      p95_ms:
+        description: 'SLO p95 latency ms'
+        required: false
+        default: '100'
+      redis_error_rate:
+        description: 'SLO redis error rate'
+        required: false
+        default: '0'
+      dry_run:
+        description: 'Dry run'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   prepare:
@@ -16,11 +50,61 @@ jobs:
     outputs:
       initial_step: ${{ steps.stages.outputs.initial_step }}
       full_step: ${{ steps.stages.outputs.full_step }}
+      from_image: ${{ steps.inputs.outputs.from_image }}
+      from_config: ${{ steps.inputs.outputs.from_config }}
+      to_image: ${{ steps.inputs.outputs.to_image }}
+      to_config: ${{ steps.inputs.outputs.to_config }}
+      error_rate: ${{ steps.inputs.outputs.error_rate }}
+      p95_ms: ${{ steps.inputs.outputs.p95_ms }}
+      redis_error_rate: ${{ steps.inputs.outputs.redis_error_rate }}
+      cloud_provider: ${{ steps.inputs.outputs.cloud_provider }}
+      dry_run: ${{ steps.inputs.outputs.dry_run }}
     steps:
       - uses: actions/checkout@v4
       - name: Assert main branch event
         run: |
           echo "main 已完成显式合流；默认要求 03/04/05 已由 PR required checks 先行放行。"
+      - name: Resolve rollout inputs
+        id: inputs
+        run: |
+          FROM_IMG="${{ github.event.inputs.from_image }}"
+          FROM_CFG="${{ github.event.inputs.from_config }}"
+          TO_IMG="${{ github.event.inputs.to_image }}"
+          TO_CFG="${{ github.event.inputs.to_config }}"
+          ERROR_RATE="${{ github.event.inputs.error_rate }}"
+          P95_MS="${{ github.event.inputs.p95_ms }}"
+          REDIS_ERROR_RATE="${{ github.event.inputs.redis_error_rate }}"
+          CLOUD_PROVIDER="${{ github.event.inputs.cloud_provider }}"
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+          if [[ -z "$CLOUD_PROVIDER" ]]; then CLOUD_PROVIDER="aliyun"; fi
+          if [[ -z "$ERROR_RATE" ]]; then ERROR_RATE="0.005"; fi
+          if [[ -z "$P95_MS" ]]; then P95_MS="100"; fi
+          if [[ -z "$REDIS_ERROR_RATE" ]]; then REDIS_ERROR_RATE="0"; fi
+          if [[ -z "$DRY_RUN" ]]; then DRY_RUN="false"; fi
+          if [[ -z "$TO_IMG" ]]; then TO_IMG="${{ vars.PROD_AUTO_TO_IMAGE_VERSION }}"; fi
+          if [[ -z "$TO_CFG" ]]; then TO_CFG="${{ vars.PROD_AUTO_TO_CONFIG_VERSION }}"; fi
+          if [[ -z "$TO_IMG" || -z "$TO_CFG" ]]; then
+            echo "::error::Set workflow inputs to_image/to_config or repository vars PROD_AUTO_TO_IMAGE_VERSION / PROD_AUTO_TO_CONFIG_VERSION"
+            exit 1
+          fi
+          STATE=".release-state/seed-box.state"
+          if [[ -z "$FROM_IMG" || -z "$FROM_CFG" ]]; then
+            if [[ ! -f "$STATE" ]]; then
+              echo "::error::Missing .release-state/seed-box.state; provide from_image/from_config explicitly"
+              exit 1
+            fi
+            if [[ -z "$FROM_IMG" ]]; then FROM_IMG=$(awk -F= '/^to_image=/{print $2; exit}' "$STATE"); fi
+            if [[ -z "$FROM_CFG" ]]; then FROM_CFG=$(awk -F= '/^to_config=/{print $2; exit}' "$STATE"); fi
+          fi
+          echo "from_image=$FROM_IMG" >> $GITHUB_OUTPUT
+          echo "from_config=$FROM_CFG" >> $GITHUB_OUTPUT
+          echo "to_image=$TO_IMG" >> $GITHUB_OUTPUT
+          echo "to_config=$TO_CFG" >> $GITHUB_OUTPUT
+          echo "error_rate=$ERROR_RATE" >> $GITHUB_OUTPUT
+          echo "p95_ms=$P95_MS" >> $GITHUB_OUTPUT
+          echo "redis_error_rate=$REDIS_ERROR_RATE" >> $GITHUB_OUTPUT
+          echo "cloud_provider=$CLOUD_PROVIDER" >> $GITHUB_OUTPUT
+          echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
       - name: Parse gray_rollout_stages
         id: stages
         run: |
@@ -41,22 +125,59 @@ jobs:
     name: Stage 1 — Initial (auto)
     needs: [prepare]
     runs-on: ubuntu-latest
+    env:
+      PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
     steps:
       - uses: actions/checkout@v4
-      - name: Placeholder — deploy STEP=${{ needs.prepare.outputs.initial_step }}
+      - name: 安装 kustomize
+        run: bash agent_ops/deploy/shared/install_kustomize.sh
+      - name: Install kubectl
         run: |
-          echo "Stage 1 initial gray: STEP=${{ needs.prepare.outputs.initial_step }}"
-          echo "Deploy + SLO would run here (PROD_KUBECONFIG required)"
-          echo "Current: dry-run placeholder; wire PROD_KUBECONFIG for real deploy"
+          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+      - name: Deploy initial rollout via stackctl
+        run: |
+          python3 agent_ops/deploy/stackctl.py deploy \
+            --target prod-hosted \
+            --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
+            --service seed-box \
+            --from-image "${{ needs.prepare.outputs.from_image }}" \
+            --to-image "${{ needs.prepare.outputs.to_image }}" \
+            --from-config "${{ needs.prepare.outputs.from_config }}" \
+            --to-config "${{ needs.prepare.outputs.to_config }}" \
+            --step "${{ needs.prepare.outputs.initial_step }}" \
+            --dry-run "${{ needs.prepare.outputs.dry_run }}" \
+            --error-rate "${{ needs.prepare.outputs.error_rate }}" \
+            --p95-ms "${{ needs.prepare.outputs.p95_ms }}" \
+            --redis-error-rate "${{ needs.prepare.outputs.redis_error_rate }}"
 
   gray-carry-on:
     name: Stage 2 — Carry-on 100% (approval)
     needs: [prepare, gray-initial]
     runs-on: ubuntu-latest
     environment: production
+    env:
+      PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
     steps:
       - uses: actions/checkout@v4
-      - name: Placeholder — deploy STEP=100
+      - name: 安装 kustomize
+        run: bash agent_ops/deploy/shared/install_kustomize.sh
+      - name: Install kubectl
         run: |
-          echo "Stage 2 carry-on: STEP=${{ needs.prepare.outputs.full_step }}"
-          echo "Deploy + SLO would run here (after Environment approval)"
+          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+      - name: Deploy carry-on rollout via stackctl
+        run: |
+          python3 agent_ops/deploy/stackctl.py deploy \
+            --target prod-hosted \
+            --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
+            --service seed-box \
+            --from-image "${{ needs.prepare.outputs.from_image }}" \
+            --to-image "${{ needs.prepare.outputs.to_image }}" \
+            --from-config "${{ needs.prepare.outputs.from_config }}" \
+            --to-config "${{ needs.prepare.outputs.to_config }}" \
+            --step "${{ needs.prepare.outputs.full_step }}" \
+            --dry-run "${{ needs.prepare.outputs.dry_run }}" \
+            --error-rate "${{ needs.prepare.outputs.error_rate }}" \
+            --p95-ms "${{ needs.prepare.outputs.p95_ms }}" \
+            --redis-error-rate "${{ needs.prepare.outputs.redis_error_rate }}"

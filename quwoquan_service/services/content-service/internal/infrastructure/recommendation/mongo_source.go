@@ -29,7 +29,7 @@ func (s *MongoCandidateSource) Recall(ctx context.Context, req rtrec.RecallReque
 
 	filter := bson.M{}
 	if len(req.Tags) > 0 {
-		filter["tags"] = bson.M{"$in": req.Tags}
+		filter["tagRefs"] = bson.M{"$in": req.Tags}
 	}
 
 	opts := options.Find().
@@ -76,7 +76,7 @@ type discoveryFeedDoc struct {
 	ContentType   string    `bson:"contentType"`
 	AuthorID      string    `bson:"authorId"`
 	Title         string    `bson:"title"`
-	Tags          []string  `bson:"tags"`
+	Tags          []string  `bson:"tagRefs"`
 	EntityRefs    []string  `bson:"entityRefs"`
 	CoverURL      string    `bson:"coverUrl"`
 	LikeCount     int64     `bson:"likeCount"`

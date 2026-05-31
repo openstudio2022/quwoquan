@@ -180,7 +180,7 @@ class MultiObjectiveScorer:
                 detail = detail_maps[i].copy()
                 detail["model"] = "multi_obj"
                 content_id = row["contentId"]
-                boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tags", []))
+                boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tagRefs", []))
                 sc += boost * 0.1
                 detail["sessionTagBoost"] = boost
                 observe_score_value(self._model_version, sc)
@@ -193,7 +193,7 @@ class MultiObjectiveScorer:
             for row in rows:
                 sc, detail = rule_score(row)
                 content_id = row["contentId"]
-                boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tags", []))
+                boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tagRefs", []))
                 sc += boost
                 detail["sessionTagBoost"] = boost
                 observe_score_value(self._model_version, sc)

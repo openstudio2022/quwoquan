@@ -26,7 +26,7 @@ type RawBehaviorEvent struct {
 	SessionID       string   `bson:"sessionId"`
 	ContentID       string   `bson:"contentId"`
 	Action          string   `bson:"action"`
-	Tags            []string `bson:"tags,omitempty"`
+	Tags            []string `bson:"tagRefs,omitempty"`
 	Duration        float64  `bson:"duration,omitempty"`
 	AuthorID        string   `bson:"authorId,omitempty"`
 	ReferralSource  string   `bson:"referralSource,omitempty"`
@@ -35,8 +35,11 @@ type RawBehaviorEvent struct {
 	TotalUnits      int      `bson:"totalUnits,omitempty"`
 	EntityRefs      []string `bson:"entityRefs,omitempty"`
 	FeedRequestID   string   `bson:"feedRequestId,omitempty"`
-	OccurredAt      string   `bson:"occurredAt"`
-	CreatedAt       time.Time `bson:"createdAt"`
+	// 交集转化归因（S6）：触发交集行动（follow/join_circle/add_contact）的维度与路径制 tagRef。
+	IntersectionDimension string    `bson:"intersectionDimension,omitempty"`
+	IntersectionTagRefs   []string  `bson:"intersectionTagRefs,omitempty"`
+	OccurredAt            string    `bson:"occurredAt"`
+	CreatedAt             time.Time `bson:"createdAt"`
 }
 
 // MongoBehaviorEventStore persists raw behavior events to MongoDB with TTL.

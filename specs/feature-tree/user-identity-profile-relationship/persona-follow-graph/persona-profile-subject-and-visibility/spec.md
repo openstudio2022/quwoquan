@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `user-identity-profile-relationship`
-- `L2_journey`: `persona-follow-graph`
-- `L3_scenario`: `persona-profile-subject-and-visibility`
+- `L1_domain_service`: `user-identity-profile-relationship`
+- `L2_business_capability`: `persona-follow-graph`
+- `L3_story`: `persona-profile-subject-and-visibility`
 
 本场景冻结“作者分身如何被看见”的领域基线：`Persona` 如何映射成公开可读的 `ProfileSubject`，如何继承用户资料基线，如何覆写作者形象，以及停用后的记录归因如何保持稳定。
 

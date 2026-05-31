@@ -17,7 +17,6 @@
 | `inviteRepositoryProvider` | `RemoteInviteRepository` | `MockInviteRepository` |
 | `behaviorRepositoryProvider` | `RemoteBehaviorRepository` | `MockBehaviorRepository` |
 | `userProfileRepositoryProvider` | `RemoteUserProfileRepository` | `MockUserProfileRepository` |
-| `contentInteractionRepositoryProvider` | `RemoteContentInteractionRepository` | `MockContentInteractionRepository` |
 | `blockRepositoryProvider` | `RemoteBlockRepository` | `MockBlockRepository` |
 | `reportRepositoryProvider` | `RemoteReportRepository` | `MockReportRepository` |
 | `keywordBlockRepositoryProvider` | `RemoteKeywordBlockRepository` | `MockKeywordBlockRepository` |

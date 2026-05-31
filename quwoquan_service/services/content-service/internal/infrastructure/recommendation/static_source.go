@@ -28,10 +28,10 @@ func NewStaticCandidateSource() *StaticCandidateSource {
 func DefaultSeedPosts() []postmodel.Post {
 	now := time.Now().UTC()
 	return []postmodel.Post{
-		{ID: "post_micro_001", AuthorId: "user_1001", ContentType: "micro", Title: "Today in Hangzhou", Body: "City walk and coffee notes", Tags: []string{"city", "life"}, MediaUrls: []string{"https://picsum.photos/seed/micro1/800/600"}, LikeCount: 23, CommentCount: 4, FavoriteCount: 8, ShareCount: 2, CreatedAt: now.Add(-2 * time.Hour), PublishedAt: now.Add(-2 * time.Hour), Status: "published", Visibility: "public"},
-		{ID: "post_photo_001", AuthorId: "user_1002", ContentType: "image", Title: "Winter light", Body: "Street photography set", Tags: []string{"photo", "street"}, MediaUrls: []string{"https://picsum.photos/seed/photo1/800/900"}, CoverUrl: "https://picsum.photos/seed/photo1/800/900", LikeCount: 103, CommentCount: 12, FavoriteCount: 39, ShareCount: 9, CreatedAt: now.Add(-4 * time.Hour), PublishedAt: now.Add(-4 * time.Hour), Status: "published", Visibility: "public"},
-		{ID: "post_video_001", AuthorId: "user_1003", ContentType: "video", Title: "Night run vlog", Body: "Training route and pacing", Tags: []string{"video", "fitness"}, VideoUrl: "https://example.com/videos/night-run.mp4", CoverUrl: "https://picsum.photos/seed/video1/800/1200", LikeCount: 88, CommentCount: 20, FavoriteCount: 21, ShareCount: 13, CreatedAt: now.Add(-1 * time.Hour), PublishedAt: now.Add(-1 * time.Hour), Status: "published", Visibility: "public"},
-		{ID: "post_article_001", AuthorId: "user_1004", ContentType: "article", Title: "How to structure deep work", Body: "A practical checklist for focused sessions", Tags: []string{"article", "productivity"}, CoverUrl: "https://picsum.photos/seed/article1/1200/700", LikeCount: 66, CommentCount: 15, FavoriteCount: 45, ShareCount: 11, CreatedAt: now.Add(-6 * time.Hour), PublishedAt: now.Add(-6 * time.Hour), Status: "published", Visibility: "public"},
+		{ID: "post_micro_001", AuthorId: "user_1001", ContentType: "micro", Title: "Today in Hangzhou", Body: "City walk and coffee notes", TagRefs: []string{"city", "life"}, MediaUrls: []string{"https://picsum.photos/seed/micro1/800/600"}, LikeCount: 23, CommentCount: 4, FavoriteCount: 8, ShareCount: 2, CreatedAt: now.Add(-2 * time.Hour), PublishedAt: now.Add(-2 * time.Hour), Status: "published", Visibility: "public"},
+		{ID: "post_photo_001", AuthorId: "user_1002", ContentType: "image", Title: "Winter light", Body: "Street photography set", TagRefs: []string{"photo", "street"}, MediaUrls: []string{"https://picsum.photos/seed/photo1/800/900"}, CoverUrl: "https://picsum.photos/seed/photo1/800/900", LikeCount: 103, CommentCount: 12, FavoriteCount: 39, ShareCount: 9, CreatedAt: now.Add(-4 * time.Hour), PublishedAt: now.Add(-4 * time.Hour), Status: "published", Visibility: "public"},
+		{ID: "post_video_001", AuthorId: "user_1003", ContentType: "video", Title: "Night run vlog", Body: "Training route and pacing", TagRefs: []string{"video", "fitness"}, VideoUrl: "https://example.com/videos/night-run.mp4", CoverUrl: "https://picsum.photos/seed/video1/800/1200", LikeCount: 88, CommentCount: 20, FavoriteCount: 21, ShareCount: 13, CreatedAt: now.Add(-1 * time.Hour), PublishedAt: now.Add(-1 * time.Hour), Status: "published", Visibility: "public"},
+		{ID: "post_article_001", AuthorId: "user_1004", ContentType: "article", Title: "How to structure deep work", Body: "A practical checklist for focused sessions", TagRefs: []string{"article", "productivity"}, CoverUrl: "https://picsum.photos/seed/article1/1200/700", LikeCount: 66, CommentCount: 15, FavoriteCount: 45, ShareCount: 11, CreatedAt: now.Add(-6 * time.Hour), PublishedAt: now.Add(-6 * time.Hour), Status: "published", Visibility: "public"},
 	}
 }
 
@@ -49,7 +49,7 @@ func (s *StaticCandidateSource) Recall(_ context.Context, req rtrec.RecallReques
 			ContentType:  p.ContentType,
 			AuthorID:     p.AuthorId,
 			Title:        p.Title,
-			Tags:         toStringSlice(p.Tags),
+			Tags:         toStringSlice(p.TagRefs),
 			PublishedAt:  p.PublishedAt,
 			ViewCount:    p.ViewCount,
 			LikeCount:    p.LikeCount,

@@ -49,6 +49,7 @@ class UserRequestPageIds {
     'ListUserLikes': 'user.likes',
     'ListUserWorks': 'user.works',
     'LoginAnonymous': 'user.login.anonymous',
+    'LoginOneTap': 'user.login.one.tap',
     'LoginWithApple': 'user.login.with.apple',
     'LoginWithPhone': 'user.login.with.phone',
     'LoginWithWechat': 'user.login.with.wechat',
@@ -61,6 +62,7 @@ class UserRequestPageIds {
     'RetirePersona': 'user.personas.retire',
     'SearchSocialRelations': 'user.social.search',
     'SendGreetingRequest': 'user.send.greeting.request',
+    'SendOtp': 'user.send.otp',
     'UnbindCredential': 'user.unbind.credential',
     'UnblockUser': 'user.block.delete',
     'UnfollowUser': 'user.unfollow',
@@ -117,6 +119,7 @@ class UserRequestPageIds {
   static const String listUserLikes = 'user.likes';
   static const String listUserWorks = 'user.works';
   static const String loginAnonymous = 'user.login.anonymous';
+  static const String loginOneTap = 'user.login.one.tap';
   static const String loginWithApple = 'user.login.with.apple';
   static const String loginWithPhone = 'user.login.with.phone';
   static const String loginWithWechat = 'user.login.with.wechat';
@@ -129,6 +132,7 @@ class UserRequestPageIds {
   static const String retirePersona = 'user.personas.retire';
   static const String searchSocialRelations = 'user.social.search';
   static const String sendGreetingRequest = 'user.send.greeting.request';
+  static const String sendOtp = 'user.send.otp';
   static const String unbindCredential = 'user.unbind.credential';
   static const String unblockUser = 'user.block.delete';
   static const String unfollowUser = 'user.unfollow';

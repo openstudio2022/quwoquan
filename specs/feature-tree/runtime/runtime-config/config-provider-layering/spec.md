@@ -16,6 +16,9 @@
 - 统一部署映射：`environments -> deploy process -> domains`
 - 拓扑一致性：`beta`、`gamma`、`prod` 的进程-领域映射保持一致
 - 端侧生产包唯一：不存在 `app-prod-gray`；生产灰度由云侧发布波次与策略表达，不单独占用环境枚举。
+- 统一 environment topology：四环境共享 `environment_topology_manifest.yaml` schema，alpha 仅通过 mock boundary 差异化。
+- 统一环境包策略：app/service 包的 host allowlist、secret scope、dataSource 与 purity gate 由 manifest 驱动。
+- 统一自动化入口：环境打包、校验、健康检查与巡检统一经 `stackctl` 暴露机器可读报告。
 
 ## 目录与版本示例（实施标准）
 
@@ -50,6 +53,53 @@
 3. `${CONFIG_ROOT}/releases/config/${SERVICE_NAME}/${CONFIG_VERSION}.yaml`
 4. 环境变量覆盖（最高优先级）
 
+## Environment Topology Manifest
+
+统一环境真相源：`deploy/shared/environment_topology_manifest.yaml`
+
+每个环境必须显式声明：
+
+- `publicBases.api / realtime / productOps / mediaAvatar / mediaImage / mediaVideo / mediaUpload`
+- `subnets.edge / media / service / data`
+- `mockBoundaryFlags`
+- `artifactPolicy.app / artifactPolicy.service`
+- `hostAllowlist`
+- `forbiddenHostTokens`
+- `rolloutStagePolicy`
+
+强制约束：
+
+- `alpha` 的 topology 字段必须完整，不能通过缺字段表达“简化环境”。
+- `prod` 只允许 `artifactPolicy.app.runtimeEnv=prod`，禁止任何 `prod-gray` 目录或枚举。
+- 本地 profile 与 host 端口必须来自 `deploy/shared/local_env_port_manifest.yaml`，不得散落在脚本内作为官方默认值。
+
+## Packaging Contract
+
+环境包必须同时满足：
+
+- App env package 与 service env package 都携带 topology schema 版本、artifact policy 摘要与机器可读报告。
+- `verify_public_vs_upstream_url_contract.py` 阻断 public base / upstream base 混用。
+- `verify_environment_packaging_contract.py` 阻断环境枚举、dataSource、artifact 目录、host allowlist 漂移。
+- `verify_env_artifact_isolation.py` 阻断跨环境 host、mock/seed/debug 信息进入错误环境产物。
+- `verify_prod_package_purity.py` 阻断 prod 产物携带 alpha/mock/seed/debug/local/test 配置。
+
+## Stackctl Contract
+
+统一自动化入口：`agent_ops/deploy/stackctl.py`
+
+命令面至少覆盖：
+
+- `package`
+- `up` / `down` / `status`
+- `verify`
+- `health`
+- `inspect`
+- `doctor`
+- `repair`
+- `deploy`
+
+所有命令必须输出稳定的 JSON 报告，并将 Markdown 摘要归档到 `artifacts/stackctl/<env>/<run-id>/`。
+
 ## 子节点
 
 - `env-file-secret-configcenter-provider`：配置来源抽象（env/file/secret/config center）
@@ -67,6 +117,7 @@
 - 不允许服务自行实现“私有加载器”
 - `prod` 环境必须显式设置 `APP_ENV=prod`
 - App 只构建 `alpha/beta/gamma/prod`；生产灰度不能通过不同 App 安装包表达。
+- 服务端配置目录只允许 `default/alpha/beta/gamma/prod`，禁止 `prod-gray` 目录。
 - 高风险配置（连接拓扑、鉴权）不支持热更新，仅支持灰度滚动切换
 - 版本快照配置文件不可变（immutable），仅允许新增版本，不允许覆盖已发布版本
 - 密钥字段禁止进入版本快照，必须通过 Secret/env 注入
@@ -79,3 +130,12 @@
 - A3：配置发布可灰度、可回滚、可审计
 - A7：配置结构与运行时实现一致
 - A8：本地/集成/生产加载逻辑有自动化测试
+- A8：topology/packaging/stackctl 契约可由 gate 自动执行并产出证据
+
+## 统一门禁矩阵（FF 配置发布契约）
+
+| 阶段命令 | 必过项（最小集） | 不通过处理 |
+|---|---|---|
+| `/prd` | spec.md 含目录/环境变量/拓扑 manifest / artifact policy / stackctl 命令面；acceptance.yaml 含对应验收项 | 阻断 FF，先补文档 |
+| `/design` | 每服务 default/alpha/beta/gamma/prod 目录齐；topology manifest 与 local port manifest 已落地；加载顺序与 APP_ENV 校验有测试；门禁脚本可执行 | 阻断 apply，先补实现与测试 |
+| `/commit` / submit-with-gate | strict gate 通过；CONFIG_VERSION 文件存在且可映射；配置-镜像兼容校验通过；prod purity / artifact isolation 通过 | 禁止提交入库 |

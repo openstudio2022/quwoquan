@@ -1,64 +1,41 @@
-version: 1
-feature: multi-environment-instance-isolation
-level: "L3_story"
-template: A1-A6
-tree_context:
-  feature_path: capability.runtime.feature.deliver-deploy-prod-pipeline.subfeature.multi-environment-instance-isolation
-  parent_path: capability.runtime.feature.deliver-deploy-prod-pipeline
-level_acceptance:
-  A1:
-    criteria: 四件套可检索，明确端侧多实例与 beta/gamma 单套服务边界
-    status: proposed
+version: 2
+node:
+  id: multi-environment-instance-isolation
+  level: L3_story
+  path: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation
+  title: multi environment instance isolation
+  parent_domain_service: runtime
+  parent_business_capability: deliver-deploy-prod-pipeline
+scope:
+  summary: multi environment instance isolation 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: multi environment instance isolation GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md
-        functions: [multi_environment_instance_isolation_spec]
-      - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/design.md
-        functions: [multi_environment_instance_isolation_design]
-      - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/plan.yaml
-        functions: [multi_environment_instance_isolation_plan]
-  A2:
-    criteria: 环境矩阵、业务数据清单与 runbook 明确端侧可多实例而 beta/gamma 服务端单套
-    status: proposed
-    tests:
-      - file: deploy/shared/environment_matrix.md
-        functions: [environment_matrix]
-      - file: specs/gates/business_env_data_inventory.md
-        functions: [business_env_data_inventory]
-      - file: deploy/shared/deliver_to_production_runbook.md
-        functions: [deliver_to_production_runbook]
-  A3:
-    criteria: 端侧启动入口支持按 env 与 device-id 启动、停止、列举实例，并记录诊断信息
-    status: proposed
-    tests:
-      - file: quwoquan_app/scripts/device/start_app_instance.sh
-        functions: [start_app_instance]
-      - file: quwoquan_app/scripts/device/stop_app_instance.sh
-        functions: [stop_app_instance]
-      - file: quwoquan_app/scripts/device/list_app_instances.sh
-        functions: [list_app_instances]
-  A4:
-    criteria: beta 启动新栈前会停止旧栈、回收固定端口并清理残留子进程
-    status: proposed
-    tests:
-      - file: quwoquan_app/scripts/device/start_app_beta_manual.sh
-        functions: [start_app_beta_manual]
-      - file: quwoquan_app/scripts/device/stop_app_beta_manual.sh
-        functions: [stop_app_beta_manual]
-      - file: agent_ops/lib/beta_manual_lifecycle.sh
-        functions: [beta_manual_lifecycle]
-  A5:
-    criteria: gamma 部署或 local-gamma mirror 切换遵循单套清理后重启语义
-    status: proposed
-    tests:
-      - file: quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
-        functions: [start_local_gamma_mirror]
-      - file: deploy/shared/deliver_to_production_runbook.md
-        functions: [deliver_to_production_runbook]
-  A6:
-    criteria: T4 至少覆盖 alpha beta gamma 三个端侧实例分别运行在不同模拟器
-    status: proposed
-    tests:
-      - file: quwoquan_service/scripts/runtime/verify_env_instance_isolation.py
-        functions: [verify_env_instance_isolation]
-      - file: artifacts
-        functions: [app_instance_reports]
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

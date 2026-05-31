@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -51,89 +53,15 @@ String coverAssetPathForPayload(CreateEditorState state) {
 }
 
 String buildArticleMarkdownForPayload(CreateEditorState state) {
-  final buffer = StringBuffer()
-    ..writeln('---')
-    ..writeln('title: ${_escapeFrontMatterValue(state.title.trim())}')
-    ..writeln(
-      'summary: ${_escapeFrontMatterValue(articleSummaryForPayload(state))}',
-    )
-    ..writeln('template: ${state.articleTemplate.name}')
-    ..writeln('fontPreset: ${state.articleFontPreset.name}');
   final cover = coverAssetPathForPayload(state);
-  if (cover.trim().isNotEmpty) {
-    buffer.writeln('coverImage: asset://cover');
-  }
-  buffer
-    ..writeln("visibility: ${state.settings.isPublic ? 'public' : 'private'}")
-    ..writeln('assistantUsePolicy: inherit')
-    ..writeln('---')
-    ..writeln();
-  if (state.title.trim().isNotEmpty) {
-    buffer
-      ..write('# ')
-      ..writeln(state.title.trim())
-      ..writeln();
-  }
-  if (cover.trim().isNotEmpty) {
-    buffer
-      ..writeln(':::figure id="cover" layout="fullWidth" caption=""')
-      ..writeln('asset://cover')
-      ..writeln(':::')
-      ..writeln();
-  }
-  for (final block in state.articleBlocks) {
-    final text = block.text.trim();
-    switch (block.type) {
-      case CreateTextBlockType.heading2:
-      case CreateTextBlockType.sectionTitle:
-        if (text.isNotEmpty) {
-          buffer
-            ..write('## ')
-            ..writeln(text)
-            ..writeln();
-        }
-      case CreateTextBlockType.heading3:
-        if (text.isNotEmpty) {
-          buffer
-            ..write('### ')
-            ..writeln(text)
-            ..writeln();
-        }
-      case CreateTextBlockType.orderedItem:
-        if (text.isNotEmpty) {
-          buffer
-            ..write('1. ')
-            ..writeln(text)
-            ..writeln();
-        }
-      case CreateTextBlockType.bulletItem:
-        if (text.isNotEmpty) {
-          buffer
-            ..write('- ')
-            ..writeln(text)
-            ..writeln();
-        }
-      case CreateTextBlockType.image:
-        final imagePath = block.imagePath.trim();
-        if (imagePath.isNotEmpty) {
-          final assetId = _assetIdForPath(imagePath, 'inline');
-          buffer
-            ..writeln(
-              ':::figure id="$assetId" layout="${block.imageLayout.name}" caption=""',
-            )
-            ..writeln('asset://$assetId')
-            ..writeln(':::')
-            ..writeln();
-        }
-      case CreateTextBlockType.paragraph:
-        if (text.isNotEmpty) {
-          buffer
-            ..writeln(text)
-            ..writeln();
-        }
-    }
-  }
-  return buffer.toString().trimRight();
+  return ArticleMarkdownCodec.serializeDocument(
+    state.articleDocument,
+    summary: articleSummaryForPayload(state),
+    visibility: state.settings.isPublic ? 'public' : 'private',
+    assistantUsePolicy: 'inherit',
+    coverAssetId: cover.trim().isNotEmpty ? 'cover' : '',
+    coverImageUrl: cover,
+  );
 }
 
 Map<String, dynamic> buildArticleAssetManifestForPayload(
@@ -144,9 +72,15 @@ Map<String, dynamic> buildArticleAssetManifestForPayload(
   if (cover.trim().isNotEmpty) {
     assets.add(_assetManifestRow('cover', cover.trim(), role: 'cover'));
   }
-  for (final path in extractArticleImagePaths(state.articleBlocks)) {
-    final assetId = _assetIdForPath(path, 'inline');
-    assets.add(_assetManifestRow(assetId, path, role: 'figure'));
+  for (final asset in state.articleDocument.assets) {
+    final imagePath = asset.imageUrl.trim();
+    if (imagePath.isEmpty) {
+      continue;
+    }
+    final assetId = asset.id.trim().isNotEmpty
+        ? asset.id.trim()
+        : _assetIdForPath(imagePath, 'inline');
+    assets.add(_assetManifestRow(assetId, imagePath, role: 'figure'));
   }
   return <String, dynamic>{
     'schemaVersion': 1,
@@ -166,10 +100,6 @@ Map<String, dynamic> buildArticleRenderProfileForPayload(
       'galleryDowngrade': 'singleColumn',
     },
   };
-}
-
-String _escapeFrontMatterValue(String value) {
-  return value.replaceAll('"', '\\"');
 }
 
 String _assetIdForPath(String path, String prefix) {
@@ -242,7 +172,7 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
     };
   }
   return <String, Object?>{
-    'type': 'moment',
+    'type': 'micro',
     'contentType': 'micro',
     'title': state.title.trim(),
     'body': state.body.trim(),
@@ -273,7 +203,15 @@ Future<void> reportCreateEditorSurfaceEvent(
             ),
           ],
         );
-  } catch (_) {}
+  } catch (e, st) {
+    // 创作埋点上报为非关键路径：失败仅降级为日志，不阻断创作流程（R17）。
+    developer.log(
+      'reportCreateEditorSurfaceEvent failed: event=$event',
+      name: 'CreateEditor',
+      error: e,
+      stackTrace: st,
+    );
+  }
 }
 
 List<CreateDraft> decodeCreateDraftsList(Object? decoded) {

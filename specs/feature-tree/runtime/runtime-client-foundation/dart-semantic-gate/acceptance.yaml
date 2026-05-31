@@ -1,53 +1,41 @@
-version: 1
-feature: dart-semantic-gate
-level: "L3_story"
-archived: true
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.dart-semantic-gate
-  parent_path: capability.runtime.feature.runtime-client-foundation
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A7_contract_metadata_consistency
-  A1:
-    criteria: verify_dart_semantic.py 存在且能检出 width/height/leadingSize 等硬编码
-    status: implemented
-    linked_tasks:
-    - M1
+version: 2
+node:
+  id: dart-semantic-gate
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/dart-semantic-gate
+  title: dart semantic gate
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: dart semantic gate 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: dart semantic gate GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-    - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
-      functions:
-      - main
-      - scan_file
-  A2:
-    criteria: gate_repo.sh run_app 调用 verify_dart_semantic
-    status: implemented
-    linked_tasks:
-    - M2
-    tests:
-    - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
-  A3:
-    criteria: 02-dart-coding 含 width/height/leadingSize 禁止示例与触控尺寸 API 表
-    status: implemented
-    linked_tasks:
-    - M3
-    tests:
-    - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
-  A4:
-    criteria: FF 模板含编码规范小节；opsx-apply 对 Dart 变更执行语义检查
-    status: implemented
-    linked_tasks:
-    - M4
-    tests:
-    - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
-  A7:
-    criteria: 06-semantic-consistency-audit、00_MASTER_DEVELOPMENT_FLOW 与特性树一致
-    status: implemented
-    linked_tasks:
-    - M3
-    tests:
-    - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py && flutter analyze quwoquan_app/lib/
-  full_gate: make gate
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

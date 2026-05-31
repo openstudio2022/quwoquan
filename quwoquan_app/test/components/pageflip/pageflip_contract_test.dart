@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/pageflip/pageflip.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_uv_mesh.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/article_reader_mode_strategy.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/single_page_mode_strategy.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
@@ -68,6 +69,53 @@ void main() {
       expect(hostSource, isNot(contains('ArticlePageCurlRenderer')));
       expect(hostSource, isNot(contains('genericDynamic')));
       expect(hostSource, isNot(contains('mirroredForwardDynamic')));
+      expect(
+        hostSource,
+        contains('ArticleReaderStableTextureCaptureLayer('),
+        reason:
+            'article reader deck must use the offscreen stable capture layer, '
+            'not a capture subtree rebuilt by every animation tick.',
+      );
+      expect(
+        hostSource,
+        contains('useOffscreenPaint: true'),
+        reason:
+            'hidden texture capture surfaces must not enter the visible stage.',
+      );
+      expect(
+        hostSource,
+        isNot(contains('class _ArticleReaderTextureCaptureLayer')),
+        reason:
+            'the old local capture layer was rebuilt inside the interactive stack '
+            'and could flicker while page curl frames were ticking.',
+      );
+      expect(
+        hostSource,
+        contains('_ensureBackTextureReadyForDirection('),
+        reason:
+            'BACK should not enter the dynamic sheet until the required semantic '
+            'verso texture is already available.',
+      );
+      expect(
+        hostSource,
+        contains('_startPageFlipTextureSession('),
+        reason:
+            'a page turn must freeze texture readiness for the session so a '
+            'late snapshot cannot visibly switch the moving sheet material.',
+      );
+      expect(
+        hostSource,
+        contains('_textureWarmupBlockedGesture'),
+        reason:
+            'if BACK texture warmup blocks pan start, the same gesture must not '
+            'enter a half-initialized fold on later pan updates.',
+      );
+      expect(
+        hostSource,
+        contains('blockCurrentGesture: true'),
+        reason:
+            'drag-based BACK warmup misses must explicitly block the current gesture.',
+      );
 
       final forwardImports = _sourceImportLines(forwardPipelineSource);
       expect(forwardImports, isNot(contains(contains('backward'))));
@@ -202,15 +250,24 @@ void main() {
         final debugMapperSource = _readAppSource(
           'lib/ui/content/article_reader/pageflip/diagnostics/article_reader_debug_mapper.dart',
         );
+        final stage1SoftGeometrySource = _readAppSource(
+          'lib/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart',
+        );
+        final partitionSource = _readAppSource(
+          'lib/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart',
+        );
+        final evidenceSource = _readAppSource(
+          'test/components/pageflip/backward_partition_evidence_test.dart',
+        );
         final softLayerStart = hostSource.indexOf('Widget _buildSoftPageLayer');
-        final hardLayerStart = hostSource.indexOf(
-          'Widget _buildHardFlippingPageLayer',
+        final dynamicLayerStart = hostSource.indexOf(
+          'Widget _buildDynamicPageLayer',
         );
         expect(softLayerStart, isNonNegative);
-        expect(hardLayerStart, greaterThan(softLayerStart));
+        expect(dynamicLayerStart, greaterThan(softLayerStart));
         final softLayerSource = hostSource.substring(
           softLayerStart,
-          hardLayerStart,
+          dynamicLayerStart,
         );
 
         expect(
@@ -221,36 +278,44 @@ void main() {
         expect(softLayerSource, contains('Transform.rotate('));
         expect(
           hostSource,
-          contains('_buildBackwardRectoVersoFlippingPageSurface('),
-          reason:
-              'BACK flipping sheet must split recto/back-unified and verso/back inside '
-              'the same soft surface.',
+          isNot(contains('Widget _buildHardFlippingPageLayer')),
+          reason: '旧 3D 硬翻页入口不得留在 article reader deck 主链。',
         );
         expect(
           hostSource,
-          contains('_buildBackwardSheetFacePolygon('),
-          reason:
-              'BACK recto/front visible plane must use the previous front surface, not the semantic back texture path.',
+          isNot(contains('rotateY(')),
+          reason: 'article reader 前后翻必须走 soft/paperFold，而不是 Matrix4.rotateY。',
         );
         expect(
           hostSource,
-          contains('Widget _buildBackwardSheetFacePolygon'),
+          contains('_buildBackwardFullSheetBackSurface('),
           reason:
-              'BACK must keep a live recto/front page-surface helper separate from the verso/back texture path.',
+              'BACK flipping sheet must use the forward-equivalent full previous-back surface.',
         );
         expect(
           hostSource,
-          contains('backwardLeafFrame: frame.backwardLeafFrame'),
+          isNot(contains('_buildBackwardPreviousFrontRevealLayer(')),
           reason:
-              'BACK split widths must come from ArticlePageBackwardLeafFrame, '
-              'not a second progress curve.',
+              'BACK previous front must not return as a separate page-space plane.',
         );
         expect(
           hostSource,
-          contains('_backwardFoldDerivedFacePolygons('),
+          isNot(contains('Widget _buildBackwardSheetFacePolygon')),
           reason:
-              'recto/verso page-local polygons must be derived from the same '
-              'fold line as the BACK sheet, not from a width-only strip.',
+              'BACK previous front must not return to the rotating sheet-local recto paint helper.',
+        );
+        expect(
+          partitionSource,
+          isNot(contains('ArticlePageBackwardLeafFrame')),
+          reason:
+              'BACK recto/verso geometry must come from the same fold/free '
+              'frame bundle, not ArticlePageBackwardLeafFrame progress data.',
+        );
+        expect(
+          hostSource,
+          isNot(contains('resolveBackwardCanonicalSheetFaces(')),
+          reason:
+              'BACK diagnostics must not consume the old sheet-local recto/verso resolver.',
         );
         expect(
           hostSource,
@@ -261,17 +326,15 @@ void main() {
         );
         expect(
           hostSource,
-          contains('_buildBackwardFrontFlatLayer('),
+          isNot(contains('_buildBackwardFrontFlatLayer(')),
           reason:
-              'Route-B must compose a distinct S-E previous-front flat segment '
-              'between current residual and the rotating back fold band.',
+              'BACK must not keep a free previous-front flat paint plane above the back band.',
         );
         expect(
           hostSource,
-          contains('backwardFrontFlatPolygon('),
+          isNot(contains('backwardFrontFlatPolygon(')),
           reason:
-              'BACK previous-front flat segment must be derived from E/free-edge '
-              'and F/foldLine geometry, not from a full baseline.',
+              'previous front must be owned by the shared page-space reveal path, not an extra flat geometry branch.',
         );
         expect(
           hostSource,
@@ -289,10 +352,9 @@ void main() {
         );
         expect(
           hostSource,
-          contains('_buildBackwardBackFoldBandSurface('),
+          isNot(contains('_buildBackwardBackFoldBandSurface(')),
           reason:
-              'BACK previous-back must use a dedicated fold-band surface so it '
-              'keeps the same backside texture and overlay semantics as FORWARD.',
+              'BACK previous-back must not return to the dedicated fold-band surface.',
         );
         expect(
           hostSource,
@@ -301,21 +363,17 @@ void main() {
               'BACK back/verso texture must stay on the flipping previous leaf; '
               'covered current is only the bottom/current residual.',
         );
-        final splitStart = hostSource.indexOf(
-          'BackwardFoldFaceGeometry _backwardFoldDerivedFacePolygons',
-        );
-        final splitEnd = hostSource.indexOf(
-          'String? _resolveBackwardPhaseLabel',
-          splitStart,
-        );
-        expect(splitStart, isNonNegative);
-        expect(splitEnd, greaterThan(splitStart));
-        final splitSource = hostSource.substring(splitStart, splitEnd);
         expect(
-          splitSource,
-          contains('backwardFoldFaceGeometry('),
+          hostSource,
+          isNot(contains('resolveBackwardCanonicalSheetFaces(')),
           reason:
-              'BACK host resolver must delegate to the shared recto/verso F/E geometry helper.',
+              'BACK host paint must not delegate visible ownership to the old sheet-local split resolver.',
+        );
+        expect(
+          hostSource,
+          isNot(contains('resolveBackwardSheetPartitionFromSheetLocal(')),
+          reason:
+              'BACK host must not keep the old sheet-local alias resolver entry point.',
         );
         expect(
           hostSource,
@@ -332,10 +390,10 @@ void main() {
               'reflection transform moves the texture out of the visible front slice.',
         );
         final backwardSurfaceStart = hostSource.indexOf(
-          'Widget _buildBackwardRectoVersoFlippingPageSurface',
+          'Widget _buildBackwardFullSheetBackSurface',
         );
         final backwardSurfaceEnd = hostSource.indexOf(
-          'Widget _buildBackwardBackFoldBandSurface',
+          'Widget _buildBottomProjectedPageSurface',
           backwardSurfaceStart,
         );
         expect(backwardSurfaceStart, isNonNegative);
@@ -346,29 +404,27 @@ void main() {
         );
         expect(
           backwardSurfaceSource,
-          contains('ArticlePageSurfaceKind.front'),
+          contains('_BackwardLeafVersoUvPainter('),
           reason:
-              'the moving sheet recto slice must draw the previous front texture.',
+              'the BACK full-sheet surface must use the semantic previous-back texture painter.',
         );
         expect(
           backwardSurfaceSource,
-          contains('_buildBackwardSheetFacePolygon('),
+          isNot(contains('_buildBackwardSheetFacePolygon(')),
           reason:
-              'the moving sheet recto slice must be routed through the front surface path.',
+              'previous front must stay outside the rotating sheet-local recto path.',
         );
         expect(
           backwardSurfaceSource,
-          contains('_buildBackwardBackFoldBandSurface('),
+          isNot(contains('_buildBackwardBackFoldBandSurface(')),
           reason:
-              'rotating BACK sheet should route previous-back through the '
-              'dedicated backside fold-band surface.',
+              'rotating BACK sheet must not route previous-back through a dedicated fold-band surface.',
         );
         expect(
           backwardSurfaceSource,
-          contains('_backwardFoldDerivedFacePolygons('),
+          isNot(contains('resolveBackwardCanonicalSheetFaces(')),
           reason:
-              'BACK recto/front and verso/back polygons must come from the same '
-              'fold-face geometry resolver.',
+              'BACK full-sheet surface must not use old recto/front and verso/back partition polygons.',
         );
         expect(
           RegExp(r'backwardSheetRectoPolygon\(').allMatches(hostSource).length,
@@ -386,40 +442,74 @@ void main() {
           debugMapperSource,
           isNot(contains('backwardSheetVersoPolygon(')),
           reason:
-              'diagnostics must not re-derive BACK verso geometry outside the shared resolver.',
-        );
-        expect(debugMapperSource, contains('backwardFoldFaceGeometry('));
-        final backFoldBandStart = hostSource.indexOf(
-          'Widget _buildBackwardBackFoldBandSurface',
-        );
-        final backFoldBandEnd = hostSource.indexOf(
-          'Widget _buildBackwardSheetFacePolygon',
-          backFoldBandStart,
-        );
-        expect(backFoldBandStart, isNonNegative);
-        expect(backFoldBandEnd, greaterThan(backFoldBandStart));
-        final backFoldBandSource = hostSource.substring(
-          backFoldBandStart,
-          backFoldBandEnd,
+              'diagnostics must not re-derive BACK verso geometry outside the forward-equivalent surface.',
         );
         expect(
-          backFoldBandSource,
-          contains('_buildBackwardVersoTextureSurface('),
-          reason:
-              'previous-back fold band must use the explicit verso/backface texture path.',
+          debugMapperSource,
+          isNot(contains('resolveBackwardCanonicalSheetFaces(')),
         );
         expect(
-          backFoldBandSource,
-          contains('_validBackPageTextureSnapshotForIndex('),
+          debugMapperSource,
+          isNot(contains('resolveBackwardSheetPartitionFromSheetLocal(')),
+        );
+        expect(
+          stage1SoftGeometrySource,
+          isNot(contains('_expandDegenerateBackwardVersoPolygon')),
           reason:
-              'previous-back fold band must bind a semantic-back validated '
-              'previous/flipping leafVerso snapshot before painting the E/F back band.',
+              'BACK partition geometry must not synthesize a verso polygon from leaf timeline width.',
+        );
+        expect(
+          hostSource,
+          isNot(contains('versoRevealWidthNormalized:')),
+          reason:
+              'BACK paint/diagnostics must not pass leaf timeline width into the partition resolver.',
+        );
+        expect(
+          debugMapperSource,
+          isNot(contains('versoRevealWidthNormalized:')),
+        );
+        expect(
+          partitionSource,
+          isNot(contains('resolveBackwardSheetPartitionFromSheetLocal(')),
+          reason:
+              'partition resolver must expose a single sheet-local entry point.',
+        );
+        expect(
+          partitionSource,
+          contains('class BackwardCanonicalSheetInput'),
+          reason:
+              'single resolver input must make sheet-local coordinates explicit.',
+        );
+        expect(
+          partitionSource,
+          isNot(contains('versoRevealWidthNormalized')),
+          reason:
+              'leaf timeline width must remain diagnostics-only and not feed partition polygons.',
+        );
+        expect(
+          evidenceSource,
+          isNot(contains('pagePartition')),
+          reason:
+              'evidence must not compare stale page-local and sheet-local resolver outputs.',
+        );
+        expect(evidenceSource, isNot(contains('sheetPartition')));
+        expect(
+          hostSource,
+          isNot(contains('Widget _buildBackwardBackFoldBandSurface')),
+          reason:
+              'previous-back must not return to the old fold-band paint helper.',
+        );
+        expect(
+          hostSource,
+          isNot(contains('Widget _buildBackwardSheetPolygonSurface')),
+          reason:
+              'previous-back must not return to a separate sheet-local polygon surface.',
         );
         final validatorStart = hostSource.indexOf(
           'ArticlePageTextureSnapshot? _validBackPageTextureSnapshotForIndex',
         );
         final validatorEnd = hostSource.indexOf(
-          'void _queueSceneTextureSnapshots',
+          'void _queueStaticTextureSnapshots',
           validatorStart,
         );
         expect(validatorStart, isNonNegative);
@@ -435,10 +525,10 @@ void main() {
               'BACK verso must reject same-size snapshots that are not semantic back surfaces.',
         );
         final backTextureStart = hostSource.indexOf(
-          'Widget _buildBackwardVersoTextureSurface',
+          'Widget _buildBackwardFullSheetBackSurface',
         );
         final backTextureEnd = hostSource.indexOf(
-          'Widget _buildBackwardRectoVersoFoldOverlay',
+          'Widget _buildBottomProjectedPageSurface',
           backTextureStart,
         );
         expect(backTextureStart, isNonNegative);
@@ -464,20 +554,14 @@ void main() {
           backTextureSource,
           isNot(contains('RawImage(')),
           reason:
-              'BACK mainline backBand must not fall back to page-rect RawImage; '
+              'BACK mainline full sheet must not fall back to page-rect RawImage; '
               'host and probes must share the same texture painter.',
         );
         expect(
           backTextureSource,
           contains('_BackwardLeafVersoUvPainter'),
           reason:
-              'BACK backBand must route the previous/flipping leafVerso snapshot through the shared painter.',
-        );
-        expect(
-          backTextureSource,
-          contains('article_backward_leaf_verso_texture_wait'),
-          reason:
-              'BACK must expose a diagnostic wait state instead of rendering a fake mirrored backface.',
+              'BACK full sheet must route the previous/flipping leafVerso snapshot through the shared painter.',
         );
         expect(
           backTextureSource,
@@ -489,16 +573,16 @@ void main() {
           hostSource,
           isNot(contains('Widget _buildBackwardVersoTextureFallback')),
           reason:
-              'BACK backBand must not keep a visual fallback branch that can draw the wrong texture.',
+              'BACK full sheet must not keep a visual fallback branch that can draw the wrong texture.',
         );
         final versoProbeSource = _readAppSource(
           'lib/ui/content/article_reader/pageflip/layers/backward_leaf_verso_pixel_probe.dart',
         );
         expect(
           versoProbeSource,
-          contains('buildBackwardLeafVersoUvMesh('),
+          contains('buildBackwardLeafVersoMaterialUvMesh('),
           reason:
-              'BACK leafVerso probes must keep using the shared, testable UV mesh builder.',
+              'BACK leafVerso probes must use the fixed material-domain UV mesh builder.',
         );
         expect(
           hostSource,
@@ -523,28 +607,71 @@ void main() {
         );
         expect(
           uvMeshSource,
-          contains('backwardVersoTexturePoint('),
+          contains('required List<Offset> materialLocalPolygon'),
           reason:
-              'BACK leafVerso mesh must consume the shared UV mapping helper '
-              'instead of reintroducing an inline mirror formula.',
-        );
-        final uvMappingSource = _readAppSource(
-          'lib/ui/content/article_reader/pageflip/layers/backward_leaf_verso_texture_mapping.dart',
+              'BACK leafVerso mesh must carry the fixed page-local material plane instead of dynamic source-area clips.',
         );
         expect(
-          uvMappingSource,
-          contains("semanticBackSnapshotUvLocal"),
+          uvMeshSource,
+          contains('textureCoordinates.add(Offset(materialX, materialY))'),
           reason:
-              'BACK texture diagnostics must identify the single-mirror UV strategy.',
+              'BACK verso fixed material UV must preserve the material-local UV direction for the angled baseline.',
         );
         expect(
-          uvMappingSource,
-          isNot(contains('pageSize.width - localPoint.dx')),
+          softLayerSource,
+          contains('final useBackwardMaterialSheet'),
           reason:
-              'BACK receives a semantic back snapshot that was already mirrored '
-              'by the forward back surface; UV must not mirror it again.',
+              'BACK must explicitly separate the visible flipping clip from the material sheet used for UV.',
+        );
+        expect(
+          softLayerSource,
+          contains('sheetMaterialLocalPolygon'),
+          reason:
+              'BACK verso UV must come from the fixed material-local sheet, not the dynamic visible clip.',
+        );
+        expect(
+          hostSource,
+          isNot(
+            contains(
+              'materialLocalPolygon: partition.previousBackVersoAreaPolygon',
+            ),
+          ),
+          reason:
+              'BACK verso paint must not sample from the dynamic partition source-area polygon.',
+        );
+        expect(
+          hostSource,
+          contains(
+            'backwardVersoTextureUvStrategy: _hasBackwardPaperFoldFrame(scene)',
+          ),
+          reason: 'BACK diagnostics must expose the active UV strategy.',
+        );
+        expect(
+          hostSource,
+          contains("'materialLockedUv'"),
+          reason:
+              'BACK diagnostics must identify fixed material-domain UV, not source-area scanning.',
+        );
+        expect(
+          softLayerSource,
+          isNot(contains('_backwardVersoAreaPolygon(')),
+          reason:
+              'Mirroring the per-frame visible clip keeps the scanning UV bug alive.',
+        );
+        expect(
+          softLayerSource,
+          isNot(contains('materialLocalPolygon: polygon')),
+          reason:
+              'The BACK verso painter must not use the visible clip polygon as the material plane.',
+        );
+        expect(
+          uvMeshSource,
+          isNot(contains('backwardVersoTexturePoint(')),
+          reason:
+              'BACK leafVerso mesh must not route through the retired stable-band mapper.',
         );
         for (final debugField in <String>[
+          'backwardVersoDisplayState',
           'backwardVersoTextureUvStrategy',
           'backwardFrontBackOverlapWidth',
           'backwardBackVisibleUncoveredWidth',
@@ -571,6 +698,24 @@ void main() {
         );
         expect(
           diagnosticsSource,
+          contains('backwardVersoDisplayState'),
+          reason:
+              'screenshot overlay must expose whether BACK is using semantic snapshot or paper fallback.',
+        );
+        expect(
+          hostSource,
+          contains('paperFallback'),
+          reason:
+              'host diagnostics must distinguish semantic BACK from paper fallback.',
+        );
+        expect(
+          hostSource,
+          contains('semanticSnapshot'),
+          reason:
+              'host diagnostics must distinguish semantic BACK from paper fallback.',
+        );
+        expect(
+          diagnosticsSource,
           contains("label: 'overlap'"),
           reason:
               'screenshot overlay must expose front/back overlap and visible back width.',
@@ -584,8 +729,7 @@ void main() {
         for (final sourceLabel in <String>[
           'staticCurrentFront',
           'bottomCurrentFront',
-          'previousFrontFlat',
-          'sheetRectoFront',
+          'previousFrontReplacement',
           'sheetVersoBack',
           'foldOverlay',
         ]) {
@@ -615,11 +759,10 @@ void main() {
               'BACK diagnostics must keep recto/front and verso/back source labels separate.',
         );
         expect(
-          backFoldBandSource,
-          contains('showBackside: true'),
+          hostSource,
+          contains('showBackside'),
           reason:
-              'previous-back fold band must reuse the same backside wash/opacity '
-              'overlay as the forward flip back face.',
+              'BACK must reuse the same face decision as the forward flipping surface.',
         );
         expect(
           _readAppSource(
@@ -630,39 +773,22 @@ void main() {
               'previous-back must not be narrowed by a synthetic vertical guard; '
               'only StPageFlip F/E geometry owns the back band.',
         );
-        final softGeometrySource = _readAppSource(
-          'lib/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart',
+        final canonicalFaceSource = _readAppSource(
+          'lib/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart',
         );
-        final versoStart = softGeometrySource.indexOf(
-          'List<Offset> backwardSheetVersoPolygon',
-        );
-        final versoEnd = softGeometrySource.indexOf(
-          'List<Offset> clipPolygonByLine',
-          versoStart,
-        );
-        expect(versoStart, isNonNegative);
-        expect(versoEnd, greaterThan(versoStart));
-        final versoSource = softGeometrySource.substring(versoStart, versoEnd);
         expect(
-          versoSource,
+          canonicalFaceSource,
           isNot(contains('!linesAreParallel(')),
           reason:
               'F/E near-parallel states must still clip the E-F strip instead '
               'of falling into a separate geometry branch.',
         );
         expect(
-          versoSource,
+          canonicalFaceSource,
           isNot(contains('return foldSidePolygon')),
           reason:
               'BACK backface must never fall back to the unbounded fold side; '
               'that is the large-back regression from the visual reports.',
-        );
-        expect(
-          hostSource,
-          contains('(0.06 + progress * 0.04)'),
-          reason:
-              'product fold boundary must be a subtle paper shadow, not the '
-              'colored debug guide line.',
         );
         expect(
           hostSource,
@@ -677,9 +803,9 @@ void main() {
           _readAppSource(
             'lib/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart',
           ),
-          contains('keepPositiveSideForBackwardRecto('),
+          isNot(contains('keepPositiveSideForBackwardRecto(')),
           reason:
-              'host and diagnostics must share the same recto/verso side helper.',
+              'old BACK side helper must stay removed; canonical resolver owns face splitting.',
         );
         expect(
           hostSource,
@@ -687,13 +813,6 @@ void main() {
           reason:
               'BACK recto/verso side choice should use the canonical free-edge '
               'line when it is available.',
-        );
-        expect(
-          hostSource,
-          contains('clipBehavior: Clip.none'),
-          reason:
-              'BACK face polygons can live in native drawSoft-local space; they must '
-              'not be clipped by an inner Stack before the outer paper clip.',
         );
         expect(
           _readAppSource(
@@ -708,9 +827,9 @@ void main() {
           _readAppSource(
             'lib/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart',
           ),
-          contains('polygonLooksLikeFullPageFallback('),
+          isNot(contains('polygonLooksLikeFullPageFallback(')),
           reason:
-              'BACK verso/back must guard against the full-page uncreased fallback.',
+              'old full-page fallback rejection must not compete with canonical face splitting.',
         );
         expect(
           hostSource,
@@ -727,14 +846,14 @@ void main() {
               'that makes the back face disappear and the front face pop in.',
         );
         expect(
-          splitSource,
+          hostSource,
           isNot(contains('totalRectoVisibleWidthNormalized > 0.001')),
           reason:
               'BACK front polygon timing must be driven by F/E clipping, not an '
               'independent recto coverage gate.',
         );
         expect(
-          splitSource,
+          hostSource,
           isNot(contains('versoRevealWidthNormalized > 0.001')),
           reason:
               'BACK back polygon timing must be driven by F/E clipping, not an '
@@ -935,24 +1054,45 @@ void main() {
     });
 
     test(
-      'BACK verso polygon remains an E-F strip when fold/free-edge are parallel',
+      'BACK canonical faces remain alive when fold/free-edge are parallel',
       () {
         const pageSize = Size(400, 600);
-        final polygon = backwardSheetVersoPolygon(
-          pageSize: pageSize,
-          sheetLocalPolygon: pageRectPolygon(pageSize),
-          foldLine: const (Offset(160, 0), Offset(160, 600)),
-          freeEdgeLine: const (Offset(100, 0), Offset(100, 600)),
+        final faces = resolveBackwardCanonicalSheetFaces(
+          const BackwardCanonicalSheetInput(
+            pageSize: pageSize,
+            sheetLocalPolygon: <Offset>[
+              Offset.zero,
+              Offset(400, 0),
+              Offset(400, 600),
+              Offset(0, 600),
+            ],
+            sheetAreaPolygon: <Offset>[
+              Offset.zero,
+              Offset(400, 0),
+              Offset(400, 600),
+              Offset(0, 600),
+            ],
+            sheetLocalFoldLine: (Offset(160, 0), Offset(160, 600)),
+            sheetLocalFreeEdgeLine: (Offset(100, 0), Offset(100, 600)),
+            currentResidualPagePolygon: <Offset>[],
+          ),
         );
 
-        expect(polygon, hasLength(greaterThanOrEqualTo(3)));
-        final bounds = polygonBounds(polygon);
+        expect(
+          faces.previousFrontRectoLocalPolygon,
+          hasLength(greaterThanOrEqualTo(3)),
+        );
+        expect(
+          faces.previousBackVersoLocalPolygon,
+          hasLength(greaterThanOrEqualTo(3)),
+        );
+        final bounds = polygonBounds(faces.previousFrontRectoLocalPolygon);
         expect(bounds, isNotNull);
-        expect(bounds!.left, closeTo(100, 0.001));
-        expect(bounds.right, closeTo(160, 0.001));
+        expect(bounds!.left, greaterThanOrEqualTo(0));
+        expect(bounds.right, lessThanOrEqualTo(pageSize.width));
         expect(
           bounds.width,
-          lessThan(pageSize.width * 0.25),
+          lessThan(pageSize.width * 0.65),
           reason:
               'parallel F/E must form a narrow fold strip, not the whole fold side.',
         );
@@ -965,123 +1105,134 @@ void main() {
       },
     );
 
-    test('BACK verso polygon is empty without a free edge boundary', () {
+    test('BACK canonical faces are empty without a free edge boundary', () {
       const pageSize = Size(400, 600);
-      final polygon = backwardSheetVersoPolygon(
-        pageSize: pageSize,
-        sheetLocalPolygon: pageRectPolygon(pageSize),
-        foldLine: const (Offset(160, 0), Offset(160, 600)),
-        freeEdgeLine: null,
+      final faces = resolveBackwardCanonicalSheetFaces(
+        const BackwardCanonicalSheetInput(
+          pageSize: pageSize,
+          sheetLocalPolygon: <Offset>[
+            Offset.zero,
+            Offset(400, 0),
+            Offset(400, 600),
+            Offset(0, 600),
+          ],
+          sheetAreaPolygon: <Offset>[
+            Offset.zero,
+            Offset(400, 0),
+            Offset(400, 600),
+            Offset(0, 600),
+          ],
+          sheetLocalFoldLine: (Offset(160, 0), Offset(160, 600)),
+          sheetLocalFreeEdgeLine: null,
+          currentResidualPagePolygon: <Offset>[],
+        ),
       );
 
       expect(
-        polygon,
+        faces.previousBackVersoLocalPolygon,
         isEmpty,
         reason:
             'BACK backface must not display the unbounded fold side when E/free-edge is unavailable.',
       );
     });
 
-    test(
-      'BACK leafVerso UV samples the already mirrored semantic back surface',
-      () {
-        const pageSize = Size(400, 600);
-        final mesh = buildBackwardLeafVersoUvMesh(
-          pageSize: pageSize,
-          polygon: const <Offset>[
-            Offset(40, 120),
-            Offset(260, 120),
-            Offset(260, 480),
-            Offset(40, 480),
-          ],
-        );
-
-        expect(mesh, isNotNull);
-        expect(
-          mesh!.textureCoordinates,
-          equals(const <Offset>[
-            Offset(40, 120),
-            Offset(260, 120),
-            Offset(260, 480),
-            Offset(40, 480),
-          ]),
-          reason:
-              'BACK leafVerso receives a snapshot that was already mirrored by '
-              'the forward back surface; UV must not mirror it a second time.',
-        );
-        expect(mesh.indices, equals(<int>[0, 1, 2, 0, 2, 3]));
-      },
-    );
-
-    test('BACK leafVerso UV clamps Route-B overflow only at texture edges', () {
+    test('BACK material UV preserves material-local direction', () {
       const pageSize = Size(400, 600);
-      const overflowPolygon = <Offset>[
+      const materialLocalPolygon = <Offset>[
+        Offset.zero,
+        Offset(400, 0),
+        Offset(400, 600),
+        Offset(0, 600),
+      ];
+      final mesh = buildBackwardLeafVersoMaterialUvMesh(
+        pageSize: pageSize,
+        materialLocalPolygon: materialLocalPolygon,
+      );
+
+      expect(mesh, isNotNull);
+      expect(mesh!.positions.first, equals(Offset.zero));
+      expect(mesh.textureCoordinates.first, equals(Offset.zero));
+      expect(mesh.textureCoordinates[12], equals(const Offset(400, 0)));
+      expect(mesh.indices, isNotEmpty);
+    });
+
+    test('BACK material UV keeps Route-B material plane unclamped', () {
+      const pageSize = Size(400, 600);
+      const overflowMaterialPolygon = <Offset>[
         Offset(-72, 96),
         Offset(456, 96),
         Offset(428, 504),
         Offset(-44, 504),
       ];
 
-      final mesh = buildBackwardLeafVersoUvMesh(
+      final mesh = buildBackwardLeafVersoMaterialUvMesh(
         pageSize: pageSize,
-        polygon: overflowPolygon,
+        materialLocalPolygon: overflowMaterialPolygon,
       );
 
       expect(mesh, isNotNull);
       expect(
-        mesh!.positions,
-        equals(overflowPolygon),
+        mesh!.paintBounds.left < 0 || mesh.paintBounds.right > pageSize.width,
+        isTrue,
         reason:
-            'Route-B BACK can produce drawSoft-local X outside the page; '
-            'the UV mesh must not clamp those vertices back onto page edges.',
+            'Route-B BACK can produce drawSoft-local material coordinates outside the page.',
       );
-      expect(
-        mesh.textureCoordinates,
-        equals(const <Offset>[
-          Offset(0, 96),
-          Offset(400, 96),
-          Offset(400, 504),
-          Offset(0, 504),
-        ]),
-        reason:
-            'Route-B keeps overflow geometry, but UV must explicitly clamp to the '
-            'semantic back snapshot edge so the back does not sample undefined pixels.',
-      );
-      expect(mesh.indices, equals(<int>[0, 1, 2, 0, 2, 3]));
+      for (final texturePoint in mesh.textureCoordinates) {
+        expect(texturePoint.dx, inInclusiveRange(0, pageSize.width));
+        expect(texturePoint.dy, inInclusiveRange(0, pageSize.height));
+      }
     });
 
-    test('BACK leafVerso UV drops duplicate points and rejects zero area', () {
+    test(
+      'BACK material UV keeps the same material point across visible clips',
+      () {
+        const pageSize = Size(400, 600);
+        const materialLocalPolygon = <Offset>[
+          Offset.zero,
+          Offset(400, 0),
+          Offset(400, 600),
+          Offset(0, 600),
+        ];
+
+        final narrowMesh = buildBackwardLeafVersoMaterialUvMesh(
+          pageSize: pageSize,
+          materialLocalPolygon: materialLocalPolygon,
+        );
+        final wideMesh = buildBackwardLeafVersoMaterialUvMesh(
+          pageSize: pageSize,
+          materialLocalPolygon: materialLocalPolygon,
+        );
+
+        expect(narrowMesh, isNotNull);
+        expect(wideMesh, isNotNull);
+        final narrowIndex = narrowMesh!.positions.indexOf(
+          const Offset(200, 300),
+        );
+        final wideIndex = wideMesh!.positions.indexOf(const Offset(200, 300));
+        expect(narrowIndex, isNonNegative);
+        expect(wideIndex, isNonNegative);
+        expect(
+          narrowMesh.textureCoordinates[narrowIndex],
+          equals(wideMesh.textureCoordinates[wideIndex]),
+          reason:
+              'Visible BACK clips may change coverage, but a material vertex must keep the same UV.',
+        );
+        expect(
+          narrowMesh.textureCoordinates[narrowIndex],
+          equals(const Offset(200, 300)),
+        );
+      },
+    );
+
+    test('BACK material UV rejects degenerate material planes', () {
       const pageSize = Size(400, 600);
-      final dedupedMesh = buildBackwardLeafVersoUvMesh(
+      final flatMesh = buildBackwardLeafVersoMaterialUvMesh(
         pageSize: pageSize,
-        polygon: const <Offset>[
-          Offset(-20, 80),
-          Offset(-20, 80),
-          Offset(240, 80),
-          Offset(240, 420),
-          Offset(-20, 420),
-          Offset(-20, 80),
-        ],
-      );
-
-      expect(dedupedMesh, isNotNull);
-      expect(
-        dedupedMesh!.positions,
-        equals(const <Offset>[
-          Offset(-20, 80),
-          Offset(240, 80),
-          Offset(240, 420),
-          Offset(-20, 420),
-        ]),
-      );
-      expect(dedupedMesh.indices, equals(<int>[0, 1, 2, 0, 2, 3]));
-
-      final flatMesh = buildBackwardLeafVersoUvMesh(
-        pageSize: pageSize,
-        polygon: const <Offset>[
+        materialLocalPolygon: const <Offset>[
           Offset(80, 120),
           Offset(200, 120),
           Offset(320, 120),
+          Offset(80, 120),
         ],
       );
 

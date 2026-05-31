@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `user-identity-profile-relationship`
-- `L2_journey`: `persona-follow-graph`
-- `L3_scenario`: `persona-context-propagation`
+- `L1_domain_service`: `user-identity-profile-relationship`
+- `L2_business_capability`: `persona-follow-graph`
+- `L3_story`: `persona-context-propagation`
 
 本场景冻结“当前激活分身如何成为全链路默认动作主体”的合同。它不是新的身份实体，而是 user 域 `active persona` 对 content/chat/circle/assistant/invite/notification 的统一透传规则。
 

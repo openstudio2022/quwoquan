@@ -19,7 +19,6 @@ import 'package:quwoquan_app/components/settings_conversation/more_actions_popup
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
@@ -29,6 +28,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
@@ -477,11 +477,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       followingUsers: ref
           .watch(userRelationshipStateProvider)
           .followingSubAccountIds,
-      onFollowClick: (subAccountId, _) => syncProfileFollowIntent(
-        ref,
-        subAccountId: subAccountId,
-        isFollowing: !effectiveProfileFollowing(ref, subAccountId),
-      ),
+      onFollowClick: (subAccountId, _) =>
+          runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
+            syncProfileFollowIntent(
+              ref,
+              subAccountId: subAccountId,
+              isFollowing: !effectiveProfileFollowing(ref, subAccountId),
+            );
+          }),
       onVideoTap: (post, index) {
         _onPostTap(post, index, feedPosts: videos.toList(), category: tabId);
       },
@@ -911,11 +914,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
     final postViews = feedPosts
         ?.map(
-          (dto) => PostSummaryView.fromDto(
-            dto,
-            surfaceId: PostReadSurfaceId.immersive,
-            wire: dto.toMap(),
-          ),
+          (dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()),
         )
         .toList();
     final viewerPosts = feedPosts ?? <PostBaseDto>[post];
@@ -986,14 +985,16 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   void _onMomentShareTap(BuildContext context, PostBaseDto post) {
-    final template = _buildShareTemplate(post);
-    ContentShareSheet.show(
-      context,
-      template: template,
-      onActionCompleted: (result) async {
-        await _trackShareAction(post, result.actionId);
-      },
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
+      final template = _buildShareTemplate(post);
+      ContentShareSheet.show(
+        context,
+        template: template,
+        onActionCompleted: (result) async {
+          await _trackShareAction(post, result.actionId);
+        },
+      );
+    });
   }
 
   void _onMomentMoreTap(BuildContext context, PostBaseDto post) {
@@ -1021,35 +1022,29 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   ContentShareTemplate _buildShareTemplate(PostBaseDto post) {
-    final raw =
-        ref
-            .read(contentRepositoryProvider)
-            .discoveryPresentationWireForPost(post.id) ??
-        post.toMap();
-    final tags =
-        (raw['tags'] as List?)
-            ?.map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
-    final circleName = raw['circleName']?.toString().trim() ?? '';
+    final wire = ref
+        .read(contentRepositoryProvider)
+        .discoveryPresentationWireForPost(post.id);
+    final circleName = wire?.circleName ?? '';
     final enableIdentityTemplate = ref.read(
       contentFeatureFlagProvider('enable_identity_share_template'),
     );
+    final surfaceView =
+        ContentSurfaceViewMapper.fromDto(post, wire: wire?.toWireMap());
     return ContentShareTemplateBuilder.build(
-      post: post,
+      surfaceView: surfaceView,
       enableIdentityTemplate: enableIdentityTemplate,
-      visibility: raw['visibility']?.toString() ?? 'public',
-      tags: tags,
+      visibility: wire?.visibility ?? 'public',
       circleNames: circleName.isEmpty ? const <String>[] : <String>[circleName],
     );
   }
 
   String _sourceCircleNameForPost(PostBaseDto post) {
-    final raw = ref
-        .read(contentRepositoryProvider)
-        .discoveryPresentationWireForPost(post.id);
-    return raw?['circleName']?.toString().trim() ?? '';
+    return ref
+            .read(contentRepositoryProvider)
+            .discoveryPresentationWireForPost(post.id)
+            ?.circleName ??
+        '';
   }
 
   Future<void> _trackShareAction(PostBaseDto post, String actionId) async {
@@ -1266,12 +1261,17 @@ class _MomentPostCardState extends State<_MomentPostCard>
                     if (_isLiked) widget.onBehavior?.call('like', item);
                   },
                   child: _actionChip(
-                    _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                    null,
                     formatCompactActionCount(
                       item.likeCount + (_isLiked ? 1 : 0),
                     ),
                     isDark,
                     iconColor: likeColor,
+                    iconWidget: AppMediaHeartIcon(
+                      size: AppSpacing.iconMedium,
+                      color: likeColor,
+                      filled: _isLiked,
+                    ),
                   ),
                 ),
               ),
@@ -1279,9 +1279,16 @@ class _MomentPostCardState extends State<_MomentPostCard>
                 child: GestureDetector(
                   onTap: () => widget.onShareTap?.call(item),
                   child: _actionChip(
-                    CupertinoIcons.arrowshape_turn_up_right,
+                    null,
                     formatCompactActionCount(item.shareCount),
                     isDark,
+                    iconWidget: AppMediaShareIcon(
+                      size: AppSpacing.iconMedium,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundSecondary,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1292,7 +1299,7 @@ class _MomentPostCardState extends State<_MomentPostCard>
                     null,
                     formatCompactActionCount(item.commentCount),
                     isDark,
-                    iconWidget: AppBubbleIcon(
+                    iconWidget: AppMediaCommentIcon(
                       size: AppSpacing.iconMedium,
                       color: AppColorsFunctional.getColor(
                         isDark,
@@ -1344,7 +1351,11 @@ class _MomentPostCardState extends State<_MomentPostCard>
               maxLines: 1,
               overflow: TextOverflow.fade,
               softWrap: false,
-              style: TextStyle(fontSize: AppTypography.sm, color: muted),
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                color: muted,
+                height: AppSpacing.one,
+              ),
             ),
           ],
         ),
@@ -1353,7 +1364,7 @@ class _MomentPostCardState extends State<_MomentPostCard>
   }
 }
 
-/// 文章卡片占位：1:1 复制 ArticleCard 结构（简化，后续接 ArticleDetailView）
+/// 文章卡片占位：1:1 复制 ArticleCard 结构（简化，富渲染走 ContentSurfaceView.article）
 class _ArticleCardPlaceholder extends StatelessWidget {
   final PostBaseDto article;
   final bool isDark;
@@ -1475,8 +1486,7 @@ class _ArticleCardPlaceholder extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      CupertinoIcons.heart,
+                    AppMediaHeartIcon(
                       size: AppSpacing.iconMedium,
                       color: muted,
                     ),
@@ -1495,7 +1505,10 @@ class _ArticleCardPlaceholder extends StatelessWidget {
                         color: muted,
                       ),
                     ),
-                    AppBubbleIcon(size: AppSpacing.iconMedium, color: muted),
+                    AppMediaCommentIcon(
+                      size: AppSpacing.iconMedium,
+                      color: muted,
+                    ),
                     Text(
                       ' ${article.commentCount} ',
                       style: TextStyle(
@@ -1506,11 +1519,7 @@ class _ArticleCardPlaceholder extends StatelessWidget {
                   ],
                 ),
                 const Spacer(),
-                Icon(
-                  CupertinoIcons.arrowshape_turn_up_right,
-                  size: AppSpacing.iconMedium,
-                  color: muted,
-                ),
+                AppMediaShareIcon(size: AppSpacing.iconMedium, color: muted),
                 Text(
                   ' ${UITextConstants.share}',
                   style: TextStyle(fontSize: AppTypography.base, color: muted),
@@ -2094,17 +2103,26 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                                     isLiked,
                                     '$likeCount',
                                     () {
-                                      syncPostLikeIntent(
+                                      runWhenLoggedIn(
                                         ref,
-                                        postId: post.id,
-                                        isLiked: !isLiked,
-                                        likeCount: isLiked
-                                            ? (likeCount - 1)
-                                                  .clamp(0, 1 << 31)
-                                                  .toInt()
-                                            : likeCount + 1,
+                                        context,
+                                        AuthGateReason.like,
+                                        () {
+                                          syncPostLikeIntent(
+                                            ref,
+                                            postId: post.id,
+                                            isLiked: !isLiked,
+                                            likeCount: isLiked
+                                                ? (likeCount - 1)
+                                                      .clamp(0, 1 << 31)
+                                                      .toInt()
+                                                : likeCount + 1,
+                                          );
+                                          _likeAnimationController.forward(
+                                            from: 0,
+                                          );
+                                        },
                                       );
-                                      _likeAnimationController.forward(from: 0);
                                     },
                                     scaleAnimation: _likeScaleAnimation,
                                   ),
@@ -2119,31 +2137,38 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                                     ),
                                     UITextConstants.bookmarks,
                                     () {
-                                      final bookmarkCount =
-                                          effectivePostBookmarkCount(
-                                            ref,
-                                            post.id,
-                                            fallback: post.favoriteCount,
-                                          );
-                                      syncPostSaveIntent(
+                                      runWhenLoggedIn(
                                         ref,
-                                        postId: post.id,
-                                        isSaved: !isSaved,
-                                        bookmarkCount: isSaved
-                                            ? (bookmarkCount - 1)
-                                                  .clamp(0, 1 << 31)
-                                                  .toInt()
-                                            : bookmarkCount + 1,
-                                      );
-                                      _bookmarkAnimationController.forward(
-                                        from: 0,
+                                        context,
+                                        AuthGateReason.favorite,
+                                        () {
+                                          final bookmarkCount =
+                                              effectivePostBookmarkCount(
+                                                ref,
+                                                post.id,
+                                                fallback: post.favoriteCount,
+                                              );
+                                          syncPostSaveIntent(
+                                            ref,
+                                            postId: post.id,
+                                            isSaved: !isSaved,
+                                            bookmarkCount: isSaved
+                                                ? (bookmarkCount - 1)
+                                                      .clamp(0, 1 << 31)
+                                                      .toInt()
+                                                : bookmarkCount + 1,
+                                          );
+                                          _bookmarkAnimationController.forward(
+                                            from: 0,
+                                          );
+                                        },
                                       );
                                     },
                                     scaleAnimation: _bookmarkScaleAnimation,
                                   ),
                                   _videoActionWidget(
                                     context,
-                                    AppBubbleIcon(
+                                    AppMediaCommentIcon(
                                       size: AppSpacing.iconMedium,
                                       color: videoFgQuaternary,
                                     ),
@@ -2155,8 +2180,7 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                                   ),
                                   _videoActionWidget(
                                     context,
-                                    Icon(
-                                      CupertinoIcons.arrowshape_turn_up_right,
+                                    AppMediaShareIcon(
                                       size: AppSpacing.iconMedium,
                                       color: videoFgQuaternary,
                                     ),
@@ -2300,13 +2324,13 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
         AppSpacing.semantic[DesignSemanticConstants
             .intraGroup]?[DesignSemanticConstants.xs] ??
         AppSpacing.intraGroupXs;
-    final iconWidget = Icon(
-      icon == CupertinoIcons.heart
-          ? (filled ? CupertinoIcons.heart_fill : CupertinoIcons.heart)
-          : icon,
-      color: filled ? AppColors.error : videoFgQuaternary,
-      size: AppSpacing.iconMedium,
-    );
+    final iconWidget = icon == CupertinoIcons.heart
+        ? AppMediaHeartIcon(
+            size: AppSpacing.iconMedium,
+            color: filled ? AppColors.error : videoFgQuaternary,
+            filled: filled,
+          )
+        : Icon(icon, color: videoFgQuaternary, size: AppSpacing.iconMedium);
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
       child: GestureDetector(
@@ -2325,6 +2349,7 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                 fontSize: AppTypography.sm,
                 fontWeight: AppTypography.bold,
                 color: videoFg,
+                height: AppSpacing.one,
               ),
             ),
           ],
@@ -2368,6 +2393,7 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                 fontSize: AppTypography.sm,
                 fontWeight: AppTypography.bold,
                 color: videoFg,
+                height: AppSpacing.one,
               ),
             ),
           ],

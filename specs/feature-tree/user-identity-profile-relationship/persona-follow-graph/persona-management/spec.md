@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `user-identity-profile-relationship`
-- `L2_journey`: `persona-follow-graph`
-- `L3_scenario`: `persona-management`
+- `L1_domain_service`: `user-identity-profile-relationship`
+- `L2_business_capability`: `persona-follow-graph`
+- `L3_story`: `persona-management`
 
 本场景冻结“用户及分身”模型下的分身管理台基线。产品与接口统一使用“用户 / 分身 / 主分身 / 用户号 / 用户ID”语义，不再使用账号、主账号、子账号。 本场景只负责分身管理面的创建、切换、继承/同步建议、停用/删除保护、配额和管理入口，不负责公开主页壳层与跨域透传实现。
 

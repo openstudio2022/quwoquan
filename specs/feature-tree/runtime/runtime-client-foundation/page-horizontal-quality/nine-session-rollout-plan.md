@@ -42,18 +42,18 @@
   - 全表扫描 **○**：须变为 **✓** 或 **—**，或在矩阵「备注」/ 兄弟 L3 中登记 **技术债 ID**；  
   - 执行 `make verify-app-page-horizontal-quality`（快检）与 `bash agent_ops/gate/gate_repo.sh --scope app`（或完整 `make gate`，视 PR 范围）；  
   - **治理落盘**：Cursor 规则 `.cursor/rules/09-page-horizontal-quality.mdc`、`01-arch-constraints.mdc` §2.4、`page_horizontal_quality_pr_checklist.md` §S9；  
-  - 更新 `specs/changelog/CR-*.yaml` 或在本 L3 `tasks.md` 勾选完成。
+  - 更新 `specs/changelog/CR-*.yaml` 或在本 L3 `树内任务文档` 勾选完成。
 
 ## 与会话规划相关的仓库产物
 
 | 产物 | 说明 |
 |------|------|
 | 本文件 | 九会话 **唯一执行顺序与出口定义** |
-| [`plan.yaml`](./plan.yaml) | `slice-3-nine-session-rollout` 指向本文件 |
-| [`tasks.md`](./tasks.md) | M4 勾选 S1–S9；**M8** 勾选 **实施波次 B** |
+| [`树内计划文档`](./树内计划文档) | `slice-3-nine-session-rollout` 指向本文件 |
+| [`树内任务文档`](./树内任务文档) | M4 勾选 S1–S9；**M8** 勾选 **实施波次 B** |
 | [`s2-metadata-driven-contract-baseline-20260330.md`](./s2-metadata-driven-contract-baseline-20260330.md) | **S2** 全页 P2↔清单对照表与基线锁定声明 |
 | [`CR-20260329-006`](../../../../changelog/CR-20260329-006-page-horizontal-quality-nine-session-rollout.yaml) | 变更登记 |
-| `plan.yaml` **slice-6** | `slice-6-mock-cloud-test-isolation-wave-b`（与 `acceptance.yaml` **A6** 同步；首 PR 实施时落盘） |
+| `树内计划文档` **slice-6** | `slice-6-mock-cloud-test-isolation-wave-b`（与 `acceptance.yaml` **A6** 同步；首 PR 实施时落盘） |
 | [`CR-20260330-010`](../../../../changelog/CR-20260330-010-mock-isolation-implementation-wave.md) | 实施波次 B 登记（YAML 可与首 PR 补） |
 
 ---
@@ -63,7 +63,7 @@
 > **定位**：与 **横向维度 S1–S9**（P1–P8 矩阵列）**正交**；聚焦 **数据源真隔离**、**目录 §9**、**正式包零 Mock 耦合**。  
 > **策略全文**：[`mock_data_cloud_integration_policy.md`](../../../../gates/mock_data_cloud_integration_policy.md)（含 **§4.1** 同文件测试、**§9** 目录、`P0–P4` 阶段表）。  
 > **变更登记**：**CR-20260330-010**（YAML 见 changelog，与实施首 PR 一并提交）。  
-> **执行勾选**：[`tasks.md`](./tasks.md) **M8**。
+> **执行勾选**：[`树内任务文档`](./树内任务文档) **M8**。
 
 ### B0 脚手架（可首 PR 落地）
 
@@ -113,16 +113,16 @@ bash agent_ops/gate/gate_repo.sh --scope app
 
 ## 附录：实施首 PR 需合入的 YAML 片段（若仓库中尚未自动落盘）
 
-> 以下供 **Agent 模式** 粘贴进 `plan.yaml` / `acceptance.yaml`；若已存在 **slice-6** / **A6** 则跳过。
+> 以下供 **Agent 模式** 粘贴进 `树内计划文档` / `acceptance.yaml`；若已存在 **slice-6** / **A6** 则跳过。
 
-**`plan.yaml`** 在 `slice-5-...` 块后追加：
+**`树内计划文档`** 在 `slice-5-...` 块后追加：
 
 ```yaml
   - id: slice-6-mock-cloud-test-isolation-wave-b
     title: 实施波次 B（Mock·端云·测试编译隔离；policy §4.1 §9；清空 allowlist；prod 入口）
     outputs:
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md
-      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/树内任务文档
       - specs/gates/mock_data_cloud_integration_policy.md
       - specs/gates/ui_mock_isolation_allowlist.yaml
       - quwoquan_app/test/support/README.md

@@ -4,8 +4,8 @@ entity_name: UserLifeItem
 aggregate_root: false
 
 description: |
-  用户主页展示的生命轨迹/人生经历项。
-  按 category（如教育、职业、荣誉、兴趣）归类，可自定义排序。
+  用户主页「生活」Tab 展示的生活记录项。
+  按 category 归类（LifeItemCategory：footprint=足迹 / soul=书影音 / taste=味蕾 / private=爱物），可自定义排序。
   通过 refId 关联内容（作品、圈子等）。
 
 storage_backend: postgres

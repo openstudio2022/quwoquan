@@ -50,9 +50,12 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       if (circleId != null && circleId!.trim().isNotEmpty) 'circleId': circleId,
       if (circleName != null && circleName!.trim().isNotEmpty)
         'circleName': circleName,
-      if (tags != null && tags!.isNotEmpty) 'tags': tags,
       if (visibility != null && visibility!.trim().isNotEmpty)
         'visibility': visibility,
+      if (intersectionReasons != null && intersectionReasons!.isNotEmpty)
+        'intersectionReasons': intersectionReasons!
+            .map((reason) => reason.toMap())
+            .toList(growable: false),
     };
   }
 }

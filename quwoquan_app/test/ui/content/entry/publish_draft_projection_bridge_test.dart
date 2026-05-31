@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/publish_draft_projection_bridge.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
@@ -22,16 +23,6 @@ void main() {
         expect(wire.containsKey('articleDocument'), isFalse);
         expect(wire['articleTemplate'], isNotNull);
         expect(wire['articleFontPreset'], isNotNull);
-      },
-    );
-
-    test(
-      'projectArticleDetailViewFromCreateEditorState returns view for initial draft',
-      () {
-        final state = CreateEditorState.initial();
-        final view = projectArticleDetailViewFromCreateEditorState(state);
-        expect(view.id, 'draft_preview');
-        expect(view.pages, isNotEmpty);
       },
     );
 
@@ -91,5 +82,99 @@ void main() {
         expect(payload.containsKey('articleDocument'), isFalse);
       },
     );
+
+    test('article markdown is serialized directly from document nodes', () {
+      final document = ArticleDocumentData(
+        nodes: const <ArticleDocumentNode>[
+          ArticleDocumentNode(
+            id: 'document_title',
+            type: ArticleDocumentNodeType.documentTitle,
+            text: '节点标题',
+          ),
+          ArticleDocumentNode(
+            id: 'h2',
+            type: ArticleDocumentNodeType.headingMajor,
+            text: '节点章节',
+          ),
+          ArticleDocumentNode(
+            id: 'fig1',
+            type: ArticleDocumentNodeType.figure,
+            assetId: 'fig1',
+            imageUrl: '/tmp/fig1.jpg',
+            imageLayout: 'wrapLeft',
+            caption: '节点图注',
+          ),
+          ArticleDocumentNode(
+            id: 'p1',
+            type: ArticleDocumentNodeType.paragraph,
+            text: '节点正文第一段。',
+          ),
+        ],
+      );
+      final state = CreateEditorState.initial().copyWith(
+        title: '旧标题不应覆盖 nodes',
+        body: '旧正文不应覆盖 nodes',
+        articleDocument: document,
+        articleBlocks: const <CreateTextBlock>[
+          CreateTextBlock(
+            id: 'legacy',
+            type: CreateTextBlockType.paragraph,
+            text: 'legacy blocks 不应进入 Markdown',
+          ),
+        ],
+      );
+
+      final markdown = buildArticleMarkdownForPayload(state);
+
+      expect(markdown, contains('# 节点标题'));
+      expect(markdown, contains('## 节点章节'));
+      expect(
+        markdown,
+        contains(':::figure id="fig1" layout="wrapLeft" caption="节点图注"'),
+      );
+      expect(markdown, contains('节点正文第一段。'));
+      expect(markdown, isNot(contains('legacy blocks')));
+    });
+
+    test('draft storage persists Markdown triple and can restore document', () {
+      final document = ArticleDocumentData(
+        nodes: const <ArticleDocumentNode>[
+          ArticleDocumentNode(
+            id: 'document_title',
+            type: ArticleDocumentNodeType.documentTitle,
+            text: '草稿标题',
+          ),
+          ArticleDocumentNode(
+            id: 'p1',
+            type: ArticleDocumentNodeType.paragraph,
+            text: '草稿正文。',
+          ),
+        ],
+      );
+      final draft = CreateDraft(
+        id: 'draft_1',
+        updatedAtMs: 1,
+        state: CreateEditorState.initial().copyWith(
+          articleDocument: document,
+          title: '草稿标题',
+          body: '草稿正文。',
+          articleCoverImagePath: '/tmp/cover.jpg',
+        ),
+      );
+
+      final map = draft.toStorageMap();
+      expect(map['articleMarkdown'], isA<String>());
+      expect(map['articleMarkdownVersion'], 'qwq-rich-md/1');
+      expect(map['articleAssetManifest'], isA<Map>());
+      expect(map['articleRenderProfile'], isA<Map>());
+      expect(map.containsKey('articleDocument'), isFalse);
+      expect(map.containsKey('articlePages'), isFalse);
+      expect(map.containsKey('articleBlocks'), isFalse);
+
+      final restored = CreateDraft.fromStorageMap(map);
+      expect(restored.state.articleDocument.title, '草稿标题');
+      expect(restored.state.articleDocument.body, contains('草稿正文'));
+      expect(restored.state.articleCoverImagePath, '/tmp/cover.jpg');
+    });
   });
 }

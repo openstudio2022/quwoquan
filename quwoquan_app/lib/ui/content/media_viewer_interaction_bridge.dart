@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
@@ -215,6 +216,11 @@ void syncPostLikeIntent(
   required bool isLiked,
   required int likeCount,
 }) {
+  // 防御性兜底：未登录绝不写本地乐观态 / outbox。UI 入口已用 requireLogin 拦截，
+  // 这里只是防止任何遗漏路径让游客写入。
+  if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+    return;
+  }
   ref
       .read(postInteractionStateProvider.notifier)
       .setLiked(postId, isLiked, likeCount: likeCount);
@@ -236,6 +242,9 @@ void syncPostSaveIntent(
   required bool isSaved,
   required int bookmarkCount,
 }) {
+  if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+    return;
+  }
   ref
       .read(postInteractionStateProvider.notifier)
       .setSaved(postId, isSaved, bookmarkCount: bookmarkCount);
@@ -256,6 +265,9 @@ void syncProfileFollowIntent(
   required String subAccountId,
   required bool isFollowing,
 }) {
+  if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+    return;
+  }
   ref
       .read(userRelationshipStateProvider.notifier)
       .setFollowing(subAccountId, isFollowing);
@@ -276,6 +288,9 @@ Future<bool> syncPostShareIntent(
   required String postId,
   required int baselineShareCount,
 }) async {
+  if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+    return false;
+  }
   ref
       .read(postInteractionStateProvider.notifier)
       .stageOptimisticShare(postId, baseShareCount: baselineShareCount);

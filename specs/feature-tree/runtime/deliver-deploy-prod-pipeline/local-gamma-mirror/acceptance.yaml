@@ -1,134 +1,41 @@
-version: 1
-feature: local-gamma-mirror
-level: "L3_scenario"
-archived: true
-archived_at: '2026-05-02T00:00:00.000000Z'
-template: A1-A6
-tree_context:
-  feature_path: capability.runtime.feature.deliver-deploy-prod-pipeline.subfeature.local-gamma-mirror
-  parent_path: capability.runtime.feature.deliver-deploy-prod-pipeline
-level_acceptance:
-  focus_groups:
-    - A1_contract_and_governance
-    - A2_local_environment_readiness
-    - A3_t3_t4_left_shift
-  notes: 本地 gamma 镜像预测试只左移提交前验证，不替代云侧 gamma/prod 发布真实性门禁。
-  A1:
-    criteria: spec/design/acceptance/plan 已落地，并明确不新增第六环境、不新增第四份 seed manifest。
-    status: implemented
-    linked_tasks:
-      - LG-1
-    test_layers:
-      T1: required
-      T2: not_applicable
-      T3: not_applicable
-      T4: not_applicable
+version: 2
+node:
+  id: local-gamma-mirror
+  level: L3_story
+  path: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror
+  title: local gamma mirror
+  parent_domain_service: runtime
+  parent_business_capability: deliver-deploy-prod-pipeline
+scope:
+  summary: local gamma mirror 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: local gamma mirror GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md
-      - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/design.md
-      - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/plan.yaml
-  A2:
-    criteria: 环境矩阵、部署拓扑 runbook 与交付 runbook 明确 local-gamma mirror 是提交前左移复用，不是 `main` required check，并说明 DNS/TLS、设备连接与云端边界。
-    status: implemented
-    linked_tasks:
-      - LG-2
-    test_layers:
-      T1: required
-      T2: optional
-      T3: not_applicable
-      T4: not_applicable
-    tests:
-      - file: deploy/shared/environment_matrix.md
-      - file: deploy/shared/process_domain_mapping_runbook.md
-      - file: deploy/shared/deliver_to_production_runbook.md
-      - file: .cursor/commands/commit.md
-  A3:
-    criteria: 本地 Docker mirror 以 gamma 语义启动，覆盖依赖、服务镜像、CONFIG_VERSION、seed/reset、DNS/TLS 反代与 media/realtime 基址。
-    status: implemented
-    linked_tasks:
-      - LG-3
-    test_layers:
-      T1: required
-      T2: optional
-      T3: required
-      T4: not_applicable
-    tests:
-      - file: quwoquan_service/docker-compose.gamma-local.yaml
-      - file: deploy/local-gamma/Caddyfile
-      - file: quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
-  A4:
-    criteria: 本地 T3 runner 使用 app_gamma_seed_manifest.json 验证真实 API、真实存储副作用、错误码、响应 schema 与 RemoteRepository 边界。
-    status: implemented
-    linked_tasks:
-      - LG-4
-    test_layers:
-      T1: required
-      T2: optional
-      T3: required
-      T4: not_applicable
-    tests:
-      - file: quwoquan_app/scripts/gamma/run_local_gamma_t3.py
-      - command: python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --help
-  A5:
-    criteria: 本地 T4 runner 统一 CLOUD_GATEWAY_BASE_URL、API_CONTRACT_BASE_URL、TEST_AUTH_TOKEN 与 MEDIA_*，复用共享 gamma 巡检脚本与证据字段，在模拟器或真机完成 Patrol 核心旅程。
-    status: implemented
-    linked_tasks:
-      - LG-5
-    test_layers:
-      T1: optional
-      T2: optional
-      T3: optional
-      T4: required
-    tests:
-      - file: quwoquan_app/scripts/gamma/run_local_gamma_t4.sh
-      - command: bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh --help
-  A6:
-    criteria: gate-local-gamma 串联 T1/T2/T3/T4 并输出 artifacts/local-gamma/report.json，作为提交前左移准入，但不再成为 `main` required check。
-    status: implemented
-    linked_tasks:
-      - LG-6
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: required
-    tests:
-      - file: Makefile
-      - file: quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py
-      - command: make gate-local-gamma LOCAL_GAMMA_DRY_RUN=1
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate-local-gamma
-  report: artifacts/local-gamma/report.json
-  cloud_gate: "`04. Pre-Release Gate` + `05. App Env Device Matrix` + 灰度阶段 SLO + prod 观测"
-journey_acceptance:
-  - id: A1
-    statement: 本地 gamma mirror 规格冻结四环境语义与云端不可替代边界。
-    t_layers: [T1]
-  - id: A3
-    statement: 本地镜像栈可重复启动并承载 gamma RemoteRepository 流量。
-    t_layers: [T1, T3]
-  - id: A5
-    statement: 模拟器或真机可通过同一 mirror endpoint 执行核心设备旅程。
-    t_layers: [T4]
-scenario_acceptance:
-  - id: S1
-    statement: 提交前运行 gate-local-gamma 能生成包含 T1/T2/T3/T4 的本地报告。
-    t_layers: [T1, T2, T3, T4]
-  - id: S2
-    statement: 本地设备、DNS、TLS 或服务依赖不足时，报告状态为 GATE_BLOCK 而不是伪通过。
-    t_layers: [T3, T4]
-evidence_matrix:
-  T1:
-    - type: static_gate
-      artifact: make gate
-    - type: env_package
-      artifact: artifacts/app-env-packages/gamma/report.json
-  T2:
-    - type: module_tests
-      artifact: agent_ops/gate/gate_repo.sh
-  T3:
-    - type: local_gamma_report
-      artifact: artifacts/local-gamma/report.json
-  T4:
-    - type: local_gamma_report
-      artifact: artifacts/local-gamma/report.json
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

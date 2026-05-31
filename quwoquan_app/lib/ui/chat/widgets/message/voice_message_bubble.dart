@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -27,17 +30,19 @@ class VoiceMessageBubble extends ConsumerWidget {
   final bool isRead;
   final String messageStatus;
 
-  /// Bubble width proportional to duration: 120px for 1s, up to 260px for 60s+.
+  /// Bubble width follows the familiar chat rhythm: short clips stay tappable,
+  /// longer clips grow smoothly without taking over the row.
   double get _bubbleWidth {
-    const minWidth = 120.0;
-    const maxWidth = 260.0;
-    final seconds = durationMs / 1000;
+    final minWidth = AppSpacing.buttonSize * 2.2;
+    final maxWidth = AppSpacing.buttonSize * 5.4;
+    final seconds = (durationMs / 1000).clamp(1.0, 60.0);
     final ratio = (seconds / 60).clamp(0.0, 1.0);
-    return minWidth + (maxWidth - minWidth) * ratio;
+    final eased = Curves.easeOutCubic.transform(ratio);
+    return minWidth + (maxWidth - minWidth) * eased;
   }
 
   String get _durationText {
-    final totalSeconds = (durationMs / 1000).ceil();
+    final totalSeconds = (durationMs / 1000).ceil().clamp(1, 599);
     if (totalSeconds < 60) return '$totalSeconds″';
     final m = totalSeconds ~/ 60;
     final s = totalSeconds % 60;
@@ -46,13 +51,15 @@ class VoiceMessageBubble extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final playback = ref.watch(voicePlayerManagerProvider);
-    final isActive = playback.activeMessageId == messageId;
-    final isPlaying = isActive && playback.isPlaying;
-    final progress = isActive ? playback.progress : 0.0;
+    final playback = ref.watch(
+      voicePlayerManagerProvider.select(
+        (state) => _VoiceBubblePlaybackView.fromState(state, messageId),
+      ),
+    );
+    final isPlaying = playback.isPlaying;
+    final progress = playback.progress;
 
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final incomingSurface = AppColorsFunctional.getColor(
       isDark,
       ColorType.surfaceElevated,
@@ -73,59 +80,86 @@ class VoiceMessageBubble extends ConsumerWidget {
         ? AppColors.white
         : AppColors.primaryColor;
 
-    return GestureDetector(
-      onTap: () {
-        if (messageStatus != 'sent' && messageStatus != 'delivered') return;
-        ref.read(voicePlayerManagerProvider.notifier).play(messageId, mediaUrl);
-      },
-      child: Container(
-        width: _bubbleWidth,
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.intraGroupSm,
-        ),
-        decoration: BoxDecoration(
-          color: bubbleColor,
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildPlayButton(isPlaying, textColor),
-            SizedBox(width: AppSpacing.intraGroupXs),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    final canPlay =
+        mediaUrl.trim().isNotEmpty &&
+        (messageStatus == 'sent' || messageStatus == 'delivered');
+    final disabledColor = textColor.withValues(alpha: 0.45);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth.isFinite
+            ? math.max(AppSpacing.buttonSize * 2, constraints.maxWidth)
+            : _bubbleWidth;
+        final width = math.min(_bubbleWidth, maxWidth);
+        return GestureDetector(
+          onTap: () {
+            if (!canPlay) return;
+            ref
+                .read(voicePlayerManagerProvider.notifier)
+                .play(messageId, mediaUrl);
+          },
+          child: Opacity(
+            opacity: canPlay ? 1 : 0.72,
+            child: Container(
+              width: width,
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerSm,
+                vertical: AppSpacing.intraGroupSm,
+              ),
+              decoration: BoxDecoration(
+                color: bubbleColor,
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.largeBorderRadius,
+                ),
+              ),
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    height: AppSpacing.lg,
-                    child: VoiceWaveformPainter(
-                      waveform: waveform,
-                      progress: progress,
-                      baseColor: waveColor,
-                      activeColor: waveActiveColor,
-                      isAnimating: isPlaying,
+                  _buildPlayButton(
+                    isPlaying,
+                    canPlay ? textColor : disabledColor,
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupXs),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        RepaintBoundary(
+                          child: SizedBox(
+                            height: AppSpacing.lg,
+                            child: VoiceWaveformPainter(
+                              waveform: waveform,
+                              progress: progress,
+                              baseColor: waveColor,
+                              activeColor: waveActiveColor,
+                              isAnimating: isPlaying,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: AppSpacing.intraGroupXs),
+                        Text(
+                          canPlay
+                              ? _durationText
+                              : UITextConstants.chatVoiceSending,
+                          style: TextStyle(
+                            fontSize: AppTypography.xs,
+                            color: textColor.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  SizedBox(height: AppSpacing.intraGroupXs),
-                  Text(
-                    _durationText,
-                    style: TextStyle(
-                      fontSize: AppTypography.xs,
-                      color: textColor.withValues(alpha: 0.7),
-                    ),
-                  ),
+                  if (!isOutgoing && !isRead) ...[
+                    SizedBox(width: AppSpacing.intraGroupXs),
+                    _buildUnreadDot(),
+                  ],
                 ],
               ),
             ),
-            if (!isOutgoing && !isRead) ...[
-              SizedBox(width: AppSpacing.intraGroupXs),
-              _buildUnreadDot(),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -141,10 +175,38 @@ class VoiceMessageBubble extends ConsumerWidget {
     return Container(
       width: AppSpacing.xs + 2,
       height: AppSpacing.xs + 2,
-      decoration: BoxDecoration(
-        color: AppColors.error,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
     );
   }
+}
+
+class _VoiceBubblePlaybackView {
+  const _VoiceBubblePlaybackView({
+    required this.isPlaying,
+    required this.progress,
+  });
+
+  factory _VoiceBubblePlaybackView.fromState(
+    VoicePlaybackState state,
+    String messageId,
+  ) {
+    final isActive = state.activeMessageId == messageId;
+    return _VoiceBubblePlaybackView(
+      isPlaying: isActive && state.isPlaying,
+      progress: isActive ? state.progress : 0,
+    );
+  }
+
+  final bool isPlaying;
+  final double progress;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _VoiceBubblePlaybackView &&
+        other.isPlaying == isPlaying &&
+        other.progress == progress;
+  }
+
+  @override
+  int get hashCode => Object.hash(isPlaying, progress);
 }

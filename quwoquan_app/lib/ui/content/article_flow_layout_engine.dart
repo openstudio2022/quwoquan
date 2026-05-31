@@ -105,6 +105,24 @@ class ArticleFlowLayoutEngine {
           document: document,
           assetsById: assetsById,
         );
+        if (measuredFragment.kind == ArticleLayoutFragmentKind.body) {
+          final bodyRuns = _splitBodyFragmentRuns(
+            fragment: measuredFragment,
+            sourcePage: page,
+            sourcePageIndex: pageIndex,
+            document: document,
+            contentWidth: contentWidth,
+            bodyStyle: bodyStyle,
+            firstRunIndex: runIndex,
+            previousSemantic: previousSemantic,
+          );
+          for (final run in bodyRuns) {
+            runs.add(run);
+            runIndex += 1;
+            previousSemantic = ArticleSpacingSemantic.paragraph;
+          }
+          continue;
+        }
         final semantic = articleSpacingSemanticForFragment(measuredFragment);
         final h =
             articleSpacingResolver().between(previousSemantic, semantic) +
@@ -129,6 +147,215 @@ class ArticleFlowLayoutEngine {
       }
     }
     return runs;
+  }
+
+  static List<ArticleFlowRun> _splitBodyFragmentRuns({
+    required ArticleLayoutFragment fragment,
+    required ArticlePageData sourcePage,
+    required int sourcePageIndex,
+    required ArticleDocumentData document,
+    required double contentWidth,
+    required TextStyle bodyStyle,
+    required int firstRunIndex,
+    required ArticleSpacingSemantic? previousSemantic,
+  }) {
+    final bindingRange = fragment.binding?.bodyRange;
+    final fullText = document.body;
+    final safeStart = bindingRange?.start.clamp(0, fullText.length) ?? 0;
+    final safeEnd =
+        bindingRange?.end.clamp(safeStart, fullText.length) ?? safeStart;
+    final fragmentText = fragment.text.trimRight();
+    if (fragmentText.trim().isEmpty) {
+      return const <ArticleFlowRun>[];
+    }
+    final ranges = bindingRange == null || bindingRange.isCollapsed
+        ? _splitLooseTextRanges(fragmentText)
+        : _splitDocumentBodyRanges(
+            fullText,
+            safeStart,
+            safeEnd,
+            bodyStyle,
+            contentWidth,
+          );
+    final runs = <ArticleFlowRun>[];
+    var previous = previousSemantic;
+    var runIndex = firstRunIndex;
+    for (final range in ranges) {
+      final text = bindingRange == null || bindingRange.isCollapsed
+          ? fragmentText.substring(range.start, range.end).trimRight()
+          : fullText.substring(range.start, range.end).trimRight();
+      if (text.trim().isEmpty) {
+        continue;
+      }
+      final bodyRange = bindingRange == null || bindingRange.isCollapsed
+          ? null
+          : ArticleTextRange(start: range.start, end: range.end);
+      final sourceBinding = sourcePage.binding;
+      final page = sourcePage.copyWith(
+        body: text,
+        fragments: <ArticleLayoutFragment>[
+          fragment.copyWith(
+            text: text,
+            binding: bodyRange == null
+                ? fragment.binding
+                : ArticlePageBinding(
+                    titleRange: sourceBinding?.titleRange,
+                    bodyRange: bodyRange,
+                    assetId: sourceBinding?.assetId,
+                    assetOffset: sourceBinding?.assetOffset,
+                    pageAssetIds: sourceBinding?.pageAssetIds,
+                    insertOffset: bodyRange.end,
+                  ),
+          ),
+        ],
+        binding: bodyRange == null
+            ? sourceBinding
+            : ArticlePageBinding(
+                titleRange: sourceBinding?.titleRange,
+                bodyRange: bodyRange,
+                assetId: sourceBinding?.assetId,
+                assetOffset: sourceBinding?.assetOffset,
+                pageAssetIds: sourceBinding?.pageAssetIds,
+                insertOffset: bodyRange.end,
+              ),
+      );
+      final measuredHeight =
+          articleSpacingResolver().between(
+            previous,
+            ArticleSpacingSemantic.paragraph,
+          ) +
+          measureArticleTextHeight(text, bodyStyle, contentWidth);
+      runs.add(
+        ArticleFlowRun(
+          id: 'flow_run_${runIndex++}',
+          fragment: page.fragments.first,
+          measuredHeight: measuredHeight,
+          sourcePage: page,
+          sourcePageIndex: sourcePageIndex,
+        ),
+      );
+      previous = ArticleSpacingSemantic.paragraph;
+    }
+    return runs;
+  }
+
+  static List<ArticleTextRange> _splitLooseTextRanges(String text) {
+    final ranges = <ArticleTextRange>[];
+    var cursor = 0;
+    for (final match in RegExp(r'\n{2,}').allMatches(text)) {
+      if (match.start > cursor) {
+        ranges.add(ArticleTextRange(start: cursor, end: match.start));
+      }
+      cursor = match.end;
+    }
+    if (cursor < text.length) {
+      ranges.add(ArticleTextRange(start: cursor, end: text.length));
+    }
+    return ranges.isEmpty
+        ? <ArticleTextRange>[ArticleTextRange(start: 0, end: text.length)]
+        : ranges;
+  }
+
+  static List<ArticleTextRange> _splitDocumentBodyRanges(
+    String text,
+    int start,
+    int end,
+    TextStyle style,
+    double contentWidth,
+  ) {
+    const maxChunkHeight = 180.0;
+    final paragraphRanges = <ArticleTextRange>[];
+    var cursor = start;
+    for (final match in RegExp(r'\n{2,}').allMatches(text, start)) {
+      if (match.start >= end) {
+        break;
+      }
+      if (match.start > cursor) {
+        paragraphRanges.add(
+          ArticleTextRange(start: cursor, end: math.min(match.start, end)),
+        );
+      }
+      cursor = math.min(match.end, end);
+    }
+    if (cursor < end) {
+      paragraphRanges.add(ArticleTextRange(start: cursor, end: end));
+    }
+    if (paragraphRanges.isEmpty) {
+      paragraphRanges.add(ArticleTextRange(start: start, end: end));
+    }
+    final ranges = <ArticleTextRange>[];
+    for (final paragraph in paragraphRanges) {
+      var chunkStart = paragraph.start;
+      while (chunkStart < paragraph.end) {
+        final chunkEnd = _fitTextChunkEnd(
+          text: text,
+          start: chunkStart,
+          endLimit: paragraph.end,
+          style: style,
+          maxWidth: contentWidth,
+          maxHeight: maxChunkHeight,
+        );
+        final safeEnd = chunkEnd <= chunkStart
+            ? math.min(paragraph.end, chunkStart + 1)
+            : chunkEnd;
+        ranges.add(ArticleTextRange(start: chunkStart, end: safeEnd));
+        chunkStart = safeEnd;
+      }
+    }
+    return ranges;
+  }
+
+  static int _fitTextChunkEnd({
+    required String text,
+    required int start,
+    required int endLimit,
+    required TextStyle style,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    double heightForEnd(int end) {
+      return measureArticleTextHeight(
+        text.substring(start, end).trimRight(),
+        style,
+        maxWidth,
+      );
+    }
+
+    if (heightForEnd(endLimit) <= maxHeight) {
+      return endLimit;
+    }
+    var low = start + 1;
+    var high = endLimit;
+    var best = low;
+    while (low <= high) {
+      final mid = (low + high) ~/ 2;
+      if (heightForEnd(mid) <= maxHeight) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return _snapBodyChunkBreak(text, start, best, endLimit);
+  }
+
+  static int _snapBodyChunkBreak(
+    String text,
+    int start,
+    int candidate,
+    int upperBound,
+  ) {
+    const breakTokens = <String>['\n', '。', '！', '？', '；', '，', '、', '.', ' '];
+    final lowerBound = math.max(
+      start + 1,
+      start + ((candidate - start) * 0.65).round(),
+    );
+    for (var index = candidate; index >= lowerBound; index -= 1) {
+      if (breakTokens.contains(text[index - 1])) {
+        return index;
+      }
+    }
+    return candidate.clamp(start + 1, upperBound);
   }
 
   /// 自上而下累加 [runs] 高度，超过 [viewportHeight] 时切开（单 run 超高时独占一片）。
@@ -657,10 +884,12 @@ class ArticleFlowLayoutEngine {
         final wrap = resolveArticleWrapLayout(
           ArticleWrapLayoutInput(
             body: fragment.text,
-            leadingText:
-                fragment.leadingText.isEmpty ? null : fragment.leadingText,
-            trailingText:
-                fragment.trailingText.isEmpty ? null : fragment.trailingText,
+            leadingText: fragment.leadingText.isEmpty
+                ? null
+                : fragment.leadingText,
+            trailingText: fragment.trailingText.isEmpty
+                ? null
+                : fragment.trailingText,
             rowContentWidth: contentWidth,
             bodyStyle: bodyStyle,
             captionText: asset.caption,

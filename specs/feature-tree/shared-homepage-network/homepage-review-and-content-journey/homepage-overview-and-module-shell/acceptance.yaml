@@ -1,68 +1,41 @@
 version: 2
-feature: homepage-overview-and-module-shell
-level: L3_scenario
-source_path: shared-homepage-network/homepage-review-and-content-journey/homepage-overview-and-module-shell
-parent_journey: homepage-review-and-content-journey
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+node:
+  id: homepage-overview-and-module-shell
+  level: L3_story
+  path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-overview-and-module-shell
+  title: homepage overview and module shell
+  parent_domain_service: shared-homepage-network
+  parent_business_capability: homepage-review-and-content-journey
 scope:
-  summary: >
-    冻结主页首屏总览、模块骨架与模块独立降级能力。
-  journey_bindings:
-    - J1
-  in_scope:
-    - 名称、类型、摘要、主操作
-    - 模块骨架
-    - 独立降级
-  out_of_scope:
-    - 评分明细
-    - 内容/问答聚合
-
-scenario_acceptance:
-  A1:
-    title: 主页首屏总览与模块骨架成立
-    scenario: homepage overview and module shell
-    journey_step: open homepage -> see overview -> continue browsing
+  summary: homepage overview and module shell 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: homepage overview and module shell GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
     done_when:
-      - 首屏展示名称、类型、关键摘要和主操作
-      - 模块支持独立加载与独立错误态
-      - 用户无需深入即可知道主页是什么
-    edge_cases:
-      - 某模块失败不影响整页
-      - 弱网先显示骨架
-    linked_plan_items:
-      - P2
-      - P4
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
     evidence:
       primary:
-        - T2_module_interaction
-        - T4_user_journey
-      supporting:
-        - T1_schema
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      planned:
-        - homepage overview shell test
+      planned: []
       recorded: []
     status: pending
-
-story_readiness:
-  S1:
-    title: 主页首屏摘要字段与模块边界可治理
-    done_when:
-      - 首屏所需字段清单明确
-      - 模块边界不与其它场景重叠
-    evidence:
-      primary:
-        - T1_schema
-        - T2_module_interaction
-      supporting:
-        - T3_cross_service_integration
-    tests:
-      planned:
-        - homepage shell schema review
-      recorded: []
-    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

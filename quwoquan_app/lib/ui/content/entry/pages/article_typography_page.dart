@@ -6,6 +6,9 @@ import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/content/article_reader/hosts/article_editor_reader_adapter.dart';
+import 'package:quwoquan_app/ui/content/article_reader/hosts/article_reader_host_adapter.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_flip_host.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/publish_draft_projection_bridge.dart';
@@ -133,29 +136,33 @@ class _ArticleTypographyPageState extends ConsumerState<ArticleTypographyPage> {
                       Expanded(
                         child: ColoredBox(
                           color: AppColors.worksBackground,
-                          child: ArticleReadOnlyBookDeck(
-                            pages: pages,
-                            template: state.articleTemplate,
-                            fontPreset: state.articleFontPreset,
-                            metrics: metrics,
-                            coverUrl: state.articleCoverImagePath,
-                            paperTexture: state.articlePaperTexture,
-                            initialPage: idx < 0 ? 0 : idx,
-                            enablePageCurl: enablePageCurl,
-                            pagePadding: EdgeInsets.zero,
-                            showFooterPageLabel: false,
-                            onPageChanged: (int i) {
-                              if (i >= 0 && i < pages.length) {
-                                ref
-                                    .read(createEditorProvider.notifier)
-                                    .setActiveArticlePage(pages[i].id);
-                              }
-                            },
-                            onFallbackResolved: (reason) {
-                              debugPrint(
-                                'ArticleTypographyPage fallback: ${reason.name}',
-                              );
-                            },
+                          child: ArticleReaderFlipHost(
+                            adapter: ArticleEditorReaderAdapter(
+                              ArticleReaderHostConfig(
+                                pages: pages,
+                                template: state.articleTemplate,
+                                fontPreset: state.articleFontPreset,
+                                metrics: metrics,
+                                coverUrl: state.articleCoverImagePath,
+                                paperTexture: state.articlePaperTexture,
+                                initialPage: idx < 0 ? 0 : idx,
+                                enablePageCurl: enablePageCurl,
+                                pagePadding: EdgeInsets.zero,
+                                showFooterPageLabel: false,
+                                onPageChanged: (int i) {
+                                  if (i >= 0 && i < pages.length) {
+                                    ref
+                                        .read(createEditorProvider.notifier)
+                                        .setActiveArticlePage(pages[i].id);
+                                  }
+                                },
+                                onFallbackResolved: (reason) {
+                                  debugPrint(
+                                    'ArticleTypographyPage fallback: ${reason.name}',
+                                  );
+                                },
+                              ),
+                            ),
                           ),
                         ),
                       ),

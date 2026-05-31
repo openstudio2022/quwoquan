@@ -33,7 +33,7 @@ def _session_boost(c: CandidateInput, session_signals: dict) -> tuple[float, boo
         return -1000.0, True
 
     tag_weights = session_signals.get("tagWeights") or {}
-    tags = c.tags or []
+    tags = c.tagRefs or []
     boost = 0.0
     for tag in tags:
         w = tag_weights.get(tag, 0.0)

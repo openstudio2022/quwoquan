@@ -1,118 +1,32 @@
-version: 1
-feature: global-search-experience
-level: L1_capability
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+version: 2
+node:
+  id: global-search-experience
+  level: L1_domain_service
+  path: specs/feature-tree/global-search-experience
+  title: global search experience
+  parent_domain_service: global-search-experience
 scope:
-  summary: >
-    冻结全局搜索作为独立一级能力的边界、领域划分、两段式统一入口、
-    独立网络结果页编排、最近搜索生命周期、小趣搜 assistant 结果规则、
-    统一搜索 contract、对象执行策略与云侧搜索存储弹性方案。
-  owned_journeys:
-    - cross-domain-search-journey
-  owned_topology_features:
-    - search-provider-routing-and-storage-topology
-  out_of_scope:
-    - 统一高性能搜索读库的本期迁移落地
-    - 低存储设备阈值与自动淘汰策略
-    - 与 unified search 无关的通用助手 runtime / skill 平台重构
-    - 密信账号分割能力本身
-
-level_acceptance:
-  C1:
-    title: 全局搜索能力归属与记录节点清理完成冻结
+  summary: global search experience 验收范围。
+  in_scope: []
+  out_of_scope: []
+domain_acceptance:
+  DA1:
+    title: global search experience 领域边界验收
     done_when:
-      - 全局搜索拥有独立 L1 能力路径，不再挂靠 discovery-content
-      - chat 记录搜索节点从特性树中移除，不再保留平行治理路径
-      - "content、messages、circle、user、assistant 的职责边界在新 L1 中明确，且首页/搜索统一入口词冻结为 `圈子`"
+    - 领域边界、上下游依赖、工程映射和服务治理清晰。
+    boundary_points: []
     evidence:
       primary:
-        - T1_schema
-        - T2_module_interaction
-      supporting:
-        - T3_cross_service_integration
+      - T1_static_contract
+      - T3_service_contract
+      supporting: []
     tests:
-      planned:
-        - feature tree path audit
-        - l1 index consistency review
-      recorded:
-        - make verify-metadata
-        - make gate-full
-    status: implemented
-  C2:
-    title: 全局搜索的 metadata 真相源边界冻结
-    done_when:
-      - route、surface、request context 与 search operation 的真相源边界已定义
-      - 联系人/聊天记录联想、群组结果、群组分类 facet 与小趣搜结果的 contract 归属明确
-      - 小趣搜只作为独立网络结果页左侧 tab，不进入联想页混排
-    evidence:
-      primary:
-        - T1_schema
-        - T3_cross_service_integration
-      supporting:
-        - T2_module_interaction
-    tests:
-      planned:
-        - metadata ownership review
-        - route and surface traceability review
-      recorded:
-        - make verify-metadata
-        - make codegen-app
-        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
-        - flutter test test/ui/search/search_repository_test.dart
-        - make gate-full
-    status: implemented
-  C3:
-    title: 商用基线与发布边界可判定
-    done_when:
-      - SLO、弱网、并发、容量假设已冻结
-      - 最近搜索、语音 ASR、小趣搜 assistant continuation 的生命周期边界已冻结
-      - 整体上线与整体替换口径明确，且底栏“圈子”用户词不再回退为旧“群组”总入口
-    evidence:
-      primary:
-        - T2_module_interaction
-        - T4_user_journey
-      supporting:
-        - T1_schema
-    tests:
-      planned:
-        - prd baseline checklist review
-        - release readiness checklist review
-      recorded:
-        - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/personal_assistant_conversation_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
-        - make gate
+      planned: []
+      recorded: []
     status: pending
-  C4:
-    title: 统一搜索 contract、执行策略与搜索存储拓扑冻结
-    done_when:
-      - "页面与业务层只有 canonical `search(request)` 接口，建议与正式结果共用同一 contract"
-      - "`chat.contact / chat.conversation / chat.message` 冻结为 `local_only`，`circle.group` 冻结为 `hybrid_remote_fallback_local`"
-      - 云侧搜索读路径采用读模型 / projection、读写分离、多读切片与独立弹性，不把扫描主业务集合定义为长期方案
-      - 未来统一高性能搜索读库仅作为可替换读侧实现，不改变 canonical contract
-      - canonical contract 可直接生成 AI agent 检索 tool schema，模型生成条件受 typed schema、allowlist 与资源边界约束
-      - "canonical contract 以 web-search-like 的单一 `query` 为主输入，支持 `web.document` 与趣我圈内部对象统一召回，不引入复杂嵌套 DSL"
-    evidence:
-      primary:
-        - T1_schema
-        - T3_cross_service_integration
-      supporting:
-        - T2_module_interaction
-    tests:
-      planned:
-        - search contract ownership review
-        - provider routing and fallback audit
-        - search storage topology review
-        - query-first assistant tool decomposition review
-      recorded:
-        - make -C quwoquan_service verify-metadata
-        - make codegen-app
-        - flutter test test/ui/search/search_repository_test.dart
-        - flutter test test/assistant/search_tool_test.dart test/assistant/tool_metadata_contract_test.dart
-        - flutter test test/assistant/acceptance_vm_test.dart test/assistant/skill_loader_commercial_test.dart
-        - flutter test test/assistant/react_runtime_tool_observation_contract_test.dart
-        - flutter test test/cloud/integration/remote_api_path_contract_test.dart
-    status: implemented
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

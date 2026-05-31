@@ -4,6 +4,8 @@ import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/tag/mock/tag_mock_data.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/tag/tag_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/tag/tag_request_page_ids.g.dart';
 
 part 'tag_repository_mock.dart';
 part 'tag_repository_remote.dart';
@@ -16,21 +18,6 @@ class TagApiDefaults {
   static const int relatedLimit = 20;
   static const int graphLimit = 50;
   static const int minCooccurCount = 1;
-}
-
-/// 标签域 request page ids（tag domain 尚未 codegen 时的手写常量）
-class TagRequestPageIds {
-  TagRequestPageIds._();
-  static const String listDimensions = 'tag.list.dimensions';
-  static const String suggest = 'tag.suggest';
-  static const String validate = 'tag.validate';
-  static const String search = 'tag.search';
-  static const String related = 'tag.related';
-  static const String searchByTags = 'tag.search.by.tags';
-  static const String feedback = 'tag.feedback';
-  static const String cooccurrence = 'tag.graph.cooccurrence';
-  static const String invertedIndex = 'tag.graph.inverted.index';
-  static const String relatedObjects = 'tag.graph.related.objects';
 }
 
 /// 标签体系 Repository（场景2: 内容创作 + 场景3: 推荐搜索 + 场景4: 关系图谱）
@@ -79,9 +66,42 @@ abstract class TagRepository {
     String? objectType,
     int limit = TagApiDefaults.relatedLimit,
   });
+
+  // ── 交集核心（V3 对象页交集卡对象对直打）──────────────────────
+  /// 计算两个对象的共享 tagRef（交集锚点 + 强度 + 来源）。
+  /// 对象页「你和这里的交集 / 你们的交集」消费此结果（先 Mock 后真打 tag-service）。
+  Future<List<SharedTagView>> sharedTags({
+    required String objectAId,
+    required String objectAType,
+    required String objectBId,
+    required String objectBType,
+    int limit = TagApiDefaults.graphLimit,
+  });
 }
 
 // ── DTO / Value Objects ──────────────────────────────────────────
+
+/// 交集锚点（tag-service /v1/tag/shared-tags 返回项，对齐 service.yaml SharedTagView）。
+class SharedTagView {
+  final String tagRef;
+  final String label;
+  final double strength;
+  final String source;
+
+  const SharedTagView({
+    required this.tagRef,
+    required this.label,
+    this.strength = 0.0,
+    this.source = '',
+  });
+
+  factory SharedTagView.fromJson(Map<String, dynamic> json) => SharedTagView(
+    tagRef: json['tagRef'] as String? ?? '',
+    label: json['label'] as String? ?? '',
+    strength: (json['strength'] as num?)?.toDouble() ?? 0.0,
+    source: json['source'] as String? ?? '',
+  );
+}
 
 class TagDimension {
   final String group;

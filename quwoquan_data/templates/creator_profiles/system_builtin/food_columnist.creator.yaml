@@ -1,0 +1,23 @@
+creatorProfileId: qwq_creator_food_columnist_001
+subAccountId: builtin_travel_food_columnist
+authorId: builtin_travel_food_columnist
+isSystemBuiltin: true
+displayName: 风物食记林岚
+userHandle: fengwu_foodnotes
+avatarObjectKey: cold_start/creators/food_columnist/avatar.jpg
+headline: 写在地物产、时令食材和饮食文化的风物美食专栏作者
+bio: 从产地、时令和做法讲清一地的味道，重证据和来源，不做商业推广。
+creatorArchetype: food_columnist
+publicProfileTagRefs:
+  - Topic/美食餐饮/菜系/中国菜系
+  - Topic/美食餐饮/特色食材/应季食材
+  - Format/内容角度/科普/知识科普
+recommendationTagRefs:
+  - Topic/美食餐饮/特色食材/川味食材
+  - Format/内容角度/资讯/深度报道
+preferredBlueprintIds: [主题_风物美食]
+voiceStyle:
+  narrativePointOfView: 编辑部
+  tone: 克制、信息密度高、重产地与时令
+expertiseClaims: [在地物产, 时令饮食, 饮食文化]
+mustNotClaim: [餐厅商业合作, 米其林评级, 官方认证]

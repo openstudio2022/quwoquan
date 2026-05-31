@@ -1,19 +1,41 @@
-version: 1
-feature: metadata-domain-restructure
-level: "L3_story"
-status: specified
-archived: true
-archived_at: '2026-03-01T00:00:00Z'
-acceptance_criteria:
-- id: A1
-  description: 目录结构重组完成
-  assertions:
-  - contracts/metadata/content/post/ 存在且含5个核心YAML
-  - contracts/metadata/content/post/projections/ 含 photo/video/article/moment 4个文件
-  - contracts/metadata/content/openapi.yaml 存在
-  - _projections/ 不再含已迁移的 post 域投影
-- id: A2
-  description: codegen 产物不变
-  assertions:
-  - make codegen-app 输出与重组前 hash 完全一致
-  - make verify-metadata PASS
+version: 2
+node:
+  id: metadata-domain-restructure
+  level: L3_story
+  path: specs/feature-tree/discovery-content/content-service-contract-foundation/metadata-domain-restructure
+  title: metadata domain restructure
+  parent_domain_service: discovery-content
+  parent_business_capability: content-service-contract-foundation
+scope:
+  summary: metadata domain restructure 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: metadata domain restructure GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

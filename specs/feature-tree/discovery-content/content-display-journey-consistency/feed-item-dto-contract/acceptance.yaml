@@ -1,21 +1,41 @@
-version: 1
-feature: feed-item-dto-contract
-level: "L3_story"
-archived: true
-template: A1-A8
+version: 2
+node:
+  id: feed-item-dto-contract
+  level: L3_story
+  path: specs/feature-tree/discovery-content/content-display-journey-consistency/feed-item-dto-contract
+  title: feed item dto contract
+  parent_domain_service: discovery-content
+  parent_business_capability: content-display-journey-consistency
+scope:
+  summary: feed item dto contract 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: feed item dto contract GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance:
-  A1: FeedItemDto 从 _projections/discovery_feed.yaml 的 client_projection.fields 生成，字段名与
-    metadata 一致，文件头含 DO NOT EDIT
-  A2: cloud/services/content/mock/content_mock_data.dart 存在，字段 100% 符合 FeedItemDto
-    schema（无旧别名如 likesCount、avatar）
-  A3: MockContentRepository 和 RemoteContentRepository 均输出 FeedItemDto（非 Map<String,
-    dynamic>）
-  A4: discovery_page.dart 无 _toMomentItem、_toPhotoItem、_toVideoItem、_toArticleItem
-    函数
-  A5: DiscoveryFeedProvider 类型为 List<FeedItemDto>，无 Map 适配层
-  A6: cloud/runtime/generated/ 按域组织（content/ 子目录存在，旧平铺文件已迁移）
-  A7: feed_item_dto_contract_test.dart 所有 mock 记录可无异常构造 FeedItemDto，核心字段非空
-  A8: make gate 通过（metadata 一致性 + codegen hash 校验）
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

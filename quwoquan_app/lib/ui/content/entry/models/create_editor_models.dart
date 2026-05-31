@@ -4,6 +4,8 @@ import 'package:quwoquan_app/ui/content/article_flow_layout_engine.dart';
 import 'package:quwoquan_app/ui/content/article_pagination_engine.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
+import 'package:quwoquan_app/ui/content/markdown/article_markdown_codec.dart';
+import 'package:quwoquan_app/ui/content/markdown/qwq_markdown_ast.dart';
 
 enum EditorStartAction { gallery, write, capture }
 
@@ -982,6 +984,10 @@ class CreateDraft {
     final storedDocumentMap = Map<String, dynamic>.from(
       map['articleDocument'] as Map? ?? const <String, dynamic>{},
     );
+    final storedMarkdown = (map['articleMarkdown'] ?? '').toString();
+    final storedAssetManifest = Map<String, dynamic>.from(
+      map['articleAssetManifest'] as Map? ?? const <String, dynamic>{},
+    );
     final articlePages = ((map['articlePages'] as List?) ?? const <Object?>[])
         .whereType<Map>()
         .map(
@@ -996,7 +1002,12 @@ class CreateDraft {
         )
         .where((block) => block.id.trim().isNotEmpty)
         .toList(growable: false);
-    final articleDocument = storedDocumentMap.isNotEmpty
+    final articleDocument = storedMarkdown.trim().isNotEmpty
+        ? ArticleMarkdownCodec.parseDocument(
+            storedMarkdown,
+            assetManifest: storedAssetManifest,
+          )
+        : storedDocumentMap.isNotEmpty
         ? ArticleDocumentData.fromMap(storedDocumentMap)
         : articlePages.isNotEmpty
         ? buildArticleDocumentFromPages(
@@ -1081,6 +1092,9 @@ class CreateDraft {
   }
 
   Map<String, dynamic> toStorageMap() {
+    final articleMarkdown = _articleMarkdownForStorage();
+    final articleAssetManifest = _articleAssetManifestForStorage();
+    final articleRenderProfile = _articleRenderProfileForStorage();
     return <String, dynamic>{
       'id': id,
       'type': storageType,
@@ -1100,13 +1114,10 @@ class CreateDraft {
       'currentMediaIndex': state.currentMediaIndex,
       'title': state.title,
       'body': state.body,
-      'articleDocument': state.articleDocument.toMap(),
-      'articlePages': state.articlePages
-          .map((page) => page.toMap())
-          .toList(growable: false),
-      'articleBlocks': state.articleBlocks
-          .map((block) => block.toMap())
-          .toList(growable: false),
+      'articleMarkdown': articleMarkdown,
+      'articleMarkdownVersion': qwqRichMarkdownVersion,
+      'articleAssetManifest': articleAssetManifest,
+      'articleRenderProfile': articleRenderProfile,
       'activeArticlePageId': state.activeArticlePageId,
       'activeArticleBlockId': state.activeArticleBlockId,
       'articleTemplate': state.articleTemplate.name,
@@ -1148,19 +1159,22 @@ class CreateDraft {
   }
 
   Map<String, dynamic> get data {
+    final articleMarkdown = _articleMarkdownForStorage();
+    final articleAssetManifest = _articleAssetManifestForStorage();
+    final articleRenderProfile = _articleRenderProfileForStorage();
     return <String, dynamic>{
       ...state.settings.toMap(),
       'title': state.title,
       'body': state.body,
-      'articleDocument': state.articleDocument.toMap(),
+      'articleMarkdown': articleMarkdown,
+      'articleMarkdownVersion': qwqRichMarkdownVersion,
+      'articleAssetManifest': articleAssetManifest,
+      'articleRenderProfile': articleRenderProfile,
       'articleTemplate': state.articleTemplate.name,
       'articlePaperTexture': state.articlePaperTexture.name,
       'articleFontPreset': state.articleFontPreset.name,
       'articleCoverImagePath': state.articleCoverImagePath,
       'coverUrl': state.articleCoverImagePath,
-      'articlePages': state.articlePages
-          .map((page) => page.toMap())
-          .toList(growable: false),
       'imagePaths': state.imagePaths,
       'videoPath': state.videoPath,
       'originalVideoPath': state.originalVideoPath,
@@ -1170,6 +1184,46 @@ class CreateDraft {
       'videoTrimEndMs': state.videoTrimEndMs,
       'videoCoverTimeMs': state.videoCoverTimeMs,
       'videoMuted': state.videoMuted,
+    };
+  }
+
+  String _articleMarkdownForStorage() {
+    return ArticleMarkdownCodec.serializeDocument(
+      state.articleDocument,
+      coverAssetId: state.articleCoverImagePath.trim().isNotEmpty
+          ? 'cover'
+          : '',
+      coverImageUrl: state.articleCoverImagePath,
+    );
+  }
+
+  Map<String, dynamic> _articleAssetManifestForStorage() {
+    final assets = <Map<String, Object?>>[];
+    final cover = state.articleCoverImagePath.trim();
+    if (cover.isNotEmpty) {
+      assets.add(_articleDraftManifestRow('cover', cover, role: 'cover'));
+    }
+    for (final asset in state.articleDocument.assets) {
+      final imageUrl = asset.imageUrl.trim();
+      if (imageUrl.isEmpty) {
+        continue;
+      }
+      final assetId = asset.id.trim().isNotEmpty ? asset.id.trim() : imageUrl;
+      assets.add(_articleDraftManifestRow(assetId, imageUrl, role: 'figure'));
+    }
+    return <String, dynamic>{
+      'schemaVersion': 1,
+      'markdownVersion': qwqRichMarkdownVersion,
+      'assets': assets,
+    };
+  }
+
+  Map<String, dynamic> _articleRenderProfileForStorage() {
+    return <String, dynamic>{
+      'template': state.articleTemplate.name,
+      'paperTexture': state.articlePaperTexture.name,
+      'fontPreset': state.articleFontPreset.name,
+      'titleStyle': state.articleDocument.titleStyle.name,
     };
   }
 
@@ -1210,4 +1264,22 @@ class CreateDraft {
         paragraphCount >= 2 ||
         state.imagePaths.isNotEmpty;
   }
+}
+
+Map<String, Object?> _articleDraftManifestRow(
+  String assetId,
+  String path, {
+  required String role,
+}) {
+  return <String, Object?>{
+    'assetId': assetId,
+    'kind': 'image',
+    'role': role,
+    'scope': 'draft',
+    'localPath': path,
+    'objectKey': path.startsWith('asset://')
+        ? path.substring('asset://'.length)
+        : path,
+    'sha256': '',
+  };
 }

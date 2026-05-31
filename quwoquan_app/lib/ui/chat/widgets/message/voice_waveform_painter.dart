@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 /// Renders a voice message waveform with progress fill animation.
-class VoiceWaveformPainter extends StatelessWidget {
+class VoiceWaveformPainter extends StatefulWidget {
   const VoiceWaveformPainter({
     super.key,
     required this.waveform,
@@ -20,16 +20,47 @@ class VoiceWaveformPainter extends StatelessWidget {
   final int barCount;
 
   @override
+  State<VoiceWaveformPainter> createState() => _VoiceWaveformPainterState();
+}
+
+class _VoiceWaveformPainterState extends State<VoiceWaveformPainter> {
+  List<double>? _lastInput;
+  int? _lastBarCount;
+  List<double>? _resampled;
+
+  @override
   Widget build(BuildContext context) {
+    final waveform = _cachedResample();
     return CustomPaint(
       painter: _WaveformPainter(
-        waveform: _resample(waveform, barCount),
-        progress: progress,
-        baseColor: baseColor,
-        activeColor: activeColor,
+        waveform: waveform,
+        progress: widget.progress,
+        baseColor: widget.baseColor,
+        activeColor: widget.activeColor,
       ),
       size: Size.infinite,
+      willChange: widget.isAnimating,
     );
+  }
+
+  List<double> _cachedResample() {
+    if (_resampled != null &&
+        _lastBarCount == widget.barCount &&
+        _sameWaveform(_lastInput, widget.waveform)) {
+      return _resampled!;
+    }
+    _lastInput = List<double>.from(widget.waveform, growable: false);
+    _lastBarCount = widget.barCount;
+    _resampled = _resample(widget.waveform, widget.barCount);
+    return _resampled!;
+  }
+
+  static bool _sameWaveform(List<double>? a, List<double> b) {
+    if (a == null || a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   /// Resamples the waveform data to a fixed number of bars.

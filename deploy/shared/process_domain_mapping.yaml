@@ -20,6 +20,8 @@ environments:
       domains: [content]
     entity-service:
       domains: [entity]
+    tag-service:
+      domains: [tag]
     product-ops-service:
       domains: [ops]
     circle-service:
@@ -50,6 +52,8 @@ environments:
       domains: [content]
     entity-service:
       domains: [entity]
+    tag-service:
+      domains: [tag]
     product-ops-service:
       domains: [ops]
     circle-service:
@@ -78,6 +82,8 @@ environments:
   beta:
     entity-service:
       domains: [entity]
+    tag-service:
+      domains: [tag]
     product-ops-service:
       domains: [ops]
     recommendation-service:
@@ -98,6 +104,8 @@ environments:
   gamma:
     entity-service:
       domains: [entity]
+    tag-service:
+      domains: [tag]
     product-ops-service:
       domains: [ops]
     recommendation-service:
@@ -118,6 +126,8 @@ environments:
   prod:
     entity-service:
       domains: [entity]
+    tag-service:
+      domains: [tag]
     product-ops-service:
       domains: [ops]
     recommendation-service:

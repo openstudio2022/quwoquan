@@ -59,8 +59,8 @@ void main() {
       );
 
       expect(remoteView.documentSource, ArticleDetailDocumentSource.markdown);
-      expect(remoteView.title, equals(mockView.title));
-      expect(remoteView.description, equals(mockView.description));
+      expect(remoteView.document.title, equals(mockView.document.title));
+      expect(remoteView.document.body, equals(mockView.document.body));
       expect(remoteView.template, equals(mockView.template));
       expect(remoteView.fontPreset, equals(mockView.fontPreset));
       expect(remoteView.pages.length, equals(mockView.pages.length));
@@ -107,10 +107,10 @@ void main() {
       );
 
       expect(before.documentSource, ArticleDetailDocumentSource.body);
-      expect(before.description, equals('分发摘要正文'));
+      expect(before.contentHtml, equals('分发摘要正文'));
       expect(after.documentSource, ArticleDetailDocumentSource.markdown);
-      expect(after.title, equals('水合后标题'));
-      expect(after.description, contains('水合后正文第一段'));
+      expect(after.document.title, equals('水合后标题'));
+      expect(after.document.body, contains('水合后正文第一段'));
     });
   });
 }

@@ -10,5 +10,22 @@
   "videoCdnBaseUrl": "https://gamma-video.quwoquan-env.test",
   "uploadBaseUrl": "https://gamma-upload.quwoquan-env.test",
   "currentUserId": "fixture_user_current",
-  "seedManifest": "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
+  "seedManifest": "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json",
+  "topologySchemaVersion": "environment-topology/v1",
+  "artifactPolicy": {
+    "runtimeEnv": "gamma",
+    "dataSource": "remote",
+    "allowSeeds": false,
+    "allowLocalHosts": false,
+    "allowProdHosts": false,
+    "distribution": "pre-release"
+  },
+  "publicBases": {
+    "gatewayBaseUrl": "https://gamma-api.quwoquan-env.test",
+    "realtimeBaseUrl": "wss://gamma-api.quwoquan-env.test",
+    "mediaAvatarCdnBaseUrl": "https://gamma-avatar.quwoquan-env.test",
+    "mediaImageCdnBaseUrl": "https://gamma-image.quwoquan-env.test",
+    "mediaVideoCdnBaseUrl": "https://gamma-video.quwoquan-env.test",
+    "mediaUploadBaseUrl": "https://gamma-upload.quwoquan-env.test"
+  }
 }

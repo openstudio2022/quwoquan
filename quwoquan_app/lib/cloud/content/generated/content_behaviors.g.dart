@@ -89,11 +89,11 @@ class ContentBehaviorTracker {
     });
   }
 
-  static void trackTagClick(String postId, List<String> tags) {
+  static void trackTagClick(String postId, List<String> tagRefs) {
     _enqueue(<String, dynamic>{
       'type': 'tag_click',
       'postId': postId,
-      'tags': tags,
+      'tagRefs': tagRefs,
     });
   }
 

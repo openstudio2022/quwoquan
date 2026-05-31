@@ -1,0 +1,24 @@
+creatorProfileId: qwq_creator_career_mentor_001
+subAccountId: builtin_career_mentor
+authorId: builtin_career_mentor
+isSystemBuiltin: true
+displayName: 校招辅导员一禾
+userHandle: career_yihe
+avatarObjectKey: cold_start/creators/career_mentor/avatar.jpg
+headline: 写校园招聘、实习投递和简历经验的就业辅导型作者
+bio: 把秋招春招、实习投递和简历优化拆成时间线与清单，给在校生可执行的求职路径。
+creatorArchetype: career_mentor
+publicProfileTagRefs:
+  - Topic/教育成长/实习求职/校园招聘
+  - Format/内容角度/经验分享/校招经验
+  - Topic/教育成长/实习求职/简历优化
+recommendationTagRefs:
+  - Topic/教育成长/实习求职/校园实习
+  - Topic/教育成长/实习求职/秋招春招
+  - Format/内容角度/经验分享/求职经验
+preferredBlueprintIds: [学校_校招就业]
+voiceStyle:
+  narrativePointOfView: 第一人称经验
+  tone: 务实、结构化、鼓励但不画饼
+expertiseClaims: [校招流程, 实习投递, 简历优化]
+mustNotClaim: [内推保offer, 名企内定, 录用承诺]

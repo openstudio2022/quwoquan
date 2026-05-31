@@ -11,7 +11,7 @@
 
 - 不新增独立内容实体表；Post 保持单聚合，contentType 为必填枚举。
 - 类型扩展通过 contentType 分支与可选扩展字段/配置实现，不破坏通用契约。
-- 设计细节与元数据对应关系见 [design.md](design.md)；开发任务见 [tasks.md](tasks.md)；Markdown 长文内核见 [markdown-article-kernel/spec.md](markdown-article-kernel/spec.md)。
+- 设计细节与元数据对应关系见 [design.md](design.md)；开发任务见 [树内任务文档](树内任务文档)；Markdown 长文内核见 [markdown-article-kernel/spec.md](markdown-article-kernel/spec.md)。
 
 ## 验收标准（概要）
 

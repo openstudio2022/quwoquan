@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/send_message_request.dart';
+import 'package:yaml/yaml.dart';
 
 void main() {
   group('SendMessageRequest — 常规契约', () {
@@ -24,6 +27,35 @@ void main() {
       expect(map['media']['durationMs'], 5200);
       expect(map['mediaUrl'], 'https://cdn.example.com/voice.m4a');
       expect(map['clientMsgId'], 'test-uuid-1');
+    });
+
+    test('openapi Message 与 SendMessageRequest enum 均声明 audio', () {
+      final file = File(
+        '${Directory.current.path}/../quwoquan_service/contracts/metadata/messages/openapi.yaml',
+      );
+      final fallback = File(
+        '${Directory.current.path}/quwoquan_service/contracts/metadata/messages/openapi.yaml',
+      );
+      final openapi =
+          loadYaml(
+                file.existsSync()
+                    ? file.readAsStringSync()
+                    : fallback.readAsStringSync(),
+              )
+              as YamlMap;
+      final schemas = (openapi['components'] as YamlMap)['schemas'] as YamlMap;
+      final messageType =
+          ((((schemas['Message'] as YamlMap)['properties'] as YamlMap)['type']
+                  as YamlMap)['enum']
+              as YamlList);
+      final sendType =
+          ((((schemas['SendMessageRequest'] as YamlMap)['properties']
+                      as YamlMap)['type']
+                  as YamlMap)['enum']
+              as YamlList);
+
+      expect(messageType, contains('audio'));
+      expect(sendType, contains('audio'));
     });
 
     test('text 类型 toMap 不包含 media 和 mediaUrl', () {

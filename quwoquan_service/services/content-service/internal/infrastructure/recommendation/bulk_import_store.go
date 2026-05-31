@@ -37,7 +37,7 @@ func (s *MongoBulkImportStore) UpsertDiscoveryFeedItem(ctx context.Context, item
 			"title":       item.Title,
 			"contentType": item.ContentType,
 			"authorId":    item.AuthorID,
-			"tags":        item.Tags,
+			"tagRefs":     item.Tags,
 			"entityRefs":  item.EntityRefs,
 			"publishedAt": publishedAt,
 			"coverUrl":    item.CoverURL,

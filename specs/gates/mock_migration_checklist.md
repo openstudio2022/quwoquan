@@ -45,7 +45,6 @@ make verify-app-mock-isolation
 | Homepage | `MockHomepageRepository` | [ ] | [`entity_repository.dart`](../../quwoquan_app/lib/cloud/services/entity/entity_repository.dart) |
 | Integration | `MockIntegrationRepository` | [ ] | [`integration_repository.dart`](../../quwoquan_app/lib/cloud/services/integration/integration_repository.dart) |
 | Behavior | `MockBehaviorRepository` | [ ] | [`behavior_repository.dart`](../../quwoquan_app/lib/cloud/services/behavior/behavior_repository.dart) |
-| ContentInteraction | `MockContentInteractionRepository` | [ ] | [`content_interaction_repository.dart`](../../quwoquan_app/lib/cloud/services/content/content_interaction_repository.dart) |
 | Block | `MockBlockRepository` | [ ] | [`block_repository.dart`](../../quwoquan_app/lib/cloud/services/user/block_repository.dart) |
 | Report | `MockReportRepository` | [ ] | [`report_repository.dart`](../../quwoquan_app/lib/cloud/services/content/report_repository.dart) |
 | KeywordBlock | `MockKeywordBlockRepository` | [ ] | [`keyword_block_repository.dart`](../../quwoquan_app/lib/cloud/services/user/keyword_block_repository.dart) |

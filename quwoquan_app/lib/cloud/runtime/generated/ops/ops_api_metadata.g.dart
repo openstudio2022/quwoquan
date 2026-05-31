@@ -33,6 +33,18 @@ class OpsApiMetadata {
     'ReportEventBatch': 'POST',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'AssignBucket': 'public',
+    'GetBucket': 'public',
+    'GetEventDrilldown': 'public',
+    'GetEventSummary': 'public',
+    'GetExperimentStats': 'public',
+    'GetVisitStats': 'public',
+    'RecordVisit': 'public',
+    'ReportEventBatch': 'public',
+  };
+
   static const String assignBucketOperation = 'AssignBucket';
   static const String getBucketOperation = 'GetBucket';
   static const String getEventDrilldownOperation = 'GetEventDrilldown';

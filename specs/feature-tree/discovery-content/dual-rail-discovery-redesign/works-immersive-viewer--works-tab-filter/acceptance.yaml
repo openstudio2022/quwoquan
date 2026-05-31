@@ -1,27 +1,41 @@
-feature: works-tab-filter
-level: "L3_story"
-template: A1-A3
-archived: false
+version: 2
+node:
+  id: works-immersive-viewer--works-tab-filter
+  level: L3_story
+  path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer--works-tab-filter
+  title: works immersive viewer  works tab filter
+  parent_domain_service: discovery-content
+  parent_business_capability: dual-rail-discovery-redesign
+scope:
+  summary: works immersive viewer  works tab filter 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: works immersive viewer  works tab filter GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make build && make test-contract
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: 进入作品频道 1.5s 后 Tab Row 平滑向上收起，顶部中央出现半透明蓝色下箭头
-    status: pending
-    linked_tasks:
-    - W3
-    - W4
-    tests: []
-  A2:
-    criteria: 点击箭头或向下拖拽 → Elastic 弹性动画展开 Tab Row，ElasticOutCurve，约 400ms
-    status: pending
-    linked_tasks:
-    - W5
-    tests: []
-  A3:
-    criteria: 切换 Tab → filter_type 正确传给 WorksFeedNotifier，cursor 重置，works-feed 重新加载
-    status: pending
-    linked_tasks:
-    - W6
-    tests: []
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

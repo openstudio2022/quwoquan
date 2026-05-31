@@ -514,30 +514,53 @@ class RemoteOpsEventRepository
        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
        _queueBoxName = queueBoxName ?? kOpsEventQueueBoxName {
     _bindLifecycle();
+    _scheduleFlush(delay: const Duration(seconds: 15));
   }
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
   final String _queueBoxName;
+  Timer? _flushTimer;
+  bool _isFlushing = false;
 
   void _bindLifecycle() {
     try {
       WidgetsBinding.instance.addObserver(this);
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 测试或无 binding 环境下注册生命周期观察者会抛错，缺少观察者仅影响后台刷盘时机 */
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _scheduleFlush(delay: const Duration(seconds: 4));
+      return;
+    }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
+      _flushTimer?.cancel();
+      _flushTimer = null;
       unawaited(flushPending());
     }
   }
 
   void dispose() {
+    _flushTimer?.cancel();
+    _flushTimer = null;
     try {
       WidgetsBinding.instance.removeObserver(this);
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 未成功注册时移除观察者会抛错，可安全忽略 */
+    }
+  }
+
+  void _scheduleFlush({Duration delay = const Duration(seconds: 8)}) {
+    _flushTimer?.cancel();
+    _flushTimer = Timer(delay, () {
+      _flushTimer = null;
+      unawaited(flushPending());
+    });
   }
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
@@ -550,7 +573,9 @@ class RemoteOpsEventRepository
     if (!Hive.isBoxOpen(_queueBoxName)) {
       try {
         await Hive.initFlutter();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
+      }
       return Hive.openBox<String>(_queueBoxName);
     }
     return Hive.box<String>(_queueBoxName);
@@ -558,35 +583,43 @@ class RemoteOpsEventRepository
 
   @override
   Future<void> flushPending() async {
-    final box = await _ensureBox();
-    final keys = box.keys.map((key) => key.toString()).toList(growable: false)
-      ..sort();
-    var consecutiveFailures = 0;
-    for (final key in keys) {
-      final raw = box.get(key);
-      if (raw == null || raw.isEmpty) {
-        await box.delete(key);
-        continue;
+    if (_isFlushing) {
+      return;
+    }
+    _isFlushing = true;
+    try {
+      final box = await _ensureBox();
+      final keys = box.keys.map((key) => key.toString()).toList(growable: false)
+        ..sort();
+      var consecutiveFailures = 0;
+      for (final key in keys) {
+        final raw = box.get(key);
+        if (raw == null || raw.isEmpty) {
+          await box.delete(key);
+          continue;
+        }
+        try {
+          final parsed = (jsonDecode(raw) as List)
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    OpsEventRecordInput.fromJson(item.cast<String, dynamic>()),
+              )
+              .toList(growable: false);
+          await _postBatch(parsed);
+          await box.delete(key);
+          consecutiveFailures = 0;
+        } catch (e) {
+          developer.log(
+            'OpsEventRepository.flushPending failed key=$key: $e',
+            name: 'ops',
+          );
+          consecutiveFailures++;
+          if (consecutiveFailures >= 3) break;
+        }
       }
-      try {
-        final parsed = (jsonDecode(raw) as List)
-            .whereType<Map>()
-            .map(
-              (item) =>
-                  OpsEventRecordInput.fromJson(item.cast<String, dynamic>()),
-            )
-            .toList(growable: false);
-        await _postBatch(parsed);
-        await box.delete(key);
-        consecutiveFailures = 0;
-      } catch (e) {
-        developer.log(
-          'OpsEventRepository.flushPending failed key=$key: $e',
-          name: 'ops',
-        );
-        consecutiveFailures++;
-        if (consecutiveFailures >= 3) break;
-      }
+    } finally {
+      _isFlushing = false;
     }
   }
 
@@ -679,15 +712,17 @@ class RemoteOpsEventRepository
     if (events.isEmpty) {
       return const OpsEventBatchAck(acceptedCount: 0, duplicateCount: 0);
     }
-    await flushPending();
     try {
-      return await _postBatch(events);
+      final ack = await _postBatch(events);
+      _scheduleFlush(delay: const Duration(seconds: 3));
+      return ack;
     } catch (e) {
       developer.log(
         'ops reportEventBatch failed, enqueuing: $e',
         name: 'OpsEventRepository',
       );
       await _enqueue(events);
+      _scheduleFlush(delay: const Duration(seconds: 12));
       return const OpsEventBatchAck(acceptedCount: 0, duplicateCount: 0);
     }
   }

@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
+import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 
 /// 圈子紧凑卡片：头像（或封面）+ 名称 + 创作数，横向布局。
 class CircleCompactCard extends StatelessWidget {
@@ -24,9 +24,8 @@ class CircleCompactCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = AppColors.iosLabel(context);
     final fgSecondary = AppColors.iosSecondaryLabel(context);
-    final separator = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.22 : 0.16);
+    final separator =
+        SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
@@ -36,13 +35,17 @@ class CircleCompactCard extends StatelessWidget {
           horizontal: AppSpacing.containerMd,
           vertical: AppSpacing.containerSm,
         ),
-        backgroundColor: AppColors.iosGroupedSurface(context),
+        backgroundColor: SettingsSemanticConstants.conversationSheetCardSurface(
+          isDark,
+        ),
         borderColor: separator,
         child: Row(
           children: <Widget>[
             CircleAvatar(
               radius: 24,
-              backgroundImage: coverUrl.isNotEmpty ? NetworkImage(coverUrl) : null,
+              backgroundImage: coverUrl.isNotEmpty
+                  ? NetworkImage(coverUrl)
+                  : null,
               backgroundColor: AppColors.iosFill(context),
               onBackgroundImageError: (error, stackTrace) {},
               child: coverUrl.isEmpty

@@ -2,7 +2,7 @@
 
 ## 节点定位
 
-- `L1_capability`: `shared-homepage-network`
+- `L1_domain_service`: `shared-homepage-network`
 
 该节点是 App 内“具体事物长期主页”的唯一能力归属。  
 它承接车型、酒店/民宿、餐厅、景点等具体事物的主页建档、展示、口碑、认领、下线与内容挂载，不承接群组/关系主页本体的详细治理。
@@ -70,7 +70,7 @@
 
 ## 关键 Journey
 
-本 L1 当前冻结 3 个 `L2_journey` 方向，现已全部正式拆出：
+本 L1 当前冻结 3 个 `L2_business_capability` 方向，现已全部正式拆出：
 
 | L2 Journey | 说明 | 当前状态 |
 |---|---|---|

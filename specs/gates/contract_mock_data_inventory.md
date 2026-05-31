@@ -14,7 +14,7 @@
 | P1 | content/discovery | `ContentMockData`、`PrototypeMockData.discovery*` | `contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json` | 发现流 photo/video/article/moment、详情 hydration、搜索 | 迁移中 |
 | P1 | circle | `CircleMockData` | `contracts/metadata/social/circle/test_fixtures/scenarios/circle_scenarios.json` | 圈子列表、详情、默认群、成员、文件 | 迁移中 |
 | P1 | chat | `ChatMockData` | `contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.json` | inbox、会话详情、成员、消息、联系人 | 迁移中 |
-| P2 | user/entity | `UserProfileMockData`、`HomepageMockData`、`ResonanceBuddyViewData.prototype` | `contracts/metadata/user/**/test_fixtures`、`contracts/metadata/entity/**/test_fixtures` | 主页、关系态、作品/生活记录 | 待迁移 |
+| P2 | user/entity | `UserProfileMockData`、`HomepageMockData` | `contracts/metadata/user/**/test_fixtures`、`contracts/metadata/entity/**/test_fixtures` | 主页、关系态、作品/生活记录 | 待迁移 |
 | P2 | notification | `MockAppMessageRepository` 内联 `AppMessageWire` | `contracts/metadata/notification/**/fixtures` 或 `test_fixtures` | AppMessage 列表、未读数 | 待迁移 |
 | P3 | rtc/realtime/integration/ops | 各 `Mock*Repository` 内存数据 | 对应域 `test_fixtures` | 协议最小样例、状态切换 | 待迁移 |
 

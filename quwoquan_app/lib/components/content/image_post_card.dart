@@ -3,7 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 import 'package:quwoquan_app/components/content/media_post_card.dart';
 
@@ -265,7 +267,6 @@ class _MultiImageContent extends StatefulWidget {
 class _MultiImageContentState extends State<_MultiImageContent> {
   late PageController _pageController;
   int _currentIndex = 0;
-  final Map<String, bool> _imageLoadingStates = {}; // 跟踪图片加载状态
 
   @override
   void initState() {
@@ -288,7 +289,11 @@ class _MultiImageContentState extends State<_MultiImageContent> {
       // 异步预加载，不阻塞UI
       Future.microtask(() {
         if (mounted) {
-          precacheImage(NetworkImage(imageUrl), context);
+          final candidates = resolveContentMediaUrlCandidates(imageUrl);
+          if (_shouldSkipLocalPrecache(candidates)) {
+            return;
+          }
+          _precacheImageCandidates(candidates);
         }
       });
     }
@@ -308,9 +313,30 @@ class _MultiImageContentState extends State<_MultiImageContent> {
         // 异步预加载
         Future.microtask(() {
           if (mounted) {
-            precacheImage(NetworkImage(imageUrl), context);
+            final candidates = resolveContentMediaUrlCandidates(imageUrl);
+            if (_shouldSkipLocalPrecache(candidates)) {
+              return;
+            }
+            _precacheImageCandidates(candidates);
           }
         });
+      }
+    }
+  }
+
+  bool _shouldSkipLocalPrecache(List<String> candidates) {
+    return candidates.isNotEmpty &&
+        candidates.every(isPrivateDevContentMediaUrl);
+  }
+
+  Future<void> _precacheImageCandidates(List<String> candidates) async {
+    for (final candidate in candidates) {
+      try {
+        await precacheImage(NetworkImage(candidate), context);
+        return;
+      } catch (_) {
+        // 尝试下一个候选媒体入口，避免低环境媒体端口被占用时整批预加载报错。
+        continue;
       }
     }
   }
@@ -394,58 +420,27 @@ class _MultiImageContentState extends State<_MultiImageContent> {
 
   /// 构建单个图片项
   Widget _buildImageItem(String imageUrl, bool isDark) {
+    final candidates = resolveContentMediaUrlCandidates(imageUrl);
     return Container(
       width: double.infinity,
       height: double.infinity,
       color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary), // 预填充背景色
-      child: Image.network(
-        imageUrl,
+      child: AppCachedNetworkImage(
+        imageUrl: imageUrl,
+        imageUrlCandidates: candidates,
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) {
-            // 图片加载完成，更新状态
-            _imageLoadingStates[imageUrl] = true;
-            return child;
-          }
-          
-          // 计算加载进度
-          final progress = loadingProgress.cumulativeBytesLoaded / 
-                          (loadingProgress.expectedTotalBytes ?? 1);
-          
-          // 如果加载进度超过50%，显示图片，否则显示加载状态
-          if (progress > 0.5) {
-            return child;
-          }
-          
-          // 检查是否滑动到第四张图片且加载缓慢
-          final isSlowLoading = _currentIndex >= 3 && progress < 0.3;
-          
-          // 显示加载进度，避免空白页面
-          return Container(
-            width: double.infinity,
-            height: double.infinity,
-            color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
-            child: _buildImageLoadingPlaceholder(
-              context, 
-              isDark, 
-              isSlowLoading ? progress : null,
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return _buildImageErrorPlaceholder(context, isDark);
-        },
-        // 添加缓存和预加载
-        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-          if (wasSynchronouslyLoaded) return child;
-          return AnimatedOpacity(
-            opacity: frame == null ? 0.0 : 1.0,
-            duration: const Duration(milliseconds: 200),
-            child: child,
-          );
-        },
+        placeholder: Container(
+          width: double.infinity,
+          height: double.infinity,
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.backgroundSecondary,
+          ),
+          child: _buildImageLoadingPlaceholder(context, isDark, null),
+        ),
+        errorWidget: _buildImageErrorPlaceholder(context, isDark),
       ),
     );
   }

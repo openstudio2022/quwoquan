@@ -1,36 +1,41 @@
-version: 1
-feature: config-rollout-slo-gate
-archived: true
-archived_at: '2026-02-28T00:00:00Z'
-level: "L3_story"
-template: A1-A3
-focus_groups: []
-tests:
-  contract:
-  - 场景：config_release_gray_rollout.sh --step 50 可执行
-  - 场景：config_release_slo_gate.sh 返回 0/10/20
+version: 2
+node:
+  id: gray-release-to-prod--config-rollout-slo-gate
+  level: L3_story
+  path: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod--config-rollout-slo-gate
+  title: gray release to prod  config rollout slo gate
+  parent_domain_service: runtime
+  parent_business_capability: deliver-deploy-prod-pipeline
+scope:
+  summary: gray release to prod  config rollout slo gate 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: gray release to prod  config rollout slo gate GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: config_release_gray_rollout.sh 支持 STEP 5/25/50/100，校验顺序
-    status: implemented
-    linked_tasks:
-    - T1
-    tests:
-    - file: agent_ops/gate/gate_repo.sh
-  A2:
-    criteria: config_release_slo_gate.sh 可执行，返回正确 exit code
-    status: implemented
-    linked_tasks:
-    - T2
-    tests:
-    - file: agent_ops/gate/gate_repo.sh
-  A3:
-    criteria: config_release_rollback.sh 可回滚到指定 config 版本
-    status: implemented
-    linked_tasks:
-    - T3
-    tests:
-    - file: agent_ops/gate/gate_repo.sh
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

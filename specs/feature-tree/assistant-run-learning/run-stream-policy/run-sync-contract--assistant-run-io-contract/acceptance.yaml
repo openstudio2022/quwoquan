@@ -1,18 +1,41 @@
-version: 1
-feature: assistant-run-io-contract
-level: "L3_story"
-template: A1-A8
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+version: 2
+node:
+  id: run-sync-contract--assistant-run-io-contract
+  level: L3_story
+  path: specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract--assistant-run-io-contract
+  title: run sync contract  assistant run io contract
+  parent_domain_service: assistant-run-learning
+  parent_business_capability: run-stream-policy
+scope:
+  summary: run sync contract  assistant run io contract 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: run sync contract  assistant run io contract GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-current_merged_acceptance:
-- source_path: assistant-run-learning/run-stream-policy/run-sync-contract/assistant-run-io-contract/run-error-mapping-governance
-  task_bucket: run-error-mapping-governance
-  migrated_as: L3_task
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

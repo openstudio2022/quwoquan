@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `user-identity-profile-relationship`
-- `L2_journey`: `persona-follow-graph`
-- `L3_scenario`: `social-graph-read`
+- `L1_domain_service`: `user-identity-profile-relationship`
+- `L2_business_capability`: `persona-follow-graph`
+- `L3_story`: `social-graph-read`
 
 本场景冻结分身社交图谱的 read side：粉丝/关注分页、关系查询与关系能力投影。它消费 `FollowEdge`、`BlockEdge` 与 `ProfileSubject`，为主页按钮矩阵、关注页、聊天门禁和推荐读取提供统一读模型。
 

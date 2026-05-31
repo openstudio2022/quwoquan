@@ -1,52 +1,41 @@
-version: 1
-feature: timeout-retry-circuit-rate-limit-degrade
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.object.timeout-retry-circuit-rate-limit-degrade
-  parent_path: capability.runtime
-  acceptance_inherits_from: capability.runtime
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A6_security_privacy
-  - A7_contract_metadata_consistency
-  notes: runtime 对象任务验收
-global_acceptance:
-  A1_functional:
-    scenarios:
-    - given: 对象任务接入
-      when: 执行流程
-      then: 输出符合预期
-  A2_experience:
-  - 体验稳定
-  A3_service_governance:
-  - 治理策略可回滚
-  A4_observability:
-  - 可观测字段完整
-  A5_product_ops:
-  - 可支持运营侧分析
-  A6_security_privacy:
-  - 字段安全策略有效
-  A7_contract_metadata_consistency:
-  - 契约元数据一致
-  A8_test_automation:
-  - 自动化测试覆盖
-tests:
-  mock:
-  - runtime/tests/mock_timeout-retry-circuit-rate-limit-degrade
-  unit:
-  - runtime/tests/unit_timeout-retry-circuit-rate-limit-degrade
-  contract:
-  - runtime/tests/contract_timeout-retry-circuit-rate-limit-degrade
-  integration:
-  - runtime/tests/integration_timeout-retry-circuit-rate-limit-degrade
-  uat:
-  - UAT-RUNTIME-TIMEOUT_RETRY_CIRCUIT_RATE_LIMIT_DEGRADE-001
+version: 2
+node:
+  id: resilience-policy-engine--timeout-retry-circuit-rate-limit-degrade
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-governance/resilience-policy-engine--timeout-retry-circuit-rate-limit-degrade
+  title: resilience policy engine  timeout retry circuit rate limit degrade
+  parent_domain_service: runtime
+  parent_business_capability: runtime-governance
+scope:
+  summary: resilience policy engine  timeout retry circuit rate limit degrade 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: resilience policy engine  timeout retry circuit rate limit degrade GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-current_merged_acceptance:
-- source_path: runtime/runtime-governance/resilience-policy-engine/timeout-retry-circuit-rate-limit-degrade/health-readiness-graceful-shutdown
-  task_bucket: health-readiness-graceful-shutdown
-  migrated_as: L3_task
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

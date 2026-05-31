@@ -34,7 +34,7 @@
 
 - [`event-ingestion-and-analytics/spec.md`](./event-ingestion-and-analytics/spec.md)
 - [`event-ingestion-and-analytics/design.md`](./event-ingestion-and-analytics/design.md)
-- [`event-ingestion-and-analytics/plan.yaml`](./event-ingestion-and-analytics/plan.yaml)
+- [`event-ingestion-and-analytics/树内计划文档`](./event-ingestion-and-analytics/树内计划文档)
 - [`event-ingestion-and-analytics/acceptance.yaml`](./event-ingestion-and-analytics/acceptance.yaml)
 
 ## 验收重点

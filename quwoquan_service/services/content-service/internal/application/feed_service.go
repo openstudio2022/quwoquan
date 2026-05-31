@@ -416,7 +416,7 @@ func containsBlockedKeyword(post *postmodel.Post, blocked map[string]struct{}) b
 		post.Title,
 		post.Body,
 	}
-	if tags := toStringSlice(post.Tags); len(tags) > 0 {
+	if tags := toStringSlice(post.TagRefs); len(tags) > 0 {
 		targets = append(targets, tags...)
 	}
 	for _, text := range targets {

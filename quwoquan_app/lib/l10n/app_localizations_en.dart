@@ -905,9 +905,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get personaPrimary => 'TODO: translate';
 
   @override
-  String get myResonance => 'TODO: translate';
-
-  @override
   String get profileEditLabel => 'TODO: translate';
 
   @override
@@ -1787,15 +1784,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyBio => 'TODO: translate';
-
-  @override
-  String get resonanceDetail => 'TODO: translate';
-
-  @override
-  String get youHave => 'TODO: translate';
-
-  @override
-  String get resonanceSuffix => 'TODO: translate';
 
   @override
   String get articleContent => 'TODO: translate';

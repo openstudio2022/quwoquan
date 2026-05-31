@@ -9,8 +9,6 @@ export 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart'
     show MockChatRepository;
 export 'package:quwoquan_app/cloud/services/circle/circle_repository.dart'
     show MockCircleRepository;
-export 'package:quwoquan_app/cloud/services/content/content_interaction_repository.dart'
-    show MockContentInteractionRepository;
 export 'package:quwoquan_app/cloud/services/content/content_repository.dart'
     show MockContentRepository;
 export 'package:quwoquan_app/cloud/services/content/report_repository.dart'

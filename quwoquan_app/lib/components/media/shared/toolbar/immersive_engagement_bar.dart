@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -361,11 +360,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
         SizedBox(
           width: actionCellWidth,
           child: _action(
-            icon: Icon(
-              isLiked
-                  ? FluentIcons.heart_24_filled
-                  : FluentIcons.heart_24_regular,
+            icon: AppMediaHeartIcon(
               color: isLiked ? AppColors.worksLike : AppColors.worksTitle,
+              filled: isLiked,
               size: AppSpacing.bottomNavItemIconSize,
             ),
             label: formatCompactActionCount(likeCount),
@@ -377,8 +374,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
         SizedBox(
           width: actionCellWidth,
           child: _action(
-            icon: Icon(
-              FluentIcons.share_24_regular,
+            icon: AppMediaShareIcon(
               color: AppColors.worksTitle,
               size: AppSpacing.bottomNavItemIconSize,
             ),
@@ -391,7 +387,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
         SizedBox(
           width: actionCellWidth,
           child: _action(
-            icon: AppBubbleIcon(
+            icon: AppMediaCommentIcon(
               color: AppColors.worksTitle,
               size: AppSpacing.bottomNavItemIconSize,
             ),
@@ -606,11 +602,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
       children: [
         Expanded(
           child: _compactAction(
-            icon: Icon(
-              isLiked
-                  ? FluentIcons.heart_24_filled
-                  : FluentIcons.heart_24_regular,
+            icon: AppMediaHeartIcon(
               color: isLiked ? AppColors.worksLike : AppColors.worksTitle,
+              filled: isLiked,
               size: AppSpacing.bottomNavItemIconSize,
             ),
             label: formatCompactActionCount(likeCount),
@@ -619,8 +613,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
         ),
         Expanded(
           child: _compactAction(
-            icon: Icon(
-              FluentIcons.share_24_regular,
+            icon: AppMediaShareIcon(
               color: AppColors.worksTitle,
               size: AppSpacing.bottomNavItemIconSize,
             ),
@@ -630,7 +623,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
         ),
         Expanded(
           child: _compactAction(
-            icon: AppBubbleIcon(
+            icon: AppMediaCommentIcon(
               color: AppColors.worksTitle,
               size: AppSpacing.bottomNavItemIconSize,
             ),

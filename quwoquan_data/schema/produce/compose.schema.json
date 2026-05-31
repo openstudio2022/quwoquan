@@ -9,7 +9,39 @@
     "coverAssetRef": { "type": "string" },
     "entityRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
     "tagRefs": { "type": "array", "items": { "type": "string" }, "minItems": 2 },
-    "sourceUrls": { "type": "array", "items": { "type": "string" } }
+    "sourceUrls": { "type": "array", "items": { "type": "string" } },
+    "sourcePaths": { "type": "array", "items": { "type": "string" } },
+    "template": { "type": "string" },
+    "galleryMarkdown": { "type": "string" },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "assetId": { "type": "string" },
+          "fileName": { "type": "string" },
+          "caption": { "type": "string" },
+          "kind": { "type": "string" },
+          "scope": { "type": "string" },
+          "objectKey": { "type": "string" },
+          "sourcePath": { "type": "string" },
+          "imageLayout": { "type": "string" }
+        },
+        "required": ["assetId", "fileName"]
+      }
+    },
+    "publishLayout": { "type": "string", "enum": ["travel", "campus"] },
+    "publishAngle": { "type": "string" },
+    "publishTitle": { "type": "string" },
+    "publishSeq": { "type": "integer" },
+    "articleRenderProfile": { "type": "object" },
+    "conditionContext": { "type": "object" },
+    "recommendation": { "type": "object" },
+    "composeBriefRef": { "type": "string" },
+    "sourceQuality": { "type": "array" },
+    "storySpine": { "type": "object" },
+    "relatedSearchPlan": { "type": "object" },
+    "evidenceBundle": { "type": "object" }
   },
   "required": ["topicId", "articleMarkdown", "title", "entityRefs", "tagRefs"]
 }

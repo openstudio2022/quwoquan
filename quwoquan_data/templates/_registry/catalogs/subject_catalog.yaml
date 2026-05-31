@@ -1,0 +1,44 @@
+version: 1
+subjects:
+  entity:
+    travel:
+      - id: 地点/景区
+        entityTypeRef: Entity/地点/景区
+        defaultCategory: travel
+      - id: 地点/博物馆
+        entityTypeRef: Entity/地点/博物馆
+        defaultCategory: humanity
+      - id: 地点/古镇
+        entityTypeRef: Entity/地点/古镇
+        defaultCategory: travel
+      - id: 地点/遗址
+        entityTypeRef: Entity/地点/遗址
+        defaultCategory: humanity
+      - id: 地点/打卡地
+        entityTypeRef: Entity/地点/打卡地
+        defaultCategory: travel
+      - id: 地点/餐厅
+        entityTypeRef: Entity/地点/餐厅
+        defaultCategory: food
+      - id: 地点/民宿
+        entityTypeRef: Entity/地点/民宿
+        defaultCategory: life
+    campus:
+      - id: 机构/学校
+        entityTypeRef: Entity/机构/学校
+        defaultCategory: life
+  topic:
+    travel:
+      - id: 旅行/线路
+        subjectTagRef: Topic/旅行/出行方式/自驾
+        defaultCategory: travel
+      - id: 旅行/榜单
+        subjectTagRef: Format/内容角度/盘点/Top榜单
+        defaultCategory: travel
+      - id: 旅行/主题
+        subjectTagRef: Topic/旅行/旅行主题/文化深度游
+        defaultCategory: travel
+    campus:
+      - id: 教育成长/合辑
+        subjectTagRef: Topic/教育成长/校园生活
+        defaultCategory: life

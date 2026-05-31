@@ -1,0 +1,34 @@
+templateId: 景区_文化
+version: 1
+subject: { kind: entity, type: 地点/景区 }
+vertical: travel
+category: humanity
+intent: 科普
+carrier: article
+styleFamily: 地理画报风
+audiences: [leisureTraveler]
+creatorPersona:
+  archetype: geo_editor
+  preferredCreatorIds: [qwq_creator_geo_editor_001]
+  requiredProfileTagRefs: [Format/内容角度/科普/知识科普]
+  allowedPerspective: [编辑部]
+  mustNotClaim: [学术机构背书, 独家资料]
+editorialIntent: 从历史、地理或文化脉络解释景区的价值。
+render: { articleTemplate: journal, fontPreset: classic }
+structure:
+  required: [历史背景, 地理特色, 代表性故事, 当代意义]
+  optional: [延伸阅读, 周边文化点]
+hooks: ["看懂{name}，要先看懂它背后的文化线索"]
+mustIncludeFacts: [历史背景, 地理位置, 代表性故事]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 800, max: 2000 }
+imagePlan:
+  - { slot: 代表景观, imageLayout: fullWidth }
+  - { slot: 文化细节, imageLayout: wrapRight }
+crossRefs: { minEntity: 1, minTag: 2 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/地点/景区/example.md

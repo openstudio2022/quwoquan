@@ -41,7 +41,7 @@ entities:
         type: string
       - name: authorId
         type: string
-      - name: tags
+      - name: tagRefs
         type: "[]string"
       - name: entityRefs
         type: "[]string"

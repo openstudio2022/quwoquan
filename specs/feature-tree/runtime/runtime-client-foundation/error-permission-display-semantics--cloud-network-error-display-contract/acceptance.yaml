@@ -1,43 +1,43 @@
-version: 1
-archived: true
-archived_at: '2026-03-01T07:10:00Z'
-feature: cloud-network-error-display-contract
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.error-permission-display-semantics.task.cloud-network-error-display-contract
-  parent_path: capability.runtime.feature.runtime-client-foundation.subfeature.error-permission-display-semantics
-level_acceptance:
-  A1:
-    criteria: 阻塞性错误使用内联占位
-    status: implemented
-    tests: []
-  A2:
-    criteria: 次要错误使用 SnackBar floating
-    status: implemented
-    tests: []
-  A7:
-    criteria: 错误码→l10n 映射契约 + 错误态 L1b 测试（交互异常为核心）
-    status: implemented
-    linked_tasks:
-    - T2
-    - T3
+version: 2
+node:
+  id: error-permission-display-semantics--cloud-network-error-display-contract
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics--cloud-network-error-display-contract
+  title: error permission display semantics  cloud network error display contract
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: error permission display semantics  cloud network error display contract
+    验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: error permission display semantics  cloud network error display contract
+      GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-    - file: test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
-      functions:
-      - l10n_keys_exist_for_error_permission_semantics
-    - file: test/ui/content/entry/widgets/location_selector_page_widget_test.dart
-      functions:
-      - cloud_error_shows_inline_placeholder_and_retry
-      - loading_shows_locationFetchingResult
-  A8:
-    criteria: L1c 创作流位置错误 journey 测试
-    status: implemented
-    linked_tasks:
-    - T5
-    tests:
-    - file: test/ui/content/entry/journeys/entry_location_error_journey_test.dart
-      functions:
-      - 创作入口→选位置→云端超时→展示内联错误和重试
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: flutter analyze
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

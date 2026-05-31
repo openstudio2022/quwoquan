@@ -1,51 +1,41 @@
-version: 1
-feature: local-search-lifecycle-and-account-isolation
-level: L3_scenario
-source_path: global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation
-parent_journey: search-provider-routing-and-storage-topology
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+version: 2
+node:
+  id: local-search-lifecycle-and-account-isolation
+  level: L3_story
+  path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation
+  title: local search lifecycle and account isolation
+  parent_domain_service: global-search-experience
+  parent_business_capability: search-provider-routing-and-storage-topology
 scope:
-  summary: >
-    冻结本地聊天搜索生命周期、账号隔离与删除同步规则。
-  journey_bindings:
-    - J2
-  in_scope:
-    - 登出保留
-    - 子账号隔离
-    - 删除同步
-  out_of_scope:
-    - 低存储设备自动淘汰
-
-scenario_acceptance:
-  A1:
-    title: 本地聊天搜索生命周期与账号隔离规则冻结
-    scenario: local search lifecycle and account isolation
-    journey_step: keep local index while isolating by account namespace
+  summary: local search lifecycle and account isolation 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: local search lifecycle and account isolation GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
     done_when:
-      - 登出不清空本地索引
-      - 子账号切换后只读取当前命名空间
-      - 删除或撤回事件同步删本地索引
-    edge_cases:
-      - 子账号切换残留旧结果
-      - 删除后仍命中
-    linked_plan_items:
-      - P1
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
     evidence:
       primary:
-        - T2_module_interaction
-      supporting:
-        - T4_user_journey
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      planned:
-        - local lifecycle and namespace test
-      recorded:
-        - flutter test test/core/services/local_chat_search_store_test.dart
-        - flutter test test/core/services/local_chat_search_sync_service_test.dart
-        - flutter test test/core/services/local_circle_group_snapshot_store_test.dart
-        - flutter test test/ui/search/search_repository_test.dart
-    status: implemented
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

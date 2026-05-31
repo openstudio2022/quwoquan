@@ -2,7 +2,7 @@
 
 ## 设计动因
 
-`homepage-discovery-and-attach-journey/spec.md` 已把“发现主页并挂载主页”的用户旅程冻结为正式 `L2_journey`，但如果没有一版 Journey 级设计，后续开发仍会发生四类漂移：
+`homepage-discovery-and-attach-journey/spec.md` 已把“发现主页并挂载主页”的用户旅程冻结为正式 `L2_business_capability`，但如果没有一版 Journey 级设计，后续开发仍会发生四类漂移：
 
 1. 搜索入口会继续分裂成“全局搜索一套、发布器一套、主页内入口一套”，用户无法建立稳定心智。
 2. 主页选择结果会停留在松散文本或临时对象，导致内容写入、主页回流和详情预览各自维护第二真相源。

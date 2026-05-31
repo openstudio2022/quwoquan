@@ -2,8 +2,8 @@
 
 ## 节点定位
 
-- `L1_capability`: `global-search-experience`
-- `L2_feature`: `search-provider-routing-and-storage-topology`
+- `L1_domain_service`: `global-search-experience`
+- `L2_business_capability`: `search-provider-routing-and-storage-topology`
 
 该节点负责冻结统一搜索 contract、对象 taxonomy、provider routing、fallback 规则、本地搜索生命周期与云侧搜索读模型弹性拓扑。它不直接定义用户可见页面，而是为 `cross-domain-search-journey` 与后续页面内搜索 / picker 搜索提供统一真相源。
 
@@ -17,7 +17,7 @@
 
 ## 子场景拆分
 
-本 L2 冻结 6 个 `L3_scenario`：
+本 L2 冻结 6 个 `L3_story`：
 
 | L3 | 职责 |
 |---|---|

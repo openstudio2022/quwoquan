@@ -1,0 +1,41 @@
+version: 2
+node:
+  id: environment-ops-cli-and-skill
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-config/environment-ops-cli-and-skill
+  title: environment ops cli and skill
+  parent_domain_service: runtime
+  parent_business_capability: runtime-config
+scope:
+  summary: environment ops cli and skill 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: environment ops cli and skill GWT
+    given:
+    - "`stackctl` 已封装环境打包、起停、校验、巡检、诊断、修复与发布入口。"
+    when:
+    - "Cursor / CLI / CI / workflow / project skill 通过 `stackctl` 调用环境能力。"
+    then:
+    - 统一命令面、报告目录与 JSON 契约保持一致，diagnose/repair 边界清晰。
+    done_when:
+    - 无需维护第二套 skill/CI 专用逻辑即可完成环境打包、验证、巡检与发布。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - python3 agent_ops/deploy/stackctl.py verify
+  full_gate:
+  - make stackctl-verify
+  - make gate

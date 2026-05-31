@@ -21,6 +21,12 @@ class RecommendationApiMetadata {
     'Score': 'POST',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'Health': 'public',
+    'Score': 'public',
+  };
+
   static const String healthOperation = 'Health';
   static const String scoreOperation = 'Score';
 

@@ -2,8 +2,8 @@
 
 ## 节点定位
 
-- `L1_capability`: `runtime`
-- `L2_journey`: `runtime-media`
+- `L1_domain_service`: `runtime`
+- `L2_business_capability`: `runtime-media`
 
 ## 背景与动机
 

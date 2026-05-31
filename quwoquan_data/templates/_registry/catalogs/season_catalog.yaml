@@ -1,0 +1,58 @@
+version: 1
+# 季节（条件修饰维）唯一真相源。模板保持季节无关，brief 阶段按 season 注入。
+# tagRefs 仅挂经 tag_exists 校验通过的已存在标签；旺季/淡季无对应标签时留空。
+seasons:
+  春:
+    label: 春季
+    conditionFacts: [花期与物候窗口, 多变天气备雨具, 昼夜温差]
+    crowdNotes: [清明与五一前后客流上升]
+    packing: [薄外套, 雨具, 防花粉]
+    imageHints: [花海, 新绿, 烟雨]
+    tagRefs: [Topic/时间/四季/春季]
+  夏:
+    label: 夏季
+    conditionFacts: [高温避暑策略, 午后雷阵雨, 防蚊与防晒]
+    crowdNotes: [暑期亲子高峰]
+    packing: [防晒透气衣, 防蚊液, 雨具]
+    imageHints: [避暑山水, 夏夜星空, 瀑布溪流]
+    tagRefs: [Topic/时间/四季/夏季, Topic/旅行/旅行主题/避暑游]
+  秋:
+    label: 秋季
+    conditionFacts: [红叶与彩林窗口, 昼夜温差加大, 干燥补水]
+    crowdNotes: [国庆与红叶季拥挤]
+    packing: [保暖外套, 护肤补水, 墨镜]
+    imageHints: [彩林红叶, 秋日金辉, 云海]
+    tagRefs: [Topic/时间/四季/秋季]
+  冬:
+    label: 冬季
+    conditionFacts: [低温与冰雪路况, 供暖与保暖, 日照偏短]
+    crowdNotes: [冰雪与温泉旺季]
+    packing: [羽绒分层, 防滑鞋, 保湿护肤]
+    imageHints: [雪景雾凇, 温泉热气, 冬日暖阳]
+    tagRefs: [Topic/时间/四季/冬季, Topic/旅行/旅行主题/避寒游]
+  雨季:
+    label: 雨季
+    conditionFacts: [降雨集中与山洪风险, 道路湿滑, 行程留弹性]
+    crowdNotes: [雨季客流偏少, 部分项目暂停]
+    packing: [防水鞋, 雨衣, 防潮袋]
+    imageHints: [雨雾山色, 水量充沛的瀑布, 云雾]
+    tagRefs: [Format/内容角度/攻略/季节限定]
+  旱季:
+    label: 旱季
+    conditionFacts: [晴朗稳定窗口, 干燥与防晒, 水位偏低]
+    crowdNotes: [旱季多为传统旺季]
+    packing: [防晒, 补水, 润唇]
+    imageHints: [通透天色, 草木枯季, 远景能见度高]
+    tagRefs: [Format/内容角度/攻略/季节限定]
+  旺季:
+    label: 旺季
+    conditionFacts: [预订提前量, 限流与排队, 价格上浮]
+    crowdNotes: [需提前预约门票与住宿]
+    packing: [备份预订凭证]
+    imageHints: [热门机位人流, 排队场景]
+  淡季:
+    label: 淡季
+    conditionFacts: [营业与班次缩减, 部分项目关闭, 性价比更高]
+    crowdNotes: [部分设施可能歇业]
+    packing: [核对开放时间]
+    imageHints: [人少空镜, 清晨光线]

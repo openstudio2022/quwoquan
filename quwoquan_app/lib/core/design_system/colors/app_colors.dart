@@ -4,10 +4,21 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
+  // ==================== 品牌蓝色阶 ====================
+  /// 更轻快的品牌蓝色阶：保留 iOS 的清透感，避免大面积使用时偏沉。
+  static const Color brandBlue50 = Color(0xFFEFF8FF);
+  static const Color brandBlue100 = Color(0xFFDCEFFF);
+  static const Color brandBlue300 = Color(0xFF76C7FF);
+  static const Color brandBlue400 = Color(0xFF36A8FF);
+  static const Color brandBlue500 = Color(0xFF1491FF);
+  static const Color brandBlue600 = Color(0xFF0A84FF);
+  static const Color brandBlue700 = Color(0xFF0072E5);
+  static const Color brandBlue800 = Color(0xFF005BBC);
+
   /// 品牌主蓝，作为全局默认强调色。
-  static const Color primaryColor = Color(0xFF007AFF);
-  static const Color primaryColorHover = Color(0xFF0A84FF);
-  static const Color primaryColorActive = Color(0xFF0062CC);
+  static const Color primaryColor = brandBlue600;
+  static const Color primaryColorHover = brandBlue500;
+  static const Color primaryColorActive = brandBlue700;
 
   static const Color secondaryColor = Color(0xFF5E5CE6);
   static const Color secondaryColorHover = Color(0xFF7D7AFF);
@@ -17,6 +28,7 @@ class AppColors {
   static const Color error = Color(0xFFFF3B30);
   static const Color success = Color(0xFF34C759);
   static const Color warning = Color(0xFFFF9F0A);
+
   /// 通话/RTC 弱网指示（橙红，与系统 [warning] 区分）
   static const Color networkCallQualityWeak = Color(0xFFFF6B35);
   static const Color info = primaryColor;
@@ -78,7 +90,7 @@ class AppColors {
   static const Color followingButtonOnDark = Color(0xFF333333);
   static const Color iosSystemSurfaceDark = Color(0xFF2C2C2E);
   static const Color iosAccentLight = primaryColor;
-  static const Color iosAccentDark = Color(0xFF0A84FF);
+  static const Color iosAccentDark = brandBlue500;
 
   // ==================== 小趣身份色（assistant brand mark） ====================
   /// 「小趣」品牌身份色（浅色 / 常规背景）。
@@ -113,11 +125,11 @@ class AppColors {
   static const Color iosProfileSurfaceDark = Color(0xFF1C1C1E);
 
   // ==================== 欢迎页语义色 ====================
-  static const Color welcomeBackground = Color(0xFF2563EB); // blue-600
-  static const Color welcomeGradientStart = Color(0xFF3B82F6); // blue-500
-  static const Color welcomeGradientEnd = Color(0xFF312E81); // indigo-900
+  static const Color welcomeBackground = primaryColor;
+  static const Color welcomeGradientStart = brandBlue500;
+  static const Color welcomeGradientEnd = Color(0xFF1554D1);
   static const Color welcomeForeground = Colors.white;
-  static const Color welcomeForegroundMuted = Color(0xFFEFF6FF); // blue-50
+  static const Color welcomeForegroundMuted = brandBlue50;
   static const Color welcomeButtonBg = Color(0x1AFFFFFF);
   static const Color welcomeButtonBgHover = Color(0x33FFFFFF);
   static const Color welcomeButtonBorder = Color(0x33FFFFFF);
@@ -291,8 +303,13 @@ class AppColors {
         context,
       );
 
-  static Color iosAccent(BuildContext context) =>
-      CupertinoDynamicColor.resolve(CupertinoColors.activeBlue, context);
+  static Color iosAccent(BuildContext context) => CupertinoDynamicColor.resolve(
+    const CupertinoDynamicColor.withBrightness(
+      color: iosAccentLight,
+      darkColor: iosAccentDark,
+    ),
+    context,
+  );
 
   static Color iosDestructive(BuildContext context) =>
       CupertinoDynamicColor.resolve(CupertinoColors.systemRed, context);
@@ -414,8 +431,8 @@ class ArticlePaperPaletteColors {
   static const Color whiteTextDark = Color(0xFFE5E5EA);
   static const Color whiteSecondaryTextLight = Color(0xFF8E8E93);
   static const Color whiteSecondaryTextDark = Color(0xFF98989D);
-  static const Color whiteAccentLight = Color(0xFF007AFF);
-  static const Color whiteAccentDark = Color(0xFF0A84FF);
+  static const Color whiteAccentLight = AppColors.primaryColor;
+  static const Color whiteAccentDark = AppColors.iosAccentDark;
   static const Color whiteBadgeBackgroundLight = Color(0xFFF2F2F7);
   static const Color whiteBadgeBackgroundDark = Color(0xFF2C2C2E);
   static const Color whiteBadgeTextLight = Color(0xFF3C3C43);
@@ -615,6 +632,12 @@ class AppColorsFunctional {
         return isDark
             ? const Color(0xFF111216)
             : AppColors.iosGroupedSurfaceLight;
+      case ColorType.globalSearchFieldBackground:
+        return isDark ? const Color(0xFF2A2B2F) : AppColors.white;
+      case ColorType.globalSearchFieldBorder:
+        return isDark
+            ? AppColors.white.withValues(alpha: 0.06)
+            : AppColors.white.withValues(alpha: 0.42);
       case ColorType.backgroundQuoted:
         return isDark ? const Color(0xFF1F2024) : const Color(0xFFF7F8FB);
       case ColorType.borderPrimary:
@@ -641,20 +664,21 @@ class AppColorsFunctional {
         return isDark ? AppColors.iosAccentDark : AppColors.primaryColor;
       // S6: RTC 来电/去电舞台渐变 — 深色下略压暗，避免与浅色壳「同图」
       case ColorType.callStageGradientStart:
-        return isDark ? const Color(0xFF1D4ED8) : AppColors.welcomeGradientStart;
+        return isDark
+            ? const Color(0xFF1D4ED8)
+            : AppColors.welcomeGradientStart;
       case ColorType.callStageGradientEnd:
         return isDark ? const Color(0xFF1E1B4B) : AppColors.welcomeGradientEnd;
       // WebView / 壳层信息卡：替代裸 white + black(alpha) 边框
       case ColorType.chromeInfoCardBackground:
         return getColor(isDark, ColorType.surfaceElevated);
       case ColorType.chromeInfoCardBorder:
-        return isDark
-            ? const Color(0xFF3A3A3C)
-            : const Color(0x1A000000);
+        return isDark ? const Color(0xFF3A3A3C) : const Color(0x1A000000);
       case ColorType.webViewPlaceholderBackground:
         return getColor(isDark, ColorType.pageBackground);
       case ColorType.dropShadow:
         return AppColors.black.withValues(alpha: isDark ? 0.14 : 0.05);
+
       /// 全屏竖滑视频/视频模式底：固定黑场（与浅色系统栏对比由 AnnotatedRegion 处理）
       case ColorType.fullBleedMediaBackdrop:
         return AppColors.black;
@@ -662,6 +686,7 @@ class AppColorsFunctional {
         return isDark
             ? AppColors.white.withValues(alpha: 0.04)
             : AppColors.black.withValues(alpha: 0.03);
+
       /// 缩略图/视频封面上的角标与控件（叠在任意内容上，固定深底浅字）
       case ColorType.mediaThumbnailOverlayScrim:
         return AppColors.black.withValues(alpha: 0.25);
@@ -671,6 +696,7 @@ class AppColorsFunctional {
         return AppColors.white.withValues(alpha: 0.9);
       case ColorType.mediaThumbnailOverlayForeground:
         return AppColors.white;
+
       /// 发现页竖滑全屏视频轨道 UI（叠在内容上，与系统深浅无关）
       case ColorType.videoImmersionBottomGradientEnd:
         return AppColors.black.withValues(alpha: 0.8);
@@ -682,6 +708,7 @@ class AppColorsFunctional {
         return AppColors.white.withValues(alpha: 0.8);
       case ColorType.videoImmersionOverlayQuaternary:
         return AppColors.white.withValues(alpha: 0.78);
+
       /// 创作页媒体格按压/遮罩基色（深色模式白、浅色模式黑，再叠 alpha）
       case ColorType.createMediaOverlayBase:
         return isDark ? AppColors.white : AppColors.black;
@@ -711,6 +738,8 @@ enum ColorType {
   backgroundTertiary,
   backgroundSecondary,
   backgroundPrimary,
+  globalSearchFieldBackground,
+  globalSearchFieldBorder,
 
   /// 引用块/图片占位：比分割条(tertiary)更浅，更接近 post 白(primary)
   backgroundQuoted,

@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons, TextDirection, TextPainter, TextSpan, TextStyle;
+import 'package:flutter/material.dart'
+    show Icons, TextDirection, TextPainter, TextSpan, TextStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -59,6 +60,7 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
   final ValueChanged<String> onEmojiSelected;
   final ValueChanged<ArticleEditorStructureAction> onStructureActionSelected;
   final ArticleEditorStructureAction? activeStructureAction;
+
   /// 为 `false` 时不画上边框，便于与紧贴在上方的条（如文内图工具栏）共用一条分割线。
   final bool showTopHairline;
   final VoidCallback? onToggleBold;
@@ -137,7 +139,8 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
                               ? '键盘'
                               : '样式',
                           onPressed: onStyleTap,
-                          selected: panelType ==
+                          selected:
+                              panelType ==
                               ArticleEditorAccessoryPanelType.style,
                         ),
                         gapBox(),
@@ -152,16 +155,15 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
                               ? '键盘'
                               : '表情',
                           onPressed: onEmojiTap,
-                          selected: panelType ==
+                          selected:
+                              panelType ==
                               ArticleEditorAccessoryPanelType.emoji,
                         ),
                         gapBox(),
                         SizedBox(
                           height: AppSpacing.iconMedium,
                           width: AppSpacing.hairline,
-                          child: ColoredBox(
-                            color: divider,
-                          ),
+                          child: ColoredBox(color: divider),
                         ),
                         gapBox(),
                         _AccessoryIconButton(
@@ -218,7 +220,8 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
               ),
             ),
           // 键盘收起且无面板时，补底部安全区占位
-          if (panelType == ArticleEditorAccessoryPanelType.none && bottomInset > 0)
+          if (panelType == ArticleEditorAccessoryPanelType.none &&
+              bottomInset > 0)
             SizedBox(height: bottomInset),
         ],
       ),
@@ -483,8 +486,10 @@ class ArticleEditorStylePanel extends StatelessWidget {
                   fontWeight: AppTypography.semiBold,
                 ),
               ),
-              selected: activeAction == ArticleEditorStructureAction.headingMajor,
-              onTap: () => _onExclusiveTap(ArticleEditorStructureAction.headingMajor),
+              selected:
+                  activeAction == ArticleEditorStructureAction.headingMajor,
+              onTap: () =>
+                  _onExclusiveTap(ArticleEditorStructureAction.headingMajor),
             ),
             _StyleCell(
               child: Text(
@@ -495,8 +500,10 @@ class ArticleEditorStylePanel extends StatelessWidget {
                   fontWeight: AppTypography.medium,
                 ),
               ),
-              selected: activeAction == ArticleEditorStructureAction.headingMinor,
-              onTap: () => _onExclusiveTap(ArticleEditorStructureAction.headingMinor),
+              selected:
+                  activeAction == ArticleEditorStructureAction.headingMinor,
+              onTap: () =>
+                  _onExclusiveTap(ArticleEditorStructureAction.headingMinor),
             ),
             _StyleCell(
               child: Text(
@@ -508,7 +515,8 @@ class ArticleEditorStylePanel extends StatelessWidget {
                 ),
               ),
               selected: activeAction == ArticleEditorStructureAction.blockquote,
-              onTap: () => _onExclusiveTap(ArticleEditorStructureAction.blockquote),
+              onTap: () =>
+                  _onExclusiveTap(ArticleEditorStructureAction.blockquote),
             ),
           ],
         ),
@@ -524,7 +532,8 @@ class ArticleEditorStylePanel extends StatelessWidget {
                 color: labelColor,
               ),
               selected: activeAction == ArticleEditorStructureAction.bulletList,
-              onTap: () => _onExclusiveTap(ArticleEditorStructureAction.bulletList),
+              onTap: () =>
+                  _onExclusiveTap(ArticleEditorStructureAction.bulletList),
             ),
             _StyleCell(
               child: Icon(
@@ -532,8 +541,10 @@ class ArticleEditorStylePanel extends StatelessWidget {
                 size: AppSpacing.iconMedium,
                 color: labelColor,
               ),
-              selected: activeAction == ArticleEditorStructureAction.orderedList,
-              onTap: () => _onExclusiveTap(ArticleEditorStructureAction.orderedList),
+              selected:
+                  activeAction == ArticleEditorStructureAction.orderedList,
+              onTap: () =>
+                  _onExclusiveTap(ArticleEditorStructureAction.orderedList),
             ),
             _StyleCell(
               child: _CnListIcon(color: labelColor),
@@ -652,7 +663,7 @@ class _StyleRow extends StatelessWidget {
 /// 面板中一个可点击格子（iOS 风格）。
 ///
 /// 未选中：`CupertinoColors.tertiarySystemFill`（浅灰，深色/浅色自适应，有可见轮廓）
-/// 选中：`CupertinoColors.activeBlue` 12% 不透明度背景 + 蓝色边框
+/// 选中：品牌蓝 12% 不透明度背景 + 蓝色边框
 class _StyleCell extends StatelessWidget {
   const _StyleCell({
     required this.child,
@@ -665,9 +676,8 @@ class _StyleCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = CupertinoColors.activeBlue.resolveFrom(context);
-    final normalBg =
-        CupertinoColors.tertiarySystemFill.resolveFrom(context);
+    final accentColor = AppColors.iosAccent(context);
+    final normalBg = CupertinoColors.tertiarySystemFill.resolveFrom(context);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -675,9 +685,7 @@ class _StyleCell extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         height: AppSpacing.minInteractiveSize,
         decoration: BoxDecoration(
-          color: selected
-              ? accentColor.withValues(alpha: 0.12)
-              : normalBg,
+          color: selected ? accentColor.withValues(alpha: 0.12) : normalBg,
           borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
           border: selected
               ? Border.all(color: accentColor, width: AppSpacing.oneHalf)
@@ -1015,7 +1023,9 @@ class _AccessoryTemplateThumbnail extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: typography.captionStyle.copyWith(color: palette.textColor),
+                  style: typography.captionStyle.copyWith(
+                    color: palette.textColor,
+                  ),
                 ),
                 SizedBox(height: AppSpacing.intraGroupXs),
                 Container(
@@ -1544,7 +1554,10 @@ class _AccessoryGlyphPainter extends CustomPainter {
         // 小 a 底部对齐大 A
         smallA.paint(
           canvas,
-          Offset(startX + bigA.width - size.width * 0.06, baselineY - smallA.height),
+          Offset(
+            startX + bigA.width - size.width * 0.06,
+            baselineY - smallA.height,
+          ),
         );
       // 以下 glyph 不再在工具栏使用，保留以避免编译错误
       case ArticleEditorAccessoryGlyph.structure:
@@ -1587,8 +1600,7 @@ class _PaperTextureSelector extends StatelessWidget {
         final texture = ArticlePaperTexture.values[index];
         final isSelected = texture == selected;
         final palette = resolveArticlePaperPalette(context, texture);
-        final labelColor =
-            CupertinoColors.secondaryLabel.resolveFrom(context);
+        final labelColor = CupertinoColors.secondaryLabel.resolveFrom(context);
         return GestureDetector(
           onTap: () => onSelected(texture),
           child: SizedBox(
@@ -1603,11 +1615,12 @@ class _PaperTextureSelector extends StatelessWidget {
                   height: AppSpacing.avatarCircleLg,
                   decoration: BoxDecoration(
                     color: palette.paperColor,
-                    borderRadius:
-                        BorderRadius.circular(AppSpacing.borderRadius),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.borderRadius,
+                    ),
                     border: Border.all(
                       color: isSelected
-                          ? CupertinoColors.activeBlue.resolveFrom(context)
+                          ? AppColors.iosAccent(context)
                           : palette.paperBorderColor,
                       width: isSelected ? 2.5 : 1,
                     ),
@@ -1628,8 +1641,9 @@ class _PaperTextureSelector extends StatelessWidget {
                   texture.label,
                   style: TextStyle(
                     fontSize: AppTypography.xxs,
-                    fontWeight:
-                        isSelected ? AppTypography.semiBold : AppTypography.regular,
+                    fontWeight: isSelected
+                        ? AppTypography.semiBold
+                        : AppTypography.regular,
                     color: isSelected
                         ? CupertinoColors.label.resolveFrom(context)
                         : labelColor,
@@ -1647,10 +1661,7 @@ class _PaperTextureSelector extends StatelessWidget {
 }
 
 class _FontPresetSelector extends StatelessWidget {
-  const _FontPresetSelector({
-    required this.selected,
-    required this.onSelected,
-  });
+  const _FontPresetSelector({required this.selected, required this.onSelected});
 
   final ArticleFontPreset selected;
   final ValueChanged<ArticleFontPreset> onSelected;
@@ -1687,13 +1698,12 @@ class _FontPresetSelector extends StatelessWidget {
               color: isSelected
                   ? CupertinoColors.tertiarySystemFill.resolveFrom(context)
                   : CupertinoColors.systemBackground
-                      .resolveFrom(context)
-                      .withValues(alpha: 0),
-              borderRadius:
-                  BorderRadius.circular(AppSpacing.borderRadius),
+                        .resolveFrom(context)
+                        .withValues(alpha: 0),
+              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               border: Border.all(
                 color: isSelected
-                    ? CupertinoColors.activeBlue.resolveFrom(context)
+                    ? AppColors.iosAccent(context)
                     : CupertinoColors.separator.resolveFrom(context),
                 width: isSelected ? 2 : 0.5,
               ),

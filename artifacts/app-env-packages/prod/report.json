@@ -10,5 +10,22 @@
   "videoCdnBaseUrl": "https://video-cdn.quwoquan.com",
   "uploadBaseUrl": "https://upload.quwoquan.com",
   "currentUserId": "",
-  "seedManifest": ""
+  "seedManifest": "",
+  "topologySchemaVersion": "environment-topology/v1",
+  "artifactPolicy": {
+    "runtimeEnv": "prod",
+    "dataSource": "remote",
+    "allowSeeds": false,
+    "allowLocalHosts": false,
+    "allowProdHosts": true,
+    "distribution": "store-release"
+  },
+  "publicBases": {
+    "gatewayBaseUrl": "https://api.quwoquan.com",
+    "realtimeBaseUrl": "wss://api.quwoquan.com",
+    "mediaAvatarCdnBaseUrl": "https://avatar-cdn.quwoquan.com",
+    "mediaImageCdnBaseUrl": "https://image-cdn.quwoquan.com",
+    "mediaVideoCdnBaseUrl": "https://video-cdn.quwoquan.com",
+    "mediaUploadBaseUrl": "https://upload.quwoquan.com"
+  }
 }

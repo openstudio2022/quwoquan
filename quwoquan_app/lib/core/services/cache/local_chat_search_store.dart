@@ -848,7 +848,9 @@ class LocalChatSearchStore {
             ids.add(id);
           }
         }
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: FTS MATCH 查询失败（如表未建/语法不兼容）时降级为后续 LIKE 查询 */
+      }
     }
     final likeRows = await database.rawQuery(
       'SELECT $idColumn FROM $table WHERE namespace_key = ? AND searchable_text LIKE ? ORDER BY $orderBy LIMIT ?',
@@ -929,7 +931,9 @@ class LocalChatSearchStore {
       if (decoded is Map) {
         return decoded.cast<String, dynamic>();
       }
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 持久化 payload 损坏时回退到空 Map，由上层用默认记录兜底 */
+    }
     return const <String, dynamic>{};
   }
 

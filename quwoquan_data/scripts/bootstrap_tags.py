@@ -1,4 +1,4 @@
-"""生成完整标签体系到 publish/v1/tags/
+"""生成完整标签体系到 publish/tags/
 
 四大分组：Topic / Audience / Format / Entity
 - Topic: 主题垂类与场景/事件/话题/时间/地理（行政区由 bootstrap_admin_regions.py 生成；垂类无 Topic/主题 中间层）
@@ -25,7 +25,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, NOW_ISO
 
-TAGS_ROOT = PUBLISH_ROOT / "v1" / "tags"
+TAGS_ROOT = PUBLISH_ROOT / "tags"
 
 DRY_RUN = False
 _stats: dict[str, int] = {}

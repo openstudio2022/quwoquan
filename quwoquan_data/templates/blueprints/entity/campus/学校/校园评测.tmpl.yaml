@@ -1,0 +1,34 @@
+templateId: 学校_校园评测
+version: 1
+subject: { kind: entity, type: 机构/学校 }
+vertical: campus
+category: life
+intent: 校园评测
+carrier: review
+styleFamily: 客观评测风
+audiences: [prospectiveStudent, campusParent]
+creatorPersona:
+  archetype: campus_blogger
+  preferredCreatorIds: [qwq_creator_campus_blogger_001]
+  requiredProfileTagRefs: [Format/内容角度/测评/校园评测, Topic/教育成长/校园生活]
+  allowedPerspective: [评测员, 校园生活记录者]
+  mustNotClaim: [学校官方身份, 就业保证]
+editorialIntent: 用可比较的维度评测学校生活、学习资源和城市连接。
+render: { articleTemplate: gentle, fontPreset: clean }
+structure:
+  required: [校园氛围, 学科资源, 宿舍食堂, 城市位置, 适合人群]
+  optional: [就业与实习, 家长关注点]
+hooks: ["如果重选一次，{name}这几项最值得提前看"]
+mustIncludeFacts: [校区位置, 学科资源, 宿舍食堂, 城市连接]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 900, max: 1800 }
+imagePlan:
+  - { slot: 校园地标, imageLayout: fullWidth }
+  - { slot: 生活设施, gallery: grid }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/机构/学校/example.md

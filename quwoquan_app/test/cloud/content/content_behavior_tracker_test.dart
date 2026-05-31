@@ -87,5 +87,107 @@ void main() {
       await tracker.flush();
       expect(repo.recorded.first.action, BehaviorAction.share);
     });
+
+    // ── V1-F/V1-H T3：feed 归因字段回流（feedRequestId/position/referralSource）──
+    test('impression 透传 feedRequestId/position/referralSource 回流', () async {
+      tracker.trackImpression(
+        'post_1',
+        feedRequestId: 'req-abc',
+        position: 7,
+        referralSource: ReferralSource.organicFeed,
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.feedRequestId, equals('req-abc'));
+      expect(event.position, equals(7));
+      expect(event.referralSource, equals(ReferralSource.organicFeed));
+    });
+
+    test('click 透传 position + referralSource 回流', () async {
+      tracker.trackClick(
+        'post_2',
+        feedRequestId: 'req-xyz',
+        position: 3,
+        referralSource: ReferralSource.organicFeed,
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.click);
+      expect(event.position, equals(3));
+      expect(event.referralSource, equals(ReferralSource.organicFeed));
+    });
+
+    test('follow 交集行动回流 dimension + tagRefs（B3 归因）', () async {
+      tracker.trackFollow(
+        'author_1',
+        feedRequestId: 'req-follow',
+        referralSource: ReferralSource.organicFeed,
+        intersectionDimension: 'identity',
+        intersectionTagRefs: const <String>['identity/campus/xdf'],
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.follow);
+      expect(event.intersectionDimension, equals('identity'));
+      expect(event.intersectionTagRefs, contains('identity/campus/xdf'));
+    });
+
+    // ── S6 交集转化三类行动可区分漏斗（follow / join_circle / add_contact）──
+    test('join_circle 交集行动独立动作 + dimension/tagRefs 回流', () async {
+      tracker.trackJoinCircle(
+        'circle_1',
+        intersectionDimension: 'interest',
+        intersectionTagRefs: const <String>['Topic/旅行'],
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.joinCircle);
+      expect(event.contentId, equals('circle_1'));
+      expect(event.intersectionDimension, equals('interest'));
+      expect(event.intersectionTagRefs, contains('Topic/旅行'));
+    });
+
+    test('add_contact 交集行动独立动作 + dimension/tagRefs 回流', () async {
+      tracker.trackAddContact(
+        'author_2',
+        intersectionDimension: 'location',
+        intersectionTagRefs: const <String>['Entity/地点/北京'],
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.addContact);
+      expect(event.contentId, equals('author_2'));
+      expect(event.intersectionDimension, equals('location'));
+      expect(event.intersectionTagRefs, contains('Entity/地点/北京'));
+    });
+
+    test('三类交集行动 wireValue 互不相同，漏斗可区分', () {
+      expect(BehaviorAction.follow.wireValue, equals('follow'));
+      expect(BehaviorAction.joinCircle.wireValue, equals('join_circle'));
+      expect(BehaviorAction.addContact.wireValue, equals('add_contact'));
+      expect(BehaviorAction.fromWireValue('join_circle'),
+          equals(BehaviorAction.joinCircle));
+      expect(BehaviorAction.fromWireValue('add_contact'),
+          equals(BehaviorAction.addContact));
+    });
+
+    // ── S6 修复：BehaviorEvent JSON roundtrip 不得丢失交集归因（入队重试场景）──
+    test('BehaviorEvent toJson 携带交集字段', () {
+      const event = BehaviorEvent(
+        contentId: 'circle_9',
+        action: BehaviorAction.joinCircle,
+        intersectionDimension: 'identity',
+        intersectionTagRefs: <String>['Entity/机构/学校/西电'],
+      );
+      final json = event.toJson();
+      expect(json['action'], equals('join_circle'));
+      expect(json['intersectionDimension'], equals('identity'));
+      expect(json['intersectionTagRefs'], contains('Entity/机构/学校/西电'));
+    });
   });
 }

@@ -7,7 +7,8 @@
     "contentType": { "type": "string", "enum": ["article", "image", "video"] },
     "entityRefs": { "type": "array", "items": { "type": "string" }, "description": "中文实体名数组" },
     "tagRefs": { "type": "array", "items": { "type": "string" }, "description": "路径格式标签ID数组" },
-    "sourcePaths": { "type": "array", "items": { "type": "string" }, "description": "实际来源文件路径" },
+    "conditionContext": { "type": ["object", "null"], "description": "条件上下文（如 region），区域锁定术语校验消费" },
+    "sourceUrls": { "type": "array", "items": { "type": "string" } },
     "assets": {
       "type": "array",
       "items": {
@@ -16,13 +17,25 @@
           "assetId": { "type": "string" },
           "fileName": { "type": "string" },
           "caption": { "type": "string" },
-          "imageLayout": { "type": "string", "enum": ["fullWidth", "wrapLeft", "wrapRight"] }
+          "imageLayout": { "type": "string", "enum": ["fullWidth", "wrapLeft", "wrapRight", "gallery"] }
         },
         "required": ["assetId", "fileName"]
       }
     },
     "template": { "type": "string", "description": "使用的模板名称" },
-    "reviewDecision": { "type": "string", "enum": ["approved", "revision_needed", "rejected"] }
+    "carrier": { "type": "string", "enum": ["article", "gallery", "review"], "description": "内容载体：article 长文 / gallery 画报 / review 评测" },
+    "generator": { "type": "string", "enum": ["agent"], "description": "正文创作来源；交付面仅允许 agent（会话模型创作），脚本拼接/占位被门禁拒绝" },
+    "generatorModel": { "type": ["string", "null"], "description": "创作所用模型标识（draft_meta.model）" },
+    "citedSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文创作时引用的 source 证据路径" },
+    "reviewDecision": { "type": "string", "enum": ["approved", "revision_needed", "rejected"] },
+    "articleMarkdownVersion": { "type": "string" },
+    "articleMarkdownDigest": { "type": "string" },
+    "articleAssetManifest": { "type": "object" },
+    "articleRenderProfile": { "type": "object" },
+    "publishLayout": { "type": "string" },
+    "publishAngle": { "type": "string" },
+    "publishTitle": { "type": "string" },
+    "publishSeq": { "type": "integer" }
   },
-  "required": ["topicId", "contentType", "entityRefs", "tagRefs", "sourcePaths"]
+  "required": ["topicId", "contentType", "entityRefs", "tagRefs", "sourceUrls", "generator"]
 }

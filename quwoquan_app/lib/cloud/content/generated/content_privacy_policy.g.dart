@@ -28,7 +28,7 @@ class ContentPrivacyPolicy {
         return value;
       case 'embedding':
         return null;
-      case 'tags':
+      case 'tagRefs':
         return value;
       case 'mediaUrls':
         return value;

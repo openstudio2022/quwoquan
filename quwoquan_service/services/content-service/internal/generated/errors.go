@@ -7,6 +7,7 @@ import "errors"
 //
 //nolint:gochecknoglobals
 var (
+	ErrAssistantMentionContextMissing      = errors.New("CONTENT.USER.assistant_mention_context_missing")
 	ErrCircleDistributionForbidden         = errors.New("CONTENT.USER.circle_distribution_forbidden")
 	ErrCommentForbiddenDelete              = errors.New("CONTENT.USER.comment_forbidden_delete")
 	ErrCommentLikeDuplicate                = errors.New("CONTENT.USER.comment_like_duplicate")
@@ -29,6 +30,9 @@ var (
 	ErrPostNotFound                        = errors.New("CONTENT.USER.post_not_found")
 	ErrPublicRequiredForCircleDistribution = errors.New("CONTENT.USER.public_required_for_circle_distribution")
 	ErrRateLimited                         = errors.New("CONTENT.USER.rate_limited")
+	ErrReviewDuplicatePerPoi               = errors.New("CONTENT.USER.review_duplicate_per_poi")
+	ErrReviewPoiRequired                   = errors.New("CONTENT.USER.review_poi_required")
+	ErrReviewRatingRequired                = errors.New("CONTENT.USER.review_rating_required")
 	ErrStorageWriteFailed                  = errors.New("CONTENT.SYSTEM.storage_write_failed")
 	ErrUnauthorized                        = errors.New("CONTENT.USER.unauthorized")
 	ErrUpstreamTimeout                     = errors.New("CONTENT.MIDDLEWARE.upstream_timeout")

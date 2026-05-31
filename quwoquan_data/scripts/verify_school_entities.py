@@ -5,7 +5,7 @@
   E2 - 每目录含 _entity.json + page.md，且不得有 manifest.json
   E3 - _entity.json 含 geoTagRef（以 Topic/地理/行政区/ 开头）
   E4 - tagRefs 至少含 Entity/机构/学校 + 1 个学段标签
-  E5 - 所有 tagRefs 在 publish/v1/tags 中可解析
+  E5 - 所有 tagRefs 在 publish/tags 中可解析
   E6 - page.md >= 300 字
   E7 - page.md 无旧式 /tag/主题/ 路径
   E8 - 无目录名冲突
@@ -20,8 +20,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, RUNTIME_ROOT
 
-ENTITIES_ROOT = PUBLISH_ROOT / "v1" / "entities" / "机构" / "学校"
-TAGS_ROOT = PUBLISH_ROOT / "v1" / "tags"
+ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "机构" / "学校"
+TAGS_ROOT = PUBLISH_ROOT / "tags"
 CATALOG_DIR = RUNTIME_ROOT / "seed" / "school_catalog"
 
 errors: list[str] = []

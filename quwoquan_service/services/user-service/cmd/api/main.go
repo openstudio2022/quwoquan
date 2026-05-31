@@ -14,8 +14,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"gopkg.in/yaml.v3"
 
-	rthealth "quwoquan_service/runtime/health"
+	rtauth "quwoquan_service/runtime/auth"
 	rtgov "quwoquan_service/runtime/governance"
+	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	rtmongo "quwoquan_service/runtime/mongodb"
@@ -164,6 +165,7 @@ func main() {
 	workStore := persistence.NewPgWorkStore(pgPool)
 	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
+	userAuthStore := persistence.NewPgUserAuthStore(pgPool)
 	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
 	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
 	inviteStore := persistence.NewPgInviteStore(pgPool)
@@ -207,6 +209,10 @@ func main() {
 	workService := application.NewWorkService(workStore)
 	lifeItemService := application.NewLifeItemService(lifeItemStore)
 	settingService := application.NewSettingService(settingStore, settingCache)
+	otpCodeCache := cache.NewOtpCodeCache(redisClient)
+	accessTokenSecret := []byte(getenvOrDefault("AUTH_JWT_SECRET", "dev-user-service-access-secret"))
+	accessSigner := rtauth.NewHS256Signer(accessTokenSecret, 30*time.Minute)
+	accessVerifier := rtauth.NewHS256Verifier(accessTokenSecret)
 	authService := application.NewAuthService(
 		profileStore,
 		personaStore,
@@ -214,6 +220,10 @@ func main() {
 		anonymousDeviceBindingStore,
 		profileCache,
 		shardDirectory,
+		application.WithUserAuthRepository(userAuthStore),
+		application.WithOtpCodeStore(otpCodeCache),
+		application.WithOtpDebugReveal(!isProdRuntimeEnv()),
+		application.WithAccessTokenSigner(accessSigner),
 	)
 	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
 	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
@@ -239,10 +249,14 @@ func main() {
 		authService, subAccountService, contactDiscoveryService, inviteService,
 	).Routes()
 
+	// 统一鉴权中间件：Bearer JWT 本地验签，验签通过后用 token principal 覆盖
+	// X-Client-User-Id，杜绝裸头伪造；非法 token 清除裸身份头。仅作用于业务路由。
+	authedHandler := rtauth.Middleware(accessVerifier)(handler)
+
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle("/", handler)
+	outerMux.Handle("/", authedHandler)
 
 	// 8.1 Observability middleware
 	instanceID, _ := os.Hostname()
@@ -299,6 +313,11 @@ func isValidAppEnv(env string) bool {
 	default:
 		return false
 	}
+}
+
+// isProdRuntimeEnv 仅在 APP_ENV=prod 时为 true；非生产允许 SendOtp 返回调试码。
+func isProdRuntimeEnv() bool {
+	return getenvOrDefault("APP_ENV", "alpha") == "prod"
 }
 
 func requiresConfigVersion(env string) bool {

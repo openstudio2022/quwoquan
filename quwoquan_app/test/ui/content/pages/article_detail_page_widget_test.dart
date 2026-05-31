@@ -152,7 +152,10 @@ void main() {
                               allowLandscapeSpread: true,
                             );
                             final stageHeight =
-                                metrics.frameSpecForStageWidth(stageWidth).paperSize.height +
+                                metrics
+                                    .frameSpecForStageWidth(stageWidth)
+                                    .paperSize
+                                    .height +
                                 pagePadding.vertical;
                             capturedStageWidth = stageWidth;
                             return UnconstrainedBox(
@@ -187,10 +190,10 @@ void main() {
 
     expect(capturedStageWidth, isNotNull);
     final outerWidth = surfaceSize.width - AppSpacing.containerMd * 2;
-    final stageSize = tester.getSize(find.byKey(TestKeys.articlePageCurlLayer));
-    final visiblePage = tester.widgetList<ArticlePageShell>(
-      find.byType(ArticlePageShell),
-    ).first;
+    final stageSize = tester.getSize(find.byType(ArticleReadOnlyBookDeck));
+    final visiblePage = tester
+        .widgetList<ArticlePageShell>(find.byType(ArticlePageShell))
+        .first;
     final visiblePageFinder = find.byWidget(visiblePage);
     final pageSize = tester.getSize(visiblePageFinder);
 
@@ -273,11 +276,88 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(pageChanges.length, greaterThanOrEqualTo(2));
-    expect(
-      pageChanges.sublist(pageChanges.length - 2),
-      equals(<int>[1, 0]),
-    );
+    expect(pageChanges.sublist(pageChanges.length - 2), equals(<int>[1, 0]));
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
+  });
+
+  testWidgets('ArticleReadOnlyBookDeck 翻页完成时上报 page curl commit', (
+    tester,
+  ) async {
+    const surfaceSize = Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = surfaceSize;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final commits = <ArticleReaderPageFlipCommit>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final metrics = resolveArticleCanvasMetrics(
+                context,
+                constraints,
+                variant: ArticleCanvasVariant.detail,
+              );
+              final pagePadding = articleReaderStagePagePadding();
+              final stageWidth = resolveArticlePaperStageWidth(
+                context,
+                constraints,
+                stagePadding: pagePadding,
+                allowLandscapeSpread: true,
+              );
+              final stageHeight =
+                  metrics.frameSpecForStageWidth(stageWidth).paperSize.height +
+                  pagePadding.vertical;
+              return Center(
+                child: SizedBox(
+                  width: stageWidth,
+                  height: stageHeight,
+                  child: ArticleReadOnlyBookDeck(
+                    pages: _bookPages(),
+                    template: ArticleTemplatePreset.tech,
+                    fontPreset: ArticleFontPreset.mono,
+                    metrics: metrics,
+                    pagePadding: pagePadding,
+                    coverUrl: '',
+                    showFooterPageLabel: false,
+                    onPageFlipCommitted: commits.add,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      const Offset(-260, -40),
+    );
+    await tester.pumpAndSettle();
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
+      const Offset(260, -40),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      commits.map((commit) => commit.direction),
+      containsAll(<String>['forward', 'backward']),
+    );
+    expect(
+      commits.map((commit) => commit.mechanism),
+      everyElement('page_curl'),
+    );
   });
 }
 

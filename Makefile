@@ -5,8 +5,10 @@
 .PHONY: verify-chat-avatar-commercial-matrix
 .PHONY: run-chat-avatar-commercial-matrix-local
 .PHONY: verify-app-mock-isolation
+.PHONY: verify-app-auth-policy
 .PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
+.PHONY: verify-app-native-edge-navigation
 .PHONY: verify-app-pageflip-back-mainline
 .PHONY: verify-app-pageflip-backward-mainline
 .PHONY: verify-app-page-abc-governance
@@ -29,6 +31,10 @@
 .PHONY: verify-quwoquan-data-post-packages
 .PHONY: verify-app-env-package
 .PHONY: verify-service-env-package
+.PHONY: verify-env-topology
+.PHONY: verify-local-port-manifest
+.PHONY: verify-public-vs-upstream-url-contract
+.PHONY: verify-env-packaging
 .PHONY: verify-env-instance-isolation
 .PHONY: observability-es-up
 .PHONY: observability-es-down
@@ -44,6 +50,7 @@
 .PHONY: beta-down
 .PHONY: beta-status
 .PHONY: verify
+.PHONY: verify-global-increment-constraints
 .PHONY: codegen
 .PHONY: codegen-app
 .PHONY: codegen-ops-portal
@@ -54,10 +61,24 @@
 .PHONY: config-gray-rollout
 .PHONY: config-rollback
 .PHONY: config-slo-gate
+.PHONY: stackctl-package
+.PHONY: stackctl-verify
+.PHONY: stackctl-up
+.PHONY: stackctl-down
+.PHONY: stackctl-status
+.PHONY: stackctl-health
+.PHONY: stackctl-inspect
+.PHONY: stackctl-doctor
+.PHONY: stackctl-repair
+.PHONY: stackctl-deploy
 
 # 客户端：UI/App/Core 不得直连 cloud/services/*/mock（过渡期见 specs/gates/ui_mock_isolation_allowlist.yaml）
 verify-app-mock-isolation:
 	@python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
+
+# API 鉴权契约：security.auth_mode 真相源与端侧鉴权快照一致，核心受限入口必须 required
+verify-app-auth-policy:
+	@python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py
 
 verify-app-lib-test-only-symbols:
 	@python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py
@@ -100,21 +121,38 @@ verify-quwoquan-data-stages:
 	@python3 quwoquan_data/scripts/cli.py data explore --query "smoke-test" > /dev/null
 
 verify-app-env-package:
-	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env alpha
-	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env beta
-	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env gamma
-	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env prod
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env alpha >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env beta >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env gamma >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env prod >/dev/null
 
 verify-service-env-package:
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "FAIL: SERVICE is required. Example: make verify-service-env-package SERVICE=content-service"; \
 		exit 2; \
 	fi
-	@bash quwoquan_service/scripts/runtime/build_service_env_package.sh --service "$(SERVICE)" --env alpha
-	@bash quwoquan_service/scripts/runtime/build_service_env_package.sh --service "$(SERVICE)" --env beta
-	@bash quwoquan_service/scripts/runtime/build_service_env_package.sh --service "$(SERVICE)" --env gamma
-	@bash quwoquan_service/scripts/runtime/build_service_env_package.sh --service "$(SERVICE)" --env prod-gray
-	@bash quwoquan_service/scripts/runtime/build_service_env_package.sh --service "$(SERVICE)" --env prod
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env alpha --service "$(SERVICE)" --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env beta --service "$(SERVICE)" --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env gamma --service "$(SERVICE)" --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env prod --service "$(SERVICE)" --include-services >/dev/null
+
+verify-env-topology:
+	@python3 agent_ops/gate/verify_environment_topology_manifest.py
+
+verify-local-port-manifest:
+	@python3 agent_ops/gate/verify_local_env_port_manifest.py
+
+verify-public-vs-upstream-url-contract:
+	@python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
+
+verify-env-packaging:
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env alpha --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env beta --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env gamma --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env prod --include-services >/dev/null
+	@python3 agent_ops/gate/verify_environment_packaging_contract.py
+	@python3 agent_ops/gate/verify_env_artifact_isolation.py
+	@python3 quwoquan_app/scripts/env/verify_prod_package_purity.py
 
 observability-es-up:
 	@python3 quwoquan_service/scripts/runtime/observability/es_cli.py up
@@ -143,14 +181,80 @@ build-app-env:
 		echo "FAIL: ENV is required. Example: make build-app-env ENV=beta"; \
 		exit 2; \
 	fi
-	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env "$(ENV)"
+	@python3 agent_ops/deploy/stackctl.py package --env "$(ENV)"
 
 build-service-env:
 	@if [ -z "$(SERVICE)" ] || [ -z "$(ENV)" ]; then \
 		echo "FAIL: SERVICE and ENV are required. Example: make build-service-env SERVICE=content-service ENV=beta"; \
 		exit 2; \
 	fi
-	@bash quwoquan_service/scripts/runtime/build_service_env_package.sh --service "$(SERVICE)" --env "$(ENV)"
+	@python3 agent_ops/deploy/stackctl.py package --env "$(ENV)" --service "$(SERVICE)" --include-services
+
+stackctl-package:
+	@if [ -z "$(ENV)" ]; then \
+		echo "FAIL: ENV is required. Example: make stackctl-package ENV=beta INCLUDE_SERVICES=1"; \
+		exit 2; \
+	fi
+	@python3 agent_ops/deploy/stackctl.py package --env "$(ENV)" $(if $(SERVICE),--service "$(SERVICE)",) $(if $(INCLUDE_SERVICES),--include-services,)
+
+stackctl-verify:
+	@python3 agent_ops/deploy/stackctl.py verify $(if $(ENV),--env "$(ENV)",) $(if $(TARGET),--target "$(TARGET)",) $(if $(KIND),--kind "$(KIND)",) $(if $(TIER),--tier "$(TIER)",)
+
+stackctl-up:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "FAIL: TARGET is required. Example: make stackctl-up TARGET=beta-local"; \
+		exit 2; \
+	fi
+	@python3 agent_ops/deploy/stackctl.py up --target "$(TARGET)" $(if $(DEVICE_ID),--device-id "$(DEVICE_ID)",) $(if $(SKIP_APP),--skip-app,) $(if $(ROLLOUT_MODE),--rollout-mode "$(ROLLOUT_MODE)",)
+
+stackctl-down:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "FAIL: TARGET is required. Example: make stackctl-down TARGET=beta-local"; \
+		exit 2; \
+	fi
+	@python3 agent_ops/deploy/stackctl.py down --target "$(TARGET)"
+
+stackctl-status:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "FAIL: TARGET is required. Example: make stackctl-status TARGET=gamma-local"; \
+		exit 2; \
+	fi
+	@python3 agent_ops/deploy/stackctl.py status --target "$(TARGET)"
+
+stackctl-health:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "FAIL: TARGET is required. Example: make stackctl-health TARGET=gamma-hosted"; \
+		exit 2; \
+	fi
+	@python3 agent_ops/deploy/stackctl.py health --target "$(TARGET)" --scope "$(or $(SCOPE),full)"
+
+stackctl-inspect:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "FAIL: TARGET is required. Example: make stackctl-inspect TARGET=prod-hosted SCOPE=all"; \
+		exit 2; \
+	fi
+	@python3 agent_ops/deploy/stackctl.py inspect --target "$(TARGET)" --scope "$(or $(SCOPE),all)"
+
+stackctl-doctor:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "FAIL: TARGET is required. Example: make stackctl-doctor TARGET=beta-local"; \
+		exit 2; \
+	fi
+	@python3 agent_ops/deploy/stackctl.py doctor --target "$(TARGET)"
+
+stackctl-repair:
+	@if [ -z "$(TARGET)" ] || [ -z "$(FIX)" ]; then \
+		echo "FAIL: TARGET and FIX are required. Example: make stackctl-repair TARGET=beta-local FIX=restart-stack"; \
+		exit 2; \
+	fi
+	@python3 agent_ops/deploy/stackctl.py repair --target "$(TARGET)" --fix "$(FIX)"
+
+stackctl-deploy:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "FAIL: TARGET is required. Example: make stackctl-deploy TARGET=prod-hosted SERVICE=seed-box TO_IMAGE=v1 TO_CONFIG=v2 STEP=50"; \
+		exit 2; \
+	fi
+	@python3 agent_ops/deploy/stackctl.py deploy --target "$(TARGET)" $(if $(STAGE),--stage "$(STAGE)",) $(if $(IMAGE_VERSION),--image-version "$(IMAGE_VERSION)",) $(if $(PREVIOUS_IMAGE_VERSION),--previous-image-version "$(PREVIOUS_IMAGE_VERSION)",) $(if $(BASE_URL),--base-url "$(BASE_URL)",) $(if $(PRODUCT_OPS_BASE_URL),--product-ops-base-url "$(PRODUCT_OPS_BASE_URL)",) $(if $(MEDIA_BASE_URL),--media-base-url "$(MEDIA_BASE_URL)",) $(if $(MEDIA_ORIGIN_BASE_URL),--media-origin-base-url "$(MEDIA_ORIGIN_BASE_URL)",) $(if $(SERVICE),--service "$(SERVICE)",) $(if $(FROM_IMAGE),--from-image "$(FROM_IMAGE)",) $(if $(TO_IMAGE),--to-image "$(TO_IMAGE)",) $(if $(FROM_CONFIG),--from-config "$(FROM_CONFIG)",) $(if $(TO_CONFIG),--to-config "$(TO_CONFIG)",) $(if $(STEP),--step "$(STEP)",) $(if $(ERROR_RATE),--error-rate "$(ERROR_RATE)",) $(if $(P95_MS),--p95-ms "$(P95_MS)",) $(if $(REDIS_ERROR_RATE),--redis-error-rate "$(REDIS_ERROR_RATE)",)
 
 verify-env-instance-isolation:
 	@python3 quwoquan_service/scripts/runtime/verify_env_instance_isolation.py
@@ -187,8 +291,11 @@ verify-app-page-horizontal-quality:
 	@python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
 	@python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
 
+verify-app-native-edge-navigation:
+	@python3 quwoquan_app/scripts/runtime/verify_native_edge_navigation.py
+
 verify-app-pageflip-back-mainline:
-	@cd quwoquan_app && flutter test test/components/pageflip/pageflip_contract_test.dart test/common/pageflip/pageflip_diagnostics_visual_test.dart
+	@cd quwoquan_app && flutter test test/components/pageflip/backward_sheet_partition_contract_test.dart test/components/pageflip/pageflip_contract_test.dart test/common/pageflip/pageflip_diagnostics_visual_test.dart test/components/pageflip/pageflip_widget_test.dart
 
 # 后翻路线 B 主线静态门禁（见 .cursor/rules/12-pageflip-backward-mainline.mdc）。
 verify-app-pageflip-backward-mainline:
@@ -220,11 +327,15 @@ verify-app-session-b-current:
 verify-retired-terms-zero:
 	@python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py
 
+verify-global-increment-constraints:
+	@bash agent_ops/scaffold/verify_global_increment_constraints.sh
+
 # 助手手写（排除 generated）+ search_repository：Map/dynamic 计数棘轮（见 specs/gates/assistant_search_weak_typing_governance.md）
 verify-app-assistant-search-weak-typing-ratchet:
 	@python3 agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py
 
 gate:
+	@$(MAKE) verify-global-increment-constraints
 	@bash quwoquan_service/scripts/deploy/verify_deployment_domain_mapping.sh
 	@bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
 	@$(MAKE) verify-reliable-task-topology
@@ -240,13 +351,17 @@ gate-local-gamma:
 		python3 quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py --dry-run; \
 	else \
 		set -e; \
-		LG_HTTP_PORT="$${LOCAL_GAMMA_HTTP_PORT:-18180}"; \
-		LG_PRODUCT_OPS_PORT="$${LOCAL_GAMMA_PRODUCT_OPS_PORT:-18186}"; \
+		LG_HTTP_PORT="$${LOCAL_GAMMA_HTTP_PORT:-19000}"; \
+		LG_PRODUCT_OPS_PORT="$${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"; \
+		LG_MEDIA_PORT="$${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"; \
+		LG_USER_PORT="$${LOCAL_GAMMA_USER_PORT:-19210}"; \
 		export LOCAL_GAMMA_HTTP_PORT="$$LG_HTTP_PORT"; \
 		export LOCAL_GAMMA_PRODUCT_OPS_PORT="$$LG_PRODUCT_OPS_PORT"; \
+		export LOCAL_GAMMA_MEDIA_EDGE_PORT="$$LG_MEDIA_PORT"; \
+		export LOCAL_GAMMA_USER_PORT="$$LG_USER_PORT"; \
 		export LOCAL_GAMMA_GATEWAY_BASE_URL="$${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:$$LG_HTTP_PORT}"; \
 		export LOCAL_GAMMA_PRODUCT_OPS_BASE_URL="$${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-http://127.0.0.1:$$LG_PRODUCT_OPS_PORT}"; \
-		export LOCAL_GAMMA_MEDIA_BASE_URL="$${LOCAL_GAMMA_MEDIA_BASE_URL:-$$LOCAL_GAMMA_GATEWAY_BASE_URL}"; \
+		export LOCAL_GAMMA_MEDIA_BASE_URL="$${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:$$LG_MEDIA_PORT}"; \
 		if [ "$${LOCAL_GAMMA_SKIP_GATE:-0}" != "1" ]; then $(MAKE) gate; fi; \
 		$(MAKE) verify-app-env-package; \
 		$(MAKE) verify-app-seed-manifest; \
@@ -274,6 +389,7 @@ run-chat-avatar-commercial-matrix-local:
 	@bash agent_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh
 
 verify:
+	@$(MAKE) verify-global-increment-constraints
 	@bash agent_ops/scaffold/verify_feature_traceability.sh
 	@bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
 	@bash agent_ops/scaffold/verify_acceptance_standard.sh
@@ -364,16 +480,15 @@ l2-content:
 	@bash quwoquan_app/scripts/content/run_l2_content_tests.sh
 
 # L3：按统一环境名解析 HTTP 基址。API_CONTRACT_ENV 默认为 gamma。
-# 变量格式：{ALPHA|BETA|GAMMA|PROD_GRAY|PROD}_BASE_URL 与 *_PRODUCT_OPS_BASE_URL。
+# 变量格式：{ALPHA|BETA|GAMMA|PROD}_BASE_URL 与 *_PRODUCT_OPS_BASE_URL。
 test-api-contract:
 	@ENV_NAME="$${API_CONTRACT_ENV:-gamma}"; \
 	case "$$ENV_NAME" in \
 		alpha) BASE_URL="$${ALPHA_BASE_URL:-}"; OPS_BASE_URL="$${ALPHA_PRODUCT_OPS_BASE_URL:-}"; AUTH_TOKEN="$${ALPHA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
 		beta) BASE_URL="$${BETA_BASE_URL:-}"; OPS_BASE_URL="$${BETA_PRODUCT_OPS_BASE_URL:-}"; AUTH_TOKEN="$${BETA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
 		gamma) BASE_URL="$${GAMMA_BASE_URL:-}"; OPS_BASE_URL="$${GAMMA_PRODUCT_OPS_BASE_URL:-}"; AUTH_TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
-		prod-gray) BASE_URL="$${PROD_GRAY_BASE_URL:-}"; OPS_BASE_URL="$${PROD_GRAY_PRODUCT_OPS_BASE_URL:-}"; AUTH_TOKEN="$${PROD_GRAY_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
 		prod) BASE_URL="$${PROD_BASE_URL:-}"; OPS_BASE_URL="$${PROD_PRODUCT_OPS_BASE_URL:-}"; AUTH_TOKEN="$${PROD_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
-		*) echo "[L3] FAIL: API_CONTRACT_ENV must be one of alpha|beta|gamma|prod-gray|prod, got $$ENV_NAME"; exit 2 ;; \
+		*) echo "[L3] FAIL: API_CONTRACT_ENV must be one of alpha|beta|gamma|prod, got $$ENV_NAME"; exit 2 ;; \
 	esac; \
 	if [ -z "$$BASE_URL" ] || [ -z "$$OPS_BASE_URL" ]; then \
 		echo "[L3] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL and $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_PRODUCT_OPS_BASE_URL"; \
@@ -394,9 +509,8 @@ test-api-contract-chat:
 		alpha) BASE_URL="$${ALPHA_BASE_URL:-}"; AUTH_TOKEN="$${ALPHA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
 		beta) BASE_URL="$${BETA_BASE_URL:-}"; AUTH_TOKEN="$${BETA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
 		gamma) BASE_URL="$${GAMMA_BASE_URL:-}"; AUTH_TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
-		prod-gray) BASE_URL="$${PROD_GRAY_BASE_URL:-}"; AUTH_TOKEN="$${PROD_GRAY_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
 		prod) BASE_URL="$${PROD_BASE_URL:-}"; AUTH_TOKEN="$${PROD_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
-		*) echo "[L3] FAIL: API_CONTRACT_ENV must be one of alpha|beta|gamma|prod-gray|prod, got $$ENV_NAME"; exit 2 ;; \
+		*) echo "[L3] FAIL: API_CONTRACT_ENV must be one of alpha|beta|gamma|prod, got $$ENV_NAME"; exit 2 ;; \
 	esac; \
 	if [ -z "$$BASE_URL" ]; then \
 		echo "[L3] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL"; \

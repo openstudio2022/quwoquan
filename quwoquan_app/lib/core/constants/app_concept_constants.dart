@@ -103,8 +103,7 @@ class AppConceptConstants {
   static const String zuopinVideo = '视频';
   static const String zuopinVideoHint = '精美视频';
 
-  // ==================== 已弃用概念（严禁使用） ====================
-  // 瞬间 (Moments) -> 已由微趣或创作取代
+  // ==================== 已退役概念（严禁使用） ====================
   // 随记 (Notes) -> 已合并至文章或生活记录
   // 好物 (Goods) -> 已整合进爱物
 }

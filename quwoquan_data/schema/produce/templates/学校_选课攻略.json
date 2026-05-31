@@ -1,0 +1,12 @@
+{
+  "templateId": "学校_选课攻略",
+  "entityType": "学校",
+  "angle": "选课攻略",
+  "description": "选课策略、热门课程与避坑指南",
+  "requiredSections": ["选课策略", "热门课程推荐", "选课避坑指南"],
+  "optionalSections": ["通识课建议", "跨专业选课"],
+  "minWordCount": 600,
+  "maxWordCount": 1500,
+  "imageMinCount": 1,
+  "tone": "清晰、经验导向"
+}

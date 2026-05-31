@@ -2,8 +2,8 @@
 
 ## 节点定位
 
-- `L1_capability`: `user-identity-profile-relationship`
-- `L2_journey`: `persona-follow-graph`
+- `L1_domain_service`: `user-identity-profile-relationship`
+- `L2_business_capability`: `persona-follow-graph`
 
 该节点保留记录路径名 `persona-follow-graph`，但本次 PRD baseline 将其正式收口为“分身生命周期、公开身份、关系隔离与跨域透传”的统一 Journey。
 

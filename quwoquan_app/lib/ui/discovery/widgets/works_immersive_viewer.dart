@@ -1,10 +1,11 @@
 // ignore_for_file: unnecessary_non_null_assertion, unused_element, unused_element_parameter
 import 'dart:async';
-import 'dart:math' show max;
+import 'dart:math' show exp, max;
 import 'dart:ui' show ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Theme;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -18,9 +19,9 @@ import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagemen
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
+import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
-import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -30,20 +31,28 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart'
     show ContentType;
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
+import 'package:quwoquan_app/ui/content/article_reader/hosts/article_reader_host_adapter.dart';
+import 'package:quwoquan_app/ui/content/article_reader/hosts/immersive_browser_reader_adapter.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart'
+    show ArticleReadOnlyBookDeckPresentationStyle;
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_flip_host.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -91,7 +100,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final VoidCallback? onHideSystemNav;
   final bool showTopNavigation;
   final List<PostBaseDto>? externalPosts;
-  final List<PostSummaryView>? externalPostViews;
+  final List<ContentSurfaceView>? externalPostViews;
   final int initialPostIndex;
   final int initialImageIndex;
   final String source;
@@ -109,13 +118,16 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
 
 class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     with TickerProviderStateMixin {
-  static bool _didAutoExpandInSession = false;
+  static const int _tailPrefetchThreshold = 2;
+  static const double _edgeDismissHotzoneWidth = AppSpacing.lg;
+  static const double _edgeDismissMinDistance = 56;
+  static const double _edgeDismissMinVelocity = 520;
 
   String? _filterType;
-  bool _isFilterExpanded = false;
   int _currentPage = 0;
   final Map<String, int> _photoInnerIndex = <String, int>{};
   final Map<String, int> _articleInnerIndex = <String, int>{};
+  final Map<String, int> _resolvedArticlePageCount = <String, int>{};
   final Map<String, int> _videoInnerIndex = <String, int>{};
   final Set<String> _expandedCaptionPostIds = <String>{};
 
@@ -126,13 +138,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       <String, Map<String, Object?>>{};
   final Set<String> _hydratingArticleIds = <String>{};
 
-  Timer? _autoCollapseTimer;
   // Follow-button delayed reveal: 3 s for photos, 5 s for video/article.
   Timer? _followButtonTimer;
   bool _showFollowButton = false;
   String? _followTimerPostId;
 
   late final PageController _pageController;
+  bool _prefetchScheduled = false;
+  bool _awaitingPrefetchedReveal = false;
+  TabSwipeDirection? _activeEdgeDismissDirection;
+  double _activeEdgeDismissDistance = 0;
 
   @override
   void initState() {
@@ -155,9 +170,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
           }
         }
       }
-      if (widget.showTopNavigation) {
-        _runOneTimeAutoExpand();
-      }
       final posts = _buildFeed();
       if (posts.isNotEmpty) {
         final initialIndex = _currentPage.clamp(0, posts.length - 1);
@@ -170,7 +182,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   @override
   void dispose() {
-    _autoCollapseTimer?.cancel();
     _followButtonTimer?.cancel();
     _pageController.dispose();
     super.dispose();
@@ -178,6 +189,93 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   bool get _usesExternalFeed =>
       widget.externalPosts != null && widget.externalPosts!.isNotEmpty;
+
+  List<String> get _trackedFeedTabIds {
+    if (_usesExternalFeed) {
+      return const <String>[];
+    }
+    switch (_filterType) {
+      case 'image':
+        return const <String>['photo'];
+      case 'video':
+        return const <String>['video'];
+      case 'article':
+        return const <String>['article'];
+      default:
+        return const <String>['photo', 'video', 'article'];
+    }
+  }
+
+  DiscoveryFeedState? _readFeedState(String tabId) {
+    return ref.read(discoveryFeedProvider(tabId)).value;
+  }
+
+  bool _trackedFeedsHaveMore() {
+    return _trackedFeedTabIds.any(
+      (tabId) => _readFeedState(tabId)?.hasMore ?? false,
+    );
+  }
+
+  bool _trackedFeedsLoading() {
+    return _trackedFeedTabIds.any(
+      (tabId) => _readFeedState(tabId)?.isLoading ?? false,
+    );
+  }
+
+  String? _trackedFeedsError() {
+    for (final tabId in _trackedFeedTabIds) {
+      final error = _readFeedState(tabId)?.error;
+      if (error != null && error.trim().isNotEmpty) {
+        return error;
+      }
+    }
+    return null;
+  }
+
+  void _requestPrefetchNow({
+    required int visibleIndex,
+    required int postsLength,
+    bool force = false,
+  }) {
+    if (_usesExternalFeed) {
+      return;
+    }
+    final thresholdIndex = max(0, postsLength - 1 - _tailPrefetchThreshold);
+    if (!force && visibleIndex < thresholdIndex) {
+      return;
+    }
+    for (final tabId in _trackedFeedTabIds) {
+      final feedState = _readFeedState(tabId);
+      if (feedState == null || !feedState.hasMore || feedState.isLoading) {
+        continue;
+      }
+      unawaited(
+        ref.read(discoveryFeedMapProvider.notifier).appendNextPage(tabId),
+      );
+    }
+  }
+
+  void _schedulePrefetch({
+    required int visibleIndex,
+    required int postsLength,
+    bool force = false,
+  }) {
+    if (_usesExternalFeed || _prefetchScheduled) {
+      return;
+    }
+    _prefetchScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _prefetchScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _requestPrefetchNow(
+        visibleIndex: visibleIndex,
+        postsLength: postsLength,
+        force: force,
+      );
+    });
+  }
 
   int get _safeInitialPage {
     if (_usesExternalFeed) {
@@ -299,28 +397,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     });
   }
 
-  void _runOneTimeAutoExpand() {
-    if (_didAutoExpandInSession) return;
-    _didAutoExpandInSession = true;
-    setState(() => _isFilterExpanded = true);
-    _autoCollapseTimer?.cancel();
-    _autoCollapseTimer = Timer(const Duration(milliseconds: 1500), () {
-      if (!mounted) return;
-      setState(() => _isFilterExpanded = false);
-    });
-  }
-
-  void _toggleFilterPanel() {
-    _autoCollapseTimer?.cancel();
-    setState(() => _isFilterExpanded = !_isFilterExpanded);
-  }
-
-  void _collapseFilterPanel() {
-    if (!_isFilterExpanded) return;
-    _autoCollapseTimer?.cancel();
-    setState(() => _isFilterExpanded = false);
-  }
-
   /// Opens the post-level more-options sheet for the currently visible post.
   /// Uses dev1.1 MoreActionPopup (MediaPostMoreActionConfig) for parity.
   /// Deliberately does NOT open the assistant — that remains the assistant
@@ -362,16 +438,21 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
               .addBlockedKeyword(keyword);
         },
         onReport: () {
-          ref
-              .read(behaviorRepositoryProvider)
-              .reportSingle(contentId: post.id, action: BehaviorAction.report);
-          ref
-              .read(reportRepositoryProvider)
-              .createReport(
-                targetId: post.id,
-                targetType: 'post',
-                reason: 'inappropriate',
-              );
+          runWhenLoggedIn(ref, context, AuthGateReason.report, () {
+            ref
+                .read(behaviorRepositoryProvider)
+                .reportSingle(
+                  contentId: post.id,
+                  action: BehaviorAction.report,
+                );
+            ref
+                .read(reportRepositoryProvider)
+                .createReport(
+                  targetId: post.id,
+                  targetType: 'post',
+                  reason: 'inappropriate',
+                );
+          });
         },
       ),
     );
@@ -471,7 +552,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     };
   }
 
-  ArticleDetailView _articleViewFor(PostBaseDto post) {
+  ContentArticleRender _articleViewFor(PostBaseDto post) {
     return projectArticleDetailView(
       Map<String, dynamic>.from(_rawArticleDataFor(post)),
       fallbackArticleId: post.id,
@@ -479,7 +560,24 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   }
 
   int _articlePageCount(PostBaseDto post) {
-    return _articleViewFor(post).pages.length.clamp(1, 99);
+    return (_resolvedArticlePageCount[post.id] ??
+            _articleViewFor(post).pages.length)
+        .clamp(1, 99);
+  }
+
+  void _handleResolvedArticlePageCount(String postId, int pageCount) {
+    final safePageCount = pageCount.clamp(1, 99);
+    if (_resolvedArticlePageCount[postId] == safePageCount) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _resolvedArticlePageCount[postId] == safePageCount) {
+        return;
+      }
+      setState(() {
+        _resolvedArticlePageCount[postId] = safePageCount;
+      });
+    });
   }
 
   ({int current, int total}) _innerProgress(List<PostBaseDto> posts) {
@@ -540,6 +638,93 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       (widget.onSwitchToFollowing != null ||
           widget.onSwitchToCircles != null ||
           widget.onSwitchToMoment != null);
+
+  bool get _canDismissViewerWithEdgeGesture =>
+      widget.onDismissed != null || widget.onTapBack != null;
+
+  bool _supportsEdgeDismissDirection(TabSwipeDirection direction) {
+    if (!_canDismissViewerWithEdgeGesture) {
+      return false;
+    }
+    return switch (Theme.of(context).platform) {
+      TargetPlatform.android || TargetPlatform.fuchsia => true,
+      TargetPlatform.iOS ||
+      TargetPlatform.macOS ||
+      TargetPlatform.linux ||
+      TargetPlatform.windows => direction == TabSwipeDirection.previous,
+    };
+  }
+
+  void _resetEdgeDismissTracking() {
+    _activeEdgeDismissDirection = null;
+    _activeEdgeDismissDistance = 0;
+  }
+
+  void _handleEdgeDismissDragStart(TabSwipeDirection direction) {
+    _activeEdgeDismissDirection = direction;
+    _activeEdgeDismissDistance = 0;
+  }
+
+  void _handleEdgeDismissDragUpdate(
+    DragUpdateDetails details,
+    TabSwipeDirection direction,
+  ) {
+    if (_activeEdgeDismissDirection != direction) {
+      return;
+    }
+    final signedDelta = direction == TabSwipeDirection.previous
+        ? details.delta.dx
+        : -details.delta.dx;
+    _activeEdgeDismissDistance = max(
+      0,
+      _activeEdgeDismissDistance + signedDelta,
+    );
+  }
+
+  void _handleEdgeDismissDragEnd(
+    DragEndDetails details,
+    TabSwipeDirection direction,
+  ) {
+    if (_activeEdgeDismissDirection != direction) {
+      return;
+    }
+    final signedVelocity = direction == TabSwipeDirection.previous
+        ? (details.primaryVelocity ?? 0)
+        : -(details.primaryVelocity ?? 0);
+    final shouldDismiss =
+        _activeEdgeDismissDistance >= _edgeDismissMinDistance ||
+        signedVelocity >= _edgeDismissMinVelocity;
+    _resetEdgeDismissTracking();
+    if (shouldDismiss) {
+      _dismissViewer();
+    }
+  }
+
+  Widget _buildEdgeDismissHotzone(TabSwipeDirection direction) {
+    if (!_supportsEdgeDismissDirection(direction)) {
+      return const SizedBox.shrink();
+    }
+    return Positioned(
+      top: 0,
+      bottom: 0,
+      left: direction == TabSwipeDirection.previous ? 0 : null,
+      right: direction == TabSwipeDirection.next ? 0 : null,
+      child: SizedBox(
+        key: ValueKey<String>('works-edge-dismiss-${direction.name}'),
+        width: _edgeDismissHotzoneWidth,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragStart: (_) => _handleEdgeDismissDragStart(direction),
+          onHorizontalDragUpdate: (details) =>
+              _handleEdgeDismissDragUpdate(details, direction),
+          onHorizontalDragEnd: (details) =>
+              _handleEdgeDismissDragEnd(details, direction),
+          onHorizontalDragCancel: _resetEdgeDismissTracking,
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+  }
 
   void _switchToPreviousPrimaryTab() {
     if (widget.onSwitchToFollowing != null) {
@@ -614,14 +799,14 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         .read(contentRepositoryProvider)
         .discoveryPresentationWireForPost(postId);
     if (wire == null) return null;
-    return Map<String, Object?>.from(wire);
+    return Map<String, Object?>.from(wire.toWireMap());
   }
 
-  PostSummaryView? _summaryForPost(String postId) {
+  ContentSurfaceView? _summaryForPost(String postId) {
     final external = widget.externalPostViews;
     if (external == null || external.isEmpty) return null;
     for (final item in external) {
-      if (item.id == postId) return item;
+      if (item.postId == postId) return item;
     }
     return null;
   }
@@ -641,11 +826,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final rawTitle = raw?['title']?.toString().trim() ?? '';
     if (rawTitle.isNotEmpty) return rawTitle;
     final summary = _summaryForPost(post.id);
-    final summaryTitle = summary?.readPresentation.title.trim() ?? '';
+    final summaryTitle = summary?.title?.trim() ?? '';
     if (summaryTitle.isNotEmpty) return summaryTitle;
-    final pres = PostReadProjectionFacade.presentationFor(
+    final pres = PostReadPresentation.fromPostBase(
       post,
-      PostReadSurfaceId.immersive,
       wire: _wireMapForPresentation(post),
     );
     return pres.title.isNotEmpty ? pres.title : post.normalizedTitle;
@@ -661,11 +845,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         '';
     if (rawBody.isNotEmpty) return rawBody;
     final summary = _summaryForPost(post.id);
-    final summaryBody = summary?.readPresentation.body.trim() ?? '';
+    final summaryBody = summary?.body?.trim() ?? '';
     if (summaryBody.isNotEmpty) return summaryBody;
-    final pres = PostReadProjectionFacade.presentationFor(
+    final pres = PostReadPresentation.fromPostBase(
       post,
-      PostReadSurfaceId.immersive,
       wire: _wireMapForPresentation(post),
     );
     return pres.body.isNotEmpty ? pres.body : post.normalizedBody;
@@ -805,15 +988,64 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return '${progress.current}/${progress.total}';
   }
 
+  _WorksTopChromeTheme _topChromeThemeForPost(
+    BuildContext context,
+    PostBaseDto? post,
+  ) {
+    if (post == null || !_isArticleLikePost(post)) {
+      return _WorksTopChromeTheme(
+        overlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: AppColors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+          systemNavigationBarColor: AppColors.transparent,
+          systemNavigationBarIconBrightness: Brightness.light,
+        ),
+        foregroundColor: AppColors.white,
+        mutedForegroundColor: AppColors.white.withValues(alpha: 0.72),
+      );
+    }
+    final article = _articleViewFor(post);
+    final palette = resolveArticleTemplatePalette(context, article.template);
+    final surfaceColor = Color.alphaBlend(
+      palette.paperColor.withValues(alpha: 0.94),
+      palette.stageBackground,
+    );
+    final primaryColor = palette.textColor.withValues(alpha: 0.96);
+    final secondaryColor = palette.secondaryTextColor.withValues(alpha: 0.84);
+    final useDarkStatusBarIcons = surfaceColor.computeLuminance() > 0.56;
+    return _WorksTopChromeTheme(
+      overlayStyle: SystemUiOverlayStyle(
+        statusBarColor: AppColors.transparent,
+        statusBarIconBrightness: useDarkStatusBarIcons
+            ? Brightness.dark
+            : Brightness.light,
+        statusBarBrightness: useDarkStatusBarIcons
+            ? Brightness.light
+            : Brightness.dark,
+        systemNavigationBarColor: AppColors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      foregroundColor: primaryColor,
+      mutedForegroundColor: secondaryColor,
+      surfaceColor: surfaceColor,
+      surfaceBorderColor: palette.paperBorderColor.withValues(alpha: 0.44),
+    );
+  }
+
   Widget? _overlayFooterForPost(BuildContext context, PostBaseDto post) {
     final circleFooter = _circleFooterForPost(context, post);
     return circleFooter;
   }
 
   bool _showsCaptionOverlay(PostBaseDto post) {
+    if (_isArticleLikePost(post)) {
+      return false;
+    }
     return _overlayTitleForPost(post).isNotEmpty ||
         _overlayBodyForPost(post).isNotEmpty ||
-        _circlesForPost(post).isNotEmpty;
+        _circlesForPost(post).isNotEmpty ||
+        IntersectionReasonChip.primaryText(post.intersectionReasons) != null;
   }
 
   ImmersiveViewerStageLayoutSpec _layoutSpecForPost(PostBaseDto post) {
@@ -824,6 +1056,41 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       return ImmersiveViewerStageLayoutSpec.textStage;
     }
     return ImmersiveViewerStageLayoutSpec.mediaStage;
+  }
+
+  ImmersiveViewerStageLayoutSpec _engagementLayoutSpecForPost(
+    PostBaseDto post,
+  ) {
+    if (_isTextOnlyMomentPost(post)) {
+      return ImmersiveViewerStageLayoutSpec.textStage;
+    }
+    return ImmersiveViewerStageLayoutSpec.mediaStage;
+  }
+
+  double _statusBarContentInsetFor(PostBaseDto post) {
+    if (_isArticleLikePost(post)) {
+      return AppSpacing.zero;
+    }
+    if (widget.topChromeSafeInset <= AppSpacing.zero) {
+      return AppSpacing.zero;
+    }
+    return _shouldMediaInvadeStatusBar(post)
+        ? AppSpacing.zero
+        : widget.topChromeSafeInset;
+  }
+
+  bool _shouldMediaInvadeStatusBar(PostBaseDto post) {
+    if (_isVideoLikePost(post)) {
+      return true;
+    }
+    if (!_isImageLikePost(post)) {
+      return false;
+    }
+    final aspectRatio = post.aspectRatio;
+    if (aspectRatio == null || aspectRatio <= AppSpacing.zero) {
+      return false;
+    }
+    return aspectRatio <= AppSpacing.immersiveStatusBarMaxAspectRatio;
   }
 
   bool _isCaptionExpanded(String postId) {
@@ -908,7 +1175,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   void _trackDocumentStructureFallback({
     required PostBaseDto post,
-    required ArticleDetailView article,
+    required ContentArticleRender article,
     required bool hydrated,
   }) {
     if (article.documentSource == ArticleDetailDocumentSource.markdown) {
@@ -1050,58 +1317,64 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final fmt = post.displayFormat;
     if (fmt == 'video') return ContentType.video;
     if (fmt == 'article') return ContentType.article;
-    if (fmt == 'moment') return ContentType.moment;
-    return ContentType.photo;
+    if (post.type == 'micro') return ContentType.micro;
+    return ContentType.image;
   }
 
   // ── 互动操作（乐观 UI + 云侧 API 同步）────────────────────────
 
   void _onLike(PostBaseDto post) {
-    final isLiked = effectivePostLiked(ref, post.id);
-    final currentCount = effectivePostLikeCount(
-      ref,
-      post.id,
-      fallback: post.likeCount,
-    );
-    final nextLiked = !isLiked;
-    final nextLikeCount = nextLiked
-        ? currentCount + 1
-        : (currentCount - 1).clamp(0, 1 << 31).toInt();
-    syncPostLikeIntent(
-      ref,
-      postId: post.id,
-      isLiked: nextLiked,
-      likeCount: nextLikeCount,
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+      final isLiked = effectivePostLiked(ref, post.id);
+      final currentCount = effectivePostLikeCount(
+        ref,
+        post.id,
+        fallback: post.likeCount,
+      );
+      final nextLiked = !isLiked;
+      final nextLikeCount = nextLiked
+          ? currentCount + 1
+          : (currentCount - 1).clamp(0, 1 << 31).toInt();
+      syncPostLikeIntent(
+        ref,
+        postId: post.id,
+        isLiked: nextLiked,
+        likeCount: nextLikeCount,
+      );
+    });
   }
 
   void _onFavorite(PostBaseDto post) {
-    final isSaved = effectivePostSaved(ref, post.id);
-    final currentCount = effectivePostBookmarkCount(
-      ref,
-      post.id,
-      fallback: post.favoriteCount,
-    );
-    final nextSaved = !isSaved;
-    final nextBookmarkCount = nextSaved
-        ? currentCount + 1
-        : (currentCount - 1).clamp(0, 1 << 31).toInt();
-    syncPostSaveIntent(
-      ref,
-      postId: post.id,
-      isSaved: nextSaved,
-      bookmarkCount: nextBookmarkCount,
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.favorite, () {
+      final isSaved = effectivePostSaved(ref, post.id);
+      final currentCount = effectivePostBookmarkCount(
+        ref,
+        post.id,
+        fallback: post.favoriteCount,
+      );
+      final nextSaved = !isSaved;
+      final nextBookmarkCount = nextSaved
+          ? currentCount + 1
+          : (currentCount - 1).clamp(0, 1 << 31).toInt();
+      syncPostSaveIntent(
+        ref,
+        postId: post.id,
+        isSaved: nextSaved,
+        bookmarkCount: nextBookmarkCount,
+      );
+    });
   }
 
   void _onFollow(PostBaseDto post) {
-    final subjectId = post.subAccountId;
-    final nextFollowing = !effectiveProfileFollowing(ref, subjectId);
-    syncProfileFollowIntent(
-      ref,
-      subAccountId: subjectId,
-      isFollowing: nextFollowing,
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
+      final subjectId = post.subAccountId;
+      final nextFollowing = !effectiveProfileFollowing(ref, subjectId);
+      syncProfileFollowIntent(
+        ref,
+        subAccountId: subjectId,
+        isFollowing: nextFollowing,
+      );
+    });
   }
 
   String _keywordForPost(PostBaseDto post) {
@@ -1123,13 +1396,46 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     ref.watch(postInteractionStateProvider);
     ref.watch(userRelationshipStateProvider);
     final posts = _buildFeed();
-    final currentPost = posts.isEmpty
+    final showLoadMoreSentinel =
+        !_usesExternalFeed &&
+        posts.isNotEmpty &&
+        (_trackedFeedsHaveMore() ||
+            _trackedFeedsLoading() ||
+            _trackedFeedsError() != null);
+    final isOnLoadMoreSentinel =
+        showLoadMoreSentinel && _currentPage >= posts.length;
+    final currentPost = posts.isEmpty || isOnLoadMoreSentinel
         ? null
         : posts[_currentPage.clamp(0, posts.length - 1)];
+    final loadMoreErrorText = !_usesExternalFeed ? _trackedFeedsError() : null;
+    final isLoadingMore = !_usesExternalFeed && _trackedFeedsLoading();
+    if (posts.isNotEmpty) {
+      _schedulePrefetch(
+        visibleIndex: _currentPage.clamp(0, posts.length),
+        postsLength: posts.length,
+        force: isOnLoadMoreSentinel,
+      );
+    }
+    if (_awaitingPrefetchedReveal && currentPost != null) {
+      final revealedPost = currentPost;
+      final revealedIndex = _currentPage;
+      _awaitingPrefetchedReveal = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        widget.onPostIndexChanged?.call(revealedIndex);
+        _trackImpressionForPost(revealedPost);
+        _pageEnterTime = DateTime.now();
+      });
+    }
     _ensureFollowButtonVisibility(currentPost);
     final currentLayoutSpec = currentPost == null
         ? ImmersiveViewerStageLayoutSpec.feedRail
         : _layoutSpecForPost(currentPost);
+    final currentEngagementLayoutSpec = currentPost == null
+        ? ImmersiveViewerStageLayoutSpec.feedRail
+        : _engagementLayoutSpecForPost(currentPost);
     final progress = _innerProgress(posts);
     final overlayTitle = currentPost == null
         ? ''
@@ -1144,6 +1450,29 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final overlayFooter = currentPost == null
         ? null
         : _overlayFooterForPost(context, currentPost);
+    final topChromeTheme = _topChromeThemeForPost(context, currentPost);
+    // 交集理由位（与 feed 内容卡同口径：首条 displayText 只读，无来源不展示）。
+    // 沉浸为深底，固定 isDark:true 取高对比 accent。
+    final intersectionReasonChip = currentPost == null
+        ? null
+        : IntersectionReasonChip.fromReasons(
+            currentPost.intersectionReasons,
+            isDark: true,
+            key: const ValueKey<String>('works-caption-intersection-reason'),
+          );
+    final captionFooter = intersectionReasonChip == null
+        ? overlayFooter
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              intersectionReasonChip,
+              if (overlayFooter != null) ...[
+                SizedBox(height: AppSpacing.intraGroupSm),
+                overlayFooter,
+              ],
+            ],
+          );
     // 与 welcome_screen 一致：阻断 MaterialApp 默认 TextStyle 合并带来的误装饰（黄下划线等）。
     return DefaultTextStyle.merge(
       style: const TextStyle(
@@ -1151,13 +1480,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         decorationThickness: 0,
       ),
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: const SystemUiOverlayStyle(
-          statusBarColor: AppColors.transparent,
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
-          systemNavigationBarColor: AppColors.transparent,
-          systemNavigationBarIconBrightness: Brightness.dark,
-        ),
+        value: topChromeTheme.overlayStyle,
         child: GestureDetector(
           behavior: HitTestBehavior.deferToChild,
           onTap: () {
@@ -1175,26 +1498,44 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   controller: _pageController,
                   scrollDirection: Axis.vertical,
                   physics: const PageScrollPhysics(),
-                  itemCount: posts.isEmpty ? 1 : posts.length,
+                  itemCount: posts.isEmpty
+                      ? 1
+                      : posts.length + (showLoadMoreSentinel ? 1 : 0),
                   onPageChanged: (index) {
                     if (_currentPage != index) {
                       // Flush dwell time for the previous post
-                      final prevPost =
-                          posts[_currentPage.clamp(0, posts.length - 1)];
-                      _flushDwell(prevPost);
-                      // Track skip: user swiped away from prevPost
-                      final enterTime = _pageEnterTime;
-                      final skipDwell = enterTime != null
-                          ? DateTime.now()
-                                    .difference(enterTime)
-                                    .inMilliseconds /
-                                1000.0
-                          : null;
-                      ref
-                          .read(contentBehaviorTrackerProvider)
-                          .trackSkip(prevPost.id, dwellSeconds: skipDwell);
+                      if (posts.isNotEmpty && _currentPage < posts.length) {
+                        final prevPost =
+                            posts[_currentPage.clamp(0, posts.length - 1)];
+                        _flushDwell(prevPost);
+                        // Track skip: user swiped away from prevPost
+                        final enterTime = _pageEnterTime;
+                        final skipDwell = enterTime != null
+                            ? DateTime.now()
+                                      .difference(enterTime)
+                                      .inMilliseconds /
+                                  1000.0
+                            : null;
+                        ref
+                            .read(contentBehaviorTrackerProvider)
+                            .trackSkip(prevPost.id, dwellSeconds: skipDwell);
+                      }
 
-                      setState(() => _currentPage = index);
+                      final nextIsSentinel =
+                          showLoadMoreSentinel && index >= posts.length;
+                      setState(() {
+                        _currentPage = index;
+                        _awaitingPrefetchedReveal = nextIsSentinel;
+                      });
+                      if (nextIsSentinel) {
+                        _pageEnterTime = null;
+                        _schedulePrefetch(
+                          visibleIndex: index,
+                          postsLength: posts.length,
+                          force: true,
+                        );
+                        return;
+                      }
                       widget.onPostIndexChanged?.call(index);
                       final newPost = posts[index.clamp(0, posts.length - 1)];
                       _trackImpressionForPost(newPost);
@@ -1205,70 +1546,77 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                     if (posts.isEmpty) {
                       return Center(child: CupertinoActivityIndicator());
                     }
-                    return _buildPostCanvas(posts[index]);
+                    if (showLoadMoreSentinel && index >= posts.length) {
+                      return _buildLoadMoreSentinel(
+                        isLoading: isLoadingMore,
+                        errorText: loadMoreErrorText,
+                        onRetry: () => _schedulePrefetch(
+                          visibleIndex: index,
+                          postsLength: posts.length,
+                          force: true,
+                        ),
+                      );
+                    }
+                    final post = posts[index];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        top: _statusBarContentInsetFor(post),
+                      ),
+                      child: KeyedSubtree(
+                        key: ValueKey<String>(
+                          'works-status-content-canvas-${post.id}',
+                        ),
+                        child: _buildPostCanvas(post),
+                      ),
+                    );
                   },
                 ),
               ),
 
-              if (_isFilterExpanded && widget.showTopNavigation)
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: _collapseFilterPanel,
-                    child: const SizedBox.expand(),
-                  ),
-                ),
+              _buildEdgeDismissHotzone(TabSwipeDirection.previous),
+              _buildEdgeDismissHotzone(TabSwipeDirection.next),
 
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
-                child: Padding(
-                  padding: EdgeInsets.only(top: widget.topChromeSafeInset),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _WorksPrimaryTopBar(
-                        layoutSpec: currentLayoutSpec,
-                        isFilterExpanded: _isFilterExpanded,
-                        progressLabel: topProgressLabel,
-                        onTapClose: _dismissViewer,
-                        onTapMore: () => _showWorksMoreSheet(context),
-                        onTapWorksArrow: _toggleFilterPanel,
-                        onTapFollowing:
-                            widget.onSwitchToFollowing ??
-                            widget.onSwitchToMoment,
-                        onTapCircles: widget.onSwitchToCircles,
-                        onHorizontalDragEnd: _handlePrimaryTabSwipeDragEnd,
-                        showNavigationTabs: widget.showTopNavigation,
-                      ),
-                      if (widget.showTopNavigation)
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 420),
-                          switchInCurve: Curves.elasticOut,
-                          switchOutCurve: Curves.easeInCubic,
-                          transitionBuilder: (child, animation) =>
-                              SizeTransition(
-                                sizeFactor: animation,
-                                axisAlignment: -1,
-                                child: FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                ),
+                child: DecoratedBox(
+                  decoration: topChromeTheme.hasSurfaceDecoration
+                      ? BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: <Color>[
+                              topChromeTheme.surfaceColor!,
+                              topChromeTheme.surfaceColor!.withValues(
+                                alpha: 0.94,
                               ),
-                          child: _isFilterExpanded
-                              ? _WorksSecondaryFilterBar(
-                                  key: const ValueKey<String>(
-                                    'works-filter-open',
-                                  ),
-                                  activeFilter: _filterType,
-                                  onFilterChange: _applyFilter,
-                                )
-                              : const SizedBox.shrink(
-                                  key: ValueKey<String>('works-filter-close'),
-                                ),
-                        ),
-                    ],
+                              topChromeTheme.surfaceColor!.withValues(alpha: 0),
+                            ],
+                            stops: const <double>[0, 0.68, 1],
+                          ),
+                          border: Border(
+                            bottom: BorderSide(
+                              color: topChromeTheme.surfaceBorderColor!,
+                              width: AppSpacing.hairline,
+                            ),
+                          ),
+                        )
+                      : const BoxDecoration(),
+                  child: Padding(
+                    padding: EdgeInsets.only(top: widget.topChromeSafeInset),
+                    child: _WorksPrimaryTopBar(
+                      layoutSpec: currentLayoutSpec,
+                      progressLabel: topProgressLabel,
+                      foregroundColor: topChromeTheme.foregroundColor,
+                      mutedForegroundColor: topChromeTheme.mutedForegroundColor,
+                      onTapClose: _dismissViewer,
+                      onTapMore: () => _showWorksMoreSheet(context),
+                      activeFilterType: _filterType,
+                      onFilterChange: _applyFilter,
+                      onHorizontalDragEnd: _handlePrimaryTabSwipeDragEnd,
+                      showNavigationTabs: widget.showTopNavigation,
+                    ),
                   ),
                 ),
               ),
@@ -1289,7 +1637,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                     caption: overlayBody,
                     isExpanded: _isCaptionExpanded(currentPost.id),
                     onToggle: () => _toggleCaptionExpanded(currentPost.id),
-                    footer: overlayFooter,
+                    footer: captionFooter,
                   ),
                 ),
 
@@ -1299,7 +1647,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   right: 0,
                   bottom: 0,
                   child: ImmersiveEngagementBar(
-                    layoutSpec: currentLayoutSpec,
+                    layoutSpec: currentEngagementLayoutSpec,
                     avatarUrl: currentPost.avatarUrl,
                     displayName: currentPost.displayName,
                     circleName: '',
@@ -1362,13 +1710,72 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return _buildTypedCanvas(post);
   }
 
+  Widget _buildLoadMoreSentinel({
+    required bool isLoading,
+    required String? errorText,
+    required VoidCallback onRetry,
+  }) {
+    final hasError = errorText != null && errorText.trim().isNotEmpty;
+    return ColoredBox(
+      key: const ValueKey<String>('works-load-more-sentinel'),
+      color: AppColors.black,
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerLg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasError)
+                Icon(
+                  CupertinoIcons.exclamationmark_circle,
+                  color: AppColors.white.withValues(alpha: 0.9),
+                  size: AppSpacing.iconLarge,
+                )
+              else
+                const CupertinoActivityIndicator(radius: 16),
+              SizedBox(height: AppSpacing.containerSm),
+              Text(
+                hasError ? '加载下一批精品内容失败' : '正在加载更多精品内容',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.white,
+                  fontSize: AppTypography.body,
+                  fontWeight: AppTypography.semiBold,
+                ),
+              ),
+              SizedBox(height: AppSpacing.intraGroupSm),
+              Text(
+                hasError ? errorText!.trim() : '继续停留即可自动预取新一批内容',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.white.withValues(alpha: 0.72),
+                  fontSize: AppTypography.iosSubheadline,
+                ),
+              ),
+              if (hasError) ...[
+                SizedBox(height: AppSpacing.containerSm),
+                CupertinoButton(
+                  key: const ValueKey<String>('works-load-more-retry'),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerMd,
+                    vertical: AppSpacing.intraGroupSm,
+                  ),
+                  color: AppColors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.smallBorderRadius,
+                  ),
+                  onPressed: isLoading ? null : onRetry,
+                  child: const Text('重试'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTypedCanvas(PostBaseDto post) {
-    final onOverflowPrevious = _canSwipePrimaryTabs
-        ? _switchToPreviousPrimaryTab
-        : null;
-    final onOverflowNext = _canSwipePrimaryTabs
-        ? _switchToNextPrimaryTab
-        : null;
     final enableArticlePageCurl = ref.watch(
       contentFeatureFlagProvider('enable_article_page_curl'),
     );
@@ -1378,8 +1785,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         initialIndex: _photoInnerIndex[post.id] ?? _defaultImageIndexFor(post),
         onImageChanged: (index) =>
             setState(() => _photoInnerIndex[post.id] = index),
-        onOverflowPrevious: onOverflowPrevious,
-        onOverflowNext: onOverflowNext,
+        onOverflowPrevious: null,
+        onOverflowNext: null,
       );
     }
     if (_isVideoLikePost(post)) {
@@ -1389,8 +1796,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         episodes: episodes,
         onEpisodeChanged: (idx) =>
             setState(() => _videoInnerIndex[post.id] = idx),
-        onOverflowPrevious: onOverflowPrevious,
-        onOverflowNext: onOverflowNext,
+        onOverflowPrevious: null,
+        onOverflowNext: null,
       );
     }
     if (_isArticleLikePost(post)) {
@@ -1403,15 +1810,17 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         article: article,
         enablePageCurl: enableArticlePageCurl,
         initialPage: safeInitialPage,
-        onPageChanged: (index) =>
-            setState(() => _articleInnerIndex[post.id] = index),
+        topChromeSafeInset: widget.topChromeSafeInset,
+        onPageChanged: (index) => _handleArticleInnerPageChanged(post, index),
+        onResolvedPageCountChanged: (pageCount) =>
+            _handleResolvedArticlePageCount(post.id, pageCount),
         onFallbackResolved: (reason) =>
             _trackArticleReaderFallback(post, reason, bookReaderEnabled: true),
         onPageFlipCommitted: (event) =>
             _trackArticlePageFlipCommit(post, event),
         onPageCurlAborted: (event) => _trackArticlePageCurlAbort(post, event),
-        onOverflowPrevious: onOverflowPrevious,
-        onOverflowNext: onOverflowNext,
+        onOverflowPrevious: null,
+        onOverflowNext: null,
       );
     }
     if (_isTextOnlyMomentPost(post)) {
@@ -1431,6 +1840,22 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return Container(color: AppColors.worksBackground);
   }
 
+  void _handleArticleInnerPageChanged(PostBaseDto post, int index) {
+    final previousIndex = _articleInnerIndex[post.id] ?? 0;
+    if (previousIndex != index) {
+      _trackArticlePageFlipCommit(
+        post,
+        ArticleReaderPageFlipCommit(
+          fromPage: previousIndex,
+          toPage: index,
+          durationMs: 0,
+          mechanism: 'page_curl',
+        ),
+      );
+    }
+    setState(() => _articleInnerIndex[post.id] = index);
+  }
+
   void _openCommentFor(BuildContext ctx, String postId) {
     CommentViewer.showModal(context: ctx, postId: postId);
   }
@@ -1440,17 +1865,19 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     PostBaseDto post, {
     required bool enableIdentityTemplate,
   }) {
-    final template = _buildShareTemplate(
-      post: post,
-      enableIdentityTemplate: enableIdentityTemplate,
-    );
-    ContentShareSheet.show(
-      ctx,
-      template: template,
-      onActionCompleted: (result) async {
-        await _recordShare(post.id, result.actionId);
-      },
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
+      final template = _buildShareTemplate(
+        post: post,
+        enableIdentityTemplate: enableIdentityTemplate,
+      );
+      ContentShareSheet.show(
+        ctx,
+        template: template,
+        onActionCompleted: (result) async {
+          await _recordShare(post.id, result.actionId);
+        },
+      );
+    });
   }
 
   Future<void> _copyLink(
@@ -1481,17 +1908,11 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final raw = _rawPostById(post.id);
     final visibility =
         raw?[ContentPostImmersiveWireKeys.visibility]?.toString() ?? 'public';
-    final tags =
-        (raw?[ContentPostImmersiveWireKeys.tags] as List?)
-            ?.map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
+    final surfaceView = ContentSurfaceViewMapper.fromDto(post, wire: raw);
     return ContentShareTemplateBuilder.build(
-      post: post,
+      surfaceView: surfaceView,
       enableIdentityTemplate: enableIdentityTemplate,
       visibility: visibility,
-      tags: tags,
       circleNames: _circlesForPost(
         post,
       ).map((circle) => circle.name).toList(growable: false),
@@ -1526,30 +1947,50 @@ class _PostCircleTarget {
   final String name;
 }
 
+@immutable
+class _WorksTopChromeTheme {
+  const _WorksTopChromeTheme({
+    required this.overlayStyle,
+    required this.foregroundColor,
+    required this.mutedForegroundColor,
+    this.surfaceColor,
+    this.surfaceBorderColor,
+  });
+
+  final SystemUiOverlayStyle overlayStyle;
+  final Color foregroundColor;
+  final Color mutedForegroundColor;
+  final Color? surfaceColor;
+  final Color? surfaceBorderColor;
+
+  bool get hasSurfaceDecoration =>
+      surfaceColor != null && surfaceBorderColor != null;
+}
+
 class _WorksPrimaryTopBar extends StatelessWidget {
   const _WorksPrimaryTopBar({
     required this.layoutSpec,
-    required this.isFilterExpanded,
     required this.progressLabel,
-    required this.onTapWorksArrow,
+    required this.activeFilterType,
+    required this.onFilterChange,
     required this.onHorizontalDragEnd,
+    required this.foregroundColor,
+    required this.mutedForegroundColor,
     this.showNavigationTabs = true,
     this.onTapClose,
     this.onTapMore,
-    this.onTapFollowing,
-    this.onTapCircles,
   });
 
   final ImmersiveViewerStageLayoutSpec layoutSpec;
-  final bool isFilterExpanded;
   final String? progressLabel;
-  final VoidCallback onTapWorksArrow;
+  final String? activeFilterType;
+  final void Function(String?) onFilterChange;
   final GestureDragEndCallback onHorizontalDragEnd;
+  final Color foregroundColor;
+  final Color mutedForegroundColor;
   final bool showNavigationTabs;
   final VoidCallback? onTapClose;
   final VoidCallback? onTapMore;
-  final VoidCallback? onTapFollowing;
-  final VoidCallback? onTapCircles;
 
   @override
   Widget build(BuildContext context) {
@@ -1565,26 +2006,12 @@ class _WorksPrimaryTopBar extends StatelessWidget {
             Positioned.fill(
               child: showNavigationTabs
                   ? Center(
-                      child: HomePrimaryTabStrip(
-                        activeTab: HomePrimaryTabStrip.featuredTabId,
-                        onTabChange: (tabId) {
-                          switch (tabId) {
-                            case HomePrimaryTabStrip.followingTabId:
-                              onTapFollowing?.call();
-                              break;
-                            case HomePrimaryTabStrip.circlesTabId:
-                              onTapCircles?.call();
-                              break;
-                            case HomePrimaryTabStrip.featuredTabId:
-                              onTapWorksArrow();
-                              break;
-                          }
-                        },
+                      child: _WorksFormatTabStrip(
+                        activeFilterType: activeFilterType,
+                        onFilterChange: onFilterChange,
                         onHorizontalDragEnd: onHorizontalDragEnd,
-                        isDark: true,
-                        style: HomePrimaryTabStripStyle.immersive,
-                        featuredIndicatorVisible: true,
-                        featuredExpanded: isFilterExpanded,
+                        selectedColor: foregroundColor,
+                        unselectedColor: mutedForegroundColor,
                       ),
                     )
                   : const SizedBox.shrink(),
@@ -1602,7 +2029,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                     child: ImmersiveToolbarIconButton(
                       icon: CupertinoIcons.back,
                       onPressed: onTapClose,
-                      foregroundColor: AppColors.white,
+                      foregroundColor: foregroundColor,
                     ),
                   ),
                 ),
@@ -1617,7 +2044,10 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                 top: 0,
                 bottom: 0,
                 child: Center(
-                  child: _WorksTopProgressLabel(label: progressLabel!),
+                  child: _WorksTopProgressLabel(
+                    label: progressLabel!,
+                    color: foregroundColor,
+                  ),
                 ),
               ),
 
@@ -1629,7 +2059,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
                 child: ImmersiveToolbarIconButton(
                   icon: CupertinoIcons.ellipsis,
                   onPressed: onTapMore,
-                  foregroundColor: AppColors.white,
+                  foregroundColor: foregroundColor,
                 ),
               ),
             ),
@@ -1641,9 +2071,10 @@ class _WorksPrimaryTopBar extends StatelessWidget {
 }
 
 class _WorksTopProgressLabel extends StatelessWidget {
-  const _WorksTopProgressLabel({required this.label});
+  const _WorksTopProgressLabel({required this.label, required this.color});
 
   final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -1653,7 +2084,7 @@ class _WorksTopProgressLabel extends StatelessWidget {
         label,
         key: const ValueKey<String>('works-top-progress-label'),
         style: TextStyle(
-          color: AppColors.white.withValues(alpha: 0.9),
+          color: color,
           fontSize: AppTypography.base,
           fontWeight: AppTypography.semiBold,
         ),
@@ -1662,97 +2093,104 @@ class _WorksTopProgressLabel extends StatelessWidget {
   }
 }
 
-class _WorksSecondaryFilterBar extends StatelessWidget {
-  const _WorksSecondaryFilterBar({
-    super.key,
-    required this.activeFilter,
+/// 精品顶部内容形态导航：占用原「关注/精品」一级 tab 的同一居中位置，
+/// 用纯文字分段表达作品形态（全部/图片/视频/文章），保持沉浸式轻量不侵入。
+/// 形态来源为 metadata 单一真相源 [ContentUIConfig.workFormatFilters]。
+class _WorksFormatTabStrip extends StatelessWidget {
+  const _WorksFormatTabStrip({
+    required this.activeFilterType,
     required this.onFilterChange,
+    required this.onHorizontalDragEnd,
+    required this.selectedColor,
+    required this.unselectedColor,
   });
 
-  final String? activeFilter;
+  final String? activeFilterType;
   final void Function(String?) onFilterChange;
+  final GestureDragEndCallback onHorizontalDragEnd;
+  final Color selectedColor;
+  final Color unselectedColor;
+
+  static const Key stripKey = ValueKey<String>('works-format-tab-strip');
+
+  static Key tabKey(String filterId) =>
+      ValueKey<String>('works-format-tab-$filterId');
 
   @override
   Widget build(BuildContext context) {
     final filters = ContentUIConfig.workFormatFilters;
-    return Align(
-      alignment: Alignment.center,
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.intraGroupSm,
-              vertical: AppSpacing.intraGroupXs,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.worksDrawerBg.withValues(alpha: 0.54),
-              borderRadius: BorderRadius.circular(
-                AppSpacing.circularBorderRadius,
-              ),
-              border: Border.all(
-                color: AppColors.worksBodyText.withValues(alpha: 0.22),
-                width: AppSpacing.toolPanelItemBorderWidthUnselected,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: filters
-                  .asMap()
-                  .entries
-                  .map((entry) {
-                    final filter = entry.value;
-                    final chip = _chip(
-                      filter.contentType,
-                      UITextConstants.contentLabelForKey(filter.labelKey),
-                    );
-                    if (entry.key == filters.length - 1) {
-                      return chip;
-                    }
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        chip,
-                        SizedBox(width: AppSpacing.intraGroupSm),
-                      ],
-                    );
-                  })
-                  .toList(growable: false),
-            ),
+    final gap = AppSpacing.primaryTabGroupGap(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragEnd: onHorizontalDragEnd,
+      child: SingleChildScrollView(
+        key: stripKey,
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: SizedBox(
+          height: AppSpacing.primaryTopBarHeight(context),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < filters.length; i++) ...[
+                if (i > 0) SizedBox(width: gap),
+                _WorksFormatTabItem(
+                  key: tabKey(filters[i].id),
+                  label: UITextConstants.contentLabelForKey(
+                    filters[i].labelKey,
+                  ),
+                  selected: activeFilterType == filters[i].contentType,
+                  selectedColor: selectedColor,
+                  unselectedColor: unselectedColor,
+                  onTap: () => onFilterChange(filters[i].contentType),
+                ),
+              ],
+            ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _chip(String? type, String label) {
-    final selected = activeFilter == type;
-    return GestureDetector(
-      onTap: () => onFilterChange(type),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.intraGroupXs,
-        ),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.worksTitle.withValues(alpha: 0.14)
-              : AppColors.transparent,
-          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-          border: Border.all(
-            color: selected
-                ? AppColors.worksTitle.withValues(alpha: 0.5)
-                : AppColors.worksBodyText.withValues(alpha: 0.2),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.base,
-            color: selected ? AppColors.worksTitle : AppColors.worksBodyText,
-            fontWeight: AppTypography.semiBold,
-          ),
+class _WorksFormatTabItem extends StatelessWidget {
+  const _WorksFormatTabItem({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.selectedColor,
+    required this.unselectedColor,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final Color selectedColor;
+  final Color unselectedColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.intraGroupSm),
+      minimumSize: Size.square(AppSpacing.minInteractiveSize),
+      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+      onPressed: () {
+        if (!selected) {
+          HapticFeedback.selectionClick();
+        }
+        onTap();
+      },
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: AppTypography.primaryTabLabelResponsive(context),
+          fontWeight: selected
+              ? AppTypography.primaryTabSelectedWeight
+              : AppTypography.primaryTabUnselectedWeight,
+          color: selected ? selectedColor : unselectedColor,
         ),
       ),
     );
@@ -1781,11 +2219,22 @@ class _WorksPhotoCanvas extends StatefulWidget {
 class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
   static const double _overflowSwitchVelocity = 320;
   static const double _overflowSwitchDistance = AppSpacing.buttonHeight;
+  static const double _overflowEdgeStartInset =
+      AppSpacing.minInteractiveSize / 2;
+  static const double _photoBoundaryRubberBandMaxOffset =
+      AppSpacing.buttonHeight;
+  static const Duration _photoBoundaryResetDuration = Duration(
+    milliseconds: 220,
+  );
 
   late final PageController _imgController;
   double _edgeOverflowDistance = 0;
+  double _boundaryRubberBandRawOffset = 0;
+  double _boundaryRubberBandOffset = 0;
   TabSwipeDirection? _pendingOverflowDirection;
   bool _overflowTriggered = false;
+  bool _shouldAnimateBoundaryReset = false;
+  Offset? _dragStartLocalPosition;
 
   @override
   void initState() {
@@ -1802,6 +2251,26 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _precacheNeighborImages(_safeInitialIndex);
+  }
+
+  @override
+  void didUpdateWidget(covariant _WorksPhotoCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.post != oldWidget.post ||
+        widget.initialIndex != oldWidget.initialIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _precacheNeighborImages(_safeInitialIndex);
+      });
+    }
+  }
+
   int get _safeInitialIndex {
     final length = _images.length;
     if (length <= 1) return 0;
@@ -1814,6 +2283,48 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
         : (widget.post.primaryImageUrl.isNotEmpty
               ? <String>[widget.post.primaryImageUrl]
               : const <String>[]);
+  }
+
+  double _pageWidthForConstraints(BoxConstraints constraints) {
+    if (constraints.maxWidth.isFinite && constraints.maxWidth > 0) {
+      return constraints.maxWidth;
+    }
+    return MediaQuery.of(context).size.width;
+  }
+
+  void _precacheNeighborImages(int centerIndex) {
+    final images = _images;
+    for (final index in <int>[centerIndex - 1, centerIndex, centerIndex + 1]) {
+      if (index < 0 || index >= images.length) {
+        continue;
+      }
+      final url = images[index];
+      if (url.isEmpty) {
+        continue;
+      }
+      final candidates = resolveContentMediaUrlCandidates(url);
+      if (_shouldSkipLocalPrecache(candidates)) {
+        continue;
+      }
+      unawaited(_precacheImageCandidates(candidates));
+    }
+  }
+
+  bool _shouldSkipLocalPrecache(List<String> candidates) {
+    return candidates.isNotEmpty &&
+        candidates.every(isPrivateDevContentMediaUrl);
+  }
+
+  Future<void> _precacheImageCandidates(List<String> candidates) async {
+    for (final candidate in candidates) {
+      try {
+        final url = candidate;
+        await precacheImage(CachedNetworkImageProvider(url), context);
+        return;
+      } catch (_) {
+        continue;
+      }
+    }
   }
 
   void _triggerOverflow(TabSwipeDirection direction) {
@@ -1833,8 +2344,74 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
     _overflowTriggered = false;
   }
 
-  void _trackEdgeOverflow(DragUpdateDetails details, List<String> images) {
-    final pageWidth = MediaQuery.of(context).size.width;
+  double _springDampedOffset(double raw, double maxPull) {
+    if (raw <= 0 || maxPull <= 0) {
+      return 0;
+    }
+    final damping = maxPull / 1.2;
+    return (maxPull * (1 - exp(-raw / damping))).clamp(0.0, maxPull);
+  }
+
+  void _setBoundaryRubberBandOffset(
+    double visualOffset, {
+    required bool animate,
+    double? rawOffset,
+  }) {
+    final safeVisualOffset = visualOffset.abs() < 0.1 ? 0.0 : visualOffset;
+    final safeRawOffset =
+        rawOffset ??
+        (safeVisualOffset == 0.0 ? 0.0 : _boundaryRubberBandRawOffset);
+    if ((_boundaryRubberBandOffset - safeVisualOffset).abs() < 0.1 &&
+        (_boundaryRubberBandRawOffset - safeRawOffset).abs() < 0.1 &&
+        _shouldAnimateBoundaryReset == animate) {
+      return;
+    }
+    setState(() {
+      _boundaryRubberBandOffset = safeVisualOffset;
+      _boundaryRubberBandRawOffset = safeRawOffset;
+      _shouldAnimateBoundaryReset = animate;
+    });
+  }
+
+  void _applyBoundaryRubberBand(
+    DragUpdateDetails details,
+    TabSwipeDirection direction,
+  ) {
+    final nextRaw = direction == TabSwipeDirection.previous
+        ? (_boundaryRubberBandRawOffset + details.delta.dx).clamp(
+            0.0,
+            double.infinity,
+          )
+        : (_boundaryRubberBandRawOffset + details.delta.dx).clamp(
+            double.negativeInfinity,
+            0.0,
+          );
+    final magnitude = _springDampedOffset(
+      nextRaw.abs(),
+      _photoBoundaryRubberBandMaxOffset,
+    );
+    final visualOffset = direction == TabSwipeDirection.previous
+        ? magnitude
+        : -magnitude;
+    _setBoundaryRubberBandOffset(
+      visualOffset,
+      animate: false,
+      rawOffset: nextRaw.toDouble(),
+    );
+  }
+
+  void _resetBoundaryRubberBand({required bool animate}) {
+    _setBoundaryRubberBandOffset(0, animate: animate, rawOffset: 0);
+  }
+
+  void _trackEdgeOverflow(
+    DragUpdateDetails details,
+    List<String> images,
+    double pageWidth,
+  ) {
+    if (!_imgController.hasClients) {
+      return;
+    }
     final maxOffset = images.length <= 1
         ? 0.0
         : (images.length - 1) * pageWidth;
@@ -1849,6 +2426,13 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
         ? TabSwipeDirection.next
         : null;
     if (direction == null) {
+      _resetBoundaryRubberBand(animate: false);
+      _edgeOverflowDistance = 0;
+      _pendingOverflowDirection = null;
+      return;
+    }
+    _applyBoundaryRubberBand(details, direction);
+    if (!_isEdgeOverflowStart(direction, pageWidth)) {
       _edgeOverflowDistance = 0;
       _pendingOverflowDirection = null;
       return;
@@ -1875,39 +2459,83 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
   //   4. The gradient overlay is wrapped in IgnorePointer so it is fully
   //      removed from hit-test consideration.
 
-  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+  bool _isEdgeOverflowStart(TabSwipeDirection direction, double width) {
+    final startPosition = _dragStartLocalPosition;
+    if (startPosition == null) {
+      return false;
+    }
+    return switch (direction) {
+      TabSwipeDirection.previous =>
+        widget.onOverflowPrevious != null &&
+            startPosition.dx <= _overflowEdgeStartInset,
+      TabSwipeDirection.next =>
+        widget.onOverflowNext != null &&
+            startPosition.dx >= width - _overflowEdgeStartInset,
+    };
+  }
+
+  void _onHorizontalDragDown(DragDownDetails details) {
+    _dragStartLocalPosition = details.localPosition;
+    if (_imgController.hasClients) {
+      _imgController.jumpTo(_imgController.offset);
+    }
+    _resetOverflowTracking();
+    _resetBoundaryRubberBand(animate: false);
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details, double pageWidth) {
     final images = _images;
-    if (images.length > 1) {
-      final pageWidth = MediaQuery.of(context).size.width;
+    if (images.length > 1 && _imgController.hasClients) {
       final maxOffset = (images.length - 1) * pageWidth;
       _imgController.jumpTo(
         (_imgController.offset - details.delta.dx).clamp(0.0, maxOffset),
       );
     }
-    _trackEdgeOverflow(details, images);
+    _trackEdgeOverflow(details, images, pageWidth);
   }
 
-  void _onHorizontalDragEnd(DragEndDetails details) {
+  Duration _settleDuration({
+    required int targetPage,
+    required double pageWidth,
+    required double velocity,
+  }) {
+    if (!_imgController.hasClients || pageWidth <= 0) {
+      return const Duration(milliseconds: 180);
+    }
+    final targetOffset = targetPage * pageWidth;
+    final distance = (targetOffset - _imgController.offset).abs();
+    final distanceRatio = (distance / pageWidth).clamp(0.0, 1.0).toDouble();
+    final fastFling = velocity.abs() >= 700;
+    final milliseconds = fastFling
+        ? 140 + distanceRatio * 80
+        : 160 + distanceRatio * 100;
+    return Duration(milliseconds: milliseconds.clamp(140, 260).round().toInt());
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details, double pageWidth) {
     final images = _images;
-    final pageWidth = MediaQuery.of(context).size.width;
     final maxOffset = images.length <= 1
         ? 0.0
         : (images.length - 1) * pageWidth;
-    final atLeadingEdge = _imgController.offset <= AppSpacing.hairline;
-    final atTrailingEdge =
-        _imgController.offset >= maxOffset - AppSpacing.hairline;
+    final currentOffset = _imgController.hasClients ? _imgController.offset : 0;
+    final atLeadingEdge = currentOffset <= AppSpacing.hairline;
+    final atTrailingEdge = currentOffset >= maxOffset - AppSpacing.hairline;
     final velocity = details.primaryVelocity ?? 0;
 
     if (!_overflowTriggered && velocity.abs() >= _overflowSwitchVelocity) {
-      if (velocity > 0 && atLeadingEdge) {
+      if (velocity > 0 &&
+          atLeadingEdge &&
+          _isEdgeOverflowStart(TabSwipeDirection.previous, pageWidth)) {
         _triggerOverflow(TabSwipeDirection.previous);
-      } else if (velocity < 0 && atTrailingEdge) {
+      } else if (velocity < 0 &&
+          atTrailingEdge &&
+          _isEdgeOverflowStart(TabSwipeDirection.next, pageWidth)) {
         _triggerOverflow(TabSwipeDirection.next);
       }
     }
 
-    if (!_overflowTriggered && images.length > 1) {
-      final currentPage = _imgController.page ?? 0;
+    if (!_overflowTriggered && images.length > 1 && _imgController.hasClients) {
+      final currentPage = pageWidth <= 0 ? 0.0 : currentOffset / pageWidth;
       final int targetPage;
       if (velocity < -500) {
         targetPage = (currentPage.round() + 1).clamp(0, images.length - 1);
@@ -1916,14 +2544,27 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
       } else {
         targetPage = currentPage.round().clamp(0, images.length - 1);
       }
+      _precacheNeighborImages(targetPage);
       _imgController.animateToPage(
         targetPage,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
+        duration: _settleDuration(
+          targetPage: targetPage,
+          pageWidth: pageWidth,
+          velocity: velocity,
+        ),
+        curve: Curves.easeOutCubic,
       );
     }
 
     _resetOverflowTracking();
+    _resetBoundaryRubberBand(animate: true);
+    _dragStartLocalPosition = null;
+  }
+
+  void _onHorizontalDragCancel() {
+    _resetOverflowTracking();
+    _resetBoundaryRubberBand(animate: true);
+    _dragStartLocalPosition = null;
   }
 
   @override
@@ -1933,61 +2574,86 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
         images.length > 1 ||
         widget.onOverflowPrevious != null ||
         widget.onOverflowNext != null;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragUpdate: handlesHorizontalOverflow
-          ? _onHorizontalDragUpdate
-          : null,
-      onHorizontalDragEnd: handlesHorizontalOverflow
-          ? _onHorizontalDragEnd
-          : null,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          PageView.builder(
-            controller: _imgController,
-            // NeverScrollableScrollPhysics — gestures handled by the outer
-            // GestureDetector above; this removes the second competing
-            // HorizontalDragGestureRecognizer from the arena entirely.
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: images.isEmpty ? 1 : images.length,
-            onPageChanged: (i) {
-              widget.onImageChanged(i);
-            },
-            itemBuilder: (context, i) {
-              if (images.isEmpty) {
-                return Container(color: AppColors.worksBackground);
-              }
-              return CachedNetworkImage(
-                imageUrl: images[i],
-                fit: BoxFit.cover,
-                placeholder: (context, url) =>
-                    Container(color: AppColors.worksBackground),
-                errorWidget: (context, url, error) =>
-                    Container(color: AppColors.worksBackground),
-              );
-            },
-          ),
-          Positioned.fill(
-            // IgnorePointer removes the gradient box from hit testing entirely,
-            // so it can never compete with the GestureDetector above.
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      AppColors.black.withValues(alpha: 0.06),
-                      AppColors.black.withValues(alpha: 0.58),
-                    ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pageWidth = _pageWidthForConstraints(constraints);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragDown: handlesHorizontalOverflow
+              ? _onHorizontalDragDown
+              : null,
+          onHorizontalDragUpdate: handlesHorizontalOverflow
+              ? (details) => _onHorizontalDragUpdate(details, pageWidth)
+              : null,
+          onHorizontalDragEnd: handlesHorizontalOverflow
+              ? (details) => _onHorizontalDragEnd(details, pageWidth)
+              : null,
+          onHorizontalDragCancel: handlesHorizontalOverflow
+              ? _onHorizontalDragCancel
+              : null,
+          child: AnimatedContainer(
+            key: const ValueKey<String>('works-photo-stage'),
+            duration: _shouldAnimateBoundaryReset
+                ? _photoBoundaryResetDuration
+                : Duration.zero,
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(
+              _boundaryRubberBandOffset,
+              0,
+              0,
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                PageView.builder(
+                  controller: _imgController,
+                  // NeverScrollableScrollPhysics — gestures handled by the outer
+                  // GestureDetector above; this removes the second competing
+                  // HorizontalDragGestureRecognizer from the arena entirely.
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: images.isEmpty ? 1 : images.length,
+                  onPageChanged: (i) {
+                    _precacheNeighborImages(i);
+                    widget.onImageChanged(i);
+                  },
+                  itemBuilder: (context, i) {
+                    if (images.isEmpty) {
+                      return Container(color: AppColors.worksBackground);
+                    }
+                    return AppCachedNetworkImage(
+                      imageUrl: images[i],
+                      imageUrlCandidates: resolveContentMediaUrlCandidates(
+                        images[i],
+                      ),
+                      fit: BoxFit.cover,
+                      placeholder: Container(color: AppColors.worksBackground),
+                      errorWidget: Container(color: AppColors.worksBackground),
+                    );
+                  },
+                ),
+                Positioned.fill(
+                  // IgnorePointer removes the gradient box from hit testing entirely,
+                  // so it can never compete with the GestureDetector above.
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            AppColors.black.withValues(alpha: 0.06),
+                            AppColors.black.withValues(alpha: 0.58),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -2063,6 +2729,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
           child: PageView.builder(
             controller: _episodeController,
             scrollDirection: Axis.horizontal,
+            allowImplicitScrolling: true,
             itemCount: episodes.length,
             onPageChanged: (index) {
               setState(() => _currentEpisodeIndex = index);
@@ -2072,12 +2739,15 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
               final episode = episodes[index];
               final videoUrl = _videoUrlFor(episode);
               if (videoUrl.isNotEmpty) {
-                return VideoPlayerWidget(
-                  key: ValueKey<String>('works-video-${episode.id}-$index'),
-                  videoUrl: videoUrl,
-                  thumbnailUrl: _thumbnailFor(episode),
-                  autoPlay: index == _currentEpisodeIndex,
-                  showControls: true,
+                return _KeepAliveStage(
+                  key: ValueKey<String>('works-video-stage-${episode.id}'),
+                  child: VideoPlayerWidget(
+                    key: ValueKey<String>('works-video-${episode.id}-$index'),
+                    videoUrl: videoUrl,
+                    thumbnailUrl: _thumbnailFor(episode),
+                    autoPlay: index == _currentEpisodeIndex,
+                    showControls: true,
+                  ),
                 );
               }
               return Container(color: AppColors.worksBackground);
@@ -2113,6 +2783,27 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   }
 }
 
+class _KeepAliveStage extends StatefulWidget {
+  const _KeepAliveStage({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAliveStage> createState() => _KeepAliveStageState();
+}
+
+class _KeepAliveStageState extends State<_KeepAliveStage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+}
+
 class _WorksArticleCanvas extends StatelessWidget {
   const _WorksArticleCanvas({
     super.key,
@@ -2120,6 +2811,8 @@ class _WorksArticleCanvas extends StatelessWidget {
     required this.article,
     required this.enablePageCurl,
     required this.onPageChanged,
+    required this.onResolvedPageCountChanged,
+    required this.topChromeSafeInset,
     this.forceDegradedPager = false,
     this.onFallbackResolved,
     this.onPageFlipCommitted,
@@ -2130,10 +2823,12 @@ class _WorksArticleCanvas extends StatelessWidget {
   });
 
   final PostBaseDto post;
-  final ArticleDetailView article;
+  final ContentArticleRender article;
   final bool enablePageCurl;
   final bool forceDegradedPager;
   final ValueChanged<int> onPageChanged;
+  final ValueChanged<int> onResolvedPageCountChanged;
+  final double topChromeSafeInset;
   final ValueChanged<ArticleReaderFallbackReason>? onFallbackResolved;
   final ValueChanged<ArticleReaderPageFlipCommit>? onPageFlipCommitted;
   final ValueChanged<ArticleReaderPageCurlAbort>? onPageCurlAborted;
@@ -2143,48 +2838,19 @@ class _WorksArticleCanvas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = resolveArticleTemplatePalette(context, article.template);
     final topPaperReservedHeight =
-        MediaQuery.paddingOf(context).top +
-        AppSpacing.tabNavigationHeight +
+        topChromeSafeInset +
+        AppSpacing.appChromeTopBarHeight(context) +
         AppSpacing.intraGroupSm;
-    final stagePadding = articleReaderStagePagePadding().copyWith(
-      top: topPaperReservedHeight,
-    );
+    final stagePadding = EdgeInsets.only(top: topPaperReservedHeight);
     return Stack(
       fit: StackFit.expand,
       children: [
-        Container(color: AppColors.worksBackground),
-        if (post.primaryImageUrl.isNotEmpty)
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.08,
-              child: CachedNetworkImage(
-                imageUrl: post.primaryImageUrl,
-                fit: BoxFit.cover,
-                placeholder: (context, url) =>
-                    Container(color: AppColors.worksBackground),
-                errorWidget: (context, url, error) =>
-                    Container(color: AppColors.worksBackground),
-              ),
-            ),
-          ),
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.black.withValues(alpha: 0.08),
-                  AppColors.worksBackground.withValues(alpha: 0.92),
-                ],
-              ),
-            ),
-          ),
-        ),
+        ColoredBox(color: palette.stageBackground),
         Positioned(
-          left: AppSpacing.intraGroupSm,
-          right: AppSpacing.intraGroupSm,
+          left: 0,
+          right: 0,
           top: 0,
           bottom: ImmersiveEngagementBar.overlayClearance(
             context,
@@ -2201,6 +2867,7 @@ class _WorksArticleCanvas extends StatelessWidget {
                 fallbackPages: article.pages,
                 variant: ArticleCanvasVariant.immersive,
               );
+              onResolvedPageCountChanged(pages.length.clamp(1, 99).toInt());
               final maxIndex = pages.isEmpty ? 0 : pages.length - 1;
               final safeInitialPage = pages.isEmpty
                   ? 0
@@ -2210,22 +2877,29 @@ class _WorksArticleCanvas extends StatelessWidget {
                 constraints,
                 variant: ArticleCanvasVariant.immersive,
               );
-              return ArticleReadOnlyBookDeck(
-                pages: pages,
-                template: article.template,
-                fontPreset: article.fontPreset,
-                metrics: metrics,
-                coverUrl: post.primaryImageUrl,
-                initialPage: safeInitialPage,
-                enablePageCurl: enablePageCurl,
-                forceDegradedPager: forceDegradedPager,
-                pagePadding: stagePadding,
-                onPageChanged: onPageChanged,
-                onOverflowPrevious: onOverflowPrevious,
-                onOverflowNext: onOverflowNext,
-                onFallbackResolved: onFallbackResolved,
-                onPageFlipCommitted: onPageFlipCommitted,
-                onPageCurlAborted: onPageCurlAborted,
+              return ArticleReaderFlipHost(
+                adapter: ImmersiveBrowserReaderAdapter(
+                  ArticleReaderHostConfig(
+                    pages: pages,
+                    template: article.template,
+                    fontPreset: article.fontPreset,
+                    metrics: metrics,
+                    coverUrl: post.primaryImageUrl,
+                    initialPage: safeInitialPage,
+                    enablePageCurl: enablePageCurl,
+                    forceDegradedPager: forceDegradedPager,
+                    pagePadding: stagePadding,
+                    showFooterPageLabel: false,
+                    presentationStyle:
+                        ArticleReadOnlyBookDeckPresentationStyle.immersive,
+                    onPageChanged: onPageChanged,
+                    onOverflowPrevious: onOverflowPrevious,
+                    onOverflowNext: onOverflowNext,
+                    onFallbackResolved: onFallbackResolved,
+                    onPageFlipCommitted: onPageFlipCommitted,
+                    onPageCurlAborted: onPageCurlAborted,
+                  ),
+                ),
               );
             },
           ),
@@ -2258,13 +2932,12 @@ class _WorksTextCanvas extends StatelessWidget {
           Positioned.fill(
             child: Opacity(
               opacity: 0.08,
-              child: CachedNetworkImage(
+              child: AppCachedNetworkImage(
                 imageUrl: imageUrl!,
+                imageUrlCandidates: resolveContentMediaUrlCandidates(imageUrl!),
                 fit: BoxFit.cover,
-                placeholder: (context, url) =>
-                    Container(color: AppColors.worksBackground),
-                errorWidget: (context, url, error) =>
-                    Container(color: AppColors.worksBackground),
+                placeholder: Container(color: AppColors.worksBackground),
+                errorWidget: Container(color: AppColors.worksBackground),
               ),
             ),
           ),
@@ -2502,13 +3175,14 @@ class _GuideThumb extends StatelessWidget {
           aspectRatio: 3 / 4,
           child: imageUrl.isEmpty
               ? Container(color: AppColors.worksBackground)
-              : CachedNetworkImage(
+              : AppCachedNetworkImage(
                   imageUrl: imageUrl,
+                  imageUrlCandidates: resolveContentMediaUrlCandidates(
+                    imageUrl,
+                  ),
                   fit: BoxFit.cover,
-                  placeholder: (context, url) =>
-                      Container(color: AppColors.worksBackground),
-                  errorWidget: (context, url, error) =>
-                      Container(color: AppColors.worksBackground),
+                  placeholder: Container(color: AppColors.worksBackground),
+                  errorWidget: Container(color: AppColors.worksBackground),
                 ),
         ),
       ),
@@ -2560,13 +3234,14 @@ class _ArticleReadingCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
-                child: CachedNetworkImage(
+                child: AppCachedNetworkImage(
                   imageUrl: imageUrl!,
+                  imageUrlCandidates: resolveContentMediaUrlCandidates(
+                    imageUrl!,
+                  ),
                   fit: BoxFit.cover,
-                  placeholder: (context, url) =>
-                      Container(color: AppColors.worksBackground),
-                  errorWidget: (context, url, error) =>
-                      Container(color: AppColors.worksBackground),
+                  placeholder: Container(color: AppColors.worksBackground),
+                  errorWidget: Container(color: AppColors.worksBackground),
                 ),
               ),
             ),

@@ -41,7 +41,7 @@ type contentFixturePost struct {
 	Title         string   `json:"title"`
 	Body          string   `json:"body"`
 	Summary       string   `json:"summary"`
-	Tags          []string `json:"tags"`
+	Tags          []string `json:"tagRefs"`
 	CoverURL      string   `json:"coverUrl"`
 	ImageURLs     []string `json:"imageUrls"`
 	VideoURL      string   `json:"videoUrl"`
@@ -167,7 +167,7 @@ func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 		ContentIdentity:           fp.Identity,
 		Title:                     fp.Title,
 		Body:                      fp.Body,
-		Tags:                      fp.Tags,
+		TagRefs:                   fp.Tags,
 		MediaUrls:                 mediaURLs,
 		CoverUrl:                  fp.CoverURL,
 		VideoUrl:                  fp.VideoURL,

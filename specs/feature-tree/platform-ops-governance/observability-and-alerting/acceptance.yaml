@@ -1,14 +1,35 @@
-version: 1
-feature: observability-and-alerting
-level: "L2_feature"
-template: A1-A8
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+version: 2
+node:
+  id: observability-and-alerting
+  level: L2_business_capability
+  path: specs/feature-tree/platform-ops-governance/observability-and-alerting
+  title: observability and alerting
+  parent_domain_service: platform-ops-governance
+  parent_business_capability: observability-and-alerting
+scope:
+  summary: observability and alerting 验收范围。
+  in_scope: []
+  out_of_scope: []
+sit_acceptance:
+  SIT1:
+    title: observability and alerting 能力 SIT
+    story_refs: []
+    done_when:
+    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

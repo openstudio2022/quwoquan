@@ -26,7 +26,7 @@ class ContentPostDetailWireDto {
   final List<String>? circleNames;
   final String? circleId;
   final String? circleName;
-  final List<String>? tags;
+  final List<String>? tagRefs;
   final String? visibility;
 
   ContentPostDetailWireDto({
@@ -48,7 +48,7 @@ class ContentPostDetailWireDto {
     this.circleNames,
     this.circleId,
     this.circleName,
-    this.tags,
+    this.tagRefs,
     this.visibility,
   });
 
@@ -72,7 +72,7 @@ class ContentPostDetailWireDto {
       circleNames: _parseStringList(m['circleNames']) ?? null,
       circleId: m['circleId']?.toString() ?? null,
       circleName: m['circleName']?.toString() ?? null,
-      tags: _parseStringList(m['tags']) ?? null,
+      tagRefs: _parseStringList(m['tagRefs']) ?? null,
       visibility: m['visibility']?.toString() ?? null,
     );
   }
@@ -97,7 +97,7 @@ class ContentPostDetailWireDto {
       'circleNames': circleNames,
       'circleId': circleId,
       'circleName': circleName,
-      'tags': tags,
+      'tagRefs': tagRefs,
       'visibility': visibility,
     };
   }
@@ -121,7 +121,7 @@ class ContentPostDetailWireDto {
     List<String>? circleNames,
     String? circleId,
     String? circleName,
-    List<String>? tags,
+    List<String>? tagRefs,
     String? visibility,
   }) {
     return ContentPostDetailWireDto(
@@ -143,7 +143,7 @@ class ContentPostDetailWireDto {
       circleNames: circleNames ?? this.circleNames,
       circleId: circleId ?? this.circleId,
       circleName: circleName ?? this.circleName,
-      tags: tags ?? this.tags,
+      tagRefs: tagRefs ?? this.tagRefs,
       visibility: visibility ?? this.visibility,
     );
   }

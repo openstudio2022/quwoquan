@@ -35,8 +35,8 @@ content_type_filters:
     description: 图片内容
   - id: video
     description: 视频内容
-  - id: moment
-    description: 动态内容
+  - id: micro
+    description: 微趣内容
 
 defaults:
   suggest_limit: 12

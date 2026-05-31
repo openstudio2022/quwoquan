@@ -1,22 +1,41 @@
-feature: moment-text-expand
-level: "L3_story"
-template: A1-A2
-archived: false
+version: 2
+node:
+  id: moment-social-feed--moment-text-expand
+  level: L3_story
+  path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/moment-social-feed--moment-text-expand
+  title: moment social feed  moment text expand
+  parent_domain_service: discovery-content
+  parent_business_capability: dual-rail-discovery-redesign
+scope:
+  summary: moment social feed  moment text expand 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: moment social feed  moment text expand GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make build && make test-contract
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: 文字超 5 行时显示截断 + 克莱因蓝「展开」按钮；5 行及以内无按钮
-    status: pending
-    linked_tasks:
-    - Tx1
-    - Tx2
-    - Tx3
-    tests: []
-  A2:
-    criteria: 点击展开 → 全文显示，按钮变「收起」；点击收起 → 恢复 5 行截断；全程无页面跳转
-    status: pending
-    linked_tasks:
-    - Tx3
-    tests: []
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

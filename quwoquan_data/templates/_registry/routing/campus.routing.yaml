@@ -1,0 +1,33 @@
+version: 1
+routes:
+  - match: { subjectKind: entity, subjectType: 机构/学校, intent: 新生攻略, audience: freshmanStudent }
+    templateId: 学校_新生攻略
+    creatorArchetype: student_mentor
+  - match: { subjectKind: entity, subjectType: 机构/学校, intent: 校园评测 }
+    templateId: 学校_校园评测
+    creatorArchetype: campus_blogger
+  - match: { subjectKind: entity, subjectType: 机构/学校, intent: 选课攻略 }
+    templateId: 学校_选课攻略
+    creatorArchetype: student_mentor
+  - match: { subjectKind: entity, subjectType: 机构/学校, intent: 考研经验 }
+    templateId: 学校_考研经验
+    creatorArchetype: student_mentor
+  - match: { subjectKind: entity, subjectType: 机构/学校, intent: 校招就业, audience: jobSeeker }
+    templateId: 学校_校招就业
+    creatorArchetype: career_mentor
+  - match: { subjectKind: entity, subjectType: 机构/学校, intent: 体验 }
+    templateId: 学校_校园日记
+    creatorArchetype: campus_blogger
+  - match: { subjectKind: entity, subjectType: 机构/学校, intent: 攻略, audience: campusParent }
+    templateId: 学校_家长择校
+    creatorArchetype: campus_blogger
+  - match: { subjectKind: topic, subjectType: 教育成长/合辑, intent: 盘点 }
+    templateId: 校园_主题合辑
+    creatorArchetype: campus_blogger
+fallback:
+  entity:
+    templateId: 学校_新生攻略
+    creatorArchetype: student_mentor
+  topic:
+    templateId: 校园_主题合辑
+    creatorArchetype: campus_blogger

@@ -283,7 +283,7 @@ void main() {
       });
     });
 
-    group('MomentPostDto', () {
+    group('MicroPostDto', () {
       test('fromMap parses text-only moment', () {
         const raw = <String, dynamic>{
           'postId': 'm1',
@@ -294,7 +294,7 @@ void main() {
           'body': '一条微趣文字',
           'publishedAt': '2026-01-14T10:00:00Z',
         };
-        final dto = MomentPostDto.fromMap(raw);
+        final dto = MicroPostDto.fromMap(raw);
         expect(dto.id, equals('m1'));
         expect(dto.type, equals('micro'));
         expect(dto.identity, equals('moment'));
@@ -320,7 +320,7 @@ void main() {
           ],
           'publishedAt': '2026-01-13T08:00:00Z',
         };
-        final dto = MomentPostDto.fromMap(raw);
+        final dto = MicroPostDto.fromMap(raw);
         expect(dto.imageUrls.length, equals(2));
         expect(dto.displayFormat, equals('image'));
         expect(dto.hasImages, isTrue);
@@ -339,7 +339,7 @@ void main() {
           'durationMs': 15000,
           'publishedAt': '2026-01-12T06:00:00Z',
         };
-        final dto = MomentPostDto.fromMap(raw);
+        final dto = MicroPostDto.fromMap(raw);
         expect(dto.videoUrl, equals('https://example.com/video.mp4'));
         expect(dto.durationMs, equals(15000));
         expect(dto.displayFormat, equals('video'));
@@ -377,13 +377,13 @@ void main() {
         expect(dto, isA<ArticlePostDto>());
       });
 
-      test('dispatches micro contentType to MomentPostDto', () {
+      test('dispatches micro contentType to MicroPostDto', () {
         final dto = postBaseDtoFromMap({
           'postId': 'x',
           'contentType': 'micro',
           'publishedAt': '2025-01-01T00:00:00Z',
         });
-        expect(dto, isA<MomentPostDto>());
+        expect(dto, isA<MicroPostDto>());
       });
 
       test('mixed list of PostBaseDto subtypes is type-safe', () {
@@ -400,7 +400,7 @@ void main() {
 
         final photos = dtos.whereType<PhotoPostDto>().toList();
         final videos = dtos.whereType<VideoPostDto>().toList();
-        final moments = dtos.whereType<MomentPostDto>().toList();
+        final moments = dtos.whereType<MicroPostDto>().toList();
         final articles = dtos.whereType<ArticlePostDto>().toList();
 
         expect(
@@ -568,7 +568,7 @@ void main() {
     );
 
     test(
-      'MomentPostDto: no images or video → hasImages and hasVideo are false',
+      'MicroPostDto: no images or video → hasImages and hasVideo are false',
       () {
         const raw = <String, dynamic>{
           'postId': 'mx',
@@ -579,7 +579,7 @@ void main() {
           'body': '纯文字',
           'publishedAt': '2026-01-01T00:00:00Z',
         };
-        final dto = MomentPostDto.fromMap(raw);
+        final dto = MicroPostDto.fromMap(raw);
         expect(dto.hasImages, isFalse);
         expect(dto.hasVideo, isFalse);
         expect(dto.imageUrls, isEmpty);

@@ -1,53 +1,35 @@
-version: 1
-feature: runtime-testinfra
-level: "L2_feature"
-archived: true
-archived_at: '2026-03-01T00:00:00Z'
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-testinfra
-  parent_path: capability.runtime
-  acceptance_inherits_from: capability.runtime
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A7_contract_metadata_consistency
-  - A8_test_automation
-  notes: 测试基础设施是契约测试的基础，确保服务可独立验证。
-global_acceptance:
-  A1_functional:
-    scenarios:
-    - given: embedded-postgres 引擎配置就绪
-      when: TestMain 启动测试引擎
-      then: PG 实例就绪，migration 执行成功，可执行 CRUD
-    - given: testcontainers mongo 引擎配置就绪
-      when: TestMain 启动测试引擎
-      then: MongoDB 容器就绪，索引创建成功，可执行 CRUD
-    - given: miniredis 引擎配置就绪
-      when: TestMain 启动测试引擎
-      then: Redis 内存实例就绪，可执行 SET/GET/TTL
-  A2_experience:
-  - 测试基础设施对业务测试代码透明，只需调用 TestSuite 基类
-  A3_service_governance:
-  - 测试引擎启动总时间 < 5s（PG + Mongo + Redis）
-  A4_observability:
-  - 测试执行日志包含 seed/assert/cleanup 阶段耗时
-  A5_product_ops:
-  - N/A
-  A6_security_privacy:
-  - 测试数据不包含真实用户数据
-  A7_contract_metadata_consistency:
-  - 测试引擎选型与 _shared/test_infra.yaml 配置一致
-  - Fixture 工厂从 fields.yaml 约束生成合规数据
-  A8_test_automation:
-  - make test-contract 一键运行全部契约测试
-  - CI 集成：每次 PR 自动运行契约测试
-tests:
-  unit:
-  - quwoquan_service/runtime/testutil/tests/pg_suite_test.go
-  - quwoquan_service/runtime/testutil/tests/mongo_suite_test.go
-  - quwoquan_service/runtime/testutil/tests/redis_suite_test.go
-  - quwoquan_service/runtime/testutil/tests/event_spy_test.go
+version: 2
+node:
+  id: runtime-testinfra
+  level: L2_business_capability
+  path: specs/feature-tree/runtime/runtime-testinfra
+  title: runtime testinfra
+  parent_domain_service: runtime
+  parent_business_capability: runtime-testinfra
+scope:
+  summary: runtime testinfra 验收范围。
+  in_scope: []
+  out_of_scope: []
+sit_acceptance:
+  SIT1:
+    title: runtime testinfra 能力 SIT
+    story_refs: []
+    done_when:
+    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

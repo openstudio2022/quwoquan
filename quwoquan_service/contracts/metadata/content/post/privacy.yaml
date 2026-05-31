@@ -42,7 +42,7 @@ app_log_policy:
     app_log: drop
     description: "向量嵌入不记录日志，体积大且无排查价值"
 
-  - field: tags
+  - field: tagRefs
     classification: PUBLIC
     app_log: allow
 

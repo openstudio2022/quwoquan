@@ -1337,7 +1337,7 @@ def content_row(post: dict[str, Any], circles_by_id: dict[str, dict[str, Any]]) 
         "thumbnailObjectKey": post["coverAsset"]["objectKey"],
         "mediaObjectKeys": [asset["objectKey"] for asset in assets],
         "imageObjectKeys": [asset["objectKey"] for asset in assets if asset["mimeType"].startswith("image/")],
-        "tags": ["fixture", post["primaryTheme"], post["postType"]],
+        "tagRefs": ["fixture", post["primaryTheme"], post["postType"]],
         "locationName": post.get("locationName", ""),
     }
     if content_type == "video":

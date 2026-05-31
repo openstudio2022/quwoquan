@@ -43,9 +43,14 @@ def validate_result(result: dict, command: str, schema_name: str) -> list[str]:
     return errors
 
 
-def _type_matches(value: Any, json_type: str | None) -> bool:
+def _type_matches(value: Any, json_type: Any) -> bool:
     if json_type is None:
         return True
+    # 支持 union 类型，如 ["string", "null"]
+    if isinstance(json_type, (list, tuple)):
+        return any(_type_matches(value, t) for t in json_type)
+    if json_type == "null":
+        return value is None
     type_map = {
         "string": str,
         "number": (int, float),
@@ -57,4 +62,7 @@ def _type_matches(value: Any, json_type: str | None) -> bool:
     expected = type_map.get(json_type)
     if expected is None:
         return True
+    # bool 是 int 子类，但 JSON integer/number 不应接受 bool
+    if json_type in ("integer", "number") and isinstance(value, bool):
+        return False
     return isinstance(value, expected)

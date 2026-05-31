@@ -9,6 +9,63 @@ description: |
   feature_flags 为编译期常量（修改需发版）；
   预留 runtime_overridable: true 标记，便于未来接入 Remote Config 覆盖。
 
+# ── 〇、首页频道配置（运营可配置：端 meta 默认 + /v1/config/app 远程覆盖）─────────
+home_channels:
+  # 首页频道（运营资产）：端 codegen 默认为发布自带 fallback；
+  # 运营经 GET /v1/config/app 的 content.home_channels 远程覆盖（不发版即可增删改频道）。
+  # template 为端实现的有限频道模板类型；运营选模板 + 配 feed_query/mood_copy 参数。
+  # feed_query 为首页频道取数真相源（端 toDiscoveryFeedQuery 优先消费；category 必填，
+  # identity/type 可选）。template 为端有限模板类型，决定单列/多列/是否带今日交集流。
+  - id: following
+    label_key: home_tab_following
+    template: single_column_relations
+    feed_query: { category: following, identity: moment }
+    mood_copy_key: home_mood_following
+    order: 0
+    runtime_overridable: true
+  - id: recommend
+    label_key: home_tab_recommend
+    template: intersection_rail_masonry
+    feed_query: { category: micro, identity: moment }
+    mood_copy_key: home_mood_recommend
+    order: 1
+    runtime_overridable: true
+  - id: campus
+    label_key: home_tab_campus
+    template: intersection_rail_masonry
+    feed_query: { category: campus }
+    mood_copy_key: home_mood_campus
+    order: 2
+    runtime_overridable: true
+  - id: travel
+    label_key: home_tab_travel
+    template: masonry_recommend
+    feed_query: { category: travel }
+    mood_copy_key: home_mood_travel
+    order: 3
+    runtime_overridable: true
+  - id: photography
+    label_key: home_tab_photography
+    template: masonry_recommend
+    feed_query: { category: photography }
+    mood_copy_key: home_mood_photography
+    order: 4
+    runtime_overridable: true
+  - id: tech
+    label_key: home_tab_tech
+    template: masonry_recommend
+    feed_query: { category: tech }
+    mood_copy_key: home_mood_tech
+    order: 5
+    runtime_overridable: true
+  - id: car
+    label_key: home_tab_car
+    template: masonry_recommend
+    feed_query: { category: car }
+    mood_copy_key: home_mood_car
+    order: 6
+    runtime_overridable: true
+
 # ── 一、发现页 Tab 配置 ─────────────────────────────────────────────────
 discovery_tabs:
   - id: photo
@@ -204,7 +261,7 @@ article_template_recommendations:
 
 # ── 二、内容卡片展示配置 ────────────────────────────────────────────────
 card_config:
-  photo:
+  image:
     show_author_avatar: true
     show_author_name: true
     show_like_count: true
@@ -223,7 +280,7 @@ card_config:
     action_bar_items: [like, comment, favorite, share]
     progress_bar: true
 
-  moment:
+  micro:
     show_author_avatar: true
     show_author_name: true
     show_like_count: true

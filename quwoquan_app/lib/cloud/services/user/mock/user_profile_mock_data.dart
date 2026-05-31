@@ -3,7 +3,7 @@
 // 字段命名与 content 域 DTO 保持一致：
 // - authorId / displayName / avatarUrl（与 PostBaseDto 共享）
 // - works：作品集（id / type / title / coverUrl / likeCount / date / desc）
-// - lifeItems：生活记录（id / name / category / categoryKey / coverUrl / desc）
+// - lifeItems：生活记录（id / category(枚举值) / title / subtitle / imageUrl / refId），对齐 UserLifeItemDto
 // 待 contracts/metadata/user/service.yaml 定义后，此文件由 make codegen-app 驱动替换。
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -139,9 +139,9 @@ class UserProfileMockData {
         'shareCount': 43,
         'createdAt': '2025-12-10T09:00:00Z',
       }),
-      MomentPostDto.fromMap({
+      MicroPostDto.fromMap({
         'postId': '${userId}_m1',
-        'contentType': 'moment',
+        'contentType': 'micro',
         'authorId': userId,
         'displayName': _displayNameFor(userId),
         'authorAvatarUrl': _avatarFor(userId),
@@ -212,39 +212,35 @@ class UserProfileMockData {
     return [
       const UserLifeItem(
         id: 'i1',
-        name: '阿那亚礼堂',
-        category: '足迹',
-        categoryKey: 'footprint',
-        coverUrl:
+        category: 'footprint',
+        title: '阿那亚礼堂',
+        subtitle: '在海边的孤独感中寻找创作灵感。',
+        imageUrl:
             'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
-        desc: '在海边的孤独感中寻找创作灵感。',
       ),
       const UserLifeItem(
         id: 'i2',
-        name: '《摄影的哲学》',
-        category: '书影音',
-        categoryKey: 'soul',
-        coverUrl:
+        category: 'soul',
+        title: '《摄影的哲学》',
+        subtitle: '比起技巧，我更痴迷于思考快门背后。',
+        imageUrl:
             'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=400',
-        desc: '比起技巧，我更痴迷于思考快门背后。',
       ),
       const UserLifeItem(
         id: 'i3',
-        name: 'Dirty Coffee',
-        category: '味蕾',
-        categoryKey: 'taste',
-        coverUrl:
+        category: 'taste',
+        title: 'Dirty Coffee',
+        subtitle: '喜欢那种冷热交替的冲突感。',
+        imageUrl:
             'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=400',
-        desc: '喜欢那种冷热交替的冲突感。',
       ),
       const UserLifeItem(
         id: 'i4',
-        name: 'Leica M11',
-        category: '爱物',
-        categoryKey: 'private',
-        coverUrl:
+        category: 'private',
+        title: 'Leica M11',
+        subtitle: '它是我身体的延伸。',
+        imageUrl:
             'https://images.unsplash.com/photo-1648049003029-3b3b32cb9a1f?q=80&w=400',
-        desc: '它是我身体的延伸。',
       ),
     ];
   }

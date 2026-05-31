@@ -24,7 +24,7 @@ _PORTAL_SHELL_JSON = r'''{
     }
   },
   "default_domain": "product-ops",
-  "default_environment": "integration",
+  "default_environment": "beta",
   "domains": [
     {
       "icon": "layout-dashboard",
@@ -64,8 +64,9 @@ _PORTAL_SHELL_JSON = r'''{
   ],
   "portal_id": "ops-portal",
   "supported_environments": [
-    "dev",
-    "integration",
+    "alpha",
+    "beta",
+    "gamma",
     "prod"
   ],
   "title": "趣我圈运营与平台门户",

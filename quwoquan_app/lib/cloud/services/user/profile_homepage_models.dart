@@ -710,22 +710,33 @@ class UserWorkItem {
   final String desc;
 }
 
-/// 生活记录条目。
+/// 生活记录条目。字段与后端契约 `user/user_life_item`（UserLifeItemDto）一一对齐。
+/// category 为 LifeItemCategory 枚举值（footprint/soul/taste/private），子页过滤直接比对。
 @immutable
 class UserLifeItem {
   const UserLifeItem({
     required this.id,
-    required this.name,
     required this.category,
-    required this.categoryKey,
-    required this.coverUrl,
-    required this.desc,
+    required this.title,
+    this.subtitle = '',
+    this.imageUrl = '',
+    this.refId = '',
   });
 
   final String id;
-  final String name;
+
+  /// LifeItemCategory 枚举值：footprint=足迹 / soul=书影音 / taste=味蕾 / private=爱物。
   final String category;
-  final String categoryKey;
-  final String coverUrl;
-  final String desc;
+
+  /// 记录主文案。
+  final String title;
+
+  /// 记录副标题/描述。
+  final String subtitle;
+
+  /// 封面图（绝对 URL 或对象键）。
+  final String imageUrl;
+
+  /// 关联内容引用（作品/圈子等）。
+  final String refId;
 }

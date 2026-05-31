@@ -1,51 +1,41 @@
-version: 1
-feature: canonical-search-contract
-level: L3_scenario
-source_path: global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract
-parent_journey: search-provider-routing-and-storage-topology
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+version: 2
+node:
+  id: canonical-search-contract
+  level: L3_story
+  path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract
+  title: canonical search contract
+  parent_domain_service: global-search-experience
+  parent_business_capability: search-provider-routing-and-storage-topology
 scope:
-  summary: >
-    冻结页面与业务层唯一 canonical 搜索接口。
-  journey_bindings:
-    - J1
-  in_scope:
-    - "`search(request)`"
-    - "`mode=suggest|result`"
-    - 统一 envelope
-  out_of_scope:
-    - provider 实现
-
-scenario_acceptance:
-  A1:
-    title: 建议与正式结果共用同一搜索接口
-    scenario: canonical search contract
-    journey_step: call unified search
+  summary: canonical search contract 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: canonical search contract GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
     done_when:
-      - "页面层只有一个 `search(request)` 入口"
-      - "`suggest` 与 `result` 仅通过 `mode` 区分"
-      - 返回为统一 typed envelope
-      - 同一 schema 可生成 AI agent 可调用的 tool descriptor，且模型生成条件受 typed schema 限定
-      - "contract 以单一 `query` 为主输入，支持 `web.document` 与趣我圈对象统一召回，便于 AI 做多轮关键词检索"
-    edge_cases:
-      - 空 query
-      - objectTypes 为空
-      - AI 将一个复杂问题拆成多次 tool 调用
-    linked_plan_items:
-      - P1
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
     evidence:
       primary:
-        - T1_schema
-      supporting:
-        - T2_module_interaction
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      planned:
-        - canonical search contract schema test
-        - assistant keyword decomposition tool schema test
+      planned: []
       recorded: []
     status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
@@ -12,13 +16,17 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/unified_object_card.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
@@ -33,9 +41,13 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin {
-  static const String _defaultTab = HomePrimaryTabStrip.recommendedTabId;
-  static const List<String> _tabOrder = HomePrimaryTabStrip.homeTabIds;
-  late String _activeTab;
+  // 默认频道 = recommend（与 ContentUIConfig.homeChannels 首发推荐频道 id 对齐）。
+  static const String _defaultChannelId = 'recommend';
+  late String _activeChannelId;
+
+  /// 频道顺序真相源 = homeChannelsProvider（端默认 + 远程覆盖），用于左右滑动切频道。
+  List<String> _channelOrder() =>
+      ref.read(homeChannelsProvider).map((channel) => channel.id).toList();
 
   @override
   bool get wantKeepAlive => true;
@@ -43,7 +55,7 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   void initState() {
     super.initState();
-    _activeTab = _initialTabForRoute(widget.routeLocation);
+    _activeChannelId = _initialTabForRoute(widget.routeLocation);
   }
 
   @override
@@ -53,27 +65,27 @@ class _HomePageState extends ConsumerState<HomePage>
       return;
     }
     final routeTab = _routeDrivenTab(widget.routeLocation);
-    if (routeTab == null || routeTab == _activeTab) {
+    if (routeTab == null || routeTab == _activeChannelId) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
-        _activeTab = routeTab;
+        _activeChannelId = routeTab;
       });
     });
   }
 
   String _initialTabForRoute(String? location) {
-    return _routeDrivenTab(location) ?? _defaultTab;
+    return _routeDrivenTab(location) ?? _defaultChannelId;
   }
 
   String? _routeDrivenTab(String? location) {
     switch (location) {
       case AppRoutePaths.home:
-        return _defaultTab;
+        return _defaultChannelId;
       case '/following':
-        return HomePrimaryTabStrip.followingTabId;
+        return HomePrimaryTabStrip.followingChannelId;
       default:
         return null;
     }
@@ -81,7 +93,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   void _syncShellRouteForTab(String id) {
     final targetLocation = switch (id) {
-      HomePrimaryTabStrip.followingTabId => AppRoutePaths.home,
+      HomePrimaryTabStrip.followingChannelId => AppRoutePaths.home,
       _ => null,
     };
     final router = GoRouter.maybeOf(context);
@@ -96,9 +108,16 @@ class _HomePageState extends ConsumerState<HomePage>
     });
   }
 
-  void _handleTabChange(String id) {
-    if (_activeTab == id) return;
-    setState(() => _activeTab = id);
+  void _handleChannelChange(String id) {
+    if (_activeChannelId == id) return;
+    // 关注频道展示「关注的人」的内容，游客需先登录；未登录时提示并引导登录，
+    // 保持当前频道不变（不切到空白的关注流）。
+    if (id == HomePrimaryTabStrip.followingChannelId &&
+        !AuthGate.isAuthenticated(ref)) {
+      unawaited(requireLogin(ref, context, AuthGateReason.followingFeed));
+      return;
+    }
+    setState(() => _activeChannelId = id);
     _syncShellRouteForTab(id);
   }
 
@@ -111,141 +130,175 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   void _handleTabSwipe(TabSwipeDirection direction) {
-    final currentIndex = _tabOrder.indexOf(_activeTab);
+    final order = _channelOrder();
+    final currentIndex = order.indexOf(_activeChannelId);
     if (currentIndex < 0) {
       return;
     }
     final nextIndex = currentIndex + direction.delta;
-    if (nextIndex < 0 || nextIndex >= _tabOrder.length) {
+    if (nextIndex < 0 || nextIndex >= order.length) {
       return;
     }
-    _handleTabChange(_tabOrder[nextIndex]);
+    _handleChannelChange(order[nextIndex]);
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final safeTop = MediaQuery.viewPaddingOf(context).top;
-    final effectiveTopInset = AppSpacing.appChromeTopSafeInset(
-      safeTop,
-      context,
-    );
+    final effectiveTopInset = safeTop + AppSpacing.intraGroupXs;
 
     final isDark = ref.watch(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
-    final borderColor = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.separatorSubtle,
+    final channels = ref.watch(homeChannelsProvider);
+    // 守护远程覆盖后当前频道可能被移除：回退到第一个频道，避免空白页。
+    final effectiveActiveChannelId =
+        channels.any((channel) => channel.id == _activeChannelId)
+        ? _activeChannelId
+        : (channels.isNotEmpty ? channels.first.id : _activeChannelId);
+    final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final searchChromeColor = isDark ? bg : AppColors.primaryColor;
+    final searchChromeSurface = AppChromeSurface.immersive;
+    final searchToTabGap = AppSpacing.intraGroupXs;
+    final statusBarStyle = SystemUiOverlayStyle(
+      statusBarColor: AppColors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: AppColors.transparent,
+      systemNavigationBarIconBrightness: isDark
+          ? Brightness.light
+          : Brightness.dark,
     );
 
-    return CupertinoPageScaffold(
-      backgroundColor: bg,
-      child: Material(
-        type: MaterialType.transparency,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(height: effectiveTopInset),
-            Container(
-              height:
-                  AppSpacing.appChromeTopBarHeight(context) +
-                  AppSpacing.primaryTopBarHeight(context) +
-                  AppSpacing.hairline,
-              decoration: BoxDecoration(
-                color: bg,
-                border: Border(
-                  bottom: BorderSide(
-                    color: borderColor,
-                    width: AppSpacing.hairline,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: statusBarStyle,
+      child: CupertinoPageScaffold(
+        backgroundColor: bg,
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                key: const ValueKey<String>('home-search-chrome'),
+                height:
+                    effectiveTopInset +
+                    AppSpacing.globalSearchFieldHeight +
+                    searchToTabGap,
+                padding: EdgeInsets.only(top: effectiveTopInset),
+                color: searchChromeColor,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.feedContentHorizontal(context),
+                    ),
+                    child: GlobalXiaoquSearchBar(
+                      initialSearchScope: GlobalSearchScope.content,
+                      surface: searchChromeSurface,
+                    ),
                   ),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: AppSpacing.appChromeTopBarHeight(context),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.feedContentHorizontal(context),
-                      ),
-                      child: const Center(
-                        child: GlobalXiaoquSearchBar(
-                          initialSearchScope: GlobalSearchScope.content,
-                        ),
-                      ),
+              Container(
+                key: const ValueKey<String>('home-primary-tab-chrome'),
+                height: AppSpacing.primaryTopBarHeight(context),
+                decoration: BoxDecoration(color: bg),
+                child: SizedBox(
+                  height: AppSpacing.primaryTopBarHeight(context),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.feedContentHorizontal(context),
+                    ),
+                    child: HomePrimaryTabStrip(
+                      activeChannelId: effectiveActiveChannelId,
+                      onChannelChanged: _handleChannelChange,
+                      onHorizontalDragEnd: _handleTabSwipeDragEnd,
+                      isDark: isDark,
+                      channels: channels,
                     ),
                   ),
-                  SizedBox(
-                    height: AppSpacing.primaryTopBarHeight(context),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.feedContentHorizontal(context),
-                      ),
-                      child: HomePrimaryTabStrip(
-                        activeTab: _activeTab,
-                        onTabChange: _handleTabChange,
-                        onHorizontalDragEnd: _handleTabSwipeDragEnd,
-                        isDark: isDark,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-            Expanded(
-              child: TabSwipeSwitchRegion(
-                enabled: true,
-                onSwipe: _handleTabSwipe,
-                child: _buildBody(isDark),
+              Expanded(
+                child: TabSwipeSwitchRegion(
+                  enabled: true,
+                  onSwipe: _handleTabSwipe,
+                  child: _buildBody(isDark, channels, effectiveActiveChannelId),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildBody(bool isDark) {
-    switch (_activeTab) {
-      case HomePrimaryTabStrip.followingTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.followingTabId);
-      case HomePrimaryTabStrip.recommendedTabId:
-        return _buildFeedTab(isDark, 'moment');
-      case HomePrimaryTabStrip.travelPhotographyTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.travelTabId);
-      case HomePrimaryTabStrip.campusTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.campusTabId);
-      case HomePrimaryTabStrip.travelTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.travelTabId);
-      case HomePrimaryTabStrip.photographyTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.photographyTabId);
-      case HomePrimaryTabStrip.techTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.techTabId);
-      case HomePrimaryTabStrip.carFriendsTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.carFriendsTabId);
-      default:
-        return const SizedBox.shrink();
+  /// 按频道 template 路由到 Feed 模板组件（去硬编码 switch）；
+  /// channelId = channel.id（取数/气质文案/桶 key 真相源），template 驱动单列/多列/今日交集流。
+  Widget _buildBody(
+    bool isDark,
+    List<HomeChannelConfig> channels,
+    String activeChannelId,
+  ) {
+    HomeChannelConfig? channel;
+    for (final candidate in channels) {
+      if (candidate.id == activeChannelId) {
+        channel = candidate;
+        break;
+      }
     }
-  }
-
-  Widget _buildFeedTab(bool isDark, String feedTabId) {
-    final visualPriority = _isInlineImageCarouselTab(feedTabId);
+    if (channel == null) {
+      return const SizedBox.shrink();
+    }
     return MomentSocialFeed(
+      key: ValueKey<String>('home-feed-${channel.id}'),
       isDark: isDark,
-      feedTabId: feedTabId,
-      inlineImageCarousel: visualPriority,
-      disableImageViewerOnTap: visualPriority,
+      channelId: channel.id,
+      template: channel.template,
       onUserTap: _openUserProfile,
       onPostTap: (post, index, {feedPosts}) {
         _openFeedPost(post, index, feedPosts: feedPosts);
       },
+      onIntersectionObjectOpen: _openIntersectionObject,
+      onIntersectionObjectAction: _handleIntersectionObjectAction,
     );
   }
 
-  bool _isInlineImageCarouselTab(String feedTabId) {
-    return feedTabId == HomePrimaryTabStrip.travelTabId ||
-        feedTabId == HomePrimaryTabStrip.photographyTabId;
+  /// 今日交集对象卡行动按钮（关注/加入/加好友）：交集行动回流。
+  /// 带 intersectionDimension + intersectionTagRefs，便于推荐归因还原交集来源。
+  void _handleIntersectionObjectAction(IntersectionReason reason) {
+    final targetId = reason.actionTargetId.trim();
+    if (targetId.isEmpty) return;
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackFollow(
+          targetId,
+          referralSource: ReferralSource.organicFeed,
+          feedRequestId: ref
+              .read(feedSessionProvider.notifier)
+              .currentFeedRequestId,
+          intersectionDimension: reason.dimension,
+          intersectionTagRefs: reason.tagRefs,
+        );
+    // 行动回流后跳到对象页，让用户完成实际关注/加入（关系写入归属对象页）。
+    _openIntersectionObject(reason);
+  }
+
+  /// 今日交集对象卡跳转：按对象类型路由到对应对象/聚合页。
+  /// 路由全部来自 metadata codegen（[AppRoutePaths]），不在此硬编码 path。
+  void _openIntersectionObject(IntersectionReason reason) {
+    final targetId = reason.actionTargetId.trim();
+    if (targetId.isEmpty) return;
+    final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);
+    switch (kind) {
+      case UnifiedObjectKind.person:
+        context.push(AppRoutePaths.userProfile(username: targetId));
+      case UnifiedObjectKind.circle:
+        context.push(AppRoutePaths.circleDetail(id: targetId));
+      case UnifiedObjectKind.place:
+      case UnifiedObjectKind.org:
+        context.push(AppRoutePaths.homepageDetail(id: targetId));
+    }
   }
 
   void _openUserProfile(
@@ -280,6 +333,10 @@ class _HomePageState extends ConsumerState<HomePage>
     final navFeedRequestId = ref
         .read(feedSessionProvider.notifier)
         .newFeedRequestId();
+    // 入口 post 在 feed 中的位置（推荐归因；-1 → null 不上报）。
+    final feedPosition = (feedPosts ?? const <PostBaseDto>[]).indexWhere(
+      (item) => item.id == post.id,
+    );
     ref
         .read(behaviorRepositoryProvider)
         .reportSingle(
@@ -288,6 +345,7 @@ class _HomePageState extends ConsumerState<HomePage>
           authorId: post.authorId,
           referralSource: ReferralSource.organicFeed,
           feedRequestId: navFeedRequestId,
+          position: feedPosition >= 0 ? feedPosition : null,
         );
 
     final rawPostsById = homeFollowingMediaViewerRaws(
@@ -296,9 +354,8 @@ class _HomePageState extends ConsumerState<HomePage>
     );
     final postViews = viewerPosts
         .map(
-          (dto) => PostSummaryView.fromDto(
+          (dto) => ContentSurfaceViewMapper.fromDto(
             dto,
-            surfaceId: PostReadSurfaceId.immersive,
             wire: rawPostsById[dto.id]!.toDynamicMap(),
           ),
         )
@@ -329,6 +386,7 @@ class _HomePageState extends ConsumerState<HomePage>
         rawPostsById: rawPostsById,
         interactionSnapshot: interactionSnapshot,
         feedRequestId: navFeedRequestId,
+        position: feedPosition >= 0 ? feedPosition : null,
       ),
     );
     if (result is MediaViewerResult) {
@@ -357,30 +415,22 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
       backgroundColor: AppColors.black,
       child: Material(
         type: MaterialType.transparency,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(height: effectiveTopInset),
-            Expanded(
-              child: WorksImmersiveViewer(
-                showWorksToolbar: true,
-                topChromeSafeInset: AppSpacing.zero,
-                onUserTap: (userId, {avatarUrl, displayName, backgroundUrl}) =>
-                    _openUserProfile(
-                      context,
-                      userId,
-                      avatarUrl: avatarUrl,
-                      displayName: displayName,
-                      backgroundUrl: backgroundUrl,
-                    ),
-                onAssistantTap: () => _openAssistantHalfSheet(context, ref),
-                onTapBack: onExitToHome,
-                onSwitchToMoment: onExitToHome,
-                onSwitchToFollowing: onExitToHome,
-                onSwitchToCircles: onExitToHome,
+        child: WorksImmersiveViewer(
+          showWorksToolbar: true,
+          topChromeSafeInset: effectiveTopInset,
+          onUserTap: (userId, {avatarUrl, displayName, backgroundUrl}) =>
+              _openUserProfile(
+                context,
+                userId,
+                avatarUrl: avatarUrl,
+                displayName: displayName,
+                backgroundUrl: backgroundUrl,
               ),
-            ),
-          ],
+          onAssistantTap: () => _openAssistantHalfSheet(context, ref),
+          onTapBack: onExitToHome,
+          onSwitchToMoment: onExitToHome,
+          onSwitchToFollowing: onExitToHome,
+          onSwitchToCircles: onExitToHome,
         ),
       ),
     );
@@ -409,7 +459,7 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
     final service = ref.read(visitRecorderServiceProvider);
     final ctx = AssistantOpenContext(
       source: AssistantSource.discovery,
-      tab: HomePrimaryTabStrip.featuredTabId,
+      tab: HomePrimaryTabStrip.featuredChannelId,
       visitTarget: target,
       experienceLevel: service.getExperience(target),
     );

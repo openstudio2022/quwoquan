@@ -63,6 +63,33 @@ class AssistantApiMetadata {
     'UpdateSkillSubscriptionStatus': 'PATCH',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'CreateAssistantConversation': 'public',
+    'CreateAssistantTurn': 'public',
+    'CreateSkillSubscription': 'public',
+    'GetAssistantConversation': 'public',
+    'GetAssistantTurn': 'public',
+    'GetLearningOpsSummary': 'public',
+    'GetPolicy': 'public',
+    'GetSkillSubscription': 'public',
+    'GetSuggestedActions': 'public',
+    'GrantSkillConsent': 'public',
+    'ListAssistantMemories': 'public',
+    'ListAssistantTasks': 'public',
+    'ListConsents': 'public',
+    'ListSkillSubscriptions': 'public',
+    'ListSkills': 'public',
+    'ReportInteractionEvent': 'public',
+    'ReportPageContext': 'public',
+    'ReportScorecard': 'public',
+    'RevokeSkillConsent': 'public',
+    'SearchXiaoquResults': 'public',
+    'StreamAssistantTurn': 'public',
+    'TickSkillSubscriptionCron': 'public',
+    'UpdateSkillSubscriptionStatus': 'public',
+  };
+
   static const String createAssistantConversationOperation = 'CreateAssistantConversation';
   static const String createAssistantTurnOperation = 'CreateAssistantTurn';
   static const String createSkillSubscriptionOperation = 'CreateSkillSubscription';

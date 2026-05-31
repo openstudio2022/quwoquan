@@ -43,6 +43,23 @@ class EntityApiMetadata {
     'UpdateClaimedHomepageBasics': 'PATCH',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'CreateHomepageClaimRequest': 'required',
+    'CreateHomepageStatusReport': 'required',
+    'GetHomepageDetail': 'public',
+    'GetHomepageRelatedGroups': 'public',
+    'GetHomepageReviewSummary': 'public',
+    'GetHomepageShell': 'public',
+    'IntakeHomepageCandidate': 'required',
+    'PublishHomepageCandidate': 'required',
+    'ReviewHomepageClaimRequest': 'required',
+    'ReviewHomepageStatusReport': 'required',
+    'SearchHomepages': 'required',
+    'SuggestHomepageCandidate': 'required',
+    'UpdateClaimedHomepageBasics': 'required',
+  };
+
   static const String createHomepageClaimRequestOperation = 'CreateHomepageClaimRequest';
   static const String createHomepageStatusReportOperation = 'CreateHomepageStatusReport';
   static const String getHomepageDetailOperation = 'GetHomepageDetail';

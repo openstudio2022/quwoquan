@@ -1,72 +1,41 @@
-version: 1
-feature: workflow-naming-consolidation
-level: "L3_story"
-archived: true
-archived_at: '2026-03-01T00:00:00Z'
-template: A1-A4
-focus_groups: []
-tests:
-  contract:
-  - 场景：8 个 workflow name 含 01～08 序号
-  - 场景：03/04/05 作为 main required checks 的主门禁
-  - 场景：deploy-prod-auto 在 push main 后触发
+version: 2
+node:
+  id: workflow-naming-consolidation
+  level: L3_story
+  path: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/workflow-naming-consolidation
+  title: workflow naming consolidation
+  parent_domain_service: runtime
+  parent_business_capability: deliver-deploy-prod-pipeline
+scope:
+  summary: workflow naming consolidation 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: workflow naming consolidation GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: 8 个 workflow name 为 01～08 序号 + 首字母大写
-    status: implemented
-    linked_tasks:
-    - T1
-    tests:
-    - file: .github/workflows/app_pipeline.yml
-      functions:
-      - name
-    - file: .github/workflows/service_pipeline.yml
-      functions:
-      - name
-    - file: .github/workflows/delivery-gate.yml
-      functions:
-      - name
-    - file: .github/workflows/pre-release-gate.yml
-      functions:
-      - name
-    - file: .github/workflows/app-env-device-matrix-self-hosted.yml
-      functions:
-      - name
-    - file: .github/workflows/deploy-prod-gray.yml
-      functions:
-      - name
-    - file: .github/workflows/deploy-prod-auto.yml
-      functions:
-      - name
-    - file: .github/workflows/deploy-gamma-ecs.yml
-      functions:
-      - name
-  A2:
-    criteria: workflow_consolidation_plan 含命名规范与 02/03 重复检查
-    status: implemented
-    linked_tasks:
-    - T3
-    tests:
-    - file: deploy/shared/workflow_consolidation_plan.md
-      functions:
-      - section 2
-      - section 4.6
-  A3:
-    criteria: deploy-prod-auto 在 push main 后作为 post-main 动作执行
-    status: implemented
-    linked_tasks:
-    - T2
-    tests:
-    - file: .github/workflows/deploy-prod-auto.yml
-      functions:
-      - push branches main
-  A4:
-    criteria: ci_cd_end_to_end_design、runbook 与规范一致
-    status: implemented
-    linked_tasks:
-    - T4
-    tests:
-    - file: agent_ops/gate/gate_repo.sh
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

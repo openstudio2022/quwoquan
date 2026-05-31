@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `runtime`
-- `L2_journey`: `runtime-media`
-- `L3_scenario`: `group-avatar-server-precompose-and-unified-sync-contract`
+- `L1_domain_service`: `runtime`
+- `L2_business_capability`: `runtime-media`
+- `L3_story`: `group-avatar-server-precompose-and-unified-sync-contract`
 
 ## 背景与动机
 

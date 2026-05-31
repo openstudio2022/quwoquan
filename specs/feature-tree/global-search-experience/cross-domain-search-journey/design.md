@@ -2,7 +2,7 @@
 
 ## 设计动因
 
-PRD 已经把全局搜索 Journey 冻结为六个正式 `L3_scenario`，但如果没有一条统一设计主轴，后续开发仍会发生三类漂移：
+PRD 已经把全局搜索 Journey 冻结为六个正式 `L3_story`，但如果没有一条统一设计主轴，后续开发仍会发生三类漂移：
 
 1. 壳层仍由原型 `GlobalSearchSheet` 主导，route / surface / request context 继续散落在 UI。
 2. 搜索结果继续依赖“本地池子过滤 + 少量远程接口”的临时方案，无法形成统一结果模型。

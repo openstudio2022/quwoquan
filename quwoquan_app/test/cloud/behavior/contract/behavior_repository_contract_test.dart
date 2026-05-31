@@ -76,6 +76,8 @@ void main() {
         'tag_click',
         'play_progress',
         'content_depth',
+        'join_circle',
+        'add_contact',
       ];
       final actualWireValues =
           BehaviorAction.values.map((a) => a.wireValue).toList();

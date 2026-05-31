@@ -254,6 +254,7 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       'currentUnderlay=${_rectLabel(debugState.backwardCurrentResidualBounds)} '
       'paintVerso=${_doubleLabel(debugState.backwardPaintedVersoWidth)} '
       'backPixels=${debugState.backwardBackPixelSurfaceStrategy ?? "-"} '
+      'versoDisplay=${debugState.backwardVersoDisplayState ?? "-"} '
       'backUv=${debugState.backwardVersoTextureUvStrategy ?? "-"} '
       'frontBackOverlap=${_doubleLabel(debugState.backwardFrontBackOverlapWidth)} '
       'backUncovered=${_doubleLabel(debugState.backwardBackVisibleUncoveredWidth)} '
@@ -341,7 +342,7 @@ String _sourceSummary(List<BackwardPaintSourceDiagnostic> sources) {
       .where((source) => source.hasVisibleBounds)
       .map(
         (source) =>
-            '${source.zOrder}:${source.label}@${_pageLabel(source.pageIndex)}:${source.surfaceKind}:${_rectLabel(source.viewportBounds)}',
+            '${source.zOrder}:${source.label}@${_pageLabel(source.pageIndex)}:${source.surfaceKind}/${source.status}:${_rectLabel(source.viewportBounds)}',
       )
       .join(' | ');
 }
@@ -537,7 +538,7 @@ class _DebugInfoCard extends StatelessWidget {
                 _DebugLine(
                   label: 'tex',
                   value:
-                      'v ${_pageLabel(debugState.activeVersoPageIndex)}/${debugState.activeVersoSurfaceKind ?? "-"}/${debugState.backwardVersoTextureUvStrategy ?? "-"}/fail ${debugState.backwardVersoFailureReason.name}',
+                      'v ${_pageLabel(debugState.activeVersoPageIndex)}/${debugState.activeVersoSurfaceKind ?? "-"}/${debugState.backwardVersoDisplayState ?? "-"}/${debugState.backwardVersoTextureUvStrategy ?? "-"}/fail ${debugState.backwardVersoFailureReason.name}',
                 ),
               if (isBackward)
                 _DebugLine(

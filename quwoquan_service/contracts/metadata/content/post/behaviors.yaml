@@ -107,14 +107,41 @@ behavior_events:
     signal_weight: -0.3
 
   - type: follow
-    description: 关注内容作者（强正向社交信号）
+    description: 关注内容作者（强正向社交信号 + 交集转化第一类：关注人）
     trigger: user_action_follow_button
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackFollow
-    payload_fields: [postId, authorId]
+    payload_fields: [postId, authorId, intersectionDimension, intersectionTagRefs]
     ml_signal: very_strong_positive
     signal_weight: 4.0
+    notes: |
+      交集转化归因（S6）：intersectionDimension（identity/location/content/interest/relationship
+      五维之一）+ intersectionTagRefs（路径制 tagRef，唯一真相源 publish/v1/tags）随关注上报，
+      供推荐回流与「交集转化率」北极星指标按维度/tagRef 下钻。
+
+  - type: join_circle
+    description: 加入圈子（交集转化第二类：进圈子）。与 follow 区分以拆分转化漏斗。
+    trigger: user_action_join_circle_button
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackJoinCircle
+    payload_fields: [postId, circleId, intersectionDimension, intersectionTagRefs]
+    ml_signal: very_strong_positive
+    signal_weight: 4.0
+    notes: |
+      交集转化三类行动（关注人 follow / 进圈子 join_circle / 加联系人 add_contact）独立成
+      BehaviorAction，使「新增可解释交集数 → 交集转化」漏斗可按动作类型切分。circleId 为目标圈子。
+
+  - type: add_contact
+    description: 添加联系人/加好友（交集转化第三类：加联系人）。与 follow 区分以拆分转化漏斗。
+    trigger: user_action_add_contact_button
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackAddContact
+    payload_fields: [postId, authorId, intersectionDimension, intersectionTagRefs]
+    ml_signal: very_strong_positive
+    signal_weight: 4.5
 
   - type: author_view
     description: 进入作者主页/实体主页查看
@@ -132,7 +159,7 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackTagClick
-    payload_fields: [postId, tags]
+    payload_fields: [postId, tagRefs]
     ml_signal: moderate_positive
     signal_weight: 1.8
 
@@ -179,7 +206,7 @@ recommend_features:
       description: 内容类型（image/video/micro/article）
 
     - name: tag_count
-      source_field: tags
+      source_field: tagRefs
       type: int
       python_type: int
       transform: list_length

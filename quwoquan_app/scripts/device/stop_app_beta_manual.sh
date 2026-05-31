@@ -3,7 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 LOG_DIR="$ROOT_DIR/tmp/app_beta_manual"
-GATEWAY_PORT="${GATEWAY_PORT:-18080}"
+eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
+GATEWAY_PORT="${GATEWAY_PORT}"
 FLUTTER_DEVICE_ID="${FLUTTER_DEVICE_ID:-}"
 IOS_BUNDLE_ID="${IOS_BUNDLE_ID:-com.example.quwoquanApp}"
 ANDROID_PACKAGE="${ANDROID_PACKAGE:-com.quwoquan.quwoquan_app}"
@@ -29,7 +30,7 @@ Options:
   -h, --help        Show this help.
 
 Ports:
-  assistant-service: 18087
+  assistant-service: ${ASSISTANT_PORT:-18230}
   gateway:           ${GATEWAY_PORT}
 EOF
 }

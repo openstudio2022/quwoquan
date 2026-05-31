@@ -1,84 +1,41 @@
-version: 1
-feature: personalized-ranking
-level: "L3_story"
-template: A1-A8
-focus_groups:
-- feed-recommendation
-- cursor-pagination
-- client-history-window
-archived: true
-archived_at: '2026-02-28T12:00:00.000000Z'
-level_acceptance:
-  A1:
-    criteria: sort=recommend 首屏与翻页路径可执行，返回稳定
-    status: implemented
-    linked_tasks:
-    - T4
-    - T5
-    - T6
+version: 2
+node:
+  id: personalized-ranking
+  level: L3_story
+  path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/personalized-ranking
+  title: personalized ranking
+  parent_domain_service: discovery-content
+  parent_business_capability: feed-orchestration-recommendation
+scope:
+  summary: personalized ranking 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: personalized ranking GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-    - file: quwoquan_service/services/content-service/tests/post_feed_contract_test.go
-      functions:
-      - TestGetFeedRecommendSortWithCursor
-  A2:
-    criteria: 同一会话下，cursor 跨页无重复，nextCursor 可连续推进
-    status: implemented
-    linked_tasks:
-    - T4
-    - T7
-    tests:
-    - file: quwoquan_service/services/content-service/tests/post_feed_contract_test.go
-      functions:
-      - TestGetFeedRecommendSortWithCursor
-      - TestGetFeedCursorPagination
-  A3:
-    criteria: 用户回滚已看内容时，端侧记录窗口不抖动
-    status: implemented
-    linked_tasks:
-    - T6
-    - T8
-    tests:
-    - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
-      functions: []
-  A4:
-    criteria: 强反馈（dislike/report/block）仅影响未来窗口，不回写记录窗口
-    status: waived
-  A5:
-    criteria: 弱反馈（click/like/favorite/dwell）可影响未来排序，不破坏分页连续性
-    status: waived
-  A7:
-    criteria: metadata/codegen/gate 一致性校验通过
-    status: implemented
-    linked_tasks:
-    - T3
-    - T9
-    tests:
-    - file: agent_ops/gate/gate_repo.sh
-      functions: []
-  A8:
-    criteria: 端云自动化测试映射完整（contract + provider/journey）
-    status: implemented
-    linked_tasks:
-    - T7
-    - T8
-    tests:
-    - file: quwoquan_service/services/content-service/tests/post_feed_contract_test.go
-      functions:
-      - TestGetFeedRecommendSortWithCursor
-      - TestGetFeedFutureWindowChangesOnly
-    - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
-      functions: []
-tests:
-  mock:
-  - quwoquan_app/test/ui/discovery/post/widgets/discovery_post_feed_widget_test.dart
-  unit:
-  - quwoquan_service/runtime/recommendation/engine_test.go
-  contract:
-  - quwoquan_service/services/content-service/tests/post_feed_contract_test.go
-  integration:
-  - quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
-  uat:
-  - 发现页推荐流：翻页无重复，回滚不抖动
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

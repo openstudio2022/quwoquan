@@ -242,7 +242,7 @@ type CandidateInput struct {
 	ContentID    string   `json:"contentId"`
 	ContentType  string   `json:"contentType"`
 	AuthorID     string   `json:"authorId"`
-	Tags         []string `json:"tags"`
+	Tags         []string `json:"tagRefs"`
 	EntityRefs   []string `json:"entityRefs,omitempty"`
 	AgeHours     float64  `json:"ageHours"`
 	ViewCount    int64    `json:"viewCount"`

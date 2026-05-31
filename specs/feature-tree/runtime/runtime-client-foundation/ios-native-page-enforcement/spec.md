@@ -57,7 +57,7 @@
 
 - `make gate` 执行时运行 `verify_ios_native_surface_gate.py` 且通过。
 - 新增页面若使用 `return Scaffold(` 且无 allowlist 条目 → **gate 失败**。
-- `spec.md` / `acceptance.yaml` / `design.md` / `plan.yaml` / `CR` 已归档。
+- `spec.md` / `acceptance.yaml` / `design.md` / `树内计划文档` / `CR` 已归档。
 
 ## L1 / L2 / L3 映射
 

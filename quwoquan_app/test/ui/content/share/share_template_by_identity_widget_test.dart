@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
@@ -30,21 +31,23 @@ class _FakeShareActionHandler implements ContentShareActionHandler {
 void main() {
   testWidgets('点滴分享模板展示 identity actions 与时间语境', (tester) async {
     final template = ContentShareTemplateBuilder.build(
-      post: MomentPostDto(
-        id: 'moment_1',
-        type: 'micro',
-        identity: 'moment',
-        assistantUsePolicy: 'inherit',
-        authorId: 'user_1',
-        displayName: '阿宁',
-        avatarUrl: '',
-        body: '清晨六点的光，刚好落在湖面。',
-        imageUrls: const ['https://example.com/moment.jpg'],
-        likeCount: 8,
-        commentCount: 2,
-        favoriteCount: 3,
-        shareCount: 1,
-        createdAt: DateTime(2026, 3, 12, 6, 0),
+      surfaceView: ContentSurfaceViewMapper.fromDto(
+        MicroPostDto(
+          id: 'moment_1',
+          type: 'micro',
+          identity: 'moment',
+          assistantUsePolicy: 'inherit',
+          authorId: 'user_1',
+          displayName: '阿宁',
+          avatarUrl: '',
+          body: '清晨六点的光，刚好落在湖面。',
+          imageUrls: const ['https://example.com/moment.jpg'],
+          likeCount: 8,
+          commentCount: 2,
+          favoriteCount: 3,
+          shareCount: 1,
+          createdAt: DateTime(2026, 3, 12, 6, 0),
+        ),
       ),
       enableIdentityTemplate: true,
       visibility: 'public',
@@ -71,21 +74,23 @@ void main() {
     final handler = _FakeShareActionHandler();
     final completed = <String>[];
     final template = ContentShareTemplateBuilder.build(
-      post: MomentPostDto(
-        id: 'moment_action',
-        type: 'micro',
-        identity: 'moment',
-        assistantUsePolicy: 'inherit',
-        authorId: 'user_action',
-        displayName: '小悠',
-        avatarUrl: '',
-        body: '点击复制链接应该走真实 handler',
-        imageUrls: const <String>[],
-        likeCount: 0,
-        commentCount: 0,
-        favoriteCount: 0,
-        shareCount: 0,
-        createdAt: DateTime(2026, 3, 12, 10, 0),
+      surfaceView: ContentSurfaceViewMapper.fromDto(
+        MicroPostDto(
+          id: 'moment_action',
+          type: 'micro',
+          identity: 'moment',
+          assistantUsePolicy: 'inherit',
+          authorId: 'user_action',
+          displayName: '小悠',
+          avatarUrl: '',
+          body: '点击复制链接应该走真实 handler',
+          imageUrls: const <String>[],
+          likeCount: 0,
+          commentCount: 0,
+          favoriteCount: 0,
+          shareCount: 0,
+          createdAt: DateTime(2026, 3, 12, 10, 0),
+        ),
       ),
       enableIdentityTemplate: true,
       visibility: 'public',
@@ -131,21 +136,23 @@ void main() {
     });
 
     final template = ContentShareTemplateBuilder.build(
-      post: MomentPostDto(
-        id: 'moment_clipboard',
-        type: 'micro',
-        identity: 'moment',
-        assistantUsePolicy: 'inherit',
-        authorId: 'user_clipboard',
-        displayName: '阿遥',
-        avatarUrl: '',
-        body: '复制链接测试',
-        imageUrls: const <String>[],
-        likeCount: 0,
-        commentCount: 0,
-        favoriteCount: 0,
-        shareCount: 0,
-        createdAt: DateTime(2026, 3, 12, 11, 0),
+      surfaceView: ContentSurfaceViewMapper.fromDto(
+        MicroPostDto(
+          id: 'moment_clipboard',
+          type: 'micro',
+          identity: 'moment',
+          assistantUsePolicy: 'inherit',
+          authorId: 'user_clipboard',
+          displayName: '阿遥',
+          avatarUrl: '',
+          body: '复制链接测试',
+          imageUrls: const <String>[],
+          likeCount: 0,
+          commentCount: 0,
+          favoriteCount: 0,
+          shareCount: 0,
+          createdAt: DateTime(2026, 3, 12, 11, 0),
+        ),
       ),
       enableIdentityTemplate: true,
       visibility: 'public',
@@ -183,29 +190,33 @@ void main() {
 
   testWidgets('作品圈内可见分享生成受控链接并保留标签', (tester) async {
     final template = ContentShareTemplateBuilder.build(
-      post: ArticlePostDto(
-        id: 'work_1',
-        type: 'article',
-        identity: 'work',
-        assistantUsePolicy: 'inherit',
-        authorId: 'user_2',
-        displayName: '洛白',
-        avatarUrl: '',
-        title: '城市夜拍攻略',
-        body: '从机位、快门到后期流程，适合第一次扫街的摄影爱好者。',
-        summary: '从机位、快门到后期流程，适合第一次扫街的摄影爱好者。',
-        coverUrl: 'https://example.com/work.jpg',
-        articleTemplate: 'tech',
-        articleFontPreset: 'mono',
-        likeCount: 12,
-        commentCount: 4,
-        favoriteCount: 9,
-        shareCount: 3,
-        createdAt: DateTime(2026, 3, 12, 20, 0),
+      surfaceView: ContentSurfaceViewMapper.fromDto(
+        ArticlePostDto(
+          id: 'work_1',
+          type: 'article',
+          identity: 'work',
+          assistantUsePolicy: 'inherit',
+          authorId: 'user_2',
+          displayName: '洛白',
+          avatarUrl: '',
+          title: '城市夜拍攻略',
+          body: '从机位、快门到后期流程，适合第一次扫街的摄影爱好者。',
+          summary: '从机位、快门到后期流程，适合第一次扫街的摄影爱好者。',
+          coverUrl: 'https://example.com/work.jpg',
+          articleTemplate: 'tech',
+          articleFontPreset: 'mono',
+          likeCount: 12,
+          commentCount: 4,
+          favoriteCount: 9,
+          shareCount: 3,
+          createdAt: DateTime(2026, 3, 12, 20, 0),
+        ),
+        wire: const <String, dynamic>{
+          'tagRefs': <String>['攻略', '夜景'],
+        },
       ),
       enableIdentityTemplate: true,
       visibility: 'circle-visible',
-      tags: const ['攻略', '夜景'],
     );
 
     await tester.pumpWidget(
@@ -226,25 +237,27 @@ void main() {
 
   testWidgets('私密内容会被分享模板拦截', (tester) async {
     final template = ContentShareTemplateBuilder.build(
-      post: ArticlePostDto(
-        id: 'private_1',
-        type: 'article',
-        identity: 'work',
-        assistantUsePolicy: 'inherit',
-        authorId: 'user_3',
-        displayName: '周周',
-        avatarUrl: '',
-        title: '仅自己可见',
-        body: '这是一条私密内容。',
-        summary: '这是一条私密内容。',
-        coverUrl: '',
-        articleTemplate: 'gentle',
-        articleFontPreset: 'clean',
-        likeCount: 0,
-        commentCount: 0,
-        favoriteCount: 0,
-        shareCount: 0,
-        createdAt: DateTime(2026, 3, 12, 12, 0),
+      surfaceView: ContentSurfaceViewMapper.fromDto(
+        ArticlePostDto(
+          id: 'private_1',
+          type: 'article',
+          identity: 'work',
+          assistantUsePolicy: 'inherit',
+          authorId: 'user_3',
+          displayName: '周周',
+          avatarUrl: '',
+          title: '仅自己可见',
+          body: '这是一条私密内容。',
+          summary: '这是一条私密内容。',
+          coverUrl: '',
+          articleTemplate: 'gentle',
+          articleFontPreset: 'clean',
+          likeCount: 0,
+          commentCount: 0,
+          favoriteCount: 0,
+          shareCount: 0,
+          createdAt: DateTime(2026, 3, 12, 12, 0),
+        ),
       ),
       enableIdentityTemplate: true,
       visibility: 'private',
@@ -266,21 +279,23 @@ void main() {
 
   testWidgets('关闭 identity share flag 仍使用身份模板布局但标记为非身份模板', (tester) async {
     final template = ContentShareTemplateBuilder.build(
-      post: MomentPostDto(
-        id: 'share_flag_off_1',
-        type: 'micro',
-        identity: 'moment',
-        assistantUsePolicy: 'inherit',
-        authorId: 'user_4',
-        displayName: '南栀',
-        avatarUrl: '',
-        body: '回退到通用分享面板',
-        imageUrls: const <String>[],
-        likeCount: 0,
-        commentCount: 0,
-        favoriteCount: 0,
-        shareCount: 0,
-        createdAt: DateTime(2026, 3, 12, 9, 0),
+      surfaceView: ContentSurfaceViewMapper.fromDto(
+        MicroPostDto(
+          id: 'share_flag_off_1',
+          type: 'micro',
+          identity: 'moment',
+          assistantUsePolicy: 'inherit',
+          authorId: 'user_4',
+          displayName: '南栀',
+          avatarUrl: '',
+          body: '回退到通用分享面板',
+          imageUrls: const <String>[],
+          likeCount: 0,
+          commentCount: 0,
+          favoriteCount: 0,
+          shareCount: 0,
+          createdAt: DateTime(2026, 3, 12, 9, 0),
+        ),
       ),
       enableIdentityTemplate: false,
       visibility: 'public',

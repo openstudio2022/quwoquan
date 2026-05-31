@@ -62,7 +62,9 @@ class WebSocketTransport {
     } catch (e) {
       try {
         await pendingChannel?.sink.close();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 连接失败后清理半开的 channel，close 二次报错无副作用可忽略 */
+      }
       debugPrint('WebSocketTransport: connect failed: $e');
       _connected.value = false;
       onDisconnect();
@@ -110,7 +112,9 @@ class WebSocketTransport {
   void _send(Map<String, dynamic> message) {
     try {
       _channel?.sink.add(jsonEncode(message));
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 连接已断开时发送会抛错，心跳/订阅丢帧由重连与补偿机制恢复 */
+    }
   }
 
   Future<void> disconnect() async {

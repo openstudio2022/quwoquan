@@ -75,32 +75,26 @@ void main() {
       );
     });
 
-    test('appendNextPage does nothing when nextCursor is null', () async {
+    test('appendNextPage 会在存在 nextCursor 时追加下一页并清空 cursor', () async {
       final container = _container(MockContentRepository());
       addTearDown(container.dispose);
 
       await container.read(discoveryFeedMapProvider.notifier).load('photo');
+      final beforeFeed = container.read(discoveryFeedMapProvider)['photo']?.value;
       final beforeCount =
-          container
-              .read(discoveryFeedMapProvider)['photo']
-              ?.value
-              ?.items
-              .length ??
-          0;
+          beforeFeed?.items.length ?? 0;
+      expect(beforeFeed?.hasMore, isTrue);
 
       await container
           .read(discoveryFeedMapProvider.notifier)
           .appendNextPage('photo');
+      final afterFeed = container.read(discoveryFeedMapProvider)['photo']?.value;
       final afterCount =
-          container
-              .read(discoveryFeedMapProvider)['photo']
-              ?.value
-              ?.items
-              .length ??
-          0;
+          afterFeed?.items.length ?? 0;
 
-      // MockContentRepository returns nextCursor: null → no new items loaded
-      expect(afterCount, equals(beforeCount));
+      expect(afterCount, greaterThan(beforeCount));
+      expect(afterFeed?.hasMore, isFalse);
+      expect(afterFeed?.error, isNull);
     });
   });
 

@@ -1,0 +1,167 @@
+version: 1
+renderDefaults:
+  travel:
+    allowedTemplates: [journal, gentle]
+  food:
+    allowedTemplates: [gentle, journal]
+  humanity:
+    allowedTemplates: [journal, ritual]
+  life:
+    allowedTemplates: [gentle, diffuse]
+  photography:
+    allowedTemplates: [journal, ritual]
+styleFamilies:
+  实用攻略风:
+    render: { articleTemplate: journal, fontPreset: clean }
+    styleProfile:
+      writingGenre: 攻略体
+      visualTone: 纪实风
+      mediaTechnique: [引导线]
+      structureRhythm: 清单式
+      professionalDepth: 入门
+      emotionalTemperature: 温暖
+      narrativePointOfView: 编辑部
+    tagRefs:
+      - Format/内容角度/攻略
+  路线规划风:
+    render: { articleTemplate: journal, fontPreset: clean }
+    styleProfile:
+      writingGenre: 路书体
+      visualTone: 电影感
+      mediaTechnique: [无人机镜头, 引导线]
+      structureRhythm: 分段路书
+      professionalDepth: 进阶
+      emotionalTemperature: 克制
+      narrativePointOfView: 第一人称经验
+    tagRefs:
+      - Format/内容角度/攻略/路线推荐
+      - Format/内容载体/行程单/DIY行程
+      - Format/视觉风格/视觉调性/电影感
+  地理画报风:
+    render: { articleTemplate: journal, fontPreset: classic }
+    styleProfile:
+      writingGenre: 专题报道体
+      visualTone: 纪实风
+      mediaTechnique: [全景接片, 前景纵深]
+      structureRhythm: 章节式
+      professionalDepth: 专业
+      emotionalTemperature: 克制
+      narrativePointOfView: 编辑部
+    tagRefs:
+      - Format/内容角度/资讯/深度报道
+      - Format/视觉风格/视觉调性/纪实风
+      - Format/表现手法/摄影技法/全景接片
+  摄影画报风:
+    render: { articleTemplate: journal, fontPreset: clean }
+    styleProfile:
+      writingGenre: 图文画报体
+      visualTone: 电影感
+      mediaTechnique: [长曝光, 全景接片]
+      structureRhythm: 图文穿插
+      professionalDepth: 进阶
+      emotionalTemperature: 松弛
+      narrativePointOfView: 摄影师
+    tagRefs:
+      - Format/内容载体/图文/图集
+      - Format/视觉风格/视觉调性/电影感
+      - Format/表现手法/摄影技法/长曝光
+  旅途随笔风:
+    render: { articleTemplate: journal, fontPreset: handwritten }
+    styleProfile:
+      writingGenre: 游记体
+      visualTone: 胶片感
+      mediaTechnique: [纪实风]
+      structureRhythm: 时间线
+      professionalDepth: 入门
+      emotionalTemperature: 温暖
+      narrativePointOfView: 第一人称经验
+    tagRefs:
+      - Format/内容载体/文章/游记
+      - Format/内容角度/叙事/旅行叙事
+  探店点评风:
+    render: { articleTemplate: gentle, fontPreset: clean }
+    styleProfile:
+      writingGenre: 点评体
+      visualTone: 高调明亮
+      mediaTechnique: [三分法]
+      structureRhythm: 清单式
+      professionalDepth: 进阶
+      emotionalTemperature: 克制
+      narrativePointOfView: 评测员
+    tagRefs:
+      - Format/内容角度/探店/餐厅探店
+      - Format/内容角度/测评/专业评测
+  低预算穷游风:
+    render: { articleTemplate: journal, fontPreset: clean }
+    styleProfile:
+      writingGenre: 省钱攻略体
+      visualTone: 纪实风
+      mediaTechnique: [固定机位]
+      structureRhythm: 清单式
+      professionalDepth: 进阶
+      emotionalTemperature: 克制
+      narrativePointOfView: 第一人称经验
+    tagRefs:
+      - Format/内容角度/攻略/省钱攻略
+      - Topic/旅行/住宿/青旅住宿
+  银发慢游风:
+    render: { articleTemplate: gentle, fontPreset: clean }
+    styleProfile:
+      writingGenre: 慢游攻略体
+      visualTone: 高调明亮
+      mediaTechnique: [纪实风]
+      structureRhythm: 缓步章节式
+      professionalDepth: 入门
+      emotionalTemperature: 温暖
+      narrativePointOfView: 编辑部
+    tagRefs:
+      - Format/内容角度/攻略/银发专享
+      - Topic/旅行/玩法/观光游览
+  学长姐攻略风:
+    render: { articleTemplate: gentle, fontPreset: rounded }
+    styleProfile:
+      writingGenre: 经验分享体
+      visualTone: 高调明亮
+      mediaTechnique: [纪实风]
+      structureRhythm: 问答式
+      professionalDepth: 入门
+      emotionalTemperature: 温暖
+      narrativePointOfView: 学长姐
+    tagRefs:
+      - Format/内容角度/攻略/新生攻略
+  校园日记风:
+    render: { articleTemplate: gentle, fontPreset: handwritten }
+    styleProfile:
+      writingGenre: 校园日记体
+      visualTone: 高调明亮
+      mediaTechnique: [纪实风]
+      structureRhythm: 时间线
+      professionalDepth: 入门
+      emotionalTemperature: 温暖
+      narrativePointOfView: 校园生活记录者
+    tagRefs:
+      - Format/内容角度/日记/校园日记
+  客观评测风:
+    render: { articleTemplate: gentle, fontPreset: clean }
+    styleProfile:
+      writingGenre: 测评体
+      visualTone: 极简白
+      mediaTechnique: [对称构图]
+      structureRhythm: 横向对比
+      professionalDepth: 进阶
+      emotionalTemperature: 克制
+      narrativePointOfView: 评测员
+    tagRefs:
+      - Format/内容角度/测评/校园评测
+  升学经验风:
+    render: { articleTemplate: gentle, fontPreset: clean }
+    styleProfile:
+      writingGenre: 经验分享体
+      visualTone: 极简白
+      mediaTechnique: [纪实风]
+      structureRhythm: 步骤式
+      professionalDepth: 进阶
+      emotionalTemperature: 鼓励
+      narrativePointOfView: 第一人称经验
+    tagRefs:
+      - Format/内容角度/经验分享/考研经验

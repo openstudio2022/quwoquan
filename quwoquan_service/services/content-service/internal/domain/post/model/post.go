@@ -22,6 +22,9 @@ type Comment struct {
 	Content                   string    `json:"content" bson:"content"`
 	ReplyToCommentId          string    `json:"replyToCommentId" bson:"replyToCommentId"`
 	ReplyToUserId             string    `json:"replyToUserId" bson:"replyToUserId"`
+	AssistantMentioned        bool      `json:"assistantMentioned" bson:"assistantMentioned"`
+	AssistantReplySource      string    `json:"assistantReplySource" bson:"assistantReplySource"`
+	AssistantCorrectionStatus string    `json:"assistantCorrectionStatus" bson:"assistantCorrectionStatus"`
 	ReplyCount                int64     `json:"replyCount" bson:"replyCount"`
 	LikeCount                 int64     `json:"likeCount" bson:"likeCount"`
 	Status                    string    `json:"status" bson:"status"`
@@ -98,8 +101,10 @@ type Post struct {
 	ContentIdentity           string         `json:"contentIdentity" bson:"contentIdentity"`
 	Title                     string         `json:"title" bson:"title"`
 	Body                      string         `json:"body" bson:"body"`
-	Tags                      []string       `json:"tags" bson:"tags"`
+	TagRefs                   []string       `json:"tagRefs" bson:"tagRefs"`
 	EntityRefs                []string       `json:"entityRefs" bson:"entityRefs"`
+	Rating                    int64          `json:"rating" bson:"rating"`
+	ReviewAspects             any            `json:"reviewAspects" bson:"reviewAspects"`
 	MediaUrls                 []string       `json:"mediaUrls" bson:"mediaUrls"`
 	CoverUrl                  string         `json:"coverUrl" bson:"coverUrl"`
 	ArticleDocument           map[string]any `json:"articleDocument" bson:"articleDocument"`

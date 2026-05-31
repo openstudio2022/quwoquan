@@ -15,7 +15,9 @@ capabilities:
 
 taggable: true
 vector_enabled: false
-tag_taxonomy_ref: social_tags
+# 关系边标签为关系强度/频率派生信号（亲密度、互动频率、互关等），属交集的 relationship 维度，
+# 通过 relationRef(follow/contact/mutual + objectId) 表达，不引用内容路径制 taxonomy；已废弃扁平 tag_taxonomy.yaml(social_tags)。
+relation_signal: true
 
 ddd_layer_mapping:
   domain_model: internal/domain/user/model

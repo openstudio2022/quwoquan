@@ -894,9 +894,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get personaPrimary => '主账号';
 
   @override
-  String get myResonance => '我的交集';
-
-  @override
   String get profileEditLabel => '资料编辑';
 
   @override
@@ -1773,15 +1770,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get emptyBio => '这个人很懒，什么都没有写';
-
-  @override
-  String get resonanceDetail => '交集详情';
-
-  @override
-  String get youHave => '你们有';
-
-  @override
-  String get resonanceSuffix => '个交集点';
 
   @override
   String get articleContent => '文章内容';

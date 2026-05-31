@@ -226,3 +226,25 @@ const kMockCooccurrences = <TagCooccurrence>[
     cooccurCount: 15,
   ),
 ];
+
+/// Mock 数据：交集锚点（对象页交集卡 shared-tags 直打的本地兜底，首发校园+旅游子集）。
+const kMockSharedTags = <SharedTagView>[
+  SharedTagView(
+    tagRef: 'Entity/机构/学校/北京大学',
+    label: '北京大学',
+    strength: 0.92,
+    source: 'entityRef',
+  ),
+  SharedTagView(
+    tagRef: 'Topic/摄影',
+    label: '摄影',
+    strength: 0.78,
+    source: 'tagRef',
+  ),
+  SharedTagView(
+    tagRef: 'Topic/旅行',
+    label: '旅行',
+    strength: 0.64,
+    source: 'tagRef',
+  ),
+];

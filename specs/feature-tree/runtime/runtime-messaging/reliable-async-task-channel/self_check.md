@@ -26,9 +26,9 @@
 |------|------|------|
 | RuntimeModule / DeploymentPackage | `spec.md`、`design.md`、`module_package_mapping.yaml` | 已覆盖 |
 | onebox 与拆分 package 等价 | `design.md`、runbook、seed-box README | 已覆盖 |
-| `env + domain + module + shardId` 租约 | `design.md`、`tasks.md` | 已覆盖 |
+| `env + domain + module + shardId` 租约 | `design.md`、`树内任务文档` | 已覆盖 |
 | task/module/package catalog | `reliable_task_module_catalog.yaml` | 已覆盖 |
-| catalog 版本与 fail-fast | `spec.md`、`design.md`、`tasks.md` | 已覆盖 |
+| catalog 版本与 fail-fast | `spec.md`、`design.md`、`树内任务文档` | 已覆盖 |
 | domain/module 权限边界 | `design.md`、`verify_module_permission_scope.py` | 已覆盖 |
 | beta/gamma/prod 一致性 | `verify_module_package_mapping.py` | 已覆盖 |
 

@@ -87,7 +87,30 @@ class ChatMessageBubble extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     Widget contentWidget;
-    if (type == 'task_card') {
+    if (message.status == 'recalled') {
+      contentWidget = _BubbleWithTail(
+        isRight: isRight,
+        color: bubbleColor.withValues(alpha: 0.72),
+        tailShadowColor: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.dropShadow,
+        ),
+        child: Container(
+          constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupLg,
+          ),
+          child: Text(
+            UITextConstants.chatPreviewRecalled,
+            style: TextStyle(
+              fontSize: AppTypography.base,
+              color: textColor.withValues(alpha: 0.72),
+            ),
+          ),
+        ),
+      );
+    } else if (type == 'task_card') {
       final tasks = message.tasks;
       contentWidget = Container(
         constraints: BoxConstraints(maxWidth: effectiveMaxWidth),

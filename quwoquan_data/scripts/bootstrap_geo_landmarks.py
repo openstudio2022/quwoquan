@@ -26,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, NOW_ISO
 
-TAGS_ROOT = PUBLISH_ROOT / "v1" / "tags" / "Topic" / "地理" / "地形地貌"
+TAGS_ROOT = PUBLISH_ROOT / "tags" / "Topic" / "地理" / "地形地貌"
 
 DRY_RUN = False
 created = 0

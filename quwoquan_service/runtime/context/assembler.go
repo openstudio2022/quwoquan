@@ -186,7 +186,7 @@ func (p *AssistantContextProjector) Project(ctx context.Context, event StoredEve
 	switch event.Type {
 	case "PostCreated", "PostPublished", "ContentViewed", "ContentReacted":
 		dimension = "contentPreference"
-		tags, _ := event.Payload["tags"].([]any)
+		tags, _ := event.Payload["tagRefs"].([]any)
 		if len(tags) > 0 {
 			tagKey, _ = tags[0].(string)
 		}

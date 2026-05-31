@@ -105,4 +105,15 @@ class MockTagRepository implements TagRepository {
   }) async {
     return [];
   }
+
+  @override
+  Future<List<SharedTagView>> sharedTags({
+    required String objectAId,
+    required String objectAType,
+    required String objectBId,
+    required String objectBType,
+    int limit = TagApiDefaults.graphLimit,
+  }) async {
+    return kMockSharedTags.take(limit).toList();
+  }
 }

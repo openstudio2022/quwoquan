@@ -10,6 +10,96 @@ class UITextConstants {
   static const String homeTabPhotography = '摄影';
   static const String homeTabTech = '科技';
   static const String homeTabCarFriends = '车之家';
+  // 今日交集顶部流标题
+  static const String homeTodayIntersection = '今日交集';
+  // 频道气质文案（下拉加载留白露出；moodCopyKey 来自 ContentUIConfig.homeChannels）
+  static const String homeMoodFollowing = '和在意的人的交集';
+  static const String homeMoodRecommend = '和同趣的人的交集';
+  static const String homeMoodCampus = '和同窗的交集';
+  static const String homeMoodTravel = '和远方的交集';
+  static const String homeMoodPhotography = '和光影的交集';
+  static const String homeMoodTech = '和同行的交集';
+  static const String homeMoodCar = '和同好的交集';
+
+  /// 频道气质文案解析：moodCopyKey（运营配置/codegen 真相源）→ 展示文案。
+  /// 无匹配时返回空串，调用方据此「不展示」。
+  static String homeChannelMoodCopy(String moodCopyKey) {
+    switch (moodCopyKey) {
+      case 'home_mood_following':
+        return homeMoodFollowing;
+      case 'home_mood_recommend':
+        return homeMoodRecommend;
+      case 'home_mood_campus':
+        return homeMoodCampus;
+      case 'home_mood_travel':
+        return homeMoodTravel;
+      case 'home_mood_photography':
+        return homeMoodPhotography;
+      case 'home_mood_tech':
+        return homeMoodTech;
+      case 'home_mood_car':
+        return homeMoodCar;
+      default:
+        return '';
+    }
+  }
+
+  /// 首页频道标签解析：labelKey（ContentUIConfig.homeChannels 真相源）→ 展示标签。
+  /// 无匹配时回退「推荐」，避免空标签。
+  static String homeChannelLabel(String labelKey) {
+    switch (labelKey) {
+      case 'home_tab_following':
+        return homeTabFollowing;
+      case 'home_tab_recommend':
+        return homeTabRecommended;
+      case 'home_tab_campus':
+        return circleScenarioCampus;
+      case 'home_tab_travel':
+        return homeTabTravel;
+      case 'home_tab_photography':
+        return homeTabPhotography;
+      case 'home_tab_tech':
+        return homeTabTech;
+      case 'home_tab_car':
+        return homeTabCarFriends;
+      default:
+        return homeTabRecommended;
+    }
+  }
+
+  // ==================== 统一对象推荐卡（今日交集对象） ====================
+  // 对象行动按钮动词（actionType 真相源来自 IntersectionReason.actionType，
+  // 此处仅做动词映射，不拼装交集文案——交集句以 displayText 为准）。
+  static const String homeObjectActionFollow = '关注';
+  static const String homeObjectActionJoin = '加入';
+  static const String homeObjectActionAddContact = '加好友';
+  static const String homeObjectActionView = '查看';
+  // 共同点计数后缀（仅数字格式化，非交集句拼装）。
+  static const String homeObjectSharedCountSuffix = ' 个共同点';
+
+  /// 对象行动按钮文案解析：actionType（IntersectionReason 真相源）→ 动词。
+  /// 无匹配回退「查看」。
+  static String homeObjectActionLabel(String actionType) {
+    switch (actionType) {
+      case 'follow':
+        return homeObjectActionFollow;
+      case 'join':
+        return homeObjectActionJoin;
+      case 'add_contact':
+        return homeObjectActionAddContact;
+      case 'view':
+        return homeObjectActionView;
+      default:
+        return homeObjectActionView;
+    }
+  }
+
+  /// 共同点计数文案：sharedCount → "N 个共同点"；count<=0 返回空串（不展示）。
+  static String homeObjectSharedCount(int count) {
+    if (count <= 0) return '';
+    return '$count$homeObjectSharedCountSuffix';
+  }
+
   static const String globalXiaoquSearchHint = '搜内容、圈子、聊天';
   static const String globalXiaoquSearchAsk = '找小趣';
   static const String homeCirclesMy = '我的';
@@ -57,7 +147,7 @@ class UITextConstants {
   static const String workFormatFilterAll = '全部';
   static const String workFormatFilterImage = '图片';
   static const String workFormatFilterVideo = '视频';
-  static const String workFormatFilterNote = '笔记';
+  static const String workFormatFilterNote = '文章';
 
   /// 发现页 V1：帮读/美图/视频
   static const String discoveryTabHelperRead = '帮读';
@@ -120,6 +210,99 @@ class UITextConstants {
   static const String create = '创建';
   static const String chat = '聊天';
   static const String profile = '个人资料';
+  static const String edgeBackExitPrompt = '再滑动一次退出应用';
+  static const String login = '登录';
+  static const String bottomNavGuestProfile = '未登录';
+  static const String loginOneTap = '一键登录';
+  static const String loginOneTapPrimary = '本机号码一键登录';
+  static const String loginPhoneNumberPlaceholder = '请输入手机号';
+  static const String loginOtpPlaceholder = '请输入验证码';
+  static const String loginSendOtp = '获取验证码';
+  static const String loginPhoneSubmit = '手机号登录';
+  static const String loginLater = '稍后登录';
+  static const String loginLaterHint = '稍后也可以在「我的」页面登录，同步作品、收藏和消息。';
+  static const String loginContinueAsGuest = loginLater;
+  static const String loginTitleFirstRun = '登录后，趣我圈更懂你的热爱';
+  static const String loginTitleReturn = '欢迎回来，登录后继续同步';
+  static const String loginTitleActionRequired = '登录后继续使用';
+  static const String loginSubtitleFirstRun = '作品、收藏、赞过、消息与分身资料会跟随账号保存。';
+  static const String loginSubtitleReturn = '你可以直接浏览，登录后继续同步点赞、收藏、关注和创作记录。';
+  static const String loginSubtitleActionRequired = '该操作需要账号身份，用于保存你的记录和权限。';
+  static const String loginAgreementPrefix = '已阅读并同意 ';
+  static const String loginAgreementAnd = ' 和 ';
+  static const String userAgreement = '用户协议';
+  static const String privacyPolicy = '隐私政策';
+  static const String loginAgreementRequired = '请先阅读并同意用户协议和隐私政策';
+  static const String loginOtherMethods = '其他登录方式';
+  static const String loginMethodWechat = '微信';
+  static const String loginMethodWeibo = '微博';
+  static const String loginMethodQq = 'QQ';
+  static const String loginMethodAlipay = '支付宝';
+  static const String loginMethodComingSoon = '即将支持';
+  static const String loginPhoneRequired = '请输入手机号';
+  static const String loginOtpRequired = '请输入验证码';
+  static const String loginOtpSent = '验证码已发送';
+  static const String loginHelp = '遇到问题';
+  static const String loginFailed = '登录失败，请稍后重试';
+
+  // ==================== 登录拦截（AuthGate）统一提示与标题 ====================
+  // 标题：进入全屏登录页后展示，按动作变化，只表达「需要账号身份」。
+  static const String authGateTitleProfile = '登录后查看我的主页';
+  static const String authGateTitleCreate = '登录后发布内容';
+  static const String authGateTitleOpenChat = '登录后查看消息';
+  static const String authGateTitleSendMessage = '登录后发送消息';
+  static const String authGateTitleComment = '登录后继续评论';
+  static const String authGateTitleLike = '登录后继续点赞';
+  static const String authGateTitleFavorite = '登录后同步收藏';
+  static const String authGateTitleFollow = '登录后继续关注';
+  static const String authGateTitleFollowingFeed = '登录后查看关注';
+  static const String authGateTitleShare = '登录后同步分享记录';
+  static const String authGateTitlePersona = '登录后管理分身';
+  static const String authGateTitleSettingsAccount = '登录后管理账号';
+  static const String authGateTitleMediaUpload = '登录后上传素材';
+  static const String authGateTitleReport = '登录后提交举报';
+  static const String authGateTitleJoinCircle = '登录后加入圈子';
+  static const String authGateTitleGeneric = '登录后继续使用';
+
+  // 轻提示：触发受限动作时在原页面给出的短提示（先提示，再进入登录页）。
+  static const String authGatePromptProfile = '登录后查看我的主页';
+  static const String authGatePromptCreate = '登录后即可发布内容';
+  static const String authGatePromptOpenChat = '登录后查看消息';
+  static const String authGatePromptSendMessage = '登录后即可发送消息';
+  static const String authGatePromptComment = '登录后即可评论';
+  static const String authGatePromptLike = '登录后即可点赞';
+  static const String authGatePromptFavorite = '登录后即可收藏';
+  static const String authGatePromptFollow = '登录后即可关注';
+  static const String authGatePromptFollowingFeed = '登录后查看关注的内容';
+  static const String authGatePromptShare = '登录后即可同步分享';
+  static const String authGatePromptPersona = '登录后即可管理分身';
+  static const String authGatePromptSettingsAccount = '登录后即可管理账号';
+  static const String authGatePromptMediaUpload = '登录后即可上传素材';
+  static const String authGatePromptReport = '登录后即可提交举报';
+  static const String authGatePromptJoinCircle = '登录后即可加入圈子';
+  static const String authGatePromptGeneric = '登录后即可继续';
+
+  // 协议未勾选约束提示（对应 AUTH.CONSENT.REQUIRED）。
+  static const String authConsentRequired = '请先勾选并同意协议';
+  // 会话过期（对应 AUTH.SESSION.EXPIRED）。
+  static const String authSessionExpired = '登录状态已过期，请重新登录';
+  // 权限不足（对应 AUTH.PERMISSION.DENIED）。
+  static const String authPermissionDenied = '当前账号暂无权限';
+  static const String legalLoadFailed = '页面加载失败，请重试';
+  static const String profileLoginCardTitle = '登录后，可同步使用记录';
+  static const String profileLoginCardSubtitle = '作品、收藏、赞过、消息与分身资料会跟随账号保存。';
+  static const String profileLoginNow = '立即登录';
+  static const String profileLoggedOutDisplayName = '未登录用户';
+  static const String profileLoggedOutTimelineHint = '登录后，这里会展示你的作品、收藏与互动记录。';
+  static const String favorite = '收藏';
+  static const String profileLikedTab = '赞过';
+  static const String logout = '退出登录';
+  static const String logoutConfirmTitle = '确定退出登录吗';
+  static const String logoutConfirmMessage =
+      '退出登录后，将不能发布内容和评论，无法同步点赞、关注、收藏记录等。你可以选择切换其他账号使用。';
+  static const String logoutThinkAgain = '我再想想';
+  static const String logoutConfirm = '确定退出';
+  static const String switchAccount = '切换账号';
   static const String like = '点赞';
   static const String share = '分享';
   static const String follow = '关注';
@@ -133,6 +316,10 @@ class UITextConstants {
   /// 「绽放热爱」承接花瓣视觉，强化轻快、明亮的品牌记忆。
   static const String welcomeMainSlogan = '遇见同趣，绽放热爱';
   static const String welcomeButtonLabel = '开启发现之旅';
+  static const String welcomeLoginPromptTitle = '登录后，趣我圈更懂你的热爱';
+  static const String welcomeLoginPromptSubtitle = '也可以先看看，稍后在「未登录」页面继续登录。';
+  static String welcomeLoginSkipWithCountdown(int seconds) =>
+      '先不登录 · $seconds秒后进入';
 
   /// 欢迎页底部「小趣寄语」署名 chip 中的发言人名（与 `✨` 一起出现）。
   /// 与中央 slogan 形成「品牌口吻 → 小趣口吻」的双层结构。
@@ -178,6 +365,13 @@ class UITextConstants {
   static const String sharePosterSaved = '海报已保存到本地文件';
   static const String shareCancelled = '已取消分享';
   static const String shareFailed = '分享失败，请稍后重试';
+  static const String shareSeedWorkFallbackTitle = '作品';
+  static const String shareSeedDefaultTitle = '内容分享';
+  static String shareSeedVideoWorkTitle(String displayName) =>
+      '$displayName 的视频作品';
+  static String shareSeedImageWorkTitle(String displayName) =>
+      '$displayName 的图片作品';
+  static String shareSeedMomentTitle(String displayName) => '$displayName 的点滴';
   static const String savePhoto = '保存图片';
   static const String saveVideo = '保存视频';
   static const String savePost = '收藏';
@@ -193,6 +387,11 @@ class UITextConstants {
   static const String commentAuthorBadge = '作者';
   static const String profileCommentsTabSent = '我发出的';
   static const String profileCommentsTabReceived = '我收到的';
+
+  // 对象页统一交集卡标题（你和对象的交集，由各壳按对象类型传入）
+  static const String profileMutualIntersectionTitle = '你们的交集';
+  static const String homepageIntersectionTitle = '你和这里的交集';
+  static const String intersectionMoreLabel = '查看全部交集';
 
   // ==================== 我的主页 ====================
   static const String editProfile = '编辑资料';
@@ -520,6 +719,11 @@ class UITextConstants {
   static const String chatVoiceHoldToTalk = '按住说话';
   static const String chatVoiceHoldTip = '按住开始录音';
   static const String chatVoiceReleaseToSend = '松开发送';
+  static const String chatVoiceSlideCancel = '上滑取消';
+  static const String chatVoiceReleaseCancel = '松开取消';
+  static const String chatVoiceTooShort = '说话时间太短';
+  static const String chatVoiceCanceled = '已取消';
+  static const String chatVoiceSending = '发送中';
   static const String chatVoicePermissionDenied = '未获得录音权限';
   static const String timeFormatAM = '上午';
   static const String timeFormatPM = '下午';
@@ -682,13 +886,17 @@ class UITextConstants {
   static const String personaRetireBlocked = '当前分身暂不可退役';
 
   /// 我的主页统计与子页（关注数用 follow，此处为统计栏标题）
-  static const String myResonance = '我的交集';
   static const String profileEditLabel = '资料编辑';
   static const String profilePersonasLabel = '分身管理';
   static const String profileDirectMessage = '消息';
   static const String profileTabCreations = '创作';
   static const String profileTabCircles = '圈子';
   static const String profileTabInteraction = '互动';
+  static const String profileTabLifestyle = '生活';
+  static const String lifestyleSubFootprint = '足迹';
+  static const String lifestyleSubSoul = '书影音';
+  static const String lifestyleSubTaste = '味蕾';
+  static const String lifestyleSubPrivate = '爱物';
   static const String creationSubAll = '全部';
   static const String creationSubMicro = '点滴';
   static const String creationSubImage = '图片';
@@ -1133,6 +1341,16 @@ class UITextConstants {
         return profileTabCircles;
       case 'profile_tab_interaction':
         return profileTabInteraction;
+      case 'profile_tab_lifestyle':
+        return profileTabLifestyle;
+      case 'lifestyle_sub_footprint':
+        return lifestyleSubFootprint;
+      case 'lifestyle_sub_soul':
+        return lifestyleSubSoul;
+      case 'lifestyle_sub_taste':
+        return lifestyleSubTaste;
+      case 'lifestyle_sub_private':
+        return lifestyleSubPrivate;
       case 'creation_sub_all':
         return creationSubAll;
       case 'creation_sub_micro':

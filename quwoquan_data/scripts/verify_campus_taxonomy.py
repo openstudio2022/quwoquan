@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT
 
-TAGS_ROOT = PUBLISH_ROOT / "v1" / "tags"
+TAGS_ROOT = PUBLISH_ROOT / "tags"
 errors: list[str] = []
 
 SCHOOL_INSTANCE_PATTERN = re.compile(

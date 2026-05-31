@@ -5,21 +5,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
+import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 
-Widget _scopedApp({ChatRepository? mock}) {
+Widget _scopedApp({ChatRepository? mock, bool isDark = false}) {
   final repo = mock ?? MockChatRepository();
   return ProviderScope(
-    overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      chatRepositoryProvider.overrideWithValue(repo),
+      isDarkProvider.overrideWithValue(isDark),
+    ],
     child: MaterialApp.router(
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       routerConfig: GoRouter(
         initialLocation: '/chat',
         routes: [
@@ -54,6 +68,22 @@ void _suppressImageErrors() {
   };
 }
 
+Finder _findByValueKeyPrefix(String prefix) {
+  return find.byWidgetPredicate((widget) {
+    final key = widget.key;
+    return key is ValueKey<String> && key.value.startsWith(prefix);
+  });
+}
+
+Color? _containerColor(WidgetTester tester, Finder finder) {
+  final container = tester.widget<Container>(finder);
+  final decoration = container.decoration;
+  if (decoration is BoxDecoration) {
+    return decoration.color;
+  }
+  return container.color;
+}
+
 void main() {
   group('ChatPage — 渲染契约', () {
     testWidgets('正常渲染聊天列表页', (tester) async {
@@ -70,6 +100,181 @@ void main() {
       await tester.pump();
 
       expect(find.byType(Scaffold), findsWidgets);
+    });
+
+    testWidgets('列表表面与分割线对齐更多功能语义 token', (tester) async {
+      for (final isDark in <bool>[false, true]) {
+        await tester.pumpWidget(
+          _scopedApp(mock: _NavigationChatRepository(), isDark: isDark),
+        );
+        await tester.pumpAndSettle();
+
+        final expectedPageBackground = AppColorsFunctional.getColor(
+          isDark,
+          ColorType.pageBackground,
+        );
+        final expectedListSurface =
+            SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+        final expectedListDivider =
+            SettingsSemanticConstants.conversationSheetDividerColor(
+              isDark,
+            ).withValues(alpha: 0.9);
+        final expectedPostSeparatorBand =
+            SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
+
+        final mainChrome = tester.widget<Container>(
+          find.byKey(const ValueKey<String>('chat-main-tabs-chrome')),
+        );
+        final mainDecoration = mainChrome.decoration! as BoxDecoration;
+        expect(mainDecoration.color, expectedPageBackground);
+        expect(mainDecoration.border, isNull);
+
+        final secondarySlot = tester.widget<AnimatedContainer>(
+          find.byKey(const ValueKey<String>('chat-secondary-tabs-slot')),
+        );
+        final secondarySlotDecoration =
+            secondarySlot.decoration! as BoxDecoration;
+        expect(secondarySlotDecoration.color, expectedPageBackground);
+        expect(secondarySlotDecoration.border, isNull);
+
+        final secondaryTabs = tester.widget<SecondaryCapsuleTabBar>(
+          find.byKey(const ValueKey<String>('chat-secondary-capsule-tabs')),
+        );
+        expect(secondaryTabs.border, isNull);
+        expect(secondaryTabs.backgroundColor, isNull);
+        expect(
+          secondaryTabs.variant,
+          SecondaryCapsuleTabBarVariant.defaultSurface,
+        );
+
+        final inboxRowFinder = find.byKey(
+          const ValueKey<String>('chat-inbox-row-conv_navigation_test'),
+        );
+        expect(_containerColor(tester, inboxRowFinder), expectedListSurface);
+        final inboxDivider = tester.widget<Divider>(
+          find.byKey(
+            const ValueKey<String>(
+              'chat-inbox-row-divider-conv_navigation_test',
+            ),
+          ),
+        );
+        expect(inboxDivider.color, expectedListDivider);
+
+        await tester.tap(find.text(AppConceptConstants.contacts));
+        await tester.pumpAndSettle();
+
+        final contactRowFinder = _findByValueKeyPrefix('chat-contact-row-');
+        expect(contactRowFinder, findsWidgets);
+        expect(
+          _containerColor(tester, contactRowFinder.first),
+          expectedListSurface,
+        );
+        final contactAvatarFinder = find.descendant(
+          of: contactRowFinder.first,
+          matching: find.byType(RoundedSquareAvatar),
+        );
+        expect(contactAvatarFinder, findsWidgets);
+        expect(
+          tester.getSize(contactAvatarFinder.first),
+          const Size.square(ChatConversationAvatarTokens.listSize),
+        );
+        final contactTitleFinder = find.descendant(
+          of: contactRowFinder.first,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Text &&
+                widget.style?.fontSize == AppTypography.iosBody,
+          ),
+        );
+        expect(contactTitleFinder, findsWidgets);
+        final contactTitle = tester.widget<Text>(contactTitleFinder.first);
+        expect(contactTitle.style?.fontSize, AppTypography.iosBody);
+        expect(contactTitle.style?.fontWeight, AppTypography.regular);
+        expect(contactTitle.style?.height, AppTypography.lineHeightTight);
+        final contactSubtitleFinder = find.descendant(
+          of: contactRowFinder.first,
+          matching: find.text('篮球爱好者'),
+        );
+        expect(contactSubtitleFinder, findsOneWidget);
+        final contactSubtitle = tester.widget<Text>(contactSubtitleFinder);
+        expect(contactSubtitle.style?.fontSize, AppTypography.iosFootnote);
+        expect(contactSubtitle.style?.height, AppTypography.lineHeightCompact);
+        expect(tester.getTopLeft(contactRowFinder.first).dx, 0);
+        expect(
+          tester.getSize(contactRowFinder.first).width,
+          tester.getSize(find.byType(ChatPage)).width,
+        );
+        final contactDividerFinder = _findByValueKeyPrefix(
+          'chat-contact-row-divider-',
+        );
+        expect(contactDividerFinder, findsWidgets);
+        final contactDivider = tester.widget<Divider>(
+          contactDividerFinder.first,
+        );
+        expect(contactDivider.color, expectedListDivider);
+        expect(contactDivider.thickness, AppSpacing.hairline);
+        expect(
+          tester.getTopLeft(contactDividerFinder.first).dx,
+          AppSpacing.md +
+              ChatConversationAvatarTokens.dividerInset(
+                ChatConversationAvatarTokens.listSize,
+              ),
+        );
+        expect(
+          tester.getTopRight(contactDividerFinder.first).dx,
+          tester.getSize(find.byType(ChatPage)).width - AppSpacing.md,
+        );
+
+        final contactListView = tester.widget<ListView>(
+          find
+              .byWidgetPredicate(
+                (widget) =>
+                    widget is ListView &&
+                    widget.scrollDirection == Axis.vertical,
+              )
+              .first,
+        );
+        expect(contactListView.padding, EdgeInsets.zero);
+
+        final indexLetterFinder = _findByValueKeyPrefix(
+          'chat-contact-index-letter-',
+        );
+        expect(indexLetterFinder, findsWidgets);
+        expect(_containerColor(tester, indexLetterFinder.first), isNull);
+
+        final sectionHeaderLabelFinder = _findByValueKeyPrefix(
+          'chat-contact-section-label-',
+        );
+        expect(sectionHeaderLabelFinder, findsWidgets);
+        final sectionHeaderFinder = find.ancestor(
+          of: sectionHeaderLabelFinder.first,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Container &&
+                widget.color == expectedPostSeparatorBand,
+          ),
+        );
+        expect(sectionHeaderFinder, findsOneWidget);
+        expect(
+          tester.getSize(sectionHeaderFinder.first).height,
+          AppSpacing.twenty,
+        );
+        final sectionHeaderText = tester.widget<Text>(
+          sectionHeaderLabelFinder.first,
+        );
+        final indexLetterText = tester.widget<Text>(
+          find
+              .descendant(
+                of: indexLetterFinder.first,
+                matching: find.byType(Text),
+              )
+              .first,
+        );
+        expect(
+          sectionHeaderText.style?.fontSize,
+          indexLetterText.style?.fontSize,
+        );
+      }
     });
   });
 
@@ -133,6 +338,10 @@ void main() {
       );
 
       expect(sparklesRightInset, closeTo(expectedInset, 2.0));
+      expect(
+        tester.getSize(find.byKey(TestKeys.globalAssistantEntryMark)),
+        const Size.square(AppSpacing.globalAssistantEntryMarkSize),
+      );
     });
 
     testWidgets('消息顶部工具栏与发现页搜索壳保持同源安全区节奏', (tester) async {
@@ -310,6 +519,20 @@ void main() {
       expect(avatar.imageUrl, contains('user_002'));
       expect(find.text('契'), findsNothing);
     });
+
+    testWidgets('单聊会话头像优先与联系人头像保持一致', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        _scopedApp(mock: _DirectAvatarConsistencyChatRepository()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('手机端头像一致性'), findsOneWidget);
+      final avatar = tester.widget<RoundedSquareAvatar>(
+        find.byType(RoundedSquareAvatar).first,
+      );
+      expect(avatar.imageUrl, 'https://example.com/contact-consistent.jpg');
+    });
   });
 }
 
@@ -347,6 +570,22 @@ class _NavigationChatRepository extends MockChatRepository {
     int limit = 20,
   }) async {
     return listInbox(cursor: cursor, limit: limit);
+  }
+
+  @override
+  Future<List<ChatContactRowDto>> listContacts({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatContactRowDto>[
+      ChatContactRowDto(
+        userId: 'user_navigation_contact',
+        displayName: '李明',
+        avatarUrl: 'https://example.com/contact.jpg',
+        bio: '篮球爱好者',
+        isFriend: true,
+      ),
+    ];
   }
 }
 
@@ -606,6 +845,51 @@ class _DirectAvatarFallbackChatRepository extends MockChatRepository {
         userId: 'user_002',
         displayName: '契约撰稿人',
         avatarUrl: 'https://example.com/user_002.jpg',
+      ),
+    ];
+  }
+}
+
+class _DirectAvatarConsistencyChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    return <ChatInboxDto>[
+      ChatInboxDto(
+        id: 'conv_direct_consistency',
+        type: 'direct',
+        title: '手机端头像一致性',
+        avatarUrl: 'https://example.com/stale-conversation-avatar.jpg',
+      ),
+    ];
+  }
+
+  @override
+  Future<List<ChatInboxDto>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return listInbox(cursor: cursor, limit: limit);
+  }
+
+  @override
+  Future<List<ChatConversationMemberDto>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+    String? sort,
+  }) async {
+    return <ChatConversationMemberDto>[
+      ChatConversationMemberDto(
+        userId: 'user_me',
+        displayName: '我',
+        avatarUrl: 'https://example.com/me.jpg',
+        isCurrentUser: true,
+      ),
+      ChatConversationMemberDto(
+        userId: 'user_contact',
+        displayName: '手机端头像一致性',
+        avatarUrl: 'https://example.com/contact-consistent.jpg',
       ),
     ];
   }

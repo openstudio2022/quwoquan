@@ -130,6 +130,17 @@ entities:
         search_field: true
         description: 个人签名
 
+      - name: interestTags
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        tag_ref: true
+        description: 声明式用户兴趣（路径制 tagRef，真相源 publish/v1/tags）；与行为派生兴趣互补，用于兴趣维度交集与冷启动召回
+
       - name: gender
         type: enum
         enum_ref: Gender

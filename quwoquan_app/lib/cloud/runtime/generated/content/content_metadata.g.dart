@@ -11,12 +11,14 @@ class GeneratedPostRuntimeMetadata {
     'circleIds': <String>[],
     'commentCount': 0,
     'embedding': <double>[],
+    'entityRefs': <String>[],
     'favoriteCount': 0,
     'likeCount': 0,
     'mediaUrls': <String>[],
     'moderationStatus': 'pending',
+    'reviewAspects': <Map<String, dynamic>>[],
     'shareCount': 0,
-    'tags': <String>[],
+    'tagRefs': <String>[],
     'viewCount': 0,
     'visibility': 'public',
   };
@@ -25,7 +27,7 @@ class GeneratedPostRuntimeMetadata {
   static const Map<String, dynamic> feedProjectionDefaults = <String, dynamic>{
     'coverUrl': '',
     'isLocalGenerated': true,
-    'tags': <String>[],
+    'tagRefs': <String>[],
     'thumbnailUrl': '',
     'videoUrl': '',
     'visibility': 'public',
@@ -34,24 +36,25 @@ class GeneratedPostRuntimeMetadata {
   static const Map<String, String> contentTypeToRenderType = <String, String>{
     'article': 'article',
     'image': 'image',
-    'micro': 'moment',
+    'micro': 'micro',
+    'review': 'review',
     'video': 'video',
   };
 
   static const Map<String, String> feedCategoryToRequestType = <String, String>{
     'article': 'article',
-    'following': 'moment',
-    'images': 'photo',
-    'moment': 'moment',
-    'photo': 'photo',
-    'recommended': 'moment',
+    'following': 'micro',
+    'images': 'image',
+    'micro': 'micro',
+    'recommended': 'micro',
+    'review': 'review',
     'video': 'video',
   };
 
   static const Map<String, String> appTabToFeedCategory = <String, String>{
     'article': 'article',
-    'moment': 'recommended',
-    'photo': 'images',
+    'image': 'images',
+    'micro': 'recommended',
     'video': 'video',
   };
 
@@ -76,7 +79,10 @@ class GeneratedPostRuntimeMetadata {
     'title',
     'body',
     'summary',
-    'tags',
+    'tagRefs',
+    'entityRefs',
+    'rating',
+    'reviewAspects',
     'mediaUrls',
     'coverUrl',
     'articleMarkdown',

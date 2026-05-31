@@ -21,8 +21,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, NOW_ISO
 
-EVENT_CANONICAL_ROOT = PUBLISH_ROOT / "v1" / "tags" / "Topic" / "事件"
-TOPIC_CANONICAL_ROOT = PUBLISH_ROOT / "v1" / "tags" / "Topic" / "话题"
+EVENT_CANONICAL_ROOT = PUBLISH_ROOT / "tags" / "Topic" / "事件"
+TOPIC_CANONICAL_ROOT = PUBLISH_ROOT / "tags" / "Topic" / "话题"
 
 DRY_RUN = False
 created = 0

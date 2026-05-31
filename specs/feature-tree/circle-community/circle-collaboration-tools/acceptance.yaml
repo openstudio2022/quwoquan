@@ -1,41 +1,35 @@
-feature: circle-collaboration-tools
-level: "L2_feature"
-archived: false
-level_acceptance:
-- id: A1
-  description: '资料能力 CRUD 可用：公共群、组织节点和开启资料能力的自建群可创建文件夹、上传文件（≤50MB）、下载文件、删除文件、重命名文件/文件夹； 文件列表支持按时间/大小排序。
-
-    '
-  status: pending
-  tests: []
-- id: A2
-  description: '资料权限模型生效：圈级或组织级治理者可配置公共群资料权限， 群主可管理自建群资料； 成员可按群规则上传和下载， 非授权操作返回
-    403 + 对应错误码。
-
-    '
-  status: pending
-  tests: []
-- id: A3
-  description: '群目录可用：群组详情可区分展示公共群与自建群； 组织型详情可展示组织节点、公共交流群与兴趣小组； 用户能明确看到自己已加入的群或节点。
-
-    '
-  status: pending
-  tests: []
-- id: A4
-  description: '公共群交流入口可用：群组详情页可进入默认公共群或组织节点的交流页， 并展示最近消息预览、未读状态和群资料入口。
-
-    '
-  status: pending
-  tests: []
-- id: A5
-  description: '群成员自动同步规则可用：加入群组后 3 秒内自动进入默认公共群， 退出群组后自动退出对应公共群； 组织型群组可按节点分流； 圈级或组织级治理者可关闭自动同步。
-
-    '
-  status: pending
-  tests: []
-- id: A6
-  description: '群组层公开内容发布区可用：详情页展示群组内容 feed， 支持笔记/作品/提问/口碑的统一发布入口； 群层不承接第二条公开时间线， 只负责交流、资料和公告。
-
-    '
-  status: pending
-  tests: []
+version: 2
+node:
+  id: circle-collaboration-tools
+  level: L2_business_capability
+  path: specs/feature-tree/circle-community/circle-collaboration-tools
+  title: circle collaboration tools
+  parent_domain_service: circle-community
+  parent_business_capability: circle-collaboration-tools
+scope:
+  summary: circle collaboration tools 验收范围。
+  in_scope: []
+  out_of_scope: []
+sit_acceptance:
+  SIT1:
+    title: circle collaboration tools 能力 SIT
+    story_refs: []
+    done_when:
+    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

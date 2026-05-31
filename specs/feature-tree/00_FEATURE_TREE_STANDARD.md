@@ -1,342 +1,177 @@
-# 特性树文档标准（Journey / Scenario 版）
+# 特性树文档标准（应用根 / 领域服务 / 业务能力 / Story 版）
 
-> **权威**：特性树节点的治理信息只通过以下四类节点文档表达：
->
-> - `spec.md`
-> - `design.md`
-> - `plan.yaml`
-> - `acceptance.yaml`
->
-> 另有一条独立的增量变更流：
->
-> - `specs/changelog/CR-*.yaml`
->
-> 本标准与三层层级定义绑定，只适用于：
->
-> - `L1_capability`
-> - `L2_journey`
-> - `L3_scenario`
->
-> 会话级 todo 只存在于 AI 会话中，不占目录层，也不属于正式治理文档。
+> **权威**：特性树是整个应用的产品规格、知识、设计与测试底座。正式目录层只表达交付责任归属，不表达测试层，也不把 Journey / Scenario 建成目录层。
 
 ---
 
-## 一、适用范围
+## 一、正式结构
 
-本标准适用于全仓端云一体化开发，包括：
+正式结构为“应用根 + 三层目录”：
 
-- `quwoquan_app`
-- `quwoquan_service`
-- `contracts/metadata`
-- `specs/feature-tree`
-- `specs/changelog`
+```text
+specs/feature-tree/
+  spec.md
+  design.md
+  acceptance.yaml
+  journey_scenario_registry.yaml
+  tree_index.yaml
 
-任何子域规范只能补充细节，不能替代本标准。
+  <domain-service>/
+    spec.md
+    design.md
+    acceptance.yaml
 
----
+    <business-capability>/
+      spec.md
+      design.md
+      acceptance.yaml
 
-## 二、节点文档与增量文档
+      <story>/
+        spec.md
+        acceptance.yaml
+```
 
-### 2.1 `L1_capability`
+正式目录层级：
 
-每个 `L1_capability` 目录必须具备以下四类节点文档：
+| 层级 | 语义 | 目录层 | 设计文档 |
+|---|---|---|---|
+| 应用根 | 全 App 定位、跨领域 Journey/Scenario、UAT、全局治理 | 否，根上下文 | 是 |
+| `L1_domain_service` | 产品领域服务边界，不等同于单个后端部署进程 | 是 | 是 |
+| `L2_business_capability` | 领域内稳定业务能力与 SIT 收口 | 是 | 是 |
+| `L3_story` | 最小可闭环价值点、GWT 与接口契约收口 | 是 | 否 |
 
-- `spec.md`
-- `design.md`
-- `plan.yaml`
-- `acceptance.yaml`
-
-职责：
-
-- 说明能力边界
-- 说明关键旅程、NFR、发布治理
-- 组织其下的 `L2_journey`
-
-### 2.2 `L2_journey`
-
-每个 `L2_journey` 目录必须具备以下四类节点文档：
-
-- `spec.md`
-- `design.md`
-- `plan.yaml`
-- `acceptance.yaml`
-
-职责：
-
-- 作为端到端用户旅程容器
-- 承载 Journey 范围、边界、跨 Scenario 组合规则与 Journey 级验收
-
-### 2.3 `L3_scenario`
-
-每个 `L3_scenario` 目录必须具备以下四类节点文档：
-
-- `spec.md`
-- `design.md`
-- `plan.yaml`
-- `acceptance.yaml`
-
-职责：
-
-- 作为最小独立实施与验证单元
-- 承载单环节场景、异常边界、实施计划、验收和测试证据
-
-### 2.4 `plan.yaml`
-
-`plan.yaml` 是节点级正式实施计划，不是目录层，也不是会话 todo。
-
-它只回答：
-
-- 稳定切片是什么
-- 切片依赖顺序是什么
-- 每个切片引用哪些 `acceptance_ref`
-- 每个切片的退出条件与预期证据是什么
-
-禁止行为：
-
-- 把 `plan.yaml` 写成对话记录
-- 把会话 todo 回写成正式 plan
-- 让 `plan.yaml` 维护第二套需求规格
-
-### 2.5 `specs/changelog/CR-*.yaml`
-
-`CR` 文件不放在节点目录下，统一放在 `specs/changelog/`。
-
-职责：
-
-- 记录一次增量变更包的 delta
-- 记录受影响的 `L2_journey / L3_scenario`
-- 记录是否需要 replan / redesign / retest
-- 记录本轮增量的版本修订 `revision`
-
-禁止行为：
-
-- 用 `specs/changelog/` 复刻一套特性树层级
-- 在 CR 中维护第二套归属关系
-- 让 CR 替代 `spec.md`、`design.md`、`acceptance.yaml`、`plan.yaml`
+`树内计划文档` 不再是特性树正式节点文档。开发计划只存在于当前会话计划、PR 拆分或外部执行台账中，不能作为规格、设计或验收的第二真相源。
 
 ---
 
-## 三、节点文档职责
+## 二、Journey / Scenario 的位置
 
-| 文档 | 作用 |
-|------|------|
-| `spec.md` | 说明为什么做、做什么、不做什么、适用边界 |
-| `design.md` | 说明怎么做、为什么这样做、方案对比、关键决策 |
-| `plan.yaml` | 说明稳定切片、依赖顺序、`acceptance_ref`、退出条件 |
-| `acceptance.yaml` | 说明 Journey / Scenario 验收标准、测试层映射、证据、执行门禁 |
-| `specs/changelog/CR-*.yaml` | 说明一次增量变更包的 delta 与影响范围 |
+`Journey` 与 `Scenario` 是应用根编排对象，不是目录层。
 
-### 3.1 禁止第五类节点治理文档
+- `Journey`：用户从目标到结果的端到端路径，通常跨多个领域服务和业务能力。
+- `Scenario`：Journey 下可被 UAT 验证的跨领域场景组合。
+- `journey_scenario_registry.yaml`：记录 Journey / Scenario、UAT、关联领域服务、业务能力、Story 与边界。
 
-禁止在特性树节点下新增以下独立治理文档：
+禁止：
 
-- `tasks.md`
-- `README.md`
-- `analysis-*.md`
-- `architecture.md`
-- `diagram.md`
-- `*-规划.md`
-- `*-设计说明.md`
-
-分析、规划、架构说明、图示说明都必须汇入四类节点文档内部；增量变更必须汇入 `specs/changelog/CR-*.yaml`。
+- 把 Journey / Scenario 建成 `L2` / `L3` 目录层。
+- 通过第四层目录表达 `subfeature/detail/leaf`。
+- 在领域服务目录中维护另一套跨领域 Journey 索引。
 
 ---
 
-## 四、文档内容要求
+## 三、Spec / Design / Acceptance 分工
 
-### 4.1 `spec.md`
+三类正式文档分工固定。
+
+| 文档 | 回答的问题 | 不负责 |
+|---|---|---|
+| `spec.md` | 为什么做、做什么、不做什么、用户或业务边界是什么 | 技术方案和测试执行细节 |
+| `design.md` | 如何组织系统长期承载这些规格 | 需求清单、验收用例、开发任务 |
+| `acceptance.yaml` | 如何判定完成，证据是什么 | 架构设计和实现计划 |
+
+### `spec.md`
 
 必须包含：
 
-- 节点层级与定位
-- 背景与动机
-- 目标用户或平台价值
-- 功能范围
-- Out of Scope
-- 约束与适用边界
-- 对标输入与吸收结论
-- 验收重点
+- 层级与定位。
+- 背景、目标用户或平台价值。
+- 范围、Out of Scope、术语和业务对象。
+- 关键业务规则、边界、依赖和验收关注点。
+- 涉及用户旅程时，引用应用根 Journey / Scenario。
 
-### 4.2 `design.md`
+### `design.md`
 
-必须包含：
+只存在于应用根、领域服务和业务能力层。
 
-- 设计动因
-- 上游输入评审
-- 对标输入分析
-- 至少两套方案对比
-- 选型决策
-- 关键设计决策
-- TDD / ATDD 策略
-- 未来演进
+- 应用根 `design.md`：描述全局架构、端云分层、领域边界、跨领域编排、全局技术约束、数据生命周期、观测、灰度和回滚。
+- 领域服务 `design.md`：描述领域能力范围、上下游依赖、领域对象、接口协作、数据归属、服务架构、技术约束、SLO、观测和运行治理。
+- 业务能力 `design.md`：描述能力内部的关键协作、状态机、策略、数据流、端云交互和测试切面。
+- Story 不设 `design.md`；Story 的实现约束、接口契约和行为规则写入 `spec.md` 与 `acceptance.yaml`，设计决策上收到业务能力层。
 
-若是 `L1_capability`，还必须在 `design.md` 内包含架构图示或等价文本说明，不得外置第五类节点文档。
+### `acceptance.yaml`
 
-### 4.3 `plan.yaml`
+必须表达：
 
-必须包含：
-
-- `version`
-- `node`
-- `derived_from`
-- `slices`
-
-每个 slice 至少包含：
-
-- `id`
-- `title`
-- `acceptance_refs`
-- `depends_on`
-- `planned_evidence`
-- `done_when`
-- `status`
-
-### 4.4 `acceptance.yaml`
-
-必须包含：
-
-- `version`
-- `feature`
-- `level`
-- `execution`
-- `scope`
-- `journey_acceptance` 或 `scenario_acceptance`
-
-`L2_journey` 的核心验收项至少包含：
-
-- `title`
-- `journey`
-- `scenario_refs`
-- `done_when`
-- `release_guardrails`
-- `evidence`
-- `tests`
-- `status`
-
-`L3_scenario` 的核心验收项至少包含：
-
-- `title`
-- `scenario`
-- `journey_step`
-- `done_when`
-- `edge_cases`
-- `linked_plan_items`
-- `evidence`
-- `tests`
-- `status`
-
-测试层只允许使用：
-
-- `T1`
-- `T2`
-- `T3`
-- `T4`
-
-### 4.5 `specs/changelog/CR-*.yaml`
-
-必须包含：
-
-- `id`
-- `title`
-- `slug`
-- `revision`
-- `status`
-- `affected_nodes`
-- `entries`
-
-每条 entry 至少包含：
-
-- `timestamp`
-- `summary`
-- `reason`
-- `changed_documents`
-- `impact`
+- 层级、范围、状态和执行门禁。
+- UAT / SIT / GWT / contract 的验收意图。
+- `done_when`、边界条件、证据层与测试文件或命令。
+- 统一测试证据层：`T1`、`T2`、`T3`、`T4`。
 
 ---
 
-## 五、目录与索引规则
+## 四、验收层级
 
-- 特性树目录只允许三层目录深度：`L1_capability / L2_journey / L3_scenario`
-- `tree_index.yaml` 是结构索引唯一真相源
-- `specs/changelog/` 是增量变更的唯一真相源
-- 不再允许脚手架、命令文案、辅助树文件维护第二套不一致层级定义
+| 层级 | 验收主语 | 验收标准 | 主要证据 |
+|---|---|---|---|
+| 应用根 | 用户需求与完整 Journey | UAT | `T4`，辅以 `T3`、SLO/KPI、灰度和回滚 |
+| `L1_domain_service` | 领域边界与服务治理 | 领域服务验收 | `T1/T3`，必要时 `T4` |
+| `L2_business_capability` | 能力内多 Story 组合 | SIT | `T2/T3` |
+| `L3_story` | 最小价值点 | GWT + 接口契约 | `T1/T2`，涉及远端边界时补 `T3` |
 
-违规即失败：
+测试层只表达验证方式，不表达特性树层级：
 
-- 发现三层以上目录
-- 发现 `L4` 或 `L5`
-- 发现节点目录仍以 `tasks.md` 作为正式计划文档
-- 发现 `acceptance.yaml` 使用旧 `level`
-- 发现旧层级残留在脚手架或 gate 中
-
----
-
-## 六、节点生命周期
-
-每个正式节点在 `tree_index.yaml` 中通过 `status` 表示生命周期：
-
-- `specified`
-- `in_progress`
-- `completed`
-- `cancelled`
-- `deprecated`
-
-### 6.1 `L1_capability`
-
-可长期存在，通常不会频繁归档变动。
-
-### 6.2 `L2_journey`
-
-是关键用户旅程与发布收口容器。
-
-### 6.3 `L3_scenario`
-
-是实施、验证、提交的核心对象。
-
-### 6.4 `plan slice`
-
-不进入 `tree_index.yaml`，通过 `plan.yaml` 管理状态。
-
-### 6.5 `session todo`
-
-只存在于会话上下文中，不写回特性树。
+- `T1`：契约与静态校验。
+- `T2`：模块与交互验证。
+- `T3`：端云集成验证。
+- `T4`：端到端旅程验证。
 
 ---
 
-## 七、与命令和流程的衔接
+## 五、索引与映射
 
-- `/explore`
-  - 确认 `L1_capability`、`L2_journey` 与目标 `L3_scenario`
-- `/prd`
-  - 创建或更新 Journey / Scenario 的 `spec.md + acceptance.yaml`
-  - 创建或更新对应 `CR`
-- `/design`
-  - 完成 Journey / Scenario 的 `design.md + plan.yaml`
-- `/dev`
-  - 消费 `plan.yaml` 中的 slices，派生本次会话 todo
-- `/verify`
-  - 复核 `L3_scenario` 完成度、`L2_journey` 受影响验收与测试证据
-- `/commit`
-  - 提交已完成的 slice 与对应 CR 范围
+唯一真相源：
+
+- 特性树结构：`specs/feature-tree/tree_index.yaml`。
+- Journey / Scenario 编排：`specs/feature-tree/journey_scenario_registry.yaml`。
+- 领域服务工程映射：`specs/l1_index.yaml`。
+- 增量变更：`specs/changelog/CR-*.yaml`。
+- 契约、字段、错误码、路径、operation、surface、route：`quwoquan_service/contracts/metadata/**`。
+
+`specs/l1_index.yaml` 必须把产品领域服务映射到：
+
+- App UI 模块。
+- App cloud repository / generated runtime。
+- Metadata domain / aggregate。
+- Service 目录和 deploy 进程。
+- 测试目录与门禁入口。
+
+---
+
+## 六、禁止项
+
+以下行为视为违规：
+
+- 新增四层以上特性树目录。
+- 新增树内 `树内计划文档`、`树内任务文档` 或 Story 设计文档 作为正式治理文档。
+- 在 Story 层维护架构设计和跨 Story 设计决策。
+- 在 acceptance 中使用 `L3/L4` 指代测试层。
+- 让 `specs/changelog/` 复刻一套特性树层级。
+- 在脚手架、命令文案、gate 中继续把 Journey / Scenario 当目录层。
+
+---
+
+## 七、迁移策略
+
+本标准先约束新增节点和新模板。存量节点按批迁移：
+
+1. 先落应用根三件套与 `journey_scenario_registry.yaml`。
+2. 再切换模板、脚手架和 gate。
+3. 新增节点强制采用新模型。
+4. 存量节点保留兼容，但不得继续扩展旧 `树内计划文档`、`树内任务文档`、Story 设计文档。
+5. 试点验证通过后，分批删除旧 schema 与旧模板。
 
 ---
 
 ## 八、总结
 
-Journey / Scenario 治理模型下，特性树节点的唯一正式结构为：
+特性树的正式治理语言为：
 
 ```text
-L1_capability
-  └── L2_journey
-        └── L3_scenario
-              ├── spec.md
-              ├── design.md
-              ├── plan.yaml
-              └── acceptance.yaml
-
-specs/changelog/
-  └── CR-YYYYMMDD-NNN-slug.yaml
+应用根：spec.md / design.md / acceptance.yaml / journey_scenario_registry.yaml
+L1_domain_service：spec.md / design.md / acceptance.yaml
+L2_business_capability：spec.md / design.md / acceptance.yaml
+L3_story：spec.md / acceptance.yaml
 ```
 
-四类节点文档服务于 `L1_capability`、`L2_journey` 与 `L3_scenario`。  
-会话级 todo 是执行层，不再是文档层；增量变更通过 `CR` 独立记录。
+用户 Journey / Scenario 在应用根编排，领域服务 / 业务能力 / Story 在目录树中承载责任归属、规格与验收。

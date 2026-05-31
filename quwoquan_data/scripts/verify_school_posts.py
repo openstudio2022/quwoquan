@@ -18,8 +18,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT
 
-ENTITIES_ROOT = PUBLISH_ROOT / "v1" / "entities" / "机构" / "学校"
-POSTS_ROOT = PUBLISH_ROOT / "v1" / "posts" / "article"
+ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "机构" / "学校"
+POSTS_ROOT = PUBLISH_ROOT / "posts" / "article"
 
 SCHOOL_POST_ANGLES = {
     "索引", "新生攻略", "选课攻略", "校园评测", "考研经验",
@@ -150,6 +150,36 @@ def p4_article_quality():
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="学校 Posts 完整性验证")
+    parser.add_argument(
+        "--pilot-schools",
+        nargs="*",
+        help="仅校验列出的学校（冷启动标杆批次）",
+    )
+    args = parser.parse_args()
+
+    if args.pilot_schools:
+        pilot = set(args.pilot_schools)
+
+        def p1_pilot_only():
+            if not ENTITIES_ROOT.exists():
+                errors.append("P1: 实体目录不存在")
+                return
+            index_dir = POSTS_ROOT / "索引"
+            if not index_dir.exists():
+                errors.append(f"P1: 索引帖目录不存在: {index_dir}")
+                return
+            posted_names = {d.name for d in index_dir.iterdir() if d.is_dir()}
+            missing = pilot - posted_names
+            if missing:
+                errors.append(f"P1: 标杆校缺少索引帖: {sorted(missing)}")
+            else:
+                print(f"  P1 OK: 标杆 {len(pilot)} 校均有索引帖")
+
+        globals()["p1_index_coverage"] = p1_pilot_only
+
     print("=" * 60)
     print("学校 Posts 完整性验证")
     print("=" * 60)

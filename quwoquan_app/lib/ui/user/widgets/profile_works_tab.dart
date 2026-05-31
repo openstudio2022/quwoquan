@@ -15,7 +15,7 @@ import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 
 /// 创作 Tab：统一承载 `全部 / 图片 / 视频 / 文字` 的内容筛选。
 class ProfileWorksTab extends ConsumerStatefulWidget {
@@ -214,8 +214,6 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
 
   CreationSubTab _creationSubTabForId(String id) {
     switch (id) {
-      case 'micro':
-        return CreationSubTab.micro;
       case 'image':
         return CreationSubTab.image;
       case 'video':
@@ -280,9 +278,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         .clamp(0, filtered.length - 1);
     final postViews = filtered
         .map(
-          (dto) => PostSummaryView.fromDto(
+          (dto) => ContentSurfaceViewMapper.fromDto(
             dto,
-            surfaceId: PostReadSurfaceId.profileWorks,
             wire: dto.toMap(),
           ),
         )

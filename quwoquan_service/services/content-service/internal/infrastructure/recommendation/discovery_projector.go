@@ -107,7 +107,7 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 		"contentType":        strVal(event.Payload, "contentType"),
 		"contentIdentity":    strVal(event.Payload, "contentIdentity"),
 		"title":              strVal(event.Payload, "title"),
-		"tags":               anySlice(event.Payload, "tags"),
+		"tagRefs":            anySlice(event.Payload, "tagRefs"),
 		"coverUrl":           strVal(event.Payload, "coverUrl"),
 		"status":             normalizedStatus(event.Payload),
 		"visibility":         normalizeVisibility(strVal(event.Payload, "visibility")),

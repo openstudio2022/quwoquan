@@ -1,0 +1,94 @@
+version: 1
+routes:
+  # 具体受众路由必须排在通用路由之前，否则会被无 audience 的通用规则遮蔽
+  - match: { subjectKind: topic, subjectType: 旅行/线路, intent: 路线推荐, audience: selfDriveTraveler }
+    templateId: 线路_自驾路书
+    creatorArchetype: self_drive_expert
+  - match: { subjectKind: topic, subjectType: 旅行/线路, intent: 跟团指南, audience: groupTourTraveler }
+    templateId: 线路_跟团攻略
+    creatorArchetype: pro_guide
+  - match: { subjectKind: topic, subjectType: 旅行/线路, intent: 攻略, audience: weekendLocalTraveler }
+    templateId: 线路_周末短途
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: topic, subjectType: 旅行/线路, intent: 攻略, audience: hubInboundTraveler }
+    templateId: 线路_枢纽到达
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: topic, subjectType: 旅行/线路, intent: 深度探险, audience: selfDriveTraveler }
+    templateId: 线路_深度探险
+    creatorArchetype: self_drive_expert
+  - match: { subjectKind: topic, subjectType: 旅行/线路, intent: 攻略, audience: budgetStudent }
+    templateId: 线路_省钱攻略
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: topic, subjectType: 旅行/线路, intent: 攻略, audience: seniorTraveler }
+    templateId: 线路_银发慢游
+    creatorArchetype: pro_guide
+  - match: { subjectKind: topic, subjectType: 旅行/线路, intent: 攻略 }
+    templateId: 线路_环线攻略
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: topic, subjectType: 旅行/线路, intent: 行前指南 }
+    templateId: 线路_补给避险
+    creatorArchetype: self_drive_expert
+  - match: { subjectKind: topic, subjectType: 旅行/主题, intent: 叙事 }
+    templateId: 旅行_个人游记
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: topic, subjectType: 旅行/榜单, intent: 盘点 }
+    templateId: 榜单_Top榜单
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: topic, subjectType: 旅行/主题, intent: 深度报道, audience: foodieReader }
+    templateId: 主题_风物美食
+    creatorArchetype: food_columnist
+  - match: { subjectKind: topic, subjectType: 旅行/主题, intent: 深度报道 }
+    templateId: 主题_地理深读
+    creatorArchetype: geo_editor
+  - match: { subjectKind: topic, subjectType: 旅行/主题, intent: 体验, audience: photoTraveler }
+    templateId: 主题_城市漫步
+    creatorArchetype: landscape_photographer
+  - match: { subjectKind: topic, subjectType: 旅行/主题, intent: 美图 }
+    templateId: 主题_图文画报
+    creatorArchetype: landscape_photographer
+  - match: { subjectKind: topic, subjectType: 旅行/主题, intent: 科普 }
+    templateId: 主题_摄影机位
+    creatorArchetype: landscape_photographer
+  - match: { subjectKind: entity, subjectType: 地点/景区, intent: 攻略 }
+    templateId: 景区_攻略
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: entity, subjectType: 地点/景区, intent: 体验 }
+    templateId: 景区_体验
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: entity, subjectType: 地点/景区, intent: 科普 }
+    templateId: 景区_文化
+    creatorArchetype: geo_editor
+  - match: { subjectKind: entity, subjectType: 地点/景区, intent: 行前指南 }
+    templateId: 景区_专业导览
+    creatorArchetype: pro_guide
+  - match: { subjectKind: entity, subjectType: 地点/博物馆, intent: 科普 }
+    templateId: 博物馆_科普
+    creatorArchetype: pro_guide
+  - match: { subjectKind: entity, subjectType: 地点/博物馆, intent: 体验 }
+    templateId: 博物馆_体验
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: entity, subjectType: 地点/古镇, intent: 攻略 }
+    templateId: 古镇_攻略
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: entity, subjectType: 地点/古镇, intent: 叙事 }
+    templateId: 古镇_叙事
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: entity, subjectType: 地点/餐厅, intent: 探店 }
+    templateId: 餐厅_探店
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: entity, subjectType: 地点/民宿, intent: 点评 }
+    templateId: 民宿_点评
+    creatorArchetype: travel_blogger
+  - match: { subjectKind: entity, subjectType: 地点/打卡地, intent: 美图 }
+    templateId: 打卡地_美图
+    creatorArchetype: landscape_photographer
+  - match: { subjectKind: entity, subjectType: 地点/遗址, intent: 科普 }
+    templateId: 遗址_文化
+    creatorArchetype: pro_guide
+fallback:
+  entity:
+    templateId: 景区_攻略
+    creatorArchetype: travel_blogger
+  topic:
+    templateId: 线路_环线攻略
+    creatorArchetype: travel_blogger

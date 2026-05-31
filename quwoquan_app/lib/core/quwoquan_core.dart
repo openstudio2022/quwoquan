@@ -51,6 +51,10 @@ export 'package:quwoquan_app/ui/discovery/providers/video_force_dark_provider.da
 export 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 
 // Services
+export 'auth/auth_session.dart';
+export 'auth/auth_gate.dart';
+export 'auth/auth_legal_config.dart';
+export 'auth/one_tap_login_channel.dart';
 export 'services/app_content_repository.dart';
 export 'services/assistant_chat_store.dart';
 

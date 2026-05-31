@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[3]
 DEFINE_KEYS = {
     "appRuntimeEnv": "APP_RUNTIME_ENV",
     "appDataSource": "APP_DATA_SOURCE",
+    "appRolloutMode": "APP_ROLLOUT_MODE",
     "gatewayBaseUrl": "CLOUD_GATEWAY_BASE_URL",
     "mediaAvatarCdnBaseUrl": "MEDIA_AVATAR_CDN_BASE_URL",
     "mediaImageCdnBaseUrl": "MEDIA_IMAGE_CDN_BASE_URL",
@@ -70,6 +71,7 @@ def apply_overrides(values: dict[str, str], args: argparse.Namespace) -> dict[st
         "currentUserId": args.current_user_id,
         "appInstanceId": args.app_instance_id,
         "appInstanceNamespace": args.app_instance_namespace,
+        "appRolloutMode": args.rollout_mode or os.environ.get("APP_ROLLOUT_MODE", ""),
     }
     url_keys = {
         "gatewayBaseUrl",
@@ -98,6 +100,7 @@ def main() -> int:
     parser.add_argument("--current-user-id", default="")
     parser.add_argument("--app-instance-id", default="")
     parser.add_argument("--app-instance-namespace", default="")
+    parser.add_argument("--rollout-mode", default="")
     args = parser.parse_args()
 
     cfg = ROOT / "quwoquan_app" / "configs" / args.env / "app_runtime.yaml"

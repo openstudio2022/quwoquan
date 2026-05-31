@@ -68,6 +68,7 @@ class AppAvatarImage extends StatelessWidget {
 
 class AppCachedNetworkImage extends StatelessWidget {
   final String imageUrl;
+  final List<String>? imageUrlCandidates;
   final BoxFit? fit;
   final double? width;
   final double? height;
@@ -78,6 +79,7 @@ class AppCachedNetworkImage extends StatelessWidget {
   const AppCachedNetworkImage({
     super.key,
     required this.imageUrl,
+    this.imageUrlCandidates,
     this.fit,
     this.width,
     this.height,
@@ -86,45 +88,70 @@ class AppCachedNetworkImage extends StatelessWidget {
     this.cdnPreset = CdnImagePreset.none,
   });
 
-  String get _processedUrl {
-    switch (cdnPreset) {
-      case CdnImagePreset.thumbnail:
-        return CdnImageUrlBuilder.thumbnail(
-          imageUrl,
-          width: (width ?? 400).toInt(),
-        );
-      case CdnImagePreset.cover:
-        return CdnImageUrlBuilder.cover(
-          imageUrl,
-          width: (width ?? 750).toInt(),
-        );
-      case CdnImagePreset.avatar:
-        return CdnImageUrlBuilder.avatar(
-          imageUrl,
-          size: (width ?? 120).toInt(),
-        );
-      case CdnImagePreset.full:
-        return CdnImageUrlBuilder.full(imageUrl);
-      case CdnImagePreset.none:
-        return imageUrl;
+  List<String> get _processedUrlCandidates {
+    final rawCandidates = imageUrlCandidates ?? <String>[imageUrl];
+    final processed = <String>[];
+    for (final candidate in rawCandidates) {
+      final normalized = candidate.trim();
+      if (normalized.isEmpty || processed.contains(normalized)) {
+        continue;
+      }
+      switch (cdnPreset) {
+        case CdnImagePreset.thumbnail:
+          processed.add(
+            CdnImageUrlBuilder.thumbnail(
+              normalized,
+              width: (width ?? 400).toInt(),
+            ),
+          );
+        case CdnImagePreset.cover:
+          processed.add(
+            CdnImageUrlBuilder.cover(
+              normalized,
+              width: (width ?? 750).toInt(),
+            ),
+          );
+        case CdnImagePreset.avatar:
+          processed.add(
+            CdnImageUrlBuilder.avatar(
+              normalized,
+              size: (width ?? 120).toInt(),
+            ),
+          );
+        case CdnImagePreset.full:
+          processed.add(CdnImageUrlBuilder.full(normalized));
+        case CdnImagePreset.none:
+          processed.add(normalized);
+      }
     }
+    return processed;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl.isEmpty) {
+    final candidates = _processedUrlCandidates;
+    if (candidates.isEmpty) {
       return _buildErrorWidget();
     }
+    return _buildCandidateImage(candidates, 0);
+  }
 
+  Widget _buildCandidateImage(List<String> candidates, int index) {
     return CachedNetworkImage(
-      imageUrl: _processedUrl,
+      imageUrl: candidates[index],
       cacheManager: _appImageCacheManager,
       fit: fit,
       width: width,
       height: height,
       placeholder: (context, url) =>
           placeholder ?? Container(color: AppColors.light.backgroundSecondary),
-      errorWidget: (context, url, error) => errorWidget ?? _buildErrorWidget(),
+      errorWidget: (context, url, error) {
+        final nextIndex = index + 1;
+        if (nextIndex < candidates.length) {
+          return _buildCandidateImage(candidates, nextIndex);
+        }
+        return errorWidget ?? _buildErrorWidget();
+      },
     );
   }
 

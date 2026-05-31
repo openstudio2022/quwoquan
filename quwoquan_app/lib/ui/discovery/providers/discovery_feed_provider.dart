@@ -9,6 +9,8 @@ import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 
 /// 单类 feed 状态：items + nextCursor
 class DiscoveryFeedState {
+  static const Object _unset = Object();
+
   const DiscoveryFeedState({
     this.items = const [],
     this.seenItemIds = const [],
@@ -23,19 +25,23 @@ class DiscoveryFeedState {
   final bool isLoading;
   final String? error;
 
+  bool get hasMore => nextCursor != null && nextCursor!.isNotEmpty;
+
   DiscoveryFeedState copyWith({
     List<PostBaseDto>? items,
     List<String>? seenItemIds,
-    String? nextCursor,
+    Object? nextCursor = _unset,
     bool? isLoading,
-    String? error,
+    Object? error = _unset,
   }) {
     return DiscoveryFeedState(
       items: items ?? this.items,
       seenItemIds: seenItemIds ?? this.seenItemIds,
-      nextCursor: nextCursor ?? this.nextCursor,
+      nextCursor: identical(nextCursor, _unset)
+          ? this.nextCursor
+          : nextCursor as String?,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: identical(error, _unset) ? this.error : error as String?,
     );
   }
 }
@@ -47,8 +53,8 @@ typedef DiscoveryFeedQuery = ({
 });
 
 /// 将 surface tab id 映射到统一 discovery feed 查询。
-DiscoveryFeedQuery toDiscoveryFeedQuery(String tabId) {
-  switch (tabId) {
+DiscoveryFeedQuery toDiscoveryFeedQuery(String channelId) {
+  switch (channelId) {
     case 'following':
       return (category: 'following', identity: 'moment', type: null);
     case 'moment':
@@ -63,27 +69,44 @@ DiscoveryFeedQuery toDiscoveryFeedQuery(String tabId) {
     case 'article':
       return (category: 'article', identity: 'work', type: 'article');
     default:
-      return (category: tabId, identity: null, type: null);
+      return (category: channelId, identity: null, type: null);
   }
 }
 
-/// 按 tabId 管理多路 feed 的 Notifier
+/// 按 channelId 管理多路 feed 的 Notifier
 class DiscoveryFeedMapNotifier
     extends Notifier<Map<String, AsyncValue<DiscoveryFeedState>>> {
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() => {};
 
-  Future<void> load(String tabId, {bool force = false}) async {
-    final currentValue = state[tabId]?.value;
+  /// 解析取数查询：首页频道以 [homeChannelsProvider]（端默认 + 远程覆盖）的 feed_query 为真相源；
+  /// 非首页频道（发现 tab photo/video/...）回退 [toDiscoveryFeedQuery]。
+  DiscoveryFeedQuery _resolveQuery(String channelId) {
+    for (final channel in ref.read(homeChannelsProvider)) {
+      if (channel.id != channelId) continue;
+      final category = channel.feedQuery['category'];
+      if (category != null && category.isNotEmpty) {
+        return (
+          category: category,
+          identity: channel.feedQuery['identity'],
+          type: channel.feedQuery['type'],
+        );
+      }
+    }
+    return toDiscoveryFeedQuery(channelId);
+  }
+
+  Future<void> load(String channelId, {bool force = false}) async {
+    final currentValue = state[channelId]?.value;
     if (!force && currentValue != null && currentValue.items.isNotEmpty) {
       return;
     }
     final repo = ref.read(contentRepositoryProvider);
-    final query = toDiscoveryFeedQuery(tabId);
+    final query = _resolveQuery(channelId);
     final feedSession = ref.read(feedSessionProvider.notifier);
     final sessionId = feedSession.sessionId;
     final feedRequestId = feedSession.newFeedRequestId();
-    state = {...state, tabId: const AsyncLoading()};
+    state = {...state, channelId: const AsyncLoading()};
     try {
       final page = await repo.listDiscoveryFeedPage(
         category: query.category,
@@ -104,7 +127,7 @@ class DiscoveryFeedMapNotifier
           .toList(growable: false);
       state = {
         ...state,
-        tabId: AsyncData(
+        channelId: AsyncData(
           DiscoveryFeedState(
             items: page.items,
             seenItemIds: seen,
@@ -116,15 +139,15 @@ class DiscoveryFeedMapNotifier
       developer.log('load error: $e', name: 'DiscoveryFeed', error: e, stackTrace: st);
       state = {
         ...state,
-        tabId: AsyncData(
+        channelId: AsyncData(
           DiscoveryFeedState(error: runtimeErrorDisplayMessage(e)),
         ),
       };
     }
   }
 
-  Future<void> appendNextPage(String tabId) async {
-    final current = state[tabId];
+  Future<void> appendNextPage(String channelId) async {
+    final current = state[channelId];
     final value = current?.value;
     if (value == null ||
         value.nextCursor == null ||
@@ -132,10 +155,13 @@ class DiscoveryFeedMapNotifier
         value.isLoading) {
       return;
     }
-    state = {...state, tabId: AsyncData(value.copyWith(isLoading: true))};
+    state = {
+      ...state,
+      channelId: AsyncData(value.copyWith(isLoading: true, error: null)),
+    };
     try {
       final repo = ref.read(contentRepositoryProvider);
-      final query = toDiscoveryFeedQuery(tabId);
+      final query = _resolveQuery(channelId);
       final feedSession = ref.read(feedSessionProvider.notifier);
       final sessionId = feedSession.sessionId;
       final feedRequestId = feedSession.newFeedRequestId();
@@ -163,12 +189,13 @@ class DiscoveryFeedMapNotifier
       ];
       state = {
         ...state,
-        tabId: AsyncData(
+        channelId: AsyncData(
           value.copyWith(
             items: merged,
             seenItemIds: mergedSeen,
             nextCursor: page.nextCursor,
             isLoading: false,
+            error: null,
           ),
         ),
       };
@@ -176,7 +203,7 @@ class DiscoveryFeedMapNotifier
       developer.log('append error: $e', name: 'DiscoveryFeed', error: e, stackTrace: st);
       state = {
         ...state,
-        tabId: AsyncData(
+        channelId: AsyncData(
           value.copyWith(
             isLoading: false,
             error: runtimeErrorDisplayMessage(e),
@@ -194,9 +221,9 @@ final discoveryFeedMapProvider =
       Map<String, AsyncValue<DiscoveryFeedState>>
     >(DiscoveryFeedMapNotifier.new);
 
-/// 按 tab (photo/video) 读取当前 feed；首次访问时需调用 notifier.load(tabId)
+/// 按 tab (photo/video) 读取当前 feed；首次访问时需调用 notifier.load(channelId)
 final discoveryFeedProvider =
-    Provider.family<AsyncValue<DiscoveryFeedState>, String>((ref, tabId) {
+    Provider.family<AsyncValue<DiscoveryFeedState>, String>((ref, channelId) {
       final map = ref.watch(discoveryFeedMapProvider);
-      return map[tabId] ?? const AsyncValue.loading();
+      return map[channelId] ?? const AsyncValue.loading();
     });

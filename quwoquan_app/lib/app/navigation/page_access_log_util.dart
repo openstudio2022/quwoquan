@@ -25,7 +25,7 @@ Future<void> writeAppPageAccessOpen({
   OpsEventRepository? eventRepository,
   String currentUserId = '',
   String experimentBucket = '',
-}) async {
+}) {
   final trace = AppTraceContextStore.instance;
   final pageName = pageNameOverride ?? pageNameFromRouteLocation(location);
   final now = DateTime.now().toUtc();
@@ -35,35 +35,39 @@ Future<void> writeAppPageAccessOpen({
           Future<void>.value(),
     );
   }
-  await AppLogService.instance.writeEvent(
-    logType: AppLogType.pageAccess,
-    level: AppLogLevel.info,
-    context: AppLogContext(
-      sessionId: trace.sessionId,
-      pageVisitId: pageVisitId,
+  unawaited(
+    AppLogService.instance.writeEvent(
+      logType: AppLogType.pageAccess,
+      level: AppLogLevel.info,
+      context: AppLogContext(
+        sessionId: trace.sessionId,
+        pageVisitId: pageVisitId,
+      ),
+      payload: AppLogPageOpenPayload(
+        event: 'open',
+        route: location,
+        pageName: pageName,
+      ).toMap(),
+      summaryPayload: AppLogPageOpenSummaryPayload(
+        event: 'open',
+        route: location,
+      ).toMap(),
     ),
-    payload: AppLogPageOpenPayload(
-      event: 'open',
-      route: location,
-      pageName: pageName,
-    ).toMap(),
-    summaryPayload: AppLogPageOpenSummaryPayload(
-      event: 'open',
-      route: location,
-    ).toMap(),
   );
-  await AppLogService.instance.writeEvent(
-    logType: AppLogType.perf,
-    level: AppLogLevel.info,
-    context: AppLogContext(
-      sessionId: trace.sessionId,
-      pageVisitId: pageVisitId,
+  unawaited(
+    AppLogService.instance.writeEvent(
+      logType: AppLogType.perf,
+      level: AppLogLevel.info,
+      context: AppLogContext(
+        sessionId: trace.sessionId,
+        pageVisitId: pageVisitId,
+      ),
+      payload: AppPerfProbe.snapshot(event: 'page_open', route: location),
+      summaryPayload: AppLogPageOpenSummaryPayload(
+        event: 'page_open',
+        route: location,
+      ).toMap(),
     ),
-    payload: AppPerfProbe.snapshot(event: 'page_open', route: location),
-    summaryPayload: AppLogPageOpenSummaryPayload(
-      event: 'page_open',
-      route: location,
-    ).toMap(),
   );
   if (eventRepository != null) {
     unawaited(
@@ -99,6 +103,7 @@ Future<void> writeAppPageAccessOpen({
       ),
     );
   }
+  return Future<void>.value();
 }
 
 Future<void> writeAppPageAccessReturn({
@@ -109,47 +114,51 @@ Future<void> writeAppPageAccessReturn({
   OpsEventRepository? eventRepository,
   String currentUserId = '',
   String experimentBucket = '',
-}) async {
+}) {
   final trace = AppTraceContextStore.instance;
   final durationMs = DateTime.now().difference(enterAt).inMilliseconds;
   final pageName = pageNameOverride ?? pageNameFromRouteLocation(location);
   final now = DateTime.now().toUtc();
-  await AppLogService.instance.writeEvent(
-    logType: AppLogType.pageAccess,
-    level: AppLogLevel.info,
-    context: AppLogContext(
-      sessionId: trace.sessionId,
-      pageVisitId: pageVisitId,
+  unawaited(
+    AppLogService.instance.writeEvent(
+      logType: AppLogType.pageAccess,
+      level: AppLogLevel.info,
+      context: AppLogContext(
+        sessionId: trace.sessionId,
+        pageVisitId: pageVisitId,
+      ),
+      payload: AppLogPageReturnPayload(
+        event: 'return',
+        route: location,
+        pageName: pageName,
+        durationMs: durationMs,
+      ).toMap(),
+      summaryPayload: AppLogPageReturnSummaryPayload(
+        event: 'return',
+        route: location,
+        durationMs: durationMs,
+      ).toMap(),
     ),
-    payload: AppLogPageReturnPayload(
-      event: 'return',
-      route: location,
-      pageName: pageName,
-      durationMs: durationMs,
-    ).toMap(),
-    summaryPayload: AppLogPageReturnSummaryPayload(
-      event: 'return',
-      route: location,
-      durationMs: durationMs,
-    ).toMap(),
   );
-  await AppLogService.instance.writeEvent(
-    logType: AppLogType.perf,
-    level: AppLogLevel.info,
-    context: AppLogContext(
-      sessionId: trace.sessionId,
-      pageVisitId: pageVisitId,
+  unawaited(
+    AppLogService.instance.writeEvent(
+      logType: AppLogType.perf,
+      level: AppLogLevel.info,
+      context: AppLogContext(
+        sessionId: trace.sessionId,
+        pageVisitId: pageVisitId,
+      ),
+      payload: AppPerfProbe.snapshot(
+        event: 'page_return',
+        route: location,
+        latencyMs: durationMs,
+      ),
+      summaryPayload: AppLogPageReturnSummaryPayload(
+        event: 'page_return',
+        route: location,
+        durationMs: durationMs,
+      ).toMap(),
     ),
-    payload: AppPerfProbe.snapshot(
-      event: 'page_return',
-      route: location,
-      latencyMs: durationMs,
-    ),
-    summaryPayload: AppLogPageReturnSummaryPayload(
-      event: 'page_return',
-      route: location,
-      durationMs: durationMs,
-    ).toMap(),
   );
   if (eventRepository != null) {
     unawaited(
@@ -195,6 +204,7 @@ Future<void> writeAppPageAccessReturn({
       ),
     );
   }
+  return Future<void>.value();
 }
 
 String pageNameFromRouteLocation(String location) {
@@ -307,7 +317,6 @@ String pageNameFromRouteLocation(String location) {
   if (path == AppRoutePaths.profileEdit) return 'profile_edit';
   if (path == AppRoutePaths.profilePersonas) return 'profile_personas';
   if (path == AppRoutePaths.profileComments) return 'profile_comments';
-  if (path == AppRoutePaths.profileResonance) return 'profile_resonance';
   if (path.startsWith('/profile/stats')) return 'profile_stats';
   if (path.startsWith('/rtc/outgoing/')) return 'rtc_outgoing';
   if (path.startsWith('/rtc/incoming/')) return 'rtc_incoming';

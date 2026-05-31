@@ -5,14 +5,14 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/media/image/viewer/immersive_image_viewer.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 
@@ -34,7 +34,7 @@ class PhotoDetailPage extends ConsumerStatefulWidget {
 
 class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
   bool _isOpen = true;
-  List<PostSummaryView> _posts = [];
+  List<ContentSurfaceView> _posts = [];
   bool _isLoading = true;
   String? _trackedContentId;
 
@@ -59,27 +59,27 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
 
   ContentType get _resolvedContentType {
     final cat = widget.initialExtra?.category;
-    if (cat == 'moment' || cat == 'profile_moment') return ContentType.moment;
+    if (cat == 'moment' || cat == 'profile_moment') return ContentType.micro;
     if (_posts.isNotEmpty) {
       final idx = _safeInitialIndex;
       final post = _posts[idx];
       final postType = post.contentType;
-      if (postType == 'moment') return ContentType.moment;
+      if (postType == 'micro') return ContentType.micro;
     }
-    return ContentType.photo;
+    return ContentType.image;
   }
 
   void _startEngagementTracking() {
     if (_posts.isEmpty) return;
     final idx = _safeInitialIndex;
     final post = _posts[idx];
-    _trackedContentId = post.id;
+    _trackedContentId = post.postId;
     ref.read(contentEngagementTrackerProvider).trackContentEnter(
-      post.id,
+      post.postId,
       contentType: _resolvedContentType,
       referralSource: widget.initialExtra?.referralSource ?? ReferralSource.organicFeed,
-      totalImages: post.images?.length ?? 1,
-      authorId: post.authorId,
+      totalImages: post.images.isEmpty ? 1 : post.images.length,
+      authorId: post.author.id,
       tags: post.tags,
       position: idx,
       feedRequestId: widget.initialExtra?.feedRequestId,
@@ -108,12 +108,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
           .listDiscoveryFeed(category: category, limit: 100);
       applyConfirmedInteractionPosts(ref, dtos);
       _posts = dtos
-          .map(
-            (dto) => PostSummaryView.fromDto(
-              dto,
-              surfaceId: PostReadSurfaceId.detailPhoto,
-            ),
-          )
+          .map((dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()))
           .toList(growable: false);
     } finally {
       if (mounted) {
@@ -162,10 +157,8 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
             setState(() {
               _posts = value.items
                   .map(
-                    (dto) => PostSummaryView.fromDto(
-                      dto,
-                      surfaceId: PostReadSurfaceId.detailPhoto,
-                    ),
+                    (dto) =>
+                        ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()),
                   )
                   .toList(growable: false);
             });
@@ -203,68 +196,79 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
       followingUsers: ref
           .watch(userRelationshipStateProvider)
           .followingSubAccountIds,
-      onFollowClick: (subAccountId, _) => syncProfileFollowIntent(
-        ref,
-        subAccountId: subAccountId,
-        isFollowing: !effectiveProfileFollowing(ref, subAccountId),
-      ),
+      onFollowClick: (subAccountId, _) =>
+          runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
+            syncProfileFollowIntent(
+              ref,
+              subAccountId: subAccountId,
+              isFollowing: !effectiveProfileFollowing(ref, subAccountId),
+            );
+          }),
       likedPosts: ref.watch(postInteractionStateProvider).likedPostIds,
       savedPosts: ref.watch(postInteractionStateProvider).savedPostIds,
       getPostLikesCount: (post) {
-        return effectivePostLikeCount(ref, post.id, fallback: post.likesCount);
+        return effectivePostLikeCount(
+          ref,
+          post.postId,
+          fallback: post.stats.like,
+        );
       },
       getPostBookmarksCount: (post) {
         return effectivePostBookmarkCount(
           ref,
-          post.id,
-          fallback: post.savesCount,
+          post.postId,
+          fallback: post.stats.favorite,
         );
       },
       getPostCommentsCount: (post) {
         return effectivePostCommentCount(
           ref,
-          post.id,
-          fallback: post.commentsCount,
+          post.postId,
+          fallback: post.stats.comment,
         );
       },
       getPostSharesCount: (post) {
         return effectivePostShareCount(
           ref,
-          post.id,
-          fallback: post.sharesCount,
+          post.postId,
+          fallback: post.stats.share,
         );
       },
       onLikeClick: (post) {
-        final wasLiked = effectivePostLiked(ref, post.id);
-        final currentLikeCount = effectivePostLikeCount(
-          ref,
-          post.id,
-          fallback: post.likesCount,
-        );
-        syncPostLikeIntent(
-          ref,
-          postId: post.id,
-          isLiked: !wasLiked,
-          likeCount: wasLiked
-              ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
-              : currentLikeCount + 1,
-        );
+        runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+          final wasLiked = effectivePostLiked(ref, post.postId);
+          final currentLikeCount = effectivePostLikeCount(
+            ref,
+            post.postId,
+            fallback: post.stats.like,
+          );
+          syncPostLikeIntent(
+            ref,
+            postId: post.postId,
+            isLiked: !wasLiked,
+            likeCount: wasLiked
+                ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
+                : currentLikeCount + 1,
+          );
+        });
       },
       onSaveClick: (post) {
-        final wasSaved = effectivePostSaved(ref, post.id);
-        final currentBookmarkCount = effectivePostBookmarkCount(
-          ref,
-          post.id,
-          fallback: post.savesCount,
-        );
-        syncPostSaveIntent(
-          ref,
-          postId: post.id,
-          isSaved: !wasSaved,
-          bookmarkCount: wasSaved
-              ? (currentBookmarkCount - 1).clamp(0, 1 << 31).toInt()
-              : currentBookmarkCount + 1,
-        );
+        runWhenLoggedIn(ref, context, AuthGateReason.favorite, () {
+          final wasSaved = effectivePostSaved(ref, post.postId);
+          final currentBookmarkCount = effectivePostBookmarkCount(
+            ref,
+            post.postId,
+            fallback: post.stats.favorite,
+          );
+          syncPostSaveIntent(
+            ref,
+            postId: post.postId,
+            isSaved: !wasSaved,
+            bookmarkCount: wasSaved
+                ? (currentBookmarkCount - 1).clamp(0, 1 << 31).toInt()
+                : currentBookmarkCount + 1,
+          );
+        });
       },
       onAssistantClick: () {
         final target = VisitTarget.page('discovery_photo');
@@ -276,6 +280,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
             tab: 'photo',
             visitTarget: target,
             experienceLevel: service.getExperience(target),
+            objectType: 'post',
           ),
         );
       },
@@ -290,13 +295,13 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
         }
         if (newIndex >= 0 && newIndex < _posts.length) {
           final post = _posts[newIndex];
-          _trackedContentId = post.id;
+          _trackedContentId = post.postId;
           ref.read(contentEngagementTrackerProvider).trackContentEnter(
-            post.id,
+            post.postId,
             contentType: _resolvedContentType,
             referralSource: widget.initialExtra?.referralSource ?? ReferralSource.organicFeed,
-            totalImages: post.images?.length ?? 1,
-            authorId: post.authorId,
+            totalImages: post.images.isEmpty ? 1 : post.images.length,
+            authorId: post.author.id,
             tags: post.tags,
             position: newIndex,
             feedRequestId: widget.initialExtra?.feedRequestId,

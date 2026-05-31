@@ -5,7 +5,10 @@
 //   PhotoPostDto   ← photo_post_dto.g.dart
 //   VideoPostDto   ← video_post_dto.g.dart
 //   ArticlePostDto ← article_post_dto.g.dart
-//   MomentPostDto  ← moment_post_dto.g.dart
+//   MicroPostDto  ← micro_post_dto.g.dart
+
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 
 /// 所有类型化帖子 DTO 的抽象基类。
 ///
@@ -57,6 +60,11 @@ abstract class PostBaseDto {
   /// Optional media duration in milliseconds.
   int? get durationMs => null;
 
+  /// 交集理由（云侧推荐管线预生成，B1）。
+  /// 默认 null 表示该帖无交集线索；内容卡「无来源不展示」。
+  /// 子类（如 MicroPostDto）按 projection 字段 override。
+  List<IntersectionReason>? get intersectionReasons => null;
+
   /// Optional canonical aspect ratio for visual posts.
   double? get aspectRatio => null;
 
@@ -65,15 +73,15 @@ abstract class PostBaseDto {
   String get normalizedBody => (body ?? '').trim();
 
   List<String> get mediaImageUrls => imageUrls
-      .map((url) => url.trim())
+      .map(resolveContentMediaUrl)
       .where((url) => url.isNotEmpty)
       .toList(growable: false);
 
-  String get mediaCoverUrl => (coverUrl ?? '').trim();
+  String get mediaCoverUrl => resolveContentMediaUrl(coverUrl);
 
-  String get mediaVideoUrl => (videoUrl ?? '').trim();
+  String get mediaVideoUrl => resolveContentMediaUrl(videoUrl);
 
-  String get mediaThumbnailUrl => (thumbnailUrl ?? '').trim();
+  String get mediaThumbnailUrl => resolveContentMediaUrl(thumbnailUrl);
 
   bool get hasImages => mediaImageUrls.isNotEmpty;
 

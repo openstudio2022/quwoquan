@@ -14,6 +14,12 @@ api_routes:
     description: 发现流（推荐排序 + cursor 分页；cursor 为 opaque token，仅用于 future window）
     query_params: [identity, type, sort, cursor, limit, subCategory]
     response_entity: Post
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
 
   - method: GET
     path: /v1/content/posts/search
@@ -28,7 +34,13 @@ api_routes:
     operation: CreatePost
     description: 创建内容（可草稿或直发）
     request_entity: Post
-    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tagRefs, entityRefs, rating, reviewAspects, mediaUrls, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/content/sub-accounts/{subAccountId}/posts
@@ -47,18 +59,36 @@ api_routes:
     path: /v1/content/posts/{postId}
     operation: UpdatePost
     description: 更新内容（仅 draft 可改；published 后不可变）
-    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tagRefs, entityRefs, rating, reviewAspects, mediaUrls, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/content/posts/{postId}/publish
     operation: PublishPost
     description: 发布草稿（发布后内容本体不可修改）
     writable_fields: [contentIdentity, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: DELETE
     path: /v1/content/posts/{postId}
     operation: DeletePost
     description: 删除内容（级联下架作者分发与用户转发并写入墓碑）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: PATCH
     path: /v1/content/posts/{postId}/circles
@@ -77,7 +107,7 @@ api_routes:
     path: /v1/content/posts/{postId}:promoteToWork
     operation: PromotePostToWork
     description: 点滴升级为作品（原地升级，保持 postId 与 deeplink 不变）
-    writable_fields: [contentType, title, summary, tags, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, title, summary, tagRefs, entityRefs, rating, reviewAspects, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
     auth: required
 
   - method: GET
@@ -93,11 +123,23 @@ api_routes:
     description: 发表评论
     request_entity: Comment
     writable_fields: [content, replyToCommentId, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: DELETE
     path: /v1/content/posts/{postId}/comments/{commentId}
     operation: DeleteComment
     description: 删除评论
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/content/comments/{commentId}/like
@@ -153,6 +195,12 @@ api_routes:
     operation: GetReactionState
     description: 当前用户互动状态（liked/favorited/shared；shared 来自权威分享记录）
     response_entity: ContentReaction
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
 
   - method: POST
     path: /v1/content/posts/{postId}/like

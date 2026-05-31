@@ -7,5 +7,12 @@
   "enabledModules": [],
   "disabledModules": [],
   "catalogVersion": 1,
-  "retentionPolicyVersion": 1
+  "retentionPolicyVersion": 1,
+  "topologySchemaVersion": "environment-topology/v1",
+  "artifactPolicy": {
+    "allowFixtureRefs": false,
+    "allowReleaseSnapshot": true,
+    "secretScope": "prod",
+    "distribution": "store-release"
+  }
 }

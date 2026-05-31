@@ -8,15 +8,25 @@ import json
 import os
 import socket
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from agent_ops.deploy.lib.port_manifest import load_port_manifest, profile_ports
 
 
 def parse_args() -> argparse.Namespace:
+    beta_default_ports = profile_ports(load_port_manifest(), "beta-local")
+    beta_port_csv = ",".join(
+        str(beta_default_ports[name])
+        for name in ("api-edge", "assistant-service", "media-edge")
+    )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--state-root",
@@ -35,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--beta-ports",
-        default="18080,18087,18088",
+        default=beta_port_csv,
         help="Comma-separated beta single-stack listener ports.",
     )
     parser.add_argument("--json", action="store_true", help="Print JSON report.")

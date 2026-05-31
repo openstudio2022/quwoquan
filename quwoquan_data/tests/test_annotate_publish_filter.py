@@ -1,0 +1,146 @@
+"""annotate CLI + publish_filter 发布门契约。
+
+可直接运行：python3 quwoquan_data/tests/test_annotate_publish_filter.py
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp(prefix="anno_rt_")
+
+from _common.io import write_json  # noqa: E402
+from _common.paths import ensure_batch_layout  # noqa: E402
+from _common.review_ledger import (  # noqa: E402
+    ReviewItem,
+    ReviewLedger,
+    JUDGE_DOUBTFUL,
+    KIND_ARTICLE,
+    KIND_IMAGE,
+    STATE_PUBLISHABLE,
+    STATE_DISCARD,
+    load_ledger,
+    resolve_publish_state,
+    save_ledger,
+)
+from _common.publish_filter import apply_publish_filter  # noqa: E402
+from annotate.handler import handle_annotate  # noqa: E402
+
+TASK = "anno_task"
+BATCH = "b1"
+REF = "topic_x"
+
+
+def _seed_ledger() -> None:
+    ensure_batch_layout(TASK, BATCH, "produce")
+    ledger = ReviewLedger(
+        taskId=TASK,
+        batchId=BATCH,
+        ref=REF,
+        article=ReviewItem(kind=KIND_ARTICLE, target=REF, agentJudgment="credible", agentScore=4),
+        images=[
+            ReviewItem(kind=KIND_IMAGE, target="img_safe", agentJudgment="credible", agentScore=4),
+            ReviewItem(kind=KIND_IMAGE, target="img_face", agentJudgment=JUDGE_DOUBTFUL, agentScore=2, reasons=["face"]),
+        ],
+    )
+    save_ledger(ledger)
+
+
+def _args(**kw) -> argparse.Namespace:
+    base = dict(
+        task=TASK, batch=BATCH, list=False, ref=None, kind=None, target=None,
+        judgment=None, score=None, override=None, reprocess=False, note=None,
+    )
+    base.update(kw)
+    return argparse.Namespace(**base)
+
+
+def test_doubtful_image_blocks_until_human():
+    _seed_ledger()
+    ledger = load_ledger(TASK, BATCH, REF)
+    face = ledger.find_item(KIND_IMAGE, "img_face")
+    # agent 存疑 + 默认 requireHumanWhenDoubtful → fix（必须人确认）
+    assert resolve_publish_state(face, ledger.policy) != STATE_PUBLISHABLE
+
+
+def test_annotate_human_publishable():
+    _seed_ledger()
+    handle_annotate(_args(ref=REF, kind=KIND_IMAGE, target="img_face", judgment="credible", score=4))
+    ledger = load_ledger(TASK, BATCH, REF)
+    face = ledger.find_item(KIND_IMAGE, "img_face")
+    assert resolve_publish_state(face, ledger.policy) == STATE_PUBLISHABLE
+
+
+def test_annotate_override_discard():
+    _seed_ledger()
+    handle_annotate(_args(ref=REF, kind=KIND_IMAGE, target="img_face", override="discard"))
+    ledger = load_ledger(TASK, BATCH, REF)
+    face = ledger.find_item(KIND_IMAGE, "img_face")
+    assert resolve_publish_state(face, ledger.policy) == STATE_DISCARD
+
+
+def test_annotate_reprocess_count():
+    _seed_ledger()
+    handle_annotate(_args(ref=REF, kind=KIND_IMAGE, target="img_face", reprocess=True))
+    handle_annotate(_args(ref=REF, kind=KIND_IMAGE, target="img_face", reprocess=True))
+    ledger = load_ledger(TASK, BATCH, REF)
+    assert ledger.find_item(KIND_IMAGE, "img_face").reprocessCount == 2
+
+
+def test_publish_filter_discard_and_homepage(tmp_path_factory=None):
+    publish_root = Path(tempfile.mkdtemp(prefix="pf_pub_"))
+    # 一个实体有主页，一个没有
+    (publish_root / "entities" / "地点" / "景区" / "有主页" ).mkdir(parents=True, exist_ok=True)
+    (publish_root / "entities" / "地点" / "景区" / "有主页" / "page.md").write_text("# 有主页\n", encoding="utf-8")
+
+    topic = Path(tempfile.mkdtemp(prefix="pf_topic_"))
+    (topic / "assets").mkdir(parents=True, exist_ok=True)
+    (topic / "assets" / "bad.jpg").write_bytes(b"x")
+    write_json(topic / "manifest.json", {
+        "topicId": REF,
+        "entityRefs": ["/entity/地点/景区/有主页", "/entity/地点/景区/无主页"],
+        "assets": [
+            {"assetId": "ok", "fileName": "ok.jpg"},
+            {"assetId": "bad", "fileName": "bad.jpg"},
+        ],
+    })
+    (topic / "article.md").write_text("# t\n\n:::figure\n![x](asset://bad)\nbad\n:::\n\n正文。\n", encoding="utf-8")
+    # 账本：文章可发布，bad 图 discard
+    ledger = ReviewLedger(
+        taskId=TASK, batchId=BATCH, ref=REF,
+        article=ReviewItem(kind=KIND_ARTICLE, target=REF, agentJudgment="credible", agentScore=4),
+        images=[
+            ReviewItem(kind=KIND_IMAGE, target="ok", agentJudgment="credible", agentScore=4),
+            ReviewItem(kind=KIND_IMAGE, target="bad", humanOverride="discard"),
+        ],
+    )
+    (topic / "review").mkdir(parents=True, exist_ok=True)
+    write_json(topic / "review" / "ledger.json", ledger.to_dict())
+
+    verdict = apply_publish_filter(topic, publish_root)
+    assert verdict.publishable is True
+    assert "bad" in verdict.discarded_assets
+    assert "无主页" in "".join(verdict.filtered_entities)
+    # discard 图从 manifest.assets 剔除
+    asset_ids = {a["assetId"] for a in verdict.manifest["assets"]}
+    assert "bad" not in asset_ids and "ok" in asset_ids
+    # 无主页实体被过滤
+    assert all("无主页" not in r for r in verdict.manifest["entityRefs"])
+    # 正文 figure 引用 bad 被剔除
+    assert "asset://bad" not in verdict.article_md
+
+
+def _run_all() -> None:
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    for fn in fns:
+        fn()
+        print(f"PASS {fn.__name__}")
+    print(f"annotate/publish_filter tests passed ({len(fns)})")
+
+
+if __name__ == "__main__":
+    _run_all()

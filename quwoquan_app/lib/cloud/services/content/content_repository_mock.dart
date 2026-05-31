@@ -19,7 +19,10 @@ class MockContentRepository implements ContentRepository {
           .map((item) => postBaseDtoFromMap(item.cast<String, dynamic>()))
           .toList(growable: false),
     );
-    return _mergePostSeeds(_discoverySeedPosts(), contractPosts);
+    if (contractPosts.isEmpty) {
+      return null;
+    }
+    return _mergePostSeeds(contractPosts, _discoverySeedPosts());
   }
 
   static List<PostBaseDto> _discoverySeedPosts() {
@@ -97,11 +100,10 @@ class MockContentRepository implements ContentRepository {
       'assistantUsePolicy': 'inherit',
       ...payloadMerge,
     };
-    final rawType = (merged['contentType'] ?? merged['type'] ?? 'micro')
+    final contentType = (merged['contentType'] ?? merged['type'] ?? 'micro')
         .toString();
-    final normalizedType = rawType == 'moment' ? 'micro' : rawType;
-    merged['contentType'] = normalizedType;
-    if (normalizedType == 'micro') {
+    merged['contentType'] = contentType;
+    if (contentType == 'micro') {
       merged['contentIdentity'] = merged['contentIdentity'] ?? 'moment';
       merged['identity'] = merged['identity'] ?? 'moment';
     } else {
@@ -128,7 +130,13 @@ class MockContentRepository implements ContentRepository {
       identity: identity,
       type: type,
     );
-    return CursorPage<PostBaseDto>(items: items, nextCursor: null);
+    final offset = int.tryParse((cursor ?? '').trim()) ?? 0;
+    final safeOffset = offset.clamp(0, items.length);
+    final safeLimit = limit <= 0 ? items.length : limit;
+    final end = (safeOffset + safeLimit).clamp(0, items.length);
+    final pageItems = items.sublist(safeOffset, end);
+    final nextCursor = end < items.length ? '$end' : null;
+    return CursorPage<PostBaseDto>(items: pageItems, nextCursor: nextCursor);
   }
 
   @override
@@ -756,9 +764,7 @@ class MockContentRepository implements ContentRepository {
     final itemIdentity =
         (item['contentIdentity'] ??
                 item['identity'] ??
-                ((itemType == 'micro' || item['type']?.toString() == 'moment')
-                    ? 'moment'
-                    : 'work'))
+                (itemType == 'micro' ? 'moment' : 'work'))
             .toString();
     final expectedIdentity = (identity ?? '').trim();
     final expectedType = _normalizeFeedType(type);
@@ -766,9 +772,6 @@ class MockContentRepository implements ContentRepository {
       return false;
     }
     if (expectedType != null && expectedType.isNotEmpty) {
-      if (expectedType == 'moment') {
-        return itemIdentity == 'moment';
-      }
       return itemType == expectedType;
     }
     return true;
@@ -808,8 +811,10 @@ class MockContentRepository implements ContentRepository {
   bool get usesCloudAssistantEdgeSync => false;
 
   @override
-  Map<String, dynamic>? discoveryPresentationWireForPost(String postId) {
-    return lookupCanonicalDiscoveryWireRowByPostId(postId);
+  DiscoveryPresentationWire? discoveryPresentationWireForPost(String postId) {
+    return DiscoveryPresentationWire.fromRow(
+      lookupCanonicalDiscoveryWireRowByPostId(postId),
+    );
   }
 
   @override

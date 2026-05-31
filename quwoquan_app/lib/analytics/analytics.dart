@@ -64,68 +64,73 @@ class AnalyticsService {
       return;
     }
     final trace = AppTraceContextStore.instance;
-    await _appLogService.writeEvent(
-      logType: AppLogType.pageAccess,
-      level: AppLogLevel.info,
-      context: AppLogContext(
-        sessionId: trace.sessionId,
-        pageVisitId: trace.newPageVisitId(),
-        requestId: trace.newRequestId(),
-        target: 'analytics_facade',
-        action: event.eventName,
+    unawaited(
+      _appLogService.writeEvent(
+        logType: AppLogType.pageAccess,
+        level: AppLogLevel.info,
+        context: AppLogContext(
+          sessionId: trace.sessionId,
+          pageVisitId: trace.newPageVisitId(),
+          requestId: trace.newRequestId(),
+          target: 'analytics_facade',
+          action: event.eventName,
+        ),
+        payload: AppLogAnalyticsEventPayload(
+          kind: 'analytics_event',
+          eventType: event.eventType,
+          eventName: event.eventName,
+          properties: event.properties,
+        ).toMap(),
+        summaryPayload: AppLogAnalyticsEventSummaryPayload(
+          kind: 'analytics_event',
+          eventType: event.eventType,
+          eventName: event.eventName,
+        ).toMap(),
       ),
-      payload: AppLogAnalyticsEventPayload(
-        kind: 'analytics_event',
-        eventType: event.eventType,
-        eventName: event.eventName,
-        properties: event.properties,
-      ).toMap(),
-      summaryPayload: AppLogAnalyticsEventSummaryPayload(
-        kind: 'analytics_event',
-        eventType: event.eventType,
-        eventName: event.eventName,
-      ).toMap(),
     );
     if (_mode != AppDataSourceMode.remote) {
       return;
     }
-    try {
-      final occurredAt = DateTime.now().toUtc();
-      await _eventRepository.reportEventBatch(
-        events: <OpsEventRecordInput>[
-          OpsEventRecordInput(
-            eventId: trace.newRequestId(),
-            eventType: event.eventType,
-            eventName: event.eventName,
-            eventVersion: 'v1',
-            priority: 'P1',
-            producer: 'app.analytics_facade',
-            source: 'analytics_facade',
-            userIdHash: _hashUserId(_resolveUserId(event.properties)),
-            sessionId: trace.sessionId,
-            pageVisitId: trace.newPageVisitId(),
-            requestId: trace.newRequestId(),
-            pageName: (event.properties['pageName'] ?? '').toString(),
-            surfaceId: (event.properties['surfaceId'] ?? '').toString(),
-            routeId: (event.properties['routeId'] ?? '').toString(),
-            operationId: (event.properties['operationId'] ?? '').toString(),
-            targetType: (event.properties['targetType'] ?? 'analytics')
-                .toString(),
-            targetKey: _targetKeyFor(event),
-            entityType: (event.properties['entityType'] ?? '').toString(),
-            entityId: (event.properties['entityId'] ?? '').toString(),
-            experimentBucket: (event.properties['experimentBucket'] ?? '')
-                .toString(),
-            occurredAt: occurredAt.toIso8601String(),
-            clientSentAt: occurredAt.toIso8601String(),
-            payload: Map<String, dynamic>.from(event.properties),
-            metrics: _extractMetrics(event.properties),
-          ),
-        ],
-      );
-    } catch (_) {
-      // Best effort: analytics façade must not block product flows.
-    }
+    final occurredAt = DateTime.now().toUtc();
+    unawaited(
+      _eventRepository
+          .reportEventBatch(
+            events: <OpsEventRecordInput>[
+              OpsEventRecordInput(
+                eventId: trace.newRequestId(),
+                eventType: event.eventType,
+                eventName: event.eventName,
+                eventVersion: 'v1',
+                priority: 'P1',
+                producer: 'app.analytics_facade',
+                source: 'analytics_facade',
+                userIdHash: _hashUserId(_resolveUserId(event.properties)),
+                sessionId: trace.sessionId,
+                pageVisitId: trace.newPageVisitId(),
+                requestId: trace.newRequestId(),
+                pageName: (event.properties['pageName'] ?? '').toString(),
+                surfaceId: (event.properties['surfaceId'] ?? '').toString(),
+                routeId: (event.properties['routeId'] ?? '').toString(),
+                operationId: (event.properties['operationId'] ?? '').toString(),
+                targetType: (event.properties['targetType'] ?? 'analytics')
+                    .toString(),
+                targetKey: _targetKeyFor(event),
+                entityType: (event.properties['entityType'] ?? '').toString(),
+                entityId: (event.properties['entityId'] ?? '').toString(),
+                experimentBucket: (event.properties['experimentBucket'] ?? '')
+                    .toString(),
+                occurredAt: occurredAt.toIso8601String(),
+                clientSentAt: occurredAt.toIso8601String(),
+                payload: Map<String, dynamic>.from(event.properties),
+                metrics: _extractMetrics(event.properties),
+              ),
+            ],
+          )
+          .catchError((_) {
+            // Best effort: analytics façade must not block product flows.
+            return const OpsEventBatchAck(acceptedCount: 0, duplicateCount: 0);
+          }),
+    );
   }
 
   String _resolveUserId(Map<String, dynamic> properties) {

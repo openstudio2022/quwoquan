@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -18,10 +19,14 @@ USER_POOL = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "
 ALPHA_MANIFEST = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "app_alpha_seed_manifest.json"
 
 
-def run(cmd: list[str], cwd: Path = ROOT) -> str:
+def run(cmd: list[str], cwd: Path = ROOT, env: dict[str, str] | None = None) -> str:
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
     result = subprocess.run(
         cmd,
         cwd=cwd,
+        env=merged_env,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -123,7 +128,10 @@ def main() -> int:
         run([sys.executable, "quwoquan_app/scripts/env/verify_app_seed_manifests.py"])
         run([sys.executable, "agent_ops/avatar/verify_avatar_user_pool_consistency.py"])
         run(["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", "alpha"])
-        run(["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", "beta"])
+        run(
+            ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", "beta"],
+            env={"CDN_DOMAIN": "cdn.beta.local"},
+        )
         report["sharedPool"] = load_shared_pool_summary()
         alpha_output = run(
             [

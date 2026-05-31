@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -12,66 +13,78 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 /// 欢迎页
 ///
 /// 与 Figma 原型及趣我圈2026 WelcomeScreen 视觉、动效一致。
-/// 动效顺序：水滴出现(100ms) -> 花瓣绽放(800ms) -> 文案出现(2000ms)
+/// 动效顺序：短暂留白 -> 花瓣绽放 -> 文案出现 -> 直接进入首页。
 class WelcomeScreen extends StatefulWidget {
-  const WelcomeScreen({super.key, required this.onFinish});
+  const WelcomeScreen({super.key, required this.onFinish, this.loginPrompt});
 
   final VoidCallback onFinish;
+  final WelcomeLoginPromptConfig? loginPrompt;
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
+class WelcomeLoginPromptConfig {
+  const WelcomeLoginPromptConfig({
+    required this.title,
+    required this.subtitle,
+    required this.onLogin,
+    required this.onContinueAsGuest,
+    this.countdownSeconds = 5,
+  });
+
+  final String title;
+  final String subtitle;
+  final FutureOr<void> Function() onLogin;
+  final FutureOr<void> Function() onContinueAsGuest;
+  final int countdownSeconds;
+}
+
 class _WelcomeScreenState extends State<WelcomeScreen>
     with TickerProviderStateMixin {
-  /// 欢迎页自动进入发现页的倒计时秒数（右上角展示）
-  static const int welcomeCountdownSeconds = 3;
+  static const Duration _initialDelay = Duration(milliseconds: 60);
+  static const Duration _petalDuration = Duration(milliseconds: 600);
+  static const Duration _petalStagger = Duration(milliseconds: 35);
+  static const Duration _postBloomPause = Duration(milliseconds: 240);
+  static const Duration _textDuration = Duration(milliseconds: 520);
+  static const Duration _finalPause = Duration(milliseconds: 360);
 
   late List<AnimationController> _petalControllers;
   late AnimationController _textController;
-  int _countdownRemaining = 0;
-  Timer? _countdownTimer;
+  Timer? _loginPromptTimer;
+  bool _showLoginPrompt = false;
+  bool _completionHandled = false;
+  int _loginPromptRemainingSeconds = 5;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppStartupRuntime.instance.markWelcomeShown();
+    });
     _petalControllers = List.generate(
       8,
-      (i) => AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 800),
-      ),
+      (i) => AnimationController(vsync: this, duration: _petalDuration),
     );
-    _textController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
+    _textController = AnimationController(vsync: this, duration: _textDuration);
 
     Future<void> runSequence() async {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(_initialDelay);
       if (!mounted) return;
       for (var i = 0; i < 8; i++) {
         _petalControllers[i].forward();
-        await Future<void>.delayed(const Duration(milliseconds: 40));
+        await Future<void>.delayed(_petalStagger);
       }
-      await Future<void>.delayed(const Duration(milliseconds: 800));
+      await Future<void>.delayed(_postBloomPause);
       if (!mounted) return;
       await _textController.forward();
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await Future<void>.delayed(_finalPause);
       if (!mounted) return;
-      setState(() => _countdownRemaining = welcomeCountdownSeconds);
-      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-        if (!mounted) {
-          t.cancel();
-          return;
-        }
-        setState(() => _countdownRemaining--);
-        if (_countdownRemaining <= 0) {
-          t.cancel();
-          _countdownTimer = null;
-          widget.onFinish();
-        }
-      });
+      if (widget.loginPrompt == null) {
+        _finishWelcome();
+      } else {
+        _showLoginChoice();
+      }
     }
 
     runSequence();
@@ -79,11 +92,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   void dispose() {
+    _loginPromptTimer?.cancel();
     for (final c in _petalControllers) {
       c.dispose();
     }
     _textController.dispose();
-    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -105,8 +118,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           children: [
             _buildBackground(appearance),
             _buildMainContent(appearance),
-            _buildAssistantWhisper(appearance),
-            _buildCountdownBadge(appearance),
+            if (_showLoginPrompt)
+              _buildWelcomeLoginPrompt(appearance)
+            else
+              _buildAssistantWhisper(appearance),
           ],
         ),
       ),
@@ -149,34 +164,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  /// 右上角倒计时角标：仅在进入 3 秒等待阶段显示
-  Widget _buildCountdownBadge(WelcomeAppearance appearance) {
-    if (_countdownRemaining <= 0) return const SizedBox.shrink();
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + AppSpacing.lg,
-      right: AppSpacing.lg,
-      child: Container(
-        decoration: BoxDecoration(
-          color: appearance.buttonBackground,
-          borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-        ),
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
-        child: Text(
-          '$_countdownRemaining',
-          style: TextStyle(
-            fontSize: AppTypography.lg,
-            fontWeight: AppTypography.semiBold,
-            color: appearance.countdownDigit,
-            decoration: TextDecoration.none,
-          ),
         ),
       ),
     );
@@ -360,5 +347,161 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildWelcomeLoginPrompt(WelcomeAppearance appearance) {
+    final prompt = widget.loginPrompt;
+    if (prompt == null) {
+      return const SizedBox.shrink();
+    }
+    return Positioned(
+      left: AppSpacing.lg,
+      right: AppSpacing.lg,
+      bottom: AppSpacing.xl,
+      child: SafeArea(
+        top: false,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          opacity: _showLoginPrompt ? 1 : 0,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.black.withValues(alpha: 0.18),
+                  blurRadius: AppSpacing.thirtySix,
+                  offset: const Offset(AppSpacing.zero, AppSpacing.ten),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.containerLg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    prompt.title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosTitle3,
+                      fontWeight: AppTypography.bold,
+                      color: AppColors.iosLabel(context),
+                      height: AppTypography.lineHeightCompact,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  Text(
+                    prompt.subtitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      color: AppColors.iosSecondaryLabel(context),
+                      height: AppSpacing.textLineHeightBody,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.interGroupMd),
+                  CupertinoButton(
+                    color: AppColors.primaryColor,
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.radiusTwenty,
+                    ),
+                    minimumSize: const Size(
+                      AppSpacing.minInteractiveSize,
+                      AppSpacing.buttonHeightLg,
+                    ),
+                    onPressed: _handleLoginTap,
+                    child: Text(
+                      UITextConstants.login,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosBody,
+                        fontWeight: AppTypography.semiBold,
+                        color: AppColors.white,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  CupertinoButton(
+                    minimumSize: const Size(
+                      AppSpacing.minInteractiveSize,
+                      AppSpacing.minInteractiveSize,
+                    ),
+                    onPressed: _handleContinueAsGuest,
+                    child: Text(
+                      UITextConstants.welcomeLoginSkipWithCountdown(
+                        _loginPromptRemainingSeconds,
+                      ),
+                      style: TextStyle(
+                        fontSize: AppTypography.iosCallout,
+                        fontWeight: AppTypography.medium,
+                        color: AppColors.iosSecondaryLabel(context),
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showLoginChoice() {
+    final prompt = widget.loginPrompt;
+    if (prompt == null || _completionHandled) {
+      return;
+    }
+    setState(() {
+      _showLoginPrompt = true;
+      _loginPromptRemainingSeconds = prompt.countdownSeconds;
+    });
+    _loginPromptTimer?.cancel();
+    _loginPromptTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _completionHandled) {
+        timer.cancel();
+        return;
+      }
+      if (_loginPromptRemainingSeconds <= 1) {
+        timer.cancel();
+        unawaited(_handleContinueAsGuest());
+        return;
+      }
+      setState(() => _loginPromptRemainingSeconds--);
+    });
+  }
+
+  Future<void> _handleLoginTap() async {
+    final prompt = widget.loginPrompt;
+    if (prompt == null || _completionHandled) {
+      return;
+    }
+    _completionHandled = true;
+    _loginPromptTimer?.cancel();
+    await prompt.onLogin();
+  }
+
+  Future<void> _handleContinueAsGuest() async {
+    final prompt = widget.loginPrompt;
+    if (prompt == null || _completionHandled) {
+      return;
+    }
+    _completionHandled = true;
+    _loginPromptTimer?.cancel();
+    await prompt.onContinueAsGuest();
+  }
+
+  void _finishWelcome() {
+    if (_completionHandled) {
+      return;
+    }
+    _completionHandled = true;
+    widget.onFinish();
   }
 }

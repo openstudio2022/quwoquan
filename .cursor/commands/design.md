@@ -1,120 +1,17 @@
----
-name: /design
-id: design
-category: Workflow
-description: 设计基线（面向 Journey / Scenario，落实商用方案与 plan）
----
+# /design
 
-> SDD 主流程：explore → prd → **design** → dev → commit → deploy
-> 若规格与设计可在同一轮冻结，可改用 `/baseline` 直接产出 `spec.md`、`acceptance.yaml`、`design.md` 与 `plan.yaml`。
+目标：冻结架构设计。
 
-## Design Gate
+设计只作用于：
+- AppRoot
+- `L1_domain_service`
+- `L2_business_capability`
 
-进入 `/design` 前必须确认：
+Story 不产生 `design.md`；Story 发现设计缺口时，上收到所属业务能力。
 
-- `spec.md` 已存在且稳定
-- `acceptance.yaml` 已定义
-- 已明确 `L1_capability / L2_journey / L3_scenario`
-- 至少有 2 个方案可比较
-- 已识别约束、依赖、测试策略
-- 选定方案能够覆盖 metadata/codegen、字段或模型演进、数据迁移/回填、必要时双读双写、feature flag、观测、SLO 验证与回滚
-- 若涉及小趣或私密内容，权限、撤销、保留模型已冻结
-- `T1~T4` 证据矩阵已形成
-- `plan.yaml` 已能表达切片顺序，且遵循 `metadata -> codegen -> 业务逻辑 -> 测试`
-- 若涉及助手链路：已阅读 `quwoquan_app/personal_assistant/docs/PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md`，并已识别对应的 Skill / Tool / Phase / 垂类场景文档
+产出：
+- 对应层级 `design.md`。
+- metadata/codegen、数据迁移、feature flag、观测、回滚方案。
+- T1~T4 证据矩阵。
 
-## 执行对象
-
-`/design` 面向 `L2_journey` / `L3_scenario`，并产出其 `plan.yaml`。
-
-适用于需要将规格冻结与设计冻结拆成两轮推进的场景。
-
-## 产出
-
-- `design.md`
-- `plan.yaml`
-- 对应 `CR` 修订
-- metadata / codegen 基线（如有）
-
-## `design.md` 要求
-
-必须包含：
-
-- 设计动因
-- 上游输入评审
-- 对标输入分析
-- 方案对比
-- 选型决策
-- 关键设计决策
-- metadata/codegen 方案
-- 字段演进、迁移/回填、必要时双读双写方案
-- feature flag、观测、SLO 验证与回滚方案
-- TDD / ATDD 策略
-- `plan slice` 与 `T1~T4` 证据矩阵映射
-- 未来演进
-
-### 工程合规设计 Checklist（design.md 必须逐项说明）
-
-```
-☐ DDD 分层：新增代码的域层归属图（domain/application/adapters/infrastructure）
-☐ 强类型：新增数据结构列表（Go struct + Dart DTO），确认无 interface{} / Map<String, dynamic>
-☐ 存储无关：Repository / Store interface 定义位置，implementation 放 infrastructure
-☐ 存储选型：引擎选型 + TTL + 归档 + 弹性策略 + 成本估算
-☐ 端云一致：Dart DTO ↔ Go struct ↔ metadata YAML 字段对照表
-☐ 元数据驱动：需要变更的 metadata YAML 文件列表（service.yaml / errors.yaml / fields.yaml 等）
-☐ codegen 影响：codegen 产物列表（*.g.dart / *.g.go），确认不手改
-```
-
-### 可观测与推荐设计 Checklist
-
-```
-☐ 埋点方案：涉及页面的行为/体验/异常/性能事件定义
-☐ 指标方案：黄金/二层指标采集、计算和切分维度
-☐ 推荐回流：新行为信号 → HotPath → 投影器 → 特征库路径设计
-☐ 性能设计：关键路径性能目标（TTI/P99/帧率），降级和缓存策略
-☐ AB 设计：实验层（recall/rank/rerank）、指标、统计显著性方案
-☐ 存储生命周期：热/温/冷分层、TTL、归档、清理策略
-```
-
-若涉及助手，还必须包含：
-
-- 对三类核心文档的引用与符合性说明
-- 本次变更的真相源映射
-- 是否引入 runtime 兼容逻辑，以及退出条件
-- 无垂类特判、无字符串硬编码、模板资产化的落实方式
-
-## `plan.yaml` 要求
-
-必须包含：
-
-- `version`
-- `node`
-- `derived_from`
-- `slices`
-
-约束：
-
-- `plan.yaml` 只承载稳定实施切片
-- 每个 slice 必须包含 `acceptance_refs`
-- 会话 todo 不得回写到 `plan.yaml`
-- 顺序必须是 `metadata -> codegen -> 业务逻辑 -> 测试`
-
-## G1
-
-如涉及 metadata/codegen，执行真实可用命令：
-
-```bash
-make -C quwoquan_service verify-metadata
-make codegen
-make codegen-app
-```
-
-## 结束输出
-
-```text
-设计基线完成：<feature-path>
-L3_scenario: <scenario>
-plan slices: <N>
-CR: <change-request>
-下一步：/dev
-```
+阻断：设计复述需求、绕过 metadata、缺回滚或测试证据时返回 `GATE_BLOCK`。

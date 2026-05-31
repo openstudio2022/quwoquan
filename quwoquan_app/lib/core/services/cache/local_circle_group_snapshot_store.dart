@@ -188,7 +188,9 @@ class LocalCircleGroupSnapshotStore {
             if (circleName.isNotEmpty) 'circleName': circleName,
           });
         }
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 单个圈子的分组拉取失败时跳过该圈，其余圈子的快照照常落库 */
+      }
     }
     await upsertGroups(namespace: namespace, groups: snapshots);
   }
@@ -203,7 +205,9 @@ class LocalCircleGroupSnapshotStore {
       if (decoded is Map) {
         return decoded.cast<String, dynamic>();
       }
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 持久化 payload 损坏时回退到空 Map，由上层用默认记录兜底 */
+    }
     return const <String, dynamic>{};
   }
 

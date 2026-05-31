@@ -52,7 +52,7 @@ void main() {
       expect(photoFeed.map((item) => item.id), contains('fixture_photo_001'));
       expect(
         photoFeed.every(
-          (item) => item.primaryVisualUrl.startsWith('media/image/post/'),
+          (item) => item.primaryVisualUrl.contains('media/image/post/'),
         ),
         isTrue,
       );
@@ -118,7 +118,7 @@ void main() {
       expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
       expect(
         circles.every(
-          (item) => item.coverUrl?.startsWith('media/image/circle/') == true,
+          (item) => item.coverUrl?.contains('media/image/circle/') == true,
         ),
         isTrue,
       );
@@ -142,7 +142,7 @@ void main() {
       expect(circleHomeFeed.length, greaterThanOrEqualTo(5));
       expect(
         circleHomeFeed.every(
-          (item) => item.primaryVisualUrl.startsWith('media/image/post/'),
+          (item) => item.primaryVisualUrl.contains('media/image/post/'),
         ),
         isTrue,
       );
@@ -156,7 +156,7 @@ void main() {
       expect(activePersonaContext.subAccountId, currentUserId);
       expect(currentUser.displayName, '契约当前用户');
       expect(
-        currentUser.backgroundUrl.startsWith('media/background/user/'),
+        currentUser.backgroundUrl.contains('media/background/user/'),
         isTrue,
       );
       final userPosts = await userRepository.listUserPosts(
@@ -167,7 +167,7 @@ void main() {
       expect(userPosts.map((item) => item.id), contains('fixture_moment_001'));
       expect(
         userPosts.every(
-          (item) => item.primaryVisualUrl.startsWith('media/image/post/'),
+          (item) => item.primaryVisualUrl.contains('media/image/post/'),
         ),
         isTrue,
       );

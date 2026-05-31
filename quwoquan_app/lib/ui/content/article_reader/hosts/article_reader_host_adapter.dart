@@ -17,6 +17,7 @@ class ArticleReaderHostConfig {
     this.forceDegradedPager = false,
     this.showFooterPageLabel = true,
     this.paperTexture,
+    this.presentationStyle = ArticleReadOnlyBookDeckPresentationStyle.book,
     this.onPageChanged,
     this.onOverflowPrevious,
     this.onOverflowNext,
@@ -40,6 +41,7 @@ class ArticleReaderHostConfig {
   final bool forceDegradedPager;
   final bool showFooterPageLabel;
   final ArticlePaperTexture? paperTexture;
+  final ArticleReadOnlyBookDeckPresentationStyle presentationStyle;
   final ValueChanged<int>? onPageChanged;
   final VoidCallback? onOverflowPrevious;
   final VoidCallback? onOverflowNext;

@@ -1,145 +1,41 @@
 version: 2
-feature: persona-context-propagation
-level: L3_scenario
-source_path: user-identity-profile-relationship/persona-follow-graph/persona-context-propagation
-parent_journey: persona-follow-graph
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+node:
+  id: persona-context-propagation
+  level: L3_story
+  path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation
+  title: persona context propagation
+  parent_domain_service: user-identity-profile-relationship
+  parent_business_capability: persona-follow-graph
 scope:
-  summary: >
-    冻结 active persona 向 content/chat/circle/assistant/invite/notification
-    的统一透传、串号阻断与观测基线。
-  journey_bindings:
-    - J2
-    - J3
-  in_scope:
-    - active persona 作为跨域默认动作主体
-    - content/comment/chat/circle/invite/assistant/notification 的 persona 透传
-    - 串号阻断、恢复与 telemetry
-  out_of_scope:
-    - 分身管理台入口与列表
-    - 公开资料与可见性合同
-    - 粉丝/关注图谱分页读取
-
-scenario_acceptance:
-  A1:
-    title: active persona 成为跨域唯一默认主体
-    scenario: 激活分身后，关键写操作与会话都以当前分身作为默认动作主体
-    journey_step: switch persona and perform first action
+  summary: persona context propagation 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: persona context propagation GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
     done_when:
-      - user 域提供 active persona 真相源
-      - 发帖、评论、聊天、圈子、邀请默认读取 active persona
-      - 只有显式选择其它分身时，才允许覆盖默认主体
-    edge_cases:
-      - 切换后立即提交评论或发送消息
-      - 切换过程中网络抖动
-    linked_plan_items:
-      - P1
-      - P2
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
     evidence:
       primary:
-        - T3_cross_service_integration
-        - T4_user_journey
-      supporting:
-        - T1_schema
-        - T2_module_interaction
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      planned:
-        - active persona propagation integration test
-        - switch then first action end-to-end test
-      recorded:
-        - "make -C quwoquan_service verify-metadata && make codegen && make codegen-app"
-        - "go test ./services/content-service/... ./services/chat-service/... ./services/user-service/..."
-        - "go test ./services/circle-service/tests/..."
-        - "flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/ui/content/entry/contract/publish_payload_contract_test.dart test/cloud/chat/contract/chat_repository_contract_test.dart test/ui/chat/journeys/chat_message_send_journey_test.dart test/ui/assistant/providers/assistant_conversation_controller_test.dart test/cloud/circle/circle_write_wire_ssot_test.dart"
-    status: implemented
-  A2:
-    title: 下游域正确落库 persona 身份与记录快照
-    scenario: content/chat/circle/invite/notification 消费 persona 标识与作者快照
-    journey_step: persist action attribution
-    done_when:
-      - content/comment 至少保留 persona 标识与作者快照
-      - chat message 使用 senderPersonaId 或等价字段
-      - circle 与 invite 的归属不落到 owner
-      - notification 打开时可恢复正确 persona 上下文
-    edge_cases:
-      - persona 停用后查看记录内容或消息
-      - 通知延迟到达时当前 active persona 已切换
-    linked_plan_items:
-      - P2
-      - P3
-    evidence:
-      primary:
-        - T1_schema
-        - T3_cross_service_integration
-      supporting:
-        - T2_module_interaction
-    tests:
-      planned:
-        - comment persona attribution contract test
-        - chat sender persona contract test
-        - notification persona replay test
-      recorded:
-        - "go test ./services/content-service/... ./services/chat-service/... ./services/user-service/..."
-        - "go test ./services/circle-service/tests/..."
-        - "flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/ui/content/entry/contract/publish_payload_contract_test.dart test/cloud/chat/contract/chat_repository_contract_test.dart test/ui/chat/journeys/chat_message_send_journey_test.dart test/ui/assistant/providers/assistant_conversation_controller_test.dart test/cloud/circle/circle_write_wire_ssot_test.dart"
-    status: implemented
-  A3:
-    title: persona 上下文缺失时系统阻断或恢复，不允许静默串号
-    scenario: 下游在提交或回放时拿不到有效 persona 上下文
-    journey_step: recover from stale or missing persona context
-    done_when:
-      - 关键动作在 persona 上下文缺失时被阻断或要求用户确认
-      - 系统可以回退到最近一次稳定 active persona 快照
-      - mismatch、stale context、assistant drift 被记录并可用于回滚
-    edge_cases:
-      - 通知打开到错误分身
-      - assistant 会话在中途切换分身
-      - 弱网下客户端与服务端 active persona 视图短暂不一致
-    linked_plan_items:
-      - P3
-      - P4
-    evidence:
-      primary:
-        - T2_module_interaction
-        - T3_cross_service_integration
-      supporting:
-        - T4_user_journey
-    tests:
-      planned:
-        - stale persona context recovery test
-        - assistant persona drift regression test
-        - notification mismatch blocking test
-      recorded:
-        - "go test ./services/circle-service/tests/..."
-        - "flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/ui/assistant/providers/assistant_conversation_controller_test.dart"
-        - "代码已在 assistant controller 中落地 `persona_context_mismatch_count / persona_context_stale_count / assistant_persona_drift_count / notification_wrong_persona_open_count` 事件上报"
-    status: implemented
-
-story_readiness:
-  S1:
-    title: 透传能力可灰度、可观测、可回退
-    done_when:
-      - content/chat/circle/assistant/notification 的透传可按开关灰度
-      - mismatch、stale context、drift 指标可观测
-      - 回退后可恢复到单 active persona 安全基线
-    evidence:
-      primary:
-        - T1_schema
-        - T3_cross_service_integration
-      supporting:
-        - T4_release_rehearsal
-    tests:
-      planned:
-        - propagation flag rollback rehearsal
-        - mismatch telemetry verification
-      recorded:
-        - "make -C quwoquan_service verify-metadata && make codegen && make codegen-app"
-        - "go test ./services/content-service/... ./services/chat-service/... ./services/user-service/..."
-        - "go test ./services/circle-service/tests/..."
-        - "flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/ui/assistant/providers/assistant_conversation_controller_test.dart"
-    status: implemented
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

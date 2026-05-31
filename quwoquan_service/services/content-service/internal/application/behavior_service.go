@@ -32,7 +32,7 @@ type BehaviorEventInput struct {
 	Action          string   `json:"action"`
 	Type            string   `json:"type"`
 	ContentType     string   `json:"contentType"`
-	Tags            []string `json:"tags"`
+	Tags            []string `json:"tagRefs"`
 	Duration        float64  `json:"duration"`
 	DwellMs         float64  `json:"dwellMs"`
 	FeedPosition    int      `json:"feedPosition"`
@@ -45,6 +45,9 @@ type BehaviorEventInput struct {
 	EntityRefs      []string `json:"entityRefs"`
 	FeedRequestID   string   `json:"feedRequestId"`
 	CommentLength   int      `json:"commentLength"`
+	// 交集转化归因（S6）：触发交集行动（follow/join_circle/add_contact）的维度与路径制 tagRef。
+	IntersectionDimension string   `json:"intersectionDimension"`
+	IntersectionTagRefs   []string `json:"intersectionTagRefs"`
 }
 
 type BehaviorService struct {
@@ -123,7 +126,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		tags := eventInput.Tags
 		if len(tags) == 0 {
 			if post, ok := s.store.FindByID(ctx, contentID); ok {
-				tags = behaviorTagsFromAny(post.Tags)
+				tags = behaviorTagsFromAny(post.TagRefs)
 			}
 		}
 		feedPos := eventInput.FeedPosition
@@ -131,44 +134,48 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			feedPos = eventInput.Position
 		}
 		signal := rtrec.BehaviorSignal{
-			UserID:          userID,
-			SessionID:       strings.TrimSpace(eventInput.SessionID),
-			FeedSessionID:   strings.TrimSpace(eventInput.FeedSessionID),
-			ContentID:       contentID,
-			Action:          action,
-			ContentType:     strings.TrimSpace(eventInput.ContentType),
-			Tags:            tags,
-			Duration:        duration,
-			Timestamp:       occurredAt,
-			AuthorID:        strings.TrimSpace(eventInput.AuthorID),
-			ReferralSource:  strings.TrimSpace(eventInput.ReferralSource),
-			EngagementDepth: eventInput.EngagementDepth,
-			ConsumedRatio:   eventInput.ConsumedRatio,
-			TotalUnits:      eventInput.TotalUnits,
-			EntityRefs:      eventInput.EntityRefs,
-			FeedRequestID:   strings.TrimSpace(eventInput.FeedRequestID),
-			Position:        feedPos,
-			CommentLength:   eventInput.CommentLength,
+			UserID:                userID,
+			SessionID:             strings.TrimSpace(eventInput.SessionID),
+			FeedSessionID:         strings.TrimSpace(eventInput.FeedSessionID),
+			ContentID:             contentID,
+			Action:                action,
+			ContentType:           strings.TrimSpace(eventInput.ContentType),
+			Tags:                  tags,
+			Duration:              duration,
+			Timestamp:             occurredAt,
+			AuthorID:              strings.TrimSpace(eventInput.AuthorID),
+			ReferralSource:        strings.TrimSpace(eventInput.ReferralSource),
+			EngagementDepth:       eventInput.EngagementDepth,
+			ConsumedRatio:         eventInput.ConsumedRatio,
+			TotalUnits:            eventInput.TotalUnits,
+			EntityRefs:            eventInput.EntityRefs,
+			FeedRequestID:         strings.TrimSpace(eventInput.FeedRequestID),
+			Position:              feedPos,
+			CommentLength:         eventInput.CommentLength,
+			IntersectionDimension: strings.TrimSpace(eventInput.IntersectionDimension),
+			IntersectionTagRefs:   eventInput.IntersectionTagRefs,
 		}
 		signals = append(signals, signal)
 		projectedEvents = append(projectedEvents, map[string]any{
-			"userId":          userID,
-			"sessionId":       signal.SessionID,
-			"contentId":       contentID,
-			"action":          action,
-			"contentType":     signal.ContentType,
-			"tags":            append([]string(nil), tags...),
-			"duration":        duration,
-			"timestamp":       occurredAt.Format(time.RFC3339),
-			"authorId":        signal.AuthorID,
-			"referralSource":  signal.ReferralSource,
-			"engagementDepth": signal.EngagementDepth,
-			"consumedRatio":   signal.ConsumedRatio,
-			"totalUnits":      signal.TotalUnits,
-			"entityRefs":      signal.EntityRefs,
-			"feedRequestId":   strings.TrimSpace(eventInput.FeedRequestID),
-			"feedPosition":    feedPos,
-			"commentLength":   eventInput.CommentLength,
+			"userId":                userID,
+			"sessionId":             signal.SessionID,
+			"contentId":             contentID,
+			"action":                action,
+			"contentType":           signal.ContentType,
+			"tagRefs":               append([]string(nil), tags...),
+			"duration":              duration,
+			"timestamp":             occurredAt.Format(time.RFC3339),
+			"authorId":              signal.AuthorID,
+			"referralSource":        signal.ReferralSource,
+			"engagementDepth":       signal.EngagementDepth,
+			"consumedRatio":         signal.ConsumedRatio,
+			"totalUnits":            signal.TotalUnits,
+			"entityRefs":            signal.EntityRefs,
+			"feedRequestId":         strings.TrimSpace(eventInput.FeedRequestID),
+			"feedPosition":          feedPos,
+			"commentLength":         eventInput.CommentLength,
+			"intersectionDimension": signal.IntersectionDimension,
+			"intersectionTagRefs":   signal.IntersectionTagRefs,
 		})
 		if batchUserID == "" {
 			batchUserID = userID
@@ -187,21 +194,23 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		rawEvents := make([]persistence.RawBehaviorEvent, len(signals))
 		for i, sig := range signals {
 			rawEvents[i] = persistence.RawBehaviorEvent{
-				UserID:          sig.UserID,
-				SessionID:       sig.SessionID,
-				ContentID:       sig.ContentID,
-				Action:          sig.Action,
-				Tags:            sig.Tags,
-				Duration:        sig.Duration,
-				AuthorID:        sig.AuthorID,
-				ReferralSource:  sig.ReferralSource,
-				EngagementDepth: sig.EngagementDepth,
-				ConsumedRatio:   sig.ConsumedRatio,
-				TotalUnits:      sig.TotalUnits,
-				EntityRefs:      sig.EntityRefs,
-				FeedRequestID:   strings.TrimSpace(events[i].FeedRequestID),
-				OccurredAt:      occurredAt.Format(time.RFC3339),
-				CreatedAt:       occurredAt,
+				UserID:                sig.UserID,
+				SessionID:             sig.SessionID,
+				ContentID:             sig.ContentID,
+				Action:                sig.Action,
+				Tags:                  sig.Tags,
+				Duration:              sig.Duration,
+				AuthorID:              sig.AuthorID,
+				ReferralSource:        sig.ReferralSource,
+				EngagementDepth:       sig.EngagementDepth,
+				ConsumedRatio:         sig.ConsumedRatio,
+				TotalUnits:            sig.TotalUnits,
+				EntityRefs:            sig.EntityRefs,
+				FeedRequestID:         strings.TrimSpace(events[i].FeedRequestID),
+				IntersectionDimension: sig.IntersectionDimension,
+				IntersectionTagRefs:   sig.IntersectionTagRefs,
+				OccurredAt:            occurredAt.Format(time.RFC3339),
+				CreatedAt:             occurredAt,
 			}
 		}
 		_ = s.eventStore.InsertBatch(ctx, rawEvents)
@@ -216,6 +225,11 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			}
 			if sig.AuthorID != "" {
 				_ = s.metricsStore.IncrementMetric(ctx, dateStr, "author", sig.AuthorID, sig.Action, dwellMs, sig.EngagementDepth)
+			}
+			// 交集转化北极星（S6）：交集维度上有归因的行动（关注/进圈子/加联系人等）按维度累计，
+			// 供「交集转化率 = 交集行动数 / 新增可解释交集数」按 dimension 下钻。
+			if sig.IntersectionDimension != "" {
+				_ = s.metricsStore.IncrementMetric(ctx, dateStr, "intersection", sig.IntersectionDimension, sig.Action, dwellMs, sig.EngagementDepth)
 			}
 		}
 	}

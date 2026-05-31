@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
 import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
+import 'package:quwoquan_app/ui/content/pageflip/reverse_curl_calculation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
 @immutable
@@ -22,10 +23,12 @@ class BackwardRenderFrameData {
     required this.freeEdgeLine,
     required this.maxShadowOpacity,
     this.shadow,
+    this.reversePose,
   });
 
   final ui.Offset localPagePoint;
   final double progress;
+  final ReverseFlipPose? reversePose;
   final StPageFlipOrientation orientation;
   final StPageFlipCorner corner;
   final ui.Size pageSize;
@@ -102,7 +105,7 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
   final renderDirection = resolvePageFlipRenderDirection(
     direction: StPageFlipDirection.back,
     orientation: data.orientation,
-    reversePose: null,
+    reversePose: data.reversePose,
   );
 
   final visualGeometry = _resolveBackwardVisualGeometry(data);
@@ -110,7 +113,7 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
   final backwardLeafFrame = resolveArticlePageBackwardLeafFrame(
     direction: StPageFlipDirection.back,
     progress: progress,
-    reversePose: null,
+    reversePose: data.reversePose,
   )!;
   final backwardProjectedFrame = _buildBackwardProjectedFrame(
     localPagePoint: visualGeometry.localPagePoint,
@@ -122,9 +125,11 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
   );
 
   final angleBand = resolveForwardCurlAngleBand(
-    localPagePoint: resolveBackwardVisualReplayLocalPagePoint(
+    localPagePoint: resolveBackwardForwardCanonicalPoint(
       localPagePoint: data.localPagePoint,
-      pageSize: data.pageSize,
+      pageWidth: data.pageSize.width,
+      pageHeight: data.pageSize.height,
+      corner: data.corner,
     ),
     pageSize: data.pageSize,
     corner: data.corner,
@@ -153,9 +158,9 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
       pageSize: data.pageSize,
       corner: data.corner,
       angleBand: angleBand,
-      reversePose: null,
+      reversePose: data.reversePose,
     ),
-    reversePose: null,
+    reversePose: data.reversePose,
     backwardLeafFrame: backwardLeafFrame,
     backwardProjectedFrame: backwardProjectedFrame,
     routeBSpineMirroredApplied:
@@ -167,9 +172,11 @@ _BackwardVisualGeometry _resolveBackwardVisualGeometry(
   BackwardRenderFrameData data,
 ) {
   if (data.orientation == StPageFlipOrientation.portrait) {
-    final replayPoint = resolveBackwardVisualReplayLocalPagePoint(
+    final replayPoint = resolveBackwardForwardCanonicalPoint(
       localPagePoint: data.localPagePoint,
-      pageSize: data.pageSize,
+      pageWidth: data.pageSize.width,
+      pageHeight: data.pageSize.height,
+      corner: data.corner,
     );
     final forwardCalculation = StPageFlipCalculation(
       direction: StPageFlipDirection.forward,
@@ -177,22 +184,26 @@ _BackwardVisualGeometry _resolveBackwardVisualGeometry(
       pageWidth: data.pageSize.width,
       pageHeight: data.pageSize.height,
     );
-    if (forwardCalculation.calc(replayPoint)) {
-      final canonicalGeometry = forwardCalculation.getCanonicalFoldGeometry();
-      return _BackwardVisualGeometry(
-        direction: StPageFlipDirection.forward,
-        localPagePoint: replayPoint,
-        flippingClipArea: forwardCalculation.getFlippingClipArea(),
-        bottomClipArea: forwardCalculation.getBottomClipArea(),
-        flippingAnchor: forwardCalculation.getActiveCorner(),
-        bottomAnchor: forwardCalculation.getBottomPagePosition(),
-        angle: forwardCalculation.getAngle(),
-        foldLine: canonicalGeometry?.foldLine,
-        freeEdgeLine: canonicalGeometry?.freeEdgeLine,
-        foldLineSource: 'backwardForwardIsomorphicFoldLine',
-        edgeLineSource: 'backwardForwardIsomorphicFreeEdgeLine',
-      );
+    if (!forwardCalculation.calc(replayPoint)) {
+      throw StateError('BACK forward canonical calculation failed');
     }
+    final canonicalGeometry = forwardCalculation.getCanonicalFoldGeometry();
+    if (canonicalGeometry == null) {
+      throw StateError('BACK forward canonical fold geometry missing');
+    }
+    return _BackwardVisualGeometry(
+      direction: StPageFlipDirection.forward,
+      localPagePoint: replayPoint,
+      flippingClipArea: forwardCalculation.getFlippingClipArea(),
+      bottomClipArea: forwardCalculation.getBottomClipArea(),
+      flippingAnchor: forwardCalculation.getActiveCorner(),
+      bottomAnchor: forwardCalculation.getBottomPagePosition(),
+      angle: forwardCalculation.getAngle(),
+      foldLine: canonicalGeometry.foldLine,
+      freeEdgeLine: canonicalGeometry.freeEdgeLine,
+      foldLineSource: 'backwardForwardIsomorphicFoldLine',
+      edgeLineSource: 'backwardForwardIsomorphicFreeEdgeLine',
+    );
   }
 
   return _BackwardVisualGeometry(

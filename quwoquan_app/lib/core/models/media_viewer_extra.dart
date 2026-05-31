@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 
 /// 媒体浏览器按帖子 id 携带的发现区/沉浸扩展数据。
@@ -158,9 +158,10 @@ class MediaViewerExtra {
     this.interactionSnapshot = const MediaViewerInteractionSnapshot(),
     this.referralSource = ReferralSource.organicFeed,
     this.feedRequestId,
+    this.position,
   });
 
-  final List<PostSummaryView> posts;
+  final List<ContentSurfaceView> posts;
   final List<PostBaseDto> dtoPosts;
   final int initialIndex; // post index for moment, image index for photo
   final String category; // 'photo' | 'video' | 'moment'
@@ -173,4 +174,7 @@ class MediaViewerExtra {
   final MediaViewerInteractionSnapshot interactionSnapshot;
   final ReferralSource referralSource;
   final String? feedRequestId;
+
+  /// 入口 post 在 feed 中的位置（推荐归因用；从 feed 列表序号透传）。
+  final int? position;
 }

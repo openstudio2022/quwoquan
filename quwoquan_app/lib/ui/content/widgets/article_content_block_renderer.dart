@@ -1,8 +1,9 @@
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 
@@ -26,7 +27,7 @@ class ArticleContentSurface extends StatelessWidget {
         backgroundColor ??
         CupertinoColors.systemBackground.resolveFrom(context);
     final borderColor = highlighted
-        ? CupertinoColors.activeBlue.resolveFrom(context)
+        ? AppColors.iosAccent(context)
         : CupertinoColors.separator
               .resolveFrom(context)
               .withValues(alpha: 0.14);
@@ -63,6 +64,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
     final sectionHeadingLineHeight = articleBodyLineHeight() * 0.72;
     final titleColor = CupertinoColors.label.resolveFrom(context);
     final bodyColor = CupertinoColors.secondaryLabel.resolveFrom(context);
+    final accent = AppColors.iosAccent(context);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -128,9 +130,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
                 height: AppSpacing.twentyEight,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: CupertinoColors.activeBlue
-                      .resolveFrom(context)
-                      .withValues(alpha: 0.12),
+                  color: accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(
                     AppSpacing.radiusNinetyNine,
                   ),
@@ -138,7 +138,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
                 child: Text(
                   '${block.orderedIndex ?? 1}',
                   style: TextStyle(
-                    color: CupertinoColors.activeBlue.resolveFrom(context),
+                    color: accent,
                     fontSize: AppTypography.sm,
                     fontWeight: AppTypography.semiBold,
                   ),
@@ -166,7 +166,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
                   width: AppSpacing.sm,
                   height: AppSpacing.sm,
                   decoration: BoxDecoration(
-                    color: CupertinoColors.activeBlue.resolveFrom(context),
+                    color: accent,
                     borderRadius: BorderRadius.circular(AppSpacing.xs),
                   ),
                 ),
@@ -259,6 +259,7 @@ class ArticleAdaptiveImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedImageUrl = imageUrl.trim();
+    final imageCandidates = resolveContentMediaUrlCandidates(resolvedImageUrl);
     if (resolvedImageUrl.isEmpty) {
       return Container(color: CupertinoColors.systemGrey5.resolveFrom(context));
     }
@@ -269,17 +270,16 @@ class ArticleAdaptiveImage extends StatelessWidget {
     }
     if (resolvedImageUrl.startsWith('http://') ||
         resolvedImageUrl.startsWith('https://')) {
-      return CachedNetworkImage(
+      return AppCachedNetworkImage(
         imageUrl: resolvedImageUrl,
-        imageBuilder: (context, imageProvider) => Image(
-          image: imageProvider,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.high,
+        imageUrlCandidates: imageCandidates,
+        fit: BoxFit.cover,
+        placeholder: Container(
+          color: CupertinoColors.systemGrey5.resolveFrom(context),
         ),
-        placeholder: (context, url) =>
-            Container(color: CupertinoColors.systemGrey5.resolveFrom(context)),
-        errorWidget: (context, url, error) =>
-            Container(color: CupertinoColors.systemGrey5.resolveFrom(context)),
+        errorWidget: Container(
+          color: CupertinoColors.systemGrey5.resolveFrom(context),
+        ),
       );
     }
     return Image.file(

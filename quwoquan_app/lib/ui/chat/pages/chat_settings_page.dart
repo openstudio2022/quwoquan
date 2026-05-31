@@ -55,7 +55,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
           _groupName = conv.title ?? '';
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 拉取会话标题失败时保留空名占位，页面其余内容仍可正常展示 */
+    }
   }
 
   void _showEditGroupNameDialog() {
@@ -120,7 +122,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     setState(() => _groupName = newName);
                     AppToast.show(context, UITextConstants.groupNameUpdated);
                   }
-                } catch (_) {}
+                } catch (_) {
+                  /* best-effort: 群名更新失败时保留原名，本页无独立错误提示设施，不改变控制流 */
+                }
               }
             },
           ),

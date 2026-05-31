@@ -130,10 +130,58 @@ Offset resolveBackwardVisualReplayCanonicalPoint({
 }) {
   const edgeEpsilon = 0.001;
   final maxVisualX = math.max(-pageWidth, pageWidth - edgeEpsilon);
-  final visualX = (-pageWidth - (2 * localPagePoint.dx))
+  final dragProgress = (-localPagePoint.dx / pageWidth)
+      .clamp(0.0, 1.0)
+      .toDouble();
+  final visualProgress = dragProgress <= 0.55
+      ? dragProgress
+      : 0.55 + (dragProgress - 0.55) * 0.5;
+  final visualX = (-pageWidth + 2 * pageWidth * visualProgress)
       .clamp(-pageWidth, maxVisualX)
       .toDouble();
-  return Offset(visualX, localPagePoint.dy.clamp(0.0, pageHeight).toDouble());
+  return Offset(visualX, localPagePoint.dy);
+}
+
+Offset resolveBackwardForwardCanonicalPoint({
+  required Offset localPagePoint,
+  required double pageWidth,
+  required double pageHeight,
+  required StPageFlipCorner corner,
+}) {
+  final replayPoint = resolveBackwardVisualReplayCanonicalPoint(
+    localPagePoint: localPagePoint,
+    pageWidth: pageWidth,
+    pageHeight: pageHeight,
+  );
+  return normalizeForwardCalculationInputPoint(
+    point: replayPoint,
+    pageWidth: pageWidth,
+    pageHeight: pageHeight,
+    corner: corner,
+  );
+}
+
+Offset normalizeForwardCalculationInputPoint({
+  required Offset point,
+  required double pageWidth,
+  required double pageHeight,
+  required StPageFlipCorner corner,
+}) {
+  final edgeEpsilon = math.max(1.0, math.min(pageWidth, pageHeight) * 0.003);
+  final x = point.dx.clamp(-pageWidth, pageWidth - edgeEpsilon).toDouble();
+  final y = switch (corner) {
+    StPageFlipCorner.top =>
+      point.dy.abs() < edgeEpsilon
+          ? (point.dy.isNegative ? -edgeEpsilon : edgeEpsilon)
+          : point.dy,
+    StPageFlipCorner.bottom =>
+      (pageHeight - point.dy).abs() < edgeEpsilon
+          ? (point.dy > pageHeight
+                ? pageHeight + edgeEpsilon
+                : pageHeight - edgeEpsilon)
+          : point.dy,
+  };
+  return Offset(x, y);
 }
 
 Offset mirrorPagePointHorizontally({

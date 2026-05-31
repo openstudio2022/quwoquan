@@ -30,7 +30,7 @@ func (s *PostRepositorySource) Recall(ctx context.Context, req rtrec.RecallReque
 			ContentType:  p.ContentType,
 			AuthorID:     p.AuthorId,
 			Title:        p.Title,
-			Tags:         candidateTagsFromAny(p.Tags),
+			Tags:         candidateTagsFromAny(p.TagRefs),
 			PublishedAt:  p.PublishedAt,
 			ViewCount:    p.ViewCount,
 			LikeCount:    p.LikeCount,

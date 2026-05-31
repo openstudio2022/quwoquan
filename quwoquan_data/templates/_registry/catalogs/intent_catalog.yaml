@@ -1,0 +1,74 @@
+version: 1
+intents:
+  攻略:
+    tagRef: Format/内容角度/攻略
+    defaultCarrier: article
+    defaultStyleFamily: 实用攻略风
+  路线推荐:
+    tagRef: Format/内容角度/攻略/路线推荐
+    defaultCarrier: article
+    defaultStyleFamily: 路线规划风
+  行前指南:
+    tagRef: Format/内容角度/攻略/行前指南
+    defaultCarrier: article
+    defaultStyleFamily: 实用攻略风
+  跟团指南:
+    tagRef: Format/内容角度/攻略/行前指南
+    defaultCarrier: article
+    defaultStyleFamily: 实用攻略风
+  深度探险:
+    tagRef: Topic/旅行/出行方式/徒步穿越
+    defaultCarrier: article
+    defaultStyleFamily: 路线规划风
+  体验:
+    tagRef: Format/内容角度/体验/亲身体验
+    defaultCarrier: article
+    defaultStyleFamily: 旅途随笔风
+  叙事:
+    tagRef: Format/内容角度/叙事/旅行叙事
+    defaultCarrier: article
+    defaultStyleFamily: 旅途随笔风
+  科普:
+    tagRef: Format/内容角度/科普/知识科普
+    defaultCarrier: article
+    defaultStyleFamily: 地理画报风
+  深度报道:
+    tagRef: Format/内容角度/资讯/深度报道
+    defaultCarrier: article
+    defaultStyleFamily: 地理画报风
+  探店:
+    tagRef: Format/内容角度/探店/餐厅探店
+    defaultCarrier: review
+    defaultStyleFamily: 探店点评风
+  点评:
+    tagRef: Format/内容角度/测评/专业评测
+    defaultCarrier: review
+    defaultStyleFamily: 探店点评风
+  盘点:
+    tagRef: Format/内容角度/盘点/Top榜单
+    defaultCarrier: article
+    defaultStyleFamily: 摄影画报风
+  美图:
+    tagRef: Format/内容载体/图文/图集
+    defaultCarrier: image
+    defaultStyleFamily: 摄影画报风
+  新生攻略:
+    tagRef: Format/内容角度/攻略/新生攻略
+    defaultCarrier: article
+    defaultStyleFamily: 学长姐攻略风
+  校园评测:
+    tagRef: Format/内容角度/测评/校园评测
+    defaultCarrier: review
+    defaultStyleFamily: 客观评测风
+  选课攻略:
+    tagRef: Format/内容角度/攻略/选课攻略
+    defaultCarrier: article
+    defaultStyleFamily: 学长姐攻略风
+  考研经验:
+    tagRef: Format/内容角度/经验分享/考研经验
+    defaultCarrier: article
+    defaultStyleFamily: 升学经验风
+  校招就业:
+    tagRef: Format/内容角度/经验分享/校招经验
+    defaultCarrier: article
+    defaultStyleFamily: 升学经验风

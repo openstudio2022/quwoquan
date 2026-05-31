@@ -1,104 +1,54 @@
-feature: profile-commercial-readiness
-level: L3_story
-source_path: user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness
-archived: true
+version: 2
+node:
+  id: profile-commercial-readiness
+  level: L3_story
+  path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness
+  title: profile commercial readiness
+  parent_domain_service: user-identity-profile-relationship
+  parent_business_capability: profile-homepage-redesign
+scope:
+  summary: 个人主页商用就绪 Story——我的主页数据加载、统计行、名字可设置等上线 gap 的最小价值闭环（V5 全量口径下保留并对齐）。
+  in_scope:
+  - 我的主页进入时加载当前用户档案（displayName/avatar/background 非 me 占位）
+  - 统计行（圈子/关注/粉丝）与列表数据同源
+  - 用户名字可设置并即时刷新
+  out_of_scope:
+  - 一级 Tab 收窄（历史去掉生活 Tab 的口径已被 V5 全量口径覆盖反转）
+  - 创作可见性过滤去除（历史去除口径已被 V5 恢复）
+gwt_acceptance:
+  GWT1:
+    title: 我的主页数据加载与统计行同源
+    given:
+    - 已登录用户进入 /profile（ProfileMode.mine）。
+    when:
+    - MyProfilePage 首帧触发 userDataProvider.loadUser(currentUserId)。
+    then:
+    - displayName/avatar/background 来自 getUserProfile，非 me 占位。
+    - 统计行顺序圈子/关注/粉丝，数字与进入详情列表条数一致（同一 Repository 方法）。
+    done_when:
+    - 我的主页首屏展示真实档案与一致统计，Mock/Remote 经 appDataSourceModeProvider 透明切换。
+    edge_cases:
+    - 未登录 → 展示登录引导（_LoggedOutProfilePrompt）。
+    - 档案加载失败 → 结构化错误兜底，不崩溃、不显示 me。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    performance_points:
+    - 我的主页首屏 TTI P95 ≤ 1.5s（缓存命中 ≤ 600ms）
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting:
+      - T3_app_api_integration
+    tests:
+      planned:
+      - quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
+      - quwoquan_app/test/ui/user/widgets/profile_stats_row_test.dart
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: '我的主页进入时自动加载当前用户档案：displayName 展示真实昵称（非 "me"），avatar、backgroundImage 正确展示。
-      通过 userDataProvider.loadUser(currentUserId) 或 ProfileShell 内等效逻辑触发。
-      Mock 模式与 Remote 模式均可验证。'
-    status: implemented
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
-  A2:
-    criteria: '背景图默认高度为屏幕 1/4；下拉可拉伸至最多 1/2 屏高，且不超过图片底部；
-      拉伸时图片跟随放大，松手后弹簧阻尼回弹（≤300ms）。
-      Debug 模式有 mock 背景；发布态从 getUserProfile 获取 backgroundUrl。'
-    status: implemented
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required
-      T3: optional
-      T4: required
-    tests: []
-  A3:
-    criteria: '统计行顺序为 圈子 | 关注 | 粉丝，无获赞。
-      统计数字与进入详情列表的数据一致，均通过 UserProfileRepository 获取。
-      点击圈子 → 圈子列表（圈子头像+名称+创作数，点击进圈子详情）；
-      点击关注 → 关注列表（用户卡片，点击进用户主页）；
-      点击粉丝 → 粉丝列表（粉丝=关注我的人，用户卡片，点击进用户主页）。
-      ProfileStatsPage 对接 Repository，支持 type=following|fans|circles；Mock 与 Remote 切换一致。'
-    status: implemented
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
-  A4:
-    criteria: '一级 Tab 为 [创作 | 圈子 | 互动]，无生活 Tab。默认选中「创作」。'
-    status: implemented
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: optional
-      T4: optional
-    tests: []
-  A5:
-    criteria: '创作 Tab：去掉 SubTab 与可见性过滤；宫格卡片分块展示 微趣、图片、视频、文章；
-      布局不等高，与圈子列表创作展示一致（非 childAspectRatio 等高）。
-      每种创作格式支持宫格卡片展示。'
-    status: implemented
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required
-      T3: optional
-      T4: optional
-    tests: []
-  A6:
-    criteria: '圈子 Tab：卡片形式为 圈子头像 + 名称 + 圈子内创作数（非 16:9 大图）。
-      点击跳转 circle_detail_page。空态友好提示。'
-    status: implemented
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required
-      T3: optional
-      T4: optional
-    tests: []
-  A7:
-    criteria: '互动 Tab：子维度 收到 | 发出（mine 双向，other 仅 Ta 收到）；
-      展示互动列表（头像、用户名、摘要、时间）。
-      UserProfileRepository 新增互动相关接口；Mock 数据补齐；Remote 对接就绪后可切换。
-      空态有友好提示。'
-    status: implemented
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: optional
-      T4: optional
-    tests: []
-  A8:
-    criteria: '用户名字可设置：编辑资料页修改昵称后，我的主页/他人主页展示真实昵称；
-      返回主页时昵称即时更新。非 "me" 或 userId 占位。'
-    status: implemented
-    linked_tasks: []
-    test_layers:
-      T1: optional
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

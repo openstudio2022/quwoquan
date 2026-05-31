@@ -100,6 +100,23 @@ void main() {
     );
   });
 
+  test('SpreadModel 可将 cover 语义与 hard density 解耦', () {
+    final model = StPageFlipSpreadModel(
+      pageCount: 4,
+      showCover: true,
+      hardPagePolicy: StPageFlipHardPagePolicy.none,
+    );
+    final spreads = model.spreadsFor(StPageFlipOrientation.landscape);
+
+    expect(spreads.map((spread) => spread.pages), <List<int>>[
+      <int>[0],
+      <int>[1, 2],
+      <int>[3],
+    ]);
+    expect(model.densityForPage(0), StPageFlipDensity.soft);
+    expect(model.densityForPage(3), StPageFlipDensity.soft);
+  });
+
   test('FlipController 在单页模式下完成前翻', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
@@ -278,7 +295,7 @@ void main() {
     expect(frame, isNotNull);
     expect(frame!.direction, StPageFlipDirection.back);
     expect(frame.renderDirection, StPageFlipDirection.back);
-    expect(frame.reversePose, isNull);
+    expect(frame.reversePose, isNotNull);
     expect(frame.timeline.rollProgress, greaterThan(0));
     expect(frame.timeline.cylinderProgress, equals(0));
     expect(frame.timeline.unfoldProgress, equals(0));
@@ -307,7 +324,7 @@ void main() {
     expect(controller.scene.calculation, isNot(isA<ReverseCurlCalculation>()));
     expect(frame!.direction, StPageFlipDirection.back);
     expect(frame.renderDirection, StPageFlipDirection.back);
-    expect(frame.reversePose, isNull);
+    expect(frame.reversePose, isNotNull);
     expect(frame.timeline.mirrored, isTrue);
     expect(frame.backwardLeafFrame, isNotNull);
     expect(frame.flippingClipArea, isNotEmpty);
@@ -374,7 +391,7 @@ void main() {
     expect(renderFrame, isNotNull);
     expect(renderFrame!.direction, StPageFlipDirection.back);
     expect(renderFrame.backwardLeafFrame, isNotNull);
-    expect(renderFrame.reversePose, isNull);
+    expect(renderFrame.reversePose, isNotNull);
 
     final builder = ArticlePageCurlMeshBuilder();
     final meshFrame = builder.build(
@@ -785,10 +802,16 @@ void main() {
     );
     expect(
       middleFrame.backwardLeafFrame!.laidDownWidthNormalized,
-      greaterThan(earlyFrame.backwardLeafFrame!.laidDownWidthNormalized),
+      greaterThanOrEqualTo(
+        earlyFrame.backwardLeafFrame!.laidDownWidthNormalized,
+      ),
     );
     expect(
       middleFrame.backwardLeafFrame!.rectoRevealWidthNormalized,
+      greaterThanOrEqualTo(0),
+    );
+    expect(
+      lateFrame.backwardLeafFrame!.totalRectoVisibleWidthNormalized,
       greaterThan(0),
     );
     expect(

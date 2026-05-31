@@ -1,12 +1,12 @@
 """基于 tagRef 共现度生成隐式关系图谱
 
-扫描 publish/v1 中所有 entity 和 post 的 tagRefs，统计标签共现关系。
+扫描 publish 主线中所有 entity 和 post 的 tagRefs，统计标签共现关系。
 生成三类产物：
   1. cooccur/tag_to_tag.ndjson     - 标签-标签共现
   2. cooccur/entity_to_entity.ndjson - 实体-实体共现（共享标签）
   3. inverted_index/tag_objects.ndjson - 标签→对象反向索引
 
-输出: publish/v1/relations/
+输出: publish/relations/
 
 用法:
   python3 tag_graph.py
@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, NOW_ISO
 
-V1_ROOT = PUBLISH_ROOT / "v1"
+V1_ROOT = PUBLISH_ROOT
 REL_ROOT = V1_ROOT / "relations"
 
 

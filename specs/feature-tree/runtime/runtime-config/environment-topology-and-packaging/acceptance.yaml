@@ -1,0 +1,43 @@
+version: 2
+node:
+  id: environment-topology-and-packaging
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging
+  title: environment topology and packaging
+  parent_domain_service: runtime
+  parent_business_capability: runtime-config
+scope:
+  summary: environment topology and packaging 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: environment topology and packaging GWT
+    given:
+    - 四环境 topology manifest、local port manifest 与环境包脚本已落地。
+    when:
+    - 执行 topology、packaging、purity 与 artifact isolation 门禁。
+    then:
+    - 四环境 schema、端口 profile、public/upstream URL 契约与 prod 包纯度均满足约束。
+    done_when:
+    - "`stackctl verify` 与 `make gate` 能自动阻断跨环境污染与非法环境枚举。"
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - python3 agent_ops/gate/verify_environment_topology_manifest.py
+  - python3 agent_ops/gate/verify_local_env_port_manifest.py
+  - python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
+  full_gate:
+  - make verify-env-packaging
+  - make gate

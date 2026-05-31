@@ -30,6 +30,7 @@ class ArticleReaderFlipHost extends StatelessWidget {
       onDebugStateChanged: config.onDebugStateChanged,
       showFooterPageLabel: config.showFooterPageLabel,
       paperTexture: config.paperTexture,
+      presentationStyle: config.presentationStyle,
       debugPageSurfaceBuilder: config.debugPageSurfaceBuilder,
       debugBackPageSurfaceBuilder: config.debugBackPageSurfaceBuilder,
     );

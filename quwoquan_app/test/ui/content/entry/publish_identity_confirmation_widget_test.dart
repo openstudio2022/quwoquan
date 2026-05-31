@@ -9,8 +9,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
@@ -66,6 +68,48 @@ class _TrackingContentRepository extends MockContentRepository {
   }
 }
 
+class _AuthedSessionStore implements AuthSessionStore {
+  const _AuthedSessionStore();
+
+  @override
+  Future<StoredAuthSession> read() async => const StoredAuthSession(
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    ownerId: 'user_001',
+    activeSubAccountId: 'user_001',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'install-id',
+    manualLoggedOut: false,
+    launchPromptDismissed: true,
+  );
+
+  @override
+  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+
+  @override
+  Future<void> updateActiveSubAccount(String subAccountId) async {}
+
+  @override
+  Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> markLaunchPromptDismissed() async {}
+}
+
+/// 在 pump 期间主动 watch 登录态，让创作页发布/选图的 requireLogin 在已登录态放行。
+class _AuthWarmup extends ConsumerWidget {
+  const _AuthWarmup({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(authSessionControllerProvider);
+    return child;
+  }
+}
+
 class _CreateHostApp extends StatelessWidget {
   const _CreateHostApp();
 
@@ -91,6 +135,7 @@ Widget _buildApp(_TrackingContentRepository repository) {
     overrides: [
       contentRepositoryProvider.overrideWithValue(repository),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
@@ -98,6 +143,8 @@ Widget _buildApp(_TrackingContentRepository repository) {
         locale: const Locale('zh'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, child) =>
+            _AuthWarmup(child: child ?? const SizedBox.shrink()),
         home: const _CreateHostApp(),
       ),
     ),
@@ -127,6 +174,7 @@ Widget _buildRouterApp(_TrackingContentRepository repository) {
     overrides: [
       contentRepositoryProvider.overrideWithValue(repository),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
@@ -134,6 +182,8 @@ Widget _buildRouterApp(_TrackingContentRepository repository) {
         locale: const Locale('zh'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, child) =>
+            _AuthWarmup(child: child ?? const SizedBox.shrink()),
         routerConfig: router,
       ),
     ),

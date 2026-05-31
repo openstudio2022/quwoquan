@@ -1,0 +1,35 @@
+templateId: 校园_主题合辑
+version: 1
+subject: { kind: topic, type: 教育成长/合辑, minEntityRefs: 3, subjectTagRef: Topic/教育成长/校园生活 }
+vertical: campus
+category: life
+intent: 盘点
+carrier: article
+styleFamily: 客观评测风
+audiences: [freshmanStudent, prospectiveStudent]
+creatorPersona:
+  archetype: campus_blogger
+  preferredCreatorIds: [qwq_creator_campus_blogger_001]
+  requiredProfileTagRefs: [Topic/教育成长/校园生活, Format/内容角度/盘点/主题盘点]
+  allowedPerspective: [编辑部, 校园生活记录者]
+  mustNotClaim: [学校官方身份, 排名背书]
+editorialIntent: 围绕一个校园主题聚合多个学校或多个校园场景，帮助读者横向比较。
+render: { articleTemplate: gentle, fontPreset: clean }
+structure:
+  required: [合辑主题, 入选标准, 逐项观察, 横向对比, 怎么选择]
+  optional: [地图分布, 家长关注点]
+hooks: ["这份校园合辑，先说清楚我们按什么标准选"]
+mustIncludeFacts: [入选标准, 对比维度, 适合人群]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 官方排名]
+wordCount: { min: 1000, max: 2200 }
+imagePlan:
+  - { slot: 合辑封面, imageLayout: fullWidth }
+  - { slot: 逐项图集, gallery: grid }
+  - { slot: 对比信息图, imageLayout: wrapRight }
+crossRefs: { minEntity: 3, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/机构/学校/example.md

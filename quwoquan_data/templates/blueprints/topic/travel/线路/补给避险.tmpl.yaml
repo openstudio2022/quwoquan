@@ -1,0 +1,66 @@
+templateId: 线路_补给避险
+version: 1
+subject: { kind: topic, type: 旅行/线路, minEntityRefs: 2, subjectTagRef: Topic/旅行/旅行筹备/应急避险 }
+vertical: travel
+category: travel
+intent: 行前指南
+carrier: article
+styleFamily: 实用攻略风
+audiences: [selfDriveTraveler, familyTraveler]
+creatorPersona:
+  archetype: self_drive_expert
+  preferredCreatorIds: [qwq_creator_self_drive_guide_001]
+  requiredProfileTagRefs: [Topic/旅行/旅行筹备/应急避险, Topic/旅行/出行方式/自驾]
+  allowedPerspective: [第一人称经验, 专业导览]
+  mustNotClaim: [实时救援承诺, 官方背书]
+editorialIntent: 以风险和补给为主线，给读者一份出发前可核对的安全清单。
+render: { articleTemplate: gentle, fontPreset: clean }
+conditionAxes:
+  region: { applicable: true, slot: 地区与医疗 }
+  season: { applicable: true, slot: 季节天气与路况 }
+narrativeMode:
+  kind: safety_route
+  openingFocus: risk_judgement
+  transitionPolicy: checklist_progression
+  factsHeading: 把补给、天气和下撤边界先讲透
+  closingFocus: safety_decision
+evidenceRequirements:
+  fact:
+    required: true
+    categories: [risk, transport, stay]
+  emotion:
+    required: true
+    kinds: [pain, like]
+  mainline:
+    required: true
+    minSignals: 2
+continuityExpectations:
+  requireProgression: true
+  requireTransitions: true
+  forbidSlotStacking: true
+  minNarrativeParagraphs: 4
+routeCoverageExpectations:
+  minCoveredEntityRefs: 2
+  requireAllPrimaryNodes: false
+structure:
+  required: [风险总览, 油电补给, 天气路况, 地区与医疗, 行李清单, 失联备选]
+  optional: [儿童老人注意, 车辆检查]
+hooks: ["出发前先看这份补给和避险清单", "{name}最该提前准备的不是滤镜，是补给和退路"]
+mustIncludeFacts: [天气路况, 医疗救援, 通信信号, 油电补给]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 1000, max: 2200 }
+imagePlan:
+  - { slot: 风险地图, imageLayout: fullWidth }
+  - { slot: 补给点表, imageLayout: wrapRight }
+  - { slot: 清单卡, gallery: grid }
+crossRefs: { minEntity: 2, minTag: 4 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+openingTension: { required: true, focus: 出发动机与犹豫 }
+explicitFeelings: { requireLike: true, requireDislike: true }
+decisionPoints: { required: true, minPoints: 2 }
+tipsEmbeddingPolicy: { mode: inline, forbidStandaloneBlock: true }
+sopExampleRef: sop/article.md

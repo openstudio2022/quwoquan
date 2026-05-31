@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `shared-homepage-network`
-- `L2_journey`: `homepage-claim-maintain-and-offline-journey`
-- `L3_scenario`: `homepage-claim-request-and-review`
+- `L1_domain_service`: `shared-homepage-network`
+- `L2_business_capability`: `homepage-claim-maintain-and-offline-journey`
+- `L3_story`: `homepage-claim-request-and-review`
 
 ## 背景与动机
 

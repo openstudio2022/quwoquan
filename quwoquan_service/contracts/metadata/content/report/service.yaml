@@ -10,6 +10,12 @@ api_routes:
     path: /v1/content/reports
     operation: CreateReport
     description: 提交举报
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/content/reports/{reportId}

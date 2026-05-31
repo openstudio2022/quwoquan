@@ -1,0 +1,28 @@
+version: 1
+evidenceProfiles:
+  travel_route:
+    requiredFacts: [里程, 分段耗时, 路况, 油电补给, 停车点, 应急避险]
+    minSourceCount: 2
+    preferredSources: [地图/交通平台, 景区公告, 天气路况, 近期游记]
+    imageSlots: [总览地图, 分段路况, 节点图集, 风险提示]
+    # 地形/海拔等地域专有事实由 region_catalog 在 brief 阶段按 region 注入，不在此写死
+  geo_feature:
+    requiredFacts: [地理位置, 地貌成因, 季节窗口, 观察点, 安全边界]
+    minSourceCount: 2
+    preferredSources: [百科/地理资料, 景区公告, 摄影记录, 地图]
+    imageSlots: [封面大片, 地貌细节, 地图信息图, 人文现场]
+  city_walk:
+    requiredFacts: [起终点, 步行时长, 节点顺序, 休息点, 避开拥挤策略]
+    minSourceCount: 2
+    preferredSources: [地图, 本地生活平台, 游记]
+    imageSlots: [街区入口, 节点图集, 细节特写]
+  campus_guide:
+    requiredFacts: [校区位置, 报到流程, 宿舍食堂, 学业资源, 生活建议]
+    minSourceCount: 2
+    preferredSources: [学校官网, 招生信息, 学生经验]
+    imageSlots: [校门, 校园地标, 宿舍食堂, 学习空间]
+  review:
+    requiredFacts: [价格或成本, 体验时间, 优点, 缺点, 适合人群]
+    minSourceCount: 1
+    preferredSources: [亲身体验, 用户点评, 官方信息]
+    imageSlots: [环境, 细节, 对比]

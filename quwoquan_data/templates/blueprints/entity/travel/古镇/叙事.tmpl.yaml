@@ -1,0 +1,34 @@
+templateId: 古镇_叙事
+version: 1
+subject: { kind: entity, type: 地点/古镇 }
+vertical: travel
+category: travel
+intent: 叙事
+carrier: article
+styleFamily: 旅途随笔风
+audiences: [leisureTraveler]
+creatorPersona:
+  archetype: travel_blogger
+  preferredCreatorIds: [qwq_creator_travel_blogger_001]
+  requiredProfileTagRefs: [Format/内容角度/叙事/旅行叙事, Topic/旅行/旅行主题/文化深度游]
+  allowedPerspective: [第一人称经验]
+  mustNotClaim: [官方推荐, 商业合作]
+editorialIntent: 用一个真实漫步视角写出古镇的时间感和生活气。
+render: { articleTemplate: journal, fontPreset: handwritten }
+structure:
+  required: [抵达时刻, 街巷漫步, 一个生活细节, 人文故事, 实用补充]
+  optional: [夜色, 雨天, 老店]
+hooks: ["在{name}，我想慢下来的是这一段路"]
+mustIncludeFacts: [抵达方式, 街巷节点, 体验时间]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 800, max: 1600 }
+imagePlan:
+  - { slot: 街巷主图, imageLayout: fullWidth }
+  - { slot: 生活细节, gallery: carousel }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/地点/古镇/example.md

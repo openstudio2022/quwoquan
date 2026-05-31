@@ -17,7 +17,7 @@ export 'post_read_presentation.g.dart';
 export 'photo_post_dto.g.dart';
 export 'video_post_dto.g.dart';
 export 'article_post_dto.g.dart';
-export 'moment_post_dto.g.dart';
+export 'micro_post_dto.g.dart';
 export 'feed_item_dto.g.dart';
 export 'content_post_mutation_wires.g.dart';
 export 'content_media_init_upload_response_dto.g.dart';
@@ -30,17 +30,17 @@ export 'content_recommendation_response_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/photo_post_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/video_post_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/article_post_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/moment_post_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/micro_post_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 
 /// contentType に応じて対応するサブクラスにディスパッチする。
 /// 按 contentType 分发到对应子类型 DTO。
 ///
-/// 支持的 contentType 值：
-/// - image / photo → PhotoPostDto
+/// 支持的 contentType 值（ContentType 真相源 types.yaml: image/video/micro/article）：
+/// - image → PhotoPostDto
 /// - video → VideoPostDto
 /// - article → ArticlePostDto
-/// - micro / moment → MomentPostDto
+/// - micro → MicroPostDto
 PostBaseDto postBaseDtoFromMap(Map<String, dynamic> m) {
   final contentType = m['contentType']?.toString() ??
       m['type']?.toString() ??
@@ -52,10 +52,8 @@ PostBaseDto postBaseDtoFromMap(Map<String, dynamic> m) {
     case 'article':
       return ArticlePostDto.fromMap(m);
     case 'micro':
-    case 'moment':
-      return MomentPostDto.fromMap(m);
+      return MicroPostDto.fromMap(m);
     case 'image':
-    case 'photo':
     default:
       return PhotoPostDto.fromMap(m);
   }

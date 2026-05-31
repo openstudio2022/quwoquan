@@ -10,7 +10,7 @@ policies:
   - id: tagref_resolvable
     description: >
       所有实体/post/圈子/用户的 tagRefs 字段中每一个 tagRef 必须能在
-      publish/v1/tags 下找到对应的 _definition.json 节点。
+      publish/tags 下找到对应的 _definition.json 节点。
       防止死引用导致搜索/推荐无法命中。
     severity: blocking
     appliesTo: [entity, post, circle, user]

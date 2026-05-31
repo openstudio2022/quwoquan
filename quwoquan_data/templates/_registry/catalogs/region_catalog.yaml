@@ -1,0 +1,60 @@
+version: 1
+# 地域（条件修饰维）唯一真相源。模板保持地域无关，brief 阶段按 region 注入。
+# tagRefs 仅挂经 tag_exists 校验通过的已存在标签。
+regions:
+  高原:
+    label: 高原 / 高海拔
+    conditionFacts: [海拔与高反风险, 强紫外线防护, 昼夜温差]
+    riskNotes: [高原反应, 强紫外线灼伤, 道路结冰落石]
+    packing: [防晒墨镜, 保暖冲锋衣, 红景天与葡萄糖]
+    imageHints: [雪山垭口, 高原湖泊, 经幡牧场]
+    tagRefs: [Topic/自然风光/高原风光]
+  雪山:
+    label: 雪山 / 高山
+    conditionFacts: [雪线与冰雪路况, 失温防护, 体能与高度适应]
+    riskNotes: [失温, 雪盲, 滑坠]
+    packing: [冰爪登山杖, 保暖分层, 高热量补给]
+    imageHints: [日照金山, 冰川, 高山草甸]
+    tagRefs: [Topic/旅行/旅行主题/雪山探险, Topic/自然风光/雪山]
+  沿海海岛:
+    label: 沿海 / 海岛
+    conditionFacts: [潮汐与海况, 台风季窗口, 防晒与防晕船]
+    riskNotes: [离岸流, 台风, 晒伤]
+    packing: [速干泳具, 防水袋, 防晒晕船药]
+    imageHints: [海岸线, 礁石浪花, 跳岛航线]
+    tagRefs: [Topic/旅行/旅行主题/海岛度假, Topic/旅行/旅行主题/海滨度假]
+  沙漠戈壁:
+    label: 沙漠 / 戈壁
+    conditionFacts: [昼夜极端温差, 缺水与补给点间距, 风沙与方向]
+    riskNotes: [脱水, 迷路, 沙尘暴]
+    packing: [大量饮水, 防风头巾, 高帮防沙鞋]
+    imageHints: [沙丘线条, 胡杨与雅丹, 星空银河]
+    tagRefs: [Topic/旅行/旅行主题/沙漠探险]
+  雨林秘境:
+    label: 热带雨林 / 秘境
+    conditionFacts: [湿热与集中降雨, 防蚊虫与蚂蝗, 路滑泥泞]
+    riskNotes: [蚊媒疾病, 暴雨山洪, 迷失方向]
+    packing: [防蚊驱虫, 速干雨具, 防滑鞋]
+    imageHints: [林冠层, 溪流瀑布, 晨雾]
+    tagRefs: [Topic/旅行/旅行主题/雨林秘境]
+  山地森林:
+    label: 山地 / 森林
+    conditionFacts: [海拔起伏与体力, 山区天气突变, 林区防火]
+    riskNotes: [迷路, 落石, 雷暴]
+    packing: [登山鞋, 冲锋衣, 头灯与急救]
+    imageHints: [林海, 山脊云雾, 溪谷]
+    tagRefs: [Topic/自然风光/森林]
+  平原都市:
+    label: 平原 / 都市
+    conditionFacts: [公共交通衔接, 步行动线, 城市天气与限行]
+    riskNotes: [高峰拥堵, 排队限流]
+    packing: [舒适步行鞋, 交通卡, 轻便雨具]
+    imageHints: [街区天际线, 巷弄细节, 夜景灯火]
+    tagRefs: [Topic/旅行/旅行主题/城市漫步]
+  乡村田园:
+    label: 乡村 / 田园
+    conditionFacts: [班车与最后一公里, 农时与物产, 住宿与餐饮有限]
+    riskNotes: [交通稀疏, 雨后泥路]
+    packing: [适量现金, 防晒驱蚊, 常用药]
+    imageHints: [梯田农事, 村落炊烟, 乡集]
+    tagRefs: [Topic/旅行/旅行主题/乡村田园]

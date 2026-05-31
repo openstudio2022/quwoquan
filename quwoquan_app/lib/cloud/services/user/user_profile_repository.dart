@@ -27,7 +27,6 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
-import 'package:quwoquan_app/ui/user/models/resonance_buddy_view_data.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -48,16 +47,12 @@ Map<String, dynamic> _omitNullMapValues(Map<String, dynamic> source) {
   );
 }
 
-/// 用户主页 Repository。
+/// 用户档案读取 / 主页 Tab 数据 / 统计 / 关系检索。
 ///
-/// 接口方法与 contracts/metadata/user/user_profile/service.yaml、
-/// contracts/metadata/user/follow_edge/service.yaml routes 一一对应。
-abstract class UserProfileRepository {
-  const UserProfileRepository();
-
+/// R02：单接口 ≤10 方法。
+abstract class ProfileReadRepository {
   // ── 档案 ──────────────────────────────────────────────────────────────────
   Future<SubAccountProfileViewData> getUserProfile(String userId);
-  Future<void> updateProfile(ProfileEditUpdatePayload data);
 
   // ── 主页 Tab 数据 ─────────────────────────────────────────────────────────
   Future<List<PostBaseDto>> listUserPosts(
@@ -76,6 +71,13 @@ abstract class UserProfileRepository {
     required String query,
     int limit = CloudApiDefaults.pageLimit,
   });
+}
+
+/// 用户档案编辑 / 最近搜索维护。
+///
+/// R02：单接口 ≤10 方法。
+abstract class ProfileEditRepository {
+  Future<void> updateProfile(ProfileEditUpdatePayload data);
 
   Future<List<RecentSearchEntryView>> listRecentSearches();
 
@@ -88,7 +90,12 @@ abstract class UserProfileRepository {
   Future<void> deleteRecentSearch(String entryId);
 
   Future<void> clearRecentSearches();
+}
 
+/// 用户关注 / 粉丝 / 关系 / 点赞 / 互动。
+///
+/// R02：单接口 ≤10 方法。
+abstract class ProfileRelationshipRepository {
   // ── 关注 / 粉丝 ──────────────────────────────────────────────────────────
   Future<void> followUser(
     String targetUserId, {
@@ -130,7 +137,12 @@ abstract class UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   });
+}
 
+/// 用户分身（persona）管理。
+///
+/// R02：单接口 ≤10 方法。
+abstract class ProfilePersonaRepository {
   // ── 分身 ──────────────────────────────────────────────────────────────────
   Future<List<PersonaDto>> listPersonas();
   Future<PersonaDto> createPersona(PersonaCreateRequestDto request);
@@ -140,6 +152,23 @@ abstract class UserProfileRepository {
   );
   Future<void> deletePersona(String subAccountId);
   Future<void> activatePersona(String subAccountId);
+}
+
+/// 用户主页 Repository。
+///
+/// 接口方法与 contracts/metadata/user/user_profile/service.yaml、
+/// contracts/metadata/user/follow_edge/service.yaml routes 一一对应。
+///
+/// 由 4 个 ≤10 方法子接口组合（R02）。既有消费方继续依赖 `UserProfileRepository`
+/// 不变；新消费方可只依赖所需子接口。下方的便捷默认方法由子类（Mock / Remote）
+/// 经 `extends` 继承。
+abstract class UserProfileRepository
+    implements
+        ProfileReadRepository,
+        ProfileEditRepository,
+        ProfileRelationshipRepository,
+        ProfilePersonaRepository {
+  const UserProfileRepository();
 
   Future<SubAccountProfileViewData> getSubAccountProfile(String userId) async {
     final profile = await getUserProfile(userId);
@@ -172,8 +201,6 @@ abstract class UserProfileRepository {
     return listUserInteractionSent(userId, cursor: cursor, limit: limit);
   }
 
-  /// 「我的交集」内嵌预览行；云侧未接 API 时为 empty。
-  List<Map<String, dynamic>> resonanceBuddyPreviewWireRows();
 }
 
 /// 预置用户档案 JSON：`jsonDecode` 后与远程 `getUserProfile` 同形进入 [SubAccountProfileWireDto]。
@@ -870,12 +897,6 @@ class MockUserProfileRepository extends UserProfileRepository {
     };
   }
 
-  @override
-  List<Map<String, dynamic>> resonanceBuddyPreviewWireRows() {
-    return ResonanceBuddyViewData.prototype
-        .map((e) => e.toWireMap())
-        .toList(growable: false);
-  }
 }
 
 // ─── Remote 实现（调用云侧 API）───────────────────────────────────────────────
@@ -1586,9 +1607,6 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     }
   }
 
-  @override
-  List<Map<String, dynamic>> resonanceBuddyPreviewWireRows() => const [];
-
   // ── Private helpers ───────────────────────────────────────────────────────
 
   static UserWorkItem _workItemFromMap(Map<String, dynamic> m) {
@@ -1606,11 +1624,11 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   static UserLifeItem _lifeItemFromMap(Map<String, dynamic> m) {
     return UserLifeItem(
       id: m['id']?.toString() ?? '',
-      name: m['name']?.toString() ?? '',
       category: m['category']?.toString() ?? '',
-      categoryKey: m['categoryKey']?.toString() ?? '',
-      coverUrl: m['coverUrl']?.toString() ?? '',
-      desc: m['desc']?.toString() ?? '',
+      title: m['title']?.toString() ?? '',
+      subtitle: m['subtitle']?.toString() ?? '',
+      imageUrl: m['imageUrl']?.toString() ?? '',
+      refId: m['refId']?.toString() ?? '',
     );
   }
 }

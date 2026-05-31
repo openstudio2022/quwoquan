@@ -41,12 +41,15 @@ class ConversationAvatar extends ConsumerWidget {
     final normalizedId = conversationId.trim();
     final normalizedType = conversationType.trim().toLowerCase();
     final resolvedAvatarUrl = resolveAvatarImageUrl(avatarUrl);
-    final shouldLoadMembers = conversationAvatarNeedsMembers(
-      conversationId: normalizedId,
-      conversationType: normalizedType,
-      avatarUrl: resolvedAvatarUrl,
-      groupAvatarVersion: groupAvatarVersion,
-    );
+    final isGroup = normalizedType == 'group';
+    final shouldLoadMembers =
+        !isGroup ||
+        conversationAvatarNeedsMembers(
+          conversationId: normalizedId,
+          conversationType: normalizedType,
+          avatarUrl: resolvedAvatarUrl,
+          groupAvatarVersion: groupAvatarVersion,
+        );
     final members = shouldLoadMembers
         ? ref.watch(
             conversationAvatarMembersProvider.select(
@@ -62,7 +65,7 @@ class ConversationAvatar extends ConsumerWidget {
           .ensureLoaded(normalizedId);
     }
 
-    if (normalizedType == 'group') {
+    if (isGroup) {
       return _buildSingleAvatar(
         imageUrl: resolvedAvatarUrl,
         fallbackIcon: groupFallbackIcon,
@@ -71,9 +74,9 @@ class ConversationAvatar extends ConsumerWidget {
 
     final fallbackAvatarUrl = _resolveDirectAvatarUrl(members);
     return _buildSingleAvatar(
-      imageUrl: resolvedAvatarUrl.isNotEmpty
-          ? resolvedAvatarUrl
-          : fallbackAvatarUrl,
+      imageUrl: fallbackAvatarUrl.isNotEmpty
+          ? fallbackAvatarUrl
+          : resolvedAvatarUrl,
       fallbackIcon: directFallbackIcon,
     );
   }

@@ -1,36 +1,35 @@
-version: 1
-feature: runtime-external-integration
-level: "L2_feature"
-template: A1-A8
-status: specified
-focus_groups:
-- service_bootstrap
-- metadata_contract
-- config_governance
+version: 2
+node:
+  id: runtime-external-integration
+  level: L2_business_capability
+  path: specs/feature-tree/runtime/runtime-external-integration
+  title: runtime external integration
+  parent_domain_service: runtime
+  parent_business_capability: runtime-external-integration
+scope:
+  summary: runtime external integration 验收范围。
+  in_scope: []
+  out_of_scope: []
+sit_acceptance:
+  SIT1:
+    title: runtime external integration 能力 SIT
+    story_refs: []
+    done_when:
+    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make verify && make -C quwoquan_service verify-metadata
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: integration-service 服务骨架、环境配置、发布配置目录创建完成
-    status: passed
-    linked_tasks:
-    - B1
-    tests: []
-  A2:
-    criteria: integration/location 元数据五件套定义完成并可通过验证
-    status: passed
-    linked_tasks:
-    - M1
-    - C1
-    tests: []
-  A3:
-    criteria: 特性树与云侧服务文档已同步，节点可进入 deliver
-    status: passed
-    linked_tasks:
-    - B2
-    - T1
-    - B3
-    - B4
-    - B5
-    tests: []
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

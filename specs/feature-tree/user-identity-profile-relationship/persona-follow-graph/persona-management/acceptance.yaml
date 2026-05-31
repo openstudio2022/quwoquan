@@ -1,178 +1,41 @@
 version: 2
-feature: persona-management
-level: L3_scenario
-source_path: user-identity-profile-relationship/persona-follow-graph/persona-management
-parent_journey: persona-follow-graph
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+node:
+  id: persona-management
+  level: L3_story
+  path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management
+  title: persona management
+  parent_domain_service: user-identity-profile-relationship
+  parent_business_capability: persona-follow-graph
 scope:
-  summary: >
-    冻结“用户及分身”模型下的分身管理台，包括统一入口、列表状态、创建、切换、
-    继承/同步建议、停用/删除保护与配额控制。
-  journey_bindings:
-    - J1
-    - J3
-  in_scope:
-    - 个人主页与设置页的分身管理入口
-    - 分身列表、激活态、主分身、用户号、继承状态、同步状态、隔离等级与配额展示
-    - 创建分身、激活切换、删除/停用保护
-    - 用户可见管理字段、资料同步建议与失败恢复
-  out_of_scope:
-    - 公开资料壳层与视觉体验
-    - 分身公开身份继承/覆写契约
-    - content/chat/circle/assistant 下游透传
-
-scenario_acceptance:
-  A1:
-    title: 分身管理入口与列表唯一化
-    scenario: 用户从个人主页或设置进入统一的分身管理台
-    journey_step: open persona management
+  summary: persona management 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: persona management GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
     done_when:
-      - "`我的主页` 与设置都进入同一个管理台"
-      - 列表能够稳定展示当前 active persona、主分身、用户号、继承状态、隔离等级与配额
-      - 单分身用户不会被强制打扰，但始终能找到管理入口
-    edge_cases:
-      - 首次进入时只有 1 个分身
-      - 远端列表为空或返回异常
-    linked_plan_items:
-      - P1
-      - P2
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
     evidence:
       primary:
-        - T2_module_interaction
-        - T3_cross_service_integration
-      supporting:
-        - T1_schema
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      planned:
-        - persona management entry widget test
-        - unified route contract test
-      recorded:
-        - "T2: `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/persona_management_page_test.dart`"
-        - "T2: `flutter test test/cloud/integration/remote_api_path_contract_test.dart`"
-    notes:
-      - "统一管理台页面、设置入口与主页入口已收敛到同一条 `/profile/personas` 主链路。"
-      - "分身管理入口现已接入 runtime config feature flag，关闭时设置页与个人主页行为一致。"
-    test_layers:
-      T1: optional
-      T2: required
-      T3: optional
-      T4: optional
-    status: implemented
-  A2:
-    title: 用户可创建、切换并管理分身资料继承
-    scenario: 用户在管理台创建新分身并决定是否立即切换
-    journey_step: create and activate persona
-    done_when:
-      - 创建时最少采集 `displayName`、`userHandle`、`isolationLevel`，可选 `purposeHint`
-      - 新分身默认继承主分身资料基线与 `phone / email`
-      - 创建成功后可选择立即切换或稍后切换
-      - 同一用户同时仅有 1 个 active persona
-      - 管理台可对 `displayName / userHandle / phone / email` 产生同步建议
-    edge_cases:
-      - 已达到 5 个分身上限
-      - 创建成功但切换失败
-      - 目标用户号已被其他分身占用
-    linked_plan_items:
-      - P2
-      - P3
-    evidence:
-      primary:
-        - T1_schema
-        - T3_cross_service_integration
-      supporting:
-        - T2_module_interaction
-    tests:
-      planned:
-        - persona create contract test
-        - active persona exclusivity test
-        - create and switch widget journey test
-        - persona profile sync suggestion test
-      recorded:
-        - "T1/T3: `go test ./services/user-service/tests -run 'Test(CreatePersona|ActivatePersona|UpdatePersona|ApplyPersonaProfileSync|SubAccount_)'`"
-        - "T2: `flutter test test/ui/user/widgets/persona_management_page_test.dart test/ui/user/providers/persona_management_provider_test.dart`"
-        - "T1/T2: `flutter test test/cloud/user/contract/user_repository_contract_test.dart test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/cloud/integration/remote_api_path_contract_test.dart`"
-    notes:
-      - "创建分身、立即切换、active exclusivity、资料编辑后的同步建议与 profile-sync contract 已完成闭环。"
-      - "分身管理与资料同步开关均已改为 runtime config 驱动，默认保持现有可用性。"
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    status: implemented
-  A3:
-    title: 删除动作遵循停用/删除保护
-    scenario: 用户删除或停用已有分身，系统保证记录归因与主分身约束
-    journey_step: retire or delete persona
-    done_when:
-      - 主分身与最后一个剩余分身不可删除
-      - 空白分身可以直接删除
-      - 有记录归因的分身按停用处理，不再作为新动作主体
-      - 删除或停用失败时，当前 active persona 与记录归因不受损
-    edge_cases:
-      - 试图删除主分身
-      - 试图删除仍处于 active 状态的分身
-      - 有记录内容但无公开资料的分身
-    linked_plan_items:
-      - P3
-      - P4
-    evidence:
-      primary:
-        - T1_schema
-        - T3_cross_service_integration
-      supporting:
-        - T2_module_interaction
-    tests:
-      planned:
-        - primary persona delete forbidden test
-        - last persona delete forbidden test
-        - retired persona management flow test
-      recorded:
-        - "T1/T3: `go test ./services/user-service/tests -run 'Test(DeletePersona|GetPersonaLifecycleGuard|RetirePersona|DeleteEmptyPersona|RetiredPersona)'`"
-        - "T2: `flutter test test/ui/user/widgets/persona_management_page_test.dart`"
-    notes:
-      - "主管理页已接入 lifecycle guard、delete-empty 与 retire 分流，并能显示已退役分身状态。"
-      - "`retire` 已写入 Persona `status / retiredAt`，退役后不可再作为激活、编辑或同步主体。"
-      - "`hasAttributedHistory` 已接入 user 域真实分身级归因来源，delete-empty 与 retire 的分流不再依赖写死布尔值。"
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    status: implemented
-
-story_readiness:
-  S1:
-    title: 分身管理台可灰度、可观测、可回退
-    done_when:
-      - 管理台入口可按功能开关独立控制
-      - create/activate/delete failure、quota reached、retired persona count、profile sync suggested/applied 可观测
-      - 回退时可退回单 active persona 基线，不影响记录归因
-    evidence:
-      primary:
-        - T1_schema
-        - T2_module_interaction
-      supporting:
-        - T4_user_journey
-    tests:
-      planned:
-        - management flag rollback verification
-        - error telemetry verification
-      recorded:
-        - "T2: `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/content/post/contract/content_runtime_config_provider_test.dart test/ui/user/providers/persona_management_provider_test.dart`"
-        - "T1/T3: `go test ./services/user-service/tests -run 'Test(GetPersonaLifecycleGuard|RetirePersona|DeleteEmptyPersona|RetiredPersona)'`"
-    notes:
-      - "`create_succeeded / activate_succeeded / retire_succeeded / create_failed / activate_failed / delete_blocked / quota_reached / retired_count / profile_sync_suggested / profile_sync_applied / profile_sync_rejected` 已纳入 telemetry。"
-      - "分身管理与资料同步入口现支持 runtime config 关闭，并验证了设置页与个人主页在 flag-off 时的一致降级。"
-      - "在 flag-off 回退到单 active persona 管理基线时，退役状态与记录归因仍由 user 域持久化保留，不依赖 UI 临时状态。"
-    test_layers:
-      T1: optional
-      T2: required
-      T3: optional
-      T4: optional
-    status: implemented
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

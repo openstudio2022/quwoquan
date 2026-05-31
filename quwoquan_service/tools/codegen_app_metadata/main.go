@@ -52,16 +52,52 @@ type fieldsFile struct {
 
 // ── post/service.yaml ─────────────────────────────────────────────────────────
 
+type routeSecurity struct {
+	AuthMode        string   `yaml:"auth_mode"`
+	Principal       string   `yaml:"principal"`
+	Permissions     []string `yaml:"permissions"`
+	TokenTransport  string   `yaml:"token_transport"`
+	AnonymousPolicy string   `yaml:"anonymous_policy"`
+	Visibility      string   `yaml:"visibility"`
+}
+
 type routeDef struct {
-	Method         string   `yaml:"method"`
-	Path           string   `yaml:"path"`
-	Operation      string   `yaml:"operation"`
-	Description    string   `yaml:"description"`
-	QueryParams    []string `yaml:"query_params"`
-	WritableFields []string `yaml:"writable_fields"`
-	RequestFields  []string `yaml:"request_fields"`
-	ResponseFields []string `yaml:"response_fields"`
-	ResponseEntity string   `yaml:"response_entity"`
+	Method         string        `yaml:"method"`
+	Path           string        `yaml:"path"`
+	Operation      string        `yaml:"operation"`
+	Description    string        `yaml:"description"`
+	QueryParams    []string      `yaml:"query_params"`
+	WritableFields []string      `yaml:"writable_fields"`
+	RequestFields  []string      `yaml:"request_fields"`
+	ResponseFields []string      `yaml:"response_fields"`
+	ResponseEntity string        `yaml:"response_entity"`
+	Security       routeSecurity `yaml:"security"`
+	// Back-compat: 旧写法 auth: required / auth_required: bool。统一收敛到 security.auth_mode。
+	Auth         string `yaml:"auth"`
+	AuthRequired *bool  `yaml:"auth_required"`
+}
+
+// resolveAuthMode 返回 public | optional | required 三态。
+// 优先 security.auth_mode；其次兼容旧 auth/auth_required；默认 public。
+func (r routeDef) resolveAuthMode() string {
+	mode := strings.ToLower(strings.TrimSpace(r.Security.AuthMode))
+	switch mode {
+	case "public", "optional", "required":
+		return mode
+	}
+	if strings.EqualFold(strings.TrimSpace(r.Auth), "required") {
+		return "required"
+	}
+	if strings.EqualFold(strings.TrimSpace(r.Auth), "optional") {
+		return "optional"
+	}
+	if r.AuthRequired != nil {
+		if *r.AuthRequired {
+			return "required"
+		}
+		return "public"
+	}
+	return "public"
 }
 
 type serviceInfo struct {
@@ -183,6 +219,16 @@ type discoveryTabDef struct {
 	Order       int    `yaml:"order"`
 }
 
+// homeChannelDef：首页频道运营可配置项（端 meta 默认 + /v1/config/app 远程覆盖）。
+type homeChannelDef struct {
+	ID          string            `yaml:"id"`
+	LabelKey    string            `yaml:"label_key"`
+	Template    string            `yaml:"template"`
+	FeedQuery   map[string]string `yaml:"feed_query"`
+	MoodCopyKey string            `yaml:"mood_copy_key"`
+	Order       int               `yaml:"order"`
+}
+
 type discoveryRailDef struct {
 	ID       string `yaml:"id"`
 	LabelKey string `yaml:"label_key"`
@@ -206,10 +252,11 @@ type workFormatFilterDef struct {
 }
 
 type profileSubTabDef struct {
-	ID          string `yaml:"id"`
-	LabelKey    string `yaml:"label_key"`
-	ContentType string `yaml:"content_type"`
-	Order       int    `yaml:"order"`
+	ID           string `yaml:"id"`
+	LabelKey     string `yaml:"label_key"`
+	ContentType  string `yaml:"content_type"`
+	LifeCategory string `yaml:"life_category"`
+	Order        int    `yaml:"order"`
 }
 
 type profileTabDef struct {
@@ -291,6 +338,7 @@ type emptyStateDef struct {
 }
 
 type uiConfigFile struct {
+	HomeChannels                   []homeChannelDef                   `yaml:"home_channels"`
 	DiscoveryTabs                  []discoveryTabDef                  `yaml:"discovery_tabs"`
 	DiscoveryRails                 []discoveryRailDef                 `yaml:"discovery_rails"`
 	CreationIdentityFilters        []identityFilterDef                `yaml:"creation_identity_filters"`
@@ -683,6 +731,10 @@ func main() {
 	}
 	defaultsOut := renderCloudAPIDefaultsDart(feedDefaultLimit)
 	writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "cloud_api_defaults.g.dart"), defaultsOut)
+	writeFile(
+		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "auth", "auth_policy.g.dart"),
+		renderAuthPolicyDart(domainRoutes),
+	)
 	for domain, routes := range domainRoutes {
 		metaOut := renderDomainAPIMetadataDart(domain, routes)
 		pageIDsOut := renderDomainRequestPageIDsDart(domain, routes)
@@ -919,7 +971,7 @@ func buildFeedDefaults(postDefaults map[string]string) map[string]string {
 	return map[string]string{
 		"coverUrl":         get("coverUrl", "''"),
 		"isLocalGenerated": "true",
-		"tags":             get("tags", "<String>[]"),
+		"tagRefs":          get("tagRefs", "<String>[]"),
 		"thumbnailUrl":     get("coverUrl", "''"),
 		"videoUrl":         get("videoUrl", "''"),
 		"visibility":       get("visibility", "'public'"),
@@ -927,41 +979,32 @@ func buildFeedDefaults(postDefaults map[string]string) map[string]string {
 }
 
 func buildContentTypeToRender(contentTypes []string) map[string]string {
+	// renderType 与 ContentType 真相源 (types.yaml) canonical 一致；不再把 micro 映射成 moment。
 	out := map[string]string{}
 	for _, ct := range contentTypes {
-		switch ct {
-		case "micro":
-			out[ct] = "moment"
-		default:
-			out[ct] = ct
-		}
+		out[ct] = ct
 	}
 	return out
 }
 
 func buildDiscoveryMappings(contentTypes []string) (map[string]string, map[string]string) {
+	// requestType 全部使用 canonical ContentType（micro/image/...），无 moment/photo 同义词。
 	feedCategoryToType := map[string]string{
-		"recommended": "moment",
-		"following":   "moment",
+		"recommended": "micro",
+		"following":   "micro",
 	}
 	for _, ct := range contentTypes {
 		category := ct
 		feedType := ct
-		switch ct {
-		case "micro":
-			category = "moment"
-			feedType = "moment"
-		case "image":
+		if ct == "image" {
 			category = "images"
-			feedType = "photo"
-			feedCategoryToType["photo"] = "photo"
 		}
 		feedCategoryToType[category] = feedType
 	}
 
 	appTabToCategory := map[string]string{
-		"moment":  "recommended",
-		"photo":   "images",
+		"micro":   "recommended",
+		"image":   "images",
 		"video":   "video",
 		"article": "article",
 	}
@@ -1071,6 +1114,12 @@ func renderDomainAPIMetadataDart(domain string, routes []routeDef) string {
 		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", route.Operation, strings.ToUpper(route.Method)))
 	}
 	b.WriteString("  };\n\n")
+	b.WriteString("  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。\n")
+	b.WriteString("  static const Map<String, String> operationToAuthMode = <String, String>{\n")
+	for _, route := range routes {
+		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", route.Operation, route.resolveAuthMode()))
+	}
+	b.WriteString("  };\n\n")
 	for _, route := range routes {
 		identifier := lowerCamel(route.Operation)
 		b.WriteString(fmt.Sprintf("  static const String %sOperation = '%s';\n", identifier, route.Operation))
@@ -1109,6 +1158,53 @@ func renderDomainAPIMetadataDart(domain string, routes []routeDef) string {
 		b.WriteString("    return path;\n")
 		b.WriteString("  }\n")
 	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
+// renderAuthPolicyDart 聚合所有域的 operation -> auth_mode，作为端侧鉴权快照的单一来源，
+// 供 AuthGate 矩阵交叉校验与 Remote token 使用测试消费。
+func renderAuthPolicyDart(domainRoutes map[string][]routeDef) string {
+	type opMode struct {
+		op   string
+		mode string
+	}
+	var entries []opMode
+	seen := map[string]bool{}
+	domains := make([]string, 0, len(domainRoutes))
+	for d := range domainRoutes {
+		domains = append(domains, d)
+	}
+	sort.Strings(domains)
+	for _, d := range domains {
+		for _, route := range domainRoutes[d] {
+			if route.Operation == "" || seen[route.Operation] {
+				continue
+			}
+			seen[route.Operation] = true
+			entries = append(entries, opMode{op: route.Operation, mode: route.resolveAuthMode()})
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].op < entries[j].op })
+
+	var b strings.Builder
+	b.WriteString("// Code generated by tools/codegen_app_metadata from all domain service.yaml security blocks. DO NOT EDIT.\n\n")
+	b.WriteString("import 'dart:core';\n\n")
+	b.WriteString("/// 端侧 API 鉴权快照：operation -> 鉴权模式（public | optional | required）。\n")
+	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
+	b.WriteString("class AuthApiPolicy {\n")
+	b.WriteString("  const AuthApiPolicy._();\n\n")
+	b.WriteString("  static const Map<String, String> operationToAuthMode = <String, String>{\n")
+	for _, e := range entries {
+		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", e.op, e.mode))
+	}
+	b.WriteString("  };\n\n")
+	b.WriteString("  static bool isRequired(String operation) =>\n")
+	b.WriteString("      operationToAuthMode[operation] == 'required';\n\n")
+	b.WriteString("  static bool isPublic(String operation) =>\n")
+	b.WriteString("      operationToAuthMode[operation] == 'public';\n\n")
+	b.WriteString("  static bool isOptional(String operation) =>\n")
+	b.WriteString("      operationToAuthMode[operation] == 'optional';\n")
 	b.WriteString("}\n")
 	return b.String()
 }
@@ -1786,6 +1882,13 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 	b.WriteString("// Code generated by tools/codegen_app_metadata from content/post/projections/discovery_feed.yaml. DO NOT EDIT.\n")
 	b.WriteString("// ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators\n\n")
 
+	for _, imp := range proj.DartImports {
+		b.WriteString(fmt.Sprintf("import '%s';\n", imp))
+	}
+	if len(proj.DartImports) > 0 {
+		b.WriteString("\n")
+	}
+
 	className := proj.DartClass
 	if className == "" {
 		className = "FeedItemDto"
@@ -1889,6 +1992,7 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 	needsMapList := false
 	needsFirstNonEmptyMapList := false
 	needsStringKeyMap := false
+	needsProjectionDtoList := false
 	for _, f := range proj.Fields {
 		dt := normalizeDartType(f.DartType)
 		switch dt {
@@ -1902,6 +2006,9 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 		}
 		if f.MapFromStringKeyClass != "" {
 			needsStringKeyMap = true
+		}
+		if f.ListElementDartClass != "" && strings.HasPrefix(dt, "List<") && strings.HasSuffix(dt, ">") {
+			needsProjectionDtoList = true
 		}
 	}
 	if needsMapList {
@@ -1924,6 +2031,24 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 		b.WriteString("    if (parsed.isNotEmpty) return parsed;\n")
 		b.WriteString("  }\n")
 		b.WriteString("  return const <Map<String, dynamic>>[];\n")
+		b.WriteString("}\n")
+	}
+	if needsProjectionDtoList {
+		b.WriteString("\nList<T> _parseProjectionDtoList<T>(\n")
+		b.WriteString("  Object? v,\n")
+		b.WriteString("  T Function(Map<String, dynamic> m) fromMap,\n")
+		b.WriteString(") {\n")
+		b.WriteString("  if (v == null) return List<T>.empty(growable: false);\n")
+		b.WriteString("  if (v is! List) return List<T>.empty(growable: false);\n")
+		b.WriteString("  final out = <T>[];\n")
+		b.WriteString("  for (final e in v) {\n")
+		b.WriteString("    if (e is Map<String, dynamic>) {\n")
+		b.WriteString("      out.add(fromMap(e));\n")
+		b.WriteString("    } else if (e is Map) {\n")
+		b.WriteString("      out.add(fromMap(Map<String, dynamic>.from(e)));\n")
+		b.WriteString("    }\n")
+		b.WriteString("  }\n")
+		b.WriteString("  return out;\n")
 		b.WriteString("}\n")
 	}
 	if needsStringKeyMap {
@@ -1958,6 +2083,7 @@ var postBaseDtoFields = map[string]bool{
 	"favoriteCount":       true,
 	"shareCount":          true,
 	"createdAt":           true,
+	"intersectionReasons": true,
 }
 
 var postBaseDtoComputedGetters = map[string]bool{
@@ -1981,6 +2107,12 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 	b.WriteString("// ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators\n\n")
 	if baseClass != "" {
 		b.WriteString("import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';\n\n")
+	}
+	for _, imp := range proj.DartImports {
+		b.WriteString(fmt.Sprintf("import '%s';\n", imp))
+	}
+	if len(proj.DartImports) > 0 {
+		b.WriteString("\n")
 	}
 
 	// Class declaration with base class
@@ -2073,6 +2205,7 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 	// Helper functions used by fromMap (only if needed)
 	needsDateTime := false
 	needsStringList := false
+	needsProjectionDtoList := false
 	for _, f := range proj.Fields {
 		dt := normalizeDartType(f.DartType)
 		if dt == "DateTime" {
@@ -2080,6 +2213,9 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 		}
 		if dt == "List<String>" {
 			needsStringList = true
+		}
+		if f.ListElementDartClass != "" && strings.HasPrefix(dt, "List<") && strings.HasSuffix(dt, ">") {
+			needsProjectionDtoList = true
 		}
 	}
 
@@ -2096,6 +2232,24 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 		b.WriteString("  if (v == null) return null;\n")
 		b.WriteString("  if (v is List) return v.map((e) => e?.toString() ?? '').toList();\n")
 		b.WriteString("  return null;\n")
+		b.WriteString("}\n")
+	}
+	if needsProjectionDtoList {
+		b.WriteString("\nList<T> _parseProjectionDtoList<T>(\n")
+		b.WriteString("  Object? v,\n")
+		b.WriteString("  T Function(Map<String, dynamic> m) fromMap,\n")
+		b.WriteString(") {\n")
+		b.WriteString("  if (v == null) return List<T>.empty(growable: false);\n")
+		b.WriteString("  if (v is! List) return List<T>.empty(growable: false);\n")
+		b.WriteString("  final out = <T>[];\n")
+		b.WriteString("  for (final e in v) {\n")
+		b.WriteString("    if (e is Map<String, dynamic>) {\n")
+		b.WriteString("      out.add(fromMap(e));\n")
+		b.WriteString("    } else if (e is Map) {\n")
+		b.WriteString("      out.add(fromMap(Map<String, dynamic>.from(e)));\n")
+		b.WriteString("    }\n")
+		b.WriteString("  }\n")
+		b.WriteString("  return out;\n")
 		b.WriteString("}\n")
 	}
 
@@ -3002,8 +3156,8 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 				positional = append(positional, "String authorId")
 			case "entityRefs":
 				positional = append(positional, "List<String> entityRefs")
-			case "tags":
-				positional = append(positional, "List<String> tags")
+			case "tagRefs":
+				positional = append(positional, "List<String> tagRefs")
 			case "consumedRatio":
 				positional = append(positional, "double consumedRatio")
 			case "totalUnits":
@@ -3119,10 +3273,43 @@ func renderContentPrivacyDart(pf *privacyFile) string {
 	return b.String()
 }
 
+func feedQueryDartLiteral(m map[string]string) string {
+	if len(m) == 0 {
+		return "<String, String>{}"
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s: %s", dartStringLiteral(k), dartStringLiteral(m[k])))
+	}
+	return "<String, String>{" + strings.Join(parts, ", ") + "}"
+}
+
 func renderContentUIConfigDart(uc *uiConfigFile) string {
 	var b strings.Builder
 	b.WriteString("// Code generated by tools/codegen_app_metadata from content/post/ui_config.yaml. DO NOT EDIT.\n")
 	b.WriteString("// ignore_for_file: prefer_const_constructors\n\n")
+
+	b.WriteString("class HomeChannelConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String labelKey;\n")
+	b.WriteString("  final String template;\n")
+	b.WriteString("  final Map<String, String> feedQuery;\n")
+	b.WriteString("  final String moodCopyKey;\n")
+	b.WriteString("  final int order;\n\n")
+	b.WriteString("  const HomeChannelConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.labelKey,\n")
+	b.WriteString("    required this.template,\n")
+	b.WriteString("    required this.feedQuery,\n")
+	b.WriteString("    required this.moodCopyKey,\n")
+	b.WriteString("    required this.order,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
 
 	b.WriteString("class DiscoveryTabConfig {\n")
 	b.WriteString("  final String id;\n")
@@ -3275,6 +3462,18 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
 	b.WriteString("class ContentUIConfig {\n")
 	b.WriteString("  const ContentUIConfig._();\n\n")
+
+	b.WriteString("  static const List<HomeChannelConfig> homeChannels = <HomeChannelConfig>[\n")
+	for _, ch := range uc.HomeChannels {
+		b.WriteString(fmt.Sprintf("    HomeChannelConfig(id: %s, labelKey: %s, template: %s, feedQuery: %s, moodCopyKey: %s, order: %d),\n",
+			dartStringLiteral(ch.ID),
+			dartStringLiteral(ch.LabelKey),
+			dartStringLiteral(ch.Template),
+			feedQueryDartLiteral(ch.FeedQuery),
+			dartStringLiteral(ch.MoodCopyKey),
+			ch.Order))
+	}
+	b.WriteString("  ];\n\n")
 
 	b.WriteString("  static const List<DiscoveryTabConfig> discoveryTabs = <DiscoveryTabConfig>[\n")
 	for _, tab := range tabs {
@@ -3433,11 +3632,13 @@ func renderUserProfileUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("class UserProfileSubTabConfig {\n")
 	b.WriteString("  final String id;\n")
 	b.WriteString("  final String labelKey;\n")
-	b.WriteString("  final String? contentType;\n\n")
+	b.WriteString("  final String? contentType;\n")
+	b.WriteString("  final String? lifeCategory;\n\n")
 	b.WriteString("  const UserProfileSubTabConfig({\n")
 	b.WriteString("    required this.id,\n")
 	b.WriteString("    required this.labelKey,\n")
-	b.WriteString("    required this.contentType,\n")
+	b.WriteString("    this.contentType,\n")
+	b.WriteString("    this.lifeCategory,\n")
 	b.WriteString("  });\n")
 	b.WriteString("}\n\n")
 
@@ -3499,10 +3700,11 @@ func renderUserProfileUIConfigDart(uc *uiConfigFile) string {
 	writeSubTabList := func(name string, tabs []profileSubTabDef) {
 		b.WriteString(fmt.Sprintf("  static const List<UserProfileSubTabConfig> %s = <UserProfileSubTabConfig>[\n", name))
 		for _, tab := range sortSubTabs(tabs) {
-			b.WriteString(fmt.Sprintf("    UserProfileSubTabConfig(id: %s, labelKey: %s, contentType: %s),\n",
+			b.WriteString(fmt.Sprintf("    UserProfileSubTabConfig(id: %s, labelKey: %s, contentType: %s, lifeCategory: %s),\n",
 				dartStringLiteral(tab.ID),
 				dartStringLiteral(tab.LabelKey),
-				dartStringOrNull(tab.ContentType)))
+				dartStringOrNull(tab.ContentType),
+				dartStringOrNull(tab.LifeCategory)))
 		}
 		b.WriteString("  ];\n\n")
 	}
@@ -3572,6 +3774,12 @@ func renderUserProfileUIConfigDart(uc *uiConfigFile) string {
 	} else {
 		writeSubTabList("interactionSubTabs", nil)
 		writeModeFilterMap("interactionDirectionFiltersByMode", map[string][]string{})
+	}
+
+	if lifestyleTab := findTab("lifestyle"); lifestyleTab != nil {
+		writeSubTabList("lifestyleSubTabs", lifestyleTab.SubTabs)
+	} else {
+		writeSubTabList("lifestyleSubTabs", nil)
 	}
 
 	b.WriteString("}\n")

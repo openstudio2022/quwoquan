@@ -19,24 +19,22 @@ class BottomNavigationWidget extends ConsumerWidget {
     final themeDark = ref.watch(isDarkProvider);
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
     final isDark = themeDark || forceDark;
+    final auth = ref.watch(authSessionControllerProvider);
+    final profileLabel = auth.status == AuthSessionStatus.guest
+        ? UITextConstants.bottomNavGuestProfile
+        : AppConceptConstants.profile;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     // 与 [MainAppShell] 主壳底同色，避免 glassSurface + BackdropFilter 的半透明毛玻璃感。
     final navBackground = forceDark
         ? AppColors.worksBackground
-        : AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
+        : SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final activeColor = forceDark
         ? CupertinoColors.white
         : AppColors.iosLabel(context);
     final inactiveColor = forceDark
         ? CupertinoColors.systemGrey
         : AppColors.iosSecondaryLabel(context);
-    final borderColor = forceDark
-        ? CupertinoColors.systemGrey.withValues(alpha: 0.28)
-        : AppColorsFunctional.getColor(
-            isDark,
-            ColorType.separatorOpaque,
-          ).withValues(alpha: 0.72);
-    final destinations = const <_BottomDestination>[
+    final destinations = <_BottomDestination>[
       _BottomDestination(
         label: AppConceptConstants.discovery,
         icon: FluentIcons.home_24_regular,
@@ -58,7 +56,8 @@ class BottomNavigationWidget extends ConsumerWidget {
         customIcon: _BottomCustomIcon.messages,
       ),
       _BottomDestination(
-        label: AppConceptConstants.profile,
+        label: profileLabel,
+        semanticLabel: profileLabel,
         icon: FluentIcons.person_circle_24_regular,
         selectedIcon: FluentIcons.person_circle_24_filled,
       ),
@@ -70,12 +69,7 @@ class BottomNavigationWidget extends ConsumerWidget {
     );
     final navHeight = AppSpacing.bottomNavBarHeight(context);
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: navBackground,
-        border: Border(
-          top: BorderSide(color: borderColor, width: AppSpacing.hairline),
-        ),
-      ),
+      decoration: BoxDecoration(color: navBackground),
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: sideInset),
         child: SizedBox(
@@ -99,6 +93,7 @@ class BottomNavigationWidget extends ConsumerWidget {
                     selected: selected,
                     activeColor: activeColor,
                     inactiveColor: inactiveColor,
+                    backgroundColor: navBackground,
                     contentHeight: navHeight + bottomInset,
                   ),
                 ),
@@ -137,6 +132,7 @@ class _BottomNavItem extends StatelessWidget {
     required this.selected,
     required this.activeColor,
     required this.inactiveColor,
+    required this.backgroundColor,
     required this.contentHeight,
   });
 
@@ -144,6 +140,7 @@ class _BottomNavItem extends StatelessWidget {
   final bool selected;
   final Color activeColor;
   final Color inactiveColor;
+  final Color backgroundColor;
   final double contentHeight;
 
   @override
@@ -217,6 +214,7 @@ class _BottomNavItem extends StatelessWidget {
       _BottomCustomIcon.messages => AppMessagesIcon(
         size: size,
         color: color,
+        backgroundColor: backgroundColor,
         filled: selected,
       ),
       null => Icon(

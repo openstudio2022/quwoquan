@@ -13,8 +13,8 @@ keys:
     json_key: circleId
   - const_name: circleName
     json_key: circleName
-  - const_name: tags
-    json_key: tags
+  - const_name: tagRefs
+    json_key: tagRefs
   - const_name: visibility
     json_key: visibility
   - const_name: description
