@@ -233,5 +233,76 @@ void main() {
 
       expect(guestCount, 1);
     });
+
+    testWidgets('未登录时在欢迎页内展示登录与先不登录倒计时', (tester) async {
+      var loginCount = 0;
+      var guestCount = 0;
+      await tester.pumpWidget(
+        wrap(
+          loginPrompt: WelcomeLoginPromptConfig(
+            title: UITextConstants.welcomeLoginPromptTitle,
+            subtitle: UITextConstants.welcomeLoginPromptSubtitle,
+            onLogin: () => loginCount++,
+            onContinueAsGuest: () => guestCount++,
+          ),
+        ),
+      );
+
+      await pumpUntilLoginPrompt(tester);
+
+      expect(
+        find.text(UITextConstants.welcomeLoginPromptTitle),
+        findsOneWidget,
+      );
+      expect(find.text(UITextConstants.login), findsOneWidget);
+      expect(find.textContaining('先不登录'), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.login));
+      await tester.pump();
+
+      expect(loginCount, 1);
+      expect(guestCount, 0);
+    });
+
+    testWidgets('点击先不登录会继续进入 App', (tester) async {
+      var guestCount = 0;
+      await tester.pumpWidget(
+        wrap(
+          loginPrompt: WelcomeLoginPromptConfig(
+            title: UITextConstants.welcomeLoginPromptTitle,
+            subtitle: UITextConstants.welcomeLoginPromptSubtitle,
+            onLogin: () {},
+            onContinueAsGuest: () => guestCount++,
+          ),
+        ),
+      );
+
+      await pumpUntilLoginPrompt(tester);
+      await tester.tap(find.textContaining('先不登录'));
+      await tester.pump();
+
+      expect(guestCount, 1);
+    });
+
+    testWidgets('倒计时结束后自动按先不登录进入 App', (tester) async {
+      var guestCount = 0;
+      await tester.pumpWidget(
+        wrap(
+          loginPrompt: WelcomeLoginPromptConfig(
+            title: UITextConstants.welcomeLoginPromptTitle,
+            subtitle: UITextConstants.welcomeLoginPromptSubtitle,
+            onLogin: () {},
+            onContinueAsGuest: () => guestCount++,
+          ),
+        ),
+      );
+
+      await pumpUntilLoginPrompt(tester);
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      expect(guestCount, 1);
+    });
   });
 }
