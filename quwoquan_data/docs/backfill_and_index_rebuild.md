@@ -36,7 +36,7 @@
 
 ```bash
 python3 scripts/build_publish_lookup_indexes.py
-python3 scripts/gate_e2e.py
+bash scripts/verify/verify_quwoquan_data.sh   # 原 gate_e2e.py 已 CLI-first 拆分
 python3 scripts/verify_campus_taxonomy.py
 python3 scripts/ml/verify_feature_consistency.py
 ```
@@ -74,7 +74,7 @@ posts/{contentType}/{angle}/{title}/{seq}/
 
 ## 验证标准
 
-- `gate_e2e.py` 通过，包含 G28 lookup 索引完整性和 G29 校园专项。
+- `scripts/verify/verify_quwoquan_data.sh`（原 `gate_e2e.py`）通过，包含 G28 lookup 索引完整性和 G29 校园专项。
 - `verify_campus_taxonomy.py` 通过。
 - `verify_feature_consistency.py` 通过。
 

@@ -102,6 +102,9 @@ ALLOWLIST_PATHS = {
     "quwoquan_data/tools/semantic_entity_resolution.py",
     ".cursor/commands/data-explore.md",
     ".cursor/commands/infra-plan.md",
+    # 数据内容流水线技能文档：唯一命中来自引用 quwoquan_data/scripts/ 下一个反硬编码
+    # 门禁脚本的真实文件名（该脚本职责即检测被禁用语，自身已由前缀 allowlist），非用户可见。
+    ".cursor/skills/quwoquan-data-content/SKILL.md",
     ".cursor/rules/13-coding-discipline.mdc",
     "quwoquan_app/lib/cloud/services/tag/mock/tag_mock_data.dart",
     "quwoquan_data/README.md",

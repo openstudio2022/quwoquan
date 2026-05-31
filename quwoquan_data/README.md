@@ -362,7 +362,7 @@ Topic/旅行/住宿/               → 话题角度（旅行中怎么讲住宿�
 | **R12** | **Topic/美食餐饮/品类 与 Entity/地点/餐厅 不得完全同名（Entity 须带店/馆/吧后缀）** | **WARN** |
 
 
-### 门禁检查（gate_e2e.py G1-G29）
+### 门禁检查（G1-G29，统一入口 `scripts/verify/verify_quwoquan_data.sh`，原 gate_e2e.py 已 CLI-first 拆分）
 
 
 | 门禁  | 检查内容                       | 级别    |
@@ -397,7 +397,8 @@ Topic/旅行/住宿/               → 话题角度（旅行中怎么讲住宿�
 
 ```bash
 python3 scripts/build_publish_lookup_indexes.py
-python3 scripts/gate_e2e.py
+# gate_e2e.py 已按 CLI-first 重构拆分到各命令 gate.py + 统一入口：
+bash scripts/verify/verify_quwoquan_data.sh
 python3 scripts/verify_campus_taxonomy.py
 ```
 
@@ -423,7 +424,7 @@ python3 scripts/verify_campus_taxonomy.py
 | `build_publish_lookup_indexes.py` | 基于 publish/v1 实体与 posts 生成 lookup 索引 |
 | `tag_stats.py`               | 按四分组统计标签数量、深度、叶枝比        |
 | `tag_graph.py`               | 基于 tagRef 共现度生成关系图谱      |
-| `gate_e2e.py`                | G1-G29 端到端门禁             |
+| `verify/verify_quwoquan_data.sh` | G1-G29 端到端门禁统一入口（原 `gate_e2e.py` CLI-first 拆分） |
 
 
 ### 场景2-4：内容创作/推荐搜索/关系图谱
