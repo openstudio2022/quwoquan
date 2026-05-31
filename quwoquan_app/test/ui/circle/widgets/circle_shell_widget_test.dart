@@ -7,12 +7,43 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
+
+class _AuthedSessionStore implements AuthSessionStore {
+  const _AuthedSessionStore();
+
+  @override
+  Future<StoredAuthSession> read() async => const StoredAuthSession(
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    ownerId: 'user_001',
+    activeSubAccountId: 'user_001',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'install-id',
+    manualLoggedOut: false,
+    launchPromptDismissed: true,
+  );
+
+  @override
+  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+
+  @override
+  Future<void> updateActiveSubAccount(String subAccountId) async {}
+
+  @override
+  Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> markLaunchPromptDismissed() async {}
+}
 
 Widget _scopedApp({
   CircleRepository? mock,
@@ -20,7 +51,10 @@ Widget _scopedApp({
 }) {
   final repo = mock ?? MockCircleRepository();
   return ProviderScope(
-    overrides: [circleRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      circleRepositoryProvider.overrideWithValue(repo),
+      authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+    ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
         initialLocation: '/',
@@ -47,6 +81,11 @@ Future<void> _pumpShell(
   VoidCallback? onBack,
 }) async {
   await tester.pumpWidget(_scopedApp(mock: mock, onBack: onBack));
+  // CircleShell 不主动 watch 登录态，这里显式触发 auth session 构建并 hydrate，
+  // 让加入/关注按钮的 requireLogin 在已登录态下放行。
+  ProviderScope.containerOf(
+    tester.element(find.byType(CircleShell)),
+  ).read(authSessionControllerProvider);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 350));
 }

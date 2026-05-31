@@ -19,6 +19,10 @@ class BottomNavigationWidget extends ConsumerWidget {
     final themeDark = ref.watch(isDarkProvider);
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
     final isDark = themeDark || forceDark;
+    final auth = ref.watch(authSessionControllerProvider);
+    final profileLabel = auth.status == AuthSessionStatus.guest
+        ? UITextConstants.bottomNavGuestProfile
+        : AppConceptConstants.profile;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     // 与 [MainAppShell] 主壳底同色，避免 glassSurface + BackdropFilter 的半透明毛玻璃感。
     final navBackground = forceDark
@@ -30,7 +34,7 @@ class BottomNavigationWidget extends ConsumerWidget {
     final inactiveColor = forceDark
         ? CupertinoColors.systemGrey
         : AppColors.iosSecondaryLabel(context);
-    final destinations = const <_BottomDestination>[
+    final destinations = <_BottomDestination>[
       _BottomDestination(
         label: AppConceptConstants.discovery,
         icon: FluentIcons.home_24_regular,
@@ -52,7 +56,8 @@ class BottomNavigationWidget extends ConsumerWidget {
         customIcon: _BottomCustomIcon.messages,
       ),
       _BottomDestination(
-        label: AppConceptConstants.profile,
+        label: profileLabel,
+        semanticLabel: profileLabel,
         icon: FluentIcons.person_circle_24_regular,
         selectedIcon: FluentIcons.person_circle_24_filled,
       ),

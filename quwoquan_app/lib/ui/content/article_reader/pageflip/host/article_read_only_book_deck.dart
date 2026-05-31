@@ -715,6 +715,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
   bool _textureCaptureScheduled = false;
   bool _textureCaptureInFlight = false;
   Set<int>? _activeBackTexturePageIndices;
+  bool _textureWarmupBlockedGesture = false;
 
   bool get _usesImmersivePresentation =>
       widget.presentationStyle ==
@@ -990,7 +991,10 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     return pageIndex;
   }
 
-  bool _ensureBackTextureReadyForDirection(StPageFlipDirection direction) {
+  bool _ensureBackTextureReadyForDirection(
+    StPageFlipDirection direction, {
+    bool blockCurrentGesture = false,
+  }) {
     final pageIndex = _backTexturePageIndexForDirection(direction);
     final pageSize = _cachedSurfaceSize;
     if (pageIndex == null || pageSize == null) {
@@ -1003,7 +1007,15 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (snapshot != null) {
       return true;
     }
-    _queuePageTextureCaptureIndices(<int>[pageIndex], prioritize: true);
+    if (blockCurrentGesture) {
+      _textureWarmupBlockedGesture = true;
+    }
+    final queued = _queuePageTextureCaptureIndices(<int>[
+      pageIndex,
+    ], prioritize: true);
+    if (queued && mounted) {
+      setState(() {});
+    }
     return false;
   }
 
@@ -1033,7 +1045,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         activeBackTexturePageIndices.contains(pageIndex);
   }
 
-  void _queuePageTextureCaptureIndices(
+  bool _queuePageTextureCaptureIndices(
     Iterable<int> pageIndices, {
     bool prioritize = false,
   }) {
@@ -1066,6 +1078,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (added) {
       _schedulePageTextureCapture();
     }
+    return added;
   }
 
   double _sceneProgress(StPageFlipScene scene) {
@@ -3040,7 +3053,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       return;
     }
     if (!_ensureBackTextureReadyForDirection(direction)) {
-      setState(() {});
       return;
     }
     final plan = controller.flip(details.localPosition);
@@ -3070,11 +3082,13 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       _pendingOverflowDirection = direction;
       return;
     }
-    if (!_ensureBackTextureReadyForDirection(direction)) {
+    if (!_ensureBackTextureReadyForDirection(
+      direction,
+      blockCurrentGesture: true,
+    )) {
       _dragStartGlobalPosition = null;
       _latestDragGlobalPosition = null;
       _dragStartedAt = null;
-      setState(() {});
       return;
     }
     _resetBoundaryRubberBand(animate: false);
@@ -3089,6 +3103,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
 
   void _handleStagePanUpdate(Offset localPosition, Offset delta) {
     if (!_showsPageCurl || _hasActivePageCurlAnimation) {
+      return;
+    }
+    if (_textureWarmupBlockedGesture) {
       return;
     }
     final controller = _pageFlipController;
@@ -3109,8 +3126,10 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (!controller.canFlipDirection(direction)) {
       return;
     }
-    if (!_ensureBackTextureReadyForDirection(direction)) {
-      setState(() {});
+    if (!_ensureBackTextureReadyForDirection(
+      direction,
+      blockCurrentGesture: true,
+    )) {
       return;
     }
     controller.fold(localPosition);
@@ -3122,6 +3141,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     _dragStartGlobalPosition = null;
     _latestDragGlobalPosition = null;
     _dragStartedAt = null;
+    _textureWarmupBlockedGesture = false;
     _resetBoundaryTracking(animate: true);
     final controller = _pageFlipController;
     if (controller == null) {
@@ -3142,6 +3162,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     _dragStartGlobalPosition = null;
     _latestDragGlobalPosition = null;
     _dragStartedAt = null;
+    final textureWarmupBlockedGesture = _textureWarmupBlockedGesture;
+    _textureWarmupBlockedGesture = false;
     final stageSize = _lastInteractiveStageSize;
     if (controller == null) {
       _resetBoundaryTracking(animate: true);
@@ -3149,6 +3171,10 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     }
     if (_boundaryDragStartLocalPosition != null && stageSize != null) {
       _finishBoundaryPan(velocity, stageSize);
+      return;
+    }
+    if (textureWarmupBlockedGesture) {
+      _resetBoundaryTracking(animate: true);
       return;
     }
     if (dragStart != null) {
@@ -3223,7 +3249,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     }
     final direction = controller.directionForGlobalPoint(event.localPosition);
     if (!_ensureBackTextureReadyForDirection(direction)) {
-      setState(() {});
       return;
     }
     final plan = controller.showCorner(event.localPosition);
@@ -3294,7 +3319,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       return;
     }
     if (!_ensureBackTextureReadyForDirection(swipe.direction)) {
-      setState(() {});
       return;
     }
     final plan = swipe.direction == StPageFlipDirection.forward
@@ -3309,6 +3333,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
 
   void _handleStagePointerCancel(PointerCancelEvent event) {
     _pointerDownLocalPosition = null;
+    _textureWarmupBlockedGesture = false;
     _pointerBridge.cancel();
   }
 

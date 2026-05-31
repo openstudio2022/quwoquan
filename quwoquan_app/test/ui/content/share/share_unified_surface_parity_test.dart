@@ -4,30 +4,21 @@ import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart'
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 
 void main() {
-  group('分享模板：统一 model 双读与旧投影同源 (D1b/T2)', () {
-    void expectParity(PostBaseDto dto, {Map<String, dynamic>? wire}) {
-      final legacy = ContentShareTemplateBuilder.build(
-        post: dto,
-        enableIdentityTemplate: true,
-        tags: const <String>['校园'],
-      );
-      final unified = ContentShareTemplateBuilder.build(
-        post: dto,
-        enableIdentityTemplate: true,
-        tags: const <String>['校园'],
+  group('分享模板：统一 model 单路径产出 (D1b/T2)', () {
+    void expectSurfaceTemplate(PostBaseDto dto, {Map<String, dynamic>? wire}) {
+      final template = ContentShareTemplateBuilder.build(
         surfaceView: ContentSurfaceViewMapper.fromDto(dto, wire: wire),
+        enableIdentityTemplate: true,
       );
-      expect(unified.shareTitle, legacy.shareTitle,
-          reason: 'shareTitle 必须同源');
-      expect(unified.shareSummary, legacy.shareSummary,
-          reason: 'shareSummary 必须同源');
-      expect(unified.coverUrl, legacy.coverUrl, reason: 'coverUrl 必须同源');
-      expect(unified.layout, legacy.layout);
-      expect(unified.permission, legacy.permission);
+      expect(template.shareTitle, isNotEmpty,
+          reason: 'shareTitle 必须由 surfaceView 种子产出');
+      expect(template.coverUrl, isNotNull);
+      expect(template.layout, isNotEmpty);
+      expect(template.permission, 'public');
     }
 
     test('image 帖同源', () {
-      expectParity(
+      expectSurfaceTemplate(
         PhotoPostDto.fromMap(<String, dynamic>{
           '_id': 'p1',
           'postId': 'p1',
@@ -50,7 +41,7 @@ void main() {
     });
 
     test('video 帖同源', () {
-      expectParity(
+      expectSurfaceTemplate(
         VideoPostDto.fromMap(<String, dynamic>{
           '_id': 'v1',
           'postId': 'v1',
@@ -73,7 +64,7 @@ void main() {
     });
 
     test('article 帖同源', () {
-      expectParity(
+      expectSurfaceTemplate(
         ArticlePostDto.fromMap(<String, dynamic>{
           '_id': 'art1',
           'postId': 'art1',
@@ -96,11 +87,11 @@ void main() {
     });
 
     test('micro 帖同源', () {
-      expectParity(
-        MomentPostDto.fromMap(<String, dynamic>{
+      expectSurfaceTemplate(
+        MicroPostDto.fromMap(<String, dynamic>{
           '_id': 'm1',
           'postId': 'm1',
-          'type': 'moment',
+          'type': 'micro',
           'contentType': 'micro',
           'identity': 'moment',
           'authorId': 'a4',

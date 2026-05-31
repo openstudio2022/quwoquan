@@ -73,6 +73,38 @@ class ChatApiMetadata {
     'UpdateGroupAdmins': 'PUT',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'AbortChatUpload': 'required',
+    'AddMembers': 'required',
+    'BatchGetConversations': 'public',
+    'CompleteChatUpload': 'required',
+    'CreateConversation': 'public',
+    'DissolveConversation': 'required',
+    'GetConversation': 'required',
+    'GetReceipts': 'public',
+    'InitChatUpload': 'required',
+    'InviteAssistant': 'required',
+    'ListContacts': 'public',
+    'ListConversationTimestamps': 'public',
+    'ListConversations': 'required',
+    'ListInbox': 'required',
+    'ListMembers': 'public',
+    'ListMessages': 'public',
+    'MarkAsRead': 'required',
+    'RecallMessage': 'public',
+    'RemoveAssistant': 'required',
+    'RemoveMember': 'required',
+    'SearchContacts': 'required',
+    'SearchConversations': 'required',
+    'SearchMessages': 'required',
+    'SendMessage': 'required',
+    'SyncMessages': 'required',
+    'TransferOwnership': 'required',
+    'UpdateConversationSettings': 'required',
+    'UpdateGroupAdmins': 'required',
+  };
+
   static const String abortChatUploadOperation = 'AbortChatUpload';
   static const String addMembersOperation = 'AddMembers';
   static const String batchGetConversationsOperation = 'BatchGetConversations';

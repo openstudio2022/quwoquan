@@ -49,6 +49,26 @@ class RtcApiMetadata {
     'ToggleMute': 'POST',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'AnswerCall': 'required',
+    'CancelCall': 'required',
+    'GetCall': 'required',
+    'HangupCall': 'required',
+    'InitiateCall': 'required',
+    'InviteToCall': 'required',
+    'JoinCall': 'required',
+    'LeaveCall': 'required',
+    'ListCalls': 'required',
+    'RejectCall': 'required',
+    'StartRecording': 'required',
+    'StartScreenShare': 'required',
+    'StopRecording': 'required',
+    'StopScreenShare': 'required',
+    'ToggleCamera': 'required',
+    'ToggleMute': 'required',
+  };
+
   static const String answerCallOperation = 'AnswerCall';
   static const String cancelCallOperation = 'CancelCall';
   static const String getCallOperation = 'GetCall';

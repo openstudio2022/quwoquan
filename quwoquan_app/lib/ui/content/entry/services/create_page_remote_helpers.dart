@@ -244,7 +244,7 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
     };
   }
   return <String, Object?>{
-    'type': 'moment',
+    'type': 'micro',
     'contentType': 'micro',
     'title': state.title.trim(),
     'body': state.body.trim(),

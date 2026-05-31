@@ -161,7 +161,7 @@ class ContentUIConfig {
 
   static const List<HomeChannelConfig> homeChannels = <HomeChannelConfig>[
     HomeChannelConfig(id: "following", labelKey: "home_tab_following", template: "single_column_relations", feedQuery: <String, String>{"category": "following", "identity": "moment"}, moodCopyKey: "home_mood_following", order: 0),
-    HomeChannelConfig(id: "recommend", labelKey: "home_tab_recommend", template: "intersection_rail_masonry", feedQuery: <String, String>{"category": "moment", "identity": "moment"}, moodCopyKey: "home_mood_recommend", order: 1),
+    HomeChannelConfig(id: "recommend", labelKey: "home_tab_recommend", template: "intersection_rail_masonry", feedQuery: <String, String>{"category": "micro", "identity": "moment"}, moodCopyKey: "home_mood_recommend", order: 1),
     HomeChannelConfig(id: "campus", labelKey: "home_tab_campus", template: "intersection_rail_masonry", feedQuery: <String, String>{"category": "campus"}, moodCopyKey: "home_mood_campus", order: 2),
     HomeChannelConfig(id: "travel", labelKey: "home_tab_travel", template: "masonry_recommend", feedQuery: <String, String>{"category": "travel"}, moodCopyKey: "home_mood_travel", order: 3),
     HomeChannelConfig(id: "photography", labelKey: "home_tab_photography", template: "masonry_recommend", feedQuery: <String, String>{"category": "photography"}, moodCopyKey: "home_mood_photography", order: 4),
@@ -240,7 +240,6 @@ class ContentUIConfig {
     'enable_share_to_circle': true,
     'enable_unified_create_editor': false,
     'show_view_count': false,
-    'unified_surface_view': false,
   };
 
   static const Map<String, Map<String, String>> emptyStates = <String, Map<String, String>>{

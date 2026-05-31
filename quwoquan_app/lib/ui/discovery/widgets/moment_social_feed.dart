@@ -12,6 +12,7 @@ import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -60,7 +61,7 @@ class MomentSocialFeed extends ConsumerWidget {
     super.key,
     required this.isDark,
     required this.onUserTap,
-    this.feedTabId = 'moment',
+    this.channelId = 'moment',
     this.template = '',
     this.inlineImageCarousel = false,
     this.disableImageViewerOnTap = false,
@@ -71,7 +72,7 @@ class MomentSocialFeed extends ConsumerWidget {
   });
 
   final bool isDark;
-  final String feedTabId;
+  final String channelId;
 
   /// 频道模板（来自 homeChannels.template；驱动单列/多列/今日交集流/图片前置）。
   /// 取值：single_column_relations / masonry_recommend / intersection_rail_masonry。
@@ -104,7 +105,7 @@ class MomentSocialFeed extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(postInteractionStateProvider);
-    final feedAsync = ref.watch(discoveryFeedProvider(feedTabId));
+    final feedAsync = ref.watch(discoveryFeedProvider(channelId));
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final articleDistributionEnabled = ref.watch(
       contentFeatureFlagProvider('enable_article_distribution_profiles'),
@@ -113,13 +114,13 @@ class MomentSocialFeed extends ConsumerWidget {
         .watch(contentRepositoryProvider)
         .usesEmbeddedContentCatalog;
     final shouldShowFollowingArticles =
-        feedTabId == 'following' &&
+        channelId == 'following' &&
         articleDistributionEnabled &&
         embeddedCatalog;
 
-    if (!feedMap.containsKey(feedTabId)) {
+    if (!feedMap.containsKey(channelId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(discoveryFeedMapProvider.notifier).load(feedTabId);
+        ref.read(discoveryFeedMapProvider.notifier).load(channelId);
       });
     }
 
@@ -140,7 +141,7 @@ class MomentSocialFeed extends ConsumerWidget {
     final articles = articlesById.values.toList(growable: false);
     final feedPosts = shouldShowFollowingArticles
         ? <PostBaseDto>[...moments, ...articles]
-        : moments;
+        : dtos;
     final hasError = feedAsync.value?.error != null;
 
     if (feedAsync.isLoading && feedPosts.isEmpty && !hasError) {
@@ -165,7 +166,7 @@ class MomentSocialFeed extends ConsumerWidget {
               SizedBox(height: AppSpacing.interGroupMd),
               CupertinoButton(
                 onPressed: () =>
-                    ref.read(discoveryFeedMapProvider.notifier).load(feedTabId),
+                    ref.read(discoveryFeedMapProvider.notifier).load(channelId),
                 padding: EdgeInsets.symmetric(
                   horizontal: AppSpacing.containerMd,
                   vertical: AppSpacing.intraGroupSm,
@@ -302,21 +303,23 @@ class MomentSocialFeed extends ConsumerWidget {
           ),
         ),
         onLikeTap: () {
-          final wasLiked = effectivePostLiked(ref, dto.id);
-          final currentLikeCount = effectivePostLikeCount(
-            ref,
-            dto.id,
-            fallback: dto.likeCount,
-          );
-          final nextLikeCount = wasLiked
-              ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
-              : currentLikeCount + 1;
-          syncPostLikeIntent(
-            ref,
-            postId: dto.id,
-            isLiked: !wasLiked,
-            likeCount: nextLikeCount,
-          );
+          runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+            final wasLiked = effectivePostLiked(ref, dto.id);
+            final currentLikeCount = effectivePostLikeCount(
+              ref,
+              dto.id,
+              fallback: dto.likeCount,
+            );
+            final nextLikeCount = wasLiked
+                ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
+                : currentLikeCount + 1;
+            syncPostLikeIntent(
+              ref,
+              postId: dto.id,
+              isLiked: !wasLiked,
+              likeCount: nextLikeCount,
+            );
+          });
         },
         onMoreTap: () {
           if (onMoreTap != null) {
@@ -360,7 +363,7 @@ class MomentSocialFeed extends ConsumerWidget {
       moodCopy: _resolveChannelMoodCopy(),
       headerSliver: headerSliver,
       onReachBottom: () =>
-          ref.read(discoveryFeedMapProvider.notifier).appendNextPage(feedTabId),
+          ref.read(discoveryFeedMapProvider.notifier).appendNextPage(channelId),
     );
   }
 
@@ -386,11 +389,11 @@ class MomentSocialFeed extends ConsumerWidget {
     return collected;
   }
 
-  /// 频道气质文案：按 feedTabId 匹配运营下发的 [ContentUIConfig.homeChannels]
+  /// 频道气质文案：按 channelId 匹配运营下发的 [ContentUIConfig.homeChannels]
   /// 解析 moodCopyKey（真相源 = ui_config home_channels）；无匹配返回空串。
   String _resolveChannelMoodCopy() {
     for (final channel in ContentUIConfig.homeChannels) {
-      if (channel.id == feedTabId) {
+      if (channel.id == channelId) {
         return UITextConstants.homeChannelMoodCopy(channel.moodCopyKey);
       }
     }
@@ -403,18 +406,20 @@ class MomentSocialFeed extends ConsumerWidget {
     PostBaseDto post, {
     required bool enableIdentityTemplate,
   }) {
-    final template = _buildShareTemplate(
-      ref: ref,
-      post: post,
-      enableIdentityTemplate: enableIdentityTemplate,
-    );
-    ContentShareSheet.show(
-      context,
-      template: template,
-      onActionCompleted: (result) async {
-        await _recordShare(ref, post.id, result.actionId);
-      },
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
+      final template = _buildShareTemplate(
+        ref: ref,
+        post: post,
+        enableIdentityTemplate: enableIdentityTemplate,
+      );
+      ContentShareSheet.show(
+        context,
+        template: template,
+        onActionCompleted: (result) async {
+          await _recordShare(ref, post.id, result.actionId);
+        },
+      );
+    });
   }
 
   void _showMoreActions(BuildContext context, WidgetRef ref, PostBaseDto post) {
@@ -453,16 +458,21 @@ class MomentSocialFeed extends ConsumerWidget {
               .addBlockedKeyword(keyword);
         },
         onReport: () {
-          ref
-              .read(behaviorRepositoryProvider)
-              .reportSingle(contentId: post.id, action: BehaviorAction.report);
-          ref
-              .read(reportRepositoryProvider)
-              .createReport(
-                targetId: post.id,
-                targetType: 'post',
-                reason: 'inappropriate',
-              );
+          runWhenLoggedIn(ref, context, AuthGateReason.report, () {
+            ref
+                .read(behaviorRepositoryProvider)
+                .reportSingle(
+                  contentId: post.id,
+                  action: BehaviorAction.report,
+                );
+            ref
+                .read(reportRepositoryProvider)
+                .createReport(
+                  targetId: post.id,
+                  targetType: 'post',
+                  reason: 'inappropriate',
+                );
+          });
         },
       ),
     );
@@ -499,16 +509,12 @@ class MomentSocialFeed extends ConsumerWidget {
     final wire = _rawDiscoveryItem(ref, post.id);
     final circleName = wire?.circleName ?? '';
     final surfaceView =
-        ref.read(contentFeatureFlagProvider('unified_surface_view'))
-        ? ContentSurfaceViewMapper.fromDto(post, wire: wire?.toLegacyRow())
-        : null;
+        ContentSurfaceViewMapper.fromDto(post, wire: wire?.toWireMap());
     return ContentShareTemplateBuilder.build(
-      post: post,
+      surfaceView: surfaceView,
       enableIdentityTemplate: enableIdentityTemplate,
       visibility: wire?.visibility ?? 'public',
-      tags: wire?.tags ?? const <String>[],
       circleNames: circleName.isEmpty ? const <String>[] : <String>[circleName],
-      surfaceView: surfaceView,
     );
   }
 
@@ -517,7 +523,7 @@ class MomentSocialFeed extends ConsumerWidget {
     String postId,
     String actionId,
   ) async {
-    final raw = _rawDiscoveryItem(ref, postId)?.toLegacyRow();
+    final raw = _rawDiscoveryItem(ref, postId)?.toWireMap();
     final rawShareCount = (raw?['shareCount'] as num?)?.toInt() ?? 0;
     final baselineShareCount = effectivePostShareCount(
       ref,

@@ -21,7 +21,7 @@ import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolba
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_assistant_panel.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 
 /// 沉浸式视频查看器 - 基于Figma原型实现
 /// 支持与作者主页、评论和帖子的完整联动
@@ -30,7 +30,7 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
   final VoidCallback onClose;
   final List<MediaItem> mediaItems;
   final int initialIndex;
-  final List<PostSummaryView> posts;
+  final List<ContentSurfaceView> posts;
   final int initialPostIndex;
   final void Function(
     String username, {
@@ -40,18 +40,18 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
   })
   onUserClick;
   final Function(String, bool)? onFollowClick;
-  final Function(PostSummaryView)? onCommentsClick;
-  final Function(PostSummaryView)? onMoreClick;
-  final Function(PostSummaryView)? onLikeClick;
-  final Function(PostSummaryView)? onSaveClick;
-  final Function(PostSummaryView)? onShareClick;
+  final Function(ContentSurfaceView)? onCommentsClick;
+  final Function(ContentSurfaceView)? onMoreClick;
+  final Function(ContentSurfaceView)? onLikeClick;
+  final Function(ContentSurfaceView)? onSaveClick;
+  final Function(ContentSurfaceView)? onShareClick;
   final Set<String>? followingUsers;
   final Set<String>? savedPosts;
   final Set<String>? likedPosts;
-  final Function(PostSummaryView)? getPostLikesCount;
-  final Function(PostSummaryView)? getPostBookmarksCount;
-  final Function(PostSummaryView)? getPostCommentsCount;
-  final Function(PostSummaryView)? getPostSharesCount;
+  final Function(ContentSurfaceView)? getPostLikesCount;
+  final Function(ContentSurfaceView)? getPostBookmarksCount;
+  final Function(ContentSurfaceView)? getPostCommentsCount;
+  final Function(ContentSurfaceView)? getPostSharesCount;
   final bool isBlocked;
   final String? source; // 'feed' | 'userProfile'
   final Map<String, dynamic>? userProfileData;
@@ -199,9 +199,9 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   void _initializePostState() {
     if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
       final currentPost = widget.posts[_currentPostIndex];
-      _isLiked = widget.likedPosts?.contains(currentPost.id) ?? false;
-      _isSaved = widget.savedPosts?.contains(currentPost.id) ?? false;
-      final followKey = currentPost.authorId;
+      _isLiked = widget.likedPosts?.contains(currentPost.postId) ?? false;
+      _isSaved = widget.savedPosts?.contains(currentPost.postId) ?? false;
+      final followKey = currentPost.author.id;
       _isFollowing = followKey.isNotEmpty
           ? (widget.followingUsers?.contains(followKey) ?? false)
           : false;
@@ -209,9 +209,10 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       _savesCount = widget.getPostBookmarksCount?.call(currentPost) ?? 0;
       _commentsCount =
           widget.getPostCommentsCount?.call(currentPost) ??
-          currentPost.commentsCount;
+          currentPost.stats.comment;
       _sharesCount =
-          widget.getPostSharesCount?.call(currentPost) ?? currentPost.sharesCount;
+          widget.getPostSharesCount?.call(currentPost) ??
+          currentPost.stats.share;
       _startFollowDelay();
     }
   }
@@ -344,7 +345,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       setState(() {
         _isFollowing = !_isFollowing;
       });
-      final username = currentPost.authorId;
+      final username = currentPost.author.id;
       if (username.isEmpty) return;
       widget.onFollowClick?.call(username, _isFollowing);
     }
@@ -359,7 +360,9 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
 
       CommentViewer.showModal(
         context: context,
-        postId: currentPost.id.isNotEmpty ? currentPost.id : 'mock_post_id',
+        postId: currentPost.postId.isNotEmpty
+            ? currentPost.postId
+            : 'mock_post_id',
         initialComments: [],
         config: commentConfig,
         modalHeight: CommentModalHeight.adaptive,
@@ -391,23 +394,26 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
 
       // 显示更多操作弹窗（1:1 PostActionSheet：复制链接、保存、举报等）
       final config = MediaPostMoreActionConfig(
-        onReward: () => debugPrint('Reward post: ${currentPost.id}'),
+        onReward: () => debugPrint('Reward post: ${currentPost.postId}'),
         onSave: () => _handleSaveClick(),
-        onMessage: () => debugPrint('Message user: ${currentPost.authorId}'),
+        onMessage: () =>
+            debugPrint('Message user: ${currentPost.author.id}'),
         onCopyLink: () {
-          final link = AppPublicContentLinks.postWebUrl(currentPost.id);
+          final link = AppPublicContentLinks.postWebUrl(currentPost.postId);
           Clipboard.setData(ClipboardData(text: link));
           if (mounted) {
             AppToast.show(context, UITextConstants.copyLink);
           }
         },
-        onViewOriginal: () => debugPrint('View original: ${currentPost.id}'),
+        onViewOriginal: () =>
+            debugPrint('View original: ${currentPost.postId}'),
         onFontSettings: () => debugPrint('Font settings'),
         onThemeToggle: () => debugPrint('Theme toggle'),
         onFeedback: () => debugPrint('Feedback'),
         onNotInterested: () => debugPrint('Not interested'),
-        onBlockUser: () => debugPrint('Block user: ${currentPost.authorId}'),
-        onReport: () => debugPrint('Report post: ${currentPost.id}'),
+        onBlockUser: () =>
+            debugPrint('Block user: ${currentPost.author.id}'),
+        onReport: () => debugPrint('Report post: ${currentPost.postId}'),
       );
 
       MoreActionPopup.show(context: context, config: config);
@@ -429,10 +435,12 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     _showAssistantPanel(currentPost);
   }
 
-  void _showAssistantPanel(PostSummaryView? post) {
+  void _showAssistantPanel(ContentSurfaceView? post) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final suggestions = _buildAssistantSuggestions(post);
-    final contextId = post?.id.isNotEmpty == true ? post!.id : 'media-viewer';
+    final contextId = post?.postId.isNotEmpty == true
+        ? post!.postId
+        : 'media-viewer';
     AssistantChatStore.normalizeMessages();
     final summaryText = AssistantChatStore.buildSummary(
       contextId: contextId,
@@ -470,7 +478,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     );
   }
 
-  List<String> _buildAssistantSuggestions(PostSummaryView? post) {
+  List<String> _buildAssistantSuggestions(ContentSurfaceView? post) {
     final suggestions = <String>[
       UITextConstants.assistantAskAboutSummary,
       UITextConstants.assistantAskAboutRecommendations,
@@ -508,11 +516,11 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       return;
     }
     final currentPost = widget.posts[_currentPostIndex];
-    final username = currentPost.authorId;
+    final username = currentPost.author.id;
     if (username.isEmpty) return;
-    final avatarUrl = currentPost.avatarUrl;
-    final displayName = currentPost.displayName;
-    final backgroundUrl = currentPost.backgroundImage;
+    final avatarUrl = currentPost.author.avatarUrl;
+    final displayName = currentPost.author.displayName;
+    final backgroundUrl = currentPost.author.backgroundUrl;
     widget.onUserClick(
       username,
       avatarUrl: avatarUrl.isEmpty ? null : avatarUrl,
@@ -535,28 +543,28 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     );
   }
 
-  String _getPostTitle(PostSummaryView? post) {
+  String _getPostTitle(ContentSurfaceView? post) {
     return post?.title ?? '';
   }
 
-  String _getPostCaption(PostSummaryView? post) {
+  String _getPostCaption(ContentSurfaceView? post) {
     return post?.body ?? '';
   }
 
-  String _getAuthorName(PostSummaryView? post) {
+  String _getAuthorName(ContentSurfaceView? post) {
     if (post == null) return UITextConstants.unknownUser;
-    final name = post.author.name;
+    final name = post.author.displayName;
     return name.isNotEmpty ? name : UITextConstants.unknownUser;
   }
 
-  String? _getAuthorAvatar(PostSummaryView? post) {
-    final avatar = post?.avatarUrl ?? post?.author.avatar;
+  String? _getAuthorAvatar(ContentSurfaceView? post) {
+    final avatar = post?.author.avatarUrl;
     return avatar?.isEmpty == true ? null : avatar;
   }
 
   Widget _buildMediaPage(
     BuildContext context,
-    PostSummaryView post,
+    ContentSurfaceView post,
     MediaItem mediaItem,
     bool isDark,
     bool isActive,
@@ -566,7 +574,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
     final caption = _getPostCaption(post);
     final hasTextLayout = title.isNotEmpty || caption.isNotEmpty;
     final shouldShowCaption = showCaption && hasTextLayout;
-    final postId = post.id;
+    final postId = post.postId;
     final isExpanded = _expandedCaptions[postId] ?? false;
     final imageUrl = mediaItem.url;
 
@@ -680,7 +688,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
 
   Widget _buildMediaContent(
     BuildContext context,
-    PostSummaryView post,
+    ContentSurfaceView post,
     MediaItem mediaItem,
     bool isActive,
   ) {
@@ -736,7 +744,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 2.0,
         heroAttributes: PhotoViewHeroAttributes(
-          tag: 'photo_${post.id}_${mediaItem.url}',
+          tag: 'photo_${post.postId}_${mediaItem.url}',
         ),
         onTapDown: (context, details, controllerValue) {
           _toggleControls();
@@ -795,9 +803,11 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
                     ? widget.mediaItems[index % widget.mediaItems.length]
                     : MediaItem(
                         type: ContentTypeConstants.image,
-                        url: (post.images?.isNotEmpty == true)
-                            ? post.images!.first
-                            : (post.thumbnailUrl ?? post.coverUrl ?? ''),
+                        url: post.images.isNotEmpty
+                            ? post.images.first.url
+                            : (post.cover?.url ??
+                                  post.video?.thumbnailUrl ??
+                                  ''),
                       );
                 return _buildMediaPage(
                   context,

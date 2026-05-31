@@ -7,19 +7,20 @@ import 'package:quwoquan_app/components/media/image/viewer/immersive_image_viewe
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 
 /// D14：微趣媒体浏览器 UI 回归 — feedPosts、二维导航、文字 3 行+全文展开
 ///
 /// 特性树：moment-display-journey
-PostSummaryView _momentPost({
+ContentSurfaceView _momentPost({
   required String id,
   required String body,
   List<String> images = const ['https://example.com/img1.jpg'],
 }) {
-  final dto = MomentPostDto(
+  final dto = MicroPostDto(
     id: id,
-    type: 'moment',
+    type: 'micro',
     identity: 'moment',
     assistantUsePolicy: 'inherit',
     authorId: 'u1',
@@ -33,7 +34,7 @@ PostSummaryView _momentPost({
     shareCount: 0,
     createdAt: DateTime.now(),
   );
-  return PostSummaryView.fromDto(dto);
+  return ContentSurfaceViewMapper.fromDto(dto);
 }
 
 Widget _wrap(Widget child) {

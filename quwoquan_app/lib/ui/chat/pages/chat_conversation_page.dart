@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -9,7 +10,6 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
@@ -20,6 +20,7 @@ import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
 import 'package:quwoquan_app/components/conversation/message_action_menu_overlay.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -33,7 +34,10 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/voice_player_manager.dart';
+import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
+import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
@@ -66,7 +70,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocusNode = FocusNode();
   final ImagePicker _imagePicker = ImagePicker();
-  final stt.SpeechToText _speechToText = stt.SpeechToText();
+  final VoiceRecorder _voiceRecorder = VoiceRecorder(
+    maxDurationMs: kMaxRecordDurationMs + 1000,
+  );
 
   ConversationDto? _conversationDto;
   String? _resolvedTitle;
@@ -76,8 +82,6 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   final Set<String> _selectedIds = <String>{};
   ChatMessageDisplayItem? _actionMenuMessage;
   Offset? _actionMenuPosition;
-  bool _speechReady = false;
-  String _lastAsrText = '';
 
   @override
   void initState() {
@@ -111,7 +115,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
 
   @override
   void dispose() {
-    _speechToText.cancel();
+    unawaited(_voiceRecorder.dispose());
     _inputController.removeListener(_onInputChanged);
     _inputController.dispose();
     _scrollController.dispose();
@@ -239,23 +243,14 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)}GB';
   }
 
-  Future<bool> _ensureSpeechReady() async {
-    if (_speechReady) return true;
-    _speechReady = await _speechToText.initialize(
-      onError: (_) {},
-      onStatus: (_) {},
-    );
-    return _speechReady;
-  }
-
   Future<bool> _requestMicPermissionForChat() async {
     final micStatus = await Permission.microphone.status;
     if (micStatus.isGranted) {
-      return _ensureSpeechReady();
+      return true;
     }
     final requested = await Permission.microphone.request();
     if (requested.isGranted) {
-      return _ensureSpeechReady();
+      return true;
     }
     if (requested.isPermanentlyDenied && mounted) {
       AppToast.show(context, UITextConstants.chatVoicePermissionDenied);
@@ -264,42 +259,60 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     return false;
   }
 
-  Future<void> _startVoiceRecordForChat() async {
-    _lastAsrText = '';
-    if (!await _ensureSpeechReady()) return;
-    if (_speechToText.isListening) {
-      await _speechToText.stop();
+  Future<bool> _startVoiceRecordForChat() async {
+    final started = await _voiceRecorder.start();
+    if (!started && mounted) {
+      AppToast.show(context, UITextConstants.chatVoicePermissionDenied);
     }
-    await _speechToText.listen(
-      onResult: (result) {
-        _lastAsrText = result.recognizedWords.trim();
-      },
-      listenOptions: stt.SpeechListenOptions(
-        partialResults: true,
-        cancelOnError: true,
-        listenMode: stt.ListenMode.dictation,
-      ),
-      localeId: 'zh_CN',
-      pauseFor: const Duration(seconds: 2),
-      listenFor: const Duration(minutes: 2),
-    );
+    return started;
   }
 
   Future<void> _stopVoiceRecordForChat(Duration duration) async {
-    if (_speechToText.isListening) {
-      await _speechToText.stop();
+    final result = await _voiceRecorder.stop();
+    if (!mounted) return;
+    if (result == null) {
+      AppToast.show(context, UITextConstants.chatVoiceTooShort);
+      return;
     }
-    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!await requireLogin(ref, context, AuthGateReason.sendMessage)) {
+      return;
+    }
+    if (!mounted) return;
+    await ref
+        .read(voiceSendProvider(widget.conversationId).notifier)
+        .sendVoice(result);
+    if (!mounted) return;
+    final sendState = ref.read(voiceSendProvider(widget.conversationId));
+    if (sendState.status == VoiceSendStatus.failed &&
+        (sendState.error ?? '').isNotEmpty) {
+      AppToast.show(context, sendState.error!);
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
-  Future<String?> _voiceAsrForChat(Duration duration) async {
-    final text = _lastAsrText.trim();
-    if (text.isNotEmpty) return text;
-    if (duration.inMilliseconds < 500) return null;
-    return '语音消息（${duration.inSeconds}s）';
+  Future<void> _cancelVoiceRecordForChat() async {
+    await _voiceRecorder.cancel();
+    if (mounted) {
+      AppToast.show(context, UITextConstants.chatVoiceCanceled);
+    }
   }
 
   Future<void> _submitChatInput(ChatInputSubmitPayload payload) async {
+    // 防御性二次拦截：私信发送是需登录写动作。会话页虽已被路由守卫保护，
+    // 这里再兜底一次，避免任何绕过路由的发送路径让游客写入。
+    if (!await requireLogin(ref, context, AuthGateReason.sendMessage)) {
+      return;
+    }
+    if (!mounted) return;
     final notifier = ref.read(
       chatMessageProvider(widget.conversationId).notifier,
     );
@@ -311,10 +324,10 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
         await notifier.sendMessage('text', '[$kind] ${item.name}');
       }
     }
-    var text = payload.text.trim();
-    if (payload.isVoiceMessage && text.isEmpty) {
-      text = '语音消息（${payload.voiceDuration.inSeconds}s）';
+    if (payload.isVoiceMessage) {
+      return;
     }
+    var text = payload.text.trim();
     if (text.isNotEmpty) {
       await _sendMessage(draftText: text);
     }
@@ -527,6 +540,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
         break;
       case 'recall':
         if (msg.isSelf) {
+          if (msg.type == 'audio') {
+            unawaited(ref.read(voicePlayerManagerProvider.notifier).stop());
+          }
           ref
               .read(chatMessageProvider(widget.conversationId).notifier)
               .recallMessage(msg.id);
@@ -717,7 +733,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                     onRequestMicPermission: _requestMicPermissionForChat,
                     onStartRecord: _startVoiceRecordForChat,
                     onStopRecord: _stopVoiceRecordForChat,
-                    onVoiceAsrTransform: _voiceAsrForChat,
+                    onCancelRecord: _cancelVoiceRecordForChat,
                     onSend: _submitChatInput,
                     showEmojiButton: true,
                     showXiaoquMentionButton: _isGroupChat,

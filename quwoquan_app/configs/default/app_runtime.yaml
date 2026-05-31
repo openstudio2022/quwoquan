@@ -2,12 +2,12 @@ schemaVersion: app-runtime-config
 runtime:
   appRuntimeEnv: alpha
   appDataSource: mock
-  gatewayBaseUrl: http://127.0.0.1:18080
-  realtimeBaseUrl: ""
-  mediaAvatarCdnBaseUrl: http://127.0.0.1:18088
-  mediaImageCdnBaseUrl: http://127.0.0.1:18088
-  mediaVideoCdnBaseUrl: http://127.0.0.1:18088
-  mediaUploadBaseUrl: http://127.0.0.1:18088
+  gatewayBaseUrl: http://127.0.0.1:17000
+  realtimeBaseUrl: ws://127.0.0.1:17000
+  mediaAvatarCdnBaseUrl: http://127.0.0.1:17100
+  mediaImageCdnBaseUrl: http://127.0.0.1:17100
+  mediaVideoCdnBaseUrl: http://127.0.0.1:17100
+  mediaUploadBaseUrl: http://127.0.0.1:17100
   currentUserId: ""
 seed:
   enabled: false

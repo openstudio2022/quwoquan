@@ -3,7 +3,6 @@ import 'dart:async';
 import 'dart:math' show exp, max;
 import 'dart:ui' show ImageFilter;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Theme;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,14 +31,18 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart'
     show ContentType;
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
@@ -50,7 +53,7 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_rea
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_flip_host.dart';
 import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -98,7 +101,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final VoidCallback? onHideSystemNav;
   final bool showTopNavigation;
   final List<PostBaseDto>? externalPosts;
-  final List<PostSummaryView>? externalPostViews;
+  final List<ContentSurfaceView>? externalPostViews;
   final int initialPostIndex;
   final int initialImageIndex;
   final String source;
@@ -465,16 +468,21 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
               .addBlockedKeyword(keyword);
         },
         onReport: () {
-          ref
-              .read(behaviorRepositoryProvider)
-              .reportSingle(contentId: post.id, action: BehaviorAction.report);
-          ref
-              .read(reportRepositoryProvider)
-              .createReport(
-                targetId: post.id,
-                targetType: 'post',
-                reason: 'inappropriate',
-              );
+          runWhenLoggedIn(ref, context, AuthGateReason.report, () {
+            ref
+                .read(behaviorRepositoryProvider)
+                .reportSingle(
+                  contentId: post.id,
+                  action: BehaviorAction.report,
+                );
+            ref
+                .read(reportRepositoryProvider)
+                .createReport(
+                  targetId: post.id,
+                  targetType: 'post',
+                  reason: 'inappropriate',
+                );
+          });
         },
       ),
     );
@@ -574,7 +582,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     };
   }
 
-  ArticleDetailView _articleViewFor(PostBaseDto post) {
+  ContentArticleRender _articleViewFor(PostBaseDto post) {
     return projectArticleDetailView(
       Map<String, dynamic>.from(_rawArticleDataFor(post)),
       fallbackArticleId: post.id,
@@ -664,9 +672,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   bool get _canDismissViewerWithEdgeGesture =>
       widget.onDismissed != null || widget.onTapBack != null;
 
-  bool _supportsEdgeDismissDirection(
-    TabSwipeDirection direction,
-  ) {
+  bool _supportsEdgeDismissDirection(TabSwipeDirection direction) {
     if (!_canDismissViewerWithEdgeGesture) {
       return false;
     }
@@ -675,8 +681,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       TargetPlatform.iOS ||
       TargetPlatform.macOS ||
       TargetPlatform.linux ||
-      TargetPlatform.windows =>
-        direction == TabSwipeDirection.previous,
+      TargetPlatform.windows => direction == TabSwipeDirection.previous,
     };
   }
 
@@ -824,14 +829,14 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         .read(contentRepositoryProvider)
         .discoveryPresentationWireForPost(postId);
     if (wire == null) return null;
-    return Map<String, Object?>.from(wire.toLegacyRow());
+    return Map<String, Object?>.from(wire.toWireMap());
   }
 
-  PostSummaryView? _summaryForPost(String postId) {
+  ContentSurfaceView? _summaryForPost(String postId) {
     final external = widget.externalPostViews;
     if (external == null || external.isEmpty) return null;
     for (final item in external) {
-      if (item.id == postId) return item;
+      if (item.postId == postId) return item;
     }
     return null;
   }
@@ -851,7 +856,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final rawTitle = raw?['title']?.toString().trim() ?? '';
     if (rawTitle.isNotEmpty) return rawTitle;
     final summary = _summaryForPost(post.id);
-    final summaryTitle = summary?.readPresentation.title.trim() ?? '';
+    final summaryTitle = summary?.title?.trim() ?? '';
     if (summaryTitle.isNotEmpty) return summaryTitle;
     final pres = PostReadProjectionFacade.presentationFor(
       post,
@@ -871,7 +876,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         '';
     if (rawBody.isNotEmpty) return rawBody;
     final summary = _summaryForPost(post.id);
-    final summaryBody = summary?.readPresentation.body.trim() ?? '';
+    final summaryBody = summary?.body?.trim() ?? '';
     if (summaryBody.isNotEmpty) return summaryBody;
     final pres = PostReadProjectionFacade.presentationFor(
       post,
@@ -1202,7 +1207,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   void _trackDocumentStructureFallback({
     required PostBaseDto post,
-    required ArticleDetailView article,
+    required ContentArticleRender article,
     required bool hydrated,
   }) {
     if (article.documentSource == ArticleDetailDocumentSource.markdown) {
@@ -1344,58 +1349,64 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final fmt = post.displayFormat;
     if (fmt == 'video') return ContentType.video;
     if (fmt == 'article') return ContentType.article;
-    if (fmt == 'moment') return ContentType.moment;
-    return ContentType.photo;
+    if (post.type == 'micro') return ContentType.micro;
+    return ContentType.image;
   }
 
   // ── 互动操作（乐观 UI + 云侧 API 同步）────────────────────────
 
   void _onLike(PostBaseDto post) {
-    final isLiked = effectivePostLiked(ref, post.id);
-    final currentCount = effectivePostLikeCount(
-      ref,
-      post.id,
-      fallback: post.likeCount,
-    );
-    final nextLiked = !isLiked;
-    final nextLikeCount = nextLiked
-        ? currentCount + 1
-        : (currentCount - 1).clamp(0, 1 << 31).toInt();
-    syncPostLikeIntent(
-      ref,
-      postId: post.id,
-      isLiked: nextLiked,
-      likeCount: nextLikeCount,
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+      final isLiked = effectivePostLiked(ref, post.id);
+      final currentCount = effectivePostLikeCount(
+        ref,
+        post.id,
+        fallback: post.likeCount,
+      );
+      final nextLiked = !isLiked;
+      final nextLikeCount = nextLiked
+          ? currentCount + 1
+          : (currentCount - 1).clamp(0, 1 << 31).toInt();
+      syncPostLikeIntent(
+        ref,
+        postId: post.id,
+        isLiked: nextLiked,
+        likeCount: nextLikeCount,
+      );
+    });
   }
 
   void _onFavorite(PostBaseDto post) {
-    final isSaved = effectivePostSaved(ref, post.id);
-    final currentCount = effectivePostBookmarkCount(
-      ref,
-      post.id,
-      fallback: post.favoriteCount,
-    );
-    final nextSaved = !isSaved;
-    final nextBookmarkCount = nextSaved
-        ? currentCount + 1
-        : (currentCount - 1).clamp(0, 1 << 31).toInt();
-    syncPostSaveIntent(
-      ref,
-      postId: post.id,
-      isSaved: nextSaved,
-      bookmarkCount: nextBookmarkCount,
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.favorite, () {
+      final isSaved = effectivePostSaved(ref, post.id);
+      final currentCount = effectivePostBookmarkCount(
+        ref,
+        post.id,
+        fallback: post.favoriteCount,
+      );
+      final nextSaved = !isSaved;
+      final nextBookmarkCount = nextSaved
+          ? currentCount + 1
+          : (currentCount - 1).clamp(0, 1 << 31).toInt();
+      syncPostSaveIntent(
+        ref,
+        postId: post.id,
+        isSaved: nextSaved,
+        bookmarkCount: nextBookmarkCount,
+      );
+    });
   }
 
   void _onFollow(PostBaseDto post) {
-    final subjectId = post.subAccountId;
-    final nextFollowing = !effectiveProfileFollowing(ref, subjectId);
-    syncProfileFollowIntent(
-      ref,
-      subAccountId: subjectId,
-      isFollowing: nextFollowing,
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
+      final subjectId = post.subAccountId;
+      final nextFollowing = !effectiveProfileFollowing(ref, subjectId);
+      syncProfileFollowIntent(
+        ref,
+        subAccountId: subjectId,
+        isFollowing: nextFollowing,
+      );
+    });
   }
 
   String _keywordForPost(PostBaseDto post) {
@@ -1916,17 +1927,19 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     PostBaseDto post, {
     required bool enableIdentityTemplate,
   }) {
-    final template = _buildShareTemplate(
-      post: post,
-      enableIdentityTemplate: enableIdentityTemplate,
-    );
-    ContentShareSheet.show(
-      ctx,
-      template: template,
-      onActionCompleted: (result) async {
-        await _recordShare(post.id, result.actionId);
-      },
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
+      final template = _buildShareTemplate(
+        post: post,
+        enableIdentityTemplate: enableIdentityTemplate,
+      );
+      ContentShareSheet.show(
+        ctx,
+        template: template,
+        onActionCompleted: (result) async {
+          await _recordShare(post.id, result.actionId);
+        },
+      );
+    });
   }
 
   Future<void> _copyLink(
@@ -1957,17 +1970,11 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final raw = _rawPostById(post.id);
     final visibility =
         raw?[ContentPostImmersiveWireKeys.visibility]?.toString() ?? 'public';
-    final tags =
-        (raw?[ContentPostImmersiveWireKeys.tags] as List?)
-            ?.map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
+    final surfaceView = ContentSurfaceViewMapper.fromDto(post, wire: raw);
     return ContentShareTemplateBuilder.build(
-      post: post,
+      surfaceView: surfaceView,
       enableIdentityTemplate: enableIdentityTemplate,
       visibility: visibility,
-      tags: tags,
       circleNames: _circlesForPost(
         post,
       ).map((circle) => circle.name).toList(growable: false),
@@ -2066,16 +2073,16 @@ class _WorksPrimaryTopBar extends StatelessWidget {
               child: showNavigationTabs
                   ? Center(
                       child: HomePrimaryTabStrip(
-                        activeTab: HomePrimaryTabStrip.featuredTabId,
-                        onTabChange: (tabId) {
-                          switch (tabId) {
-                            case HomePrimaryTabStrip.followingTabId:
+                        activeChannelId: HomePrimaryTabStrip.featuredChannelId,
+                        onChannelChanged: (channelId) {
+                          switch (channelId) {
+                            case HomePrimaryTabStrip.followingChannelId:
                               onTapFollowing?.call();
                               break;
-                            case HomePrimaryTabStrip.circlesTabId:
+                            case HomePrimaryTabStrip.circlesChannelId:
                               onTapCircles?.call();
                               break;
-                            case HomePrimaryTabStrip.featuredTabId:
+                            case HomePrimaryTabStrip.featuredChannelId:
                               onTapWorksArrow();
                               break;
                           }
@@ -2319,6 +2326,26 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _precacheNeighborImages(_safeInitialIndex);
+  }
+
+  @override
+  void didUpdateWidget(covariant _WorksPhotoCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.post != oldWidget.post ||
+        widget.initialIndex != oldWidget.initialIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _precacheNeighborImages(_safeInitialIndex);
+      });
+    }
+  }
+
   int get _safeInitialIndex {
     final length = _images.length;
     if (length <= 1) return 0;
@@ -2331,6 +2358,49 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
         : (widget.post.primaryImageUrl.isNotEmpty
               ? <String>[widget.post.primaryImageUrl]
               : const <String>[]);
+  }
+
+  double _pageWidthForConstraints(BoxConstraints constraints) {
+    if (constraints.maxWidth.isFinite && constraints.maxWidth > 0) {
+      return constraints.maxWidth;
+    }
+    return MediaQuery.of(context).size.width;
+  }
+
+  void _precacheNeighborImages(int centerIndex) {
+    final images = _images;
+    for (final index in <int>[centerIndex - 1, centerIndex, centerIndex + 1]) {
+      if (index < 0 || index >= images.length) {
+        continue;
+      }
+      final url = images[index];
+      if (url.isEmpty) {
+        continue;
+      }
+      final candidates = resolveContentMediaUrlCandidates(url);
+      if (_shouldSkipLocalPrecache(candidates)) {
+        continue;
+      }
+      unawaited(
+        _precacheImageCandidates(candidates),
+      );
+    }
+  }
+
+  bool _shouldSkipLocalPrecache(List<String> candidates) {
+    return candidates.isNotEmpty &&
+        candidates.every(isPrivateDevContentMediaUrl);
+  }
+
+  Future<void> _precacheImageCandidates(List<String> candidates) async {
+    for (final candidate in candidates) {
+      try {
+        await precacheImage(NetworkImage(candidate), context);
+        return;
+      } catch (_) {
+        continue;
+      }
+    }
   }
 
   void _triggerOverflow(TabSwipeDirection direction) {
@@ -2410,8 +2480,14 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
     _setBoundaryRubberBandOffset(0, animate: animate, rawOffset: 0);
   }
 
-  void _trackEdgeOverflow(DragUpdateDetails details, List<String> images) {
-    final pageWidth = MediaQuery.of(context).size.width;
+  void _trackEdgeOverflow(
+    DragUpdateDetails details,
+    List<String> images,
+    double pageWidth,
+  ) {
+    if (!_imgController.hasClients) {
+      return;
+    }
     final maxOffset = images.length <= 1
         ? 0.0
         : (images.length - 1) * pageWidth;
@@ -2476,31 +2552,50 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
 
   void _onHorizontalDragDown(DragDownDetails details) {
     _dragStartLocalPosition = details.localPosition;
+    if (_imgController.hasClients) {
+      _imgController.jumpTo(_imgController.offset);
+    }
     _resetOverflowTracking();
     _resetBoundaryRubberBand(animate: false);
   }
 
-  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+  void _onHorizontalDragUpdate(DragUpdateDetails details, double pageWidth) {
     final images = _images;
-    if (images.length > 1) {
-      final pageWidth = MediaQuery.of(context).size.width;
+    if (images.length > 1 && _imgController.hasClients) {
       final maxOffset = (images.length - 1) * pageWidth;
       _imgController.jumpTo(
         (_imgController.offset - details.delta.dx).clamp(0.0, maxOffset),
       );
     }
-    _trackEdgeOverflow(details, images);
+    _trackEdgeOverflow(details, images, pageWidth);
   }
 
-  void _onHorizontalDragEnd(DragEndDetails details) {
+  Duration _settleDuration({
+    required int targetPage,
+    required double pageWidth,
+    required double velocity,
+  }) {
+    if (!_imgController.hasClients || pageWidth <= 0) {
+      return const Duration(milliseconds: 180);
+    }
+    final targetOffset = targetPage * pageWidth;
+    final distance = (targetOffset - _imgController.offset).abs();
+    final distanceRatio = (distance / pageWidth).clamp(0.0, 1.0).toDouble();
+    final fastFling = velocity.abs() >= 700;
+    final milliseconds = fastFling
+        ? 140 + distanceRatio * 80
+        : 160 + distanceRatio * 100;
+    return Duration(milliseconds: milliseconds.clamp(140, 260).round().toInt());
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details, double pageWidth) {
     final images = _images;
-    final pageWidth = MediaQuery.of(context).size.width;
     final maxOffset = images.length <= 1
         ? 0.0
         : (images.length - 1) * pageWidth;
-    final atLeadingEdge = _imgController.offset <= AppSpacing.hairline;
-    final atTrailingEdge =
-        _imgController.offset >= maxOffset - AppSpacing.hairline;
+    final currentOffset = _imgController.hasClients ? _imgController.offset : 0;
+    final atLeadingEdge = currentOffset <= AppSpacing.hairline;
+    final atTrailingEdge = currentOffset >= maxOffset - AppSpacing.hairline;
     final velocity = details.primaryVelocity ?? 0;
 
     if (!_overflowTriggered && velocity.abs() >= _overflowSwitchVelocity) {
@@ -2515,8 +2610,8 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
       }
     }
 
-    if (!_overflowTriggered && images.length > 1) {
-      final currentPage = _imgController.page ?? 0;
+    if (!_overflowTriggered && images.length > 1 && _imgController.hasClients) {
+      final currentPage = pageWidth <= 0 ? 0.0 : currentOffset / pageWidth;
       final int targetPage;
       if (velocity < -500) {
         targetPage = (currentPage.round() + 1).clamp(0, images.length - 1);
@@ -2525,10 +2620,15 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
       } else {
         targetPage = currentPage.round().clamp(0, images.length - 1);
       }
+      _precacheNeighborImages(targetPage);
       _imgController.animateToPage(
         targetPage,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
+        duration: _settleDuration(
+          targetPage: targetPage,
+          pageWidth: pageWidth,
+          velocity: velocity,
+        ),
+        curve: Curves.easeOutCubic,
       );
     }
 
@@ -2550,75 +2650,86 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
         images.length > 1 ||
         widget.onOverflowPrevious != null ||
         widget.onOverflowNext != null;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragDown: handlesHorizontalOverflow
-          ? _onHorizontalDragDown
-          : null,
-      onHorizontalDragUpdate: handlesHorizontalOverflow
-          ? _onHorizontalDragUpdate
-          : null,
-      onHorizontalDragEnd: handlesHorizontalOverflow
-          ? _onHorizontalDragEnd
-          : null,
-      onHorizontalDragCancel: handlesHorizontalOverflow
-          ? _onHorizontalDragCancel
-          : null,
-      child: AnimatedContainer(
-        key: const ValueKey<String>('works-photo-stage'),
-        duration: _shouldAnimateBoundaryReset
-            ? _photoBoundaryResetDuration
-            : Duration.zero,
-        curve: Curves.easeOutCubic,
-        transform: Matrix4.translationValues(_boundaryRubberBandOffset, 0, 0),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            PageView.builder(
-              controller: _imgController,
-              // NeverScrollableScrollPhysics — gestures handled by the outer
-              // GestureDetector above; this removes the second competing
-              // HorizontalDragGestureRecognizer from the arena entirely.
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: images.isEmpty ? 1 : images.length,
-              onPageChanged: (i) {
-                widget.onImageChanged(i);
-              },
-              itemBuilder: (context, i) {
-                if (images.isEmpty) {
-                  return Container(color: AppColors.worksBackground);
-                }
-                return CachedNetworkImage(
-                  imageUrl: images[i],
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) =>
-                      Container(color: AppColors.worksBackground),
-                  errorWidget: (context, url, error) =>
-                      Container(color: AppColors.worksBackground),
-                );
-              },
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pageWidth = _pageWidthForConstraints(constraints);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragDown: handlesHorizontalOverflow
+              ? _onHorizontalDragDown
+              : null,
+          onHorizontalDragUpdate: handlesHorizontalOverflow
+              ? (details) => _onHorizontalDragUpdate(details, pageWidth)
+              : null,
+          onHorizontalDragEnd: handlesHorizontalOverflow
+              ? (details) => _onHorizontalDragEnd(details, pageWidth)
+              : null,
+          onHorizontalDragCancel: handlesHorizontalOverflow
+              ? _onHorizontalDragCancel
+              : null,
+          child: AnimatedContainer(
+            key: const ValueKey<String>('works-photo-stage'),
+            duration: _shouldAnimateBoundaryReset
+                ? _photoBoundaryResetDuration
+                : Duration.zero,
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(
+              _boundaryRubberBandOffset,
+              0,
+              0,
             ),
-            Positioned.fill(
-              // IgnorePointer removes the gradient box from hit testing entirely,
-              // so it can never compete with the GestureDetector above.
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        AppColors.black.withValues(alpha: 0.06),
-                        AppColors.black.withValues(alpha: 0.58),
-                      ],
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                PageView.builder(
+                  controller: _imgController,
+                  // NeverScrollableScrollPhysics — gestures handled by the outer
+                  // GestureDetector above; this removes the second competing
+                  // HorizontalDragGestureRecognizer from the arena entirely.
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: images.isEmpty ? 1 : images.length,
+                  onPageChanged: (i) {
+                    _precacheNeighborImages(i);
+                    widget.onImageChanged(i);
+                  },
+                  itemBuilder: (context, i) {
+                    if (images.isEmpty) {
+                      return Container(color: AppColors.worksBackground);
+                    }
+                    return AppCachedNetworkImage(
+                      imageUrl: images[i],
+                      imageUrlCandidates: resolveContentMediaUrlCandidates(
+                        images[i],
+                      ),
+                      fit: BoxFit.cover,
+                      placeholder: Container(color: AppColors.worksBackground),
+                      errorWidget: Container(color: AppColors.worksBackground),
+                    );
+                  },
+                ),
+                Positioned.fill(
+                  // IgnorePointer removes the gradient box from hit testing entirely,
+                  // so it can never compete with the GestureDetector above.
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            AppColors.black.withValues(alpha: 0.06),
+                            AppColors.black.withValues(alpha: 0.58),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -2694,6 +2805,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
           child: PageView.builder(
             controller: _episodeController,
             scrollDirection: Axis.horizontal,
+            allowImplicitScrolling: true,
             itemCount: episodes.length,
             onPageChanged: (index) {
               setState(() => _currentEpisodeIndex = index);
@@ -2703,12 +2815,15 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
               final episode = episodes[index];
               final videoUrl = _videoUrlFor(episode);
               if (videoUrl.isNotEmpty) {
-                return VideoPlayerWidget(
-                  key: ValueKey<String>('works-video-${episode.id}-$index'),
-                  videoUrl: videoUrl,
-                  thumbnailUrl: _thumbnailFor(episode),
-                  autoPlay: index == _currentEpisodeIndex,
-                  showControls: true,
+                return _KeepAliveStage(
+                  key: ValueKey<String>('works-video-stage-${episode.id}'),
+                  child: VideoPlayerWidget(
+                    key: ValueKey<String>('works-video-${episode.id}-$index'),
+                    videoUrl: videoUrl,
+                    thumbnailUrl: _thumbnailFor(episode),
+                    autoPlay: index == _currentEpisodeIndex,
+                    showControls: true,
+                  ),
                 );
               }
               return Container(color: AppColors.worksBackground);
@@ -2744,6 +2859,27 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   }
 }
 
+class _KeepAliveStage extends StatefulWidget {
+  const _KeepAliveStage({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAliveStage> createState() => _KeepAliveStageState();
+}
+
+class _KeepAliveStageState extends State<_KeepAliveStage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+}
+
 class _WorksArticleCanvas extends StatelessWidget {
   const _WorksArticleCanvas({
     super.key,
@@ -2763,7 +2899,7 @@ class _WorksArticleCanvas extends StatelessWidget {
   });
 
   final PostBaseDto post;
-  final ArticleDetailView article;
+  final ContentArticleRender article;
   final bool enablePageCurl;
   final bool forceDegradedPager;
   final ValueChanged<int> onPageChanged;
@@ -2872,13 +3008,12 @@ class _WorksTextCanvas extends StatelessWidget {
           Positioned.fill(
             child: Opacity(
               opacity: 0.08,
-              child: CachedNetworkImage(
+              child: AppCachedNetworkImage(
                 imageUrl: imageUrl!,
+                imageUrlCandidates: resolveContentMediaUrlCandidates(imageUrl!),
                 fit: BoxFit.cover,
-                placeholder: (context, url) =>
-                    Container(color: AppColors.worksBackground),
-                errorWidget: (context, url, error) =>
-                    Container(color: AppColors.worksBackground),
+                placeholder: Container(color: AppColors.worksBackground),
+                errorWidget: Container(color: AppColors.worksBackground),
               ),
             ),
           ),
@@ -3116,13 +3251,12 @@ class _GuideThumb extends StatelessWidget {
           aspectRatio: 3 / 4,
           child: imageUrl.isEmpty
               ? Container(color: AppColors.worksBackground)
-              : CachedNetworkImage(
+              : AppCachedNetworkImage(
                   imageUrl: imageUrl,
+                  imageUrlCandidates: resolveContentMediaUrlCandidates(imageUrl),
                   fit: BoxFit.cover,
-                  placeholder: (context, url) =>
-                      Container(color: AppColors.worksBackground),
-                  errorWidget: (context, url, error) =>
-                      Container(color: AppColors.worksBackground),
+                  placeholder: Container(color: AppColors.worksBackground),
+                  errorWidget: Container(color: AppColors.worksBackground),
                 ),
         ),
       ),
@@ -3174,13 +3308,14 @@ class _ArticleReadingCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
-                child: CachedNetworkImage(
+                child: AppCachedNetworkImage(
                   imageUrl: imageUrl!,
+                  imageUrlCandidates: resolveContentMediaUrlCandidates(
+                    imageUrl!,
+                  ),
                   fit: BoxFit.cover,
-                  placeholder: (context, url) =>
-                      Container(color: AppColors.worksBackground),
-                  errorWidget: (context, url, error) =>
-                      Container(color: AppColors.worksBackground),
+                  placeholder: Container(color: AppColors.worksBackground),
+                  errorWidget: Container(color: AppColors.worksBackground),
                 ),
               ),
             ),

@@ -139,9 +139,9 @@ class UserProfileMockData {
         'shareCount': 43,
         'createdAt': '2025-12-10T09:00:00Z',
       }),
-      MomentPostDto.fromMap({
+      MicroPostDto.fromMap({
         'postId': '${userId}_m1',
-        'contentType': 'moment',
+        'contentType': 'micro',
         'authorId': userId,
         'displayName': _displayNameFor(userId),
         'authorAvatarUrl': _avatarFor(userId),

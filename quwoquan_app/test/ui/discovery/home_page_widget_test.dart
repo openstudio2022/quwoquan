@@ -477,7 +477,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final selectedTab = find.byKey(
-        HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.recommendedTabId),
+        HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.recommendedChannelId),
       );
       final selectedLabel = tester.widget<Text>(
         find
@@ -560,7 +560,7 @@ void main() {
 
       expect(
         find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.circlesTabId),
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.circlesChannelId),
         ),
         findsNothing,
       );
@@ -575,7 +575,7 @@ void main() {
       expect(find.byType(HomePrimaryTabStrip), findsOneWidget);
       expect(
         find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.recommendedTabId),
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.recommendedChannelId),
         ),
         findsOneWidget,
       );
@@ -588,7 +588,7 @@ void main() {
 
       await tester.tap(
         find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.followingTabId),
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.followingChannelId),
         ),
       );
       await tester.pumpAndSettle();
@@ -849,24 +849,27 @@ void main() {
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
 
-      for (final tabId in HomePrimaryTabStrip.homeTabIds) {
-        expect(find.byKey(HomePrimaryTabStrip.tabKey(tabId)), findsOneWidget);
+      for (final channelId in HomePrimaryTabStrip.homeChannelIds) {
+        expect(
+          find.byKey(HomePrimaryTabStrip.channelKey(channelId)),
+          findsOneWidget,
+        );
       }
       expect(
         find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.followingTabId),
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.followingChannelId),
         ),
         findsOneWidget,
       );
       expect(
         find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.recommendedTabId),
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.recommendedChannelId),
         ),
         findsOneWidget,
       );
       expect(
         find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.featuredTabId),
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.featuredChannelId),
         ),
         findsNothing,
       );
@@ -899,7 +902,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.campusTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId)),
       );
       await tester.pumpAndSettle();
 
@@ -916,7 +919,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
         findsOneWidget,
       );
     });
@@ -927,33 +930,33 @@ void main() {
       await tester.pumpAndSettle();
 
       final campusBefore = tester.getCenter(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.campusTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId)),
       );
       final travelBefore = tester.getCenter(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
       );
       final campusTopBefore = tester.getTopLeft(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.campusTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId)),
       );
       final travelTopBefore = tester.getTopLeft(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
       );
       await tester.tap(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
       );
       await tester.pumpAndSettle();
 
       final campusAfter = tester.getCenter(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.campusTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId)),
       );
       final travelAfter = tester.getCenter(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
       );
       final campusTopAfter = tester.getTopLeft(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.campusTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId)),
       );
       final travelTopAfter = tester.getTopLeft(
-        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
+        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
       );
       expect(campusAfter.dx, closeTo(campusBefore.dx, 0.1));
       expect(travelAfter.dx, closeTo(travelBefore.dx, 0.1));

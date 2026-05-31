@@ -7,7 +7,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 /// 聊天消息发送旅程：输入 → 发送 → 消息出现在列表
 ///
-/// ChatDetailPage 依赖较重（speech_to_text、file_picker、image_picker 等 native
+/// ChatDetailPage 依赖较重（file_picker、image_picker、record 等 native
 /// 插件），因此旅程测试通过自建简化 Widget 验证 ChatRepository 的消息发送 → 列表
 /// 更新这一核心交互链路，确保 Provider 注入、异步刷新、错误态 UI 展示的完整性。
 void main() {

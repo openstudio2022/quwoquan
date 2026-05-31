@@ -140,13 +140,13 @@ void main() {
     expect(find.byKey(TestKeys.searchContentArticleToggle), findsOneWidget);
     expect(find.byKey(TestKeys.searchContentImageToggle), findsOneWidget);
     expect(find.byKey(TestKeys.searchContentVideoToggle), findsOneWidget);
-    expect(find.byKey(TestKeys.searchContentMomentToggle), findsOneWidget);
+    expect(find.byKey(TestKeys.searchContentMicroToggle), findsOneWidget);
 
     await tester.tap(find.text('图片').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('视频').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('动态').last);
+    await tester.tap(find.text('微趣').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(TestKeys.searchContentSheetDoneButton));
     await tester.pumpAndSettle();

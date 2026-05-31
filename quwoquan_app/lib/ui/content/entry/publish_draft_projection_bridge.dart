@@ -1,9 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
-import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 
 /// 创作草稿 → 与 [projectArticleDetailView] 兼容的 wire Map（预览 / ReadPresentation 管道入口）。
 ///
@@ -43,18 +41,6 @@ Map<String, dynamic> createEditorStateToArticlePreviewWire(
     ArticleDetailWireKeys.articleTemplate: state.articleTemplate.name,
     ArticleDetailWireKeys.articleFontPreset: state.articleFontPreset.name,
   };
-}
-
-/// 草稿 → 文章详情视图（排版预览等），与云端 GetPost 路径共用 [projectArticleDetailView]。
-ArticleDetailView projectArticleDetailViewFromCreateEditorState(
-  CreateEditorState state, {
-  String previewPostId = 'draft_preview',
-}) {
-  final raw = createEditorStateToArticlePreviewWire(
-    state,
-    previewPostId: previewPostId,
-  );
-  return projectArticleDetailView(raw, fallbackArticleId: previewPostId);
 }
 
 /// 长文草稿 → [PostReadUiBundle]（[PostReadSurfaceId.draftPreview]），与 [createEditorStateToArticlePreviewWire] 同源 wire。
@@ -119,8 +105,8 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
     );
     return <String, dynamic>{
       ...base,
-      'contentType': 'photo',
-      'type': 'photo',
+      'contentType': 'image',
+      'type': 'image',
       'contentIdentity': identityStr,
       'identity': identityStr,
       if (caption.isNotEmpty) 'body': caption,
@@ -132,8 +118,8 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
   if (isMoment) {
     return <String, dynamic>{
       ...base,
-      'contentType': 'moment',
-      'type': 'moment',
+      'contentType': 'micro',
+      'type': 'micro',
       'contentIdentity': 'moment',
       'identity': 'moment',
       'body': caption,

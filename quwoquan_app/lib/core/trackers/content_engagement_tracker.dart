@@ -4,11 +4,11 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
 /// Content type for engagement depth calculation.
 enum ContentType {
   article,
-  photo,
+  image,
   video,
-  moment;
+  micro;
 
-  /// Wire-format string matching Go `contentType` field.
+  /// Wire-format string matching Go `contentType` field (ContentType 真相源 types.yaml）。
   String get wireValue => name;
 }
 
@@ -292,7 +292,7 @@ class ContentEngagementTracker {
         if (total <= 2) return -1;
         if (total <= 0 || session.maxPageReached <= 0) return 0;
         return session.maxPageReached / total;
-      case ContentType.photo:
+      case ContentType.image:
         final total = session.totalImages ?? 0;
         if (total <= 2) return -1;
         if (total <= 0 || session.maxImageReached <= 0) return 0;
@@ -305,7 +305,7 @@ class ContentEngagementTracker {
         }
         if (total <= 0 || session.lastPlayPositionMs <= 0) return 0;
         return session.lastPlayPositionMs / total;
-      case ContentType.moment:
+      case ContentType.micro:
         return -1;
     }
   }
@@ -314,11 +314,11 @@ class ContentEngagementTracker {
     switch (session.contentType) {
       case ContentType.article:
         return session.totalPages ?? 0;
-      case ContentType.photo:
+      case ContentType.image:
         return session.totalImages ?? 0;
       case ContentType.video:
         return ((session.totalDurationMs ?? 0) / 1000).round();
-      case ContentType.moment:
+      case ContentType.micro:
         return 1;
     }
   }
@@ -330,12 +330,12 @@ class ContentEngagementTracker {
         if (dwellMs < 15000) return 1;
         if (dwellMs < 30000) return 2;
         return 3;
-      case ContentType.photo:
+      case ContentType.image:
         if (dwellMs < 3000) return 0;
         if (dwellMs < 8000) return 1;
         if (dwellMs < 15000) return 2;
         return 3;
-      case ContentType.moment:
+      case ContentType.micro:
         if (dwellMs < 2000) return 0;
         if (dwellMs < 5000) return 1;
         if (dwellMs < 10000) return 2;

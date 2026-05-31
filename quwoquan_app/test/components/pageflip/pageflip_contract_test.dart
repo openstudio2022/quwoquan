@@ -103,6 +103,19 @@ void main() {
             'a page turn must freeze texture readiness for the session so a '
             'late snapshot cannot visibly switch the moving sheet material.',
       );
+      expect(
+        hostSource,
+        contains('_textureWarmupBlockedGesture'),
+        reason:
+            'if BACK texture warmup blocks pan start, the same gesture must not '
+            'enter a half-initialized fold on later pan updates.',
+      );
+      expect(
+        hostSource,
+        contains('blockCurrentGesture: true'),
+        reason:
+            'drag-based BACK warmup misses must explicitly block the current gesture.',
+      );
 
       final forwardImports = _sourceImportLines(forwardPipelineSource);
       expect(forwardImports, isNot(contains(contains('backward'))));

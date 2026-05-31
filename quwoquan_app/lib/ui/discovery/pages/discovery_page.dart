@@ -19,7 +19,6 @@ import 'package:quwoquan_app/components/settings_conversation/more_actions_popup
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
@@ -478,11 +477,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       followingUsers: ref
           .watch(userRelationshipStateProvider)
           .followingSubAccountIds,
-      onFollowClick: (subAccountId, _) => syncProfileFollowIntent(
-        ref,
-        subAccountId: subAccountId,
-        isFollowing: !effectiveProfileFollowing(ref, subAccountId),
-      ),
+      onFollowClick: (subAccountId, _) =>
+          runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
+            syncProfileFollowIntent(
+              ref,
+              subAccountId: subAccountId,
+              isFollowing: !effectiveProfileFollowing(ref, subAccountId),
+            );
+          }),
       onVideoTap: (post, index) {
         _onPostTap(post, index, feedPosts: videos.toList(), category: tabId);
       },
@@ -912,11 +914,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
     final postViews = feedPosts
         ?.map(
-          (dto) => PostSummaryView.fromDto(
-            dto,
-            surfaceId: PostReadSurfaceId.immersive,
-            wire: dto.toMap(),
-          ),
+          (dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()),
         )
         .toList();
     final viewerPosts = feedPosts ?? <PostBaseDto>[post];
@@ -987,14 +985,16 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   void _onMomentShareTap(BuildContext context, PostBaseDto post) {
-    final template = _buildShareTemplate(post);
-    ContentShareSheet.show(
-      context,
-      template: template,
-      onActionCompleted: (result) async {
-        await _trackShareAction(post, result.actionId);
-      },
-    );
+    runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
+      final template = _buildShareTemplate(post);
+      ContentShareSheet.show(
+        context,
+        template: template,
+        onActionCompleted: (result) async {
+          await _trackShareAction(post, result.actionId);
+        },
+      );
+    });
   }
 
   void _onMomentMoreTap(BuildContext context, PostBaseDto post) {
@@ -1029,16 +1029,13 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final enableIdentityTemplate = ref.read(
       contentFeatureFlagProvider('enable_identity_share_template'),
     );
-    final surfaceView = ref.read(contentFeatureFlagProvider('unified_surface_view'))
-        ? ContentSurfaceViewMapper.fromDto(post, wire: wire?.toLegacyRow())
-        : null;
+    final surfaceView =
+        ContentSurfaceViewMapper.fromDto(post, wire: wire?.toWireMap());
     return ContentShareTemplateBuilder.build(
-      post: post,
+      surfaceView: surfaceView,
       enableIdentityTemplate: enableIdentityTemplate,
       visibility: wire?.visibility ?? 'public',
-      tags: wire?.tags ?? const <String>[],
       circleNames: circleName.isEmpty ? const <String>[] : <String>[circleName],
-      surfaceView: surfaceView,
     );
   }
 
@@ -1367,7 +1364,7 @@ class _MomentPostCardState extends State<_MomentPostCard>
   }
 }
 
-/// 文章卡片占位：1:1 复制 ArticleCard 结构（简化，后续接 ArticleDetailView）
+/// 文章卡片占位：1:1 复制 ArticleCard 结构（简化，富渲染走 ContentSurfaceView.article）
 class _ArticleCardPlaceholder extends StatelessWidget {
   final PostBaseDto article;
   final bool isDark;
@@ -2106,17 +2103,26 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                                     isLiked,
                                     '$likeCount',
                                     () {
-                                      syncPostLikeIntent(
+                                      runWhenLoggedIn(
                                         ref,
-                                        postId: post.id,
-                                        isLiked: !isLiked,
-                                        likeCount: isLiked
-                                            ? (likeCount - 1)
-                                                  .clamp(0, 1 << 31)
-                                                  .toInt()
-                                            : likeCount + 1,
+                                        context,
+                                        AuthGateReason.like,
+                                        () {
+                                          syncPostLikeIntent(
+                                            ref,
+                                            postId: post.id,
+                                            isLiked: !isLiked,
+                                            likeCount: isLiked
+                                                ? (likeCount - 1)
+                                                      .clamp(0, 1 << 31)
+                                                      .toInt()
+                                                : likeCount + 1,
+                                          );
+                                          _likeAnimationController.forward(
+                                            from: 0,
+                                          );
+                                        },
                                       );
-                                      _likeAnimationController.forward(from: 0);
                                     },
                                     scaleAnimation: _likeScaleAnimation,
                                   ),
@@ -2131,24 +2137,31 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                                     ),
                                     UITextConstants.bookmarks,
                                     () {
-                                      final bookmarkCount =
-                                          effectivePostBookmarkCount(
-                                            ref,
-                                            post.id,
-                                            fallback: post.favoriteCount,
-                                          );
-                                      syncPostSaveIntent(
+                                      runWhenLoggedIn(
                                         ref,
-                                        postId: post.id,
-                                        isSaved: !isSaved,
-                                        bookmarkCount: isSaved
-                                            ? (bookmarkCount - 1)
-                                                  .clamp(0, 1 << 31)
-                                                  .toInt()
-                                            : bookmarkCount + 1,
-                                      );
-                                      _bookmarkAnimationController.forward(
-                                        from: 0,
+                                        context,
+                                        AuthGateReason.favorite,
+                                        () {
+                                          final bookmarkCount =
+                                              effectivePostBookmarkCount(
+                                                ref,
+                                                post.id,
+                                                fallback: post.favoriteCount,
+                                              );
+                                          syncPostSaveIntent(
+                                            ref,
+                                            postId: post.id,
+                                            isSaved: !isSaved,
+                                            bookmarkCount: isSaved
+                                                ? (bookmarkCount - 1)
+                                                      .clamp(0, 1 << 31)
+                                                      .toInt()
+                                                : bookmarkCount + 1,
+                                          );
+                                          _bookmarkAnimationController.forward(
+                                            from: 0,
+                                          );
+                                        },
                                       );
                                     },
                                     scaleAnimation: _bookmarkScaleAnimation,

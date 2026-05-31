@@ -1,25 +1,15 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/markdown/qwq_markdown.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
+import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 
-/// 统一投射入口：raw post map → [PostSummaryView]（DTO 驱动）。
-///
-/// 所有 mock / remote 数据均通过此函数归一化，下游 UI 消费 [PostSummaryView] 强类型字段。
-/// 表面 ID 见 [PostReadSurfaceId]（metadata: read_presentation_surfaces.yaml）。
-PostSummaryView projectPostMap(
-  Map<String, dynamic> raw, {
-  PostReadSurfaceId surfaceId = PostReadSurfaceId.feedCard,
-}) {
-  final dto = postBaseDtoFromMap(raw);
-  return PostSummaryView.fromDto(dto, surfaceId: surfaceId, wire: raw);
-}
-
-/// 自 [ContentRepository.getPost] 返回的 [ContentPostDetailPayload] 投射（优先于裸 Map）。
-ArticleDetailView projectArticleDetailViewFromPayload(
+/// 自 [ContentRepository.getPost] 返回的 [ContentPostDetailPayload] 投射出文章富渲染载荷。
+ContentArticleRender projectArticleDetailViewFromPayload(
   ContentPostDetailPayload payload, {
   required String fallbackArticleId,
 }) {
@@ -29,16 +19,33 @@ ArticleDetailView projectArticleDetailViewFromPayload(
   );
 }
 
-/// 文章详情投射：raw post map → [ArticleDetailView]（供 ArticleDetailPage 消费）
-ArticleDetailView projectArticleDetailView(
+/// 文章详情投射：raw post map → [ContentArticleRender]（富渲染载荷，挂载到
+/// [ContentSurfaceView.article]）。公共字段（作者/统计/标题/封面）由
+/// [ContentSurfaceViewMapper.fromDto] 同源承载，本投影只负责文档/分页/块/卡片。
+ContentArticleRender projectArticleDetailView(
   Map<String, dynamic> raw, {
   required String fallbackArticleId,
 }) {
-  final post = projectPostMap(raw, surfaceId: PostReadSurfaceId.detailArticle);
-  final images = (post.images ?? const <String>[])
-      .where((e) => e.isNotEmpty)
-      .toList(growable: false);
-  final body = post.body ?? '';
+  final dto = postBaseDtoFromMap(raw);
+  final read = PostReadProjectionFacade.presentationFor(
+    dto,
+    PostReadSurfaceId.detailArticle,
+    wire: raw,
+  );
+  final postTitle = read.title;
+  final body = read.body;
+  var images = dto.hasImages
+      ? dto.mediaImageUrls.where((e) => e.isNotEmpty).toList(growable: false)
+      : const <String>[];
+  if (dto.isArticleLike && dto.mediaCoverUrl.isNotEmpty && images.isEmpty) {
+    images = <String>[dto.mediaCoverUrl];
+  }
+  final coverFromDto = dto.mediaCoverUrl.isNotEmpty
+      ? dto.mediaCoverUrl
+      : (dto.primaryImageUrl.isNotEmpty ? dto.primaryImageUrl : '');
+  final thumbnailFromDto = dto.mediaThumbnailUrl.isNotEmpty
+      ? dto.mediaThumbnailUrl
+      : dto.primaryVisualUrl;
   final rawCards = (raw[ArticleDetailWireKeys.cards] is List)
       ? List<Object?>.from(raw[ArticleDetailWireKeys.cards] as List)
       : const <Object?>[];
@@ -49,7 +56,9 @@ ArticleDetailView projectArticleDetailView(
           title: card[ArticleCardWireKeys.title]?.toString() ?? '',
           body: card[ArticleCardWireKeys.body]?.toString() ?? '',
           layout: card[ArticleCardWireKeys.layout]?.toString() ?? 'full',
-          imageUrl: card[ArticleCardWireKeys.imageUrl]?.toString(),
+          imageUrl: resolveContentMediaUrl(
+            card[ArticleCardWireKeys.imageUrl]?.toString(),
+          ),
           caption: card[ArticleCardWireKeys.caption]?.toString(),
         ),
       )
@@ -60,13 +69,11 @@ ArticleDetailView projectArticleDetailView(
             (card.imageUrl?.isNotEmpty ?? false),
       )
       .toList(growable: false);
-  final coverImage = post.coverUrl?.isNotEmpty == true
-      ? post.coverUrl!
+  final coverImage = coverFromDto.isNotEmpty
+      ? coverFromDto
       : (images.isNotEmpty
             ? images.first
-            : (post.thumbnailUrl?.isNotEmpty == true
-                  ? post.thumbnailUrl!
-                  : ''));
+            : (thumbnailFromDto.isNotEmpty ? thumbnailFromDto : ''));
   final documentSource = _resolveArticleDocumentSource(
     raw: raw,
     cards: cards,
@@ -76,14 +83,14 @@ ArticleDetailView projectArticleDetailView(
       documentSource == ArticleDetailDocumentSource.markdown;
   final seedPages = _projectArticlePages(
     raw: raw,
-    postTitle: post.title ?? '',
+    postTitle: postTitle,
     body: body,
     coverImage: coverImage,
     cards: cards,
   );
   final document = _projectArticleDocument(
     raw: raw,
-    postTitle: post.title ?? '',
+    postTitle: postTitle,
     pages: seedPages,
   );
   final contentBlocks = _projectArticleContentBlocks(
@@ -94,48 +101,17 @@ ArticleDetailView projectArticleDetailView(
   );
   final pages = _projectArticlePages(
     raw: raw,
-    postTitle: (post.title ?? '').trim().isNotEmpty
-        ? post.title ?? ''
-        : document.title,
+    postTitle: postTitle.trim().isNotEmpty ? postTitle : document.title,
     body: body,
     coverImage: coverImage,
     cards: cards,
     document: hasMarkdownDocument ? document : null,
   );
-  final preferDocumentText =
-      documentSource != ArticleDetailDocumentSource.body &&
-      documentSource != ArticleDetailDocumentSource.empty;
-  final resolvedTitle = preferDocumentText
-      ? (document.title.trim().isNotEmpty
-            ? document.title.trim()
-            : (post.title ?? '').trim())
-      : ((post.title ?? '').trim().isNotEmpty
-            ? (post.title ?? '').trim()
-            : document.title.trim());
-  final resolvedBody = preferDocumentText
-      ? (document.body.trim().isNotEmpty ? document.body.trim() : body)
-      : (body.trim().isNotEmpty ? body : document.body.trim());
 
-  return ArticleDetailView(
-    id: post.id.isNotEmpty ? post.id : fallbackArticleId,
-    title: resolvedTitle,
-    description: resolvedBody,
-    contentHtml: resolvedBody,
-    date: post.createdAt,
-    author: ArticleAuthorView(
-      name: post.displayName,
-      avatar: post.avatarUrl,
-      isOfficial: raw[ArticleDetailWireKeys.isOfficial] == true,
-      badge: raw[ArticleDetailWireKeys.badge]?.toString(),
-    ),
+  return ContentArticleRender(
+    contentHtml: body,
     layoutMode: images.length > 1 ? 'carousel' : 'hero',
-    coverImage: coverImage,
     images: images,
-    stats: ArticleStatsView(
-      likes: post.likesCount,
-      comments: post.commentsCount,
-      bookmarks: post.savesCount,
-    ),
     contentBlocks: contentBlocks,
     cards: cards,
     document: document,
@@ -147,6 +123,8 @@ ArticleDetailView projectArticleDetailView(
       raw[ArticleDetailWireKeys.articleFontPreset]?.toString(),
     ),
     documentSource: documentSource,
+    isOfficial: raw[ArticleDetailWireKeys.isOfficial] == true,
+    badge: raw[ArticleDetailWireKeys.badge]?.toString(),
   );
 }
 
@@ -270,7 +248,7 @@ ArticleDocumentData _projectMarkdownArticleDocument(String markdown) {
     fontPreset: parsed.frontMatter.fontPreset.isNotEmpty
         ? parsed.frontMatter.fontPreset
         : 'clean',
-    coverImageUrl: parsed.frontMatter.coverImage,
+    coverImageUrl: resolveContentMediaUrl(parsed.frontMatter.coverImage),
   );
 }
 
@@ -309,12 +287,13 @@ ArticleDocumentData _projectArticleDocument({
           .toString()
           .trim();
       final text = (block[ArticleBlockWireKeys.text] ?? '').toString();
-      final imageUrl =
-          (block[ArticleBlockWireKeys.imagePath] ??
-                  block[ArticleBlockWireKeys.imageUrl] ??
-                  '')
-              .toString()
-              .trim();
+      final imageUrl = resolveContentMediaUrl(
+        (block[ArticleBlockWireKeys.imagePath] ??
+                block[ArticleBlockWireKeys.imageUrl] ??
+                '')
+            .toString()
+            .trim(),
+      );
       final imageLayout =
           (block[ArticleBlockWireKeys.imageLayout] ?? 'fullWidth')
               .toString()
@@ -400,7 +379,9 @@ ArticleDocumentData _projectArticleDocument({
           raw[ArticleDetailWireKeys.articleTemplate]?.toString() ?? 'gentle',
       fontPreset:
           raw[ArticleDetailWireKeys.articleFontPreset]?.toString() ?? 'clean',
-      coverImageUrl: raw[ArticleDetailWireKeys.coverUrl]?.toString() ?? '',
+      coverImageUrl: resolveContentMediaUrl(
+        raw[ArticleDetailWireKeys.coverUrl]?.toString(),
+      ),
     );
   }
   final buffer = StringBuffer();
@@ -438,7 +419,9 @@ ArticleDocumentData _projectArticleDocument({
         raw[ArticleDetailWireKeys.articleTemplate]?.toString() ?? 'gentle',
     fontPreset:
         raw[ArticleDetailWireKeys.articleFontPreset]?.toString() ?? 'clean',
-    coverImageUrl: raw[ArticleDetailWireKeys.coverUrl]?.toString() ?? '',
+    coverImageUrl: resolveContentMediaUrl(
+      raw[ArticleDetailWireKeys.coverUrl]?.toString(),
+    ),
   );
 }
 
@@ -455,9 +438,15 @@ List<ArticlePageData> _projectArticlePages({
   if (rawPages.isNotEmpty) {
     final pages = rawPages
         .whereType<Map>()
-        .map(
-          (entry) => ArticlePageData.fromMap(Map<String, dynamic>.from(entry)),
-        )
+        .map((entry) {
+          final pageMap = Map<String, dynamic>.from(entry);
+          return ArticlePageData.fromMap(pageMap).copyWith(
+            imageUrl: resolveContentMediaUrl(
+              pageMap['imageUrl']?.toString() ??
+                  pageMap['imagePath']?.toString(),
+            ),
+          );
+        })
         .where((page) => page.id.trim().isNotEmpty)
         .toList(growable: false);
     if (pages.isNotEmpty) {
@@ -530,9 +519,9 @@ List<ArticlePageData> _projectArticlePages({
           .toString()
           .trim();
       final text = (block[ArticleBlockWireKeys.text] ?? '').toString().trim();
-      final imagePath = (block[ArticleBlockWireKeys.imagePath] ?? '')
-          .toString()
-          .trim();
+      final imagePath = resolveContentMediaUrl(
+        (block[ArticleBlockWireKeys.imagePath] ?? '').toString().trim(),
+      );
       final imageLayout =
           (block[ArticleBlockWireKeys.imageLayout] ?? 'fullWidth')
               .toString()
@@ -786,9 +775,9 @@ List<ArticleContentBlockView> _projectArticleContentBlocks({
           .toString()
           .trim();
       final text = (block[ArticleBlockWireKeys.text] ?? '').toString().trim();
-      final imageUrl = (block[ArticleBlockWireKeys.imagePath] ?? '')
-          .toString()
-          .trim();
+      final imageUrl = resolveContentMediaUrl(
+        (block[ArticleBlockWireKeys.imagePath] ?? '').toString().trim(),
+      );
       final imageLayout =
           (block[ArticleBlockWireKeys.imageLayout] ?? 'fullWidth')
               .toString()

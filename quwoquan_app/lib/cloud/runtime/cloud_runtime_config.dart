@@ -1,10 +1,11 @@
 /// 云侧运行时配置（端云协同时使用）。
 ///
-/// 约定：alpha 先跑通单实例验证，beta 做本地端云联调，再切到 gamma/prod-gray/prod。
+/// 约定：alpha 先跑通单实例验证，beta 做本地端云联调，再切到 gamma/prod。
+/// 生产灰度属于 `prod` 语义下的 rollout stage，不额外占用环境枚举。
 class CloudRuntimeConfig {
   const CloudRuntimeConfig._();
 
-  /// App 运行环境：alpha / beta / gamma / prod-gray / prod。
+  /// App 运行环境：alpha / beta / gamma / prod。
   ///
   /// 通过 `--dart-define=APP_RUNTIME_ENV=...` 注入。
   static const String appRuntimeEnv = String.fromEnvironment(
@@ -17,28 +18,28 @@ class CloudRuntimeConfig {
   /// 通过 `--dart-define=CLOUD_GATEWAY_BASE_URL=...` 注入。
   static const String gatewayBaseUrl = String.fromEnvironment(
     'CLOUD_GATEWAY_BASE_URL',
-    defaultValue: 'http://127.0.0.1:18080',
+    defaultValue: 'http://127.0.0.1:17000',
   );
 
   /// 头像 CDN Base URL。展示 URL 由服务端返回，App 仅用于环境包审计与 beta 联调报告。
   static const String mediaAvatarCdnBaseUrl = String.fromEnvironment(
     'MEDIA_AVATAR_CDN_BASE_URL',
-    defaultValue: 'http://127.0.0.1:18088',
+    defaultValue: 'http://127.0.0.1:17100',
   );
 
   static const String mediaImageCdnBaseUrl = String.fromEnvironment(
     'MEDIA_IMAGE_CDN_BASE_URL',
-    defaultValue: 'http://127.0.0.1:18088',
+    defaultValue: 'http://127.0.0.1:17100',
   );
 
   static const String mediaVideoCdnBaseUrl = String.fromEnvironment(
     'MEDIA_VIDEO_CDN_BASE_URL',
-    defaultValue: 'http://127.0.0.1:18088',
+    defaultValue: 'http://127.0.0.1:17100',
   );
 
   static const String mediaUploadBaseUrl = String.fromEnvironment(
     'MEDIA_UPLOAD_BASE_URL',
-    defaultValue: 'http://127.0.0.1:18088',
+    defaultValue: 'http://127.0.0.1:17100',
   );
 
   /// CDN 主域名（用于判断 URL 是否属于本应用 CDN，启用图片处理参数）。
@@ -64,6 +65,12 @@ class CloudRuntimeConfig {
     defaultValue: '',
   );
 
+  /// 当前 prod rollout 诊断阶段，仅用于演练/观测，不参与环境枚举。
+  static const String appRolloutMode = String.fromEnvironment(
+    'APP_ROLLOUT_MODE',
+    defaultValue: '',
+  );
+
   /// 地图供应商（baidu / amap）。
   ///
   /// 通过 `--dart-define=MAP_PROVIDER=baidu|amap` 注入。
@@ -76,7 +83,13 @@ class CloudRuntimeConfig {
     return appRuntimeEnv == 'alpha' ||
         appRuntimeEnv == 'beta' ||
         appRuntimeEnv == 'gamma' ||
-        appRuntimeEnv == 'prod-gray' ||
         appRuntimeEnv == 'prod';
+  }
+
+  static bool get isValidRolloutMode {
+    return appRolloutMode.isEmpty ||
+        appRolloutMode == 'gray-initial' ||
+        appRolloutMode == 'carry-on' ||
+        appRolloutMode == 'full';
   }
 }

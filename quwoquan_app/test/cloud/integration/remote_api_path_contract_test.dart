@@ -441,7 +441,7 @@ void main() {
     test('createPost → POST /v1/content/posts', () async {
       try {
         await repo.createPost(
-          body: CreatePostRequestWire.fromMap({'type': 'moment'}),
+          body: CreatePostRequestWire.fromMap({'type': 'micro'}),
         );
       } catch (_) {}
       expect(log.last.method, 'POST');

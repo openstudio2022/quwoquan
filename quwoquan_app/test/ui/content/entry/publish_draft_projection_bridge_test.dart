@@ -26,16 +26,6 @@ void main() {
     );
 
     test(
-      'projectArticleDetailViewFromCreateEditorState returns view for initial draft',
-      () {
-        final state = CreateEditorState.initial();
-        final view = projectArticleDetailViewFromCreateEditorState(state);
-        expect(view.id, 'draft_preview');
-        expect(view.pages, isNotEmpty);
-      },
-    );
-
-    test(
       'postReadPreviewBundleFromCreateEditorState uses draftPreview surface',
       () {
         final state = CreateEditorState.initial().copyWith(title: 'NavTitle');

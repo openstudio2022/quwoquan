@@ -12,7 +12,7 @@ import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
@@ -456,7 +456,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
   String _rawIdentity(Map<String, dynamic> item) {
     return (item['contentIdentity'] ??
-            (item['type']?.toString() == 'moment' ? 'moment' : 'work'))
+            (item['type']?.toString() == 'micro' ? 'moment' : 'work'))
         .toString();
   }
 
@@ -469,8 +469,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         return 'video';
       case 'article':
         return 'note';
-      case 'moment':
-        return 'moment';
+      case 'micro':
+        return 'micro';
       default:
         return type;
     }
@@ -482,7 +482,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       if (d.identity == 'moment') return 'moment';
       return d.identity.isNotEmpty
           ? d.identity
-          : (entry.raw['type']?.toString() == 'moment' ? 'moment' : 'work');
+          : (entry.raw['type']?.toString() == 'micro' ? 'moment' : 'work');
     }
     return _rawIdentity(entry.raw);
   }
@@ -497,8 +497,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
           return 'video';
         case 'article':
           return 'note';
-        case 'moment':
-          return 'moment';
+        case 'micro':
+          return 'micro';
         default:
           return d.type;
       }
@@ -837,7 +837,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       route,
       extra: MediaViewerExtra(
         posts: viewerDtos
-            .map((dto) => PostSummaryView.fromDto(dto))
+            .map((dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()))
             .toList(growable: false),
         dtoPosts: viewerDtos,
         initialIndex: initialIndex,

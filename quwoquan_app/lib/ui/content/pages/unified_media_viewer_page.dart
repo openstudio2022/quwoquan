@@ -6,7 +6,7 @@ import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
 /// Immersive media viewer with engagement tracking.
@@ -43,23 +43,23 @@ class _UnifiedMediaViewerPageState
     super.dispose();
   }
 
-  ContentType _resolveContentType(PostSummaryView post) {
+  ContentType _resolveContentType(ContentSurfaceView post) {
     final cat = widget.extra.category;
-    if (cat == 'moment' || cat == 'profile_moment') return ContentType.moment;
+    if (cat == 'moment' || cat == 'profile_moment') return ContentType.micro;
     final typeStr = post.contentType;
     if (typeStr == 'video') return ContentType.video;
     if (typeStr == 'article') return ContentType.article;
-    if (typeStr == 'moment') return ContentType.moment;
-    return ContentType.photo;
+    if (typeStr == 'micro') return ContentType.micro;
+    return ContentType.image;
   }
 
   ContentType _resolveContentTypeFromDto(PostBaseDto dto) {
     final cat = widget.extra.category;
-    if (cat == 'moment' || cat == 'profile_moment') return ContentType.moment;
+    if (cat == 'moment' || cat == 'profile_moment') return ContentType.micro;
     if (dto is VideoPostDto) return ContentType.video;
     if (dto is ArticlePostDto) return ContentType.article;
-    if (dto is MomentPostDto) return ContentType.moment;
-    return ContentType.photo;
+    if (dto is MicroPostDto) return ContentType.micro;
+    return ContentType.image;
   }
 
   void _startTrackingInitialPost() {
@@ -95,11 +95,11 @@ class _UnifiedMediaViewerPageState
     } else if (widget.extra.posts.isNotEmpty &&
         index < widget.extra.posts.length) {
       final post = widget.extra.posts[index];
-      postId = post.id;
+      postId = post.postId;
       contentType = _resolveContentType(post);
-      authorId = post.authorId;
+      authorId = post.author.id;
       tags = post.tags;
-      totalImages = post.images?.length;
+      totalImages = post.images.length;
     } else {
       return;
     }

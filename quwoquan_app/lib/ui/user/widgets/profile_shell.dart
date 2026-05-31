@@ -743,12 +743,38 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                   onManagePersonas: personaManagementEnabled
                       ? () => context.push(AppRoutePaths.profilePersonas)
                       : null,
-                  onFollow: notifier.toggleFollow,
-                  onMessage: () =>
-                      context.push(AppRoutePaths.chatDetail(id: widget.userId)),
-                  onGreet: () => _showGreetDialog(context),
-                  onVoiceCall: () => _startCall(context, 'voice'),
-                  onVideoCall: () => _startCall(context, 'video'),
+                  onFollow: () => runWhenLoggedIn(
+                    ref,
+                    context,
+                    AuthGateReason.follow,
+                    notifier.toggleFollow,
+                  ),
+                  onMessage: () => runWhenLoggedIn(
+                    ref,
+                    context,
+                    AuthGateReason.openChat,
+                    () => context.push(
+                      AppRoutePaths.chatDetail(id: widget.userId),
+                    ),
+                  ),
+                  onGreet: () => runWhenLoggedIn(
+                    ref,
+                    context,
+                    AuthGateReason.sendMessage,
+                    () => _showGreetDialog(context),
+                  ),
+                  onVoiceCall: () => runWhenLoggedIn(
+                    ref,
+                    context,
+                    AuthGateReason.openChat,
+                    () => _startCall(context, 'voice'),
+                  ),
+                  onVideoCall: () => runWhenLoggedIn(
+                    ref,
+                    context,
+                    AuthGateReason.openChat,
+                    () => _startCall(context, 'video'),
+                  ),
                 ),
               ],
             ],

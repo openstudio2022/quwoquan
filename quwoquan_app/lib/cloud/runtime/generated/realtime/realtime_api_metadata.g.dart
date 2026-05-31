@@ -31,6 +31,16 @@ class RealtimeApiMetadata {
     'WebSocketUpgrade': 'GET',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'ChannelWebhook': 'public',
+    'GetRealtimeConfig': 'public',
+    'HealthCheck': 'public',
+    'LongPoll': 'required',
+    'Metrics': 'public',
+    'WebSocketUpgrade': 'required',
+  };
+
   static const String channelWebhookOperation = 'ChannelWebhook';
   static const String getRealtimeConfigOperation = 'GetRealtimeConfig';
   static const String healthCheckOperation = 'HealthCheck';

@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
@@ -197,9 +197,8 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                     .clamp(0, moments.length - 1);
                 final postViews = moments
                     .map(
-                      (dto) => PostSummaryView.fromDto(
+                      (dto) => ContentSurfaceViewMapper.fromDto(
                         dto,
-                        surfaceId: PostReadSurfaceId.profileMoments,
                         wire: dto.toMap(),
                       ),
                     )
@@ -253,9 +252,8 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                     .clamp(0, moments.length - 1);
                 final postViews = moments
                     .map(
-                      (dto) => PostSummaryView.fromDto(
+                      (dto) => ContentSurfaceViewMapper.fromDto(
                         dto,
-                        surfaceId: PostReadSurfaceId.profileMoments,
                         wire: dto.toMap(),
                       ),
                     )

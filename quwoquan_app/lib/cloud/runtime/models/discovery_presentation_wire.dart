@@ -2,8 +2,9 @@
 ///
 /// 替代 `ContentRepository.discoveryPresentationWireForPost` 既有的
 /// `Map<String, dynamic>?` 裸返回（R04）。对消费方暴露强类型 getter；
-/// 过渡期通过 [toLegacyRow] 兼容尚未迁移到 `ContentSurfaceView` 的 surface，
-/// 待 D1b 四 surface 接入统一 model 后移除 [toLegacyRow]。
+/// [toWireMap] 把底层 canonical wire row 透传给统一映射器
+/// [ContentSurfaceViewMapper.fromDto]（其 `tagRefs` / read-presentation 取数仍以
+/// wire map 为入参）。
 class DiscoveryPresentationWire {
   const DiscoveryPresentationWire(this._fields);
 
@@ -17,9 +18,9 @@ class DiscoveryPresentationWire {
 
   final Map<String, dynamic> _fields;
 
-  /// 内容标签（已去空白、去空）。
-  List<String> get tags {
-    final raw = _fields['tags'];
+  /// 内容标签引用（已去空白、去空）。
+  List<String> get tagRefs {
+    final raw = _fields['tagRefs'];
     if (raw is List) {
       return raw
           .map((item) => item.toString().trim())
@@ -35,8 +36,7 @@ class DiscoveryPresentationWire {
   /// 可见性（默认 public）。
   String get visibility => _fields['visibility']?.toString() ?? 'public';
 
-  /// 过渡期兼容：返回底层 wire row。
-  ///
-  /// 仅供尚未迁移到 `ContentSurfaceView` 的 surface 使用；统一 model 接入后移除。
-  Map<String, dynamic> toLegacyRow() => _fields;
+  /// 透传底层 canonical wire row，供统一映射器
+  /// [ContentSurfaceViewMapper.fromDto] 的 `wire` 入参消费。
+  Map<String, dynamic> toWireMap() => _fields;
 }

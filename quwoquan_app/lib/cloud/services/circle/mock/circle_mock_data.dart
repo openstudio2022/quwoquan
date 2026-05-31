@@ -496,7 +496,7 @@ class CircleMockData {
       'id': 'circle_post_moment_text_1',
       'postId': 'circle_post_moment_text_1',
       'circleId': 'circle_photo_01',
-      'type': 'moment',
+      'type': 'micro',
       'contentType': 'micro',
       'contentIdentity': 'moment',
       'authorId': 'u3',

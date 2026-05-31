@@ -41,6 +41,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
   ChewieController? _chewieController;
   bool _isInitialized = false;
   bool _hasError = false;
+  int _videoInitGeneration = 0;
 
   @override
   void initState() {
@@ -49,36 +50,69 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
   }
 
   @override
+  void didUpdateWidget(covariant VideoPlayerWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.videoUrl != oldWidget.videoUrl) {
+      _replaceVideoController();
+      return;
+    }
+    if (widget.autoPlay != oldWidget.autoPlay) {
+      _syncPlaybackWithAutoPlay();
+    }
+  }
+
+  @override
   void dispose() {
+    _videoInitGeneration += 1;
     _chewieController?.dispose();
     _controller?.dispose();
     super.dispose();
   }
 
+  void _disposeActiveControllers() {
+    _chewieController?.dispose();
+    _chewieController = null;
+    _controller?.dispose();
+    _controller = null;
+  }
+
+  void _replaceVideoController() {
+    _disposeActiveControllers();
+    setState(() {
+      _isInitialized = false;
+      _hasError = false;
+    });
+    _initializeVideo();
+  }
+
+  void _syncPlaybackWithAutoPlay() {
+    final controller = _controller;
+    if (!_isInitialized || controller == null) {
+      return;
+    }
+    if (widget.autoPlay) {
+      controller.play();
+    } else {
+      controller.pause();
+    }
+  }
+
   Future<void> _initializeVideo() async {
+    final generation = _videoInitGeneration + 1;
+    _videoInitGeneration = generation;
     try {
-      _controller = VideoPlayerController.networkUrl(
+      final controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.videoUrl),
       );
+      _controller = controller;
 
-      await _controller!.initialize();
+      await controller.initialize();
 
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-
-        // 通知父组件控制器已创建
-        widget.onControllerCreated?.call(_controller!);
-
-        // 如果设置了自动播放，则开始播放
-        if (widget.autoPlay) {
-          _controller!.play();
-        }
-
-        // 创建Chewie控制器
+      if (mounted &&
+          generation == _videoInitGeneration &&
+          identical(_controller, controller)) {
         _chewieController = ChewieController(
-          videoPlayerController: _controller!,
+          videoPlayerController: controller,
           autoPlay: widget.autoPlay,
           looping: false,
           showControls: widget.showControls,
@@ -92,9 +126,18 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
           ),
           placeholder: _buildVideoPlaceholder(),
         );
+        setState(() {
+          _isInitialized = true;
+        });
+
+        // 通知父组件控制器已创建
+        widget.onControllerCreated?.call(controller);
+
+        // 如果设置了自动播放，则开始播放
+        _syncPlaybackWithAutoPlay();
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generation == _videoInitGeneration) {
         setState(() {
           _hasError = true;
         });

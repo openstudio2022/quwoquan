@@ -19,7 +19,10 @@ class MockContentRepository implements ContentRepository {
           .map((item) => postBaseDtoFromMap(item.cast<String, dynamic>()))
           .toList(growable: false),
     );
-    return _mergePostSeeds(_discoverySeedPosts(), contractPosts);
+    if (contractPosts.isEmpty) {
+      return null;
+    }
+    return _mergePostSeeds(contractPosts, _discoverySeedPosts());
   }
 
   static List<PostBaseDto> _discoverySeedPosts() {
@@ -97,11 +100,10 @@ class MockContentRepository implements ContentRepository {
       'assistantUsePolicy': 'inherit',
       ...payloadMerge,
     };
-    final rawType = (merged['contentType'] ?? merged['type'] ?? 'micro')
+    final contentType = (merged['contentType'] ?? merged['type'] ?? 'micro')
         .toString();
-    final normalizedType = rawType == 'moment' ? 'micro' : rawType;
-    merged['contentType'] = normalizedType;
-    if (normalizedType == 'micro') {
+    merged['contentType'] = contentType;
+    if (contentType == 'micro') {
       merged['contentIdentity'] = merged['contentIdentity'] ?? 'moment';
       merged['identity'] = merged['identity'] ?? 'moment';
     } else {
@@ -762,9 +764,7 @@ class MockContentRepository implements ContentRepository {
     final itemIdentity =
         (item['contentIdentity'] ??
                 item['identity'] ??
-                ((itemType == 'micro' || item['type']?.toString() == 'moment')
-                    ? 'moment'
-                    : 'work'))
+                (itemType == 'micro' ? 'moment' : 'work'))
             .toString();
     final expectedIdentity = (identity ?? '').trim();
     final expectedType = _normalizeFeedType(type);
@@ -772,9 +772,6 @@ class MockContentRepository implements ContentRepository {
       return false;
     }
     if (expectedType != null && expectedType.isNotEmpty) {
-      if (expectedType == 'moment') {
-        return itemIdentity == 'moment';
-      }
       return itemType == expectedType;
     }
     return true;

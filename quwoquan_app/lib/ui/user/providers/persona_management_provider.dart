@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
@@ -116,6 +117,9 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     state = state.copyWith(isMutating: true, error: () => null);
     try {
       await _repo.activatePersona(subAccountId);
+      await ref
+          .read(authSessionControllerProvider.notifier)
+          .updateActiveSubAccount(subAccountId);
       await _reloadAfterMutation();
       await _track('activate_succeeded', <String, dynamic>{
         'subAccountId': subAccountId,

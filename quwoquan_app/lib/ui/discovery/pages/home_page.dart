@@ -20,7 +20,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/ui/discovery/widgets/unified_object_card.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
@@ -40,8 +40,8 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin {
   // 默认频道 = recommend（与 ContentUIConfig.homeChannels 首发推荐频道 id 对齐）。
-  static const String _defaultTab = 'recommend';
-  late String _activeTab;
+  static const String _defaultChannelId = 'recommend';
+  late String _activeChannelId;
 
   /// 频道顺序真相源 = homeChannelsProvider（端默认 + 远程覆盖），用于左右滑动切频道。
   List<String> _channelOrder() =>
@@ -53,7 +53,7 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   void initState() {
     super.initState();
-    _activeTab = _initialTabForRoute(widget.routeLocation);
+    _activeChannelId = _initialTabForRoute(widget.routeLocation);
   }
 
   @override
@@ -63,27 +63,27 @@ class _HomePageState extends ConsumerState<HomePage>
       return;
     }
     final routeTab = _routeDrivenTab(widget.routeLocation);
-    if (routeTab == null || routeTab == _activeTab) {
+    if (routeTab == null || routeTab == _activeChannelId) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
-        _activeTab = routeTab;
+        _activeChannelId = routeTab;
       });
     });
   }
 
   String _initialTabForRoute(String? location) {
-    return _routeDrivenTab(location) ?? _defaultTab;
+    return _routeDrivenTab(location) ?? _defaultChannelId;
   }
 
   String? _routeDrivenTab(String? location) {
     switch (location) {
       case AppRoutePaths.home:
-        return _defaultTab;
+        return _defaultChannelId;
       case '/following':
-        return HomePrimaryTabStrip.followingTabId;
+        return HomePrimaryTabStrip.followingChannelId;
       default:
         return null;
     }
@@ -91,7 +91,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   void _syncShellRouteForTab(String id) {
     final targetLocation = switch (id) {
-      HomePrimaryTabStrip.followingTabId => AppRoutePaths.home,
+      HomePrimaryTabStrip.followingChannelId => AppRoutePaths.home,
       _ => null,
     };
     final router = GoRouter.maybeOf(context);
@@ -106,9 +106,9 @@ class _HomePageState extends ConsumerState<HomePage>
     });
   }
 
-  void _handleTabChange(String id) {
-    if (_activeTab == id) return;
-    setState(() => _activeTab = id);
+  void _handleChannelChange(String id) {
+    if (_activeChannelId == id) return;
+    setState(() => _activeChannelId = id);
     _syncShellRouteForTab(id);
   }
 
@@ -122,7 +122,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   void _handleTabSwipe(TabSwipeDirection direction) {
     final order = _channelOrder();
-    final currentIndex = order.indexOf(_activeTab);
+    final currentIndex = order.indexOf(_activeChannelId);
     if (currentIndex < 0) {
       return;
     }
@@ -130,7 +130,7 @@ class _HomePageState extends ConsumerState<HomePage>
     if (nextIndex < 0 || nextIndex >= order.length) {
       return;
     }
-    _handleTabChange(order[nextIndex]);
+    _handleChannelChange(order[nextIndex]);
   }
 
   @override
@@ -142,10 +142,10 @@ class _HomePageState extends ConsumerState<HomePage>
     final isDark = ref.watch(isDarkProvider);
     final channels = ref.watch(homeChannelsProvider);
     // 守护远程覆盖后当前频道可能被移除：回退到第一个频道，避免空白页。
-    final effectiveActiveTab =
-        channels.any((channel) => channel.id == _activeTab)
-        ? _activeTab
-        : (channels.isNotEmpty ? channels.first.id : _activeTab);
+    final effectiveActiveChannelId =
+        channels.any((channel) => channel.id == _activeChannelId)
+        ? _activeChannelId
+        : (channels.isNotEmpty ? channels.first.id : _activeChannelId);
     final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final searchChromeColor = isDark ? bg : AppColors.primaryColor;
     final searchChromeSurface = AppChromeSurface.immersive;
@@ -201,8 +201,8 @@ class _HomePageState extends ConsumerState<HomePage>
                       horizontal: AppSpacing.feedContentHorizontal(context),
                     ),
                     child: HomePrimaryTabStrip(
-                      activeTab: effectiveActiveTab,
-                      onTabChange: _handleTabChange,
+                      activeChannelId: effectiveActiveChannelId,
+                      onChannelChanged: _handleChannelChange,
                       onHorizontalDragEnd: _handleTabSwipeDragEnd,
                       isDark: isDark,
                       channels: channels,
@@ -214,7 +214,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 child: TabSwipeSwitchRegion(
                   enabled: true,
                   onSwipe: _handleTabSwipe,
-                  child: _buildBody(isDark, channels, effectiveActiveTab),
+                  child: _buildBody(isDark, channels, effectiveActiveChannelId),
                 ),
               ),
             ],
@@ -225,15 +225,15 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   /// 按频道 template 路由到 Feed 模板组件（去硬编码 switch）；
-  /// feedTabId = channel.id（取数/气质文案/桶 key 真相源），template 驱动单列/多列/今日交集流。
+  /// channelId = channel.id（取数/气质文案/桶 key 真相源），template 驱动单列/多列/今日交集流。
   Widget _buildBody(
     bool isDark,
     List<HomeChannelConfig> channels,
-    String activeTab,
+    String activeChannelId,
   ) {
     HomeChannelConfig? channel;
     for (final candidate in channels) {
-      if (candidate.id == activeTab) {
+      if (candidate.id == activeChannelId) {
         channel = candidate;
         break;
       }
@@ -244,7 +244,7 @@ class _HomePageState extends ConsumerState<HomePage>
     return MomentSocialFeed(
       key: ValueKey<String>('home-feed-${channel.id}'),
       isDark: isDark,
-      feedTabId: channel.id,
+      channelId: channel.id,
       template: channel.template,
       onUserTap: _openUserProfile,
       onPostTap: (post, index, {feedPosts}) {
@@ -345,9 +345,8 @@ class _HomePageState extends ConsumerState<HomePage>
     );
     final postViews = viewerPosts
         .map(
-          (dto) => PostSummaryView.fromDto(
+          (dto) => ContentSurfaceViewMapper.fromDto(
             dto,
-            surfaceId: PostReadSurfaceId.immersive,
             wire: rawPostsById[dto.id]!.toDynamicMap(),
           ),
         )
@@ -451,7 +450,7 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
     final service = ref.read(visitRecorderServiceProvider);
     final ctx = AssistantOpenContext(
       source: AssistantSource.discovery,
-      tab: HomePrimaryTabStrip.featuredTabId,
+      tab: HomePrimaryTabStrip.featuredChannelId,
       visitTarget: target,
       experienceLevel: service.getExperience(target),
     );

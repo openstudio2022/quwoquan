@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
@@ -19,7 +20,7 @@ void main() {
 
       expect(
         item.avatarUrl,
-        'http://127.0.0.1:18088/media/avatar/conversation/conv_1/v2/hash.png?v=2',
+        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/conversation/conv_1/v2/hash.png?v=2',
       );
     });
 
@@ -35,7 +36,7 @@ void main() {
 
       expect(
         row.avatarUrl,
-        'http://127.0.0.1:18088/media/avatar/user/user_2/v1/profile.png',
+        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/user/user_2/v1/profile.png',
       );
     });
 
@@ -51,7 +52,7 @@ void main() {
 
       expect(
         item.senderAvatar,
-        'http://127.0.0.1:18088/media/avatar/user/user_2/v3/profile.png?v=3',
+        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/user/user_2/v3/profile.png?v=3',
       );
     });
   });

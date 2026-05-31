@@ -5,10 +5,10 @@ import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 void main() {
   group('PostReadProjectionFacade', () {
     test('subAccountId 与 authorId 保持同一真相源', () {
-      final dto = MomentPostDto.fromMap(<String, dynamic>{
+      final dto = MicroPostDto.fromMap(<String, dynamic>{
         '_id': 'p_canonical',
         'postId': 'p_canonical',
-        'type': 'moment',
+        'type': 'micro',
         'contentType': 'micro',
         'authorId': 'current_author',
         'displayName': 'User',
@@ -25,10 +25,10 @@ void main() {
     });
 
     test('presentationFor matches fromPostBase for feedCard', () {
-      final dto = MomentPostDto.fromMap(<String, dynamic>{
+      final dto = MicroPostDto.fromMap(<String, dynamic>{
         '_id': 'p1',
         'postId': 'p1',
-        'type': 'moment',
+        'type': 'micro',
         'contentType': 'micro',
         'authorId': 'a1',
         'displayName': 'User',
@@ -76,10 +76,10 @@ void main() {
 
   group('PostReadUiBundle', () {
     test('fromPost carries surface', () {
-      final dto = MomentPostDto.fromMap(<String, dynamic>{
+      final dto = MicroPostDto.fromMap(<String, dynamic>{
         '_id': 'p1',
         'postId': 'p1',
-        'type': 'moment',
+        'type': 'micro',
         'contentType': 'micro',
         'authorId': 'a1',
         'displayName': 'User',

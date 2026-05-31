@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
@@ -239,9 +238,11 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
           isLiked: isLiked,
           likedIds: state.likedCommentIds,
           isDark: isDark,
-          onLike: () => ref
-              .read(commentProviderFamily(widget.postId).notifier)
-              .toggleLike(comment.id),
+          onLike: () => runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+            ref
+                .read(commentProviderFamily(widget.postId).notifier)
+                .toggleLike(comment.id);
+          }),
           onReply: () {
             setState(() {
               _replyTo = CommentModel(
@@ -257,9 +258,12 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
                     .read(commentProviderFamily(widget.postId).notifier)
                     .deleteComment(comment.id)
               : null,
-          onReplyLike: (replyId) => ref
-              .read(commentProviderFamily(widget.postId).notifier)
-              .toggleLike(replyId),
+          onReplyLike: (replyId) =>
+              runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+                ref
+                    .read(commentProviderFamily(widget.postId).notifier)
+                    .toggleLike(replyId);
+              }),
         );
       },
     );

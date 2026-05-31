@@ -708,11 +708,21 @@ class _CircleShellState extends ConsumerState<CircleShell> {
                 state: state,
                 initialTab: CircleEditSettingsTab.settings,
               ),
-              onFollow: notifier.toggleFollow,
+              onFollow: () => runWhenLoggedIn(
+                ref,
+                context,
+                AuthGateReason.follow,
+                notifier.toggleFollow,
+              ),
               onJoinCircle:
                   _isMemberLike(state) || state.joinStatus == 'pending'
                   ? null
-                  : notifier.joinCircle,
+                  : () => runWhenLoggedIn(
+                      ref,
+                      context,
+                      AuthGateReason.joinCircle,
+                      notifier.joinCircle,
+                    ),
               onOpenChat: hasConversation
                   ? () => _openChat(context, circle!.conversationId!)
                   : null,

@@ -11,7 +11,7 @@ Map<String, MediaViewerPostWireRow> homeFollowingMediaViewerRaws({
     for (final item in viewerPosts)
       item.id: MediaViewerPostWireRow.fromDynamicMap(
         Map<String, dynamic>.from(
-          content.discoveryPresentationWireForPost(item.id)?.toLegacyRow() ??
+          content.discoveryPresentationWireForPost(item.id)?.toWireMap() ??
               item.toMap(),
         ),
       ),

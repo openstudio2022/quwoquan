@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
+import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
 
 Widget _wrapBubble({
   required ChatMessageDisplayItem message,
@@ -9,18 +12,20 @@ Widget _wrapBubble({
   VoidCallback? onTap,
   void Function(LongPressStartDetails)? onLongPressStart,
 }) {
-  return MaterialApp(
-    home: Scaffold(
-      body: SingleChildScrollView(
-        child: ChatMessageBubble(
-          message: message,
-          isRight: isRight,
-          bubbleColor: Colors.white,
-          textColor: Colors.black,
-          isSelectionMode: false,
-          isSelected: false,
-          onLongPressStart: onLongPressStart ?? (_) {},
-          onTap: onTap,
+  return ProviderScope(
+    child: MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: ChatMessageBubble(
+            message: message,
+            isRight: isRight,
+            bubbleColor: Colors.white,
+            textColor: Colors.black,
+            isSelectionMode: false,
+            isSelected: false,
+            onLongPressStart: onLongPressStart ?? (_) {},
+            onTap: onTap,
+          ),
         ),
       ),
     ),
@@ -56,6 +61,47 @@ void main() {
 
       expect(find.text('未知类型消息'), findsAtLeastNWidgets(1));
       expect(find.byType(ChatMessageBubble), findsOneWidget);
+    });
+
+    testWidgets('语音消息按时长映射气泡宽度', (tester) async {
+      final shortVoice = _message(
+        type: 'audio',
+        mediaUrl: 'https://cdn.example.com/1.m4a',
+        audioDurationMs: 1000,
+      );
+      await tester.pumpWidget(_wrapBubble(message: shortVoice, isRight: true));
+      await tester.pump();
+      final shortWidth = tester.getSize(find.byType(VoiceMessageBubble)).width;
+
+      final longVoice = _message(
+        id: 'msg_002',
+        type: 'audio',
+        mediaUrl: 'https://cdn.example.com/2.m4a',
+        audioDurationMs: 22000,
+      );
+      await tester.pumpWidget(_wrapBubble(message: longVoice, isRight: true));
+      await tester.pump();
+      final longWidth = tester.getSize(find.byType(VoiceMessageBubble)).width;
+
+      expect(longWidth, greaterThan(shortWidth));
+    });
+
+    testWidgets('撤回后的语音消息不再展示播放气泡', (tester) async {
+      final recalledVoice = _message(
+        type: 'audio',
+        status: 'recalled',
+        mediaUrl: 'https://cdn.example.com/1.m4a',
+        audioDurationMs: 1000,
+      );
+
+      await tester.pumpWidget(_wrapBubble(message: recalledVoice));
+      await tester.pump();
+
+      expect(find.byType(VoiceMessageBubble), findsNothing);
+      expect(
+        find.text(UITextConstants.chatPreviewRecalled),
+        findsAtLeastNWidgets(1),
+      );
     });
   });
 
@@ -135,6 +181,9 @@ ChatMessageDisplayItem _message({
   String senderName = '',
   String type = 'text',
   String content = '',
+  String status = 'sent',
+  String mediaUrl = '',
+  int audioDurationMs = 0,
 }) {
   return ChatMessageDisplayItem(
     id: id,
@@ -147,16 +196,16 @@ ChatMessageDisplayItem _message({
     senderSubAccountId: '',
     type: type,
     content: content,
-    status: 'sent',
+    status: status,
     timestampLabel: '2026-05-07T10:00:00.000Z',
     sentAtIso: '2026-05-07T10:00:00.000Z',
     isSelf: senderId == 'user_001',
     isRead: true,
-    mediaUrl: '',
+    mediaUrl: mediaUrl,
     imageUrl: '',
     thumbnailUrl: '',
-    audioDurationMs: 0,
-    audioWaveform: const <double>[],
+    audioDurationMs: audioDurationMs,
+    audioWaveform: const <double>[0.1, 0.4, 0.2, 0.8],
     tasks: const <ChatTaskCardEntry>[],
   );
 }

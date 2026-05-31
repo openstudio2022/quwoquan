@@ -40,18 +40,18 @@ void main() {
   group('DiscoveryPresentationWire 强类型封装 (R04 de-Map)', () {
     test('typed getter: tags / circleName / visibility', () {
       const wire = DiscoveryPresentationWire(<String, dynamic>{
-        'tags': <dynamic>[' 校园 ', '', '摄影'],
+        'tagRefs': <dynamic>[' 校园 ', '', '摄影'],
         'circleName': '  新东方校友圈 ',
         'visibility': 'circle',
       });
-      expect(wire.tags, <String>['校园', '摄影']);
+      expect(wire.tagRefs, <String>['校园', '摄影']);
       expect(wire.circleName, '新东方校友圈');
       expect(wire.visibility, 'circle');
     });
 
     test('缺省值: 空 row → 空标签/空圈名/public', () {
       const wire = DiscoveryPresentationWire(<String, dynamic>{});
-      expect(wire.tags, isEmpty);
+      expect(wire.tagRefs, isEmpty);
       expect(wire.circleName, '');
       expect(wire.visibility, 'public');
     });
@@ -59,16 +59,16 @@ void main() {
     test('fromRow(null) 返回 null', () {
       expect(DiscoveryPresentationWire.fromRow(null), isNull);
       expect(
-        DiscoveryPresentationWire.fromRow(<String, dynamic>{'tags': <String>[]}),
+        DiscoveryPresentationWire.fromRow(<String, dynamic>{'tagRefs': <String>[]}),
         isNotNull,
       );
     });
 
-    test('toLegacyRow 透传底层 row（过渡期兼容）', () {
+    test('toWireMap 透传底层 canonical wire row 给统一映射器', () {
       final row = <String, dynamic>{'shareCount': 9, 'circleName': 'c'};
       final wire = DiscoveryPresentationWire(row);
-      expect(wire.toLegacyRow()['shareCount'], 9);
-      expect(identical(wire.toLegacyRow(), row), isTrue);
+      expect(wire.toWireMap()['shareCount'], 9);
+      expect(identical(wire.toWireMap(), row), isTrue);
     });
   });
 }

@@ -25,6 +25,9 @@ enum ContentErrorCode {
   invalidMomentPayload,
   contentDeleted,
   circleDistributionForbidden,
+  reviewRatingRequired,
+  reviewPoiRequired,
+  reviewDuplicatePerPoi,
   storageWriteFailed,
   internalError,
   upstreamTimeout,
@@ -78,6 +81,12 @@ enum ContentErrorCode {
         return ContentErrorCode.contentDeleted;
       case 'CONTENT.USER.circle_distribution_forbidden':
         return ContentErrorCode.circleDistributionForbidden;
+      case 'CONTENT.USER.review_rating_required':
+        return ContentErrorCode.reviewRatingRequired;
+      case 'CONTENT.USER.review_poi_required':
+        return ContentErrorCode.reviewPoiRequired;
+      case 'CONTENT.USER.review_duplicate_per_poi':
+        return ContentErrorCode.reviewDuplicatePerPoi;
       case 'CONTENT.SYSTEM.storage_write_failed':
         return ContentErrorCode.storageWriteFailed;
       case 'CONTENT.SYSTEM.internal_error':
@@ -118,6 +127,9 @@ class ContentErrorMessages {
     ContentErrorCode.invalidMomentPayload: '微趣内容为空，正文/图片/视频至少填写一项',
     ContentErrorCode.contentDeleted: '内容已删除',
     ContentErrorCode.circleDistributionForbidden: '无权修改圈子分发关系',
+    ContentErrorCode.reviewRatingRequired: '口碑评分必填，请打 1–5 星',
+    ContentErrorCode.reviewPoiRequired: '口碑需绑定一个地点',
+    ContentErrorCode.reviewDuplicatePerPoi: '你已点评过该地点，请先删除原口碑再发布',
     ContentErrorCode.storageWriteFailed: '操作失败，请稍后重试',
     ContentErrorCode.internalError: '服务异常，请稍后重试',
     ContentErrorCode.upstreamTimeout: '请求超时，请检查网络后重试',
@@ -147,6 +159,9 @@ class ContentErrorMessages {
     ContentErrorCode.invalidMomentPayload: 'Moment payload is empty; at least body/image/video is required',
     ContentErrorCode.contentDeleted: 'Content has been deleted',
     ContentErrorCode.circleDistributionForbidden: 'Not allowed to modify circle distribution',
+    ContentErrorCode.reviewRatingRequired: 'Review rating is required (1–5 stars)',
+    ContentErrorCode.reviewPoiRequired: 'A review must be attached to a place',
+    ContentErrorCode.reviewDuplicatePerPoi: 'You already reviewed this place; delete the existing review first',
     ContentErrorCode.storageWriteFailed: 'Operation failed, please retry',
     ContentErrorCode.internalError: 'Service error, please try again later',
     ContentErrorCode.upstreamTimeout: 'Request timed out, please check your connection',

@@ -24,6 +24,11 @@ if [[ ! -f "$cfg" ]]; then
   echo "FAIL: app runtime config not found: $cfg" >&2
   exit 1
 fi
+topology_manifest="deploy/shared/environment_topology_manifest.yaml"
+if [[ ! -f "$topology_manifest" ]]; then
+  echo "FAIL: environment topology manifest not found: $topology_manifest" >&2
+  exit 1
+fi
 
 APP_RUNTIME_ENV="$env_name" bash agent_ops/deploy/shared/verify_cdn_domain_injection.sh
 
@@ -34,15 +39,20 @@ rm -rf "$out_dir"
 mkdir -p "$out_dir"
 cp "quwoquan_app/configs/default/app_runtime.yaml" "$out_dir/default_app_runtime.yaml"
 cp "$cfg" "$out_dir/app_runtime.yaml"
+cp "$topology_manifest" "$out_dir/environment_topology_manifest.yaml"
 
-python3 - "$env_name" "$cfg" "$out_dir/report.json" <<'PY'
+python3 - "$env_name" "$cfg" "$topology_manifest" "$out_dir/report.json" <<'PY'
 import json
 import re
 import sys
 from pathlib import Path
 
-env_name, cfg_path, report_path = sys.argv[1:4]
+env_name, cfg_path, topology_path, report_path = sys.argv[1:5]
 text = Path(cfg_path).read_text(encoding="utf-8")
+topology = json.loads(Path(topology_path).read_text(encoding="utf-8"))
+env_topology = ((topology.get("environments") or {}).get(env_name) or {})
+public_bases = env_topology.get("publicBases") or {}
+artifact_policy = ((env_topology.get("artifactPolicy") or {}).get("app") or {})
 
 def scalar(path):
     # Tiny YAML reader for the simple runtime config shape used here.
@@ -73,23 +83,46 @@ current_user_id = scalar("runtime.currentUserId")
 seed_manifest = scalar("seed.manifest")
 if runtime_env != env_name:
     raise SystemExit(f"runtime.appRuntimeEnv mismatch: {runtime_env} != {env_name}")
-if env_name == "alpha" and data_source != "mock":
-    raise SystemExit("alpha package must use mock data source")
-if env_name in {"beta", "gamma", "prod"} and data_source != "remote":
-    raise SystemExit(f"{env_name} package must use remote data source")
+expected_data_source = artifact_policy.get("dataSource")
+if expected_data_source and data_source != expected_data_source:
+    raise SystemExit(
+        f"{env_name} package dataSource mismatch: {data_source} != {expected_data_source}"
+    )
 if env_name in {"prod"} and ("test_fixtures" in text or "seedRefs" in text or "requiresSeedReset" in text):
     raise SystemExit(f"{env_name} app package config must not reference test fixtures or seed refs")
+expected_urls = {
+    "gatewayBaseUrl": public_bases.get("api", ""),
+    "realtimeBaseUrl": public_bases.get("realtime", ""),
+    "mediaAvatarCdnBaseUrl": public_bases.get("mediaAvatar", ""),
+    "mediaImageCdnBaseUrl": public_bases.get("mediaImage", ""),
+    "mediaVideoCdnBaseUrl": public_bases.get("mediaVideo", ""),
+    "mediaUploadBaseUrl": public_bases.get("mediaUpload", ""),
+}
 for label, value in {
     "gatewayBaseUrl": gateway,
+    "realtimeBaseUrl": realtime,
     "mediaAvatarCdnBaseUrl": avatar_cdn,
     "mediaImageCdnBaseUrl": image_cdn,
     "mediaVideoCdnBaseUrl": video_cdn,
     "mediaUploadBaseUrl": upload_base,
 }.items():
     if not (value.startswith("http://") or value.startswith("https://")):
-        raise SystemExit(f"{label} must include http/https scheme")
+        if label == "realtimeBaseUrl" and (value.startswith("ws://") or value.startswith("wss://")):
+            pass
+        else:
+            raise SystemExit(f"{label} must include http/https scheme")
+    expected = str(expected_urls.get(label, "")).strip()
+    if expected and value != expected:
+        raise SystemExit(f"{label} mismatch: {value} != {expected}")
 if env_name in {"prod"}:
-    forbidden = (".example", ".test", "127.0.0.1", "10.0.2.2", "192.168.", "mock-cdn.example.com")
+    forbidden = tuple(env_topology.get("forbiddenHostTokens") or ()) or (
+        ".example",
+        ".test",
+        "127.0.0.1",
+        "10.0.2.2",
+        "192.168.",
+        "mock-cdn.example.com",
+    )
     joined = "\n".join([gateway, realtime, avatar_cdn, image_cdn, video_cdn, upload_base])
     if any(token in joined for token in forbidden):
         raise SystemExit(f"{env_name} app package contains forbidden local/test media or gateway URL")
@@ -107,8 +140,15 @@ report = {
     "uploadBaseUrl": upload_base,
     "currentUserId": current_user_id,
     "seedManifest": seed_manifest,
+    "topologySchemaVersion": topology.get("schemaVersion"),
+    "artifactPolicy": artifact_policy,
+    "publicBases": expected_urls,
 }
 Path(report_path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
+
+if [[ "$env_name" == "prod" ]]; then
+  python3 quwoquan_app/scripts/env/verify_prod_package_purity.py >/dev/null
+fi
 
 echo "app env package prepared: $out_dir"

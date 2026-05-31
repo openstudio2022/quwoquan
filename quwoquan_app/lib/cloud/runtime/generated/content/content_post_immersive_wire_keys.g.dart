@@ -16,7 +16,7 @@ abstract final class ContentPostImmersiveWireKeys {
 
   static const String circleName = 'circleName';
 
-  static const String tags = 'tags';
+  static const String tagRefs = 'tagRefs';
 
   static const String visibility = 'visibility';
 

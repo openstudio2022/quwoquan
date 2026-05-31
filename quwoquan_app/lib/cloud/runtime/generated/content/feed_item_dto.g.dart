@@ -30,7 +30,7 @@ class FeedItemDto {
   final List<String>? circleNames;
   final String? circleId;
   final String? circleName;
-  final List<String>? tags;
+  final List<String>? tagRefs;
   final String? visibility;
   final String? summary;
   final String? authorBackgroundUrl;
@@ -69,7 +69,7 @@ class FeedItemDto {
     this.circleNames,
     this.circleId,
     this.circleName,
-    this.tags,
+    this.tagRefs,
     this.visibility,
     this.summary,
     this.authorBackgroundUrl,
@@ -86,7 +86,7 @@ class FeedItemDto {
     return FeedItemDto(
       id: m['postId']?.toString() ?? m['_id']?.toString() ?? '',
       type: m['contentType']?.toString() ?? m['category']?.toString() ?? '',
-      identity: m['contentIdentity']?.toString() ?? m['identity']?.toString() ?? ((m['contentType']?.toString() == 'micro' || m['contentType']?.toString() == 'moment') ? 'moment' : 'work'),
+      identity: m['contentIdentity']?.toString() ?? m['identity']?.toString() ?? (m['contentType']?.toString() == 'micro' ? 'moment' : 'work'),
       assistantUsePolicy: m['assistantUsePolicy']?.toString() ?? 'inherit',
       authorId: m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? '',
       displayName: m['authorNickname']?.toString() ?? m['nickname']?.toString() ?? m['username']?.toString() ?? m['displayName']?.toString() ?? '',
@@ -110,7 +110,7 @@ class FeedItemDto {
       circleNames: _parseStringList(m['circleNames']) ?? null,
       circleId: m['circleId']?.toString() ?? null,
       circleName: m['circleName']?.toString() ?? null,
-      tags: _parseStringList(m['tags']) ?? null,
+      tagRefs: _parseStringList(m['tagRefs']) ?? null,
       visibility: m['visibility']?.toString() ?? null,
       summary: m['summary']?.toString() ?? m['highlightText']?.toString() ?? null,
       authorBackgroundUrl: m['authorBackgroundUrl']?.toString() ?? null,
@@ -152,7 +152,7 @@ class FeedItemDto {
       'circleNames': circleNames,
       'circleId': circleId,
       'circleName': circleName,
-      'tags': tags,
+      'tagRefs': tagRefs,
       'visibility': visibility,
       'summary': summary,
       'authorBackgroundUrl': authorBackgroundUrl,
@@ -193,7 +193,7 @@ class FeedItemDto {
     List<String>? circleNames,
     String? circleId,
     String? circleName,
-    List<String>? tags,
+    List<String>? tagRefs,
     String? visibility,
     String? summary,
     String? authorBackgroundUrl,
@@ -232,7 +232,7 @@ class FeedItemDto {
       circleNames: circleNames ?? this.circleNames,
       circleId: circleId ?? this.circleId,
       circleName: circleName ?? this.circleName,
-      tags: tags ?? this.tags,
+      tagRefs: tagRefs ?? this.tagRefs,
       visibility: visibility ?? this.visibility,
       summary: summary ?? this.summary,
       authorBackgroundUrl: authorBackgroundUrl ?? this.authorBackgroundUrl,

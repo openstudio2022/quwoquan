@@ -25,7 +25,6 @@ import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/services/content/content_interaction_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
@@ -46,6 +45,8 @@ import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_sync_repository.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/auth/one_tap_login_channel.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/client_state_sync.dart';
@@ -228,6 +229,10 @@ final userDataProvider = NotifierProvider<UserDataNotifier, User?>(() {
 
 /// 当前用户 ID — 以 User 快照为准；环境包可显式注入测试/预置用户。
 final currentUserIdProvider = Provider<String>((ref) {
+  final authSession = ref.watch(authSessionControllerProvider);
+  if (authSession.activeSubAccountId.isNotEmpty) {
+    return authSession.activeSubAccountId;
+  }
   final profileUserId = ref.watch(userDataProvider)?.id;
   if (profileUserId != null && profileUserId.isNotEmpty) {
     return profileUserId;
@@ -240,6 +245,10 @@ final currentUserIdProvider = Provider<String>((ref) {
 /// 优先使用已加载用户快照里的 `ownerUserId`，否则回退到当前用户 id，
 /// 避免 remote 读链路在分身上下文尚未就绪时完全拿不到 `X-Client-User-Id`。
 final resolvedOwnerUserIdProvider = Provider<String>((ref) {
+  final authOwnerId = ref.watch(authSessionControllerProvider).ownerId.trim();
+  if (authOwnerId.isNotEmpty) {
+    return authOwnerId;
+  }
   final currentUser = ref.watch(userDataProvider);
   final ownerUserId =
       currentUser?.metadata?['ownerUserId']?.toString().trim() ?? '';
@@ -279,6 +288,9 @@ final appearanceSnapshotProvider = Provider<AppearanceSnapshot>((ref) {
 /// CloudHttpClient, ensuring every HTTP call is metered for L1 monitoring.
 final cloudHttpClientProvider = Provider<CloudHttpClient>((ref) {
   return CloudHttpClient(
+    authTokenProvider: ProviderBackedCloudAuthTokenProvider(
+      () => ref.read(authSessionControllerProvider).accessToken,
+    ),
     latencyObserver: (method, path, elapsedMs, statusCode) {
       AppLogService.instance.writeEvent(
         logType: AppLogType.perf,
@@ -1767,6 +1779,10 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   );
 });
 
+final oneTapLoginClientProvider = Provider<OneTapLoginClient>((ref) {
+  return MethodChannelOneTapLoginClient();
+});
+
 /// Invite Repository（邀请归因）
 final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
@@ -1827,19 +1843,6 @@ final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {
     mock: () => const MockUserProfileRepository(),
   );
 });
-
-/// ContentInteraction Repository（like/unlike/favorite/unfavorite）
-final contentInteractionRepositoryProvider =
-    Provider<ContentInteractionRepository>((ref) {
-      final mode = ref.watch(appDataSourceModeProvider);
-      return cloudRepositoryImplForMode(
-        mode,
-        remote: () => RemoteContentInteractionRepository(
-          httpClient: ref.watch(cloudHttpClientProvider),
-        ),
-        mock: MockContentInteractionRepository.new,
-      );
-    });
 
 /// Block Repository（拉黑/取消拉黑用户）
 final blockRepositoryProvider = Provider<BlockRepository>((ref) {

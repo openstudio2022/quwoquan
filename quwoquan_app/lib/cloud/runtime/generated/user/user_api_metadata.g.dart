@@ -61,6 +61,7 @@ class UserApiMetadata {
     'ListUserLikes': '/v1/users/{userId}/likes',
     'ListUserWorks': '/v1/users/{userId}/works',
     'LoginAnonymous': '/v1/auth/login/anonymous',
+    'LoginOneTap': '/v1/auth/login/one-tap',
     'LoginWithApple': '/v1/auth/login/apple',
     'LoginWithPhone': '/v1/auth/login/phone',
     'LoginWithWechat': '/v1/auth/login/wechat',
@@ -73,6 +74,7 @@ class UserApiMetadata {
     'RetirePersona': '/v1/user/personas/{subAccountId}/retire',
     'SearchSocialRelations': '/v1/user/search/social-relations',
     'SendGreetingRequest': '/v1/user/greeting-request',
+    'SendOtp': '/v1/auth/otp/send',
     'UnbindCredential': '/v1/owner/credentials/{credentialType}',
     'UnblockUser': '/v1/user/sub-accounts/{targetSubAccountId}/block',
     'UnfollowUser': '/v1/user/sub-accounts/{targetSubAccountId}/follow',
@@ -130,6 +132,7 @@ class UserApiMetadata {
     'ListUserLikes': 'GET',
     'ListUserWorks': 'GET',
     'LoginAnonymous': 'POST',
+    'LoginOneTap': 'POST',
     'LoginWithApple': 'POST',
     'LoginWithPhone': 'POST',
     'LoginWithWechat': 'POST',
@@ -142,6 +145,7 @@ class UserApiMetadata {
     'RetirePersona': 'POST',
     'SearchSocialRelations': 'GET',
     'SendGreetingRequest': 'POST',
+    'SendOtp': 'POST',
     'UnbindCredential': 'DELETE',
     'UnblockUser': 'DELETE',
     'UnfollowUser': 'DELETE',
@@ -152,6 +156,78 @@ class UserApiMetadata {
     'UpdatePrivacySettings': 'PATCH',
     'UpdateUserProfile': 'PATCH',
     'UpsertRecentSearch': 'PUT',
+  };
+
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'AcceptInvite': 'required',
+    'ActivatePersona': 'public',
+    'ApplyPersonaProfileSync': 'public',
+    'ApplyProposal': 'public',
+    'BindCredential': 'public',
+    'BlockUser': 'public',
+    'CancelGreetingRequest': 'public',
+    'ClearRecentSearches': 'required',
+    'ConfirmProposal': 'public',
+    'CreatePersona': 'required',
+    'DeleteEmptyPersona': 'public',
+    'DeleteRecentSearch': 'required',
+    'DismissContactDiscovery': 'public',
+    'FollowUser': 'required',
+    'GenerateInvite': 'required',
+    'GetActivePersonaContext': 'public',
+    'GetAppearanceSettings': 'public',
+    'GetCallSettings': 'public',
+    'GetInviteByCode': 'public',
+    'GetLatestContactDiscovery': 'required',
+    'GetMeProfile': 'required',
+    'GetNotificationSettings': 'public',
+    'GetPersonaLifecycleGuard': 'public',
+    'GetPersonaManagementSummary': 'public',
+    'GetPrivacySettings': 'public',
+    'GetRelationship': 'public',
+    'GetRelationshipCapability': 'public',
+    'GetSubAccountProfile': 'public',
+    'GetUserProfile': 'public',
+    'IgnoreGreetingRequest': 'public',
+    'InitiateContactDiscovery': 'required',
+    'ListBlockedUsers': 'public',
+    'ListCredentials': 'required',
+    'ListFollowers': 'public',
+    'ListFollowing': 'public',
+    'ListGreetingInbox': 'public',
+    'ListGreetingOutbox': 'public',
+    'ListMyInvites': 'required',
+    'ListPersonas': 'required',
+    'ListRecentSearches': 'required',
+    'ListUserLifeItems': 'public',
+    'ListUserLikes': 'public',
+    'ListUserWorks': 'public',
+    'LoginAnonymous': 'public',
+    'LoginOneTap': 'public',
+    'LoginWithApple': 'public',
+    'LoginWithPhone': 'public',
+    'LoginWithWechat': 'public',
+    'Logout': 'public',
+    'PullUserSync': 'required',
+    'RefreshToken': 'public',
+    'RegisterDevice': 'public',
+    'RejectProposal': 'public',
+    'ReplyGreetingRequest': 'public',
+    'RetirePersona': 'public',
+    'SearchSocialRelations': 'required',
+    'SendGreetingRequest': 'public',
+    'SendOtp': 'public',
+    'UnbindCredential': 'public',
+    'UnblockUser': 'public',
+    'UnfollowUser': 'public',
+    'UpdateAppearanceSettings': 'public',
+    'UpdateCallSettings': 'public',
+    'UpdateNotificationSettings': 'public',
+    'UpdatePersona': 'public',
+    'UpdatePrivacySettings': 'public',
+    'UpdateUserProfile': 'public',
+    'UpsertRecentSearch': 'required',
   };
 
   static const String acceptInviteOperation = 'AcceptInvite';
@@ -198,6 +274,7 @@ class UserApiMetadata {
   static const String listUserLikesOperation = 'ListUserLikes';
   static const String listUserWorksOperation = 'ListUserWorks';
   static const String loginAnonymousOperation = 'LoginAnonymous';
+  static const String loginOneTapOperation = 'LoginOneTap';
   static const String loginWithAppleOperation = 'LoginWithApple';
   static const String loginWithPhoneOperation = 'LoginWithPhone';
   static const String loginWithWechatOperation = 'LoginWithWechat';
@@ -210,6 +287,7 @@ class UserApiMetadata {
   static const String retirePersonaOperation = 'RetirePersona';
   static const String searchSocialRelationsOperation = 'SearchSocialRelations';
   static const String sendGreetingRequestOperation = 'SendGreetingRequest';
+  static const String sendOtpOperation = 'SendOtp';
   static const String unbindCredentialOperation = 'UnbindCredential';
   static const String unblockUserOperation = 'UnblockUser';
   static const String unfollowUserOperation = 'UnfollowUser';
@@ -380,6 +458,7 @@ class UserApiMetadata {
     });
   }
   static const String loginAnonymousPath = '/v1/auth/login/anonymous';
+  static const String loginOneTapPath = '/v1/auth/login/one-tap';
   static const String loginWithApplePath = '/v1/auth/login/apple';
   static const String loginWithPhonePath = '/v1/auth/login/phone';
   static const String loginWithWechatPath = '/v1/auth/login/wechat';
@@ -407,6 +486,7 @@ class UserApiMetadata {
   }
   static const String searchSocialRelationsPath = '/v1/user/search/social-relations';
   static const String sendGreetingRequestPath = '/v1/user/greeting-request';
+  static const String sendOtpPath = '/v1/auth/otp/send';
   static const String unbindCredentialPathTemplate = '/v1/owner/credentials/{credentialType}';
   static String unbindCredentialPath({required String credentialType}) {
     return _fillPath(unbindCredentialPathTemplate, <String, String>{

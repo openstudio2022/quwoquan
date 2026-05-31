@@ -32,7 +32,10 @@ class CreatePostRequestWire {
     this.title,
     this.body,
     this.summary,
-    this.tags,
+    this.tagRefs,
+    this.entityRefs,
+    this.rating,
+    this.reviewAspects,
     this.mediaUrls,
     this.coverUrl,
     this.articleMarkdown,
@@ -66,7 +69,10 @@ class CreatePostRequestWire {
   final String? title;
   final String? body;
   final String? summary;
-  final List<String>? tags;
+  final String? tagRefs;
+  final String? entityRefs;
+  final String? rating;
+  final String? reviewAspects;
   final List<String>? mediaUrls;
   final String? coverUrl;
   final String? articleMarkdown;
@@ -101,7 +107,10 @@ class CreatePostRequestWire {
     _mutationPutOpt(m, 'title', title);
     _mutationPutOpt(m, 'body', body);
     _mutationPutOpt(m, 'summary', summary);
-    if (tags != null) m['tags'] = tags!;
+    _mutationPutOpt(m, 'tagRefs', tagRefs);
+    _mutationPutOpt(m, 'entityRefs', entityRefs);
+    _mutationPutOpt(m, 'rating', rating);
+    _mutationPutOpt(m, 'reviewAspects', reviewAspects);
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
     _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
@@ -138,7 +147,10 @@ class CreatePostRequestWire {
       title: m['title']?.toString(),
       body: m['body']?.toString(),
       summary: m['summary']?.toString(),
-      tags: _mutationStringList(m['tags']),
+      tagRefs: m['tagRefs']?.toString(),
+      entityRefs: m['entityRefs']?.toString(),
+      rating: m['rating']?.toString(),
+      reviewAspects: m['reviewAspects']?.toString(),
       mediaUrls: _mutationStringList(m['mediaUrls']),
       coverUrl: m['coverUrl']?.toString(),
       articleMarkdown: m['articleMarkdown']?.toString(),
@@ -176,7 +188,10 @@ class UpdatePostRequestWire {
     this.title,
     this.body,
     this.summary,
-    this.tags,
+    this.tagRefs,
+    this.entityRefs,
+    this.rating,
+    this.reviewAspects,
     this.mediaUrls,
     this.coverUrl,
     this.articleMarkdown,
@@ -202,7 +217,10 @@ class UpdatePostRequestWire {
   final String? title;
   final String? body;
   final String? summary;
-  final List<String>? tags;
+  final String? tagRefs;
+  final String? entityRefs;
+  final String? rating;
+  final String? reviewAspects;
   final List<String>? mediaUrls;
   final String? coverUrl;
   final String? articleMarkdown;
@@ -229,7 +247,10 @@ class UpdatePostRequestWire {
     _mutationPutOpt(m, 'title', title);
     _mutationPutOpt(m, 'body', body);
     _mutationPutOpt(m, 'summary', summary);
-    if (tags != null) m['tags'] = tags!;
+    _mutationPutOpt(m, 'tagRefs', tagRefs);
+    _mutationPutOpt(m, 'entityRefs', entityRefs);
+    _mutationPutOpt(m, 'rating', rating);
+    _mutationPutOpt(m, 'reviewAspects', reviewAspects);
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
     _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
@@ -258,7 +279,10 @@ class UpdatePostRequestWire {
       title: m['title']?.toString(),
       body: m['body']?.toString(),
       summary: m['summary']?.toString(),
-      tags: _mutationStringList(m['tags']),
+      tagRefs: m['tagRefs']?.toString(),
+      entityRefs: m['entityRefs']?.toString(),
+      rating: m['rating']?.toString(),
+      reviewAspects: m['reviewAspects']?.toString(),
       mediaUrls: _mutationStringList(m['mediaUrls']),
       coverUrl: m['coverUrl']?.toString(),
       articleMarkdown: m['articleMarkdown']?.toString(),
@@ -389,7 +413,10 @@ class PromotePostToWorkRequestWire {
     this.contentType,
     this.title,
     this.summary,
-    this.tags,
+    this.tagRefs,
+    this.entityRefs,
+    this.rating,
+    this.reviewAspects,
     this.coverUrl,
     this.articleMarkdown,
     this.articleMarkdownVersion,
@@ -408,7 +435,10 @@ class PromotePostToWorkRequestWire {
   final String? contentType;
   final String? title;
   final String? summary;
-  final List<String>? tags;
+  final String? tagRefs;
+  final String? entityRefs;
+  final String? rating;
+  final String? reviewAspects;
   final String? coverUrl;
   final String? articleMarkdown;
   final String? articleMarkdownVersion;
@@ -428,7 +458,10 @@ class PromotePostToWorkRequestWire {
     _mutationPutOpt(m, 'contentType', contentType);
     _mutationPutOpt(m, 'title', title);
     _mutationPutOpt(m, 'summary', summary);
-    if (tags != null) m['tags'] = tags!;
+    _mutationPutOpt(m, 'tagRefs', tagRefs);
+    _mutationPutOpt(m, 'entityRefs', entityRefs);
+    _mutationPutOpt(m, 'rating', rating);
+    _mutationPutOpt(m, 'reviewAspects', reviewAspects);
     _mutationPutOpt(m, 'coverUrl', coverUrl);
     _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
     _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
@@ -450,7 +483,10 @@ class PromotePostToWorkRequestWire {
       contentType: m['contentType']?.toString(),
       title: m['title']?.toString(),
       summary: m['summary']?.toString(),
-      tags: _mutationStringList(m['tags']),
+      tagRefs: m['tagRefs']?.toString(),
+      entityRefs: m['entityRefs']?.toString(),
+      rating: m['rating']?.toString(),
+      reviewAspects: m['reviewAspects']?.toString(),
       coverUrl: m['coverUrl']?.toString(),
       articleMarkdown: m['articleMarkdown']?.toString(),
       articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),

@@ -16,14 +16,13 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
-import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_reader/hosts/article_detail_reader_adapter.dart';
 import 'package:quwoquan_app/ui/content/article_reader/hosts/article_reader_host_adapter.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_flip_host.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
-import 'package:quwoquan_app/ui/content/post_view_projection.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
@@ -45,8 +44,7 @@ class ArticleDetailPage extends ConsumerStatefulWidget {
 }
 
 class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
-  ArticleDetailView? _article;
-  PostReadUiBundle? _postReadBundle;
+  ContentSurfaceView? _surface;
   bool _isLoading = true;
   Object? _loadError;
 
@@ -73,14 +71,9 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
           .read(contentRepositoryProvider)
           .getPost(postId: widget.articleId);
       applyConfirmedInteractionPost(ref, detail.post);
-      final article = projectArticleDetailViewFromPayload(
+      final surface = ContentSurfaceViewMapper.fromArticleDetailPayload(
         detail,
         fallbackArticleId: widget.articleId,
-      );
-      final readBundle = PostReadUiBundle.fromPost(
-        detail.post,
-        PostReadSurfaceId.detailArticle,
-        wire: detail.mergedArticleWireMap,
       );
       if (!mounted) return;
       final snapshot = buildMediaViewerInteractionSnapshot(
@@ -96,8 +89,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         primeMediaViewerInteractionSnapshot(ref, snapshot);
       });
       setState(() {
-        _article = article;
-        _postReadBundle = readBundle;
+        _surface = surface;
         _isLoading = false;
         _loadError = null;
         _intersectionReasonText = IntersectionReasonChip.primaryText(
@@ -111,13 +103,13 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
             contentType: ContentType.article,
             referralSource: widget.referralSource,
             authorId: detail.post.authorId,
-            totalPages: article.pages.length,
+            totalPages: surface.article?.pages.length ?? 0,
             feedRequestId: widget.feedRequestId,
           );
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _postReadBundle = null;
+        _surface = null;
         _isLoading = false;
         _loadError = e;
       });
@@ -141,11 +133,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
     return formatCompactActionCount(n);
   }
 
-  String _formatArticleDate(String rawValue) {
-    final date = DateTime.tryParse(rawValue);
-    if (date == null) {
-      return rawValue;
-    }
+  String _formatArticleDate(DateTime date) {
     return '${date.year}年${context.l10n.monthDayTemplate(date.month, date.day)}';
   }
 
@@ -166,7 +154,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       );
     }
 
-    if (_article == null) {
+    if (_surface == null) {
       return AppScaffold(
         backgroundColor: background,
         navigationBar: AppNavigationBar(
@@ -190,24 +178,25 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       );
     }
 
-    final article = _article!;
+    final surface = _surface!;
+    final render = surface.article!;
     final postId = widget.articleId;
     final isLiked = effectivePostLiked(ref, postId);
     final isSaved = effectivePostSaved(ref, postId);
     final likesCount = effectivePostLikeCount(
       ref,
       postId,
-      fallback: article.stats.likes,
+      fallback: surface.stats.like,
     );
     final commentsCount = effectivePostCommentCount(
       ref,
       postId,
-      fallback: article.stats.comments,
+      fallback: surface.stats.comment,
     );
     final bookmarksCount = effectivePostBookmarkCount(
       ref,
       postId,
-      fallback: article.stats.bookmarks,
+      fallback: surface.stats.favorite,
     );
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return AppScaffold(
@@ -220,9 +209,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
               context.canPop() ? context.pop() : context.go(AppRoutePaths.home),
         ),
         middle: Text(
-          article.title.trim().isNotEmpty
-              ? article.title
-              : (_postReadBundle?.presentation.title ?? ''),
+          surface.title ?? '',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
@@ -263,8 +250,8 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _ArticleHeader(
-                      article: article,
-                      dateText: _formatArticleDate(article.date),
+                      surface: surface,
+                      dateText: _formatArticleDate(surface.createdAt),
                       intersectionReasonText: _intersectionReasonText,
                     ),
                     SizedBox(height: AppSpacing.interGroupMd),
@@ -275,10 +262,10 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                         final pages = resolvePaginatedArticlePages(
                           context: context,
                           constraints: constraints,
-                          document: article.document,
-                          template: article.template,
-                          fontPreset: article.fontPreset,
-                          fallbackPages: article.pages,
+                          document: render.document,
+                          template: render.template,
+                          fontPreset: render.fontPreset,
+                          fallbackPages: render.pages,
                           variant: ArticleCanvasVariant.detail,
                         );
                         final metrics = resolveArticleCanvasMetrics(
@@ -308,11 +295,11 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                               adapter: ArticleDetailReaderAdapter(
                                 ArticleReaderHostConfig(
                                   pages: pages,
-                                  template: article.template,
-                                  fontPreset: article.fontPreset,
+                                  template: render.template,
+                                  fontPreset: render.fontPreset,
                                   metrics: metrics,
                                   initialPage: 0,
-                                  coverUrl: article.coverImage,
+                                  coverUrl: surface.cover?.url ?? '',
                                   pagePadding: pagePadding,
                                 ),
                               ),
@@ -364,13 +351,20 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                             ? AppColors.iosAccent(context)
                             : CupertinoColors.label.resolveFrom(context),
                         onTap: () {
-                          syncPostLikeIntent(
+                          runWhenLoggedIn(
                             ref,
-                            postId: postId,
-                            isLiked: !isLiked,
-                            likeCount: isLiked
-                                ? (likesCount - 1).clamp(0, 1 << 31).toInt()
-                                : likesCount + 1,
+                            context,
+                            AuthGateReason.like,
+                            () {
+                              syncPostLikeIntent(
+                                ref,
+                                postId: postId,
+                                isLiked: !isLiked,
+                                likeCount: isLiked
+                                    ? (likesCount - 1).clamp(0, 1 << 31).toInt()
+                                    : likesCount + 1,
+                              );
+                            },
                           );
                         },
                       ),
@@ -383,13 +377,22 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                             ? CupertinoColors.systemYellow.resolveFrom(context)
                             : CupertinoColors.label.resolveFrom(context),
                         onTap: () {
-                          syncPostSaveIntent(
+                          runWhenLoggedIn(
                             ref,
-                            postId: postId,
-                            isSaved: !isSaved,
-                            bookmarkCount: isSaved
-                                ? (bookmarksCount - 1).clamp(0, 1 << 31).toInt()
-                                : bookmarksCount + 1,
+                            context,
+                            AuthGateReason.favorite,
+                            () {
+                              syncPostSaveIntent(
+                                ref,
+                                postId: postId,
+                                isSaved: !isSaved,
+                                bookmarkCount: isSaved
+                                    ? (bookmarksCount - 1)
+                                          .clamp(0, 1 << 31)
+                                          .toInt()
+                                    : bookmarksCount + 1,
+                              );
+                            },
                           );
                         },
                       ),
@@ -424,12 +427,12 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
 
 class _ArticleHeader extends StatelessWidget {
   const _ArticleHeader({
-    required this.article,
+    required this.surface,
     required this.dateText,
     this.intersectionReasonText,
   });
 
-  final ArticleDetailView article;
+  final ContentSurfaceView surface;
   final String dateText;
   final String? intersectionReasonText;
 
@@ -440,10 +443,11 @@ class _ArticleHeader extends StatelessWidget {
     final titleColor = CupertinoColors.label.resolveFrom(context);
     final bodyColor = CupertinoColors.secondaryLabel.resolveFrom(context);
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final badge = surface.article?.badge;
     final stats = <String>[
-      '${formatCompactActionCount(article.stats.likes)} 赞',
-      '${formatCompactActionCount(article.stats.comments)} 评论',
-      '${formatCompactActionCount(article.stats.bookmarks)} 收藏',
+      '${formatCompactActionCount(surface.stats.like)} 赞',
+      '${formatCompactActionCount(surface.stats.comment)} 评论',
+      '${formatCompactActionCount(surface.stats.favorite)} 收藏',
     ];
 
     return Container(
@@ -455,18 +459,18 @@ class _ArticleHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (article.coverImage.isNotEmpty) ...[
+          if (surface.cover != null) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
               child: AspectRatio(
                 aspectRatio: 16 / 10,
-                child: ArticleAdaptiveImage(imageUrl: article.coverImage),
+                child: ArticleAdaptiveImage(imageUrl: surface.cover!.url),
               ),
             ),
             SizedBox(height: AppSpacing.interGroupMd),
           ],
           Text(
-            article.title,
+            surface.title ?? '',
             style: TextStyle(
               color: titleColor,
               fontSize: AppTypography.xxl,
@@ -474,10 +478,10 @@ class _ArticleHeader extends StatelessWidget {
               height: 1.35, // ignore: verify_dart_semantic
             ),
           ),
-          if (article.description.trim().isNotEmpty) ...[
+          if (surface.body != null) ...[
             SizedBox(height: AppSpacing.intraGroupSm),
             Text(
-              article.description,
+              surface.body!,
               style: TextStyle(
                 color: bodyColor,
                 fontSize: AppTypography.base,
@@ -495,7 +499,7 @@ class _ArticleHeader extends StatelessWidget {
           SizedBox(height: AppSpacing.interGroupMd),
           Row(
             children: [
-              _ArticleAvatar(imageUrl: article.author.avatar),
+              _ArticleAvatar(imageUrl: surface.author.avatarUrl),
               SizedBox(width: AppSpacing.intraGroupSm),
               Expanded(
                 child: Column(
@@ -505,9 +509,9 @@ class _ArticleHeader extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            article.author.name.trim().isEmpty
+                            surface.author.displayName.trim().isEmpty
                                 ? context.l10n.anonymous
-                                : article.author.name,
+                                : surface.author.displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -517,9 +521,9 @@ class _ArticleHeader extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if ((article.author.badge ?? '').isNotEmpty) ...[
+                        if ((badge ?? '').isNotEmpty) ...[
                           SizedBox(width: AppSpacing.intraGroupXs),
-                          _ArticleBadge(label: article.author.badge!),
+                          _ArticleBadge(label: badge!),
                         ],
                       ],
                     ),

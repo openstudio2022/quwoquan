@@ -20,7 +20,7 @@ class PrototypeMockData {
     return [
       {
         'id': 'm4',
-        'type': 'moment',
+        'type': 'micro',
         'user': {
           'id': 'u4',
           'name': '李想',
@@ -55,7 +55,7 @@ class PrototypeMockData {
       },
       {
         'id': 'm1',
-        'type': 'moment',
+        'type': 'micro',
         'user': {
           'id': 'u1',
           'name': '你的皮炎有点辣',
@@ -90,7 +90,7 @@ class PrototypeMockData {
       },
       {
         'id': 'm2',
-        'type': 'moment',
+        'type': 'micro',
         'user': {
           'id': 'u2',
           'name': '仅分组可见',
@@ -120,7 +120,7 @@ class PrototypeMockData {
       },
       {
         'id': 'm3',
-        'type': 'moment',
+        'type': 'micro',
         'user': {
           'id': 'u3',
           'name': '原价帝吧',
@@ -682,14 +682,14 @@ class PrototypeMockData {
               'titleOrDescription': '发布了一条微趣',
               'likes': 1581,
               'workId': 'm4',
-              'workType': 'moment',
+              'workType': 'micro',
             },
             {
               'actorName': '你的皮炎有点辣',
               'titleOrDescription': '发布了一条微趣',
               'likes': 234,
               'workId': 'm1',
-              'workType': 'moment',
+              'workType': 'micro',
             },
             {
               'actorName': '墨韵',
@@ -741,7 +741,7 @@ class PrototypeMockData {
               'actorName': '李想',
               'titleOrDescription': '赞了你的微趣',
               'workId': 'm1',
-              'workType': 'moment',
+              'workType': 'micro',
             },
             {
               'actorName': '3 位趣友',

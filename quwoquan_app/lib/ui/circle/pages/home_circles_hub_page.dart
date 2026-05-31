@@ -25,7 +25,7 @@ import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -608,9 +608,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       extra: MediaViewerExtra(
         posts: viewerDtos
             .map(
-              (dto) => PostSummaryView.fromDto(
+              (dto) => ContentSurfaceViewMapper.fromDto(
                 dto,
-                surfaceId: PostReadSurfaceId.immersive,
                 wire: mediaRaws[dto.id]?.toDynamicMap() ?? dto.toMap(),
               ),
             )

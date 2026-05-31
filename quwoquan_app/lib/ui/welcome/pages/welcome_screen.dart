@@ -15,12 +15,29 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 /// 与 Figma 原型及趣我圈2026 WelcomeScreen 视觉、动效一致。
 /// 动效顺序：短暂留白 -> 花瓣绽放 -> 文案出现 -> 直接进入首页。
 class WelcomeScreen extends StatefulWidget {
-  const WelcomeScreen({super.key, required this.onFinish});
+  const WelcomeScreen({super.key, required this.onFinish, this.loginPrompt});
 
   final VoidCallback onFinish;
+  final WelcomeLoginPromptConfig? loginPrompt;
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class WelcomeLoginPromptConfig {
+  const WelcomeLoginPromptConfig({
+    required this.title,
+    required this.subtitle,
+    required this.onLogin,
+    required this.onContinueAsGuest,
+    this.countdownSeconds = 5,
+  });
+
+  final String title;
+  final String subtitle;
+  final FutureOr<void> Function() onLogin;
+  final FutureOr<void> Function() onContinueAsGuest;
+  final int countdownSeconds;
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen>
@@ -34,6 +51,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   late List<AnimationController> _petalControllers;
   late AnimationController _textController;
+  Timer? _loginPromptTimer;
+  bool _showLoginPrompt = false;
+  bool _completionHandled = false;
+  int _loginPromptRemainingSeconds = 5;
 
   @override
   void initState() {
@@ -59,7 +80,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       await _textController.forward();
       await Future<void>.delayed(_finalPause);
       if (!mounted) return;
-      widget.onFinish();
+      if (widget.loginPrompt == null) {
+        _finishWelcome();
+      } else {
+        _showLoginChoice();
+      }
     }
 
     runSequence();
@@ -67,6 +92,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   void dispose() {
+    _loginPromptTimer?.cancel();
     for (final c in _petalControllers) {
       c.dispose();
     }
@@ -92,7 +118,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           children: [
             _buildBackground(appearance),
             _buildMainContent(appearance),
-            _buildAssistantWhisper(appearance),
+            if (_showLoginPrompt)
+              _buildWelcomeLoginPrompt(appearance)
+            else
+              _buildAssistantWhisper(appearance),
           ],
         ),
       ),
@@ -318,5 +347,161 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildWelcomeLoginPrompt(WelcomeAppearance appearance) {
+    final prompt = widget.loginPrompt;
+    if (prompt == null) {
+      return const SizedBox.shrink();
+    }
+    return Positioned(
+      left: AppSpacing.lg,
+      right: AppSpacing.lg,
+      bottom: AppSpacing.xl,
+      child: SafeArea(
+        top: false,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          opacity: _showLoginPrompt ? 1 : 0,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.black.withValues(alpha: 0.18),
+                  blurRadius: AppSpacing.thirtySix,
+                  offset: const Offset(AppSpacing.zero, AppSpacing.ten),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.containerLg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    prompt.title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosTitle3,
+                      fontWeight: AppTypography.bold,
+                      color: AppColors.iosLabel(context),
+                      height: AppTypography.lineHeightCompact,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  Text(
+                    prompt.subtitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      color: AppColors.iosSecondaryLabel(context),
+                      height: AppSpacing.textLineHeightBody,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.interGroupMd),
+                  CupertinoButton(
+                    color: AppColors.primaryColor,
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.radiusTwenty,
+                    ),
+                    minimumSize: const Size(
+                      AppSpacing.minInteractiveSize,
+                      AppSpacing.buttonHeightLg,
+                    ),
+                    onPressed: _handleLoginTap,
+                    child: Text(
+                      UITextConstants.login,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosBody,
+                        fontWeight: AppTypography.semiBold,
+                        color: AppColors.white,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupXs),
+                  CupertinoButton(
+                    minimumSize: const Size(
+                      AppSpacing.minInteractiveSize,
+                      AppSpacing.minInteractiveSize,
+                    ),
+                    onPressed: _handleContinueAsGuest,
+                    child: Text(
+                      UITextConstants.welcomeLoginSkipWithCountdown(
+                        _loginPromptRemainingSeconds,
+                      ),
+                      style: TextStyle(
+                        fontSize: AppTypography.iosCallout,
+                        fontWeight: AppTypography.medium,
+                        color: AppColors.iosSecondaryLabel(context),
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showLoginChoice() {
+    final prompt = widget.loginPrompt;
+    if (prompt == null || _completionHandled) {
+      return;
+    }
+    setState(() {
+      _showLoginPrompt = true;
+      _loginPromptRemainingSeconds = prompt.countdownSeconds;
+    });
+    _loginPromptTimer?.cancel();
+    _loginPromptTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _completionHandled) {
+        timer.cancel();
+        return;
+      }
+      if (_loginPromptRemainingSeconds <= 1) {
+        timer.cancel();
+        unawaited(_handleContinueAsGuest());
+        return;
+      }
+      setState(() => _loginPromptRemainingSeconds--);
+    });
+  }
+
+  Future<void> _handleLoginTap() async {
+    final prompt = widget.loginPrompt;
+    if (prompt == null || _completionHandled) {
+      return;
+    }
+    _completionHandled = true;
+    _loginPromptTimer?.cancel();
+    await prompt.onLogin();
+  }
+
+  Future<void> _handleContinueAsGuest() async {
+    final prompt = widget.loginPrompt;
+    if (prompt == null || _completionHandled) {
+      return;
+    }
+    _completionHandled = true;
+    _loginPromptTimer?.cancel();
+    await prompt.onContinueAsGuest();
+  }
+
+  void _finishWelcome() {
+    if (_completionHandled) {
+      return;
+    }
+    _completionHandled = true;
+    widget.onFinish();
   }
 }

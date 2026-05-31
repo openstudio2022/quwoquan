@@ -41,6 +41,22 @@ class TagApiMetadata {
     'ValidateTagRefs': 'POST',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'InvertedObjects': 'public',
+    'ListDimensions': 'public',
+    'RelatedObjects': 'public',
+    'RelatedTags': 'public',
+    'ResolveTag': 'public',
+    'SearchByTags': 'public',
+    'SearchTags': 'public',
+    'SharedTags': 'public',
+    'SuggestTags': 'public',
+    'TagCooccurrence': 'public',
+    'TagFeedback': 'public',
+    'ValidateTagRefs': 'public',
+  };
+
   static const String invertedObjectsOperation = 'InvertedObjects';
   static const String listDimensionsOperation = 'ListDimensions';
   static const String relatedObjectsOperation = 'RelatedObjects';

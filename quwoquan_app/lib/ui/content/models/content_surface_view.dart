@@ -1,4 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/ui/content/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/article_document_models.dart';
+import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 
 /// 统一内容展示种类（媒体形态）。
 ///
@@ -77,6 +80,45 @@ class ContentSurfaceReferral {
   final String? feedRequestId;
 }
 
+/// 文章富渲染载荷（仅 article 类型有意义）。
+///
+/// 承载文章详情/沉浸阅读真正渲染所需的结构化内容：内容块、卡片、文档、分页、
+/// 排版模板与字体预设。翻页层（pageflip）继续消费其中的 [pages] / [document] /
+/// [contentBlocks] 子对象，几何/绘制真相源不变（rule 11/12）。
+///
+/// 作者/统计/标题/正文/封面等公共字段由外层 [ContentSurfaceView] 承载，本类不重复。
+class ContentArticleRender {
+  const ContentArticleRender({
+    this.contentHtml = '',
+    this.layoutMode = 'hero',
+    this.images = const <String>[],
+    this.contentBlocks = const <ArticleContentBlockView>[],
+    this.cards = const <ArticleCardView>[],
+    required this.document,
+    this.pages = const <ArticlePageData>[],
+    this.template = ArticleTemplatePreset.gentle,
+    this.fontPreset = ArticleFontPreset.clean,
+    this.documentSource = ArticleDetailDocumentSource.empty,
+    this.isOfficial = false,
+    this.badge,
+  });
+
+  final String contentHtml;
+
+  /// 'hero'（单图）或 'carousel'（多图）。
+  final String layoutMode;
+  final List<String> images;
+  final List<ArticleContentBlockView> contentBlocks;
+  final List<ArticleCardView> cards;
+  final ArticleDocumentData document;
+  final List<ArticlePageData> pages;
+  final ArticleTemplatePreset template;
+  final ArticleFontPreset fontPreset;
+  final ArticleDetailDocumentSource documentSource;
+  final bool isOfficial;
+  final String? badge;
+}
+
 /// 统一只读内容展示模型。
 ///
 /// 作为 feed / immersive / detail / share 四个消费 surface 的唯一只读真相源，
@@ -103,6 +145,7 @@ class ContentSurfaceView {
     this.tags = const <String>[],
     this.articleTemplate = '',
     this.articleFontPreset = '',
+    this.article,
     this.referral = const ContentSurfaceReferral(),
   });
 
@@ -133,15 +176,20 @@ class ContentSurfaceView {
   final String articleTemplate;
   final String articleFontPreset;
 
+  /// 文章富渲染载荷（仅 article 详情/沉浸阅读水合后非空）。
+  final ContentArticleRender? article;
+
   final ContentSurfaceReferral referral;
 
   bool get hasImages => images.isNotEmpty;
   bool get hasVideo => video != null;
   bool get hasIntersectionReasons => intersectionReasons.isNotEmpty;
+  bool get hasArticleRender => article != null;
 
   ContentSurfaceView copyWith({
     ContentSurfaceReferral? referral,
     List<IntersectionReason>? intersectionReasons,
+    ContentArticleRender? article,
   }) {
     return ContentSurfaceView(
       postId: postId,
@@ -160,6 +208,7 @@ class ContentSurfaceView {
       tags: tags,
       articleTemplate: articleTemplate,
       articleFontPreset: articleFontPreset,
+      article: article ?? this.article,
       referral: referral ?? this.referral,
     );
   }

@@ -406,7 +406,10 @@ class _CommentInputState extends ConsumerState<CommentInput> {
   /// 获取提示文本
   String _getHintText() {
     if (!widget.config.canUserComment) {
-      return widget.config.isUserLoggedIn
+      final loggedIn = ref
+          .read(authSessionControllerProvider)
+          .isAuthenticated;
+      return loggedIn
           ? UITextConstants.commentClosed
           : UITextConstants.needLogin;
     }
@@ -419,7 +422,7 @@ class _CommentInputState extends ConsumerState<CommentInput> {
   }
 
   /// 提交评论
-  void _onSubmit([String? text]) {
+  Future<void> _onSubmit([String? text]) async {
     final content = (text ?? _controller.text).trim();
 
     if (content.isEmpty) {
@@ -429,6 +432,12 @@ class _CommentInputState extends ConsumerState<CommentInput> {
     // 检查内容长度
     if (content.length > 500) {
       _showError(UITextConstants.commentTooLong);
+      return;
+    }
+
+    // 评论需要账号身份：未登录先经统一拦截器引导登录。
+    final allowed = await requireLogin(ref, context, AuthGateReason.comment);
+    if (!allowed) {
       return;
     }
 

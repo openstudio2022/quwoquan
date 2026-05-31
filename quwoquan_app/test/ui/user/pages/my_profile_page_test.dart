@@ -5,8 +5,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -217,6 +220,39 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   }
 }
 
+class _TestAuthSessionStore implements AuthSessionStore {
+  const _TestAuthSessionStore({required this.authenticated});
+
+  final bool authenticated;
+
+  @override
+  Future<StoredAuthSession> read() async {
+    return StoredAuthSession(
+      accessToken: authenticated ? 'access-token' : '',
+      refreshToken: authenticated ? 'refresh-token' : '',
+      ownerId: authenticated ? 'user_001' : '',
+      activeSubAccountId: authenticated ? 'user_001' : '',
+      accountState: authenticated ? 'active' : '',
+      identityOrigin: authenticated ? 'phone' : '',
+      installId: 'install-id',
+      manualLoggedOut: false,
+      launchPromptDismissed: !authenticated,
+    );
+  }
+
+  @override
+  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+
+  @override
+  Future<void> updateActiveSubAccount(String subAccountId) async {}
+
+  @override
+  Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> markLaunchPromptDismissed() async {}
+}
+
 void main() {
   setUp(() {
     HttpOverrides.global = _FakeHttpOverrides();
@@ -232,6 +268,9 @@ void main() {
           _ThrowingCapabilityRepository(),
         ),
         currentUserIdProvider.overrideWithValue('user_001'),
+        authSessionStoreProvider.overrideWithValue(
+          const _TestAuthSessionStore(authenticated: true),
+        ),
       ],
       child: const MaterialApp(home: MyProfilePage()),
     );
@@ -245,6 +284,9 @@ void main() {
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _ThrowingCapabilityRepository(),
+        ),
+        authSessionStoreProvider.overrideWithValue(
+          const _TestAuthSessionStore(authenticated: true),
         ),
         ...overrides,
       ],
@@ -265,6 +307,40 @@ void main() {
   }
 
   group('MyProfilePage — 我的主页数据加载 (A1)', () {
+    testWidgets('未登录态展示完整主页占位与登录按钮', (tester) async {
+      setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userProfileRepositoryProvider.overrideWithValue(
+              const MockUserProfileRepository(),
+            ),
+            relationshipCapabilityRepositoryProvider.overrideWithValue(
+              _ThrowingCapabilityRepository(),
+            ),
+            authSessionStoreProvider.overrideWithValue(
+              const _TestAuthSessionStore(authenticated: false),
+            ),
+          ],
+          child: const MaterialApp(home: MyProfilePage()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(UITextConstants.profileLoggedOutDisplayName),
+        findsOneWidget,
+      );
+      expect(find.text(UITextConstants.profileLoginNow), findsOneWidget);
+      expect(
+        find.text(UITextConstants.profileLoggedOutTimelineHint),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('进入后 displayName 非 "me"，展示真实昵称', (tester) async {
       setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);

@@ -149,6 +149,111 @@ void main() {
       expect(find.text(UITextConstants.chatVoiceHoldToTalk), findsOneWidget);
     });
 
+    testWidgets('语音按住松开发送 voice payload', (tester) async {
+      var startCount = 0;
+      var stopCount = 0;
+      ChatInputSubmitPayload? submitted;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                onRequestMicPermission: () async => true,
+                onStartRecord: () async {
+                  startCount++;
+                  return true;
+                },
+                onStopRecord: (_) async => stopCount++,
+                onSend: (payload) async {
+                  submitted = payload;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(TestKeys.chatInputVoiceToggleButton));
+      await tester.pump();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(TestKeys.chatInputVoiceHoldButton)),
+      );
+      await tester.pump();
+      expect(find.byKey(TestKeys.chatInputVoiceRecordHud), findsOneWidget);
+
+      await gesture.up();
+      await tester.pump();
+
+      expect(startCount, 1);
+      expect(stopCount, 1);
+      expect(submitted, isNotNull);
+      expect(submitted!.isVoiceMessage, isTrue);
+    });
+
+    testWidgets('语音上滑取消不会提交 payload', (tester) async {
+      var cancelCount = 0;
+      var sendCount = 0;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                onRequestMicPermission: () async => true,
+                onCancelRecord: () async => cancelCount++,
+                onSend: (_) async {
+                  sendCount++;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(TestKeys.chatInputVoiceToggleButton));
+      await tester.pump();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(TestKeys.chatInputVoiceHoldButton)),
+      );
+      await tester.pump();
+      await gesture.moveBy(Offset(0, -AppSpacing.buttonHeight * 2));
+      await tester.pump();
+      expect(find.text(UITextConstants.chatVoiceReleaseCancel), findsWidgets);
+
+      await gesture.up();
+      await tester.pump();
+
+      expect(cancelCount, 1);
+      expect(sendCount, 0);
+    });
+
+    testWidgets('compact 宽度下群聊输入栏不挤出 overflow', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 680));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                onSend: (_) async {},
+                showEmojiButton: true,
+                showXiaoquMentionButton: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(TestKeys.chatInputAtXiaoquButton), findsNothing);
+      expect(find.byKey(TestKeys.chatInputEmojiToggleButton), findsOneWidget);
+      expect(find.byKey(TestKeys.chatInputMoreButton), findsOneWidget);
+    });
+
     testWidgets('默认单行输入槽保持统一高度，多行输入可自然撑高', (tester) async {
       final controller = TextEditingController();
       addTearDown(controller.dispose);

@@ -17,6 +17,7 @@ class SettingsPage extends ConsumerWidget {
     final contentAccessState = ref.watch(personalContentAccessProvider);
     final snapshot = appearanceState.snapshot;
     final isDark = ref.watch(isDarkProvider);
+    final authSession = ref.watch(authSessionControllerProvider);
     final personaManagementEnabled = ref.watch(
       personaManagementFeatureFlagProvider,
     );
@@ -112,6 +113,33 @@ class SettingsPage extends ConsumerWidget {
                     ),
                   ),
                   SettingsInsetFormSectionDivider(isDark: isDark),
+                  if (authSession.isAuthenticated) ...<Widget>[
+                    _SettingsRow(
+                      icon: CupertinoIcons.person_crop_circle_badge_plus,
+                      label: UITextConstants.switchAccount,
+                      onTap: () =>
+                          _handleLogout(context, ref, navigateToLogin: true),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    _SettingsRow(
+                      icon: CupertinoIcons.square_arrow_right,
+                      label: UITextConstants.logout,
+                      onTap: () => _confirmLogout(context, ref),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                  ] else ...<Widget>[
+                    _SettingsRow(
+                      icon: CupertinoIcons.person_crop_circle_badge_checkmark,
+                      label: UITextConstants.profileLoginNow,
+                      onTap: () => context.push(
+                        AppRoutePaths.login(
+                          reason: AuthPromptReason.actionRequired.name,
+                          redirect: AppRoutePaths.settings,
+                        ),
+                      ),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                  ],
                   _SettingsRow(
                     icon: CupertinoIcons.lab_flask,
                     label: '开发者',
@@ -209,6 +237,59 @@ class SettingsPage extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  static Future<void> _confirmLogout(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text(UITextConstants.logoutConfirmTitle),
+        content: const Text(UITextConstants.logoutConfirmMessage),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text(UITextConstants.logoutThinkAgain),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text(UITextConstants.logoutConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      await _handleLogout(context, ref, navigateToLogin: true);
+    }
+  }
+
+  static Future<void> _handleLogout(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool navigateToLogin,
+  }) async {
+    final session = ref.read(authSessionControllerProvider);
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .logout(
+            refreshToken: session.refreshToken,
+            deviceId: session.installId,
+          );
+    } catch (_) {
+      // 本地退出优先保障用户可控；远端吊销失败由下次 refresh 兜底。
+    }
+    await ref.read(authSessionControllerProvider.notifier).clearForLogout();
+    if (!context.mounted || !navigateToLogin) {
+      return;
+    }
+    context.go(
+      AppRoutePaths.login(reason: AuthPromptReason.manualLoggedOut.name),
     );
   }
 }

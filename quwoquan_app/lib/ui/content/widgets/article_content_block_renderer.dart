@@ -1,8 +1,9 @@
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 
@@ -258,6 +259,7 @@ class ArticleAdaptiveImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedImageUrl = imageUrl.trim();
+    final imageCandidates = resolveContentMediaUrlCandidates(resolvedImageUrl);
     if (resolvedImageUrl.isEmpty) {
       return Container(color: CupertinoColors.systemGrey5.resolveFrom(context));
     }
@@ -268,17 +270,16 @@ class ArticleAdaptiveImage extends StatelessWidget {
     }
     if (resolvedImageUrl.startsWith('http://') ||
         resolvedImageUrl.startsWith('https://')) {
-      return CachedNetworkImage(
+      return AppCachedNetworkImage(
         imageUrl: resolvedImageUrl,
-        imageBuilder: (context, imageProvider) => Image(
-          image: imageProvider,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.high,
+        imageUrlCandidates: imageCandidates,
+        fit: BoxFit.cover,
+        placeholder: Container(
+          color: CupertinoColors.systemGrey5.resolveFrom(context),
         ),
-        placeholder: (context, url) =>
-            Container(color: CupertinoColors.systemGrey5.resolveFrom(context)),
-        errorWidget: (context, url, error) =>
-            Container(color: CupertinoColors.systemGrey5.resolveFrom(context)),
+        errorWidget: Container(
+          color: CupertinoColors.systemGrey5.resolveFrom(context),
+        ),
       );
     }
     return Image.file(

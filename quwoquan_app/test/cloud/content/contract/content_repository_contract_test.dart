@@ -43,7 +43,7 @@ void main() {
     test('createPost 返回创建结果', () async {
       final result = await repo.createPost(
         body: CreatePostRequestWire.fromMap({
-          'type': 'moment',
+          'type': 'micro',
           'body': 'test moment',
         }),
       );

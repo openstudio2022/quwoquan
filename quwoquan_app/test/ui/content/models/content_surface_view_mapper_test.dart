@@ -96,7 +96,7 @@ void main() {
         wire: <String, dynamic>{
           'articleTemplate': 'modern',
           'articleFontPreset': 'serif',
-          'tags': <String>['校园', '摄影'],
+          'tagRefs': <String>['校园', '摄影'],
         },
       );
 
@@ -111,10 +111,10 @@ void main() {
     });
 
     test('micro 帖 → kind.micro，仅正文，无媒体', () {
-      final dto = MomentPostDto.fromMap(<String, dynamic>{
+      final dto = MicroPostDto.fromMap(<String, dynamic>{
         '_id': 'micro1',
         'postId': 'micro1',
-        'type': 'moment',
+        'type': 'micro',
         'contentType': 'micro',
         'identity': 'moment',
         'authorId': 'a4',
@@ -138,10 +138,10 @@ void main() {
     });
 
     test('intersectionReasons 透传到统一 model', () {
-      final dto = MomentPostDto.fromMap(<String, dynamic>{
+      final dto = MicroPostDto.fromMap(<String, dynamic>{
         '_id': 'micro2',
         'postId': 'micro2',
-        'type': 'moment',
+        'type': 'micro',
         'contentType': 'micro',
         'identity': 'moment',
         'authorId': 'a5',
@@ -179,10 +179,10 @@ void main() {
     });
 
     test('referral 上下文透传（不影响展示字段）', () {
-      final dto = MomentPostDto.fromMap(<String, dynamic>{
+      final dto = MicroPostDto.fromMap(<String, dynamic>{
         '_id': 'micro3',
         'postId': 'micro3',
-        'type': 'moment',
+        'type': 'micro',
         'contentType': 'micro',
         'identity': 'moment',
         'authorId': 'a6',

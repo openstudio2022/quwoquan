@@ -48,7 +48,7 @@ void main() {
       expect(posts, isNotEmpty);
       expect(posts.length, 4);
       final types = posts.map((p) => p.type).toSet();
-      expect(types, containsAll(['photo', 'video', 'article', 'moment']));
+      expect(types, containsAll(['photo', 'video', 'article', 'micro']));
     });
 
     test('listUserWorks 返回作品集列表', () async {

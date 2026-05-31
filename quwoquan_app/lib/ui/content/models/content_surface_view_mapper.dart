@@ -1,7 +1,9 @@
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_presentation.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
+import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 
 /// 统一展示模型的唯一映射器：`PostBaseDto (+ wire)` → [ContentSurfaceView]。
 ///
@@ -21,9 +23,10 @@ class ContentSurfaceViewMapper {
     final title = read.title.trim().isEmpty ? null : read.title.trim();
     final body = read.body.trim().isEmpty ? null : read.body.trim();
 
-    final coverUrl = read.coverUrl.trim().isEmpty
+    final projectedCoverUrl = resolveContentMediaUrl(read.coverUrl);
+    final coverUrl = projectedCoverUrl.isEmpty
         ? dto.mediaCoverUrl
-        : read.coverUrl.trim();
+        : projectedCoverUrl;
     final cover = coverUrl.isEmpty
         ? null
         : ContentCoverRef(url: coverUrl, aspectRatio: dto.aspectRatio);
@@ -75,6 +78,27 @@ class ContentSurfaceViewMapper {
     );
   }
 
+  /// 文章详情/沉浸水合路径：从 [ContentPostDetailPayload] 构建带富渲染载荷的统一视图。
+  ///
+  /// 公共字段（作者/统计/标题/封面）走 [fromDto] 同源口径；文章块/卡片/文档/分页
+  /// 由 [projectArticleDetailViewFromPayload] 直接投影为 [ContentArticleRender] 并
+  /// 挂载到 [ContentSurfaceView.article]。
+  static ContentSurfaceView fromArticleDetailPayload(
+    ContentPostDetailPayload payload, {
+    required String fallbackArticleId,
+    ContentSurfaceReferral referral = const ContentSurfaceReferral(),
+  }) {
+    final wire = payload.mergedArticleWireMap;
+    final dto = postBaseDtoFromMap(wire);
+    final base = fromDto(dto, wire: wire, referral: referral);
+    return base.copyWith(
+      article: projectArticleDetailViewFromPayload(
+        payload,
+        fallbackArticleId: fallbackArticleId,
+      ),
+    );
+  }
+
   /// 媒体形态判别：仅用 `PostBaseDto` 的契约派生 getter（无 `is/as`）。
   static ContentSurfaceKind _kindFor(PostBaseDto dto) {
     if (dto.isVideoLike) {
@@ -90,7 +114,7 @@ class ContentSurfaceViewMapper {
   }
 
   static List<String> _tagsFrom(Map<String, dynamic>? wire) {
-    final raw = wire?['tags'];
+    final raw = wire?['tagRefs'];
     if (raw is List) {
       return raw.whereType<String>().toList(growable: false);
     }

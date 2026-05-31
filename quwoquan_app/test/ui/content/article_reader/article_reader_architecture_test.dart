@@ -90,7 +90,7 @@ void main() {
     );
   });
 
-  test('article reader deck does not expose legacy hard page flipping', () {
+  test('article reader deck does not expose deprecated hard page flipping', () {
     final appLib = Directory('lib').existsSync()
         ? Directory('lib')
         : Directory('quwoquan_app/lib');

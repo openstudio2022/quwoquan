@@ -98,24 +98,24 @@ enum SearchContentTypeFilter {
   article,
   image,
   video,
-  moment;
+  micro;
 
   String get wireValue => switch (this) {
     SearchContentTypeFilter.article => 'article',
     SearchContentTypeFilter.image => 'image',
     SearchContentTypeFilter.video => 'video',
-    SearchContentTypeFilter.moment => 'moment',
+    SearchContentTypeFilter.micro => 'micro',
   };
 
   String get label => switch (this) {
     SearchContentTypeFilter.article => '文章',
     SearchContentTypeFilter.image => '图片',
     SearchContentTypeFilter.video => '视频',
-    SearchContentTypeFilter.moment => '动态',
+    SearchContentTypeFilter.micro => '微趣',
   };
 
   String get identity => switch (this) {
-    SearchContentTypeFilter.moment => 'moment',
+    SearchContentTypeFilter.micro => 'moment',
     SearchContentTypeFilter.article ||
     SearchContentTypeFilter.image ||
     SearchContentTypeFilter.video => 'work',
@@ -125,7 +125,7 @@ enum SearchContentTypeFilter {
     SearchContentTypeFilter.article => 'article',
     SearchContentTypeFilter.image => 'image',
     SearchContentTypeFilter.video => 'video',
-    SearchContentTypeFilter.moment => 'micro',
+    SearchContentTypeFilter.micro => 'micro',
   };
 
   static SearchContentTypeFilter? fromWire(String raw) {
@@ -136,8 +136,8 @@ enum SearchContentTypeFilter {
         return SearchContentTypeFilter.image;
       case 'video':
         return SearchContentTypeFilter.video;
-      case 'moment':
-        return SearchContentTypeFilter.moment;
+      case 'micro':
+        return SearchContentTypeFilter.micro;
       default:
         return null;
     }

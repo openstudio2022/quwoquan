@@ -40,6 +40,21 @@ class NotificationApiMetadata {
     'StreamAppMessages': 'GET',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'AckAppMessage': 'public',
+    'CreateAppMessage': 'public',
+    'GetAppMessage': 'public',
+    'GetAppMessageUnreadCount': 'public',
+    'GetUnreadCount': 'public',
+    'ListAppMessages': 'public',
+    'ListNotifications': 'public',
+    'MarkAllAsRead': 'public',
+    'MarkAsRead': 'public',
+    'ReadAppMessage': 'public',
+    'StreamAppMessages': 'public',
+  };
+
   static const String ackAppMessageOperation = 'AckAppMessage';
   static const String createAppMessageOperation = 'CreateAppMessage';
   static const String getAppMessageOperation = 'GetAppMessage';

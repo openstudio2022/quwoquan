@@ -26,7 +26,8 @@ import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagemen
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_flip_host.dart';
 import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
-import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -356,7 +357,7 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
   }
 
   @override
-  Map<String, dynamic>? discoveryPresentationWireForPost(String postId) {
+  DiscoveryPresentationWire? discoveryPresentationWireForPost(String postId) {
     final isArticle = ContentMockData.discoveryArticleData.any(
       (item) => item.id == postId,
     );
@@ -364,7 +365,7 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
       final row = ContentMockData.discoveryArticleData.firstWhere(
         (item) => item.id == postId,
       );
-      return <String, dynamic>{
+      return DiscoveryPresentationWire.fromRow(<String, dynamic>{
         ...row.toDiscoveryWireMap(),
         'id': row.id,
         'type': 'article',
@@ -374,7 +375,7 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
         'cards': const <Map<String, dynamic>>[
           {'title': '第二页标题', 'body': '第二页正文'},
         ],
-      };
+      });
     }
     return super.discoveryPresentationWireForPost(postId);
   }
@@ -456,10 +457,8 @@ ArticlePostDto _articlePost() {
   );
 }
 
-MomentPostDto _textMoment({
-  List<IntersectionReason>? intersectionReasons,
-}) {
-  return MomentPostDto(
+MicroPostDto _textMoment({List<IntersectionReason>? intersectionReasons}) {
+  return MicroPostDto(
     id: 'moment-1',
     type: 'micro',
     identity: 'moment',
@@ -546,7 +545,7 @@ class _DeferredPostWorksViewerState extends State<_DeferredPostWorksViewer> {
       showTopNavigation: false,
       externalPosts: _posts,
       externalPostViews: _posts
-          .map(PostSummaryView.fromDto)
+          .map(ContentSurfaceViewMapper.fromDto)
           .toList(growable: false),
       rawPostsById: _posts.isEmpty
           ? const <String, MediaViewerPostWireRow>{}
@@ -560,6 +559,47 @@ class _DeferredPostWorksViewerState extends State<_DeferredPostWorksViewer> {
 void main() {
   setUp(() {
     HttpOverrides.global = _FakeHttpOverrides();
+  });
+
+  test('沉浸媒体滑动顺滑性静态契约', () {
+    final viewerSource = File(
+      'lib/ui/discovery/widgets/works_immersive_viewer.dart',
+    ).readAsStringSync();
+    final videoPlayerSource = File(
+      'lib/components/media/video/player/video_player_widget.dart',
+    ).readAsStringSync();
+
+    expect(
+      viewerSource,
+      contains('double _pageWidthForConstraints(BoxConstraints constraints)'),
+      reason: '图片横滑分页距离必须来自实际 stage 宽度，而不是全屏宽度。',
+    );
+    expect(
+      viewerSource,
+      contains('Duration _settleDuration({'),
+      reason: '图片释放吸附应根据距离/速度动态收敛，避免固定时长拖沓。',
+    );
+    expect(
+      viewerSource,
+      contains('precacheImage(CachedNetworkImageProvider(url), context)'),
+      reason: '图片横滑应预热相邻图，降低快速滑动时 placeholder 闪动。',
+    );
+    expect(
+      viewerSource,
+      contains('allowImplicitScrolling: true'),
+      reason: '视频横滑应允许 PageView 提前构建相邻页以降低黑屏概率。',
+    );
+    expect(
+      viewerSource,
+      contains('class _KeepAliveStage'),
+      reason: '视频相邻页构建后应保活，避免来回滑动反复初始化。',
+    );
+    expect(
+      videoPlayerSource,
+      contains('void didUpdateWidget(covariant VideoPlayerWidget oldWidget)'),
+      reason: '视频播放器必须响应 autoPlay 变化，同步切页后的播放/暂停状态。',
+    );
+    expect(videoPlayerSource, contains('_syncPlaybackWithAutoPlay();'));
   });
 
   testWidgets('精品沉浸流尾部显示加载哨兵并预取下一批内容', (tester) async {
@@ -655,6 +695,11 @@ void main() {
       findsNothing,
     );
     expect(switchedToHome, isFalse);
+
+    // 滚动翻页会经 trackSkip 懒创建 ContentBehaviorTracker（周期性 flush 定时器，
+    // 生命周期绑定 container.onDispose）。在测试体结束前显式 dispose container，
+    // 使定时器在 pending-timer 不变量校验前被取消，避免 "Timer still pending"。
+    container.dispose();
   });
 
   testWidgets('UnifiedMediaViewerPage 首帧后灌入互动快照且不抛 provider 生命周期异常', (
@@ -674,7 +719,9 @@ void main() {
             theme: ThemeData.dark(),
             home: UnifiedMediaViewerPage(
               extra: MediaViewerExtra(
-                posts: <PostSummaryView>[PostSummaryView.fromDto(post)],
+                posts: <ContentSurfaceView>[
+                  ContentSurfaceViewMapper.fromDto(post),
+                ],
                 dtoPosts: <PostBaseDto>[post],
                 initialIndex: 0,
                 category: 'photo',
@@ -745,7 +792,9 @@ void main() {
             theme: ThemeData.dark(),
             home: UnifiedMediaViewerPage(
               extra: MediaViewerExtra(
-                posts: <PostSummaryView>[PostSummaryView.fromDto(post)],
+                posts: <ContentSurfaceView>[
+                  ContentSurfaceViewMapper.fromDto(post),
+                ],
                 dtoPosts: <PostBaseDto>[post],
                 initialIndex: 0,
                 category: 'article',
@@ -820,7 +869,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -882,7 +931,7 @@ void main() {
           showTopNavigation: false,
           topChromeSafeInset: AppSpacing.twenty,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -908,7 +957,7 @@ void main() {
           showTopNavigation: false,
           topChromeSafeInset: AppSpacing.twenty,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -937,7 +986,7 @@ void main() {
           showTopNavigation: false,
           topChromeSafeInset: AppSpacing.twenty,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -971,7 +1020,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1080,7 +1129,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1130,7 +1179,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1181,11 +1230,11 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'moment',
+              'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
               'authorNickname': post.displayName,
@@ -1206,9 +1255,7 @@ void main() {
     expect(find.textContaining('今天风有点大'), findsOneWidget);
   });
 
-  testWidgets('沉浸 caption 接入交集理由位（与 feed 同口径，只读 displayText）', (
-    tester,
-  ) async {
+  testWidgets('沉浸 caption 接入交集理由位（与 feed 同口径，只读 displayText）', (tester) async {
     final post = _textMoment(
       intersectionReasons: <IntersectionReason>[
         IntersectionReason(
@@ -1225,11 +1272,11 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'moment',
+              'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
               'authorNickname': post.displayName,
@@ -1246,9 +1293,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(
-        const ValueKey<String>('works-caption-intersection-reason'),
-      ),
+      find.byKey(const ValueKey<String>('works-caption-intersection-reason')),
       findsOneWidget,
     );
     expect(find.text('你和 TA 都来自同一校园'), findsOneWidget);
@@ -1269,11 +1314,11 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'moment',
+              'type': 'micro',
               'contentType': 'micro',
               'authorId': post.authorId,
               'authorNickname': post.displayName,
@@ -1329,7 +1374,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
@@ -1366,7 +1411,7 @@ void main() {
         WorksImmersiveViewer(
           showWorksToolbar: true,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           initialImageIndex: 1,
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
@@ -1404,7 +1449,7 @@ void main() {
           showWorksToolbar: false,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           initialImageIndex: 0,
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
@@ -1463,7 +1508,7 @@ void main() {
           showWorksToolbar: false,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           initialImageIndex: 1,
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
@@ -1516,7 +1561,7 @@ void main() {
         WorksImmersiveViewer(
           showWorksToolbar: true,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1571,7 +1616,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1638,7 +1683,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1723,7 +1768,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1782,7 +1827,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -1854,7 +1899,7 @@ void main() {
           showWorksToolbar: false,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           initialImageIndex: 0,
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
@@ -1889,7 +1934,7 @@ void main() {
           showWorksToolbar: false,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
           onTapBack: () {
@@ -1936,7 +1981,7 @@ void main() {
                 showWorksToolbar: false,
                 showTopNavigation: false,
                 externalPosts: [post],
-                externalPostViews: [PostSummaryView.fromDto(post)],
+                externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
                 onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
                 onAssistantTap: () {},
                 onTapBack: () {
@@ -1976,7 +2021,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -2036,7 +2081,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -2116,7 +2161,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -2167,7 +2212,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -2224,7 +2269,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -2277,7 +2322,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -2369,7 +2414,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -2424,7 +2469,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -2474,7 +2519,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -2530,7 +2575,7 @@ void main() {
           showWorksToolbar: true,
           showTopNavigation: false,
           externalPosts: [post],
-          externalPostViews: [PostSummaryView.fromDto(post)],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,

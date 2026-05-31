@@ -1,47 +1,12 @@
-/// L1a Contract Tests: ContentInteractionRepository Mock 契约
+/// L1a Contract Tests: 内容互动相关 Mock 契约（Block / Report）。
 ///
-/// 守护：MockContentInteractionRepository 状态正确，不发 HTTP。
-/// 覆盖：like / unlike / favorite / unfavorite 状态变迁。
+/// 内容点赞/收藏窄接口已并入 [ContentReactionRepository]，其 like/favorite 行为
+/// 由 content_repository 契约测试与子接口契约测试覆盖。
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/services/content/content_interaction_repository.dart';
 
 void main() {
-  group('MockContentInteractionRepository', () {
-    late MockContentInteractionRepository repo;
-
-    setUp(() => repo = MockContentInteractionRepository());
-
-    test('like 添加到 likedPosts', () async {
-      await repo.like('post_1');
-      expect(repo.likedPosts.contains('post_1'), isTrue);
-    });
-
-    test('unlike 从 likedPosts 移除', () async {
-      await repo.like('post_1');
-      await repo.unlike('post_1');
-      expect(repo.likedPosts.contains('post_1'), isFalse);
-    });
-
-    test('favorite 添加到 favoritedPosts', () async {
-      await repo.favorite('post_2');
-      expect(repo.favoritedPosts.contains('post_2'), isTrue);
-    });
-
-    test('unfavorite 从 favoritedPosts 移除', () async {
-      await repo.favorite('post_2');
-      await repo.unfavorite('post_2');
-      expect(repo.favoritedPosts.contains('post_2'), isFalse);
-    });
-
-    test('多次 like 同一帖子不重复添加（Set 特性）', () async {
-      await repo.like('post_1');
-      await repo.like('post_1');
-      expect(repo.likedPosts.where((id) => id == 'post_1').length, equals(1));
-    });
-  });
-
   group('MockBlockRepository', () {
     test('blockUser 记录，isBlocked 返回 true', () async {
       final repo = _blockRepo();

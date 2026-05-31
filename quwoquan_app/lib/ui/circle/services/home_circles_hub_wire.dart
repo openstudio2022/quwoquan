@@ -32,14 +32,12 @@ CircleHubFeedPostEntry mergeCircleStoryEntry(
 String hubCircleStoryTypeLabel(Map<String, dynamic> item) {
   final type = (item['type'] ?? item['contentType'] ?? '').toString();
   switch (type) {
-    case 'photo':
     case 'image':
       return UITextConstants.discoveryTabPhoto;
     case 'video':
       return UITextConstants.discoveryTabVideo;
     case 'article':
       return UITextConstants.creationSubArticle;
-    case 'moment':
     case 'micro':
       final hasVideo = (item['videoUrl']?.toString().trim() ?? '').isNotEmpty;
       final imageUrls = item['imageUrls'];

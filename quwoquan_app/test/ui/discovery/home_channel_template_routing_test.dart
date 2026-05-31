@@ -23,7 +23,7 @@ const HomeChannelConfig _recommend = HomeChannelConfig(
   id: 'recommend',
   labelKey: 'home_tab_recommend',
   template: 'intersection_rail_masonry',
-  feedQuery: <String, String>{'category': 'moment', 'identity': 'moment'},
+  feedQuery: <String, String>{'category': 'micro', 'identity': 'moment'},
   moodCopyKey: 'home_mood_recommend',
   order: 1,
 );
@@ -76,16 +76,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(
-        find.byKey(HomePrimaryTabStrip.tabKey('following')),
+        find.byKey(HomePrimaryTabStrip.channelKey('following')),
         findsOneWidget,
       );
       expect(
-        find.byKey(HomePrimaryTabStrip.tabKey('recommend')),
+        find.byKey(HomePrimaryTabStrip.channelKey('recommend')),
         findsOneWidget,
       );
       // 默认 7 频道里的垂类不在本覆盖集合中，不应渲染。
-      expect(find.byKey(HomePrimaryTabStrip.tabKey('campus')), findsNothing);
-      expect(find.byKey(HomePrimaryTabStrip.tabKey('car')), findsNothing);
+      expect(find.byKey(HomePrimaryTabStrip.channelKey('campus')), findsNothing);
+      expect(find.byKey(HomePrimaryTabStrip.channelKey('car')), findsNothing);
     });
 
     testWidgets('默认激活 recommend → body 使用 intersection_rail_masonry 模板', (tester) async {
@@ -94,7 +94,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       final feed = tester.widget<MomentSocialFeed>(find.byType(MomentSocialFeed));
-      expect(feed.feedTabId, 'recommend');
+      expect(feed.channelId, 'recommend');
       expect(feed.template, 'intersection_rail_masonry');
     });
 
@@ -104,7 +104,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       final feed = tester.widget<MomentSocialFeed>(find.byType(MomentSocialFeed));
-      expect(feed.feedTabId, 'following');
+      expect(feed.channelId, 'following');
       expect(feed.template, 'single_column_relations');
     });
   });

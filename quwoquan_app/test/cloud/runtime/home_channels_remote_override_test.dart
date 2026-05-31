@@ -12,7 +12,7 @@ void main() {
               'label_key': 'home_tab_recommend',
               'template': 'intersection_rail_masonry',
               'feed_query': <String, Object?>{
-                'category': 'moment',
+                'category': 'micro',
                 'identity': 'moment',
               },
               'mood_copy_key': 'home_mood_recommend',
@@ -39,7 +39,7 @@ void main() {
       ]);
       final recommend = channels.firstWhere((c) => c.id == 'recommend');
       expect(recommend.template, 'intersection_rail_masonry');
-      expect(recommend.feedQuery['category'], 'moment');
+      expect(recommend.feedQuery['category'], 'micro');
       expect(recommend.feedQuery['identity'], 'moment');
       expect(recommend.moodCopyKey, 'home_mood_recommend');
     });
