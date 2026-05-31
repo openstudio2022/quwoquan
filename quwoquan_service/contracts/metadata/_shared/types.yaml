@@ -36,6 +36,8 @@ enums:
   MediaAssetSourceKind: [user_upload, ai_generated, cold_start_crawl, remote_import]
   UserStatus: [active, suspended, deleted]
   Gender: [male, female, other, unspecified]
+  # 个人主页「生活」Tab 子分类：足迹/书影音/味蕾/爱物
+  LifeItemCategory: [footprint, soul, taste, private]
   ConversationType: [direct, group, circle, encrypted]
   MessageType: [text, image, video, audio, file, card, system, assistant_reply]
   MessageStatus: [sent, delivered, read, recalled]

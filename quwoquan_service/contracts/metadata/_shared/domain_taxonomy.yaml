@@ -4,6 +4,8 @@ description: |
   统一领域标签体系。圈子频道、个人助理领域路由、推荐场景、内容标签
   共享同一套领域 ID。
   唯一真相：本文件。codegen 生成 Go DomainTag 枚举 + Dart DomainTaxonomy 类。
+  user_tag_ref 桥接到用户兴趣标签锚点，统一使用路径制 tagRef（唯一标签真相源
+  quwoquan_data/publish/v1/tags），不再引用已废弃的扁平 tag_taxonomy.yaml id。
 
 domains:
   - id: travel
@@ -15,7 +17,7 @@ domains:
     sub_categories: ["城市", "露营", "异域", "攻略", "徒步", "自驾"]
     assistant_domain_ids: [travel_planning, travel_transport]
     recommendation_scenario: circle_discovery
-    user_tag_ref: interest_travel
+    user_tag_ref: Topic/旅行
 
   - id: local_life
     label: { zh: "美食", en: "Food & Local" }
@@ -26,7 +28,7 @@ domains:
     sub_categories: ["探店", "烹饪", "茶酒", "咖啡", "烘焙", "团购"]
     assistant_domain_ids: [local_life]
     recommendation_scenario: circle_discovery
-    user_tag_ref: interest_food
+    user_tag_ref: Topic/美食餐饮
 
   - id: health_wellness
     label: { zh: "运动", en: "Sports & Health" }
@@ -37,7 +39,7 @@ domains:
     sub_categories: ["健身", "户外", "球类", "养生", "竞技", "瑜伽"]
     assistant_domain_ids: [health_wellness]
     recommendation_scenario: circle_discovery
-    user_tag_ref: interest_sports
+    user_tag_ref: Topic/运动
 
   - id: tech
     label: { zh: "科技", en: "Technology" }
@@ -48,7 +50,7 @@ domains:
     sub_categories: ["数码", "AI", "编程", "智能", "航天", "开源"]
     assistant_domain_ids: [knowledge_general, shopping_decision]
     recommendation_scenario: circle_discovery
-    user_tag_ref: interest_tech
+    user_tag_ref: Topic/科技
 
   - id: education
     label: { zh: "校园", en: "Education & Campus" }
@@ -69,7 +71,7 @@ domains:
     sub_categories: ["穿搭", "家居", "萌宠", "情感", "亲子", "手账"]
     assistant_domain_ids: [emotion_companion, shopping_decision]
     recommendation_scenario: circle_discovery
-    user_tag_ref: interest_home
+    user_tag_ref: Topic/家居生活
 
   - id: social_meet
     label: { zh: "遇见", en: "Social & Meet" }
@@ -90,7 +92,7 @@ domains:
     sub_categories: ["艺术", "影像", "文学", "记录", "设计", "哲学"]
     assistant_domain_ids: [knowledge_general]
     recommendation_scenario: circle_discovery
-    user_tag_ref: interest_art
+    user_tag_ref: Topic/艺术创作
 
   - id: automotive
     label: { zh: "车友", en: "Automotive" }
@@ -111,7 +113,7 @@ domains:
     sub_categories: ["基金", "股票", "保险", "理财", "行业"]
     assistant_domain_ids: [finance_consumer]
     recommendation_scenario: circle_discovery
-    user_tag_ref: interest_finance
+    user_tag_ref: Topic/金融理财
 
   - id: fortune
     label: { zh: "星座", en: "Fortune & Astrology" }

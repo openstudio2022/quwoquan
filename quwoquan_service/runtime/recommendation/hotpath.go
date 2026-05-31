@@ -66,10 +66,11 @@ type SignalProcessor interface {
 // pipeline reads and atomic multi-key operations without cross-slot errors.
 //
 // Actual key format (cluster-safe):
-//   rec:session_signals:{<userId>}:<sessionId>  → hash   TTL 1800s
-//   rec:exposed:{<userId>}:<sessionId>          → set    TTL 1800s
-//   rec:negative:{<userId>}:<sessionId>         → set    TTL 86400s
-//   rec:realtime_interest:{<userId>}:<sessionId>→ string TTL 1800s
+//
+//	rec:session_signals:{<userId>}:<sessionId>  → hash   TTL 1800s
+//	rec:exposed:{<userId>}:<sessionId>          → set    TTL 1800s
+//	rec:negative:{<userId>}:<sessionId>         → set    TTL 86400s
+//	rec:realtime_interest:{<userId>}:<sessionId>→ string TTL 1800s
 //
 // In standalone mode Redis ignores the braces and treats the key verbatim.
 const (
@@ -102,6 +103,10 @@ type BehaviorSignal struct {
 	FeedRequestID   string    `json:"feedRequestId,omitempty"`
 	Position        int       `json:"position,omitempty"`
 	CommentLength   int       `json:"commentLength,omitempty"`
+	// 交集转化归因（S6）：触发该行为的交集维度（identity/location/content/interest/relationship）
+	// 与路径制 tagRef 锚点（唯一真相源 publish/v1/tags），供推荐回流与交集转化漏斗按维度/tagRef 下钻。
+	IntersectionDimension string   `json:"intersectionDimension,omitempty"`
+	IntersectionTagRefs   []string `json:"intersectionTagRefs,omitempty"`
 }
 
 // EffectiveSessionID returns the feed-scoped session ID for recommendation
@@ -133,6 +138,9 @@ var SignalWeights = map[string]float64{
 	"tag_click":        1.8,
 	"play_progress":    1.0,
 	"content_depth":    1.0,
+	// 交集转化三类行动（S6）：关注人 follow / 进圈子 join_circle / 加联系人 add_contact。
+	"join_circle": 4.0,
+	"add_contact": 4.5,
 }
 
 // ReferralSourceMultiplier maps referral sources to tag weight multipliers.
@@ -244,9 +252,9 @@ func (h *HotPath) ProcessSignalBatch(ctx context.Context, signals []BehaviorSign
 	}
 
 	var (
-		mu      sync.Mutex
+		mu       sync.Mutex
 		firstErr error
-		wg      sync.WaitGroup
+		wg       sync.WaitGroup
 	)
 
 	for _, sigs := range groups {

@@ -35,8 +35,11 @@ type RawBehaviorEvent struct {
 	TotalUnits      int      `bson:"totalUnits,omitempty"`
 	EntityRefs      []string `bson:"entityRefs,omitempty"`
 	FeedRequestID   string   `bson:"feedRequestId,omitempty"`
-	OccurredAt      string   `bson:"occurredAt"`
-	CreatedAt       time.Time `bson:"createdAt"`
+	// 交集转化归因（S6）：触发交集行动（follow/join_circle/add_contact）的维度与路径制 tagRef。
+	IntersectionDimension string    `bson:"intersectionDimension,omitempty"`
+	IntersectionTagRefs   []string  `bson:"intersectionTagRefs,omitempty"`
+	OccurredAt            string    `bson:"occurredAt"`
+	CreatedAt             time.Time `bson:"createdAt"`
 }
 
 // MongoBehaviorEventStore persists raw behavior events to MongoDB with TTL.

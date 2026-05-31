@@ -79,8 +79,6 @@ routes:
     path: /profile/personas
   - id: profileComments
     path: /profile/comments
-  - id: profileResonance
-    path: /profile/resonance
   - id: profileStats
     path: /profile/stats
     query_params: [type]

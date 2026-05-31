@@ -1,6 +1,6 @@
 {
   "schemaVersion": "tag-test-fixtures",
-  "description": "tag-service 首发子集 contract seed（校园 + 旅游出行）。供服务侧 resolve/shared-tags/inverted 契约测试与 app mock 共用；全量 5111 节点标签树由数据工程 publish/v1/tags 主线产出，本子集仅冻结首发垂类根 + 演示对象索引。",
+  "description": "tag-service 首发子集 contract seed（校园 + 旅游出行）。供服务侧 resolve/shared-tags/inverted 契约测试与 app mock 共用；全量 5111 节点标签树由数据工程 publish/v1/tags 主线产出，本子集仅冻结首发垂类根 + 演示对象索引。object_tag_index 中 fixture_user_* 对象与 user_scenarios.gamma-curated.json 对齐，使 local-gamma 交集卡（fixture_user_current × 被看用户）真打出非空交集；所有 tagRefs 均存在于本文件 tag_nodes seed。",
   "scenarios": {
     "tag_launch_subset": {
       "tag_nodes": [
@@ -20,7 +20,10 @@
         { "objectId": "post_pku_campus_demo", "objectType": "post", "tagRefs": ["Topic/摄影", "Entity/机构/学校/北京大学", "Format/内容载体"] },
         { "objectId": "entity_pku_demo", "objectType": "entity", "tagRefs": ["Entity/机构/学校/北京大学"] },
         { "objectId": "user_alice_demo", "objectType": "user", "tagRefs": ["Topic/旅行", "Topic/摄影", "Entity/机构/学校/北京大学"] },
-        { "objectId": "user_bob_demo", "objectType": "user", "tagRefs": ["Topic/摄影", "Topic/美食餐饮", "Entity/机构/学校/北京大学"] }
+        { "objectId": "user_bob_demo", "objectType": "user", "tagRefs": ["Topic/摄影", "Topic/美食餐饮", "Entity/机构/学校/北京大学"] },
+        { "objectId": "fixture_user_current", "objectType": "user", "tagRefs": ["Topic/摄影", "Topic/旅行", "Entity/机构/学校/北京大学"] },
+        { "objectId": "fixture_user_photo", "objectType": "user", "tagRefs": ["Topic/摄影", "Topic/地理/中国/四川省/成都市"] },
+        { "objectId": "fixture_user_travel", "objectType": "user", "tagRefs": ["Topic/旅行", "Topic/地理/中国/四川省/成都市"] }
       ],
       "expected_shared_tags": {
         "description": "shared-tags(user_alice_demo, user_bob_demo) 期望命中（identity: 同校北大 + interest: 同好摄影）",

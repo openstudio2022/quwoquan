@@ -18,17 +18,17 @@ func NewTagHandler(svc *application.TagService) *TagHandler {
 	return &TagHandler{svc: svc}
 }
 
-// reservedRoutes 是 service.yaml 保留契约、V0.5 未实现的端点；显式 501，不留静默 404。
+// reservedRoutes 是 service.yaml 保留契约、仍未实现的端点；显式 501，不留静默 404。
+//
+// feedback 是写操作（用户对推荐的点击/忽略/修正），与 tag-service「只读消费导入产物」的
+// 领域定位冲突——落地需新增写存储或路由到 behavior/recommendation 域，待架构评审，故保留 501。
+// 其余 search / related / search-by-tags / cooccurrence / related-objects 已基于现有
+// TagNode / ObjectTagIndex 只读数据实现。
 var reservedRoutes = []string{
-	"GET /v1/tag/search",
-	"GET /v1/tag/related",
-	"POST /v1/tag/search-by-tags",
 	"POST /v1/tag/feedback",
-	"GET /v1/tag/graph/cooccurrence",
-	"GET /v1/tag/related-objects",
 }
 
-// Routes 注册 V0.5 首发交集核心路由、创作打标基础查询 + 保留契约的 501 占位。
+// Routes 注册交集核心、创作打标查询、推荐搜索与共现图谱路由 + 保留契约的 501 占位。
 func (h *TagHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/tag/resolve", h.resolve)
@@ -37,6 +37,11 @@ func (h *TagHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/tag/dimensions", h.listDimensions)
 	mux.HandleFunc("GET /v1/tag/suggest", h.suggest)
 	mux.HandleFunc("POST /v1/tag/validate", h.validate)
+	mux.HandleFunc("GET /v1/tag/search", h.search)
+	mux.HandleFunc("GET /v1/tag/related", h.related)
+	mux.HandleFunc("POST /v1/tag/search-by-tags", h.searchByTags)
+	mux.HandleFunc("GET /v1/tag/graph/cooccurrence", h.cooccurrence)
+	mux.HandleFunc("GET /v1/tag/related-objects", h.relatedObjects)
 	for _, p := range reservedRoutes {
 		mux.HandleFunc(p, h.notImplemented)
 	}
@@ -140,8 +145,94 @@ func (h *TagHandler) validate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, view)
 }
 
+func (h *TagHandler) search(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	query := q.Get("q")
+	if query == "" {
+		writeError(w, http.StatusBadRequest, "q is required")
+		return
+	}
+	views, err := h.svc.SearchTags(r.Context(), query, q.Get("group"), parseLimit(q.Get("limit")))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, views)
+}
+
+func (h *TagHandler) related(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	tagRef := q.Get("tagRef")
+	if tagRef == "" {
+		writeError(w, http.StatusBadRequest, "tagRef is required")
+		return
+	}
+	views, err := h.svc.RelatedTags(r.Context(), tagRef, parseLimit(q.Get("limit")))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, views)
+}
+
+func (h *TagHandler) searchByTags(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req struct {
+		TagRefs    []string `json:"tagRefs"`
+		ObjectType string   `json:"objectType"`
+		Limit      int      `json:"limit"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.TagRefs) == 0 {
+		writeError(w, http.StatusBadRequest, "tagRefs is required")
+		return
+	}
+	views, err := h.svc.SearchByTags(r.Context(), req.TagRefs, req.ObjectType, req.Limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, views)
+}
+
+func (h *TagHandler) cooccurrence(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	tagRef := q.Get("tagRef")
+	if tagRef == "" {
+		writeError(w, http.StatusBadRequest, "tagRef is required")
+		return
+	}
+	views, err := h.svc.TagCooccurrence(r.Context(), tagRef, parseLimit(q.Get("minCount")), parseLimit(q.Get("limit")))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, views)
+}
+
+func (h *TagHandler) relatedObjects(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	objectID := q.Get("objectId")
+	if objectID == "" {
+		writeError(w, http.StatusBadRequest, "objectId is required")
+		return
+	}
+	views, err := h.svc.RelatedObjects(r.Context(), objectID, q.Get("objectType"), parseLimit(q.Get("limit")))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, views)
+}
+
 func (h *TagHandler) notImplemented(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotImplemented, "endpoint reserved; not implemented in V0.5")
+	writeError(w, http.StatusNotImplemented, "endpoint reserved; not implemented (feedback awaiting domain decision)")
 }
 
 func parseLimit(s string) int {

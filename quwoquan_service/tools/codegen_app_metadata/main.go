@@ -252,10 +252,11 @@ type workFormatFilterDef struct {
 }
 
 type profileSubTabDef struct {
-	ID          string `yaml:"id"`
-	LabelKey    string `yaml:"label_key"`
-	ContentType string `yaml:"content_type"`
-	Order       int    `yaml:"order"`
+	ID           string `yaml:"id"`
+	LabelKey     string `yaml:"label_key"`
+	ContentType  string `yaml:"content_type"`
+	LifeCategory string `yaml:"life_category"`
+	Order        int    `yaml:"order"`
 }
 
 type profileTabDef struct {
@@ -3631,11 +3632,13 @@ func renderUserProfileUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("class UserProfileSubTabConfig {\n")
 	b.WriteString("  final String id;\n")
 	b.WriteString("  final String labelKey;\n")
-	b.WriteString("  final String? contentType;\n\n")
+	b.WriteString("  final String? contentType;\n")
+	b.WriteString("  final String? lifeCategory;\n\n")
 	b.WriteString("  const UserProfileSubTabConfig({\n")
 	b.WriteString("    required this.id,\n")
 	b.WriteString("    required this.labelKey,\n")
-	b.WriteString("    required this.contentType,\n")
+	b.WriteString("    this.contentType,\n")
+	b.WriteString("    this.lifeCategory,\n")
 	b.WriteString("  });\n")
 	b.WriteString("}\n\n")
 
@@ -3697,10 +3700,11 @@ func renderUserProfileUIConfigDart(uc *uiConfigFile) string {
 	writeSubTabList := func(name string, tabs []profileSubTabDef) {
 		b.WriteString(fmt.Sprintf("  static const List<UserProfileSubTabConfig> %s = <UserProfileSubTabConfig>[\n", name))
 		for _, tab := range sortSubTabs(tabs) {
-			b.WriteString(fmt.Sprintf("    UserProfileSubTabConfig(id: %s, labelKey: %s, contentType: %s),\n",
+			b.WriteString(fmt.Sprintf("    UserProfileSubTabConfig(id: %s, labelKey: %s, contentType: %s, lifeCategory: %s),\n",
 				dartStringLiteral(tab.ID),
 				dartStringLiteral(tab.LabelKey),
-				dartStringOrNull(tab.ContentType)))
+				dartStringOrNull(tab.ContentType),
+				dartStringOrNull(tab.LifeCategory)))
 		}
 		b.WriteString("  ];\n\n")
 	}
@@ -3770,6 +3774,12 @@ func renderUserProfileUIConfigDart(uc *uiConfigFile) string {
 	} else {
 		writeSubTabList("interactionSubTabs", nil)
 		writeModeFilterMap("interactionDirectionFiltersByMode", map[string][]string{})
+	}
+
+	if lifestyleTab := findTab("lifestyle"); lifestyleTab != nil {
+		writeSubTabList("lifestyleSubTabs", lifestyleTab.SubTabs)
+	} else {
+		writeSubTabList("lifestyleSubTabs", nil)
 	}
 
 	b.WriteString("}\n")

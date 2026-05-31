@@ -208,12 +208,134 @@ func TestInvertedFilterByType(t *testing.T) {
 	}
 }
 
-// 保留契约端点显式 501（不留静默 404）。
+// 保留契约端点显式 501（不留静默 404）。feedback 为写操作，待领域决策，仍保留 501。
 func TestReservedEndpointsReturn501(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/tag/feedback",
+		bytes.NewBufferString(`{"tagRef":"Topic/旅行","action":"click"}`))
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501 for reserved feedback endpoint, got %d", rec.Code)
+	}
+}
+
+// T3：search 全文搜索，命中首发子集并带 score。
+func TestSearchTags(t *testing.T) {
+	seedLaunchSubset(t)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/tag/search?q=旅", nil)
 	testHandler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("expected 501 for reserved endpoint, got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var results []struct {
+		TagRef string  `json:"tagRef"`
+		Label  string  `json:"label"`
+		Score  float64 `json:"score"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &results); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(results) != 1 || results[0].TagRef != "Topic/旅行" {
+		t.Fatalf("expected single Topic/旅行 result, got %+v", results)
+	}
+	if results[0].Score <= 0 {
+		t.Fatalf("expected positive score, got %v", results[0].Score)
+	}
+}
+
+// T3：related 共现度最高的相关标签（u1∩u2 维度）。
+func TestRelatedTags(t *testing.T) {
+	seedLaunchSubset(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/tag/related?tagRef=Topic/摄影", nil)
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var related []struct {
+		TagRef       string `json:"tagRef"`
+		Label        string `json:"label"`
+		CooccurCount int    `json:"cooccurCount"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &related); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// 摄影出现在 u1{旅行,北大}、u2{北大} → 共现: 北大=2, 旅行=1。
+	if len(related) != 2 || related[0].TagRef != "Entity/机构/学校/北京大学" || related[0].CooccurCount != 2 {
+		t.Fatalf("expected 北京大学(2) ranked first, got %+v", related)
+	}
+}
+
+// T3：search-by-tags 多标签联合搜索对象。
+func TestSearchByTags(t *testing.T) {
+	seedLaunchSubset(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/tag/search-by-tags",
+		bytes.NewBufferString(`{"tagRefs":["Topic/摄影","Entity/机构/学校/北京大学"]}`))
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var matches []struct {
+		ObjectID    string   `json:"objectId"`
+		MatchedTags []string `json:"matchedTags"`
+		Score       float64  `json:"score"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &matches); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// u1、u2 都含两标签 → score=1.0。
+	if len(matches) != 2 {
+		t.Fatalf("expected 2 matched objects, got %d: %+v", len(matches), matches)
+	}
+	if matches[0].Score != 1.0 || len(matches[0].MatchedTags) != 2 {
+		t.Fatalf("expected full match score 1.0, got %+v", matches[0])
+	}
+}
+
+// T3：cooccurrence 共现图谱（>= minCount）。
+func TestTagCooccurrence(t *testing.T) {
+	seedLaunchSubset(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/tag/graph/cooccurrence?tagRef=Topic/摄影&minCount=2", nil)
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var pairs []struct {
+		TagA         string `json:"tagA"`
+		TagB         string `json:"tagB"`
+		CooccurCount int    `json:"cooccurCount"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &pairs); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// minCount=2 → 只有 (摄影, 北大, 2)。
+	if len(pairs) != 1 || pairs[0].TagB != "Entity/机构/学校/北京大学" || pairs[0].CooccurCount != 2 {
+		t.Fatalf("expected single (摄影,北大,2) pair, got %+v", pairs)
+	}
+}
+
+// T3：related-objects 通过共享标签查找相关对象。
+func TestRelatedObjects(t *testing.T) {
+	seedLaunchSubset(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/tag/related-objects?objectId=u1&objectType=user", nil)
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var related []struct {
+		ObjectID    string   `json:"objectId"`
+		SharedTags  []string `json:"sharedTags"`
+		SharedCount int      `json:"sharedCount"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &related); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// u1{旅行,摄影,北大} → u2 共享{摄影,北大}=2, p1 共享{旅行}=1。
+	if len(related) != 2 || related[0].ObjectID != "u2" || related[0].SharedCount != 2 {
+		t.Fatalf("expected u2 shared(2) ranked first, got %+v", related)
 	}
 }

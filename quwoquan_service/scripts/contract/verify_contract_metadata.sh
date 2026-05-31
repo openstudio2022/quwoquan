@@ -18,12 +18,14 @@ for f in _shared/types.yaml _shared/redis_keyspace.yaml; do
   ruby -ryaml -e "YAML.load_file('$p')" || { echo "[verify] FAIL: invalid YAML $p"; exit 1; }
 done
 
-# Deprecated flat taxonomy: kept only until path-based tagRef backfill completes,
-# then removed (single source of truth = quwoquan_data/publish/v1/tags). Not required to exist.
-dep="${BASE}/_shared/tag_taxonomy.yaml"
-if [[ -f "$dep" ]]; then
-  ruby -ryaml -e "YAML.load_file('$dep')" || { echo "[verify] FAIL: invalid YAML $dep"; exit 1; }
-fi
+# Flat taxonomy fully retired (V6 同源收口): single source of truth =
+# quwoquan_data/publish/v1/tags (path-based tagRef). tag_taxonomy.yaml /
+# tag_ref_migration.yaml must NOT exist; enforced by verify_tag_ref_source_of_truth.py (C1).
+for retired in _shared/tag_taxonomy.yaml _shared/tag_ref_migration.yaml; do
+  if [[ -f "${BASE}/${retired}" ]]; then
+    echo "[verify] FAIL: retired flat taxonomy file still present: ${retired} (single source = publish/v1/tags)"; exit 1
+  fi
+done
 
 _verify_entity_dir() {
   local dir="$1"

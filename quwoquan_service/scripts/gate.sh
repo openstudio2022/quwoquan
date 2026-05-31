@@ -750,6 +750,13 @@ echo "[gate] running product-ops-service contract tests"
     go test ./... -count=1 -timeout=120s
 ) || fail "product-ops-service go tests failed"
 
+# ── L2: tag-service contract tests ───────────────────────────────────────────
+# testcontainers(mongo) 在无 Docker 的本地会优雅 skip（TestMain os.Exit(0)），
+# CI(CI=true / GITHUB_ACTIONS=true) 下强制起容器，缺 Docker 即 panic 暴露。
+echo "[gate] running tag-service contract tests"
+go test ./services/tag-service/... -count=1 -timeout=120s \
+  || fail "tag-service go tests failed"
+
 # ── T38: e2e.yaml patrol_flow 文件存在性检查（warn 级别，不 fail）─────────────
 # 确保 e2e.yaml 中每个 ui_journey 场景的 patrol_flow 引用文件在 quwoquan_app 中存在。
 E2E_YAML="contracts/metadata/content/post/tests/e2e.yaml"

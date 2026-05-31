@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -53,4 +54,22 @@ func (s *MongoObjectTagIndexStore) FindObjectsByTagRef(ctx context.Context, tagR
 		return nil, err
 	}
 	return out, nil
+}
+
+// UpsertObjectTags 幂等写入对象的 tagRefs 倒排（按 {objectId, objectType} 唯一键）。
+// 派生数据，可由离线回填管道重建；nil tagRefs 规整为空数组。
+func (s *MongoObjectTagIndexStore) UpsertObjectTags(ctx context.Context, objectID, objectType string, tagRefs []string) error {
+	now := time.Now().UTC()
+	if tagRefs == nil {
+		tagRefs = []string{}
+	}
+	_, err := s.coll.UpdateOne(ctx,
+		bson.M{"objectId": objectID, "objectType": objectType},
+		bson.M{
+			"$set":         bson.M{"tagRefs": tagRefs, "updatedAt": now},
+			"$setOnInsert": bson.M{"createdAt": now},
+		},
+		options.UpdateOne().SetUpsert(true),
+	)
+	return err
 }
