@@ -41,7 +41,7 @@ local_gamma_has_existing_stack() {
     return 0
   fi
   if command -v podman >/dev/null 2>&1 && \
-    podman ps -a --format '{{.Names}}' 2>/dev/null | awk '/^quwoquan_service_(gamma-proxy|assistant-service|user-service|chat-service|content-service|product-ops-service|rec-model-service|redis|mongodb|postgres)_1$/ {found=1} END {exit found ? 0 : 1}'; then
+    podman ps -a --format '{{.Names}}' 2>/dev/null | awk '/^quwoquan_service_(gamma-proxy|assistant-service|user-service|chat-service|content-service|product-ops-service|tag-service|rec-model-service|redis|mongodb|postgres)_1$/ {found=1} END {exit found ? 0 : 1}'; then
     return 0
   fi
   return 1
@@ -80,9 +80,13 @@ stop_media_origin() {
 }
 
 start_media_origin() {
-  local media_root="$ROOT/artifacts/local-gamma"
+  # 与 docker `/srv/media`(line ~878 -v artifacts/local-gamma/media:/srv/media) 及
+  # Caddy `root * /srv/media` + `handle /media/*` 同源：URL `/media/image/...` 解析为
+  # `<root>/media/image/...`，curated bundle 实际落在 artifacts/local-gamma/media/media/...，
+  # 故 origin 静态服务 root 必须为 artifacts/local-gamma/media（而非其父目录）。
+  local media_root="$ROOT/artifacts/local-gamma/media"
   local log_file="$ROOT/artifacts/local-gamma/media-origin.log"
-  mkdir -p "$ROOT/artifacts/local-gamma"
+  mkdir -p "$media_root"
   stop_media_origin
   python3 -m http.server "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}" --bind 127.0.0.1 --directory "$media_root" \
     >"$log_file" 2>&1 &
@@ -137,12 +141,15 @@ start_colima_tunnels_if_needed() {
   local http_port="${LOCAL_GAMMA_HTTP_PORT:-19000}"
   local product_ops_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
   local media_edge_port="${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
+  # user-service 直连健康探针（wait_local_gamma_host_ready）使用 user_port，必须同步开隧道，
+  # 否则 colima 下 host 无法直达 user-service 发布端口，host 就绪探测会卡死。
+  local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
   local ssh_config="$ROOT/artifacts/local-gamma/colima-ssh-config"
   mkdir -p "$ROOT/artifacts/local-gamma" "$ROOT/artifacts/local-gamma/model-cache"
   stop_colima_tunnels
   colima ssh-config > "$ssh_config"
   : > "$tunnel_pid_file"
-  for port in "$http_port" "$product_ops_port" "$media_edge_port"; do
+  for port in "$http_port" "$product_ops_port" "$media_edge_port" "$user_port"; do
     if host_port_open "$port"; then
       continue
     fi
@@ -204,7 +211,10 @@ prepare_config_root() {
     "$out/releases/config/product-ops-service" \
     "$out/configs/recommendation-service/default" \
     "$out/configs/recommendation-service/gamma" \
-    "$out/releases/config/recommendation-service"
+    "$out/releases/config/recommendation-service" \
+    "$out/configs/tag-service/default" \
+    "$out/configs/tag-service/gamma" \
+    "$out/releases/config/tag-service"
   cp "$ROOT/quwoquan_service/services/content-service/configs/default/config.yaml" "$out/configs/content-service/default/config.yaml"
   cp "$ROOT/quwoquan_service/services/content-service/configs/gamma/config.yaml" "$out/configs/content-service/gamma/config.yaml"
   cp "$ROOT/quwoquan_service/services/chat-service/configs/default/config.yaml" "$out/configs/chat-service/default/config.yaml"
@@ -219,6 +229,8 @@ prepare_config_root() {
   cp "$ROOT/quwoquan_service/services/product-ops-service/configs/gamma/config.yaml" "$out/configs/product-ops-service/gamma/config.yaml"
   cp "$ROOT/quwoquan_service/services/rec-model-service/configs/default/config.yaml" "$out/configs/recommendation-service/default/config.yaml"
   cp "$ROOT/quwoquan_service/services/rec-model-service/configs/gamma/config.yaml" "$out/configs/recommendation-service/gamma/config.yaml"
+  cp "$ROOT/quwoquan_service/services/tag-service/configs/default/config.yaml" "$out/configs/tag-service/default/config.yaml"
+  cp "$ROOT/quwoquan_service/services/tag-service/configs/gamma/config.yaml" "$out/configs/tag-service/gamma/config.yaml"
   cat > "$out/releases/config/content-service/${CONFIG_VERSION}.yaml" <<YAML
 config:
   version: "${CONFIG_VERSION}"
@@ -358,6 +370,18 @@ service:
   http:
     addr: ":8000"
 YAML
+  cat > "$out/releases/config/tag-service/${CONFIG_VERSION}.yaml" <<YAML
+config:
+  version: "${CONFIG_VERSION}"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+service:
+  http:
+    addr: ":18092"
+mongo:
+  uri: "mongodb://mongodb:27017"
+  database: "quwoquan_tag"
+YAML
 }
 
 prepare_media_root() {
@@ -478,6 +502,10 @@ gamma-api.quwoquan-env.test {{
 \thandle @api_assistant {{
 \t\treverse_proxy assistant-service:18087
 \t}}
+\t@api_tag path /v1/tag*
+\thandle @api_tag {{
+\t\treverse_proxy tag-service:18092
+\t}}
 \thandle /v1/ops/* {{
 \t\treverse_proxy product-ops-service:18086
 \t}}
@@ -521,6 +549,10 @@ gamma-product-ops.quwoquan-env.test {{
 \t@pub_assistant path /v1/assistant*
 \thandle @pub_assistant {{
 \t\treverse_proxy assistant-service:18087
+\t}}
+\t@pub_tag path /v1/tag*
+\thandle @pub_tag {{
+\t\treverse_proxy tag-service:18092
 \t}}
 \thandle /v1/ops/* {{
 \t\treverse_proxy product-ops-service:18086
@@ -654,6 +686,7 @@ if [[ "$podman_compose" == "1" ]]; then
     quwoquan_service_chat-service_1 \
     quwoquan_service_content-service_1 \
     quwoquan_service_product-ops-service_1 \
+    quwoquan_service_tag-service_1 \
     quwoquan_service_mongo-init_1 \
     quwoquan_service_rec-model-service_1 \
     quwoquan_service_redis_1 \
@@ -826,6 +859,25 @@ if [[ "$podman_compose" == "1" ]]; then
     "$LOCAL_GAMMA_GO_BOOKWORM_IMAGE" sh -lc "cd services/assistant-service/cmd/api && /usr/local/go/bin/go run ." >/dev/null
   wait_healthy quwoquan_service_assistant-service_1
 
+  podman run --pull=never --name quwoquan_service_tag-service_1 -d \
+    --net "$network_name" --network-alias tag-service \
+    -e PATH=/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    -e GOPROXY="${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}" \
+    -e GOSUMDB="${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}" \
+    -e SERVICE_NAME=tag-service -e APP_ENV=gamma \
+    -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
+    -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e TAG_SERVICE_ADDR=:18092 \
+    -e TAG_MONGO_URI=mongodb://mongodb:27017 -e TAG_MONGO_DATABASE=quwoquan_tag \
+    -v "$ROOT/quwoquan_service:/workspace" \
+    -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
+    -v quwoquan_service_local-gamma-go-cache:/go \
+    -w /workspace \
+    -p "${LOCAL_GAMMA_TAG_PORT:-18092}:18092" \
+    --healthcheck-command "wget -qO- http://127.0.0.1:18092/healthz >/dev/null 2>&1" \
+    --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
+    "$LOCAL_GAMMA_GO_BOOKWORM_IMAGE" sh -lc "cd services/tag-service/cmd/api && /usr/local/go/bin/go run ." >/dev/null
+  wait_healthy quwoquan_service_tag-service_1
+
   podman run --pull=never --name quwoquan_service_gamma-proxy_1 -d \
     --net "$network_name" --network-alias gamma-proxy \
     -e LOCAL_GAMMA_TLS_MODE="${LOCAL_GAMMA_TLS_MODE:-internal}" \
@@ -925,6 +977,32 @@ wait_local_gamma_host_ready
 if [[ "${compose_up_failed:-0}" == "1" ]]; then
   echo "[local-gamma] WARN: host probes recovered after compose startup reported an error" >&2
 fi
+
+# tag-service 数据灌库（幂等可重跑）：交集 shared-tags 真闭环依赖此步。
+#  - tag_nodes      ← publish/v1/tags（路径制 taxonomy，唯一标签真相源）
+#  - object_tag_index ← contracts/metadata/tag 的 contract fixture（与契约测试/app mock 同源）
+# 任一步失败仅告警不中断：契约层仍正确，交集卡走端侧兜底，由 verify 探测数据非空。
+seed_tag_service_data() {
+  local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
+  if [[ -z "$mongo_port" ]]; then
+    echo "[local-gamma] WARN: LOCAL_GAMMA_MONGO_PORT unset; skip tag data seed" >&2
+    return 0
+  fi
+  local mongo_uri="mongodb://127.0.0.1:${mongo_port}/?directConnection=true"
+  echo "[local-gamma] seeding tag_nodes (publish/v1/tags -> quwoquan_tag.tag_nodes) ..."
+  if ! ( cd "$ROOT/quwoquan_service" && go run ./services/tag-service/cmd/import \
+      --tags-dir ../quwoquan_data/publish/v1/tags \
+      --mongo-uri "$mongo_uri" --db quwoquan_tag ); then
+    echo "[local-gamma] WARN: tag_nodes import failed (shared-tags may return empty)" >&2
+  fi
+  echo "[local-gamma] seeding object_tag_index (contract fixture -> quwoquan_tag.object_tag_index) ..."
+  if ! ( cd "$ROOT/quwoquan_service" && go run ./services/tag-service/cmd/import-objects \
+      --objects-file contracts/metadata/tag/test_fixtures/scenarios/tag_scenarios.json \
+      --mongo-uri "$mongo_uri" --db quwoquan_tag ); then
+    echo "[local-gamma] WARN: object_tag_index import failed (intersection card falls back to client)" >&2
+  fi
+}
+seed_tag_service_data
 
 python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$LOCAL_MEDIA_ORIGIN_URL" "$restarted_from_previous" <<'PY'
 import json

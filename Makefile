@@ -121,20 +121,20 @@ verify-quwoquan-data-stages:
 	@python3 quwoquan_data/scripts/cli.py data explore --query "smoke-test" > /dev/null
 
 verify-app-env-package:
-	@python3 agent_ops/deploy/stackctl.py package --env alpha --output-format json >/dev/null
-	@python3 agent_ops/deploy/stackctl.py package --env beta --output-format json >/dev/null
-	@python3 agent_ops/deploy/stackctl.py package --env gamma --output-format json >/dev/null
-	@python3 agent_ops/deploy/stackctl.py package --env prod --output-format json >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env alpha >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env beta >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env gamma >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env prod >/dev/null
 
 verify-service-env-package:
 	@if [ -z "$(SERVICE)" ]; then \
 		echo "FAIL: SERVICE is required. Example: make verify-service-env-package SERVICE=content-service"; \
 		exit 2; \
 	fi
-	@python3 agent_ops/deploy/stackctl.py package --env alpha --service "$(SERVICE)" --include-services --output-format json >/dev/null
-	@python3 agent_ops/deploy/stackctl.py package --env beta --service "$(SERVICE)" --include-services --output-format json >/dev/null
-	@python3 agent_ops/deploy/stackctl.py package --env gamma --service "$(SERVICE)" --include-services --output-format json >/dev/null
-	@python3 agent_ops/deploy/stackctl.py package --env prod --service "$(SERVICE)" --include-services --output-format json >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env alpha --service "$(SERVICE)" --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env beta --service "$(SERVICE)" --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env gamma --service "$(SERVICE)" --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env prod --service "$(SERVICE)" --include-services >/dev/null
 
 verify-env-topology:
 	@python3 agent_ops/gate/verify_environment_topology_manifest.py
@@ -146,10 +146,10 @@ verify-public-vs-upstream-url-contract:
 	@python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
 
 verify-env-packaging:
-	@python3 agent_ops/deploy/stackctl.py package --env alpha --include-services --output-format json >/dev/null
-	@python3 agent_ops/deploy/stackctl.py package --env beta --include-services --output-format json >/dev/null
-	@python3 agent_ops/deploy/stackctl.py package --env gamma --include-services --output-format json >/dev/null
-	@python3 agent_ops/deploy/stackctl.py package --env prod --include-services --output-format json >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env alpha --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env beta --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env gamma --include-services >/dev/null
+	@python3 agent_ops/deploy/stackctl.py --output-format json package --env prod --include-services >/dev/null
 	@python3 agent_ops/gate/verify_environment_packaging_contract.py
 	@python3 agent_ops/gate/verify_env_artifact_isolation.py
 	@python3 quwoquan_app/scripts/env/verify_prod_package_purity.py
@@ -354,9 +354,11 @@ gate-local-gamma:
 		LG_HTTP_PORT="$${LOCAL_GAMMA_HTTP_PORT:-19000}"; \
 		LG_PRODUCT_OPS_PORT="$${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"; \
 		LG_MEDIA_PORT="$${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"; \
+		LG_USER_PORT="$${LOCAL_GAMMA_USER_PORT:-19210}"; \
 		export LOCAL_GAMMA_HTTP_PORT="$$LG_HTTP_PORT"; \
 		export LOCAL_GAMMA_PRODUCT_OPS_PORT="$$LG_PRODUCT_OPS_PORT"; \
 		export LOCAL_GAMMA_MEDIA_EDGE_PORT="$$LG_MEDIA_PORT"; \
+		export LOCAL_GAMMA_USER_PORT="$$LG_USER_PORT"; \
 		export LOCAL_GAMMA_GATEWAY_BASE_URL="$${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:$$LG_HTTP_PORT}"; \
 		export LOCAL_GAMMA_PRODUCT_OPS_BASE_URL="$${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-http://127.0.0.1:$$LG_PRODUCT_OPS_PORT}"; \
 		export LOCAL_GAMMA_MEDIA_BASE_URL="$${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:$$LG_MEDIA_PORT}"; \
