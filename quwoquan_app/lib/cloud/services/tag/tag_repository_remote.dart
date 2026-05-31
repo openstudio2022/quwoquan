@@ -211,4 +211,31 @@ class RemoteTagRepository implements TagRepository {
         .map((e) => RelatedObject.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  @override
+  Future<List<SharedTagView>> sharedTags({
+    required String objectAId,
+    required String objectAType,
+    required String objectBId,
+    required String objectBType,
+    int limit = TagApiDefaults.graphLimit,
+  }) async {
+    final params = <String, String>{
+      'objectAId': objectAId,
+      'objectAType': objectAType,
+      'objectBId': objectBId,
+      'objectBType': objectBType,
+      'limit': '$limit',
+    };
+    final data =
+        await _get(
+              TagApiMetadata.sharedTagsPath,
+              TagRequestPageIds.sharedTags,
+              params,
+            )
+            as List;
+    return data
+        .map((e) => SharedTagView.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
 }

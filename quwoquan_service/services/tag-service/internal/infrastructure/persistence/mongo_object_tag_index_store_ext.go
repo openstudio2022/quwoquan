@@ -1,0 +1,56 @@
+package persistence
+
+import (
+	"context"
+	"errors"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	model "quwoquan_service/services/tag-service/internal/domain/tag/model"
+)
+
+// MongoObjectTagIndexStore 是 ObjectTagIndex 的只读 Mongo 存储（embed codegen base）。
+type MongoObjectTagIndexStore struct {
+	mongoObjectTagIndexStoreBase
+}
+
+// NewMongoObjectTagIndexStore 构造对象↔tagRef 索引存储。
+func NewMongoObjectTagIndexStore(coll *mongo.Collection) *MongoObjectTagIndexStore {
+	return &MongoObjectTagIndexStore{mongoObjectTagIndexStoreBase{coll: coll}}
+}
+
+// FindByObject 取单个对象的 tagRefs 索引；未命中返回 (nil, nil)。
+func (s *MongoObjectTagIndexStore) FindByObject(ctx context.Context, objectID, objectType string) (*model.ObjectTagIndex, error) {
+	var idx model.ObjectTagIndex
+	if err := s.coll.FindOne(ctx, bson.M{"objectId": objectID, "objectType": objectType}).Decode(&idx); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &idx, nil
+}
+
+// FindObjectsByTagRef 反向查询：引用某 tagRef 的对象索引（tagRefs 为数组，走 contains）。
+func (s *MongoObjectTagIndexStore) FindObjectsByTagRef(ctx context.Context, tagRef, objectType string, limit int64) ([]model.ObjectTagIndex, error) {
+	filter := bson.M{"tagRefs": tagRef}
+	if objectType != "" {
+		filter["objectType"] = objectType
+	}
+	opts := options.Find()
+	if limit > 0 {
+		opts.SetLimit(limit)
+	}
+	cur, err := s.coll.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	out := make([]model.ObjectTagIndex, 0)
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}

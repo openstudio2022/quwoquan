@@ -386,6 +386,11 @@ class UITextConstants {
   static const String profileCommentsTabSent = '我发出的';
   static const String profileCommentsTabReceived = '我收到的';
 
+  // 对象页统一交集卡标题（你和对象的交集，由各壳按对象类型传入）
+  static const String profileMutualIntersectionTitle = '你们的交集';
+  static const String homepageIntersectionTitle = '你和这里的交集';
+  static const String intersectionMoreLabel = '查看全部交集';
+
   // ==================== 我的主页 ====================
   static const String editProfile = '编辑资料';
   static const String settings = '设置';

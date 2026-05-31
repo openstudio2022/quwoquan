@@ -95,13 +95,20 @@ entities:
         ops_exposure: read
         description: post / circle / entity / user
       - name: tagRefs
-        type: "[]string"
+        type: "string[]"
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
         tag_ref: true
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
       - name: updatedAt
         type: timestamp
         constraints: [NOT_NULL]

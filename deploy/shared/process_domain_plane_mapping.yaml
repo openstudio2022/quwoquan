@@ -13,6 +13,10 @@ environments:
       bindings:
         - domain: entity
           planes: [user-plane, platform-control-plane, product-control-plane]
+    tag-service:
+      bindings:
+        - domain: tag
+          planes: [user-plane, platform-control-plane]
     product-ops-service:
       bindings:
         - domain: ops
@@ -72,6 +76,10 @@ environments:
       bindings:
         - domain: entity
           planes: [user-plane, platform-control-plane, product-control-plane]
+    tag-service:
+      bindings:
+        - domain: tag
+          planes: [user-plane, platform-control-plane]
     product-ops-service:
       bindings:
         - domain: ops
@@ -127,6 +135,10 @@ environments:
       bindings:
         - domain: entity
           planes: [user-plane, platform-control-plane, product-control-plane]
+    tag-service:
+      bindings:
+        - domain: tag
+          planes: [user-plane, platform-control-plane]
     product-ops-service:
       bindings:
         - domain: ops
@@ -166,6 +178,10 @@ environments:
       bindings:
         - domain: entity
           planes: [user-plane, platform-control-plane, product-control-plane]
+    tag-service:
+      bindings:
+        - domain: tag
+          planes: [user-plane, platform-control-plane]
     product-ops-service:
       bindings:
         - domain: ops
@@ -205,6 +221,10 @@ environments:
       bindings:
         - domain: entity
           planes: [user-plane, platform-control-plane, product-control-plane]
+    tag-service:
+      bindings:
+        - domain: tag
+          planes: [user-plane, platform-control-plane]
     product-ops-service:
       bindings:
         - domain: ops

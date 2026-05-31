@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 
@@ -49,11 +50,11 @@ class CircleActionBar extends StatelessWidget {
       required IconData icon,
       required VoidCallback? onPressed,
     }) {
-      return _CircleIosActionButton(
+      return ProfileIosActionButton(
         label: label,
         icon: icon,
         onPressed: onPressed,
-        style: _CircleIosActionStyle.outlined,
+        style: ProfileIosActionStyle.outlined,
         backgroundColor: neutralFill,
         foregroundColor: neutralForeground,
         borderColor: separator,
@@ -66,11 +67,11 @@ class CircleActionBar extends StatelessWidget {
       required IconData icon,
       required VoidCallback? onPressed,
     }) {
-      return _CircleIosActionButton(
+      return ProfileIosActionButton(
         label: label,
         icon: icon,
         onPressed: onPressed,
-        style: _CircleIosActionStyle.filled,
+        style: ProfileIosActionStyle.filled,
         labelFontWeight: AppTypography.medium,
       );
     }
@@ -80,11 +81,11 @@ class CircleActionBar extends StatelessWidget {
       required IconData icon,
       required VoidCallback? onPressed,
     }) {
-      return _CircleIosActionButton(
+      return ProfileIosActionButton(
         label: label,
         icon: icon,
         onPressed: onPressed,
-        style: _CircleIosActionStyle.tinted,
+        style: ProfileIosActionStyle.tinted,
         labelFontWeight: AppTypography.medium,
       );
     }
@@ -163,110 +164,6 @@ class CircleActionBar extends StatelessWidget {
                 ),
         ),
       ],
-    );
-  }
-}
-
-enum _CircleIosActionStyle { filled, tinted, outlined }
-
-class _CircleIosActionButton extends StatelessWidget {
-  const _CircleIosActionButton({
-    required this.label,
-    this.icon,
-    this.onPressed,
-    this.style = _CircleIosActionStyle.tinted,
-    this.backgroundColor,
-    this.foregroundColor,
-    this.borderColor,
-    this.labelFontWeight,
-  });
-
-  final String label;
-  final IconData? icon;
-  final VoidCallback? onPressed;
-  final _CircleIosActionStyle style;
-  final Color? backgroundColor;
-  final Color? foregroundColor;
-  final Color? borderColor;
-  final FontWeight? labelFontWeight;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.iosAccent(context);
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final foreground =
-        foregroundColor ??
-        switch (style) {
-          _CircleIosActionStyle.filled => CupertinoColors.white,
-          _CircleIosActionStyle.tinted => accent,
-          _CircleIosActionStyle.outlined => AppColors.iosLabel(context),
-        };
-    final background =
-        backgroundColor ??
-        switch (style) {
-          _CircleIosActionStyle.filled => accent,
-          _CircleIosActionStyle.tinted => accent.withValues(
-            alpha: isDark ? 0.24 : 0.12,
-          ),
-          _CircleIosActionStyle.outlined => AppColors.iosSystemBackground(context),
-        };
-    final resolvedBorderColor =
-        borderColor ??
-        switch (style) {
-          _CircleIosActionStyle.outlined => AppColors.iosSeparator(
-            context,
-          ).withValues(alpha: 0.24),
-          _ => AppColors.transparent,
-        };
-
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: const Size(
-        AppSpacing.minInteractiveSize,
-        AppSpacing.minInteractiveSize,
-      ),
-      onPressed: onPressed,
-      child: Container(
-        height: AppSpacing.minInteractiveSize,
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.intraGroupXs,
-        ),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-          border: Border.all(
-            color: resolvedBorderColor,
-            width: AppSpacing.hairline,
-          ),
-        ),
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (icon != null) ...<Widget>[
-                  Icon(icon, size: AppSpacing.iconSmall, color: foreground),
-                  SizedBox(width: AppSpacing.intraGroupXs),
-                ],
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosButton,
-                    fontWeight: labelFontWeight ?? AppTypography.semiBold,
-                    color: foreground,
-                    letterSpacing: -0.18,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

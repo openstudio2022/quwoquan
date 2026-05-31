@@ -1,0 +1,137 @@
+part of 'circle_shell.dart';
+
+enum _CircleMoreAction { share, copyLink, report }
+
+class _CircleToolbarButton extends StatelessWidget {
+  const _CircleToolbarButton({
+    required this.icon,
+    required this.onPressed,
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final Color backgroundColor;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(
+        AppSpacing.appChromeActionButtonSize,
+        AppSpacing.appChromeActionButtonSize,
+      ),
+      onPressed: onPressed,
+      child: Container(
+        width: AppSpacing.appChromeActionButtonSize,
+        height: AppSpacing.appChromeActionButtonSize,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          size: AppSpacing.appChromeActionIconSize,
+          color: foregroundColor,
+        ),
+      ),
+    );
+  }
+}
+
+class _CircleMetaChipData {
+  const _CircleMetaChipData({
+    required this.label,
+    required this.icon,
+    this.accent = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool accent;
+}
+
+class _CircleMetaChip extends StatelessWidget {
+  const _CircleMetaChip({
+    required this.label,
+    required this.icon,
+    this.accent = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = accent
+        ? AppColors.primaryColor
+        : AppColors.iosSecondaryLabel(context);
+    final background = accent
+        ? AppColors.primaryColor.withValues(alpha: 0.08)
+        : AppColors.iosGroupedSurface(context);
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: AppSpacing.iconSmall, color: foreground),
+          SizedBox(width: AppSpacing.intraGroupXs),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: AppTypography.xs,
+              fontWeight: AppTypography.semiBold,
+              color: foreground,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionSurface extends StatelessWidget {
+  const _SectionSurface({required this.isDark, required this.child});
+
+  final bool isDark;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = AppColors.iosGroupedSurface(context);
+    final border = AppColors.iosSeparator(context);
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        border: Border.all(color: border.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.black.withValues(alpha: isDark ? 0.14 : 0.05),
+            blurRadius: AppSpacing.md,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _TabSpec {
+  const _TabSpec({required this.type, required this.label});
+
+  final String type;
+  final String label;
+}

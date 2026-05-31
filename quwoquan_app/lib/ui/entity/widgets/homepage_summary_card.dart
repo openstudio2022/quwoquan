@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
+import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class HomepageSummaryCard extends StatelessWidget {
