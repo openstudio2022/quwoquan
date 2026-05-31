@@ -1,37 +1,35 @@
 ---
-description: quwoquan 全栈核心约束：spec、metadata、DDD、商用准入
+description: quwoquan 全栈核心军规：分层、metadata、测试、发布
 alwaysApply: true
 ---
 
-# quwoquan 全栈核心约束
+# quwoquan 全栈核心军规
 
-唯一主线见 `specs/00_MASTER_DEVELOPMENT_FLOW.md`。
+## 必守
 
-## 必守约束
+- 一棵树：`AppRoot -> L1_domain_service -> L2_business_capability -> L3_story`。
+- 正式文档：应用根/领域/能力用 `spec.md + design.md + acceptance.yaml`；Story 只用 `spec.md + acceptance.yaml`。
+- 测试语言：验收意图为 UAT/SIT/GWT/contract，证据层只用 T1/T2/T3/T4。
+- DDD 依赖方向固定：`domain <- application <- adapters <- infrastructure`。
+- `contracts/metadata/**` 是字段、错误码、path、operation、surface、route、decoder context 的唯一真相源。
+- codegen 文件禁止手改；改行为先改 metadata，再 verify/codegen。
+- UI、Repository、Router、埋点和文档不得维护第二套 IA、path、surface、operation 或 decoder 规则表。
+- Mock 数据必须隔离；生产包默认 Remote，无 Mock/Remote 切换入口。
+- 涉及页面数据、Repository、Remote API、人工 beta 或端云测试时，先补 fixture/seed manifest。
 
-- `spec-first` + `acceptance-first` + `test-first`。
-- DDD 依赖方向固定为 `domain <- application <- adapters <- infrastructure`。
-- `contracts/metadata/*` 是字段、错误码、`path / operation / surface / route / decoder context` 的唯一真相源。
-- `contracts/metadata/**/test_fixtures` 与 `_shared/test_fixtures/app_{alpha,beta,gamma}_seed_manifest.json` 是 alpha/beta/gamma 测试数据唯一真相源。
-- codegen 文件禁止手改；新增字段、接口、路由、错误码必须先 metadata，再 verify/codegen。
-- UI、Repository、Router、埋点与文档不得维护第二套 IA、path、surface、operation 或 decoder 规则表。
-- 凡是用户可见、可灰度、可分享、可被小趣消费的能力，必须先通过 `/prd` + `/design` 或 `/baseline` 冻结 benchmark、`SLO/KPI`、权限边界、数据生命周期、迁移/灰度/回滚、观测方案。
-- 与既有 Story 冲突时，先在 `spec.md` 明确覆盖矩阵与优先级，再进入设计。
-- `/dev` 前必须已有稳定的 `spec.md`、`acceptance.yaml`、`design.md`、`plan.yaml`、对应 `CR`，且 codegen 已通过。
-- 涉及页面数据、Repository、人工 beta 或端云测试时，必须先补 fixture/seed manifest，再实现 alpha mock、beta/gamma remote 和测试。
-- AI Agent 执行 `/dev` 时必须先进入任务级 plan mode，系统性审视规格、设计、切片、验收、前后端影响面与商用条件。
-- `/dev` 必须自主完成目标 scenario 所需的前后端实现、metadata/codegen、四层测试证据、验收与商用条件闭环；若发现缺口，必须自动修复，不能停在部分完成状态。
-- 生产 App 只有一个 `prod` 包；不得创建 `app-prod-gray`。灰度由应用市场分发策略、端侧上下文与云侧 prod-gray 策略控制。
-- `/dev` 验证通过后必须自动完成 archive 等价回写，再等待 `/commit`。
-- 测试层只使用 `T1~T4`。
-- 缺关键前置时直接 `GATE_BLOCK`，不要绕过流程直接实现。
+## 阻断
 
-## 交付口径
+- 旧树、树内临时计划文档、Story 设计文档回归。
+- UI 直连 mock 或在 UI 复制业务假数据。
+- 硬编码错误码、路径、surface、operation、route。
+- 用户可见能力缺 SLO/KPI、权限、生命周期、灰度、回滚或观测。
+- `implemented/completed` 但无测试证据。
 
-- `/explore`：定位 `L1/L2/L3`，识别 metadata、NFR、权限、CR 与发布风险。
-- `/prd`：冻结规格、验收、商用基线。
-- `/design`：冻结方案、`plan.yaml`、metadata/codegen、迁移与回滚。
-- `/baseline`：在需求明确且方案收敛时一次完成规格、设计与 `plan.yaml` 基线。
-- `/dev`：先用任务级 plan mode 审视并补齐缺口，再按 `metadata -> codegen -> 业务逻辑 -> 测试` 顺序自主闭环到 verify/archive 完成、待 `/commit`。
+## 交付
+
+- `/explore`：定位树归属和风险。
+- `/prd`：冻结规格与验收。
+- `/design`：冻结应用根/领域/能力设计。
+- `/dev`：按 metadata -> codegen -> 业务逻辑 -> 测试闭环。
+- `/verify`：检查 UAT/SIT/GWT/contract 与 T1~T4。
 - `/commit` / `/deploy`：以门禁、SLO、灰度与回滚演练为准。
-

@@ -116,8 +116,7 @@ abstract class ContentWriteRepository {
 
 /// 内容互动反应（点赞 / 收藏 / 分享 / 反应态 / 计数 / 行为上报）。
 ///
-/// 注：命名为 `Reaction` 以避免与既有窄接口 `ContentInteractionRepository`
-/// （`content_interaction_repository.dart`，like/unlike/favorite/unfavorite）冲突。
+/// 唯一的内容互动接口（已并入原 like/unlike/favorite/unfavorite 窄接口）。
 /// R02：单接口 ≤10 方法。
 abstract class ContentReactionRepository {
   Future<void> likePost({required String postId});

@@ -51,7 +51,7 @@ domain ← application ← adapters ← infrastructure
 
 **历史教训**：审计发现 Dart 端多个 Repository 严重膨胀——`ContentRepository` 39+ 方法、`CircleRepository` 34 方法、`ChatRepository` 31 方法、`UserProfileRepository` 26+ 方法。这些"上帝接口"导致 Mock 实现庞大、测试难以聚焦、消费者被迫依赖不需要的方法。
 
-**军规**：新增 Repository 或 interface 方法超过 10 个时，必须按读写、场景或子域拆分为细粒度接口（如 `ContentReadRepository`、`ContentWriteRepository`、`ContentInteractionRepository`）。存量接口在重构时逐步拆分，新增方法前先评估是否应拆到子接口。
+**军规**：新增 Repository 或 interface 方法超过 10 个时，必须按读写、场景或子域拆分为细粒度接口（如 `ContentReadRepository`、`ContentWriteRepository`、`ContentReactionRepository`）。存量接口在重构时逐步拆分，新增方法前先评估是否应拆到子接口。
 
 ### R03 — 文件行数红线
 

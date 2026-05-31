@@ -1,111 +1,111 @@
 ---
-description: 端云一体化测试治理（T1~T4 唯一口径）
-globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
+description: 端云一体化测试治理（UAT/SIT/GWT/contract + T1~T4）
+globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/acceptance.yaml
 ---
 
 # 端云一体化测试治理
 
-> 本规则只定义测试治理语言与门禁职责。  
-> 自本规则生效后，测试层统一使用：
->
-> - `T1`
-> - `T2`
-> - `T3`
-> - `T4`
->
-> 禁止再用 `L3/L4` 表示测试层。
+测试治理分为两套语言：
+
+- 验收意图：`UAT`、`SIT`、`GWT`、`contract`
+- 测试证据：`T1`、`T2`、`T3`、`T4`
+
+禁止用 `L3/L4` 表示测试层。
 
 ---
 
-## 1. 四层测试视图
+## 1. 验收意图
+
+| 验收 | 归属 | 语义 |
+|---|---|---|
+| `UAT` | 应用根 Journey / Scenario | 用户需求和端到端价值是否成立 |
+| `SIT` | `L2_business_capability` | 多 Story 组合、状态机、数据一致性、端云协同是否成立 |
+| `GWT` | `L3_story` | 最小价值点在 Given / When / Then 下是否成立 |
+| `contract` | `L3_story` 或 metadata | API、DTO、错误码、route/surface/operation 是否一致 |
+
+---
+
+## 2. 测试证据
 
 | 测试层 | 语义 | 典型对象 |
-|--------|------|---------|
+|---|---|---|
 | `T1` | 契约与静态校验 | metadata、DTO、错误码、字段策略、脚本校验 |
-| `T2` | 模块与交互验证 | widget、provider、journey、模块集成 |
+| `T2` | 模块与交互验证 | widget、provider、模块交互、Story GWT |
 | `T3` | 端云集成验证 | API contract、真实存储、staging/集成环境 |
-| `T4` | 端到端旅程验证 | Patrol、真机、权限、性能、弱网、发布前旅程 |
+| `T4` | 端到端旅程验证 | Patrol、真机、权限、性能、弱网、发布前 UAT |
 
-原则：
+规则：
 
-- 测试层只表达**验证方式**
-- 特性树层级只表达**交付对象**
-- 两者不再共用 `L*` 语义
-
----
-
-## 2. 与三层特性树的关系
-
-### `L1_capability`
-
-通常关注：
-
-- 关键旅程
-- NFR
-- 发布/回滚
-- `T3/T4` 证据
-
-### `L2_journey`
-
-是测试映射主单元：
-
-- 每个 `L2_journey` 的 `acceptance.yaml` 必须声明 `journey_acceptance`
-- `L2_journey` 主要聚合 `T3/T4`
-- 每个核心 Journey 验收项至少映射到一个测试层
-
-### `L3_scenario`
-
-是最小实施与测试收口单元：
-
-- 每个 `L3_scenario` 的 `acceptance.yaml` 必须声明 `scenario_acceptance`
-- `L3_scenario` 主要收口 `T1/T2`
-- 必要时补 `T3` 验证端云边界
+- 测试层只表达验证方式。
+- 特性树层级只表达交付对象和责任归属。
+- `UAT/SIT/GWT/contract` 必须映射到至少一个 `T1~T4` 证据。
 
 ---
 
-## 3. TDD / ATDD 规则
+## 3. 与特性树关系
+
+### 应用根
+
+- 必须声明 UAT。
+- 主要证据为 `T4`，辅以 `T3`。
+- 用 `journey_scenario_registry.yaml` 绑定 Journey / Scenario 与领域服务、业务能力、Story。
+
+### `L1_domain_service`
+
+- 必须验证领域边界、依赖、权限、生命周期、观测和发布 guardrails。
+- 主要证据为 `T1/T3`，必要时补 `T4`。
+
+### `L2_business_capability`
+
+- 必须声明 SIT。
+- 主要证据为 `T2/T3`。
+- 能力级设计负责说明状态机、策略、数据流和跨 Story 协作。
+
+### `L3_story`
+
+- 必须声明 GWT 和必要的 contract。
+- 主要证据为 `T1/T2`，涉及远端边界时补 `T3`。
+- Story 不设 `design.md`；需要设计时上收到业务能力层。
+
+---
+
+## 4. TDD / ATDD 规则
 
 所有 `/dev`、`/deliver`、`/try` 必须遵循：
 
 ```text
 先定义 acceptance
-→ 再确定 T1~T4
-→ 再确定 `plan.yaml` 中的 acceptance refs
-→ 先写失败测试（Red）
-→ 写最小实现（Green）
-→ 重构（Refactor）
-→ 回填 tests 证据
+→ 再确定 UAT/SIT/GWT/contract
+→ 再确定 T1~T4 证据
+→ 先写失败测试或替代验证说明
+→ 写最小实现
+→ 重构
+→ 回填测试证据
 ```
 
 强制要求：
 
-- 每个当前交付任务开始前，必须能指出对应的验收项和测试层
-- 每个会话 todo 开始前，必须能指出来源 slice 和 `acceptance_ref`
-- 高风险改动必须有明确的先失败再转绿证据
-- 若无法先写测试，必须在 `design.md` 说明原因和替代验证手段
+- 每个当前交付任务开始前，必须能指出对应验收项和测试层。
+- 每个会话 todo 必须回链到 Story 或能力验收项。
+- 高风险改动必须有明确的先失败再转绿证据。
+- 无法先写测试时，必须在对应 design 或 acceptance 中说明替代验证手段。
 
 ---
 
-## 4. 门禁绑定
+## 5. 门禁绑定
 
-### 开发期门禁
-
-`make gate` 应覆盖：
+开发期 `make gate` 应覆盖：
 
 - `T1`
 - `T2`
 - 必要的本地 `T3`
 
-### 收口期门禁
-
-`make gate-full` 应覆盖：
+收口期 `make gate-full` 应覆盖：
 
 - `T1`
 - `T2`
 - `T3`
 - 必要的 `T4` 入口检查或发布前验证准备
-
-### 发布前
 
 发布前必须补齐：
 
@@ -114,7 +114,7 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
 
 ---
 
-## 4.1 环境数据驱动测试
+## 6. 环境数据驱动测试
 
 新增或修改业务对象页面、Repository、Remote API、MockRepository 时，必须遵守：
 
@@ -122,104 +122,29 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
 - 端侧 alpha 使用 contract-seeded MockRepository，不访问云服务。
 - 端侧 beta/gamma 使用 RemoteRepository，经 gateway/API 读取云侧 seed 数据，禁止读取 Dart mock 列表。
 - 云侧 alpha/beta/gamma 必须通过 seed manifest 声明 `seedRefs`、`resetScope`、`targetStore` 与 `verifiedEndpoints`。
-- 人工 beta 预置数据必须进入 `app_beta_seed_manifest.json`，不得在脚本、数据库或 UI 中临时造数。
-- 生产 App 只有一个包；不存在 `app-prod-gray`，灰度由应用市场分发、端侧上下文与云侧策略决定。
-
-对应命令：
-
-```bash
-make verify-app-seed-manifest
-make test-app-alpha-seed
-make test-app-beta-seed
-```
+- 人工 beta 预置数据必须进入 `app_beta_seed_manifest.json`。
+- 生产 App 只有一个包；不存在 `app-prod-gray`。
 
 ---
 
-## 5. 测试内容要求
+## 7. acceptance.yaml 要求
 
-### `T1`
-
-至少覆盖：
-
-- metadata / DTO / 错误码 / 行为配置
-- 生成常量与契约字段
-- 树结构与脚本校验
-
-### `T2`
-
-至少覆盖：
-
-- 组件渲染
-- 交互状态变化
-- Scenario 常规/异常路径
-
-### `T3`
-
-至少覆盖：
-
-- 真实 API 协议
-- 真实存储副作用
-- 错误码与响应格式
-- 端云边界不漂移
-
-### `T4`
-
-至少覆盖：
-
-- 用户核心旅程
-- 真机或接近真机的系统能力验证
-- 权限、IME、通知、相机、弱网、性能等 `flutter_test` 无法替代的路径
-
----
-
-## 6. 验收文件要求
-
-`acceptance.yaml` 的核心验收项必须声明：
+验收项必须包含：
 
 ```yaml
-test_layers:
-  T1: required
-  T2: optional
-  T3: optional
-  T4: optional
-```
-
-并在实现完成后回填：
-
-```yaml
+evidence:
+  primary:
+    - T1_contract
+  supporting:
+    - T2_module_interaction
 tests:
-  - file: <path>
-    functions: [<fn1>, <fn2>]
+  planned: []
+  recorded: []
 ```
 
 禁止：
 
-- `implemented` 但 `tests` 为空
-- 使用 `L3/L4` 作为测试层标识
-- 将 `L2_journey` 与 `L3_scenario` 的测试职责写反
-
----
-
-## 7. 违规规则
-
-以下情况视为违规：
-
-- 在规则、命令、验收文件中使用 `L3/L4` 指代测试层
-- 验收项不声明 `T1~T4`
-- `implemented` 项没有测试证据
-- 将测试层与特性树层级混写
-
----
-
-## 8. 总结
-
-仓库测试治理的唯一正式语言是：
-
-```text
-T1 契约与静态
-T2 模块与交互
-T3 端云集成
-T4 端到端旅程
-```
-
-特性树与测试层从现在开始彻底解耦。
+- `implemented` / `completed` 但 `tests.recorded` 为空。
+- 用 `L3/L4` 作为测试层标识。
+- 将 UAT、SIT、GWT、contract 和 T1~T4 混为一层。
+- 在 Story 层新增 `design.md` 来绕过能力级设计。
