@@ -1,0 +1,57 @@
+id: CR-20260531-025
+title: V4 architecture unification — consolidate all worktrees into single dev1.0 mainline
+slug: arch-unify-dev1.0
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-client-foundation
+  - quwoquan_app/lib/components/object_page
+  - quwoquan_service/services/tag-service
+  - quwoquan_service/contracts/metadata/content/post
+
+entries:
+  - timestamp: "2026-05-31T11:00:00+08:00"
+    summary: >-
+      V4 架构统一收口：把分散在多个未合并 worktree 的版本工作统一到单一 dev1.0 主线，
+      消除全部独立工作区，确立「今后只有 dev1.0」单一主线原则。
+      P0 主树固化：session0 合并后累积在 dev1.0 working tree 的 1733 改动（5 工作线：
+      specs 去版本化标准化 / 内容命名收敛 CR-022 / ops 环境拓扑+数据生产 / user auth /
+      pageflip 增量）固化为 5 个主题 commit；约 927 个产物（artifacts/env-packages 164 +
+      quwoquan_data/release 763）按口径排除不污染主线。
+      S1 V3 整合：session3 对象页壳层统一(ObjectPageShell) + tag-service 真打 + 交集卡
+      merge 进 dev1.0，content 取 dev1.0 B 内容收敛基线、shell 取 session3 V3 重构。
+      S2 V2 收口：dev1.0 B(CR-022 Block 0) 已吸收内容多形态核心(ContentSurfaceView/
+      micro/口碑字段)，补 review_aspect projection 契约；session2 旧 moment 基线与旧 UI
+      整体丢弃，不搬旧债。
+      S5 游离全清：14 worktree → 2(dev1.0 + auth 三天内宽限)，16 个一周前分支删除，
+      7 个历史 stash 清空。
+    reason: >-
+      按用户冻结口径「统一到 dev1.0、不要再有独立工作区、不留技术债与兼容处理、保持技术
+      主线升级」：多版本散落在 session0/session2/session3 及 12 个历史 worktree 造成碎片化
+      与未固化债务。一次性收口到单一 dev1.0 主线，内容线硬切单一同源(无 unified_surface_view
+      双读 flag、无旧投影并行)，分支保留原则今后仅 dev1.0(三天内工作区宽限保留)。
+    change_type:
+      - baseline
+      - refactor
+      - debt_cleanup
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - dev1.0 领先基线 9a002512 共 8 commit；tracked working tree 干净，仅构建/数据产物 untracked。
+      - 验证全绿：go build 全 service + dart analyze lib 0 error + codegen 0 drift +
+        verify_dart_semantic / ui_mock_isolation / tag_ref_source_of_truth 门禁。
+      - S4 内容双轨清理由 CR-022 硬切达成(单一同源)；超大文件 R03/ContentRepository R02
+        拆分为主线后续优化。
+      - 口碑聚合(poi projector)/校验(validateReviewPayload)/创作前端编辑页(publish_review_editor/
+        publish_tag_selector) 作主线后续(契约已完整)，不搬 session2 旧 UI 实现避免旧债。
+      - tag-service Suggest/ListDimensions/Validate 后端(service.yaml 保留契约,当前 501)
+        与 gate-full(testcontainers + gamma 镜像) 为主线后续。
+      - 分支清理：一周前(< 05-28)worktree/分支/stash 全清；今后只保留 dev1.0(及三天内活跃工作区)。
