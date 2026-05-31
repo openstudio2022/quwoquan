@@ -44,9 +44,10 @@ List<ChatConversationMemberDto> sortChatMemberDtos(
   return copy;
 }
 
-/// Chat 域 Repository：会话、消息、成员、联系人等业务对象入口。
-/// 接口与 contracts/metadata/messages/conversation/service.yaml 17 个 API 一一对应。
-abstract class ChatRepository {
+/// Chat 会话读写（收件箱 / 检索 / 创建 / 标题 / 设置 / 时间戳 / 批量）。
+///
+/// R02：单接口 ≤10 方法。
+abstract class ChatConversationRepository {
   // ── 会话 ────────────────────────────────────────────────────────────────────
   /// 收件箱会话列表（强类型，优先用于新代码）。
   Future<List<ChatInboxDto>> listInbox({
@@ -79,6 +80,23 @@ abstract class ChatRepository {
   /// 更新会话展示标题（群名等）。Remote 侧按资源 PATCH；无独立 operation 元数据时用 GetConversation 上下文。
   Future<void> updateConversationTitle(String conversationId, String title);
 
+  // ── 用户设置 ──────────────────────────────────────────────────────────────
+  Future<void> updateConversationSettings({
+    required String conversationId,
+    bool? muted,
+    bool? pinned,
+  });
+
+  // ── 会话时间戳索引（端云同步） ─────────────────────────────────────────────
+  Future<List<ChatConversationTimestampDto>> getConversationTimestamps();
+
+  Future<List<ConversationDto>> batchGetConversations(List<String> ids);
+}
+
+/// Chat 消息收发 / 同步 / 已读回执。
+///
+/// R02：单接口 ≤10 方法。
+abstract class ChatMessageRepository {
   // ── 消息 ────────────────────────────────────────────────────────────────────
   Future<List<ChatMessageDto>> listMessages({
     required String conversationId,
@@ -128,7 +146,12 @@ abstract class ChatRepository {
     required String conversationId,
     required String messageId,
   });
+}
 
+/// Chat 会话成员管理 / 助手参与。
+///
+/// R02：单接口 ≤10 方法。
+abstract class ChatMemberRepository {
   // ── 成员管理 ──────────────────────────────────────────────────────────────
   Future<List<ChatConversationMemberDto>> listMembers({
     required String conversationId,
@@ -150,6 +173,9 @@ abstract class ChatRepository {
     required String userId,
   });
 
+  /// 搜索联想等：会话成员 userId 列表（Mock：内存成员表；Remote：listMembers）。
+  Future<List<String>> listMemberUserIds(String conversationId);
+
   // ── 助手参与 ──────────────────────────────────────────────────────────────
   Future<void> inviteAssistant({
     required String conversationId,
@@ -157,14 +183,12 @@ abstract class ChatRepository {
   });
 
   Future<void> removeAssistant({required String conversationId});
+}
 
-  // ── 用户设置 ──────────────────────────────────────────────────────────────
-  Future<void> updateConversationSettings({
-    required String conversationId,
-    bool? muted,
-    bool? pinned,
-  });
-
+/// Chat 联系人列表 / 联系人 Tab / 检索。
+///
+/// R02：单接口 ≤10 方法。
+abstract class ChatContactRepository {
   // ── 联系人 ──────────────────────────────────────────────────────────────
   Future<List<ChatContactRowDto>> listContacts({
     String? cursor,
@@ -181,19 +205,16 @@ abstract class ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  /// 搜索联想等：会话成员 userId 列表（Mock：内存成员表；Remote：listMembers）。
-  Future<List<String>> listMemberUserIds(String conversationId);
-
   Future<List<ChatContactSearchItemDto>> searchContacts({
     required String query,
     int limit = CloudApiDefaults.pageLimit,
   });
+}
 
-  // ── 会话时间戳索引（端云同步） ─────────────────────────────────────────────
-  Future<List<ChatConversationTimestampDto>> getConversationTimestamps();
-
-  Future<List<ConversationDto>> batchGetConversations(List<String> ids);
-
+/// Chat 群管理（设置 / 转让 / 管理员 / 解散）。
+///
+/// R02：单接口 ≤10 方法。
+abstract class ChatGroupAdminRepository {
   // ── 群管理 ──────────────────────────────────────────────────────────────────
   Future<ChatGroupSettingsDto> getGroupSettings(String conversationId);
 
@@ -208,3 +229,16 @@ abstract class ChatRepository {
 
   Future<void> dissolveConversation(String conversationId);
 }
+
+/// Chat 域 Repository：会话、消息、成员、联系人等业务对象入口。
+/// 接口与 contracts/metadata/messages/conversation/service.yaml 17 个 API 一一对应。
+///
+/// 由 5 个 ≤10 方法子接口组合（R02）。既有消费方继续依赖 `ChatRepository`
+/// 不变；新消费方可只依赖所需子接口。
+abstract class ChatRepository
+    implements
+        ChatConversationRepository,
+        ChatMessageRepository,
+        ChatMemberRepository,
+        ChatContactRepository,
+        ChatGroupAdminRepository {}

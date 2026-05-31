@@ -1844,12 +1844,6 @@ abstract class AppLocalizations {
   /// **'主账号'**
   String get personaPrimary;
 
-  /// No description provided for @myResonance.
-  ///
-  /// In zh, this message translates to:
-  /// **'我的交集'**
-  String get myResonance;
-
   /// No description provided for @profileEditLabel.
   ///
   /// In zh, this message translates to:
@@ -3577,24 +3571,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'这个人很懒，什么都没有写'**
   String get emptyBio;
-
-  /// No description provided for @resonanceDetail.
-  ///
-  /// In zh, this message translates to:
-  /// **'交集详情'**
-  String get resonanceDetail;
-
-  /// No description provided for @youHave.
-  ///
-  /// In zh, this message translates to:
-  /// **'你们有'**
-  String get youHave;
-
-  /// No description provided for @resonanceSuffix.
-  ///
-  /// In zh, this message translates to:
-  /// **'个交集点'**
-  String get resonanceSuffix;
 
   /// No description provided for @articleContent.
   ///

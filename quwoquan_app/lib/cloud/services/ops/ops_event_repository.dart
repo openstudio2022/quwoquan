@@ -526,7 +526,9 @@ class RemoteOpsEventRepository
   void _bindLifecycle() {
     try {
       WidgetsBinding.instance.addObserver(this);
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 测试或无 binding 环境下注册生命周期观察者会抛错，缺少观察者仅影响后台刷盘时机 */
+    }
   }
 
   @override
@@ -548,7 +550,9 @@ class RemoteOpsEventRepository
     _flushTimer = null;
     try {
       WidgetsBinding.instance.removeObserver(this);
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 未成功注册时移除观察者会抛错，可安全忽略 */
+    }
   }
 
   void _scheduleFlush({Duration delay = const Duration(seconds: 8)}) {
@@ -569,7 +573,9 @@ class RemoteOpsEventRepository
     if (!Hive.isBoxOpen(_queueBoxName)) {
       try {
         await Hive.initFlutter();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
+      }
       return Hive.openBox<String>(_queueBoxName);
     }
     return Hive.box<String>(_queueBoxName);

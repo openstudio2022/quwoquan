@@ -61,7 +61,9 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                     )
                     .transferOwnership(member.userId);
                 if (mounted) context.pop();
-              } catch (_) {}
+              } catch (_) {
+                /* best-effort: 转让群主失败时停留在当前页，本页无独立错误提示设施，不改变控制流 */
+              }
             },
           ),
         ],

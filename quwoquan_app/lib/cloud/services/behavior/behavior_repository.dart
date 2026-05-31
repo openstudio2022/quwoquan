@@ -34,7 +34,11 @@ enum BehaviorAction {
   entityPageView('entity_page_view'),
   tagClick('tag_click'),
   playProgress('play_progress'),
-  contentDepth('content_depth');
+  contentDepth('content_depth'),
+  // 交集转化三类行动（S6）：关注人 follow / 进圈子 join_circle / 加联系人 add_contact，
+  // 独立 BehaviorAction 以拆分交集转化漏斗。
+  joinCircle('join_circle'),
+  addContact('add_contact');
 
   const BehaviorAction(this.wireValue);
 
@@ -291,7 +295,9 @@ class RemoteBehaviorRepository extends BehaviorRepository
   void _bindLifecycle() {
     try {
       WidgetsBinding.instance.addObserver(this);
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 测试或无 binding 环境下注册生命周期观察者会抛错，缺少观察者仅影响后台刷盘时机 */
+    }
   }
 
   @override
@@ -305,7 +311,9 @@ class RemoteBehaviorRepository extends BehaviorRepository
   void dispose() {
     try {
       WidgetsBinding.instance.removeObserver(this);
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 未成功注册时移除观察者会抛错，可安全忽略 */
+    }
   }
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
@@ -314,7 +322,9 @@ class RemoteBehaviorRepository extends BehaviorRepository
     if (!Hive.isBoxOpen(kBehaviorPendingQueueBoxName)) {
       try {
         await Hive.initFlutter();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
+      }
       return Hive.openBox<String>(kBehaviorPendingQueueBoxName);
     }
     return Hive.box<String>(kBehaviorPendingQueueBoxName);
@@ -567,6 +577,10 @@ class RemoteBehaviorRepository extends BehaviorRepository
           ?.map((item) => item.toString())
           .toList(),
       pageVisitId: json['pageVisitId'] as String?,
+      intersectionDimension: json['intersectionDimension'] as String?,
+      intersectionTagRefs: (json['intersectionTagRefs'] as List?)
+          ?.map((item) => item.toString())
+          .toList(),
     );
   }
 

@@ -17,11 +17,13 @@ class UserProfileSubTabConfig {
   final String id;
   final String labelKey;
   final String? contentType;
+  final String? lifeCategory;
 
   const UserProfileSubTabConfig({
     required this.id,
     required this.labelKey,
-    required this.contentType,
+    this.contentType,
+    this.lifeCategory,
   });
 }
 
@@ -67,13 +69,14 @@ class UserProfileUIConfig {
     UserProfileTabConfig(id: "creations", labelKey: "profile_tab_creations", isDefault: true),
     UserProfileTabConfig(id: "circles", labelKey: "profile_tab_circles", isDefault: false),
     UserProfileTabConfig(id: "interaction", labelKey: "profile_tab_interaction", isDefault: false),
+    UserProfileTabConfig(id: "lifestyle", labelKey: "profile_tab_lifestyle", isDefault: false),
   ];
 
   static const List<UserProfileSubTabConfig> creationSubTabs = <UserProfileSubTabConfig>[
-    UserProfileSubTabConfig(id: "all", labelKey: "creation_sub_all", contentType: null),
-    UserProfileSubTabConfig(id: "image", labelKey: "creation_sub_image", contentType: "image"),
-    UserProfileSubTabConfig(id: "video", labelKey: "creation_sub_video", contentType: "video"),
-    UserProfileSubTabConfig(id: "article", labelKey: "creation_sub_text", contentType: "article"),
+    UserProfileSubTabConfig(id: "all", labelKey: "creation_sub_all", contentType: null, lifeCategory: null),
+    UserProfileSubTabConfig(id: "image", labelKey: "creation_sub_image", contentType: "image", lifeCategory: null),
+    UserProfileSubTabConfig(id: "video", labelKey: "creation_sub_video", contentType: "video", lifeCategory: null),
+    UserProfileSubTabConfig(id: "article", labelKey: "creation_sub_text", contentType: "article", lifeCategory: null),
   ];
 
   static const Map<String, List<String>> creationVisibilityFiltersByMode = <String, List<String>>{
@@ -82,14 +85,21 @@ class UserProfileUIConfig {
   };
 
   static const List<UserProfileSubTabConfig> interactionSubTabs = <UserProfileSubTabConfig>[
-    UserProfileSubTabConfig(id: "likes", labelKey: "interaction_sub_likes", contentType: null),
-    UserProfileSubTabConfig(id: "comments", labelKey: "interaction_sub_comments", contentType: null),
-    UserProfileSubTabConfig(id: "shares", labelKey: "interaction_sub_shares", contentType: null),
+    UserProfileSubTabConfig(id: "likes", labelKey: "interaction_sub_likes", contentType: null, lifeCategory: null),
+    UserProfileSubTabConfig(id: "comments", labelKey: "interaction_sub_comments", contentType: null, lifeCategory: null),
+    UserProfileSubTabConfig(id: "shares", labelKey: "interaction_sub_shares", contentType: null, lifeCategory: null),
   ];
 
   static const Map<String, List<String>> interactionDirectionFiltersByMode = <String, List<String>>{
     'mine': <String>["received", "sent"],
     'other': <String>["received"],
   };
+
+  static const List<UserProfileSubTabConfig> lifestyleSubTabs = <UserProfileSubTabConfig>[
+    UserProfileSubTabConfig(id: "footprint", labelKey: "lifestyle_sub_footprint", contentType: null, lifeCategory: "footprint"),
+    UserProfileSubTabConfig(id: "soul", labelKey: "lifestyle_sub_soul", contentType: null, lifeCategory: "soul"),
+    UserProfileSubTabConfig(id: "taste", labelKey: "lifestyle_sub_taste", contentType: null, lifeCategory: "taste"),
+    UserProfileSubTabConfig(id: "private", labelKey: "lifestyle_sub_private", contentType: null, lifeCategory: "private"),
+  ];
 
 }

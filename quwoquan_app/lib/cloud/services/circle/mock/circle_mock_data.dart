@@ -815,7 +815,9 @@ class CircleMockData {
       for (final m in _circleFeedWireSeeds) {
         try {
           out.add(postBaseDtoFromMap(Map<String, dynamic>.from(m)));
-        } catch (_) {}
+        } catch (_) {
+          /* best-effort: 单条 mock 种子解析失败时跳过该条，其余目录数据照常构建 */
+        }
       }
       return out;
     }();

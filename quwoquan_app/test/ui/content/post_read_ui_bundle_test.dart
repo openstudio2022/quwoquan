@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
+import 'package:quwoquan_app/ui/content/post_read_ui_bundle.dart';
 
 void main() {
-  group('PostReadProjectionFacade', () {
+  // S2 内容投影单轨：PostReadProjectionFacade 已删除，投影统一经
+  // PostReadPresentation.fromPostBase（DTO + wire 单一真相源）。
+  group('PostReadPresentation single-rail projection', () {
     test('subAccountId 与 authorId 保持同一真相源', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
         '_id': 'p_canonical',
@@ -24,7 +26,7 @@ void main() {
       expect(dto.subAccountId, 'current_author');
     });
 
-    test('presentationFor matches fromPostBase for feedCard', () {
+    test('fromPostBase 投射 feedCard 字段', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
         '_id': 'p1',
         'postId': 'p1',
@@ -40,15 +42,12 @@ void main() {
         'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
-      final pres = PostReadProjectionFacade.presentationFor(
-        dto,
-        PostReadSurfaceId.feedCard,
-      );
+      final pres = PostReadPresentation.fromPostBase(dto);
       expect(pres.postId, 'p1');
       expect(pres.body, 'hello');
     });
 
-    test('wire articleTemplate flows through immersive surface', () {
+    test('wire articleTemplate 经 fromPostBase 透传', () {
       final dto = ArticlePostDto.fromMap(<String, dynamic>{
         '_id': 'a1',
         'postId': 'a1',
@@ -65,9 +64,8 @@ void main() {
         'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
-      final pres = PostReadProjectionFacade.presentationFor(
+      final pres = PostReadPresentation.fromPostBase(
         dto,
-        PostReadSurfaceId.detailArticle,
         wire: <String, dynamic>{'articleTemplate': 'modern'},
       );
       expect(pres.articleTemplate, 'modern');

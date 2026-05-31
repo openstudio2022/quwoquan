@@ -72,7 +72,9 @@ class AppLogUploader {
           files.add(entity);
         }
       }
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 日志目录可能不存在或不可读，扫描失败时返回已收集到的文件，下次再试 */
+    }
     files.sort((a, b) => a.path.compareTo(b.path));
     return files;
   }
@@ -90,7 +92,9 @@ class AppLogUploader {
     if (lines.isEmpty) {
       try {
         file.deleteSync();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 删除空日志文件失败可忽略，下次扫描会再次尝试清理 */
+      }
       return 0;
     }
 
@@ -133,12 +137,16 @@ class AppLogUploader {
     if (batch.length >= lines.length) {
       try {
         file.deleteSync();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 全量上传后删除日志文件失败可忽略，残留文件会在后续轮次重传去重 */
+      }
     } else {
       final remaining = '${lines.sublist(batch.length).join('\n')}\n';
       try {
         file.writeAsStringSync(remaining);
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 回写剩余日志失败时保留原文件，下轮重传依赖服务端去重避免重复 */
+      }
     }
     return batch.length;
   }

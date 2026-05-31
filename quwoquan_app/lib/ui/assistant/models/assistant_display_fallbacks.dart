@@ -13,7 +13,9 @@ Map<String, dynamic> _structuredPayload(AssistantRunResponse response) {
     final decoded = jsonDecode(raw);
     if (decoded is Map<String, dynamic>) return decoded;
     if (decoded is Map) return decoded.cast<String, dynamic>();
-  } catch (_) {}
+  } catch (_) {
+    /* best-effort: finalText 非 JSON 时回退到空结构化负载，由上层用文本兜底 */
+  }
   return const <String, dynamic>{};
 }
 

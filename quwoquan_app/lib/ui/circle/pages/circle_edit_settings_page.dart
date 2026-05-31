@@ -136,7 +136,9 @@ class _CircleEditSettingsPageState
           cfg,
         );
       });
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 拉取圈子分类标签失败时沿用内置默认分类，不影响编辑表单其余字段 */
+    }
   }
 
   @override

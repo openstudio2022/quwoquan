@@ -77,7 +77,9 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
           .read(conversationMembersProvider(widget.conversationId).notifier)
           .updateGroupAdmins(_selectedIds.toList());
       if (mounted) context.pop();
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 更新管理员失败时停留在当前页，本页无独立错误提示设施，不改变控制流 */
+    }
   }
 
   @override

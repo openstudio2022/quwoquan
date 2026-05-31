@@ -122,7 +122,9 @@ class AppExceptionTelemetryService {
     if (!Hive.isBoxOpen(_queueBoxName)) {
       try {
         await Hive.initFlutter();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
+      }
       return Hive.openBox<String>(_queueBoxName);
     }
     return Hive.box<String>(_queueBoxName);

@@ -211,9 +211,6 @@ class AppRoutePaths {
   static const String profileComments = '/profile/comments';
   static const String profileCommentsSegment = 'comments';
 
-  static const String profileResonance = '/profile/resonance';
-  static const String profileResonanceSegment = 'resonance';
-
   static const String profileStatsPathTemplate = '/profile/stats';
   static String profileStats({String? type}) {
     return _buildPath(profileStatsPathTemplate, <String, String>{

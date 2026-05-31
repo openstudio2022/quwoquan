@@ -134,5 +134,60 @@ void main() {
       expect(event.intersectionDimension, equals('identity'));
       expect(event.intersectionTagRefs, contains('identity/campus/xdf'));
     });
+
+    // ── S6 交集转化三类行动可区分漏斗（follow / join_circle / add_contact）──
+    test('join_circle 交集行动独立动作 + dimension/tagRefs 回流', () async {
+      tracker.trackJoinCircle(
+        'circle_1',
+        intersectionDimension: 'interest',
+        intersectionTagRefs: const <String>['Topic/旅行'],
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.joinCircle);
+      expect(event.contentId, equals('circle_1'));
+      expect(event.intersectionDimension, equals('interest'));
+      expect(event.intersectionTagRefs, contains('Topic/旅行'));
+    });
+
+    test('add_contact 交集行动独立动作 + dimension/tagRefs 回流', () async {
+      tracker.trackAddContact(
+        'author_2',
+        intersectionDimension: 'location',
+        intersectionTagRefs: const <String>['Entity/地点/北京'],
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.addContact);
+      expect(event.contentId, equals('author_2'));
+      expect(event.intersectionDimension, equals('location'));
+      expect(event.intersectionTagRefs, contains('Entity/地点/北京'));
+    });
+
+    test('三类交集行动 wireValue 互不相同，漏斗可区分', () {
+      expect(BehaviorAction.follow.wireValue, equals('follow'));
+      expect(BehaviorAction.joinCircle.wireValue, equals('join_circle'));
+      expect(BehaviorAction.addContact.wireValue, equals('add_contact'));
+      expect(BehaviorAction.fromWireValue('join_circle'),
+          equals(BehaviorAction.joinCircle));
+      expect(BehaviorAction.fromWireValue('add_contact'),
+          equals(BehaviorAction.addContact));
+    });
+
+    // ── S6 修复：BehaviorEvent JSON roundtrip 不得丢失交集归因（入队重试场景）──
+    test('BehaviorEvent toJson 携带交集字段', () {
+      const event = BehaviorEvent(
+        contentId: 'circle_9',
+        action: BehaviorAction.joinCircle,
+        intersectionDimension: 'identity',
+        intersectionTagRefs: <String>['Entity/机构/学校/西电'],
+      );
+      final json = event.toJson();
+      expect(json['action'], equals('join_circle'));
+      expect(json['intersectionDimension'], equals('identity'));
+      expect(json['intersectionTagRefs'], contains('Entity/机构/学校/西电'));
+    });
   });
 }

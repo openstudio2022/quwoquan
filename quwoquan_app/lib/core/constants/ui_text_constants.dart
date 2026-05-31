@@ -147,7 +147,7 @@ class UITextConstants {
   static const String workFormatFilterAll = '全部';
   static const String workFormatFilterImage = '图片';
   static const String workFormatFilterVideo = '视频';
-  static const String workFormatFilterNote = '笔记';
+  static const String workFormatFilterNote = '文章';
 
   /// 发现页 V1：帮读/美图/视频
   static const String discoveryTabHelperRead = '帮读';
@@ -255,6 +255,7 @@ class UITextConstants {
   static const String authGateTitleLike = '登录后继续点赞';
   static const String authGateTitleFavorite = '登录后同步收藏';
   static const String authGateTitleFollow = '登录后继续关注';
+  static const String authGateTitleFollowingFeed = '登录后查看关注';
   static const String authGateTitleShare = '登录后同步分享记录';
   static const String authGateTitlePersona = '登录后管理分身';
   static const String authGateTitleSettingsAccount = '登录后管理账号';
@@ -272,6 +273,7 @@ class UITextConstants {
   static const String authGatePromptLike = '登录后即可点赞';
   static const String authGatePromptFavorite = '登录后即可收藏';
   static const String authGatePromptFollow = '登录后即可关注';
+  static const String authGatePromptFollowingFeed = '登录后查看关注的内容';
   static const String authGatePromptShare = '登录后即可同步分享';
   static const String authGatePromptPersona = '登录后即可管理分身';
   static const String authGatePromptSettingsAccount = '登录后即可管理账号';
@@ -884,13 +886,17 @@ class UITextConstants {
   static const String personaRetireBlocked = '当前分身暂不可退役';
 
   /// 我的主页统计与子页（关注数用 follow，此处为统计栏标题）
-  static const String myResonance = '我的交集';
   static const String profileEditLabel = '资料编辑';
   static const String profilePersonasLabel = '分身管理';
   static const String profileDirectMessage = '消息';
   static const String profileTabCreations = '创作';
   static const String profileTabCircles = '圈子';
   static const String profileTabInteraction = '互动';
+  static const String profileTabLifestyle = '生活';
+  static const String lifestyleSubFootprint = '足迹';
+  static const String lifestyleSubSoul = '书影音';
+  static const String lifestyleSubTaste = '味蕾';
+  static const String lifestyleSubPrivate = '爱物';
   static const String creationSubAll = '全部';
   static const String creationSubMicro = '点滴';
   static const String creationSubImage = '图片';
@@ -1335,6 +1341,16 @@ class UITextConstants {
         return profileTabCircles;
       case 'profile_tab_interaction':
         return profileTabInteraction;
+      case 'profile_tab_lifestyle':
+        return profileTabLifestyle;
+      case 'lifestyle_sub_footprint':
+        return lifestyleSubFootprint;
+      case 'lifestyle_sub_soul':
+        return lifestyleSubSoul;
+      case 'lifestyle_sub_taste':
+        return lifestyleSubTaste;
+      case 'lifestyle_sub_private':
+        return lifestyleSubPrivate;
       case 'creation_sub_all':
         return creationSubAll;
       case 'creation_sub_micro':

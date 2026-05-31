@@ -140,7 +140,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
       if (dto.type == 'direct') {
         _loadOtherParticipantId(repo);
       }
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 加载会话标题失败时回退到 conversationId 作为标题，不阻断聊天 */
+    }
   }
 
   Future<void> _loadOtherParticipantId(ChatRepository repo) async {
@@ -156,7 +158,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
         setState(() => _otherParticipantId = otherId);
         await _loadRelationshipCapability(otherId);
       }
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 解析单聊对端 userId 失败仅影响关系能力展示，不阻断聊天主流程 */
+    }
   }
 
   Future<void> _loadRelationshipCapability(String otherId) async {
@@ -166,7 +170,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
           .getCapability(otherId);
       if (!mounted) return;
       setState(() => _relationshipCapability = capability);
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 获取关系能力失败时维持空能力态，相关入口按默认隐藏处理 */
+    }
   }
 
   bool get _isGroupChat => _conversationDto?.type == 'group';

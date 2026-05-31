@@ -60,7 +60,7 @@ void main() {
     expect(find.text('微趣'), findsNothing);
   });
 
-  testWidgets('作品频道格式筛选使用全部/图片/视频/笔记', (tester) async {
+  testWidgets('作品频道格式筛选使用全部/图片/视频/文章', (tester) async {
     await tester.pumpWidget(
       _buildApp(
         WorksImmersiveViewer(
@@ -75,7 +75,7 @@ void main() {
     expect(find.text('全部'), findsAtLeastNWidgets(1));
     expect(find.text('图片'), findsAtLeastNWidgets(1));
     expect(find.text('视频'), findsAtLeastNWidgets(1));
-    expect(find.text('笔记'), findsAtLeastNWidgets(1));
-    expect(find.text('文章'), findsNothing);
+    expect(find.text('文章'), findsAtLeastNWidgets(1));
+    expect(find.text('笔记'), findsNothing);
   });
 }

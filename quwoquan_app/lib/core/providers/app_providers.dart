@@ -689,7 +689,9 @@ Future<Box<String>> _ensureClientInteractionStateBox() async {
   if (!Hive.isBoxOpen(_clientInteractionStateBoxName)) {
     try {
       await Hive.initFlutter();
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
+    }
     return Hive.openBox<String>(_clientInteractionStateBoxName);
   }
   return Hive.box<String>(_clientInteractionStateBoxName);
@@ -709,7 +711,9 @@ Future<Map<String, dynamic>?> _readPersistedInteractionMap(String key) async {
     if (decoded is Map) {
       return decoded.cast<String, dynamic>();
     }
-  } catch (_) {}
+  } catch (_) {
+    /* best-effort: 本地交互状态损坏时回退到 null，由调用方按未持久化态初始化 */
+  }
   return null;
 }
 
@@ -720,7 +724,9 @@ Future<void> _writePersistedInteractionMap(
   try {
     final box = await _ensureClientInteractionStateBox();
     await box.put(key, jsonEncode(value));
-  } catch (_) {}
+  } catch (_) {
+    /* best-effort: 本地交互状态持久化失败仅丢失离线缓存，云端同步仍为真相源 */
+  }
 }
 
 final personaManagementFeatureFlagProvider = Provider<bool>((ref) {

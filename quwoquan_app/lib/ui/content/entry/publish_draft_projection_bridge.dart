@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
-import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
+import 'package:quwoquan_app/ui/content/post_read_ui_bundle.dart';
 
 /// 创作草稿 → 与 [projectArticleDetailView] 兼容的 wire Map（预览 / ReadPresentation 管道入口）。
 ///

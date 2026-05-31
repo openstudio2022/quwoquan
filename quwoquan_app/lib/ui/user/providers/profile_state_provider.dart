@@ -16,7 +16,7 @@ class ProfileState {
     this.activeVisibility = CreationVisibility.all,
     this.interactionSubTab = InteractionSubTab.likes,
     this.interactionDirection = InteractionDirection.received,
-    this.lifestyleSubTab = LifestyleSubTab.footprint,
+    this.lifestyleSubTab = 'footprint',
     this.creations = const [],
     this.circles = const [],
     this.lifeItems = const [],
@@ -34,7 +34,10 @@ class ProfileState {
   final CreationVisibility activeVisibility;
   final InteractionSubTab interactionSubTab;
   final InteractionDirection interactionDirection;
-  final LifestyleSubTab lifestyleSubTab;
+
+  /// 生活 Tab 当前子页 = LifeItemCategory 枚举值（footprint/soul/taste/private）。
+  /// 子页清单与默认值由 codegen `UserProfileUIConfig.lifestyleSubTabs` 驱动。
+  final String lifestyleSubTab;
   final List<PostBaseDto> creations;
   final List<CircleDto> circles;
   final List<UserLifeItem> lifeItems;
@@ -62,7 +65,7 @@ class ProfileState {
     CreationVisibility? activeVisibility,
     InteractionSubTab? interactionSubTab,
     InteractionDirection? interactionDirection,
-    LifestyleSubTab? lifestyleSubTab,
+    String? lifestyleSubTab,
     List<PostBaseDto>? creations,
     List<CircleDto>? circles,
     List<UserLifeItem>? lifeItems,
@@ -262,8 +265,8 @@ class ProfileNotifier extends Notifier<ProfileState> {
     state = state.copyWith(interactionDirection: d);
   }
 
-  void setLifestyleSubTab(LifestyleSubTab tab) {
-    state = state.copyWith(lifestyleSubTab: tab);
+  void setLifestyleSubTab(String lifeCategory) {
+    state = state.copyWith(lifestyleSubTab: lifeCategory);
   }
 
   Future<void> toggleFollow() async {

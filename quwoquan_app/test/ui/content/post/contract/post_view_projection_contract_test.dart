@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
@@ -99,7 +100,10 @@ void main() {
     test('authorBackgroundUrl 投射到 author.backgroundUrl', () {
       final raw = Map<String, dynamic>.from(minPhoto)
         ..['authorBackgroundUrl'] = 'https://example.com/bg.jpg';
-      expect(surfaceOf(raw).author.backgroundUrl, equals('https://example.com/bg.jpg'));
+      expect(
+        surfaceOf(raw).author.backgroundUrl,
+        equals('https://example.com/bg.jpg'),
+      );
     });
 
     test('createdAt 是有效 DateTime', () {
@@ -112,8 +116,11 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('ContentStats 计数字段 & 0→1 回归', () {
     test('likeCount 忠实保留原始计数', () {
-      expect(surfaceOf(minPhoto).stats.like, equals(100),
-          reason: '投射不得把 100 归零：0→1 bug');
+      expect(
+        surfaceOf(minPhoto).stats.like,
+        equals(100),
+        reason: '投射不得把 100 归零：0→1 bug',
+      );
     });
 
     test('commentCount / favoriteCount / shareCount 忠实保留', () {
@@ -142,7 +149,11 @@ void main() {
         'publishedAt': '2025-01-01T00:00:00Z',
       };
       final r = surfaceOf(raw);
-      expect(r.stats.like, equals(200), reason: 'likesCount alias 必须被 DTO 正确归一');
+      expect(
+        r.stats.like,
+        equals(200),
+        reason: 'likesCount alias 必须被 DTO 正确归一',
+      );
       expect(r.stats.comment, equals(10));
       expect(r.stats.favorite, equals(40));
     });
@@ -221,7 +232,10 @@ void main() {
     });
 
     test('仅含无效字段也不抛异常', () {
-      expect(() => surfaceOf(<String, dynamic>{'unknown': 'value'}), returnsNormally);
+      expect(
+        () => surfaceOf(<String, dynamic>{'unknown': 'value'}),
+        returnsNormally,
+      );
     });
   });
 
@@ -284,7 +298,10 @@ void main() {
       expect(r.contentBlocks[1].type, equals('ordered_item'));
       expect(r.contentBlocks[1].orderedIndex, equals(1));
       expect(r.contentBlocks[2].type, equals('image'));
-      expect(r.contentBlocks[2].imageUrl, equals('https://example.com/block.jpg'));
+      expect(
+        r.contentBlocks[2].imageUrl,
+        equals('https://example.com/block.jpg'),
+      );
     });
 
     test('wrap image + paragraph 会投射为 wrapped_paragraph', () {
@@ -303,8 +320,68 @@ void main() {
       expect(r.contentBlocks, hasLength(1));
       expect(r.contentBlocks.first.type, equals('wrapped_paragraph'));
       expect(r.contentBlocks.first.imageLayout, equals('wrapLeft'));
-      expect(r.contentBlocks.first.imageUrl, equals('https://example.com/wrap.jpg'));
+      expect(
+        r.contentBlocks.first.imageUrl,
+        equals('https://example.com/wrap.jpg'),
+      );
     });
+
+    test(
+      'Markdown asset:// refs are resolved through articleAssetManifest',
+      () {
+        final raw = Map<String, dynamic>.from(minArticle)
+          ..['articleMarkdown'] =
+              '---\n'
+              'title: Manifest 标题\n'
+              'cover_asset_id: cover\n'
+              '---\n\n'
+              '# Manifest 标题\n\n'
+              ':::figure id="cover" layout="fullWidth" caption="封面"\n'
+              'asset://cover\n'
+              ':::\n\n'
+              '首段正文。\n\n'
+              ':::figure id="fig1" layout="wrapLeft" caption="配图"\n'
+              'asset://fig1\n'
+              ':::\n';
+        raw['articleAssetManifest'] = <String, dynamic>{
+          'schemaVersion': 1,
+          'assets': <Map<String, dynamic>>[
+            {
+              'assetId': 'cover',
+              'cdnUrl': 'https://cdn.example.com/cover.jpg',
+              'role': 'cover',
+            },
+            {
+              'assetId': 'fig1',
+              'cdnUrl': 'https://cdn.example.com/fig1.jpg',
+              'role': 'figure',
+            },
+          ],
+        };
+
+        final r = projectArticleDetailView(
+          raw,
+          fallbackArticleId: 'fb_manifest',
+        );
+        final imageNodes = r.document.nodes
+            .where((node) => node.isFigure)
+            .toList();
+        expect(
+          imageNodes.map((node) => node.imageUrl),
+          contains('https://cdn.example.com/cover.jpg'),
+        );
+        expect(
+          imageNodes.map((node) => node.imageUrl),
+          contains('https://cdn.example.com/fig1.jpg'),
+        );
+        expect(
+          r.pages.first.fragments
+              .where((fragment) => fragment.asset != null)
+              .map((fragment) => fragment.asset!.imageUrl),
+          contains('https://cdn.example.com/cover.jpg'),
+        );
+      },
+    );
 
     test('正文标题块会投射到连续文档与阅读块语义', () {
       final raw = Map<String, dynamic>.from(minArticle)
@@ -335,7 +412,10 @@ void main() {
       expect(r.contentBlocks, hasLength(1));
       expect(r.contentBlocks.first.type, equals('section'));
       expect(r.contentBlocks.first.title, equals('小节一'));
-      expect(r.contentBlocks.first.imageUrl, equals('https://example.com/card.jpg'));
+      expect(
+        r.contentBlocks.first.imageUrl,
+        equals('https://example.com/card.jpg'),
+      );
     });
 
     test('cards 使用 ArticleDetailWireKeys + ArticleCardWireKeys 构造仍可投射', () {
@@ -347,11 +427,17 @@ void main() {
             ArticleCardWireKeys.imageUrl: 'https://example.com/ssot-card.jpg',
           },
         ];
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_cards_keys');
+      final r = projectArticleDetailView(
+        raw,
+        fallbackArticleId: 'fb_cards_keys',
+      );
       expect(r.contentBlocks, hasLength(1));
       expect(r.contentBlocks.first.type, equals('section'));
       expect(r.contentBlocks.first.title, equals('SSOT 小节'));
-      expect(r.contentBlocks.first.imageUrl, equals('https://example.com/ssot-card.jpg'));
+      expect(
+        r.contentBlocks.first.imageUrl,
+        equals('https://example.com/ssot-card.jpg'),
+      );
     });
 
     test('articleMarkdown canonical 优先投射为连续内容块与分页首页', () {
@@ -379,12 +465,88 @@ void main() {
       expect(
         r.contentBlocks.any(
           (block) =>
-              block.type == 'wrapped_paragraph' && block.imageUrl == 'asset://hero',
+              block.type == 'wrapped_paragraph' &&
+              block.imageUrl == 'https://example.com/doc.jpg',
         ),
         isTrue,
       );
       expect(r.pages, isNotEmpty);
       expect(r.pages.first.title, equals('连续文档标题'));
+    });
+
+    test('quwoquan_data article.md + manifest 进入 App 后保持 Markdown 三件套主链', () {
+      const dataArticleMarkdown =
+          '---\n'
+          'title: 成都出发峨眉山周末自驾周末短途（夏季）\n'
+          'template: journal\n'
+          'articleMarkdownVersion: qwq-rich-md/1\n'
+          'coverImage: asset://data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg\n'
+          '---\n\n'
+          '# 成都出发峨眉山周末自驾周末短途（夏季）\n\n'
+          '## 周末动线\n\n'
+          '出发地成都，这个周末我去 峨眉山：Day1 走核心，Day2 上午补点后返程。\n\n'
+          ':::figure id="fig1" layout="fullWidth" caption="周末动线"\n'
+          'asset://data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg\n'
+          ':::\n\n'
+          '## 交通方式\n\n'
+          '交通方式选 自驾；单程耗时 1 小时。\n\n'
+          ':::figure id="fig2" layout="wrapRight" caption="交通方式"\n'
+          'asset://data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg_2\n'
+          ':::\n';
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..['articleMarkdown'] = dataArticleMarkdown
+        ..['articleMarkdownVersion'] = 'qwq-rich-md/1'
+        ..['articleTemplate'] = 'journal'
+        ..['articleFontPreset'] = 'clean'
+        ..['articleAssetManifest'] = <String, dynamic>{
+          'schemaVersion': 1,
+          'articleMarkdownVersion': 'qwq-rich-md/1',
+          'articleMarkdownDigest': 'sha256:test',
+          'assets': <Map<String, dynamic>>[
+            {
+              'assetId':
+                  'data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg',
+              'kind': 'image',
+              'scope': 'cold_start',
+              'objectKey': 'media/image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+              'caption': '封面',
+            },
+            {
+              'assetId':
+                  'data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg_2',
+              'kind': 'image',
+              'scope': 'cold_start',
+              'objectKey':
+                  'media/image/post/chuanxi_v2_峨眉山周末_自驾/v1/detail_2.jpg',
+              'caption': '配图2',
+            },
+          ],
+        }
+        ..['articleRenderProfile'] = <String, dynamic>{
+          'template': 'journal',
+          'fontPreset': 'clean',
+        };
+
+      final r = projectArticleDetailView(
+        raw,
+        fallbackArticleId: 'data_article',
+      );
+
+      expect(r.documentSource, ArticleDetailDocumentSource.markdown);
+      expect(r.document.title, equals('成都出发峨眉山周末自驾周末短途（夏季）'));
+      expect(r.template, ArticleTemplatePreset.journal);
+      expect(r.fontPreset, ArticleFontPreset.clean);
+      expect(r.document.nodes.where((node) => node.isFigure), hasLength(2));
+      expect(
+        r.document.nodes
+            .where((node) => node.isFigure)
+            .map((node) => node.imageUrl),
+        contains(
+          'http://127.0.0.1:17100/media/image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+        ),
+      );
+      expect(r.pages, isNotEmpty);
+      expect(r.pages.first.title, equals(r.document.title));
     });
   });
 
@@ -428,15 +590,24 @@ void main() {
     };
 
     test('micro type dispatches to MicroPostDto', () {
-      expect(postBaseDtoFromMap(momentWithImages), isA<MicroPostDto>(),
-          reason: 'contentType=micro must dispatch to MicroPostDto');
-      expect(postBaseDtoFromMap(momentWithVideo), isA<MicroPostDto>(),
-          reason: 'contentType=micro must dispatch to MicroPostDto');
+      expect(
+        postBaseDtoFromMap(momentWithImages),
+        isA<MicroPostDto>(),
+        reason: 'contentType=micro must dispatch to MicroPostDto',
+      );
+      expect(
+        postBaseDtoFromMap(momentWithVideo),
+        isA<MicroPostDto>(),
+        reason: 'contentType=micro must dispatch to MicroPostDto',
+      );
     });
 
     test('moment body is projected to ContentSurfaceView', () {
-      expect(surfaceOf(momentWithImages).body, equals('今天天气真好 ☀️'),
-          reason: 'moment body must be projected to ContentSurfaceView.body');
+      expect(
+        surfaceOf(momentWithImages).body,
+        equals('今天天气真好 ☀️'),
+        reason: 'moment body must be projected to ContentSurfaceView.body',
+      );
     });
 
     test('moment imageUrls projected correctly', () {
@@ -459,8 +630,11 @@ void main() {
 
     test('moment with no images has empty imageUrls list (not null)', () {
       final dto = postBaseDtoFromMap(momentWithVideo) as MicroPostDto;
-      expect(dto.imageUrls, isEmpty,
-          reason: 'imageUrls must be an empty list when no images provided');
+      expect(
+        dto.imageUrls,
+        isEmpty,
+        reason: 'imageUrls must be an empty list when no images provided',
+      );
     });
   });
 

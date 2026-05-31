@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -108,6 +110,13 @@ class _HomePageState extends ConsumerState<HomePage>
 
   void _handleChannelChange(String id) {
     if (_activeChannelId == id) return;
+    // 关注频道展示「关注的人」的内容，游客需先登录；未登录时提示并引导登录，
+    // 保持当前频道不变（不切到空白的关注流）。
+    if (id == HomePrimaryTabStrip.followingChannelId &&
+        !AuthGate.isAuthenticated(ref)) {
+      unawaited(requireLogin(ref, context, AuthGateReason.followingFeed));
+      return;
+    }
     setState(() => _activeChannelId = id);
     _syncShellRouteForTab(id);
   }

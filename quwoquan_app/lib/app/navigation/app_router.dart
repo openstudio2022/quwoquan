@@ -54,7 +54,6 @@ import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
-import 'package:quwoquan_app/ui/user/pages/resonance_page.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_management_page.dart';
@@ -725,12 +724,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             state: state,
             child: const ProfileCommentsPage(),
           );
-        },
-      ),
-      GoRoute(
-        path: AppRoutePaths.profileResonance,
-        pageBuilder: (context, state) {
-          return appRoutePage<void>(state: state, child: const ResonancePage());
         },
       ),
       GoRoute(

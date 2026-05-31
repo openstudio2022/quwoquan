@@ -1,10 +1,7 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-
-enum HomePrimaryTabStripStyle { regular, immersive }
 
 class HomePrimaryTabStrip extends StatelessWidget {
   const HomePrimaryTabStrip({
@@ -13,12 +10,7 @@ class HomePrimaryTabStrip extends StatelessWidget {
     required this.onChannelChanged,
     required this.isDark,
     this.channels,
-    this.style = HomePrimaryTabStripStyle.regular,
-    this.featuredIndicatorVisible = false,
-    this.featuredExpanded = false,
     this.onHorizontalDragEnd,
-    this.immersiveSelectedColor,
-    this.immersiveUnselectedColor,
   });
 
   static const String followingChannelId = 'following';
@@ -45,11 +37,6 @@ class HomePrimaryTabStrip extends StatelessWidget {
     carChannelId,
   ];
 
-  static const List<String> immersiveChannelIds = <String>[
-    followingChannelId,
-    featuredChannelId,
-  ];
-
   static Key channelKey(String channelId) =>
       ValueKey<String>('home-primary-tab-$channelId');
 
@@ -58,14 +45,9 @@ class HomePrimaryTabStrip extends StatelessWidget {
   final bool isDark;
 
   /// 首页频道（运营资产，来自 homeChannelsProvider：端默认 + 远程覆盖）。
-  /// 为空时回退发布自带默认 [homeChannelIds]（仅离线兜底）；immersive 风格固定用 [immersiveChannelIds]。
+  /// 为空时回退发布自带默认 [homeChannelIds]（仅离线兜底）。
   final List<HomeChannelConfig>? channels;
-  final HomePrimaryTabStripStyle style;
-  final bool featuredIndicatorVisible;
-  final bool featuredExpanded;
   final GestureDragEndCallback? onHorizontalDragEnd;
-  final Color? immersiveSelectedColor;
-  final Color? immersiveUnselectedColor;
 
   static double _measureLabelWidth(BuildContext context, String label) {
     final painter = TextPainter(
@@ -83,15 +65,9 @@ class HomePrimaryTabStrip extends StatelessWidget {
     return painter.width;
   }
 
-  static double _slotWidth(
-    BuildContext context,
-    String label, {
-    bool reserveAccessorySlot = false,
-  }) {
+  static double _slotWidth(BuildContext context, String label) {
     final labelWidth = _measureLabelWidth(context, label);
-    final edgeReserve = reserveAccessorySlot
-        ? AppSpacing.primaryTabAccessoryReserve(context)
-        : AppSpacing.primaryTabSlotSidePadding(context);
+    final edgeReserve = AppSpacing.primaryTabSlotSidePadding(context);
     return (labelWidth + (edgeReserve * 2)).clamp(
       AppSpacing.minInteractiveSize,
       double.infinity,
@@ -108,9 +84,7 @@ class HomePrimaryTabStrip extends StatelessWidget {
     final regularChannelIds = (channels != null && channels!.isNotEmpty)
         ? channels!.map((channel) => channel.id).toList(growable: false)
         : homeChannelIds;
-    final channelIds = style == HomePrimaryTabStripStyle.immersive
-        ? immersiveChannelIds
-        : regularChannelIds;
+    final channelIds = regularChannelIds;
     String labelFor(String channelId) =>
         labelByChannelId[channelId] ?? _labelForChannel(channelId);
     return GestureDetector(
@@ -132,20 +106,8 @@ class HomePrimaryTabStrip extends StatelessWidget {
                   channelId: channelIds[i],
                   label: labelFor(channelIds[i]),
                   selected: activeChannelId == channelIds[i],
-                  slotWidth: _slotWidth(
-                    context,
-                    labelFor(channelIds[i]),
-                    reserveAccessorySlot: channelIds[i] == featuredChannelId,
-                  ),
+                  slotWidth: _slotWidth(context, labelFor(channelIds[i])),
                   isDark: isDark,
-                  style: style,
-                  reserveIndicatorSlot: channelIds[i] == featuredChannelId,
-                  showIndicator:
-                      channelIds[i] == featuredChannelId &&
-                      featuredIndicatorVisible,
-                  indicatorExpanded: featuredExpanded,
-                  immersiveSelectedColor: immersiveSelectedColor,
-                  immersiveUnselectedColor: immersiveUnselectedColor,
                   onTap: () => _handleChannelTap(channelIds[i]),
                 ),
               ],
@@ -187,13 +149,7 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
     required this.selected,
     required this.slotWidth,
     required this.isDark,
-    required this.style,
     required this.onTap,
-    this.reserveIndicatorSlot = false,
-    this.showIndicator = false,
-    this.indicatorExpanded = false,
-    this.immersiveSelectedColor,
-    this.immersiveUnselectedColor,
   });
 
   final String channelId;
@@ -201,36 +157,16 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
   final bool selected;
   final double slotWidth;
   final bool isDark;
-  final HomePrimaryTabStripStyle style;
   final VoidCallback onTap;
-  final bool reserveIndicatorSlot;
-  final bool showIndicator;
-  final bool indicatorExpanded;
-  final Color? immersiveSelectedColor;
-  final Color? immersiveUnselectedColor;
 
   @override
   Widget build(BuildContext context) {
-    final selectedColor = switch (style) {
-      HomePrimaryTabStripStyle.immersive =>
-        immersiveSelectedColor ?? AppColors.worksTitle,
-      HomePrimaryTabStripStyle.regular =>
-        isDark
-            ? AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary)
-            : AppColors.primaryColor,
-    };
-    final unselectedColor = switch (style) {
-      HomePrimaryTabStripStyle.immersive =>
-        immersiveUnselectedColor ??
-            AppColors.worksTitle.withValues(alpha: 0.72),
-      HomePrimaryTabStripStyle.regular =>
-        isDark
-            ? AppColorsFunctional.getColor(isDark, ColorType.tabUnselected)
-            : AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundSecondary,
-              ),
-    };
+    final selectedColor = isDark
+        ? AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary)
+        : AppColors.primaryColor;
+    final unselectedColor = isDark
+        ? AppColorsFunctional.getColor(isDark, ColorType.tabUnselected)
+        : AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     final underlineColor = isDark
         ? AppColors.iosAccentDark
         : AppColors.primaryColor;
@@ -247,16 +183,8 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
       fontSize,
       selectedWeight,
     );
-    final indicatorColor = selected
-        ? selectedColor
-        : unselectedColor.withValues(alpha: 0.88);
-    final indicatorReserve = reserveIndicatorSlot
-        ? AppSpacing.primaryTabAccessoryReserve(context)
-        : 0.0;
     final showUnderline =
-        selected &&
-        style == HomePrimaryTabStripStyle.regular &&
-        channelId != HomePrimaryTabStrip.featuredChannelId;
+        selected && channelId != HomePrimaryTabStrip.featuredChannelId;
 
     return SizedBox(
       width: slotWidth,
@@ -282,29 +210,6 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
                   style: textStyle,
                 ),
               ),
-              if (reserveIndicatorSlot)
-                Positioned.fill(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: SizedBox(
-                      width: indicatorReserve,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 180),
-                        opacity: showIndicator ? 1 : 0,
-                        child: AnimatedRotation(
-                          duration: const Duration(milliseconds: 220),
-                          turns: indicatorExpanded ? 0.5 : 0,
-                          curve: Curves.easeOutCubic,
-                          child: Icon(
-                            Icons.keyboard_arrow_down,
-                            color: indicatorColor,
-                            size: AppSpacing.iconSmall,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               Positioned(
                 left: 0,
                 right: 0,

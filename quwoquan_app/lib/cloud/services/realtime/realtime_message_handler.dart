@@ -149,7 +149,9 @@ class RealtimeMessageHandler {
           unreadCount: currentUnread + 1,
         ),
       );
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 应用会话列表补丁失败仅影响列表预览即时性，下次同步会拉到最新态 */
+    }
   }
 
   /// 成员变更 → 插入系统消息到对话
@@ -193,7 +195,9 @@ class RealtimeMessageHandler {
             ).syncConversation(conversationId: id, forceFull: true),
           );
         }
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 强制刷新会话缓存失败时维持现有缓存，下次读取会从云端补齐 */
+      }
     });
   }
 
@@ -206,7 +210,9 @@ class RealtimeMessageHandler {
         unawaited(syncService.sync(force: true));
         _scheduleAvatarPatchSync(_latestHintedSyncSeq);
         unawaited(_read(localChatSearchSyncProvider).sync(force: true));
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 重连后触发的补全同步失败由下一次心跳/重连或主动刷新再次兜底 */
+      }
     });
   }
 
@@ -227,7 +233,9 @@ class RealtimeMessageHandler {
             force: true,
           ),
         );
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 头像补丁同步失败仅影响头像即时刷新，后续同步会补齐 */
+      }
     });
   }
 }

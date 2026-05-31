@@ -61,10 +61,11 @@ void main() {
       expect(draft.state.body, '第一段\n1. 第二条');
       expect(draft.state.imagePaths, <String>['inline.png']);
       expect(draft.state.activeArticleBlockId, 'o1');
-      expect(
-        (draft.toStorageMap()['articleBlocks'] as List).length,
-        3,
-      );
+
+      final storage = draft.toStorageMap();
+      expect(storage['articleMarkdown'], contains('第一段'));
+      final restored = CreateDraft.fromStorageMap(storage);
+      expect(restored.state.body, '第一段\n1. 第二条');
     });
 
     test('图片块布局样式可序列化恢复', () {

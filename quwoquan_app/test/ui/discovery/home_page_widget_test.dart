@@ -34,6 +34,12 @@ Widget _buildApp() {
                   const Scaffold(body: HomePage(routeLocation: '/')),
             ),
             GoRoute(
+              path: '/login',
+              builder: (context, state) => const Scaffold(
+                body: SizedBox(key: ValueKey<String>('login-route-sentinel')),
+              ),
+            ),
+            GoRoute(
               path: '/circles',
               builder: (context, state) =>
                   const Scaffold(body: CirclesHubPage()),
@@ -581,7 +587,9 @@ void main() {
       );
     });
 
-    testWidgets('点击关注 tab 不触发无效路由跳转', (tester) async {
+    testWidgets('游客点击关注 tab 引导登录而不进入空白关注流', (tester) async {
+      // 登录门有进程级防抖，先复位避免受其它用例触发影响。
+      AuthGate.resetDebounce();
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
@@ -593,9 +601,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // 游客点击「关注」应被登录门拦截并引导至登录路由，而不是无效路由或空白关注流。
       expect(find.text('Page Not Found'), findsNothing);
-      expect(find.byType(HomePage), findsOneWidget);
-      expect(find.byType(MomentSocialFeed), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('login-route-sentinel')),
+        findsOneWidget,
+      );
+
+      // 让登录提示 toast 的计时器结束，避免遗留挂起的 Timer。
+      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('关注流手机端首条 post 占满屏宽', (tester) async {
@@ -891,7 +905,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(HomePrimaryTabStrip), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('works-format-tab-strip')),
+        findsOneWidget,
+      );
       expect(find.byType(WorksImmersiveViewer), findsOneWidget);
       expect(exited, isFalse);
     });

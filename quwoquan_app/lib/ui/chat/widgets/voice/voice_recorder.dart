@@ -130,14 +130,18 @@ class VoiceRecorder {
       final amplitude = await _recorder.getAmplitude();
       _amplitudes.add(amplitude.current);
       _amplitudeController.add(List.unmodifiable(_amplitudes));
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 采样录音振幅用于波形展示，单次读取失败仅丢一帧采样，不影响录音 */
+    }
   }
 
   void _cleanup() {
     if (_filePath != null) {
       try {
         File(_filePath!).deleteSync();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 删除已取消录音的临时文件，删除失败由系统临时目录回收，可安全忽略 */
+      }
     }
     _filePath = null;
     _startTime = null;

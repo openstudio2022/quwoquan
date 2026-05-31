@@ -28,7 +28,9 @@ class VisitRecorderService {
     if (!Hive.isBoxOpen(kVisitPendingSyncBoxName)) {
       try {
         await Hive.initFlutter();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
+      }
       return Hive.openBox<String>(kVisitPendingSyncBoxName);
     }
     return Hive.box<String>(kVisitPendingSyncBoxName);
@@ -38,7 +40,9 @@ class VisitRecorderService {
     if (!Hive.isBoxOpen(_boxName)) {
       try {
         await Hive.initFlutter();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
+      }
       return Hive.openBox<String>(_boxName);
     }
     return Hive.box<String>(_boxName);

@@ -4,9 +4,8 @@ import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/markdown/qwq_markdown.dart';
+import 'package:quwoquan_app/ui/content/markdown/article_markdown_codec.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
-import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 
 /// 自 [ContentRepository.getPost] 返回的 [ContentPostDetailPayload] 投射出文章富渲染载荷。
 ContentArticleRender projectArticleDetailViewFromPayload(
@@ -27,11 +26,7 @@ ContentArticleRender projectArticleDetailView(
   required String fallbackArticleId,
 }) {
   final dto = postBaseDtoFromMap(raw);
-  final read = PostReadProjectionFacade.presentationFor(
-    dto,
-    PostReadSurfaceId.detailArticle,
-    wire: raw,
-  );
+  final read = PostReadPresentation.fromPostBase(dto, wire: raw);
   final postTitle = read.title;
   final body = read.body;
   var images = dto.hasImages
@@ -128,6 +123,14 @@ ContentArticleRender projectArticleDetailView(
   );
 }
 
+Map<String, dynamic>? _articleAssetManifestMap(Map<String, dynamic> raw) {
+  final manifest = raw[ArticleDetailWireKeys.articleAssetManifest];
+  if (manifest is Map) {
+    return Map<String, dynamic>.from(manifest);
+  }
+  return null;
+}
+
 ArticleDetailDocumentSource _resolveArticleDocumentSource({
   required Map<String, dynamic> raw,
   required List<ArticleCardView> cards,
@@ -150,108 +153,6 @@ ArticleDetailDocumentSource _resolveArticleDocumentSource({
   return ArticleDetailDocumentSource.empty;
 }
 
-ArticleDocumentData _projectMarkdownArticleDocument(String markdown) {
-  final parsed = const QwqMarkdownParser().parse(markdown).document;
-  final nodes = <ArticleDocumentNode>[];
-  final title = parsed.frontMatter.title.trim();
-  if (title.isNotEmpty) {
-    nodes.add(
-      ArticleDocumentNode(
-        id: 'document_title',
-        type: ArticleDocumentNodeType.documentTitle,
-        text: title,
-      ),
-    );
-  }
-  var seed = 0;
-  for (final block in parsed.blocks) {
-    switch (block.kind) {
-      case QwqMarkdownBlockKind.heading:
-        nodes.add(
-          ArticleDocumentNode(
-            id: block.id.isNotEmpty ? block.id : 'heading_${seed++}',
-            type: block.level >= 3
-                ? ArticleDocumentNodeType.headingMinor
-                : ArticleDocumentNodeType.headingMajor,
-            text: block.text,
-          ),
-        );
-      case QwqMarkdownBlockKind.paragraph:
-      case QwqMarkdownBlockKind.quote:
-      case QwqMarkdownBlockKind.callout:
-      case QwqMarkdownBlockKind.card:
-        if (block.text.trim().isNotEmpty) {
-          nodes.add(
-            ArticleDocumentNode(
-              id: block.id.isNotEmpty ? block.id : 'paragraph_${seed++}',
-              type: ArticleDocumentNodeType.paragraph,
-              text: block.text,
-            ),
-          );
-        }
-      case QwqMarkdownBlockKind.orderedItem:
-        nodes.add(
-          ArticleDocumentNode(
-            id: block.id.isNotEmpty ? block.id : 'ordered_${seed++}',
-            type: ArticleDocumentNodeType.orderedItem,
-            text: block.text,
-          ),
-        );
-      case QwqMarkdownBlockKind.bulletItem:
-        nodes.add(
-          ArticleDocumentNode(
-            id: block.id.isNotEmpty ? block.id : 'bullet_${seed++}',
-            type: ArticleDocumentNodeType.bulletItem,
-            text: block.text,
-          ),
-        );
-      case QwqMarkdownBlockKind.image:
-      case QwqMarkdownBlockKind.figure:
-        final ref = block.assetRef;
-        if (ref != null) {
-          nodes.add(
-            ArticleDocumentNode(
-              id: block.id.isNotEmpty ? block.id : ref.assetId,
-              type: ArticleDocumentNodeType.figure,
-              assetId: ref.assetId,
-              imageUrl: 'asset://${ref.assetId}',
-              imageLayout: ref.layout.name,
-              caption: ref.caption,
-            ),
-          );
-        }
-      case QwqMarkdownBlockKind.gallery:
-        for (final ref in block.assetRefs) {
-          nodes.add(
-            ArticleDocumentNode(
-              id: '${block.id}_${ref.assetId}',
-              type: ArticleDocumentNodeType.figure,
-              assetId: ref.assetId,
-              imageUrl: 'asset://${ref.assetId}',
-              imageLayout: ref.layout.name,
-              caption: ref.caption,
-            ),
-          );
-        }
-      case QwqMarkdownBlockKind.section:
-      case QwqMarkdownBlockKind.codeBlock:
-      case QwqMarkdownBlockKind.spacer:
-      case QwqMarkdownBlockKind.horizontalRule:
-        break;
-    }
-  }
-  return ArticleDocumentData(
-    nodes: nodes,
-    template: parsed.frontMatter.template.isNotEmpty
-        ? parsed.frontMatter.template
-        : 'gentle',
-    fontPreset: parsed.frontMatter.fontPreset.isNotEmpty
-        ? parsed.frontMatter.fontPreset
-        : 'clean',
-    coverImageUrl: resolveContentMediaUrl(parsed.frontMatter.coverImage),
-  );
-}
-
 ArticleDocumentData _projectArticleDocument({
   required Map<String, dynamic> raw,
   required String postTitle,
@@ -259,7 +160,10 @@ ArticleDocumentData _projectArticleDocument({
 }) {
   final markdown = raw[ArticleDetailWireKeys.articleMarkdown]?.toString() ?? '';
   if (markdown.trim().isNotEmpty) {
-    return _projectMarkdownArticleDocument(markdown);
+    return ArticleMarkdownCodec.parseDocument(
+      markdown,
+      assetManifest: _articleAssetManifestMap(raw),
+    );
   }
   final rawBlocks =
       (raw[ArticleDetailWireKeys.articleBlocks] as List?) ?? const <Object?>[];
@@ -470,15 +374,18 @@ List<ArticlePageData> _projectArticlePages({
         canonicalDocument.body.trim().isNotEmpty ||
         canonicalDocument.title.trim().isNotEmpty ||
         coverImage.trim().isNotEmpty) {
+      final projected = ArticlePageData(
+        id: 'page_0',
+        title: canonicalDocument.title.trim().isNotEmpty
+            ? canonicalDocument.title.trim()
+            : postTitle.trim(),
+        body: canonicalDocument.body.trim(),
+        imageUrl: coverImage.trim(),
+        contentBlocks: canonicalDocument.contentBlocks,
+      );
       return <ArticlePageData>[
-        ArticlePageData(
-          id: 'page_0',
-          title: canonicalDocument.title.trim().isNotEmpty
-              ? canonicalDocument.title.trim()
-              : postTitle.trim(),
-          body: canonicalDocument.body.trim(),
-          imageUrl: coverImage.trim(),
-          contentBlocks: canonicalDocument.blocks,
+        projected.copyWith(
+          fragments: _fragmentsFromDocument(canonicalDocument),
         ),
       ];
     }
@@ -608,6 +515,114 @@ List<ArticlePageData> _projectArticlePages({
   return <ArticlePageData>[
     ArticlePageData(id: 'page_0', title: postTitle.trim(), body: body.trim()),
   ];
+}
+
+List<ArticleLayoutFragment> _fragmentsFromDocument(
+  ArticleDocumentData document,
+) {
+  final fragments = <ArticleLayoutFragment>[];
+  if (document.titleStyle != ArticleDocumentTitleStyle.none &&
+      document.title.trim().isNotEmpty) {
+    fragments.add(
+      ArticleLayoutFragment(
+        kind: ArticleLayoutFragmentKind.title,
+        text: document.title.trim(),
+        textStyleKey: 'title',
+        binding: ArticlePageBinding(
+          titleRange: ArticleTextRange(start: 0, end: document.title.length),
+          insertOffset: 0,
+        ),
+      ),
+    );
+  }
+  var bodyCursor = 0;
+  for (final node in document.nodes) {
+    if (node.isDocumentTitle) {
+      continue;
+    }
+    switch (node.type) {
+      case ArticleDocumentNodeType.documentTitle:
+        break;
+      case ArticleDocumentNodeType.headingMajor:
+      case ArticleDocumentNodeType.headingMinor:
+      case ArticleDocumentNodeType.orderedItem:
+      case ArticleDocumentNodeType.bulletItem:
+        fragments.add(
+          ArticleLayoutFragment(
+            kind: ArticleLayoutFragmentKind.semanticBlock,
+            block: _blockFromNode(node, bodyCursor),
+            text: node.text.trim(),
+            textStyleKey: node.type == ArticleDocumentNodeType.headingMinor
+                ? 'heading3'
+                : node.type == ArticleDocumentNodeType.headingMajor
+                ? 'heading2'
+                : node.type == ArticleDocumentNodeType.orderedItem
+                ? 'orderedItem'
+                : 'bulletItem',
+            textAlign: node.textAlign,
+          ),
+        );
+        bodyCursor += node.text.length + 1;
+        break;
+      case ArticleDocumentNodeType.figure:
+        final asset = ArticleDocumentAsset(
+          id: node.assetId.trim().isNotEmpty ? node.assetId.trim() : node.id,
+          offset: bodyCursor,
+          imageUrl: node.imageUrl,
+          imageLayout: node.imageLayout,
+          caption: node.caption,
+        );
+        fragments.add(
+          ArticleLayoutFragment(
+            kind: asset.usesWrappedLayout
+                ? ArticleLayoutFragmentKind.wrapContent
+                : ArticleLayoutFragmentKind.fullWidthImage,
+            asset: asset,
+            textStyleKey: 'body',
+          ),
+        );
+        break;
+      case ArticleDocumentNodeType.paragraph:
+        final text = node.text.trimRight();
+        if (text.trim().isEmpty) {
+          break;
+        }
+        final start = bodyCursor;
+        final end = bodyCursor + node.text.length;
+        fragments.add(
+          ArticleLayoutFragment(
+            kind: ArticleLayoutFragmentKind.body,
+            text: text,
+            textStyleKey: 'body',
+            binding: ArticlePageBinding(
+              bodyRange: ArticleTextRange(start: start, end: end),
+              insertOffset: end,
+            ),
+          ),
+        );
+        bodyCursor = end + 1;
+        break;
+    }
+  }
+  return fragments;
+}
+
+ArticleDocumentBlock _blockFromNode(ArticleDocumentNode node, int offset) {
+  return ArticleDocumentBlock(
+    id: node.id,
+    type: switch (node.type) {
+      ArticleDocumentNodeType.headingMajor => ArticleDocumentBlockType.heading2,
+      ArticleDocumentNodeType.headingMinor => ArticleDocumentBlockType.heading3,
+      ArticleDocumentNodeType.orderedItem =>
+        ArticleDocumentBlockType.orderedItem,
+      ArticleDocumentNodeType.bulletItem => ArticleDocumentBlockType.bulletItem,
+      _ => ArticleDocumentBlockType.paragraph,
+    },
+    offset: offset,
+    text: node.text,
+    textAlign: node.textAlign,
+    listDepth: node.listDepth,
+  );
 }
 
 List<ArticleContentBlockView> _projectArticleContentBlocksFromDocument(

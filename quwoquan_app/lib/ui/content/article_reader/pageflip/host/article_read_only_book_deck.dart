@@ -894,7 +894,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     );
     final spreadModel = StPageFlipSpreadModel(
       pageCount: widget.pages.length,
-      showCover: widget.coverUrl.trim().isNotEmpty,
+      showCover: false,
       hardPagePolicy: StPageFlipHardPagePolicy.none,
     );
     if (_pageFlipController == null) {
@@ -2819,8 +2819,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     });
     _clearPageFlipTextureSession();
     if (plan.isTurned) {
-      widget.onPageChanged?.call(_currentPage);
       _emitPageFlipCommit(fromPage: previousPage, toPage: _currentPage);
+      widget.onPageChanged?.call(_currentPage);
     }
   }
 
@@ -2830,6 +2830,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
   }) {
     if (reportAbort) {
       _emitPageCurlAbortForPlan(plan);
+    }
+    if (plan.isTurned && _pageTransitionStartedAt == null) {
+      _startPageTransition('page_curl');
     }
     _startPageFlipTextureSession(plan.direction);
     _activePageFlipAnimation = plan;
@@ -3469,21 +3472,13 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           ? '${index + 1}/${widget.pages.length}'
           : null,
       paperTexture: widget.paperTexture,
-      child: index == 0 && widget.coverUrl.trim().isNotEmpty
-          ? ArticleFrontispieceView(
-              page: page,
-              template: widget.template,
-              fontPreset: widget.fontPreset,
-              coverUrl: widget.coverUrl.trim(),
-              paperTexture: widget.paperTexture,
-            )
-          : ArticlePageReadOnlyView(
-              page: page,
-              template: widget.template,
-              fontPreset: widget.fontPreset,
-              metrics: widget.metrics,
-              paperTexture: widget.paperTexture,
-            ),
+      child: ArticlePageReadOnlyView(
+        page: page,
+        template: widget.template,
+        fontPreset: widget.fontPreset,
+        metrics: widget.metrics,
+        paperTexture: widget.paperTexture,
+      ),
     );
   }
 

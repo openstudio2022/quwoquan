@@ -22,6 +22,7 @@ enum AuthGateReason {
   like,
   favorite,
   follow,
+  followingFeed,
   shareRecord,
   personaManage,
   settingsAccount,
@@ -100,6 +101,15 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
         title: UITextConstants.authGateTitleFollow,
         prompt: UITextConstants.authGatePromptFollow,
         requiredOperations: <String>['FollowUser'],
+      ),
+      // 关注频道展示「关注的人」的内容流，游客无关注关系，需登录后查看。
+      // 关注流走 GetFeed（鉴权快照为 optional），故此处不声明 requiredOperations，
+      // 登录约束是产品决策而非 API 强制。
+      AuthGateReason.followingFeed: AuthGateEntry(
+        reason: AuthGateReason.followingFeed,
+        title: UITextConstants.authGateTitleFollowingFeed,
+        prompt: UITextConstants.authGatePromptFollowingFeed,
+        requiredOperations: <String>[],
       ),
       AuthGateReason.shareRecord: AuthGateEntry(
         reason: AuthGateReason.shareRecord,

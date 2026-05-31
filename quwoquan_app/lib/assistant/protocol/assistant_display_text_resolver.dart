@@ -529,7 +529,9 @@ abstract final class AssistantDisplayTextResolver {
       if (decoded is Map || decoded is List) {
         return decoded;
       }
-    } catch (_) {}
+    } catch (_) {
+      /* best-effort: 前缀非结构化 JSON 时返回 null，判定为非泄漏负载继续后续解析 */
+    }
     return null;
   }
 

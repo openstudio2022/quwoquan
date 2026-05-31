@@ -61,7 +61,7 @@ void main() {
 
       await tester.tap(find.text('作品').first);
       await tester.pumpAndSettle();
-      expect(find.text('笔记'), findsOneWidget);
+      expect(find.text('文章'), findsOneWidget);
     });
 
     test('圈子文章 mock 覆盖封面/标题四种组合', () {
@@ -214,7 +214,7 @@ void main() {
 
       await tester.tap(find.text('作品').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('笔记'));
+      await tester.tap(find.text('文章'));
       await tester.pumpAndSettle();
 
       expect(

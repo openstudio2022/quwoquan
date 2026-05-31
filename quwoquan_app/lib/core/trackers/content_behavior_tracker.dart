@@ -190,6 +190,40 @@ class ContentBehaviorTracker {
     ));
   }
 
+  /// 记录加入圈子（join_circle）。交集行动，回流带 dimension + tagRefs（S6 归因）。
+  void trackJoinCircle(String circleId, {
+    String? feedRequestId,
+    ReferralSource? referralSource,
+    String? intersectionDimension,
+    List<String>? intersectionTagRefs,
+  }) {
+    _add(BehaviorEvent(
+      contentId: circleId,
+      action: BehaviorAction.joinCircle,
+      feedRequestId: feedRequestId,
+      referralSource: referralSource,
+      intersectionDimension: intersectionDimension,
+      intersectionTagRefs: intersectionTagRefs,
+    ));
+  }
+
+  /// 记录添加联系人/加好友（add_contact）。交集行动，回流带 dimension + tagRefs（S6 归因）。
+  void trackAddContact(String authorId, {
+    String? feedRequestId,
+    ReferralSource? referralSource,
+    String? intersectionDimension,
+    List<String>? intersectionTagRefs,
+  }) {
+    _add(BehaviorEvent(
+      contentId: authorId,
+      action: BehaviorAction.addContact,
+      feedRequestId: feedRequestId,
+      referralSource: referralSource,
+      intersectionDimension: intersectionDimension,
+      intersectionTagRefs: intersectionTagRefs,
+    ));
+  }
+
   void _add(BehaviorEvent event) {
     _buffer.add(event);
     if (_buffer.length >= _maxBatchSize) {

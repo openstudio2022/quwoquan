@@ -20,7 +20,18 @@ flutter config --no-enable-native-assets
 flutter config --enable-native-assets
 ```
 
-## 解决方案（Xcode 工程侧）
+## 本仓库当前修复方案
+除了保留 Xcode 工程侧的 `SDKROOT` 防御配置外，本仓库额外锁定了
+不会触发 `sqlite3` native assets 的依赖组合：
+
+- `sqflite_common_ffi: 2.3.7+1`
+- `sqlite3: 2.9.4`
+
+原因是当前 Flutter stable 的 iOS `flutter run` / hot restart 链路里，
+即使工程侧已经写了 `SDKROOT`，只要依赖图里还包含 `native_assets`
+构建链，仍可能继续报 `SdkRoot` 缺失。
+
+## 防御配置（Xcode 工程侧）
 已在以下 xcconfig 文件中明确设置了 SDKROOT：
 - `Debug.xcconfig`
 - `Release.xcconfig`
@@ -42,5 +53,6 @@ xcrun --show-sdk-version --sdk iphoneos
 
 ## 注意事项
 - 这些配置会覆盖默认设置，确保构建时使用正确的 SDK
-- 如果更新 Xcode 或 Flutter 版本，可能需要重新验证这些配置
+- 如果未来升级到已完全修复该问题的 Flutter stable，可重新评估是否移除
+  `sqflite_common_ffi/sqlite3` 版本锁定
 - 不要删除这些配置，否则可能会再次出现 SdkRoot 错误

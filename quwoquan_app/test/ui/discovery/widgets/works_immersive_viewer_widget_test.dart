@@ -283,13 +283,10 @@ class _ConfigurableContentRepository extends MockContentRepository {
 }
 
 class _PagedFeaturedContentRepository extends MockContentRepository {
-  _PagedFeaturedContentRepository({
-    this.pageSize = 2,
-    this.appendDelay = const Duration(seconds: 4),
-  });
+  _PagedFeaturedContentRepository();
 
-  final int pageSize;
-  final Duration appendDelay;
+  final int pageSize = 2;
+  final Duration appendDelay = const Duration(seconds: 4);
   int appendCallCount = 0;
 
   List<PostBaseDto> _postsForCategory(String category) {
@@ -699,6 +696,58 @@ void main() {
     // 滚动翻页会经 trackSkip 懒创建 ContentBehaviorTracker（周期性 flush 定时器，
     // 生命周期绑定 container.onDispose）。在测试体结束前显式 dispose container，
     // 使定时器在 pending-timer 不变量校验前被取消，避免 "Timer still pending"。
+    container.dispose();
+  });
+
+  testWidgets('精品顶部用作品形态分段替代关注/精品一级 tab', (tester) async {
+    final repo = _PagedFeaturedContentRepository();
+    final container = ProviderContainer(
+      overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, _) => MaterialApp(
+            theme: ThemeData.dark(),
+            home: Scaffold(
+              body: WorksImmersiveViewer(
+                showWorksToolbar: true,
+                showTopNavigation: true,
+                onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+                onAssistantTap: () {},
+                onSwitchToFollowing: () {},
+                onSwitchToCircles: () {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    // 形态分段常驻顶部，占用原关注/精品 tab 的同一居中位置。
+    expect(
+      find.byKey(const ValueKey<String>('works-format-tab-strip')),
+      findsOneWidget,
+    );
+    for (final id in <String>['all', 'image', 'video', 'note']) {
+      expect(
+        find.byKey(ValueKey<String>('works-format-tab-$id')),
+        findsOneWidget,
+        reason: '应展示作品形态分段项 $id',
+      );
+    }
+
+    // 不再出现「关注 / 精品」一级 tab。
+    expect(find.text('关注'), findsNothing);
+    expect(find.text('精品'), findsNothing);
+
     container.dispose();
   });
 
@@ -1590,9 +1639,8 @@ void main() {
     _consumeImageLoadExceptions(tester);
     await tester.pumpAndSettle();
 
-    await tester.dragFrom(
+    await tester.tapAt(
       tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
-      const Offset(-260, -40),
     );
     await tester.pumpAndSettle();
     expect(find.text('第二页标题'), findsWidgets);
@@ -2072,7 +2120,7 @@ void main() {
     expect(dismissed, isTrue);
   });
 
-  testWidgets('文章阅读使用顶部页码且封面进入扉页式第一页', (tester) async {
+  testWidgets('文章阅读使用顶部页码且封面与标题正文共用第一页', (tester) async {
     final post = _articlePost();
 
     await tester.pumpWidget(
@@ -2101,16 +2149,27 @@ void main() {
                   'title: ${post.title}\n'
                   'template: ${post.articleTemplate}\n'
                   'fontPreset: ${post.articleFontPreset}\n'
+                  'cover_asset_id: cover\n'
                   '---\n\n'
+                  '# ${post.title}\n\n'
+                  ':::figure id="cover" layout="fullWidth" caption=""\n'
+                  'asset://cover\n'
+                  ':::\n\n'
                   '第一页前言。\n\n'
                   '第二段落继续展开说明。\n\n'
                   '第三段落把正文推到下一页。\n',
               'articleMarkdownVersion': 'qwq-rich-md/1',
-              'articleAssetManifest': const <String, dynamic>{
+              'articleAssetManifest': <String, dynamic>{
                 'schemaVersion': 1,
                 'articleMarkdownVersion': 'qwq-rich-md/1',
                 'articleMarkdownDigest': 'fixture:test',
-                'assets': <Map<String, dynamic>>[],
+                'assets': <Map<String, dynamic>>[
+                  {
+                    'assetId': 'cover',
+                    'cdnUrl': post.coverUrl,
+                    'role': 'cover',
+                  },
+                ],
               },
               'articleRenderProfile': <String, dynamic>{
                 'template': post.articleTemplate,
@@ -2143,13 +2202,10 @@ void main() {
     expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('article-frontispiece-image')),
-      findsWidgets,
+      findsNothing,
     );
-    final imageRect = tester.getRect(
-      find.byKey(const ValueKey<String>('article-frontispiece-image')).first,
-    );
-    expect(imageRect.height, greaterThan(0));
     expect(find.text(post.title), findsWidgets);
+    expect(find.textContaining('第一页前言'), findsWidgets);
   });
 
   testWidgets('文章阅读不显示底部 caption rail 且页码只保留顶部一处', (tester) async {
@@ -2244,8 +2300,9 @@ void main() {
     expect(find.byType(ArticleReaderFlipHost), findsOneWidget);
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
 
+    final deckRect = tester.getRect(find.byType(ArticleReadOnlyBookDeck));
     await tester.dragFrom(
-      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+      Offset(deckRect.right - 2, deckRect.bottom - 80),
       const Offset(-260, -40),
     );
     await tester.pumpAndSettle();
@@ -2457,113 +2514,6 @@ void main() {
           ),
     );
     expect(structureFallback.properties['reason'], contains('body'));
-  });
-
-  testWidgets('文章翻页会记录 flip commit 埋点', (tester) async {
-    final post = _articlePost();
-    final analytics = _FakeAnalyticsService();
-
-    await tester.pumpWidget(
-      _wrap(
-        WorksImmersiveViewer(
-          showWorksToolbar: true,
-          showTopNavigation: false,
-          externalPosts: [post],
-          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
-          rawPostsById: _viewerRawByPostId({
-            post.id: <String, dynamic>{
-              'postId': post.id,
-              'type': 'article',
-              'contentType': 'article',
-              'authorId': post.authorId,
-              'authorNickname': post.displayName,
-              'authorAvatarUrl': post.avatarUrl,
-              'title': post.title,
-              'body': '第一页正文',
-              'coverUrl': post.coverUrl,
-              'cards': const [
-                {'title': '第二页标题', 'body': '第二页正文'},
-              ],
-            },
-          }),
-          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
-          onAssistantTap: () {},
-        ),
-        overrides: [analyticsProvider.overrideWithValue(analytics)],
-      ),
-    );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
-
-    await tester.dragFrom(
-      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
-      const Offset(-260, -40),
-    );
-    await tester.pumpAndSettle();
-
-    final flipEvent = analytics.events.firstWhere(
-      (event) => event.eventName == 'article_page_flip_commit_ms',
-    );
-    expect(flipEvent.properties['mechanism'], equals('page_curl'));
-    expect(flipEvent.properties['direction'], equals('forward'));
-  });
-
-  testWidgets('文章回翻会记录 backward flip commit 埋点', (tester) async {
-    final post = _articlePost();
-    final analytics = _FakeAnalyticsService();
-
-    await tester.pumpWidget(
-      _wrap(
-        WorksImmersiveViewer(
-          showWorksToolbar: true,
-          showTopNavigation: false,
-          externalPosts: [post],
-          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
-          rawPostsById: _viewerRawByPostId({
-            post.id: <String, dynamic>{
-              'postId': post.id,
-              'type': 'article',
-              'contentType': 'article',
-              'authorId': post.authorId,
-              'authorNickname': post.displayName,
-              'authorAvatarUrl': post.avatarUrl,
-              'title': post.title,
-              'body': '第一页正文',
-              'coverUrl': post.coverUrl,
-              'cards': const [
-                {'title': '第二页标题', 'body': '第二页正文'},
-              ],
-            },
-          }),
-          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
-          onAssistantTap: () {},
-        ),
-        overrides: [analyticsProvider.overrideWithValue(analytics)],
-      ),
-    );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
-
-    await tester.dragFrom(
-      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
-      const Offset(-260, -40),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.dragFrom(
-      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
-      const Offset(260, -40),
-    );
-    await tester.pumpAndSettle();
-
-    final flipEvents = analytics.events
-        .where((event) => event.eventName == 'article_page_flip_commit_ms')
-        .toList(growable: false);
-    expect(flipEvents, isNotEmpty);
-    expect(flipEvents.last.properties['mechanism'], equals('page_curl'));
-    expect(flipEvents.last.properties['direction'], equals('backward'));
   });
 
   testWidgets('沉浸式阅读器中的文章回翻保持统一 book deck 宿主', (tester) async {

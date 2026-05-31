@@ -124,7 +124,9 @@ class MediaDownloadCache {
         _currentSize -= entry.fileSize;
         try {
           File(entry.localPath).deleteSync();
-        } catch (_) {}
+        } catch (_) {
+          /* best-effort: LRU 淘汰时删除磁盘缓存文件，删除失败仅留下孤儿文件，后续 clear 会再清理 */
+        }
       }
     }
   }
@@ -134,7 +136,9 @@ class MediaDownloadCache {
     for (final entry in _entries.values) {
       try {
         File(entry.localPath).deleteSync();
-      } catch (_) {}
+      } catch (_) {
+        /* best-effort: 清空缓存时删除磁盘文件，个别删除失败不影响内存索引清零 */
+      }
     }
     _entries.clear();
     _currentSize = 0;

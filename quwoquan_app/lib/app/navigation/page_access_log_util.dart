@@ -317,7 +317,6 @@ String pageNameFromRouteLocation(String location) {
   if (path == AppRoutePaths.profileEdit) return 'profile_edit';
   if (path == AppRoutePaths.profilePersonas) return 'profile_personas';
   if (path == AppRoutePaths.profileComments) return 'profile_comments';
-  if (path == AppRoutePaths.profileResonance) return 'profile_resonance';
   if (path.startsWith('/profile/stats')) return 'profile_stats';
   if (path.startsWith('/rtc/outgoing/')) return 'rtc_outgoing';
   if (path.startsWith('/rtc/incoming/')) return 'rtc_incoming';

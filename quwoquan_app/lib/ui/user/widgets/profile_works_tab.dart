@@ -214,8 +214,6 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
 
   CreationSubTab _creationSubTabForId(String id) {
     switch (id) {
-      case 'micro':
-        return CreationSubTab.micro;
       case 'image':
         return CreationSubTab.image;
       case 'video':
