@@ -68,6 +68,15 @@ import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/models/user_models.dart';
 
+// 跨平台防腐层 Provider（平台目标、能力契约、文件存储网关、原生桥）统一从
+// app_providers 再导出，业务层经同一入口消费能力位，禁止直接判断平台。
+export 'package:quwoquan_app/core/platform/platform_providers.dart'
+    show
+        platformTargetProvider,
+        platformCapabilitiesProvider,
+        fileStorageGatewayProvider,
+        assistantLocalContextBridgeProvider;
+
 /// 主题相关的便捷Provider
 final isDarkProvider = Provider<bool>((ref) {
   return ref.watch(effectiveIsDarkProvider);

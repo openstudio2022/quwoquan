@@ -6,6 +6,8 @@ import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../../support/sqflite_ffi_test_support.dart';
+
 void main() {
   group('Conversation avatar cloud chain', () {
     test('ConversationDto -> cache record preserves group avatar fields', () {
@@ -36,7 +38,7 @@ void main() {
     test(
       'avatar patch updates conversation cache and local search payload',
       () async {
-        sqfliteFfiInit();
+        ensureSqfliteFfiInitialized();
         final namespace = LocalSearchNamespace(
           ownerUserId: 'user_owner',
           subAccountId: 'persona_001',
@@ -94,7 +96,7 @@ void main() {
     test(
       'listInbox refresh converges stale cache and local search avatar fields',
       () async {
-        sqfliteFfiInit();
+        ensureSqfliteFfiInitialized();
         final namespace = LocalSearchNamespace(
           ownerUserId: 'user_owner',
           subAccountId: 'persona_001',

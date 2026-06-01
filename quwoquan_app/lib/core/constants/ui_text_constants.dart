@@ -348,6 +348,18 @@ class UITextConstants {
   static const String unknownUser = '未知用户';
   static const String copyLink = '复制链接';
 
+  // ==================== Web 安装提示 ====================
+  static const String webInstallBannerTitle = '在 App 里继续趣我圈';
+  static const String webInstallBannerMobileSubtitle =
+      '手机或平板打开，可直接下载 App，也可以转发给朋友安装。';
+  static const String webInstallBannerDesktopSubtitle =
+      '电脑端可选择对应安装包，也可以把安装页发到手机或微信里继续安装。';
+  static const String webInstallBannerDownloadApp = '下载 App';
+  static const String webInstallBannerShareInstall = '分享安装页';
+  static const String webInstallBannerDesktopPackages = '选择安装包';
+  static const String webInstallBannerIosPackage = 'iPhone / iPad';
+  static const String webInstallBannerAndroidPackage = 'Android / 鸿蒙';
+
   /// 分享目标：微信
   static const String shareTargetWechat = '微信';
 

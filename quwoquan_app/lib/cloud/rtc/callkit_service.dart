@@ -40,8 +40,6 @@ class CallKitService {
       handle: callerName,
       type: isVideo ? 1 : 0,
       duration: 30000,
-      textAccept: UITextConstants.callAccept,
-      textDecline: UITextConstants.callReject,
       // CallKitParams.extra / headers 类型由 flutter_callkit_incoming 固定为 Map<String, dynamic>?
       extra: <String, dynamic>{'callId': callId},
       headers: const <String, dynamic>{},
@@ -52,6 +50,8 @@ class CallKitService {
         backgroundColor: '#0955fa',
         actionColor: '#0955fa',
         isShowFullLockedScreen: true,
+        textAccept: UITextConstants.callAccept,
+        textDecline: UITextConstants.callReject,
       ),
       ios: IOSParams(
         iconName: 'CallKitLogo',
@@ -78,24 +78,20 @@ class CallKitService {
     _eventSub?.cancel();
     _eventSub = FlutterCallkitIncoming.onEvent.listen((event) {
       if (event == null) return;
-      debugPrint('CallKit event: ${event.event}');
+      debugPrint('CallKit event: $event');
 
-      switch (event.event) {
-        case Event.actionCallAccept:
+      switch (event) {
+        case CallEventActionCallAccept():
           _actions.add(CallKitAction.accept);
-          break;
-        case Event.actionCallDecline:
+        case CallEventActionCallDecline():
           _actions.add(CallKitAction.decline);
           _activeCallId = null;
-          break;
-        case Event.actionCallEnded:
+        case CallEventActionCallEnded():
           _actions.add(CallKitAction.end);
           _activeCallId = null;
-          break;
-        case Event.actionCallTimeout:
+        case CallEventActionCallTimeout():
           _actions.add(CallKitAction.timeout);
           _activeCallId = null;
-          break;
         default:
           break;
       }

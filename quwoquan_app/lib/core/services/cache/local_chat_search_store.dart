@@ -6,7 +6,7 @@ import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite/sqflite.dart';
 
 /// 同步摄入的联系人行（与 `ChatContactDto.toMap()` 等 wire 对齐；值为 JSON 叶子或嵌套结构）。
 typedef LocalChatSearchContactWire = Map<String, Object?>;
@@ -1010,12 +1010,7 @@ class LocalChatSearchStore {
     if (_databaseFactory != null || _ffiInitialized) {
       return;
     }
-    if (Platform.isAndroid || Platform.isIOS) {
-      _ffiInitialized = true;
-      return;
-    }
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+    // 移动端 / macOS 使用 sqflite 插件原生实现；VM 单测通过构造函数注入 databaseFactory。
     _ffiInitialized = true;
   }
 

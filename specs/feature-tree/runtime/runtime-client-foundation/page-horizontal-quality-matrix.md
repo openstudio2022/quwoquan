@@ -22,6 +22,7 @@
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/app/shell/main_app_shell.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏 `IndexedStack`+状态栏；小趣退出底栏；未登录点击创作/聊天进入登录门禁；`isDarkProvider` / `AppColorsFunctional`；2026-05-17 收口底部安全区与底栏背景一体化，避免 home indicator 机型下缘留白过厚；regular 档底栏高度同步降到紧凑基线 |
 | `lib/app/shell/bottom_navigation.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏底栏；C 位创作触发 `/create-entry`；底栏背景 / `forceDark` 与壳一致；2026-05-17 底栏内容改为占满含底部安全区总高、顶部留白与底部安全区对称，并在有圆角/indicator 机型增加左右保护量；2026-05-19 图标/label/阴影接入 chrome 语义 token，视觉基线不变 |
+| `lib/app/shell/web_app_install_banner.dart` | T1 | ✓ | — | — | — | — | ✓ | ✓ | ✓ | Web 顶部 App 安装提示；由 `PlatformCapabilities.promotesAppInstall` 控制，手机/Pad 提供下载与分享安装页，PC 提供 iOS/Android(鸿蒙)安装包入口；P7 走 `AppSpacing.wideBreakpoint`/`webContentMaxWidth`，P8 走 `UITextConstants`/`AppColors`/`AppTypography` |
 
 ---
 
@@ -183,7 +184,7 @@
 | `ui/**/pages/*_page.dart`（含 T0 一行） | 58 |
 | `welcome_screen.dart`（额外入口） | 1 |
 | `components/**/*_page.dart` | 5 |
-| `app/shell/*.dart`（主壳 + 底栏） | 2 |
+| `app/shell/*.dart`（主壳 + 底栏 + Web 安装提示） | 3 |
 | **矩阵数据行（含 T0 + shell）** | **66** |
 | **需验收的独立页面行（排除 T0）** | **62** |
 | **P6 = ✓（full）** | **53** |

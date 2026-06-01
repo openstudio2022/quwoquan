@@ -7,7 +7,11 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 
+import '../../support/sqflite_ffi_test_support.dart';
+
 void main() {
+  setUpAll(ensureSqfliteFfiInitialized);
+
   group('LocalCircleGroupSnapshotStore', () {
     late Directory tempDir;
     late LocalCircleGroupSnapshotStore store;

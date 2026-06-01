@@ -64,3 +64,18 @@
 | Remote 空桩清理 | beta 不得在关键页面返回空桩 | `listHomeCircleDiscoveryFeed`、趣信联系人圈子/趣群 tab 均有远端派生数据 |
 | beta 预置网关补齐 | 人工 beta 启动时主要页面路径都有 fixture 响应 | `scripts/start_app_beta_manual.sh --skip-app` 健康检查覆盖上述路径 |
 | 三环境共用测试 | alpha mock 与 beta remote 使用同一 fixture ID；gamma 暂缓远端执行但保留 manifest 与路径约束 | `make test-app-alpha-seed`、`flutter test test/cloud/services/business_beta_remote_repository_test.dart`、`python3 quwoquan_app/scripts/env/run_app_alpha_beta_seed_matrix.py` |
+
+## 内容飞轮 ship 与环境数据分层（alpha 豁免决策）
+
+内容飞轮（`quwoquan_data` 产线 + `ship`）按 [`content_sampling_manifest.yaml`](../../deploy/shared/content_sampling_manifest.yaml) 把审核通过的真实内容采样回填各环境**服务侧运行库**。其中 `alpha` 的处理需明确两层区分，避免与 [08-mock-data-isolation](../../.cursor/rules/08-mock-data-isolation.mdc) / 编码军规 R30 冲突：
+
+| 层 | alpha 含义 | 数据源 | 约束来源 |
+|---|---|---|---|
+| **App 端侧** | 离线冒烟 | contract-seeded `MockRepository`（不变） | 08-mock-isolation / R30 |
+| **服务侧运行库** | 端云联通冒烟 | 内容飞轮 ship 回填的真实内容（10% 采样、≤1000） | content_sampling_manifest |
+
+**有意决策**：服务侧 alpha 运行库接受 ship 真实内容，用于端云联通冒烟，**不改变** App 端侧 alpha 仍用 contract-seeded mock 的口径。二者作用域不同、并存不冲突，故：
+
+- `verify_business_env_data_inventory.py` 仅校验 `_core` seedRefs ⊆ alpha/beta/gamma manifest，与本豁免无关，保持绿。
+- ship 回填 alpha 的真实内容带 `sourceTaskId`，可经 `task trace` 溯源、`task prune-publish --orphans` 清理，不进 `test_fixtures` / `seedRefs`。
+- prod 仍全量、禁 mock；alpha 服务侧运行库不得把 ship 内容写回 `app_alpha_seed_manifest.json`。

@@ -42,6 +42,38 @@ class CloudRuntimeConfig {
     defaultValue: 'http://127.0.0.1:17100',
   );
 
+  /// Web 顶部安装提示：移动/Pad 端直接下载 App 或打开商店落地页。
+  ///
+  /// 生产环境通过 `--dart-define=WEB_APP_MOBILE_DOWNLOAD_URL=...` 注入；
+  /// 默认相对路径由 Web 站点承接，不在端侧硬编码安装包地址。
+  static const String webAppMobileDownloadUrl = String.fromEnvironment(
+    'WEB_APP_MOBILE_DOWNLOAD_URL',
+    defaultValue: '/download/mobile',
+  );
+
+  /// Web 顶部安装提示：PC 端安装包/下载中心入口。
+  static const String webAppDesktopDownloadUrl = String.fromEnvironment(
+    'WEB_APP_DESKTOP_DOWNLOAD_URL',
+    defaultValue: '/download/desktop',
+  );
+
+  /// Web 顶部安装提示：分享给微信/好友的安装落地页。
+  static const String webAppShareInstallUrl = String.fromEnvironment(
+    'WEB_APP_SHARE_INSTALL_URL',
+    defaultValue: '/download',
+  );
+
+  /// Web 顶部安装提示：iOS / Android 具体入口，PC 宽屏用来提示对应安装包。
+  static const String webAppIosDownloadUrl = String.fromEnvironment(
+    'WEB_APP_IOS_DOWNLOAD_URL',
+    defaultValue: '/download/ios',
+  );
+
+  static const String webAppAndroidDownloadUrl = String.fromEnvironment(
+    'WEB_APP_ANDROID_DOWNLOAD_URL',
+    defaultValue: '/download/android',
+  );
+
   /// CDN 主域名（用于判断 URL 是否属于本应用 CDN，启用图片处理参数）。
   static const String cdnDomain = String.fromEnvironment(
     'CDN_DOMAIN',

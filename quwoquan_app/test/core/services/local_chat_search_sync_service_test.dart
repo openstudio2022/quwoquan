@@ -14,7 +14,11 @@ import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 
+import '../../support/sqflite_ffi_test_support.dart';
+
 void main() {
+  setUpAll(ensureSqfliteFfiInitialized);
+
   group('LocalChatSearchSyncService', () {
     late Directory tempDir;
     late LocalChatSearchStore store;

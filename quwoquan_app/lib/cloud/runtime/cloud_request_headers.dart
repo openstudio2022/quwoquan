@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 
 /// 端侧请求上下文 header 注入（用于网关访问日志/异常日志/过程日志关联）。
 ///
@@ -28,6 +29,11 @@ class CloudRequestHeaders {
 
   static String platform() {
     if (kIsWeb) return 'web';
+    // HarmonyOS / OpenHarmony reports as `ohos` via dart:io operatingSystem,
+    // which `defaultTargetPlatform` does not distinguish. Detect it first.
+    // NOTE: the cloud-side `X-Client-Device-Platform` enum must register
+    // `ohos` (and `web`) metadata-first before relying on it server-side.
+    if (currentAppPlatform == AppPlatform.ohos) return 'ohos';
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return 'android';

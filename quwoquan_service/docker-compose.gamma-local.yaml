@@ -249,6 +249,8 @@ services:
       - .:/workspace
       - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
       - local-gamma-go-cache:/go
+    ports:
+      - "${LOCAL_GAMMA_ASSISTANT_PORT:-18087}:18087"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -282,6 +284,7 @@ services:
         condition: service_healthy
     ports:
       - "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-18086}:18086"
+      - "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19010}:18086"
     volumes:
       - .:/workspace
       - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro

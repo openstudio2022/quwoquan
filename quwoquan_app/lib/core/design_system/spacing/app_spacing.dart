@@ -36,6 +36,19 @@ class AppSpacing {
   // ==================== 响应式断点 ====================
   static const double compactBreakpoint = 360.0;
   static const double expandedBreakpoint = 600.0;
+  static const double wideBreakpoint = 1024.0;
+
+  /// Web/桌面内容主列最大宽度：内容优先，避免 PC 上无限拉宽导致阅读疲劳。
+  static const double webContentMaxWidth = 1120.0;
+
+  /// Web 顶部安装提示条的移动端高度。
+  static const double webInstallBannerCompactHeight = 72.0;
+
+  /// Web 顶部安装提示条的宽屏高度。
+  static const double webInstallBannerWideHeight = 56.0;
+
+  /// Web 宽屏侧栏语义宽度（后续 adaptive_app_shell 使用）。
+  static const double webNavigationRailWidth = 96.0;
 
   // ==================== 基础间距 ====================
   /// 极小间距: 4.0
@@ -886,6 +899,43 @@ class AppSpacing {
     if (width >= expandedBreakpoint) return expanded;
     return regular;
   }
+
+  static double responsiveWideValue(
+    BuildContext context, {
+    required double compact,
+    required double regular,
+    required double expanded,
+    required double wide,
+  }) {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width >= wideBreakpoint) return wide;
+    if (width >= expandedBreakpoint) return expanded;
+    if (width < compactBreakpoint) return compact;
+    return regular;
+  }
+
+  static bool isWideLayout(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= wideBreakpoint;
+
+  static double webInstallBannerHeight(BuildContext context) =>
+      responsiveWideValue(
+        context,
+        compact: webInstallBannerCompactHeight,
+        regular: webInstallBannerCompactHeight,
+        expanded: webInstallBannerCompactHeight,
+        wide: webInstallBannerWideHeight,
+      );
+
+  static EdgeInsets webShellContentPadding(BuildContext context) =>
+      EdgeInsets.symmetric(
+        horizontal: responsiveWideValue(
+          context,
+          compact: containerXs,
+          regular: containerSm,
+          expanded: containerMd,
+          wide: containerLg,
+        ),
+      );
 
   // ==================== 响应式内容网格 ====================
 

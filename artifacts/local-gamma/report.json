@@ -1,10 +1,10 @@
 {
   "status": "passed",
   "dryRun": false,
-  "commitSha": "fa618c3a",
+  "commitSha": "b54c09a8",
   "configVersion": "local-gamma-v1",
   "imageVersion": "0.0.1",
-  "generatedAt": "2026-05-31T15:00:36.289089+00:00",
+  "generatedAt": "2026-06-01T08:32:16.512175+00:00",
   "gammaValidationSuiteRegistry": "deploy/shared/gamma_validation_suites.json",
   "serviceMode": "single-stack",
   "restartedFromPrevious": true,
@@ -18,7 +18,7 @@
     "productOpsBaseUrl": "http://127.0.0.1:19010",
     "mediaEdgeBaseUrl": "http://127.0.0.1:19100",
     "mediaOriginBaseUrl": "http://127.0.0.1:19110",
-    "generatedAt": "2026-05-31T14:57:09.531940Z"
+    "generatedAt": "2026-06-01T08:29:39.130380Z"
   },
   "tests": {
     "T1": {
@@ -48,7 +48,7 @@
       "seed": {
         "status": "passed",
         "insertedCount": 11,
-        "output": "time=\"2026-05-31T22:57:09+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-05-26T00:00:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 11 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_video_001',\n    '3': 'fixture_article_001',\n    '4': 'fixture_moment_001',\n    '5': 'fixture_post_photography_001',\n    '6': 'fixture_post_travel_001',\n    '7': 'fixture_post_citywalk_001',\n    '8': 'fixture_post_lifestyle_001',\n    '9': 'fixture_post_outdoor_001',\n    '10': 'fixture_post_tech_001'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 11\n}\n\nrs0 [direct: primary] test> "
+        "output": "time=\"2026-06-01T16:29:39+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-05-26T00:00:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 11 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_video_001',\n    '3': 'fixture_article_001',\n    '4': 'fixture_moment_001',\n    '5': 'fixture_post_photography_001',\n    '6': 'fixture_post_travel_001',\n    '7': 'fixture_post_citywalk_001',\n    '8': 'fixture_post_lifestyle_001',\n    '9': 'fixture_post_outdoor_001',\n    '10': 'fixture_post_tech_001'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 11\n}\n\nrs0 [direct: primary] test> "
       },
       "endpoints": [
         {
@@ -142,21 +142,29 @@
           "name": "product_ops_api_contract",
           "status": "passed",
           "exitCode": 0,
-          "output": "Waiting for another flutter command to release the startup lock...\n00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/ops/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: ops_event_ingestion_end_to_end POST /v1/ops/events 后 summary / drilldown 可读\n00:00 +1: ops_visit_record_end_to_end POST /v1/ops/visits 后 stats 可读\n00:00 +2: (tearDownAll)\n00:00 +2: All tests passed!\n"
+          "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/ops/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: ops_event_ingestion_end_to_end POST /v1/ops/events 后 summary / drilldown 可读\n00:00 +1: ops_visit_record_end_to_end POST /v1/ops/visits 后 stats 可读\n00:00 +2: (tearDownAll)\n00:00 +2: All tests passed!\n"
         }
       ]
     },
     "T4": {
       "suiteId": "content_feed_patrol",
       "status": "passed",
-      "startedAt": "2026-05-31T14:57:32.397153Z",
-      "endedAt": "2026-05-31T15:00:36.089789Z",
+      "startedAt": "2026-06-01T08:29:46.754130Z",
+      "endedAt": "2026-06-01T08:32:16.440264Z",
       "environmentAlias": "local-gamma",
       "target": "test/patrol/discovery/feed_load_test.dart",
       "platform": "all",
       "gatewayBaseUrl": "http://127.0.0.1:19000",
       "productOpsBaseUrl": "http://127.0.0.1:19010",
       "devices": [
+        {
+          "id": "emulator-5554",
+          "name": "sdk gphone64 arm64",
+          "targetPlatform": "android-arm64",
+          "sdk": "Android 12 (API 31)",
+          "emulator": true,
+          "ephemeral": false
+        },
         {
           "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
           "name": "iPhone 17 Pro",
@@ -167,6 +175,78 @@
         }
       ],
       "runs": [
+        {
+          "command": [
+            "patrol",
+            "test",
+            "-t",
+            "test/patrol/discovery/feed_load_test.dart",
+            "-d",
+            "emulator-5554",
+            "--dart-define=RUN_T4_PATROL=true",
+            "--dart-define=APP_RUNTIME_ENV=gamma",
+            "--dart-define=APP_DATA_SOURCE=remote",
+            "--dart-define=API_CONTRACT_ENV=gamma",
+            "--dart-define=CLOUD_GATEWAY_BASE_URL=http://127.0.0.1:19000",
+            "--dart-define=API_CONTRACT_BASE_URL=http://127.0.0.1:19000",
+            "--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=http://127.0.0.1:19010",
+            "--dart-define=TEST_AUTH_TOKEN=local-gamma-token",
+            "--dart-define=MEDIA_AVATAR_CDN_BASE_URL=http://127.0.0.1:19100",
+            "--dart-define=MEDIA_IMAGE_CDN_BASE_URL=http://127.0.0.1:19100",
+            "--dart-define=MEDIA_VIDEO_CDN_BASE_URL=http://127.0.0.1:19100",
+            "--dart-define=MEDIA_UPLOAD_BASE_URL=http://127.0.0.1:19100"
+          ],
+          "cwd": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 84533,
+          "outputSummary": "\nUpdate available! 4.3.1 → 4.4.0\n\nCheck the compatibility table at: https://patrol.leancode.co/documentation/compatibility-table\n\n\nFailed to post analytics\n• Building apk with entrypoint test_bundle.dart...\n\tWARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): patrol\n\tFuture versions of Flutter will fail to build if your app uses plugins that apply KGP.\n\t\n\tPlease check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.\n\tIf no such version exists, report the issue to the plugin. If necessary, here is a guide on filing \n\tan issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors\n\t\n\tIf you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors\n\tWARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): patrol\n\tFuture versions of Flutter will fail to build if your app uses plugins that apply KGP.\n\t\n\tPlease check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.\n\tIf no such version exists, report the issue to the plugin. If necessary, here is a guide on filing \n\tan issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors\n\t\n\tIf you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors\n✓ Completed building apk with entrypoint test_bundle.dart (36.7s)\n• Executing tests of apk with entrypoint test_bundle.dart on emulator-5554...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: file:///Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/app/reports/androidTests/connected/debug/index.html\n⏱️  Duration: 21s\n\n✓ Completed executing apk with entrypoint test_bundle.dart on emulator-5554 (21.9s)\n",
+          "logPath": "artifacts/local-gamma/runs/emulator-5554/patrol.log",
+          "device": {
+            "id": "emulator-5554",
+            "name": "sdk gphone64 arm64",
+            "targetPlatform": "android-arm64",
+            "sdk": "Android 12 (API 31)",
+            "emulator": true,
+            "ephemeral": false
+          },
+          "evidence": {
+            "runDirectory": "artifacts/local-gamma/runs/emulator-5554",
+            "deviceManifestPath": "artifacts/local-gamma/runs/emulator-5554/device.json",
+            "commandPath": "artifacts/local-gamma/runs/emulator-5554/command.json",
+            "rawLogPath": "artifacts/local-gamma/runs/emulator-5554/patrol.log",
+            "beforeScreenshot": {
+              "status": "captured",
+              "path": "artifacts/local-gamma/runs/emulator-5554/before.png",
+              "command": [
+                "adb",
+                "-s",
+                "emulator-5554",
+                "exec-out",
+                "screencap",
+                "-p"
+              ],
+              "stderrSummary": ""
+            },
+            "afterScreenshot": {
+              "status": "captured",
+              "path": "artifacts/local-gamma/runs/emulator-5554/after.png",
+              "command": [
+                "adb",
+                "-s",
+                "emulator-5554",
+                "exec-out",
+                "screencap",
+                "-p"
+              ],
+              "stderrSummary": ""
+            },
+            "failureScreenshot": {
+              "status": "skipped",
+              "reason": "command passed"
+            }
+          }
+        },
         {
           "command": [
             "patrol",
@@ -191,8 +271,8 @@
           "cwd": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app",
           "exitCode": 0,
           "timedOut": false,
-          "durationMs": 173462,
-          "outputSummary": "\nUpdate available! 4.3.1 → 4.4.0\n\nCheck the compatibility table at: https://patrol.leancode.co/documentation/compatibility-table\n\n\n• Building app with entrypoint test_bundle.dart for iOS simulator (debug)...\n\tBuilding com.example.quwoquanApp for simulator (ios)...\n✓ Completed building app with entrypoint test_bundle.dart for iOS simulator (124.8s)\n• Running app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/ios_results_1780239594170.xcresult\n⏱️  Duration: 40s\n\n✓ Completed executing app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro (40.8s)\n",
+          "durationMs": 56510,
+          "outputSummary": "\nUpdate available! 4.3.1 → 4.4.0\n\nCheck the compatibility table at: https://patrol.leancode.co/documentation/compatibility-table\n\n\n• Building app with entrypoint test_bundle.dart for iOS simulator (debug)...\n\tBuilding com.example.quwoquanApp for simulator (ios)...\n✓ Completed building app with entrypoint test_bundle.dart for iOS simulator (21.6s)\n• Running app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/ios_results_1780302711318.xcresult\n⏱️  Duration: 24s\n\n✓ Completed executing app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro (24.8s)\n",
           "logPath": "artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/patrol.log",
           "device": {
             "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",

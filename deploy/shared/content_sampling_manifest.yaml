@@ -4,34 +4,33 @@
 #
 # 采样确定性：seedHash(salt + ref) 映射到 [0,1)，< sampleRatio 入选；再按 bucket cap 截断。
 # 同一 ref 在同一 env/salt 下结果稳定，可重跑、可审计。
+#
+# 回填策略（默认）：alpha/beta/gamma 按比例 10% 采集，且总量不超过上限 1000；
+# 池较小（< ~10k）时上限不约束，按 10% 比例回填；池超过上限时按 rank 截断到 1000。
+# 各环境缺省继承 defaults，可按需在 environments.<env> 覆盖单键。prod 显式全量。
 schemaVersion: quwoquan.content_sampling_manifest
 salt: "qwq-content-2026"
+defaults:
+  sampleRatio: 0.10        # 默认按 10% 比例回填
+  postCapPerBucket: 0      # 0 = 不限（按比例 + 总量上限约束）
+  entityCapPerBucket: 0
+  maxPosts: 1000           # 总量上限：超出按 rank 确定性截断
+  maxEntities: 1000
 environments:
   prod:
     description: 生产全量，不采样
     sampleRatio: 1.0
-    postCapPerBucket: 0      # 0 = 不限
+    postCapPerBucket: 0
     entityCapPerBucket: 0
-    maxPosts: 0
+    maxPosts: 0            # 0 = 不限（全量）
     maxEntities: 0
   gamma:
-    description: 自动化集成，半量采样
-    sampleRatio: 0.5
-    postCapPerBucket: 80
-    entityCapPerBucket: 60
-    maxPosts: 2000
-    maxEntities: 1500
+    description: 自动化集成；默认 10% 比例、上限 1000
   beta:
-    description: 人工验收，小样
-    sampleRatio: 0.2
-    postCapPerBucket: 24
-    entityCapPerBucket: 20
-    maxPosts: 600
-    maxEntities: 400
+    description: 人工验收；默认 10% 比例、上限 1000
   alpha:
-    description: 开发/CI 冒烟，极小样
-    sampleRatio: 0.05
-    postCapPerBucket: 6
-    entityCapPerBucket: 6
-    maxPosts: 120
-    maxEntities: 100
+    # 【有意决策·豁免】此 alpha 指「服务侧 alpha 运行库」接受内容飞轮 ship 的真实内容用于端云冒烟，
+    # 与 08-mock-isolation / R30 的「App 端侧 alpha = contract-seeded MockRepository」属不同层，二者并存不冲突：
+    # 端侧离线 mock 数据源不变；服务侧 alpha 运行库可灌入 ship 真实内容。
+    # 详见 specs/gates/business_env_data_inventory.md「内容飞轮 ship 与环境数据分层（alpha 豁免决策）」。
+    description: 开发/CI 冒烟；默认 10% 比例、上限 1000（服务侧运行库接受 ship 真实内容，见豁免说明）

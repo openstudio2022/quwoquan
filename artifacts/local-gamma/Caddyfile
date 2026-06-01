@@ -12,6 +12,9 @@ gamma-api.quwoquan-env.test {
 	handle /healthz {
 		reverse_proxy content-service:18080
 	}
+	handle /v1/config/app {
+		reverse_proxy content-service:18080
+	}
 	handle /livez {
 		reverse_proxy content-service:18080
 	}
@@ -74,6 +77,9 @@ gamma-upload.quwoquan-env.test {
 
 :80 {
 	handle /healthz {
+		reverse_proxy content-service:18080
+	}
+	handle /v1/config/app {
 		reverse_proxy content-service:18080
 	}
 	@pub_content path /v1/content*

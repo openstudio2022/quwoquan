@@ -64,7 +64,9 @@ run_app() {
   dart tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
   (cd quwoquan_app && flutter pub get)
-  (cd quwoquan_app && flutter analyze --no-fatal-warnings --no-fatal-infos)
+  # 仅分析主 App 业务代码与测试；vendor/plugins/** 属于 path overrides 的第三方依赖，
+  # 其 example/test/pigeons 不应作为 quwoquan_app 主工程门禁输入。
+  (cd quwoquan_app && flutter analyze lib test --no-fatal-warnings --no-fatal-infos)
   # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
   if command -v python3 >/dev/null 2>&1; then
     python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py || exit 1
@@ -133,6 +135,8 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_lib_platform_check_isolation.py || exit 1
     python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py || exit 1
     python3 quwoquan_app/scripts/env/verify_business_env_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py || exit 1
@@ -143,7 +147,7 @@ run_app() {
     # R02 Repository 接口方法数预算（ratchet；伞组合接口免登记）
     python3 quwoquan_app/scripts/runtime/verify_repository_interface_method_budget.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_native_edge_navigation, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_app_seed_manifests, verify_business_env_data_inventory, verify_pageflip_backward_mainline"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_native_edge_navigation, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_lib_dart_io_budget, verify_lib_platform_check_isolation, verify_app_seed_manifests, verify_business_env_data_inventory, verify_pageflip_backward_mainline"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)

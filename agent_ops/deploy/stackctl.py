@@ -1168,20 +1168,24 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
     ports = profile_ports(manifest, profile_name)
     target = get_target(topology, target_name)
     public_bases = target.get("publicBases") or {}
-    origins = target.get("origins") or {}
     return {
         "LOCAL_GAMMA_HTTP_PORT": str(ports["api-edge"]),
         "LOCAL_GAMMA_PRODUCT_OPS_PORT": str(ports["product-ops-edge"]),
+        "LOCAL_GAMMA_PLATFORM_OPS_PORT": str(ports["platform-ops-edge"]),
         "LOCAL_GAMMA_MEDIA_EDGE_PORT": str(ports["media-edge"]),
         "LOCAL_GAMMA_MEDIA_ORIGIN_PORT": str(ports["media-origin"]),
         "LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL": str(public_bases["mediaImage"]),
         "LOCAL_GAMMA_MEDIA_BASE_URL": str(public_bases["mediaImage"]),
-        "LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL": str(origins.get("mediaOrigin", "")),
+        # local-gamma 默认直接服务挂载的 curated media bundle；不要把容器内回源指向宿主 loopback。
+        "LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL": "",
         "LOCAL_GAMMA_CONTENT_PORT": str(ports["content-service"]),
         "LOCAL_GAMMA_CHAT_PORT": str(ports["chat-service"]),
         "LOCAL_GAMMA_USER_PORT": str(ports["user-service"]),
         "LOCAL_GAMMA_ASSISTANT_PORT": str(ports["assistant-service"]),
         "LOCAL_GAMMA_REC_MODEL_PORT": str(ports["rec-model-service"]),
+        "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT": str(ports["product-ops-service"]),
+        "LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT": str(ports["platform-ops-service"]),
+        "LOCAL_GAMMA_TAG_PORT": str(ports["tag-service"]),
         "LOCAL_GAMMA_MONGO_PORT": str(ports["mongodb"]),
         "LOCAL_GAMMA_REDIS_PORT": str(ports["redis"]),
         "LOCAL_GAMMA_POSTGRES_PORT": str(ports["postgres"]),
@@ -1262,11 +1266,14 @@ def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
         if not role_name.endswith("-service"):
             continue
         port = canonical_port(manifest, str(profile_name), role_name)
+        path = "/healthz"
+        if role_name == "rec-model-service":
+            path = "/health"
         checks.append(
             {
                 "name": role_name,
                 "scope": "service",
-                "url": f"http://127.0.0.1:{port}/healthz",
+                "url": f"http://127.0.0.1:{port}{path}",
             }
         )
     return checks
@@ -1277,15 +1284,16 @@ def _full_scope_health_checks(
     public_bases: dict[str, Any],
     env_cfg: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    checks = [
-        {
-            "name": "app-config",
-            "scope": "full",
-            "url": f"{str(public_bases['api']).rstrip('/')}/v1/config/app",
-        }
-    ]
+    checks: list[dict[str, Any]] = []
     env_name = str(env_cfg.get("artifactPolicy", {}).get("app", {}).get("runtimeEnv", ""))
     if target_name == "beta-local":
+        checks.append(
+            {
+                "name": "app-config",
+                "scope": "full",
+                "url": f"{str(public_bases['api']).rstrip('/')}/v1/config/app",
+            }
+        )
         checks.extend(
             [
                 {
@@ -1301,12 +1309,27 @@ def _full_scope_health_checks(
             ]
         )
     elif target_name == "gamma-local":
-        checks.append(
-            {
-                "name": "gamma-route-smoke",
-                "scope": "full",
-                "url": f"{str(public_bases['api']).rstrip('/')}/v1/content/posts?limit=1",
-            }
+        checks.extend(
+            [
+                {
+                    "name": "app-config",
+                    "scope": "full",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/config/app",
+                },
+                {
+                    "name": "gamma-route-smoke",
+                    "scope": "full",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/content/feed?limit=1",
+                },
+                {
+                    "name": "tag-shared-tags-smoke",
+                    "scope": "full",
+                    "url": (
+                        f"{str(public_bases['api']).rstrip('/')}"
+                        "/v1/tag/shared-tags?objectAId=u1&objectAType=user&objectBId=u2&objectBType=user"
+                    ),
+                },
+            ]
         )
     elif target_name == "prod-hosted" and env_name == "prod":
         checks.append(
@@ -1364,7 +1387,7 @@ def _expected_local_roles(target_name: str) -> list[str]:
             "assistant-service",
             "rec-model-service",
             "product-ops-service",
-            "platform-ops-service",
+            "tag-service",
         ],
         "prod-sim": [
             "api-edge",
