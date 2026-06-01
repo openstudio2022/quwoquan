@@ -4,6 +4,25 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 COMPOSE_FILE="$ROOT/quwoquan_service/docker-compose.gamma-local.yaml"
 eval "$(python3 "$ROOT/agent_ops/deploy/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
+# docker compose 只读取导出的环境变量；这里把 canonical local-gamma 端口全部导出，
+# 避免直接运行脚本/Makefile 时回退到 compose 文件里的旧默认端口。
+export \
+  LOCAL_GAMMA_HTTP_PORT \
+  LOCAL_GAMMA_PRODUCT_OPS_PORT \
+  LOCAL_GAMMA_PLATFORM_OPS_PORT \
+  LOCAL_GAMMA_MEDIA_EDGE_PORT \
+  LOCAL_GAMMA_MEDIA_ORIGIN_PORT \
+  LOCAL_GAMMA_CONTENT_PORT \
+  LOCAL_GAMMA_CHAT_PORT \
+  LOCAL_GAMMA_USER_PORT \
+  LOCAL_GAMMA_ASSISTANT_PORT \
+  LOCAL_GAMMA_REC_MODEL_PORT \
+  LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT \
+  LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT \
+  LOCAL_GAMMA_TAG_PORT \
+  LOCAL_GAMMA_POSTGRES_PORT \
+  LOCAL_GAMMA_MONGO_PORT \
+  LOCAL_GAMMA_REDIS_PORT
 CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
 IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
 GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:${LOCAL_GAMMA_HTTP_PORT}}"
@@ -409,6 +428,10 @@ from pathlib import Path
 
 out_path = Path(sys.argv[1])
 media_origin = sys.argv[2].strip().rstrip("/")
+# 容器内 reverse_proxy 到 127.0.0.1/localhost 会命中容器自身 loopback。
+# local-gamma 默认应直接服务挂载的 curated media bundle，仅在显式传入可达公网/宿主地址时才回源。
+if media_origin.startswith(("http://127.0.0.1", "https://127.0.0.1", "http://localhost", "https://localhost")):
+    media_origin = ""
 
 if media_origin:
     media_api_block = "\n".join(
@@ -480,6 +503,9 @@ gamma-api.quwoquan-env.test {{
 \thandle /healthz {{
 \t\treverse_proxy content-service:18080
 \t}}
+\thandle /v1/config/app {{
+\t\treverse_proxy content-service:18080
+\t}}
 \thandle /livez {{
 \t\treverse_proxy content-service:18080
 \t}}
@@ -532,6 +558,9 @@ gamma-product-ops.quwoquan-env.test {{
 
 :80 {{
 \thandle /healthz {{
+\t\treverse_proxy content-service:18080
+\t}}
+\thandle /v1/config/app {{
 \t\treverse_proxy content-service:18080
 \t}}
 \t@pub_content path /v1/content*

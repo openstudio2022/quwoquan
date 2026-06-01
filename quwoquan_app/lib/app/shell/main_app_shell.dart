@@ -9,6 +9,7 @@ import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
+import 'package:quwoquan_app/app/shell/web_app_install_banner.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
@@ -138,6 +139,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         isFeaturedActive ||
         widget.currentLocation == AppRoutePaths.createEntry ||
         widget.currentLocation.startsWith(AppRoutePaths.createPathTemplate);
+    final capabilities = ref.watch(platformCapabilitiesProvider);
+    final showInstallBanner = capabilities.promotesAppInstall;
 
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -153,30 +156,41 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       value: statusBarStyle,
       child: ColoredBox(
         color: shellBackground,
-        child: Stack(
+        child: Column(
           children: [
-            IndexedStack(
-              index: _currentIndex,
-              children: [
-                HomePage(routeLocation: _currentLocation),
-                HomeFeaturedImmersivePage(
-                  onExitToHome: () => _selectMainTab(MainTabDestination.home),
-                ),
-                const SizedBox.shrink(),
-                const ChatPage(),
-                const MyProfilePage(),
-              ],
-            ),
-            if (!bottomNavHidden)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: BottomNavigationWidget(
-                  currentIndex: _currentIndex,
-                  onTap: _handleBottomNavTap,
+            if (showInstallBanner) const WebAppInstallBanner(),
+            Expanded(
+              child: _ShellContentFrame(
+                constrained: capabilities.wideScreenLayout,
+                child: Stack(
+                  children: [
+                    IndexedStack(
+                      index: _currentIndex,
+                      children: [
+                        HomePage(routeLocation: _currentLocation),
+                        HomeFeaturedImmersivePage(
+                          onExitToHome: () =>
+                              _selectMainTab(MainTabDestination.home),
+                        ),
+                        const SizedBox.shrink(),
+                        const ChatPage(),
+                        const MyProfilePage(),
+                      ],
+                    ),
+                    if (!bottomNavHidden)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: BottomNavigationWidget(
+                          currentIndex: _currentIndex,
+                          onTap: _handleBottomNavTap,
+                        ),
+                      ),
+                  ],
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -293,6 +307,26 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         route: _currentLocation,
         action: action,
       ).toMap(),
+    );
+  }
+}
+
+class _ShellContentFrame extends StatelessWidget {
+  const _ShellContentFrame({required this.constrained, required this.child});
+
+  final bool constrained;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!constrained || !AppSpacing.isWideLayout(context)) {
+      return child;
+    }
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: AppSpacing.webContentMaxWidth),
+        child: child,
+      ),
     );
   }
 }

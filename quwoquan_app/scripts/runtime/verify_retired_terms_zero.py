@@ -63,11 +63,16 @@ TERMS = (
 
 ALLOWLIST_PREFIXES = {
     "quwoquan_app/test/ui/content/markdown/fixtures/",
+    # vendored 第三方插件源码/示例/测试不属于主仓业务命名治理范围。
+    "quwoquan_app/vendor/",
     "quwoquan_data/runtime/",
     "quwoquan_data/publish/",
     "quwoquan_data/sop/",
     "quwoquan_data/docs/",
     "quwoquan_data/data/",
+    # data task 规格/notes/runs 与对应测试允许出现“历史/既往”等真实领域与迁移语义。
+    "quwoquan_data/tasks/",
+    "quwoquan_data/tests/",
     "quwoquan_data/schema/produce/templates/",
     # 数据工程领域内容/模板（文旅实体的过往脉络与背景等核心领域文案）。
     "quwoquan_data/templates/",
@@ -79,6 +84,8 @@ ALLOWLIST_PREFIXES = {
 }
 
 ALLOWLIST_PATHS = {
+    # 门禁脚本自身需要声明被检词与报错文案，允许自引用。
+    "quwoquan_app/scripts/runtime/verify_retired_terms_zero.py",
     "deploy/shared/media_slice_registry.json",
     "deploy/shared/process_domain_mapping_runbook.md",
     "quwoquan_app/lib/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart",

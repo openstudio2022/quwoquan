@@ -7,6 +7,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
+import 'package:quwoquan_app/app/shell/web_app_install_banner.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
@@ -14,6 +15,7 @@ import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
@@ -292,6 +294,103 @@ void main() {
         SettingsSemanticConstants.conversationSheetCardSurface(false),
       );
       expect(decoration.border, isNull);
+    });
+
+    testWidgets('Web 能力下顶部展示安装提示，移动宽度提供下载与分享', (tester) async {
+      _suppressExpectedErrors();
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            platformCapabilitiesProvider.overrideWithValue(
+              CapabilityProfile.web,
+            ),
+            authSessionStoreProvider.overrideWithValue(
+              const _TestAuthSessionStore(authenticated: true),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+            home: MainAppShell(
+              currentLocation: AppRoutePaths.home,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text(UITextConstants.webInstallBannerTitle), findsOneWidget);
+      expect(
+        find.text(UITextConstants.webInstallBannerDownloadApp),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(WebAppInstallBanner),
+          matching: find.text(UITextConstants.share),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Web 宽屏展示对应安装包入口', (tester) async {
+      _suppressExpectedErrors();
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            platformCapabilitiesProvider.overrideWithValue(
+              CapabilityProfile.web,
+            ),
+            authSessionStoreProvider.overrideWithValue(
+              const _TestAuthSessionStore(authenticated: true),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+            home: MainAppShell(
+              currentLocation: AppRoutePaths.home,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text(UITextConstants.webInstallBannerTitle), findsOneWidget);
+      expect(
+        find.text(UITextConstants.webInstallBannerIosPackage),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.webInstallBannerAndroidPackage),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.webInstallBannerShareInstall),
+        findsOneWidget,
+      );
     });
   });
 }

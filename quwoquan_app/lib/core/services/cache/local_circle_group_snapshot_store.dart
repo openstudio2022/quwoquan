@@ -5,7 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_group_wire_no
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite/sqflite.dart';
 
 class LocalCircleGroupSnapshotStore {
   LocalCircleGroupSnapshotStore({
@@ -251,12 +251,7 @@ class LocalCircleGroupSnapshotStore {
     if (_databaseFactory != null || _ffiInitialized) {
       return;
     }
-    if (Platform.isAndroid || Platform.isIOS) {
-      _ffiInitialized = true;
-      return;
-    }
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+    // 移动端 / macOS 使用 sqflite 插件原生实现；VM 单测通过构造函数注入 databaseFactory。
     _ffiInitialized = true;
   }
 

@@ -139,6 +139,31 @@ void main() {
       }
     });
 
+    testWidgets('固定 rail 高度约束下不发生垂直溢出', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          SizedBox(
+            height: AppSpacing.homeObjectCardRailHeight,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: UnifiedObjectCard(
+                reason: _reason(
+                  relationKind: 'person',
+                  actionType: 'follow',
+                  displayText: '这是一个会占满两行的交集说明文案，用于回归小高度溢出问题',
+                  sharedCount: 12,
+                ),
+                isDark: false,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('行动按钮热区 ≥ 44 且回调触发', (tester) async {
       var actionCount = 0;
       var openCount = 0;

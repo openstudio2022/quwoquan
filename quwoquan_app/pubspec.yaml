@@ -4,8 +4,8 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.11.0 <4.0.0'
-  flutter: '>=3.41.0'
+  sdk: '>=3.12.0 <4.0.0'
+  flutter: '>=3.44.0'
 
 dependencies:
   flutter:
@@ -41,7 +41,7 @@ dependencies:
   
   # 视频播放
   video_player: ^2.11.1
-  chewie: ^1.13.1
+  chewie: ^1.14.1
   video_thumbnail: ^0.5.6
   
   # 其他
@@ -53,29 +53,26 @@ dependencies:
   yaml: ^3.1.3
   crypto: ^3.0.7
   url_launcher: ^6.3.2
-  share_plus: ^12.0.2
+  share_plus: ^13.1.0
   geolocator: ^14.0.2
   google_fonts: ^8.1.0
   flutter_markdown_plus: ^1.0.7
   markdown: ^7.3.1
-  file_picker: ^11.0.2
-  permission_handler: ^12.0.1
+  file_picker: ^12.0.0-beta.5
+  permission_handler: ^12.0.2
   
   # 语音消息
-  record: ^6.2.0
+  record: ^7.0.0
   just_audio: ^0.10.5
   audio_session: ^0.2.3
   connectivity_plus: ^7.1.1
 
   # 实时音视频通话
   livekit_client: ^2.7.0
-  flutter_callkit_incoming: ^3.0.0
+  flutter_callkit_incoming: ^3.1.1
   web_socket_channel: ^3.0.3
   webview_flutter: ^4.13.1
   sqflite: ^2.4.2+1
-  # 锁定到 sqlite3 v2 兼容链，规避 Flutter stable 在 iOS hot restart 上的
-  # native_assets SdkRoot 缺失问题。
-  sqflite_common_ffi: 2.3.7+1
 
   # Repository 抽象（Mock/Remote 共用）；见 packages/quwoquan_cloud_contracts
   quwoquan_cloud_contracts:
@@ -97,14 +94,47 @@ dev_dependencies:
     sdk: flutter
   build_runner: ^2.15.0
   test: ^1.31.1
+  # VM/CI 单测 in-memory 库；在新版链路下与 sqlite3 v3 保持一致
+  sqflite_common_ffi: ^2.4.0+3
 
 dependency_overrides:
-  # 与 sqflite_common_ffi 2.3.7+1 配套，避免拉入 sqlite3 v3 native assets。
-  sqlite3: 2.9.4
-  # 暂时锁定到不依赖 objective_c native asset 的版本，规避 iOS 启动白屏
-  path_provider_foundation: 2.5.1
-  # livekit 传递依赖；升到 1.4.1 以对齐上游修复
-  flutter_webrtc: ^1.4.1
+  audio_session:
+    path: vendor/plugins/audio_session
+  camera_android_camerax:
+    path: vendor/plugins/camera_android_camerax
+  device_info_plus:
+    path: vendor/plugins/device_info_plus
+  flutter_callkit_incoming:
+    path: vendor/plugins/flutter_callkit_incoming
+  flutter_webrtc:
+    path: vendor/plugins/flutter_webrtc
+  image_picker_android:
+    path: vendor/plugins/image_picker_android
+  livekit_client:
+    path: vendor/plugins/livekit_client
+  package_info_plus:
+    path: vendor/plugins/package_info_plus
+  patrol:
+    path: vendor/plugins/patrol
+  photo_manager:
+    path: vendor/plugins/photo_manager
+  record_web:
+    path: vendor/plugins/record_web
+  share_plus:
+    path: vendor/plugins/share_plus
+  shared_preferences_android:
+    path: vendor/plugins/shared_preferences_android
+  video_thumbnail:
+    path: vendor/plugins/video_thumbnail
+  url_launcher_android:
+    path: vendor/plugins/url_launcher_android
+  wakelock_plus:
+    path: vendor/plugins/wakelock_plus
+  webview_flutter_android:
+    path: vendor/plugins/webview_flutter_android
+  # chewie 1.14 / share_plus 13 需要较新的传递依赖；上游 geolocator / livekit 尚未对齐
+  win32: ^6.3.0
+  vector_math: ^2.3.0
   characters: ^1.4.1
   matcher: ^0.12.20
   meta: ^1.18.2
@@ -113,10 +143,11 @@ dependency_overrides:
   test_core: ^0.6.18
   dart_style: ^3.1.9
   material_color_utilities: ^0.13.0
-  # record_linux 0.7.2 缺少 record_platform_interface 1.5.0 新增的 startStream/hasPermission 签名
-  record_linux: ^1.3.0
 
 flutter:
+  config:
+    # patrol / video_thumbnail / livekit_client / flutter_webrtc 尚未支持 SwiftPM
+    enable-swift-package-manager: false
   generate: true
   uses-material-design: true
   

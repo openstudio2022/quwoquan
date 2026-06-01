@@ -16,6 +16,12 @@ analyzer:
     - lib/cloud/runtime/generated/content/moment_post_dto.g.dart
     - lib/cloud/runtime/generated/content/photo_post_dto.g.dart
     - lib/cloud/runtime/generated/content/video_post_dto.g.dart
+    # vendored 第三方插件的示例/生成脚本不属于主 App 门禁分析范围
+    - vendor/plugins/**/example/**
+    - vendor/plugins/**/example_ohos/**
+    - vendor/plugins/**/integration_test/**
+    - vendor/plugins/**/test/**
+    - vendor/plugins/**/pigeons/**
 
 linter:
   # The lint rules applied to this project can be customized in the

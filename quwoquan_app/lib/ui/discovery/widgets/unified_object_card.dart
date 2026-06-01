@@ -99,7 +99,10 @@ class UnifiedObjectCard extends StatelessWidget {
             ),
           ),
           child: Padding(
-            padding: EdgeInsets.all(AppSpacing.containerSm),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.containerSm,
+              vertical: AppSpacing.containerXs,
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -107,7 +110,8 @@ class UnifiedObjectCard extends StatelessWidget {
                 SizedBox(width: AppSpacing.intraGroupSm),
                 Flexible(
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisSize: MainAxisSize.max,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
@@ -122,7 +126,7 @@ class UnifiedObjectCard extends StatelessWidget {
                         ),
                       ),
                       if (sharedCountText.isNotEmpty) ...[
-                        SizedBox(height: AppSpacing.intraGroupXs),
+                        SizedBox(height: AppSpacing.hairline),
                         Text(
                           sharedCountText,
                           maxLines: 1,

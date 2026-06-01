@@ -20,8 +20,11 @@ import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_sto
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import '../../common/chat/chat_mock_seed_refs.dart';
+import '../../support/sqflite_ffi_test_support.dart';
 
 void main() {
+  setUpAll(ensureSqfliteFfiInitialized);
+
   group('AppSearchRepository', () {
     late Directory tempDir;
     late LocalSearchNamespace namespace;
