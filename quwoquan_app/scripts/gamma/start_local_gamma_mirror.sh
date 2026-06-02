@@ -107,8 +107,10 @@ start_media_origin() {
   local log_file="$ROOT/artifacts/local-gamma/media-origin.log"
   mkdir -p "$media_root"
   stop_media_origin
-  python3 -m http.server "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}" --bind 127.0.0.1 --directory "$media_root" \
-    >"$log_file" 2>&1 &
+  (
+    cd "$media_root"
+    python3 -m http.server "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}" --bind 127.0.0.1
+  ) >"$log_file" 2>&1 &
   local pid="$!"
   echo "$pid" > "$media_origin_pid_file"
   python3 - "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}" <<'PY'
