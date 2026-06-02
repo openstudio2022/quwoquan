@@ -15,6 +15,10 @@ on:
         required: false
         type: string
         default: ''
+      skip_upload:
+        description: Reuse the existing ECS tree and only rerun remote startup
+        type: boolean
+        default: false
 
 concurrency:
   group: gamma-ecs-direct-${{ github.ref }}
@@ -75,6 +79,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sshpass
       - name: Create minimal ECS bundle
+        if: ${{ !inputs.skip_upload }}
         run: |
           mkdir -p "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_app"
           cp -R agent_ops "${RUNNER_TEMP}/gamma-minimal-bundle/agent_ops"
@@ -100,6 +105,7 @@ jobs:
         run: bash agent_ops/deploy/gamma/deploy_gamma_ecs.sh
         env:
           GAMMA_ECS_STAGE: ${{ inputs.stage }}
+          GAMMA_ECS_SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
           GAMMA_DEPLOY_IMAGE_VERSION: ${{ inputs.image_version || format('0.0.{0}', github.run_number) }}
           GAMMA_ECS_LOCAL_TARBALL: ${{ runner.temp }}/gamma-ecs-bundle.tgz
           GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
