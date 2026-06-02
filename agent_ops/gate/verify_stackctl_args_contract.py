@@ -41,6 +41,12 @@ def main() -> int:
     if inspect_help.returncode != 0 or "--kind" not in inspect_help.stdout:
         issues.append("stackctl inspect --help must expose --kind alias")
 
+    up_help = run(["python3", str(STACKCTL), "up", "--help"])
+    if up_help.returncode != 0 or "--env" not in up_help.stdout or "--device-id" not in up_help.stdout:
+        issues.append("stackctl up --help must expose --env/--device-id")
+    if "--gateway-base-url" in up_help.stdout:
+        issues.append("stackctl up user surface must not expose gateway override flags")
+
     profile_result = run(
         ["python3", str(PORT_PROFILE), "--profile", "beta-local", "--format", "json"]
     )

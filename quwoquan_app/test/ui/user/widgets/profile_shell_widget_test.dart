@@ -166,9 +166,10 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.text('创作'), findsOneWidget);
+      expect(find.text('作品'), findsOneWidget);
       expect(_inlinePrimaryTab('圈子'), findsOneWidget);
       expect(find.text('互动'), findsOneWidget);
+      expect(find.text('看点'), findsOneWidget);
     });
 
     testWidgets('用户主页主区块表面使用更多功能同源语义 token', (tester) async {
@@ -502,7 +503,7 @@ void main() {
         _scopedApp(mode: ProfileMode.mine, themeMode: ThemeMode.dark),
       );
       await _pumpFrames(tester);
-      expect(find.text('创作'), findsOneWidget);
+      expect(find.text('作品'), findsOneWidget);
       expect(
         find.byIcon(AppNavigationSemanticConstants.settingsActionIcon),
         findsOneWidget,
@@ -550,7 +551,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine, userId: ''));
       await _pumpFrames(tester);
-      expect(find.text('创作'), findsOneWidget);
+      expect(find.text('作品'), findsOneWidget);
     });
   });
 }

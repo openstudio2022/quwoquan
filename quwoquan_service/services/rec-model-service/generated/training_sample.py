@@ -13,6 +13,7 @@ class ContentTrainingSample(BaseModel):
     """Training sample for content recommendation model."""
 
     user_id: str
+    device_actor_id: str
     session_id: str
     request_time_hour: int
     item_features: ContentFeatures

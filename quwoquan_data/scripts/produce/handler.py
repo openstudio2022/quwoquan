@@ -10,7 +10,21 @@ from __future__ import annotations
 import argparse
 import sys
 
-from _common.draft_io import drafts_dir
+from _common.draft_io import (
+    drafts_dir,
+    draft_article_path,
+    draft_meta_path,
+    is_placeholder,
+    read_draft_article,
+    read_draft_meta,
+)
+from _common.entity_annotation import (
+    annotate_inline,
+    annotation_closure_issues,
+    build_entity_dictionary,
+)
+from _common.batch_orchestration import batch_dir, plan_batches, write_batch
+from _common.io import write_json
 from _common.paths import batch_inputs_dir, ensure_batch_layout, batch_command_root
 from produce.materialize import materialize_posts
 from produce.entity_workflow import (
@@ -27,7 +41,7 @@ from produce.route_workflow import (
 
 
 CONTENT_TYPES = ("article", "image", "video")
-STAGES = ("compose-brief", "review")
+STAGES = ("compose-brief", "annotate-entities", "review")
 
 
 def _collect_briefs(task_id: str, batch_id: str, refs):
@@ -36,9 +50,9 @@ def _collect_briefs(task_id: str, batch_id: str, refs):
     return routes, entities
 
 
-def _stage_compose_brief(task_id: str, batch_id: str, refs) -> int:
+def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int = 1) -> int:
     routes, entities = _collect_briefs(task_id, batch_id, refs)
-    prepared = 0
+    prepared_refs: list[str] = []
     blocked = 0
     for ref, brief in routes:
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
@@ -47,7 +61,7 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs) -> int:
             print(f"[produce] SKIP {ref}: evidence too weak (recommendation=skip)", file=sys.stderr)
             continue
         build_route_writing_pack(task_id, batch_id, ref, brief, quality)
-        prepared += 1
+        prepared_refs.append(ref)
     for ref, brief in entities:
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
         if quality.get("recommendation") == "skip":
@@ -55,13 +69,62 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs) -> int:
             print(f"[produce] SKIP {ref}: evidence too weak (recommendation=skip)", file=sys.stderr)
             continue
         build_entity_writing_pack(task_id, batch_id, ref, brief, quality)
-        prepared += 1
+        prepared_refs.append(ref)
     out_dir = drafts_dir(task_id, batch_id)
-    print(f"[produce] compose-brief prepared {prepared} writing pack(s); blocked={blocked}")
+    print(f"[produce] compose-brief prepared {len(prepared_refs)} writing pack(s); blocked={blocked}")
     print(f"[produce] Drafts dir: {out_dir}")
-    print("[produce] Next: 会话模型阅读 {ref}.prompt.md 与 {ref}.writing_pack.json 创作正文，写回 {ref}.article.md (generator=agent)。")
+    if batch_size > 1 and prepared_refs:
+        groups = plan_batches(prepared_refs, batch_size)
+        for seq, group in enumerate(groups, start=1):
+            write_batch(task_id, batch_id, seq, group)
+        print(
+            f"[produce] single-session batches: {len(prepared_refs)} ref(s) → {len(groups)} batch prompt(s) "
+            f"(size={batch_size}); see {batch_dir(task_id, batch_id)}"
+        )
+        print("[produce] Next: 会话模型阅读 _batch/{seq}.batch_prompt.md，一会话产 N 篇分别写回各 {ref}.article.md。")
+    else:
+        print("[produce] Next: 会话模型阅读 {ref}.prompt.md 与 {ref}.writing_pack.json 创作正文，写回 {ref}.article.md (generator=agent)。")
     print("[produce] 然后运行: qwq-data produce --task <T> --batch <B> --type article --stage review --materialize")
-    return prepared
+    return len(prepared_refs)
+
+
+def _stage_annotate_entities(task_id: str, batch_id: str, refs, *, allow_partial: bool) -> None:
+    """实体标注环节：把 agent 正文里、库中有主页的实体首次出现处标成 inline 链接（确定性 grounding）。
+
+    NER 由 compose 阶段会话 agent 完成（draft_meta.extractedEntities），本阶段只做词典 grounding +
+    inline 机械标注 + ref 闭环强校验，并把被标注实体登记进 draft_meta.annotatedEntityRefs（compose 据此并入
+    manifest.entityRefs，使标注→登记→主页闭环成立）。
+    """
+    routes, entities = _collect_briefs(task_id, batch_id, refs)
+    total_links = 0
+    refs_with_issues = 0
+    for ref, brief in [*routes, *entities]:
+        article = read_draft_article(task_id, batch_id, ref)
+        if is_placeholder(article):
+            print(f"[produce] annotate-entities SKIP {ref}: draft 未由 agent 创作", file=sys.stderr)
+            continue
+        draft_meta = read_draft_meta(task_id, batch_id, ref) or {}
+        dictionary, required = build_entity_dictionary(task_id, brief, draft_meta)
+        new_article, annotated = annotate_inline(article, dictionary)
+        if new_article != article:
+            draft_article_path(task_id, batch_id, ref).write_text(new_article, encoding="utf-8")
+        draft_meta["annotatedEntityRefs"] = sorted(annotated)
+        write_json(draft_meta_path(task_id, batch_id, ref), draft_meta)
+        total_links += len(annotated)
+        issues = annotation_closure_issues(
+            new_article,
+            manifest_entity_refs=sorted(set(required) | annotated),
+            dictionary=dictionary,
+            required_refs=required,
+            require_coverage=True,
+        )
+        if issues:
+            refs_with_issues += 1
+            print(f"[produce] annotate-entities ISSUES {ref}: {issues}", file=sys.stderr)
+    print(f"[produce] annotate-entities annotated {total_links} link(s); {refs_with_issues} ref(s) with closure issues")
+    print("[produce] Next: qwq-data produce --task <T> --batch <B> --type article --stage review --materialize")
+    if refs_with_issues and not allow_partial:
+        raise SystemExit(1)
 
 
 def _stage_review(task_id: str, batch_id: str, refs, *, materialize: bool, allow_partial: bool) -> None:
@@ -114,7 +177,14 @@ def handle_produce(args: argparse.Namespace) -> None:
         return
 
     if stage == "compose-brief":
-        _stage_compose_brief(task_id, batch_id, refs)
+        _stage_compose_brief(task_id, batch_id, refs, batch_size=getattr(args, "batch_size", 1))
+    elif stage == "annotate-entities":
+        _stage_annotate_entities(
+            task_id,
+            batch_id,
+            refs,
+            allow_partial=getattr(args, "allow_partial", False),
+        )
     elif stage == "review":
         _stage_review(
             task_id,
@@ -133,8 +203,19 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--task", required=True, help="Task ID")
     p.add_argument("--batch", required=True, help="Batch ID")
     p.add_argument("--type", required=True, choices=CONTENT_TYPES, help="Content type")
-    p.add_argument("--stage", choices=STAGES, default="compose-brief", help="compose-brief (prepare) or review (gate+materialize)")
+    p.add_argument(
+        "--stage",
+        choices=STAGES,
+        default="compose-brief",
+        help="compose-brief (prepare) | annotate-entities (实体 inline 标注) | review (gate+materialize)",
+    )
     p.add_argument("--refs", help="Optional comma-separated refs to process")
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="(compose-brief) 把 N 个实体聚合成单会话 batch prompt，一会话产多篇（默认 1=逐篇）",
+    )
     p.add_argument(
         "--allow-partial",
         action="store_true",

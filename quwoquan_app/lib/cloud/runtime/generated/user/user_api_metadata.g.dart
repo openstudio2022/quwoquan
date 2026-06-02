@@ -45,6 +45,7 @@ class UserApiMetadata {
     'GetRelationship': '/v1/user/sub-accounts/{subAccountId}/relationship',
     'GetRelationshipCapability': '/v1/user/sub-accounts/{subAccountId}/relationship/capability',
     'GetSubAccountProfile': '/v1/user/{subAccountId}',
+    'GetUserInterestProfile': '/v1/users/{userId}/interest-profile',
     'GetUserProfile': '/v1/user/profile/{userId}',
     'IgnoreGreetingRequest': '/v1/user/greeting-request/{requestId}/ignore',
     'InitiateContactDiscovery': '/v1/owner/contact-discovery',
@@ -52,6 +53,7 @@ class UserApiMetadata {
     'ListCredentials': '/v1/owner/credentials',
     'ListFollowers': '/v1/user/sub-accounts/{subAccountId}/followers',
     'ListFollowing': '/v1/user/sub-accounts/{subAccountId}/following',
+    'ListFollowingSubjects': '/v1/user/following-subjects',
     'ListGreetingInbox': '/v1/user/greeting-request/inbox',
     'ListGreetingOutbox': '/v1/user/greeting-request/outbox',
     'ListMyInvites': '/v1/me/invites',
@@ -66,6 +68,7 @@ class UserApiMetadata {
     'LoginWithPhone': '/v1/auth/login/phone',
     'LoginWithWechat': '/v1/auth/login/wechat',
     'Logout': '/v1/auth/logout',
+    'MarkFollowingSubjectVisited': '/v1/user/following-subjects/{subjectType}/{subjectId}:mark-visited',
     'PullUserSync': '/v1/user/sync',
     'RefreshToken': '/v1/auth/token/refresh',
     'RegisterDevice': '/v1/user/devices/push-tokens',
@@ -116,6 +119,7 @@ class UserApiMetadata {
     'GetRelationship': 'GET',
     'GetRelationshipCapability': 'GET',
     'GetSubAccountProfile': 'GET',
+    'GetUserInterestProfile': 'GET',
     'GetUserProfile': 'GET',
     'IgnoreGreetingRequest': 'POST',
     'InitiateContactDiscovery': 'POST',
@@ -123,6 +127,7 @@ class UserApiMetadata {
     'ListCredentials': 'GET',
     'ListFollowers': 'GET',
     'ListFollowing': 'GET',
+    'ListFollowingSubjects': 'GET',
     'ListGreetingInbox': 'GET',
     'ListGreetingOutbox': 'GET',
     'ListMyInvites': 'GET',
@@ -137,6 +142,7 @@ class UserApiMetadata {
     'LoginWithPhone': 'POST',
     'LoginWithWechat': 'POST',
     'Logout': 'POST',
+    'MarkFollowingSubjectVisited': 'POST',
     'PullUserSync': 'POST',
     'RefreshToken': 'POST',
     'RegisterDevice': 'POST',
@@ -188,6 +194,7 @@ class UserApiMetadata {
     'GetRelationship': 'public',
     'GetRelationshipCapability': 'public',
     'GetSubAccountProfile': 'public',
+    'GetUserInterestProfile': 'required',
     'GetUserProfile': 'public',
     'IgnoreGreetingRequest': 'public',
     'InitiateContactDiscovery': 'required',
@@ -195,6 +202,7 @@ class UserApiMetadata {
     'ListCredentials': 'required',
     'ListFollowers': 'public',
     'ListFollowing': 'public',
+    'ListFollowingSubjects': 'required',
     'ListGreetingInbox': 'public',
     'ListGreetingOutbox': 'public',
     'ListMyInvites': 'required',
@@ -209,6 +217,7 @@ class UserApiMetadata {
     'LoginWithPhone': 'public',
     'LoginWithWechat': 'public',
     'Logout': 'public',
+    'MarkFollowingSubjectVisited': 'required',
     'PullUserSync': 'required',
     'RefreshToken': 'public',
     'RegisterDevice': 'public',
@@ -258,6 +267,7 @@ class UserApiMetadata {
   static const String getRelationshipOperation = 'GetRelationship';
   static const String getRelationshipCapabilityOperation = 'GetRelationshipCapability';
   static const String getSubAccountProfileOperation = 'GetSubAccountProfile';
+  static const String getUserInterestProfileOperation = 'GetUserInterestProfile';
   static const String getUserProfileOperation = 'GetUserProfile';
   static const String ignoreGreetingRequestOperation = 'IgnoreGreetingRequest';
   static const String initiateContactDiscoveryOperation = 'InitiateContactDiscovery';
@@ -265,6 +275,7 @@ class UserApiMetadata {
   static const String listCredentialsOperation = 'ListCredentials';
   static const String listFollowersOperation = 'ListFollowers';
   static const String listFollowingOperation = 'ListFollowing';
+  static const String listFollowingSubjectsOperation = 'ListFollowingSubjects';
   static const String listGreetingInboxOperation = 'ListGreetingInbox';
   static const String listGreetingOutboxOperation = 'ListGreetingOutbox';
   static const String listMyInvitesOperation = 'ListMyInvites';
@@ -279,6 +290,7 @@ class UserApiMetadata {
   static const String loginWithPhoneOperation = 'LoginWithPhone';
   static const String loginWithWechatOperation = 'LoginWithWechat';
   static const String logoutOperation = 'Logout';
+  static const String markFollowingSubjectVisitedOperation = 'MarkFollowingSubjectVisited';
   static const String pullUserSyncOperation = 'PullUserSync';
   static const String refreshTokenOperation = 'RefreshToken';
   static const String registerDeviceOperation = 'RegisterDevice';
@@ -407,6 +419,12 @@ class UserApiMetadata {
       'subAccountId': subAccountId,
     });
   }
+  static const String getUserInterestProfilePathTemplate = '/v1/users/{userId}/interest-profile';
+  static String getUserInterestProfilePath({required String userId}) {
+    return _fillPath(getUserInterestProfilePathTemplate, <String, String>{
+      'userId': userId,
+    });
+  }
   static const String getUserProfilePathTemplate = '/v1/user/profile/{userId}';
   static String getUserProfilePath({required String userId}) {
     return _fillPath(getUserProfilePathTemplate, <String, String>{
@@ -434,6 +452,7 @@ class UserApiMetadata {
       'subAccountId': subAccountId,
     });
   }
+  static const String listFollowingSubjectsPath = '/v1/user/following-subjects';
   static const String listGreetingInboxPath = '/v1/user/greeting-request/inbox';
   static const String listGreetingOutboxPath = '/v1/user/greeting-request/outbox';
   static const String listMyInvitesPath = '/v1/me/invites';
@@ -463,6 +482,13 @@ class UserApiMetadata {
   static const String loginWithPhonePath = '/v1/auth/login/phone';
   static const String loginWithWechatPath = '/v1/auth/login/wechat';
   static const String logoutPath = '/v1/auth/logout';
+  static const String markFollowingSubjectVisitedPathTemplate = '/v1/user/following-subjects/{subjectType}/{subjectId}:mark-visited';
+  static String markFollowingSubjectVisitedPath({required String subjectType, required String subjectId}) {
+    return _fillPath(markFollowingSubjectVisitedPathTemplate, <String, String>{
+      'subjectType': subjectType,
+      'subjectId': subjectId,
+    });
+  }
   static const String pullUserSyncPath = '/v1/user/sync';
   static const String refreshTokenPath = '/v1/auth/token/refresh';
   static const String registerDevicePath = '/v1/user/devices/push-tokens';

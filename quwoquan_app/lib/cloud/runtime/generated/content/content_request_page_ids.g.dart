@@ -18,8 +18,10 @@ class ContentRequestPageIds {
     'GetAppConfig': 'content.get.app.config',
     'GetCounters': 'content.post.counters',
     'GetFeed': 'content.feed.list',
+    'GetFeedIntersections': 'content.get.feed.intersections',
     'GetHelperRead': 'content.get.helper.read',
     'GetMediaAsset': 'content.media.get',
+    'GetMyIntersectionSummary': 'content.get.my.intersection.summary',
     'GetPost': 'content.post.get',
     'GetReactionState': 'content.post.reactions',
     'GetRecommendation': 'content.recommend',
@@ -30,13 +32,16 @@ class ContentRequestPageIds {
     'ListComments': 'content.comment.list',
     'ListCommentsByAuthor': 'content.list.comments.by.author',
     'ListCommentsForPostAuthor': 'content.list.comments.for.post.author',
+    'ListMyIntersections': 'content.list.my.intersections',
     'ListProfileInteractionActivitiesReceived': 'content.profile.interactions.received',
     'ListProfileInteractionActivitiesSent': 'content.profile.interactions.sent',
     'ListUserPosts': 'content.user.posts',
+    'MarkIntersectionsVisited': 'content.mark.intersections.visited',
     'PromotePostToWork': 'content.post.promote',
     'PublishPost': 'content.post.publish',
     'QuoteToCircle': 'content.post.quote',
     'ReportBehaviors': 'content.behaviors.report',
+    'ReportIntersectionExposure': 'content.report.intersection.exposure',
     'RepostToCircle': 'content.post.repost',
     'RequestOriginalImageAccess': 'content.request.original.image.access',
     'ResolveReport': 'content.resolve.report',
@@ -66,8 +71,10 @@ class ContentRequestPageIds {
   static const String getAppConfig = 'content.get.app.config';
   static const String getCounters = 'content.post.counters';
   static const String getFeed = 'content.feed.list';
+  static const String getFeedIntersections = 'content.get.feed.intersections';
   static const String getHelperRead = 'content.get.helper.read';
   static const String getMediaAsset = 'content.media.get';
+  static const String getMyIntersectionSummary = 'content.get.my.intersection.summary';
   static const String getPost = 'content.post.get';
   static const String getReactionState = 'content.post.reactions';
   static const String getRecommendation = 'content.recommend';
@@ -78,13 +85,16 @@ class ContentRequestPageIds {
   static const String listComments = 'content.comment.list';
   static const String listCommentsByAuthor = 'content.list.comments.by.author';
   static const String listCommentsForPostAuthor = 'content.list.comments.for.post.author';
+  static const String listMyIntersections = 'content.list.my.intersections';
   static const String listProfileInteractionActivitiesReceived = 'content.profile.interactions.received';
   static const String listProfileInteractionActivitiesSent = 'content.profile.interactions.sent';
   static const String listUserPosts = 'content.user.posts';
+  static const String markIntersectionsVisited = 'content.mark.intersections.visited';
   static const String promotePostToWork = 'content.post.promote';
   static const String publishPost = 'content.post.publish';
   static const String quoteToCircle = 'content.post.quote';
   static const String reportBehaviors = 'content.behaviors.report';
+  static const String reportIntersectionExposure = 'content.report.intersection.exposure';
   static const String repostToCircle = 'content.post.repost';
   static const String requestOriginalImageAccess = 'content.request.original.image.access';
   static const String resolveReport = 'content.resolve.report';

@@ -1,0 +1,145 @@
+version: 2
+node:
+  id: object-homepage-network
+  level: L1_domain_service
+  path: specs/feature-tree/object-homepage-network
+  title: object homepage network
+  parent_domain_service: object-homepage-network
+scope:
+  summary: 用户主页、圈子/群组主页、共享主页三类对象页端云一体升级验收范围。
+  in_scope:
+    - 三类对象页统一信息架构、视觉系统、交集证据和小艺入口。
+    - ObjectRelationEdge、ObjectPageBundle、ObjectPageContext 契约。
+    - HomepageType、entity-service、评论关联实体、实体双 ID 四项硬债清算。
+    - 灰度、埋点、实时推荐、小艺主动服务闭环。
+  out_of_scope:
+    - 交易、支付、预约和团购闭环。
+    - 新增第二套标签枚举或旧 resonance 链路兼容。
+    - user/circle/entity 各领域主档所有权迁移。
+domain_acceptance:
+  DA1:
+    title: 三类对象页统一体验验收
+    done_when:
+      - 用户主页、圈子/群组主页、共享主页均使用统一四段式信息架构。
+      - 任一对象页首屏能在 3 秒内讲清对象身份、与我的关系和可行动作。
+      - 三类对象页共享视觉组件，但按 user/circle/homepage 保留自然差异。
+    boundary_points:
+      - 前台不暴露 entity、object graph、relation edge 等工程词。
+      - UI 不维护第二套对象关系文案或路由表。
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T4_user_journey
+      supporting:
+        - T1_static_contract
+    tests:
+      planned:
+        - quwoquan_app/test/components/object_page/object_identity_header_test.dart
+        - quwoquan_app/test/components/object_page/object_relation_ribbon_test.dart
+        - quwoquan_app/test/ui/user/profile_object_homepage_widget_test.dart
+        - quwoquan_app/test/ui/circle/circle_object_homepage_widget_test.dart
+        - quwoquan_app/test/ui/entity/entity_object_homepage_widget_test.dart
+        - quwoquan_app/test/patrol/object_homepage_network_journey_test.dart
+      recorded: []
+    status: pending
+  DA2:
+    title: 对象关系契约与硬债验收
+    done_when:
+      - ObjectRelationEdge、ObjectPageBundle、ObjectPageContext 完成 metadata 与 codegen。
+      - HomepageType 与 fixture 不再漂移，首发校园和旅游出行对象有明确模板。
+      - entity-service 主页读模型具备持久化、内容聚合、口碑、相关圈子和关系边。
+      - 评论可关联 canonicalEntityId 或 homepageId，并能形成 comment_about_entity 关系边。
+      - canonicalEntityId 与 homepageId 有单一映射合同。
+    boundary_points:
+      - 关系事实只来自 metadata/codegen/后端投影，端侧不得编造。
+      - 不恢复旧扁平 tag taxonomy 或旧 resonance 链路。
+    evidence:
+      primary:
+        - T1_contract
+        - T3_service_contract
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - quwoquan_service/contracts/metadata/object_page/tests/contract.yaml
+        - quwoquan_service/tests/entity/object_page_bundle_contract_test.go
+        - quwoquan_service/tests/entity/homepage_type_fixture_contract_test.go
+        - quwoquan_service/tests/content/comment_entity_relation_contract_test.go
+        - quwoquan_app/test/cloud/runtime/generated/object_page_dto_contract_test.dart
+      recorded: []
+    status: pending
+  DA3:
+    title: 运营灰度与回滚验收
+    done_when:
+      - 对象页升级可按地域、版本、白名单、experimentBucket、对象类型和环境灰度。
+      - 生产 App 仍只有一个 prod 包，不出现 app-prod-gray 或 release mock 入口。
+      - 每个灰度 cohort 可观测曝光、转化、异常率、接口 RT、小艺触发和 dismiss。
+      - 可按层级关闭小艺主动提示、关系证据可视化、新对象页模板、推荐策略变体。
+    boundary_points:
+      - 灰度不改变数据真相源。
+      - 回滚不得恢复旧对象页并行数据链路。
+    evidence:
+      primary:
+        - T1_static_contract
+        - T3_cross_service_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - quwoquan_service/tests/product_ops/object_homepage_rollout_contract_test.go
+        - quwoquan_app/test/core/rollout/object_homepage_rollout_policy_test.dart
+        - quwoquan_app/test/ui/object_homepage/object_homepage_rollout_widget_test.dart
+      recorded: []
+    status: pending
+  DA4:
+    title: 埋点到实时推荐闭环验收
+    done_when:
+      - 对象页曝光、交集曝光/点击、关系边点击、Tab 切换、行动、小艺反馈均进入统一行为管道。
+      - 事件携带 objectType、objectId、canonicalEntityId、tagRefs、entityRefs、relationEdgeIds、intersectionReasonIds、referralSource、feedRequestId、recommendationTraceId、experimentBucket、rolloutCohort。
+      - 推荐服务能消费对象关系反馈并形成 relation-aware ranking 输入。
+    boundary_points:
+      - 不允许只上报普通点击而丢失对象关系字段。
+      - T3 中每个真实行为断言必须在 T2 mock 行为测试中有对应断言。
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_cross_service_integration
+      supporting:
+        - T1_contract
+    tests:
+      planned:
+        - quwoquan_app/test/core/trackers/object_homepage_behavior_tracker_test.dart
+        - quwoquan_app/test/ui/object_homepage/object_homepage_behavior_widget_test.dart
+        - quwoquan_service/tests/recommendation/object_homepage_event_ingestion_contract_test.go
+      recorded: []
+    status: pending
+  DA5:
+    title: 小艺主动服务验收
+    done_when:
+      - 小艺主动提示消费 ObjectPageContext、IntersectionReason、ObjectRelationEdge 和 rollout 策略。
+      - 主动提示具备置信度、触发原因、冷却时间、可关闭状态。
+      - impression、click、accept、dismiss 全部回流行为管道。
+      - 小艺提示不遮挡对象页主操作，不在同一首屏出现多个主动提示。
+    boundary_points:
+      - 小艺不得基于端侧临时拼装上下文生成事实解释。
+      - 用户关闭或忽略必须影响后续触发策略。
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_cross_service_integration
+      supporting:
+        - T4_user_journey
+    tests:
+      planned:
+        - quwoquan_app/test/ui/assistant/object_page_assistant_action_dock_test.dart
+        - quwoquan_app/test/assistant/object_page_context_builder_test.dart
+        - quwoquan_service/tests/assistant/object_page_assistant_context_contract_test.go
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+    - make verify-app-page-horizontal-quality
+  full_gate:
+    - make gate-full

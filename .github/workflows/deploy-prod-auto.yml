@@ -1,14 +1,18 @@
-# 全自动灰度到 prod：代码真正进入 main 后自动触发
-# Stage 1 初始灰度全自动，Stage 2 100% 需 Environment approval
-# 设计见 deploy/shared/deploy_prod_design.md
+# main 后多环境自动 promotion 主链
+# 设计见 specs/feature-tree/runtime/deliver-deploy-prod-pipeline/design.md
 name: 07. Deploy To Prod (Auto)
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows:
+      - 02. Service Pipeline
+    types:
+      - completed
   workflow_dispatch:
     inputs:
+      release_run_id:
+        description: '02. Service Pipeline run id（留空则使用手填版本）'
+        required: false
       cloud_provider:
         description: 'Cloud provider'
         required: false
@@ -43,10 +47,23 @@ on:
         default: false
         type: boolean
 
+concurrency:
+  group: mainline-auto-prod-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prepare:
-    name: Prepare (parse stages)
+    name: Prepare mainline auto prod inputs
     runs-on: ubuntu-latest
+    if: >-
+      ${{
+        github.event_name != 'workflow_run' ||
+        (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main'
+        )
+      }}
     outputs:
       initial_step: ${{ steps.stages.outputs.initial_step }}
       full_step: ${{ steps.stages.outputs.full_step }}
@@ -59,11 +76,89 @@ jobs:
       redis_error_rate: ${{ steps.inputs.outputs.redis_error_rate }}
       cloud_provider: ${{ steps.inputs.outputs.cloud_provider }}
       dry_run: ${{ steps.inputs.outputs.dry_run }}
+      checkout_ref: ${{ steps.context.outputs.checkout_ref }}
+      base_sha: ${{ steps.diff.outputs.base_sha }}
+      head_sha: ${{ steps.context.outputs.head_sha }}
+      artifact_note: ${{ steps.inputs.outputs.artifact_note }}
+      has_release_artifact: ${{ steps.artifact.outputs.has_release_artifact }}
+      service_pipeline_run_id: ${{ steps.context.outputs.release_run_id }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Assert main branch event
+      - id: context
+        name: Resolve workflow context
         run: |
-          echo "main 已完成显式合流；默认要求 03/04/05 已由 PR required checks 先行放行。"
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "checkout_ref=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "base_sha=" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "release_run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "checkout_ref=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "base_sha=" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "release_run_id=${{ github.event.inputs.release_run_id }}" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          ref: ${{ steps.context.outputs.checkout_ref }}
+      - name: Resolve diff base sha
+        id: diff
+        run: |
+          BASE_SHA="${{ steps.context.outputs.base_sha }}"
+          if [[ -z "$BASE_SHA" ]]; then
+            BASE_SHA="$(git rev-parse HEAD^ 2>/dev/null || true)"
+          fi
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+      - name: Download mainline release artifact
+        if: ${{ steps.context.outputs.release_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: mainline-release-artifact
+          path: .mainline-release-artifact
+          run-id: ${{ steps.context.outputs.release_run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download service pipeline timing summary
+        if: ${{ steps.context.outputs.release_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: service-pipeline-timing-summary
+          path: .service-pipeline-timing
+          run-id: ${{ steps.context.outputs.release_run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Unpack generated release snapshots
+        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') != '' }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path(".mainline-release-artifact")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          for rel_path in manifest.get("releaseFiles", {}).values():
+              src = root / rel_path
+              dst = Path(rel_path)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+          PY
+      - name: Detect resolved release artifact
+        id: artifact
+        run: |
+          if [[ -f ".mainline-release-artifact/manifest.json" ]]; then
+            echo "has_release_artifact=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_release_artifact=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Upload resolved release artifact
+        if: ${{ steps.artifact.outputs.has_release_artifact == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-mainline-release-artifact
+          path: .mainline-release-artifact/**
+          if-no-files-found: error
+          compression-level: 0
       - name: Resolve rollout inputs
         id: inputs
         run: |
@@ -76,15 +171,35 @@ jobs:
           REDIS_ERROR_RATE="${{ github.event.inputs.redis_error_rate }}"
           CLOUD_PROVIDER="${{ github.event.inputs.cloud_provider }}"
           DRY_RUN="${{ github.event.inputs.dry_run }}"
+          ARTIFACT_NOTE="manual inputs"
           if [[ -z "$CLOUD_PROVIDER" ]]; then CLOUD_PROVIDER="aliyun"; fi
           if [[ -z "$ERROR_RATE" ]]; then ERROR_RATE="0.005"; fi
           if [[ -z "$P95_MS" ]]; then P95_MS="100"; fi
           if [[ -z "$REDIS_ERROR_RATE" ]]; then REDIS_ERROR_RATE="0"; fi
           if [[ -z "$DRY_RUN" ]]; then DRY_RUN="false"; fi
-          if [[ -z "$TO_IMG" ]]; then TO_IMG="${{ vars.PROD_AUTO_TO_IMAGE_VERSION }}"; fi
-          if [[ -z "$TO_CFG" ]]; then TO_CFG="${{ vars.PROD_AUTO_TO_CONFIG_VERSION }}"; fi
+          if [[ -f ".mainline-release-artifact/manifest.json" ]]; then
+            if [[ -z "$TO_IMG" ]]; then
+              TO_IMG="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path(".mainline-release-artifact/manifest.json").read_text(encoding="utf-8"))
+          print(str(manifest["versions"]["imageVersion"]))
+          PY
+              )"
+            fi
+            if [[ -z "$TO_CFG" ]]; then
+              TO_CFG="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path(".mainline-release-artifact/manifest.json").read_text(encoding="utf-8"))
+          print(str(manifest["versions"]["configVersion"]))
+          PY
+              )"
+            fi
+            ARTIFACT_NOTE="consumed 02 mainline-release-artifact"
+          fi
           if [[ -z "$TO_IMG" || -z "$TO_CFG" ]]; then
-            echo "::error::Set workflow inputs to_image/to_config or repository vars PROD_AUTO_TO_IMAGE_VERSION / PROD_AUTO_TO_CONFIG_VERSION"
+            echo "::error::missing target image/config version; provide workflow inputs or a valid 02 mainline-release-artifact"
             exit 1
           fi
           STATE=".release-state/seed-box.state"
@@ -105,6 +220,7 @@ jobs:
           echo "redis_error_rate=$REDIS_ERROR_RATE" >> $GITHUB_OUTPUT
           echo "cloud_provider=$CLOUD_PROVIDER" >> $GITHUB_OUTPUT
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
+          echo "artifact_note=$ARTIFACT_NOTE" >> $GITHUB_OUTPUT
       - name: Parse gray_rollout_stages
         id: stages
         run: |
@@ -121,21 +237,142 @@ jobs:
           echo "initial_step=$s1" >> $GITHUB_OUTPUT
           echo "full_step=$s2" >> $GITHUB_OUTPUT
 
-  gray-initial:
-    name: Stage 1 — Initial (auto)
+  delivery_gate:
+    name: Delivery Gate (mainline)
     needs: [prepare]
+    uses: ./.github/workflows/delivery-gate.yml
+    with:
+      checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
+      base_sha: ${{ needs.prepare.outputs.base_sha }}
+      head_sha: ${{ needs.prepare.outputs.head_sha }}
+    secrets: inherit
+
+  alpha_local:
+    name: Alpha local stage
+    needs: [prepare, delivery_gate]
     runs-on: ubuntu-latest
-    env:
-      PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Verify topology/config contracts
+        run: |
+          python3 agent_ops/deploy/stackctl.py verify \
+            --env alpha \
+            --target alpha-local \
+            --kind all \
+            --tier t1 \
+            --report-dir artifacts/stackctl/alpha/mainline-verify
+      - name: Package alpha environment
+        run: |
+          python3 agent_ops/deploy/stackctl.py package \
+            --env alpha \
+            --include-services \
+            --report-dir artifacts/stackctl/alpha/mainline-package
+      - name: Bring up alpha-local
+        run: |
+          python3 agent_ops/deploy/stackctl.py up \
+            --target alpha-local \
+            --report-dir artifacts/stackctl/alpha/mainline-up
+      - name: Alpha full health
+        run: |
+          python3 agent_ops/deploy/stackctl.py health \
+            --target alpha-local \
+            --scope full \
+            --report-dir artifacts/stackctl/alpha/mainline-health
+      - name: Alpha inspect
+        if: always()
+        run: |
+          python3 agent_ops/deploy/stackctl.py inspect \
+            --target alpha-local \
+            --scope all \
+            --report-dir artifacts/stackctl/alpha/mainline-inspect
+      - name: Upload alpha stackctl artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mainline-auto-prod-alpha
+          path: artifacts/stackctl/alpha/**
+          if-no-files-found: ignore
+          compression-level: 0
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  beta_device_matrix:
+    name: Beta local stage
+    needs: [prepare, alpha_local]
+    uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
+    with:
+      checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
+      validation_profile: mainline_auto_prod
+    secrets: inherit
+
+  gamma_hosted:
+    name: Gamma hosted stage
+    needs: [prepare, beta_device_matrix]
+    uses: ./.github/workflows/gamma-ecs-pre-hosted-core.yml
+    with:
+      checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
+      image_version: ${{ needs.prepare.outputs.to_image }}
+      config_version: ${{ needs.prepare.outputs.to_config }}
+      release_artifact_name: ${{ needs.prepare.outputs.has_release_artifact == 'true' && 'resolved-mainline-release-artifact' || '' }}
+      assistant_smoke_profile: protocol
+    secrets: inherit
+
+  prod_initial:
+    name: Prod initial rollout
+    needs: [prepare, gamma_hosted]
+    runs-on: ubuntu-latest
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    env:
+      PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
+      SEED_BOX_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/seed-box
+      RECOMMENDATION_SERVICE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/recommendation-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Download resolved release artifact
+        if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: resolved-mainline-release-artifact
+          path: .mainline-release-artifact
+      - name: Unpack generated release snapshots
+        if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path(".mainline-release-artifact")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          for rel_path in manifest.get("releaseFiles", {}).values():
+              src = root / rel_path
+              dst = Path(rel_path)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+          PY
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 安装 kustomize
         run: bash agent_ops/deploy/shared/install_kustomize.sh
       - name: Install kubectl
         run: |
           curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-      - name: Deploy initial rollout via stackctl
+      - name: Deploy prod initial via stackctl
         run: |
           python3 agent_ops/deploy/stackctl.py deploy \
             --target prod-hosted \
@@ -150,23 +387,66 @@ jobs:
             --error-rate "${{ needs.prepare.outputs.error_rate }}" \
             --p95-ms "${{ needs.prepare.outputs.p95_ms }}" \
             --redis-error-rate "${{ needs.prepare.outputs.redis_error_rate }}"
+      - name: Upload prod initial artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mainline-auto-prod-prod-initial
+          path: artifacts/stackctl/prod/**
+          if-no-files-found: ignore
+          compression-level: 0
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
-  gray-carry-on:
-    name: Stage 2 — Carry-on 100% (approval)
-    needs: [prepare, gray-initial]
+  prod_full:
+    name: Prod full rollout
+    needs: [prepare, prod_initial]
     runs-on: ubuntu-latest
-    environment: production
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     env:
       PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
+      SEED_BOX_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/seed-box
+      RECOMMENDATION_SERVICE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/recommendation-service
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Download resolved release artifact
+        if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: resolved-mainline-release-artifact
+          path: .mainline-release-artifact
+      - name: Unpack generated release snapshots
+        if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path(".mainline-release-artifact")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          for rel_path in manifest.get("releaseFiles", {}).values():
+              src = root / rel_path
+              dst = Path(rel_path)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+          PY
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 安装 kustomize
         run: bash agent_ops/deploy/shared/install_kustomize.sh
       - name: Install kubectl
         run: |
           curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-      - name: Deploy carry-on rollout via stackctl
+      - name: Deploy prod full via stackctl
         run: |
           python3 agent_ops/deploy/stackctl.py deploy \
             --target prod-hosted \
@@ -181,3 +461,205 @@ jobs:
             --error-rate "${{ needs.prepare.outputs.error_rate }}" \
             --p95-ms "${{ needs.prepare.outputs.p95_ms }}" \
             --redis-error-rate "${{ needs.prepare.outputs.redis_error_rate }}"
+      - name: Upload prod full artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mainline-auto-prod-prod-full
+          path: artifacts/stackctl/prod/**
+          if-no-files-found: ignore
+          compression-level: 0
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  mainline_summary:
+    name: 07. Deploy To Prod (Auto)
+    needs:
+      - prepare
+      - delivery_gate
+      - alpha_local
+      - beta_device_matrix
+      - gamma_hosted
+      - prod_initial
+      - prod_full
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Download service pipeline timing summary
+        if: ${{ needs.prepare.outputs.service_pipeline_run_id != '' }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: service-pipeline-timing-summary
+          path: .service-pipeline-timing
+          run-id: ${{ needs.prepare.outputs.service_pipeline_run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download delivery gate timing summary
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: delivery-gate-timing-summary
+          path: .delivery-gate-timing
+      - name: Download beta timing summary
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: app-env-device-matrix-timing-summary
+          path: .beta-device-timing
+      - name: Download gamma timing summary
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: gamma-hosted-timing-summary
+          path: .gamma-hosted-timing
+      - name: Download alpha stackctl artifacts
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: mainline-auto-prod-alpha
+          path: .mainline-alpha
+      - name: Download beta stackctl artifacts
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: app-env-device-matrix-*-mobile
+          path: .mainline-beta
+          merge-multiple: true
+      - name: Download prod initial stackctl artifacts
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: mainline-auto-prod-prod-initial
+          path: .mainline-prod-initial
+      - name: Download prod full stackctl artifacts
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: mainline-auto-prod-prod-full
+          path: .mainline-prod-full
+      - name: Render mainline timing summary
+        env:
+          DELIVERY_SECONDS: ${{ needs.delivery_gate.outputs.critical_path_seconds }}
+          ALPHA_SECONDS: ${{ needs.alpha_local.outputs.duration_seconds }}
+          BETA_SECONDS: ${{ needs.beta_device_matrix.outputs.critical_path_seconds }}
+          GAMMA_SECONDS: ${{ needs.gamma_hosted.outputs.critical_path_seconds }}
+          PROD_INITIAL_SECONDS: ${{ needs.prod_initial.outputs.duration_seconds }}
+          PROD_FULL_SECONDS: ${{ needs.prod_full.outputs.duration_seconds }}
+        run: |
+          SERVICE_PIPELINE=0
+          if [ -f ".service-pipeline-timing/service-pipeline-summary.json" ]; then
+            SERVICE_PIPELINE="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path(".service-pipeline-timing/service-pipeline-summary.json").read_text(encoding="utf-8"))
+          print(int(payload.get("criticalPathSeconds", 0) or 0))
+          PY
+            )"
+          fi
+          DELIVERY="${DELIVERY_SECONDS:-0}"
+          ALPHA="${ALPHA_SECONDS:-0}"
+          BETA="${BETA_SECONDS:-0}"
+          GAMMA="${GAMMA_SECONDS:-0}"
+          PROD_INITIAL="${PROD_INITIAL_SECONDS:-0}"
+          PROD_FULL="${PROD_FULL_SECONDS:-0}"
+          CRITICAL_PATH_SECONDS=$(( DELIVERY + ALPHA + BETA + GAMMA + PROD_INITIAL + PROD_FULL ))
+          COMMIT_TO_PROD_SECONDS=$(( SERVICE_PIPELINE + CRITICAL_PATH_SECONDS ))
+          python3 agent_ops/ci/render_ci_timing_summary.py \
+            --gate-key 07.mainline_auto_prod \
+            --title "07. Deploy To Prod (Auto)" \
+            --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
+            --phase "delivery_gate=${DELIVERY}" \
+            --phase "alpha_stage=${ALPHA}" \
+            --phase "beta_device_matrix=${BETA}" \
+            --phase "gamma_hosted=${GAMMA}" \
+            --phase "prod_initial_checks=${PROD_INITIAL}" \
+            --phase "prod_full=${PROD_FULL}" \
+            --note "目标版本来源：${{ needs.prepare.outputs.artifact_note }}；主链 checkout 已锁定到触发 02 的 main commit。" \
+            --write-json "artifacts/ci-timing/mainline-auto-prod-summary.json" \
+            --write-step-summary
+          python3 agent_ops/ci/render_ci_timing_summary.py \
+            --gate-key 07.main_commit_to_prod \
+            --title "Main Commit To Prod" \
+            --critical-path-seconds "${COMMIT_TO_PROD_SECONDS}" \
+            --phase "service_pipeline_02=${SERVICE_PIPELINE}" \
+            --phase "mainline_auto_prod_07=${CRITICAL_PATH_SECONDS}" \
+            --note "真实 commit-to-prod = 02.service_pipeline + 07.mainline_auto_prod；15 分钟承诺以该总和为准。" \
+            --write-json "artifacts/ci-timing/main-commit-to-prod-summary.json" \
+            --write-step-summary
+          if [ "${CRITICAL_PATH_SECONDS}" -gt 900 ]; then
+            echo "::error::mainline_auto_prod critical_path_seconds=${CRITICAL_PATH_SECONDS} exceeds 900s budget"
+            exit 1
+          fi
+          if [ "${COMMIT_TO_PROD_SECONDS}" -gt 900 ]; then
+            echo "::error::main_commit_to_prod critical_path_seconds=${COMMIT_TO_PROD_SECONDS} exceeds 900s budget"
+            exit 1
+          fi
+      - name: Render environment chain timing diagnostics
+        if: always()
+        run: |
+          python3 agent_ops/ci/render_environment_chain_timing_diagnostics.py \
+            --service-pipeline-root ".service-pipeline-timing" \
+            --delivery-gate-root ".delivery-gate-timing" \
+            --beta-summary-root ".beta-device-timing" \
+            --gamma-summary-root ".gamma-hosted-timing" \
+            --mainline-summary "artifacts/ci-timing/mainline-auto-prod-summary.json" \
+            --commit-summary "artifacts/ci-timing/main-commit-to-prod-summary.json" \
+            --alpha-stackctl-root ".mainline-alpha" \
+            --beta-stackctl-root ".mainline-beta" \
+            --prod-initial-stackctl-root ".mainline-prod-initial" \
+            --prod-full-stackctl-root ".mainline-prod-full" \
+            --write-json "artifacts/ci-timing/environment-chain-timing-diagnostics.json" \
+            --write-markdown "artifacts/ci-timing/environment-chain-timing-diagnostics.md" \
+            --write-step-summary \
+            --emit-annotations
+      - name: Upload mainline timing summaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mainline-auto-prod-timing-summaries
+          path: |
+            artifacts/ci-timing/*.json
+            artifacts/ci-timing/*.md
+          if-no-files-found: error
+          compression-level: 0
+      - name: Assert promotion stages
+        env:
+          DELIVERY_RESULT: ${{ needs.delivery_gate.outputs.summary_result }}
+          ALPHA_RESULT: ${{ needs.alpha_local.result }}
+          BETA_RESULT: ${{ needs.beta_device_matrix.outputs.summary_result }}
+          GAMMA_RESULT: ${{ needs.gamma_hosted.result }}
+          PROD_INITIAL_RESULT: ${{ needs.prod_initial.result }}
+          PROD_FULL_RESULT: ${{ needs.prod_full.result }}
+        run: |
+          set -euo pipefail
+          fail=0
+          expect_success() {
+            local name="$1" value="$2" hint="$3"
+            if [ "${value}" != "success" ]; then
+              echo "::error::${name} expected success, got ${value}. ${hint}"
+              fail=1
+            fi
+          }
+          expect_success "delivery_gate" "${DELIVERY_RESULT}" "检查 03 Delivery Gate"
+          expect_success "alpha_local" "${ALPHA_RESULT}" "检查 alpha-local package/up/health artifacts"
+          expect_success "beta_device_matrix" "${BETA_RESULT}" "检查 beta-local self-hosted matrix gate"
+          expect_success "gamma_hosted" "${GAMMA_RESULT}" "检查 gamma hosted deploy/readiness/T3/protocol smoke"
+          expect_success "prod_initial" "${PROD_INITIAL_RESULT}" "检查 prod initial deploy 与 post-deploy probes"
+          expect_success "prod_full" "${PROD_FULL_RESULT}" "检查 prod full deploy 与 rollback 闭环"
+          if [ "${fail}" -ne 0 ]; then
+            exit 1
+          fi

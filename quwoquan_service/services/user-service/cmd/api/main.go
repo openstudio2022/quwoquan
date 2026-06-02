@@ -30,6 +30,7 @@ import (
 	"quwoquan_service/services/user-service/internal/application"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/user-service/internal/infrastructure/projection"
 )
 
 type redisSceneCfg struct {
@@ -243,10 +244,16 @@ func main() {
 	}
 
 	// 8. Handler
+	var interestReader application.InterestProfileReader
+	if mongoDB != nil {
+		interestReader = projection.NewMongoInterestProfileReader(mongoDB)
+	}
+	interestProfileService := application.NewInterestProfileService(interestReader)
 	handler := httpadapter.NewUserHandler(
 		profileService, searchService, followService, blockService,
 		personaService, workService, lifeItemService, settingService,
 		authService, subAccountService, contactDiscoveryService, inviteService,
+		interestProfileService,
 	).Routes()
 
 	// 统一鉴权中间件：Bearer JWT 本地验签，验签通过后用 token principal 覆盖
@@ -274,6 +281,19 @@ func main() {
 		ServiceName:       "user-service",
 		ServiceInstanceID: instanceID,
 	}, ioLogger, processLogger, exceptionLogger)
+
+	// 8.2 Interest profile projector: consume content's UserInterestRecomputed
+	// and maintain the user-domain rm_user_profile_view interest read model.
+	if mongoDB != nil {
+		interestProjector := projection.NewInterestProfileProjector(mongoDB, nil)
+		projCtx, projCancel := context.WithCancel(ctx)
+		defer projCancel()
+		go func() {
+			if err := interestProjector.Run(projCtx, redisClient); err != nil && projCtx.Err() == nil {
+				log.Printf("WARN: interest profile projector stopped: %v", err)
+			}
+		}()
+	}
 
 	// 9. Start
 	rateLimiter := rtgov.NewRateLimiter(1000)

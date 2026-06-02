@@ -6,7 +6,10 @@ import json
 import os
 import shlex
 import socket
+import ssl
+import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -18,6 +21,7 @@ if str(ROOT) not in sys.path:
 
 from agent_ops.deploy.lib.common import (
     artifact_run_dir,
+    ensure_list,
     load_json_yaml,
     relpath,
     run,
@@ -30,6 +34,15 @@ from agent_ops.deploy.lib.environment_topology import (
     TARGETS,
     get_target,
     load_environment_topology,
+)
+from agent_ops.deploy.lib.dev_up import (
+    DEV_UP_ENVS,
+    DEV_UP_STACK_TARGETS,
+    app_target_for_env,
+    build_start_app_command,
+    launch_app,
+    pick_dev_up_env,
+    resolve_device_id,
 )
 from agent_ops.deploy.lib.port_manifest import canonical_port, load_port_manifest, profile_ports
 
@@ -89,7 +102,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     up_parser = subparsers.add_parser("up")
-    up_parser.add_argument("--target", choices=TARGETS, required=True)
+    up_parser.add_argument("--target", choices=TARGETS, default="")
+    up_parser.add_argument("--env", choices=DEV_UP_ENVS, default="")
     up_parser.add_argument("--device-id", default="")
     up_parser.add_argument("--skip-app", action="store_true")
     up_parser.add_argument("--rollout-mode", choices=["gray-initial", "carry-on", "full"], default="")
@@ -161,6 +175,318 @@ def resolve_report_dir(args: argparse.Namespace, env_name: str, target: str) -> 
     return artifact_run_dir(env_name, args.command, target=target or "local")
 
 
+def _start_timing() -> tuple[float, str]:
+    return time.monotonic(), utc_now()
+
+
+def _finish_timing(started_monotonic: float, started_at: str) -> dict[str, Any]:
+    return {
+        "startedAt": started_at,
+        "endedAt": utc_now(),
+        "durationMs": int((time.monotonic() - started_monotonic) * 1000),
+    }
+
+
+def _format_duration_ms(duration_ms: int | None) -> str:
+    if duration_ms is None:
+        return "0ms"
+    seconds = max(int(duration_ms), 0) / 1000.0
+    if seconds < 1:
+        return f"{int(duration_ms)}ms"
+    return f"{seconds:.2f}s"
+
+
+def _is_interactive_terminal() -> bool:
+    return sys.stdout.isatty() and sys.stderr.isatty()
+
+
+def _progress_print(message: str) -> None:
+    if _is_interactive_terminal():
+        print(message, flush=True)
+
+
+def _format_stage_header(index: int, total: int, name: str) -> str:
+    return f"[step {index}/{total}] {name}"
+
+
+def _run_with_live_output(
+    argv: list[str],
+    *,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+    prefix: str = "",
+) -> subprocess.CompletedProcess[str]:
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+    process = subprocess.Popen(
+        argv,
+        cwd=str(cwd or ROOT),
+        env=merged_env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    lines: list[str] = []
+    assert process.stdout is not None
+    try:
+        for line in process.stdout:
+            lines.append(line)
+            if _is_interactive_terminal():
+                if prefix:
+                    print(f"{prefix}{line}", end="", flush=True)
+                else:
+                    print(line, end="", flush=True)
+        process.wait()
+    finally:
+        process.stdout.close()
+    stdout = "".join(lines)
+    return subprocess.CompletedProcess(
+        argv,
+        process.returncode,
+        stdout=stdout,
+        stderr="",
+    )
+
+
+def _tail_file_for_startup(
+    log_path: Path,
+    *,
+    process: subprocess.Popen[str] | None = None,
+    prefix: str = "[app] ",
+    idle_timeout_seconds: float = 2.5,
+    max_follow_seconds: float = 20.0,
+    ready_patterns: tuple[str, ...] = (),
+    ready_idle_timeout_seconds: float = 2.0,
+) -> dict[str, Any]:
+    if not _is_interactive_terminal():
+        return {"followed": False, "lines": 0, "reason": "non-interactive"}
+    deadline = time.monotonic() + max_follow_seconds
+    while time.monotonic() < deadline:
+        if log_path.exists():
+            break
+        if process is not None and process.poll() is not None:
+            return {"followed": False, "lines": 0, "reason": "process-exited-before-log"}
+        time.sleep(0.1)
+    if not log_path.exists():
+        return {"followed": False, "lines": 0, "reason": "log-not-created"}
+
+    print(f"{prefix}tailing startup log: {relpath(log_path)}", flush=True)
+    line_count = 0
+    last_activity = time.monotonic()
+    ready_seen = False
+    with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+        while True:
+            line = handle.readline()
+            if line:
+                line_count += 1
+                last_activity = time.monotonic()
+                print(f"{prefix}{line}", end="", flush=True)
+                if ready_patterns and any(pattern in line for pattern in ready_patterns):
+                    ready_seen = True
+                continue
+            if process is not None and process.poll() is not None:
+                break
+            now = time.monotonic()
+            if now >= deadline:
+                break
+            effective_idle_timeout = ready_idle_timeout_seconds if ready_seen else idle_timeout_seconds
+            if line_count > 0 and now - last_activity >= effective_idle_timeout:
+                break
+            time.sleep(0.15)
+    reason = "idle"
+    if process is not None and process.poll() is not None:
+        reason = "process-exited"
+    elif time.monotonic() >= deadline:
+        reason = "timeout"
+    print(f"{prefix}startup log tail finished ({reason})", flush=True)
+    return {
+        "followed": True,
+        "lines": line_count,
+        "reason": reason,
+        "readySeen": ready_seen,
+        "readyPatterns": list(ready_patterns),
+    }
+
+
+def _tail_multiple_logs_for_startup(
+    log_specs: list[tuple[str, Path]],
+    *,
+    idle_timeout_seconds: float = 2.5,
+    max_follow_seconds: float = 20.0,
+) -> dict[str, Any]:
+    if not _is_interactive_terminal():
+        return {"followed": False, "logs": [], "reason": "non-interactive"}
+    existing_specs = [(label, path) for label, path in log_specs if path.exists()]
+    if not existing_specs:
+        return {"followed": False, "logs": [], "reason": "log-not-created"}
+
+    for label, path in existing_specs:
+        print(f"[{label}] tailing startup log: {relpath(path)}", flush=True)
+
+    handles = {
+        label: path.open("r", encoding="utf-8", errors="replace")
+        for label, path in existing_specs
+    }
+    line_counts = {label: 0 for label, _ in existing_specs}
+    last_activity = time.monotonic()
+    deadline = time.monotonic() + max_follow_seconds
+    try:
+        while True:
+            saw_output = False
+            for label, _path in existing_specs:
+                line = handles[label].readline()
+                if not line:
+                    continue
+                saw_output = True
+                line_counts[label] += 1
+                last_activity = time.monotonic()
+                print(f"[{label}] {line}", end="", flush=True)
+            now = time.monotonic()
+            if now >= deadline:
+                reason = "timeout"
+                break
+            if saw_output:
+                continue
+            if sum(line_counts.values()) > 0 and now - last_activity >= idle_timeout_seconds:
+                reason = "idle"
+                break
+            time.sleep(0.15)
+    finally:
+        for handle in handles.values():
+            handle.close()
+
+    for label, _path in existing_specs:
+        print(f"[{label}] startup log tail finished ({reason})", flush=True)
+    return {
+        "followed": True,
+        "logs": [
+            {
+                "label": label,
+                "path": relpath(path),
+                "lines": line_counts[label],
+            }
+            for label, path in existing_specs
+        ],
+        "reason": reason,
+    }
+
+
+def _tail_gamma_container_logs() -> dict[str, Any]:
+    if not _is_interactive_terminal():
+        return {"followed": False, "reason": "non-interactive", "backend": ""}
+
+    compose_file = ROOT / "quwoquan_service" / "docker-compose.gamma-local.yaml"
+    if not compose_file.exists():
+        return {"followed": False, "reason": "compose-file-missing", "backend": ""}
+
+    docker_result = subprocess.run(
+        ["docker", "--version"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    use_podman = docker_result.returncode == 0 and "podman" in (docker_result.stdout + docker_result.stderr).lower()
+    if use_podman:
+        if subprocess.run(["podman", "--version"], text=True, capture_output=True, check=False).returncode != 0:
+            return {"followed": False, "reason": "podman-missing", "backend": "podman"}
+        containers = {
+            "gamma-proxy": "quwoquan_service_gamma-proxy_1",
+            "content-service": "quwoquan_service_content-service_1",
+            "assistant-service": "quwoquan_service_assistant-service_1",
+            "user-service": "quwoquan_service_user-service_1",
+            "chat-service": "quwoquan_service_chat-service_1",
+        }
+        log_paths: list[tuple[str, Path]] = []
+        with tempfile.TemporaryDirectory(prefix="gamma-tail-") as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            spawned: list[subprocess.Popen[str]] = []
+            try:
+                for label, container_name in containers.items():
+                    inspect = subprocess.run(
+                        ["podman", "inspect", container_name],
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    if inspect.returncode != 0:
+                        continue
+                    log_path = tmp_root / f"{label}.log"
+                    handle = log_path.open("w", encoding="utf-8")
+                    proc = subprocess.Popen(
+                        ["podman", "logs", "-f", "--tail", "40", container_name],
+                        stdout=handle,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                    )
+                    handle.close()
+                    spawned.append(proc)
+                    log_paths.append((f"gamma-{label}", log_path))
+                result = _tail_multiple_logs_for_startup(
+                    log_paths,
+                    idle_timeout_seconds=6.0,
+                    max_follow_seconds=45.0,
+                )
+                result["backend"] = "podman"
+                return result
+            finally:
+                for proc in spawned:
+                    if proc.poll() is None:
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            proc.kill()
+        return {"followed": False, "reason": "no-podman-containers", "backend": "podman"}
+
+    if subprocess.run(["docker", "compose", "version"], text=True, capture_output=True, check=False).returncode != 0:
+        return {"followed": False, "reason": "docker-compose-missing", "backend": "docker"}
+
+    services = ["gamma-proxy", "content-service", "assistant-service", "user-service", "chat-service"]
+    with tempfile.TemporaryDirectory(prefix="gamma-tail-") as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        log_paths = [(f"gamma-{service}", tmp_root / f"{service}.log") for service in services]
+        handles = {label: path.open("w", encoding="utf-8") for label, path in log_paths}
+        process = subprocess.Popen(
+            ["docker", "compose", "-f", str(compose_file), "logs", "-f", "--tail", "40", *services],
+            cwd=str(ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        assert process.stdout is not None
+        try:
+            deadline = time.monotonic() + 4.0
+            while time.monotonic() < deadline:
+                line = process.stdout.readline()
+                if not line:
+                    if process.poll() is not None:
+                        break
+                    time.sleep(0.05)
+                    continue
+                for label, handle in handles.items():
+                    service_name = label.removeprefix("gamma-")
+                    if line.startswith(f"{service_name}"):
+                        handle.write(line)
+                        handle.flush()
+            result = _tail_multiple_logs_for_startup(
+                log_paths,
+                idle_timeout_seconds=6.0,
+                max_follow_seconds=45.0,
+            )
+            result["backend"] = "docker"
+            return result
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+            for handle in handles.values():
+                handle.close()
+
+
 def _write_summary_bundle(
     report_dir: Path,
     *,
@@ -170,6 +496,7 @@ def _write_summary_bundle(
     summary: str,
     details: list[str],
     extra: dict[str, Any] | None = None,
+    timing: dict[str, Any] | None = None,
 ) -> None:
     payload = {
         "command": command,
@@ -179,21 +506,29 @@ def _write_summary_bundle(
         "details": details,
         "generatedAt": utc_now(),
     }
+    if timing:
+        payload.update(timing)
     if extra:
         payload.update(extra)
     write_json(report_dir / "summary.json", payload)
+    summary_lines = [
+        f"# stackctl {command}",
+        "",
+        f"- target: `{target}`",
+        f"- status: `{status}`",
+        f"- summary: {summary}",
+    ]
+    if timing:
+        summary_lines.extend(
+            [
+                f"- startedAt: `{timing.get('startedAt', '')}`",
+                f"- endedAt: `{timing.get('endedAt', '')}`",
+                f"- duration: `{_format_duration_ms(int(timing.get('durationMs', 0) or 0))}`",
+            ]
+        )
     write_markdown(
         report_dir / "summary.md",
-        "\n".join(
-            [
-                f"# stackctl {command}",
-                "",
-                f"- target: `{target}`",
-                f"- status: `{status}`",
-                f"- summary: {summary}",
-                *[f"- {line}" for line in details],
-            ]
-        ),
+        "\n".join(summary_lines + [*[f"- {line}" for line in details]]),
     )
 
 
@@ -314,7 +649,11 @@ def _selected_tier_commands(env_name: str, target_name: str, tier: str) -> list[
 
 def fetch_url(url: str, timeout: float = 6.0) -> tuple[bool, int | None, str]:
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:
+        with urllib.request.urlopen(
+            url,
+            timeout=timeout,
+            context=ssl._create_unverified_context(),
+        ) as response:
             body = response.read().decode("utf-8", errors="replace")
             return True, int(response.status), body[:500]
     except urllib.error.HTTPError as exc:
@@ -322,6 +661,258 @@ def fetch_url(url: str, timeout: float = 6.0) -> tuple[bool, int | None, str]:
         return False, int(exc.code), body[:500]
     except Exception as exc:
         return False, None, str(exc)
+
+
+def _read_json_payload(path: Path) -> Any | None:
+    if not path.exists():
+        return None
+    try:
+        return load_json_yaml(path)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _resolve_test_auth_token(env_name: str) -> str:
+    token_envs = {
+        "beta": ("BETA_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN", "GAMMA_TEST_AUTH_TOKEN"),
+        "gamma": ("GAMMA_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN"),
+        "prod": ("PROD_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN"),
+    }
+    for key in token_envs.get(env_name, ("TEST_AUTH_TOKEN",)):
+        value = os.environ.get(key, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _run_script_probe(
+    *,
+    name: str,
+    scope: str,
+    argv: list[str],
+    report_file: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> tuple[dict[str, Any], str, list[str]]:
+    result = run(argv, env=env)
+    output = "\n".join(filter(None, [result.stdout, result.stderr])).strip()
+    report_payload = _read_json_payload(report_file) if report_file else None
+    report_status = ""
+    report_findings: list[str] = []
+    preview = output[:500]
+    if isinstance(report_payload, dict):
+        report_status = str(report_payload.get("status", "")).strip().lower()
+        preview = str(
+            report_payload.get("blockingReason")
+            or report_payload.get("summary")
+            or report_payload.get("status")
+            or preview
+        )[:500]
+        for item in ensure_list(report_payload.get("findings")):
+            if isinstance(item, str) and item.strip():
+                report_findings.append(item.strip())
+        blocking_reason = str(report_payload.get("blockingReason", "")).strip()
+        if blocking_reason:
+            report_findings.append(blocking_reason)
+    ok = result.returncode == 0 and report_status not in {"failed", "gate_block", "error"}
+    if not ok and not report_findings:
+        report_findings.append(
+            f"{scope}/{name} failed: exit={result.returncode} {argv[-1] if argv else name}"
+        )
+    payload = {
+        "name": name,
+        "scope": scope,
+        "type": "script",
+        "argv": argv,
+        "ok": ok,
+        "statusCode": result.returncode,
+        "bodyPreview": preview,
+        "skipped": False,
+        "reportPath": relpath(report_file) if report_file else "",
+    }
+    return payload, output, report_findings
+
+
+def _run_environment_integration_probe(
+    topology: dict[str, Any],
+    target_name: str,
+    report_dir: Path,
+) -> tuple[dict[str, Any], str, list[str]]:
+    target = get_target(topology, target_name)
+    env_name = str(target["env"])
+    public_bases = target.get("publicBases") or {}
+    report_file = report_dir / "integration-probe.json"
+    argv = [
+        "python3",
+        "agent_ops/deploy/probes/run_environment_integration_probe.py",
+        "--env",
+        env_name,
+        "--base-url",
+        str(public_bases["api"]),
+        "--report",
+        str(report_file),
+    ]
+    product_ops = str(public_bases.get("productOps") or "").strip()
+    if product_ops:
+        argv.extend(["--product-ops-base-url", product_ops])
+    token = _resolve_test_auth_token(env_name)
+    if token:
+        argv.extend(["--test-auth-token", token])
+    if target_name == "prod-hosted":
+        argv.extend(["--mode", "post-deploy"])
+    return _run_script_probe(
+        name="integration-readonly",
+        scope="full",
+        argv=argv,
+        report_file=report_file,
+    )
+
+
+def _run_gamma_readiness_probe(
+    topology: dict[str, Any],
+    target_name: str,
+    report_dir: Path,
+) -> tuple[dict[str, Any], str, list[str]]:
+    target = get_target(topology, target_name)
+    public_bases = target.get("publicBases") or {}
+    report_file = report_dir / "gamma-readiness-report.json"
+    argv = [
+        "python3",
+        "quwoquan_service/scripts/gamma/verify_gamma_environment_ready.py",
+        "--base-url",
+        str(public_bases["api"]),
+        "--product-ops-base-url",
+        str(public_bases["productOps"]),
+        "--report",
+        str(report_file),
+    ]
+    return _run_script_probe(
+        name="gamma-readiness",
+        scope="full",
+        argv=argv,
+        report_file=report_file,
+    )
+
+
+def _run_gamma_media_route_probe(
+    topology: dict[str, Any],
+    target_name: str,
+    report_dir: Path,
+) -> tuple[dict[str, Any], str, list[str]]:
+    target = get_target(topology, target_name)
+    public_bases = target.get("publicBases") or {}
+    report_file = report_dir / "gamma-media-route-report.json"
+    argv = [
+        "python3",
+        "quwoquan_service/scripts/media/verify_gamma_curated_media_routes.py",
+        "--base-url",
+        str(public_bases["mediaImage"]),
+        "--report",
+        str(report_file),
+    ]
+    return _run_script_probe(
+        name="gamma-media-routes",
+        scope="media",
+        argv=argv,
+        report_file=report_file,
+    )
+
+
+def _script_probe_plan_for_target(
+    topology: dict[str, Any],
+    target_name: str,
+) -> list[dict[str, Any]]:
+    target = get_target(topology, target_name)
+    if target_name == "beta-local":
+        return [{"name": "integration-readonly", "kind": "readonly-http"}]
+    if target_name == "gamma-hosted":
+        return [
+            {"name": "gamma-readiness", "kind": "hosted-readiness"},
+            {"name": "gamma-media-routes", "kind": "curated-media"},
+            {"name": "integration-readonly", "kind": "readonly-http"},
+        ]
+    if target_name == "prod-hosted":
+        return [
+            {"name": "integration-readonly", "kind": "readonly-http"},
+            {"name": "release-state", "kind": "rollout-state"},
+        ]
+    if str(target.get("env")) == "gamma" and target_name == "gamma-local":
+        return [{"name": "integration-readonly", "kind": "readonly-http"}]
+    return []
+
+
+def _script_probes_for_target(
+    topology: dict[str, Any],
+    target_name: str,
+    scope: str,
+    report_dir: Path,
+) -> tuple[list[dict[str, Any]], list[tuple[str, str]], list[str]]:
+    if scope != "full":
+        return [], [], []
+    statuses: list[dict[str, Any]] = []
+    stdout_sections: list[tuple[str, str]] = []
+    findings: list[str] = []
+
+    if target_name == "gamma-hosted":
+        for runner in (
+            _run_gamma_readiness_probe,
+            _run_gamma_media_route_probe,
+            _run_environment_integration_probe,
+        ):
+            status, output, probe_findings = runner(topology, target_name, report_dir)
+            statuses.append(status)
+            stdout_sections.append((status["name"], output))
+            findings.extend(probe_findings)
+        return statuses, stdout_sections, findings
+
+    if target_name in {"beta-local", "gamma-local", "prod-hosted"}:
+        status, output, probe_findings = _run_environment_integration_probe(
+            topology,
+            target_name,
+            report_dir,
+        )
+        statuses.append(status)
+        stdout_sections.append((status["name"], output))
+        findings.extend(probe_findings)
+    return statuses, stdout_sections, findings
+
+
+def _load_release_state(service: str = "seed-box") -> dict[str, str]:
+    state_path = ROOT / ".release-state" / f"{service}.state"
+    payload: dict[str, str] = {}
+    if not state_path.exists():
+        return payload
+    for raw in state_path.read_text(encoding="utf-8").splitlines():
+        if "=" not in raw:
+            continue
+        key, value = raw.split("=", 1)
+        payload[key.strip()] = value.strip()
+    return payload
+
+
+def _update_release_state(
+    service: str,
+    *,
+    from_image: str,
+    to_image: str,
+    from_config: str,
+    to_config: str,
+    step: str,
+) -> dict[str, str]:
+    state_dir = ROOT / ".release-state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    state_path = state_dir / f"{service}.state"
+    payload = {
+        "service": service,
+        "from_image": from_image,
+        "to_image": to_image,
+        "from_config": from_config,
+        "to_config": to_config,
+        "step": step,
+        "updated_at": utc_now(),
+    }
+    lines = [f"{key}={value}" for key, value in payload.items()]
+    state_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return payload
 
 
 def socket_probe(port: int) -> bool:
@@ -348,6 +939,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
     env_name = args.env
     target_name = args.target or DEFAULT_TARGET_BY_ENV[env_name]
     report_dir = resolve_report_dir(args, env_name, target_name)
+    started_monotonic, started_at = _start_timing()
     details: list[str] = []
     reports: list[dict[str, Any]] = []
 
@@ -363,7 +955,8 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         }
     )
     if app_result.returncode != 0:
-        write_json(report_dir / "report.json", {"status": "failed", "steps": reports})
+        timing = _finish_timing(started_monotonic, started_at)
+        write_json(report_dir / "report.json", {"status": "failed", "steps": reports, **timing})
         _write_summary_bundle(
             report_dir,
             command="package",
@@ -372,6 +965,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             summary=f"stackctl package failed for {env_name}",
             details=[app_result.stderr.strip() or app_result.stdout.strip()],
             extra={"env": env_name},
+            timing=timing,
         )
         _write_stdout_markdown(report_dir, [("app-package", "\n".join(filter(None, [app_result.stdout, app_result.stderr])))])
         return {
@@ -379,6 +973,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "summary": f"stackctl package failed for {env_name}",
             "details": [app_result.stderr.strip() or app_result.stdout.strip()],
             "reportDir": relpath(report_dir),
+            **timing,
         }
     details.append(f"app package ready: artifacts/app-env-packages/{env_name}")
 
@@ -404,7 +999,8 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
             if svc_result.returncode != 0:
-                write_json(report_dir / "report.json", {"status": "failed", "steps": reports})
+                timing = _finish_timing(started_monotonic, started_at)
+                write_json(report_dir / "report.json", {"status": "failed", "steps": reports, **timing})
                 _write_summary_bundle(
                     report_dir,
                     command="package",
@@ -413,6 +1009,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                     summary=f"stackctl package failed for {service}/{env_name}",
                     details=[svc_result.stderr.strip() or svc_result.stdout.strip()],
                     extra={"env": env_name},
+                    timing=timing,
                 )
                 _write_stdout_markdown(
                     report_dir,
@@ -423,9 +1020,11 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                     "summary": f"stackctl package failed for {service}/{env_name}",
                     "details": [svc_result.stderr.strip() or svc_result.stdout.strip()],
                     "reportDir": relpath(report_dir),
+                    **timing,
                 }
             details.append(f"service package ready: artifacts/service-env-packages/{service}/{env_name}")
 
+    timing = _finish_timing(started_monotonic, started_at)
     payload = {
         "status": "ok",
         "command": "package",
@@ -435,6 +1034,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         "reportDir": relpath(report_dir),
         "topologyTarget": get_target(topology, target_name),
         "steps": reports,
+        **timing,
     }
     write_json(report_dir / "report.json", payload)
     _write_summary_bundle(
@@ -445,12 +1045,14 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         summary=f"stackctl package completed for {env_name}",
         details=details,
         extra={"env": env_name},
+        timing=timing,
     )
     return {
         "exitCode": 0,
         "summary": f"stackctl package completed for {env_name}",
         "details": details,
         "reportDir": relpath(report_dir),
+        **timing,
     }
 
 
@@ -458,6 +1060,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
     env_name = args.env or (get_target(load_environment_topology(), args.target).get("env") if args.target else "all")
     target_name = args.target or (DEFAULT_TARGET_BY_ENV[env_name] if env_name in ENVIRONMENTS else "repo")
     report_dir = resolve_report_dir(args, env_name if env_name in ENVIRONMENTS else "repo", target_name)
+    started_monotonic, started_at = _start_timing()
     steps: list[dict[str, Any]] = []
     issues: list[str] = []
     package_envs = [env_name] if env_name in ENVIRONMENTS else list(ENVIRONMENTS)
@@ -524,6 +1127,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                 f"{tier_command['name']} failed: "
                 + (result.stderr.strip() or result.stdout.strip() or "unknown tier failure")
             )
+    timing = _finish_timing(started_monotonic, started_at)
     payload = {
         "status": "ok" if not issues else "failed",
         "command": "verify",
@@ -531,6 +1135,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         "kind": args.kind,
         "tier": args.tier,
         "steps": steps,
+        **timing,
     }
     write_json(report_dir / "report.json", payload)
     write_json(report_dir / "findings.json", {"issues": issues})
@@ -542,6 +1147,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         summary="stackctl verify passed" if not issues else "stackctl verify failed",
         details=issues or [f"ran {len(steps)} checks"],
         extra={"kind": args.kind, "tier": args.tier},
+        timing=timing,
     )
     _write_stdout_markdown(report_dir, stdout_sections)
     return {
@@ -549,95 +1155,408 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         "summary": "stackctl verify passed" if not issues else "stackctl verify failed",
         "details": issues or [f"ran {len(steps)} checks"],
         "reportDir": relpath(report_dir),
+        **timing,
     }
 
 
 def command_up(args: argparse.Namespace) -> dict[str, Any]:
     topology = load_environment_topology()
-    target = get_target(topology, args.target)
-    env_name = str(target["env"])
-    report_dir = resolve_report_dir(args, env_name, args.target)
-    steps: list[dict[str, Any]] = []
+    started_monotonic, started_at = _start_timing()
+    if not args.env and not args.target:
+        try:
+            args.env = pick_dev_up_env(label="[stackctl up]")
+        except RuntimeError as exc:
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": "stackctl up failed",
+                "details": [str(exc)],
+                **timing,
+            }
 
-    if args.target == "beta-local":
+    if bool(args.env) == bool(args.target):
+        timing = _finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": "stackctl up failed",
+            "details": ["provide exactly one of --env or --target"],
+            **timing,
+        }
+
+    requested_target = args.target
+    if args.env:
+        requested_target = DEV_UP_STACK_TARGETS[args.env]
+        if not requested_target:
+            requested_target = app_target_for_env(args.env)
+
+    target = get_target(topology, requested_target)
+    env_name = str(target["env"])
+    report_target = args.env or requested_target
+    report_dir = resolve_report_dir(args, env_name, report_target)
+    steps: list[dict[str, Any]] = []
+    interactive = _is_interactive_terminal()
+    stage_index = 0
+    expected_stage_total = 3 if requested_target in {"alpha-local", "beta-local", "gamma-local"} and not args.skip_app else 2
+    if requested_target in {"prod-sim", "prod-hosted"} and not args.skip_app:
+        expected_stage_total = 2
+    elif requested_target == "prod-hosted" and args.skip_app:
+        expected_stage_total = 1
+
+    def announce(stage: str, message: str, *, numbered: bool = False) -> None:
+        if interactive:
+            if numbered:
+                _progress_print(f"{stage} {message}")
+            else:
+                _progress_print(f"[stackctl up] {stage} {message}")
+
+    def run_stage(
+        stage: str,
+        argv: list[str],
+        *,
+        env: dict[str, str] | None = None,
+        live_prefix: str = "",
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal stage_index
+        stage_index += 1
+        stage_header = _format_stage_header(stage_index, expected_stage_total, stage)
+        announce(stage_header, "started", numbered=True)
+        stage_started = time.monotonic()
+        result = _run_with_live_output(argv, env=env, prefix=live_prefix)
+        duration = _format_duration_ms(int((time.monotonic() - stage_started) * 1000))
+        status = "completed" if result.returncode == 0 else f"failed (exit={result.returncode})"
+        announce(stage_header, f"{status} in {duration}", numbered=True)
+        return result
+
+    def maybe_resolve_device_id(*, include_web: bool) -> str:
+        if args.skip_app:
+            return ""
+        if args.device_id:
+            return args.device_id
+        return resolve_device_id(
+            include_mobile=True,
+            include_web=include_web,
+            include_desktop=False,
+            label="[stackctl up]",
+        )
+
+    def start_app_process(env_key: str, device_id: str) -> dict[str, Any]:
+        nonlocal stage_index
+        launch_log = report_dir / f"app-launch-{device_id.replace('/', '_')}.log"
+        stage_index += 1
+        stage_header = _format_stage_header(stage_index, expected_stage_total, "app-launch")
+        announce(stage_header, f"starting for {env_key}/{device_id}", numbered=True)
+        try:
+            process = launch_app(
+                env_key,
+                device_id,
+                topology=topology,
+                rollout_mode=args.rollout_mode,
+                log_path=launch_log,
+            )
+        except RuntimeError as exc:
+            raise RuntimeError(f"app launch failed for {env_key}/{device_id}: {exc}") from exc
+        return {
+            "process": process,
+            "command": build_start_app_command(
+                env_key,
+                device_id,
+                topology=topology,
+                rollout_mode=args.rollout_mode,
+            ),
+            "log_path": launch_log,
+            "stageHeader": stage_header,
+        }
+
+    def tail_beta_background_logs() -> dict[str, Any]:
+        beta_log_dir = ROOT / "tmp" / "beta_stack"
+        return _tail_multiple_logs_for_startup(
+            [
+                ("beta-app", beta_log_dir / "app-beta.log"),
+                ("beta-product-ops", beta_log_dir / "product-ops.log"),
+                ("beta-platform-ops", beta_log_dir / "platform-ops.log"),
+                ("beta-ops-portal", beta_log_dir / "ops-portal.log"),
+            ],
+            idle_timeout_seconds=4.0,
+            max_follow_seconds=35.0,
+        )
+
+    def tail_alpha_background_logs() -> dict[str, Any]:
+        alpha_log_dir = ROOT / "tmp" / "alpha_stack"
+        return _tail_multiple_logs_for_startup(
+            [
+                ("alpha-api-edge", alpha_log_dir / "api-edge.log"),
+                ("alpha-product-ops", alpha_log_dir / "product-ops.log"),
+                ("alpha-media-edge", alpha_log_dir / "media-edge.log"),
+                ("alpha-media-origin", alpha_log_dir / "media-origin.log"),
+            ],
+            idle_timeout_seconds=4.0,
+            max_follow_seconds=20.0,
+        )
+
+    if requested_target == "beta-local":
+        if not args.skip_app:
+            args.device_id = maybe_resolve_device_id(include_web=True)
         cmd = ["bash", "agent_ops/deploy/beta/start_beta_stack.sh", "up"]
         env = _beta_env_from_port_manifest()
         if args.device_id:
             env["DEVICE_ID"] = args.device_id
         if args.skip_app:
             env["START_APP"] = "0"
-        result = run(cmd, env=env)
-    elif args.target == "gamma-local":
+        result = run_stage("beta-local", cmd, env=env, live_prefix="[beta] ")
+        background_tail = tail_beta_background_logs()
+        steps.append(
+            {
+                "kind": "beta-background-tail",
+                "exitCode": 0,
+                "stdout": "tailed beta background logs",
+                "stderr": "",
+                "tail": background_tail,
+            }
+        )
+    elif requested_target == "gamma-local":
         cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"]
-        env = _gamma_env_from_port_manifest(topology, args.target)
-        result = run(cmd, env=env)
-    elif args.target == "alpha-local":
-        result = run(["bash", "agent_ops/deploy/alpha/start_alpha_mock_stack.sh", "up"])
+        env = _gamma_env_from_port_manifest(topology, requested_target)
+        result = run_stage("gamma-local", cmd, env=env, live_prefix="[gamma-local] ")
+        if result.returncode == 0 and not args.skip_app:
+            args.device_id = maybe_resolve_device_id(include_web=True)
+            try:
+                app_launch = start_app_process("gamma", args.device_id)
+            except RuntimeError as exc:
+                result = subprocess.CompletedProcess(cmd, 1, stdout="", stderr=str(exc))
+                app_launch = None
+            if app_launch is not None:
+                gamma_tail = _tail_gamma_container_logs()
+                steps.append(
+                    {
+                        "kind": "gamma-background-tail",
+                        "exitCode": 0,
+                        "stdout": "tailed gamma container logs",
+                        "stderr": "",
+                        "tail": gamma_tail,
+                    }
+                )
+                tail_result = _tail_file_for_startup(
+                    app_launch["log_path"],
+                    process=app_launch["process"],
+                    prefix=f"[{app_launch['stageHeader']} app] ",
+                    idle_timeout_seconds=6.0,
+                    max_follow_seconds=90.0,
+                    ready_patterns=(
+                        "Syncing files to device",
+                        "Flutter run key commands",
+                        "A Dart VM Service",
+                        "The Flutter DevTools debugger",
+                    ),
+                    ready_idle_timeout_seconds=3.0,
+                )
+                steps.append(
+                    {
+                        "argv": app_launch["command"],
+                        "exitCode": 0,
+                        "stdout": f"pid={app_launch['process'].pid}",
+                        "stderr": f"log={relpath(app_launch['log_path'])}",
+                        "tail": tail_result,
+                    }
+                )
+                cmd = app_launch["command"]
+                result = subprocess.CompletedProcess(
+                    cmd,
+                    0,
+                    stdout=f"pid={app_launch['process'].pid}",
+                    stderr=f"log={relpath(app_launch['log_path'])}",
+                )
+    elif requested_target == "alpha-local":
         cmd = ["bash", "agent_ops/deploy/alpha/start_alpha_mock_stack.sh", "up"]
-        if result.returncode == 0 and args.device_id and not args.skip_app:
-            app_cmd = [
-                "bash",
-                "quwoquan_app/scripts/device/start_app_instance.sh",
-                "--env",
-                "alpha",
-                "--device-id",
-                args.device_id,
-            ]
-            app_result = run(app_cmd)
-            steps.append(
-                {
-                    "argv": app_cmd,
-                    "exitCode": app_result.returncode,
-                    "stdout": app_result.stdout,
-                    "stderr": app_result.stderr,
-                }
-            )
-            if app_result.returncode != 0:
-                result = app_result
-    elif args.target == "prod-sim":
-        if not args.device_id:
+        result = run_stage("alpha-local", cmd, live_prefix="[alpha] ")
+        background_tail = tail_alpha_background_logs()
+        steps.append(
+            {
+                "kind": "alpha-background-tail",
+                "exitCode": 0,
+                "stdout": "tailed alpha background logs",
+                "stderr": "",
+                "tail": background_tail,
+            }
+        )
+        if result.returncode == 0 and not args.skip_app:
+            args.device_id = maybe_resolve_device_id(include_web=True)
+            try:
+                app_launch = start_app_process("alpha", args.device_id)
+            except RuntimeError as exc:
+                result = subprocess.CompletedProcess(cmd, 1, stdout="", stderr=str(exc))
+                app_launch = None
+            if app_launch is not None:
+                tail_result = _tail_file_for_startup(
+                    app_launch["log_path"],
+                    process=app_launch["process"],
+                    prefix=f"[{app_launch['stageHeader']} app] ",
+                    idle_timeout_seconds=6.0,
+                    max_follow_seconds=60.0,
+                    ready_patterns=(
+                        "Syncing files to device",
+                        "Flutter run key commands",
+                        "A Dart VM Service",
+                        "The Flutter DevTools debugger",
+                    ),
+                    ready_idle_timeout_seconds=3.0,
+                )
+                steps.append(
+                    {
+                        "argv": app_launch["command"],
+                        "exitCode": 0,
+                        "stdout": f"pid={app_launch['process'].pid}",
+                        "stderr": f"log={relpath(app_launch['log_path'])}",
+                        "tail": tail_result,
+                    }
+                )
+                cmd = app_launch["command"]
+                result = subprocess.CompletedProcess(
+                    cmd,
+                    0,
+                    stdout=f"pid={app_launch['process'].pid}",
+                    stderr=f"log={relpath(app_launch['log_path'])}",
+                )
+    elif requested_target == "prod-sim":
+        if args.skip_app:
+            timing = _finish_timing(started_monotonic, started_at)
             return {
                 "exitCode": 2,
-                "summary": f"stackctl up failed for {args.target}",
-                "details": [f"--device-id is required for {args.target} app launch"],
+                "summary": "stackctl up failed for prod-sim",
+                "details": ["prod-sim only supports app launch; do not pass --skip-app"],
+                **timing,
             }
-        target_public_bases = target.get("publicBases") or {}
-        cmd = [
-            "bash",
-            "quwoquan_app/scripts/device/start_app_instance.sh",
-            "--env",
-            "prod",
-            "--device-id",
-            args.device_id,
-        ]
-        cmd.extend(
-            [
-                "--gateway-base-url",
-                str(target_public_bases["api"]),
-                "--media-avatar-base-url",
-                str(target_public_bases["mediaAvatar"]),
-                "--media-image-base-url",
-                str(target_public_bases["mediaImage"]),
-                "--media-video-base-url",
-                str(target_public_bases["mediaVideo"]),
-                "--media-upload-base-url",
-                str(target_public_bases["mediaUpload"]),
-                "--instance-namespace",
-                "prod-sim",
-                "--service-mode",
-                "prod-sim-app",
-            ]
+        args.device_id = maybe_resolve_device_id(include_web=True)
+        try:
+            app_launch = start_app_process("prod-sim", args.device_id)
+        except RuntimeError as exc:
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 1,
+                "summary": "stackctl up failed for prod-sim",
+                "details": [str(exc)],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        tail_result = _tail_file_for_startup(
+            app_launch["log_path"],
+            process=app_launch["process"],
+            prefix=f"[{app_launch['stageHeader']} app] ",
+            idle_timeout_seconds=8.0,
+            max_follow_seconds=120.0,
+            ready_patterns=(
+                "Syncing files to device",
+                "Flutter run key commands",
+                "A Dart VM Service",
+                "The Flutter DevTools debugger",
+            ),
+            ready_idle_timeout_seconds=3.0,
         )
-        if args.rollout_mode:
-            cmd.extend(["--rollout-mode", args.rollout_mode])
-        result = run(cmd)
+        announce("prod-sim", "app launch reached steady state")
+        cmd = app_launch["command"]
+        result = subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout=f"pid={app_launch['process'].pid}",
+            stderr=f"log={relpath(app_launch['log_path'])}",
+        )
+        steps.append(
+            {
+                "argv": app_launch["command"],
+                "exitCode": 0,
+                "stdout": f"pid={app_launch['process'].pid}",
+                "stderr": f"log={relpath(app_launch['log_path'])}",
+                "tail": tail_result,
+            }
+        )
+    elif requested_target == "prod-hosted":
+        announce("prod-hosted", "running edge health check")
+        health_args = argparse.Namespace(
+            command="health",
+            target="prod-hosted",
+            scope="edge",
+            output_format="json",
+            report_dir=str(report_dir / "health"),
+        )
+        health = command_health(health_args)
+        steps.append(
+            {
+                "argv": ["python3", "agent_ops/deploy/stackctl.py", "health", "--target", "prod-hosted", "--scope", "edge"],
+                "exitCode": int(health.get("exitCode", 1)),
+                "stdout": health.get("summary", ""),
+                "stderr": "\n".join(health.get("details", [])),
+            }
+        )
+        if int(health.get("exitCode", 1)) != 0:
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 1,
+                "summary": "stackctl up failed for prod-hosted",
+                "details": ["prod-hosted health failed; run `stackctl deploy --target prod-hosted ...` first", *health.get("details", [])],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        if args.skip_app:
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 0,
+                "summary": "stackctl up completed for prod",
+                "details": ["prod-hosted edge health passed; app launch skipped"],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        args.device_id = maybe_resolve_device_id(include_web=True)
+        try:
+            app_launch = start_app_process("prod", args.device_id)
+        except RuntimeError as exc:
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 1,
+                "summary": "stackctl up failed for prod-hosted",
+                "details": [str(exc)],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        tail_result = _tail_file_for_startup(
+            app_launch["log_path"],
+            process=app_launch["process"],
+            prefix=f"[{app_launch['stageHeader']} app] ",
+            idle_timeout_seconds=6.0,
+            max_follow_seconds=60.0,
+            ready_patterns=(
+                "Syncing files to device",
+                "Flutter run key commands",
+                "A Dart VM Service",
+                "The Flutter DevTools debugger",
+            ),
+            ready_idle_timeout_seconds=3.0,
+        )
+        announce("prod-hosted", "app launch reached steady state")
+        cmd = app_launch["command"]
+        result = subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout=f"pid={app_launch['process'].pid}",
+            stderr=f"log={relpath(app_launch['log_path'])}",
+        )
+        steps.append(
+            {
+                "argv": app_launch["command"],
+                "exitCode": 0,
+                "stdout": f"pid={app_launch['process'].pid}",
+                "stderr": f"log={relpath(app_launch['log_path'])}",
+                "tail": tail_result,
+            }
+        )
     else:
+        timing = _finish_timing(started_monotonic, started_at)
         return {
             "exitCode": 2,
-            "summary": f"stackctl up is not implemented for {args.target}",
+            "summary": f"stackctl up is not implemented for {requested_target}",
             "details": ["use deploy for hosted gamma/prod targets"],
+            **timing,
         }
 
+    timing = _finish_timing(started_monotonic, started_at)
     steps.append(
         {
             "argv": cmd,
@@ -646,20 +1565,31 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             "stderr": result.stderr,
         }
     )
-    write_json(report_dir / "report.json", {"command": "up", "target": args.target, "steps": steps})
+    write_json(
+        report_dir / "report.json",
+        {
+            "command": "up",
+            "target": report_target,
+            "resolvedTarget": requested_target,
+            "steps": steps,
+            **timing,
+        },
+    )
     _write_summary_bundle(
         report_dir,
         command="up",
-        target=args.target,
+        target=report_target,
         status="ok" if result.returncode == 0 else "failed",
-        summary=f"stackctl up {'completed' if result.returncode == 0 else 'failed'} for {args.target}",
+        summary=f"stackctl up {'completed' if result.returncode == 0 else 'failed'} for {report_target}",
         details=_command_details(result),
+        timing=timing,
     )
     return {
         "exitCode": result.returncode,
-        "summary": f"stackctl up {'completed' if result.returncode == 0 else 'failed'} for {args.target}",
+        "summary": f"stackctl up {'completed' if result.returncode == 0 else 'failed'} for {report_target}",
         "details": _command_details(result),
         "reportDir": relpath(report_dir),
+        **timing,
     }
 
 
@@ -747,6 +1677,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
     target = get_target(topology, args.target)
     env_name = str(target["env"])
     report_dir = resolve_report_dir(args, env_name, args.target)
+    started_monotonic, started_at = _start_timing()
     checks = _health_checks_for_target(topology, args.target, args.scope)
     statuses: list[dict[str, Any]] = []
     findings: list[str] = []
@@ -780,7 +1711,17 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
         stdout_sections.append((item["name"], f"{status_code or 'ERR'} {item['url']}\n{body}"))
+    script_statuses, script_stdout_sections, script_findings = _script_probes_for_target(
+        topology,
+        args.target,
+        args.scope,
+        report_dir,
+    )
+    statuses.extend(script_statuses)
+    stdout_sections.extend(script_stdout_sections)
+    findings.extend(script_findings)
     ok_count = sum(1 for item in statuses if item["ok"])
+    timing = _finish_timing(started_monotonic, started_at)
     payload = {
         "command": "health",
         "target": args.target,
@@ -788,6 +1729,8 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         "checks": statuses,
         "findings": findings,
         "timestamp": utc_now(),
+        "scriptProbes": _script_probe_plan_for_target(topology, args.target),
+        **timing,
     }
     write_json(report_dir / "report.json", payload)
     write_json(report_dir / "health.json", {"target": args.target, "scope": args.scope, "checks": statuses})
@@ -800,6 +1743,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         summary=f"stackctl health {args.target}: {ok_count}/{len(statuses)} healthy",
         details=findings or [f"scope={args.scope}", f"healthy checks={ok_count}/{len(statuses)}"],
         extra={"scope": args.scope},
+        timing=timing,
     )
     _write_stdout_markdown(report_dir, stdout_sections)
     return {
@@ -807,6 +1751,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         "summary": f"stackctl health {args.target}: {ok_count}/{len(statuses)} healthy",
         "details": findings or [f"{item['name']} -> {item['statusCode'] or 'OK'} {item['url']}" for item in statuses],
         "reportDir": relpath(report_dir),
+        **timing,
     }
 
 
@@ -815,6 +1760,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
     target = get_target(topology, args.target)
     env_name = str(target["env"])
     report_dir = resolve_report_dir(args, env_name, args.target)
+    started_monotonic, started_at = _start_timing()
     scopes = (
         ["logs", "network", "data", "metrics", "config", "security"]
         if args.scope == "all"
@@ -827,6 +1773,17 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         inspection["config"] = {
             "target": target,
             "portProfile": target.get("portProfile"),
+            "publicBases": target.get("publicBases", {}),
+            "origins": target.get("origins", {}),
+            "releaseState": (
+                _load_release_state("seed-box")
+                if args.target == "prod-hosted"
+                else (
+                    _read_json_payload(ROOT / "artifacts" / "ecs-onebox" / "deploy-report.json")
+                    if args.target == "gamma-hosted"
+                    else {}
+                )
+            ),
         }
     if "logs" in scopes:
         inspection["logs"] = _local_log_report(args.target)
@@ -836,7 +1793,8 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         inspection["metrics"] = _metrics_report(topology, args.target)
     if "security" in scopes:
         inspection["security"] = _security_report(topology, args.target)
-    write_json(report_dir / "report.json", {"command": "inspect", "inspection": inspection})
+    timing = _finish_timing(started_monotonic, started_at)
+    write_json(report_dir / "report.json", {"command": "inspect", "inspection": inspection, **timing})
     for key, value in inspection.items():
         write_json(report_dir / f"{key}.json", value)
     details = [f"{key}: collected" for key in inspection]
@@ -848,12 +1806,14 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         summary=f"stackctl inspect completed for {args.target}",
         details=details,
         extra={"scope": args.scope},
+        timing=timing,
     )
     return {
         "exitCode": 0,
         "summary": f"stackctl inspect completed for {args.target}",
         "details": details,
         "reportDir": relpath(report_dir),
+        **timing,
     }
 
 
@@ -862,8 +1822,16 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
     target = get_target(topology, args.target)
     env_name = str(target["env"])
     report_dir = resolve_report_dir(args, env_name, args.target)
+    started_monotonic, started_at = _start_timing()
     findings: list[str] = []
-    health = command_status(args)
+    health_args = argparse.Namespace(
+        command="health",
+        target=args.target,
+        scope="full",
+        output_format="json",
+        report_dir=str(report_dir / "health"),
+    )
+    health = command_health(health_args)
     if health["exitCode"] != 0:
         findings.append("health checks are failing")
     if target.get("portProfile"):
@@ -871,10 +1839,23 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         closed = [item["name"] for item in network["ports"] if not item["open"]]
         if closed:
             findings.append(f"ports not listening: {', '.join(closed)}")
+    elif args.target in {"gamma-hosted", "prod-hosted"}:
+        public_bases = target.get("publicBases") or {}
+        if not public_bases.get("api"):
+            findings.append("public api base url is missing")
+        if not public_bases.get("productOps"):
+            findings.append("product-ops base url is missing")
+        if args.target == "prod-hosted":
+            state = _load_release_state("seed-box")
+            if not state:
+                findings.append("prod rollout release-state is missing")
+            elif not state.get("to_image") or not state.get("to_config"):
+                findings.append("prod release-state missing image/config target")
     packages = [
         ROOT / "artifacts" / "app-env-packages" / env_name / "report.json",
     ]
-    if not all(path.exists() for path in packages):
+    require_package_artifacts = bool(target.get("portProfile"))
+    if require_package_artifacts and not all(path.exists() for path in packages):
         findings.append("packaged app artifact is missing")
     repair_plan = []
     if findings:
@@ -884,6 +1865,7 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
             repair_plan.append("run `stackctl repair --target <target> --fix restart-stack` for local targets")
         if any("artifact" in item for item in findings):
             repair_plan.append("run `stackctl repair --target <target> --fix rebuild-packages`")
+    timing = _finish_timing(started_monotonic, started_at)
     write_json(
         report_dir / "report.json",
         {
@@ -892,6 +1874,7 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
             "findings": findings,
             "repairPlan": repair_plan,
             "timestamp": utc_now(),
+            **timing,
         },
     )
     write_json(report_dir / "findings.json", {"target": args.target, "issues": findings})
@@ -903,12 +1886,14 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         status="ok" if not findings else "failed",
         summary="stackctl doctor found no issues" if not findings else "stackctl doctor found issues",
         details=findings or ["no issues found"],
+        timing=timing,
     )
     return {
         "exitCode": 0 if not findings else 1,
         "summary": "stackctl doctor found no issues" if not findings else "stackctl doctor found issues",
         "details": findings or ["no issues found"],
         "reportDir": relpath(report_dir),
+        **timing,
     }
 
 
@@ -995,12 +1980,23 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
     report_dir = resolve_report_dir(args, "prod" if args.target == "prod-hosted" else "gamma", args.target)
+    started_monotonic, started_at = _start_timing()
+    post_deploy_checks: list[dict[str, Any]] = []
+    rollback_post_checks: list[dict[str, Any]] = []
+    deploy_result: Any | None = None
+    rollback_result: Any | None = None
+    rollback_reason = ""
+    rollback_state: dict[str, str] | None = None
+    rollout_decision = "continue"
+    dry_run_requested = str(getattr(args, "dry_run", "false")).strip().lower() == "true"
     if args.target == "gamma-hosted":
         if not args.stage or not args.image_version or not args.previous_image_version:
+            timing = _finish_timing(started_monotonic, started_at)
             return {
                 "exitCode": 2,
                 "summary": "stackctl deploy gamma-hosted requires --stage --image-version --previous-image-version",
                 "details": [],
+                **timing,
             }
         cmd = [
             "bash",
@@ -1008,16 +2004,18 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
         ]
         env = {}
         for key, value in {
-            "STAGE": args.stage,
-            "IMAGE_VERSION": args.image_version,
-            "PREV_IMAGE_VERSION": args.previous_image_version,
-            "BASE_URL": args.base_url,
-            "PRODUCT_OPS_BASE_URL": args.product_ops_base_url,
-            "MEDIA_BASE_URL": args.media_base_url,
-            "MEDIA_ORIGIN_BASE_URL": args.media_origin_base_url,
+            "GAMMA_ECS_STAGE": args.stage,
+            "GAMMA_DEPLOY_IMAGE_VERSION": args.image_version,
+            "GAMMA_PREVIOUS_IMAGE_VERSION": args.previous_image_version,
+            "GAMMA_BASE_URL": args.base_url,
+            "GAMMA_PRODUCT_OPS_BASE_URL": args.product_ops_base_url,
         }.items():
             if value:
                 env[key] = value
+        if args.media_base_url:
+            env["MEDIA_AVATAR_CDN_BASE_URL"] = args.media_base_url
+        if args.media_origin_base_url:
+            env["GAMMA_ECS_MEDIA_ORIGIN_BASE_URL"] = args.media_origin_base_url
         result = run(cmd, env=env)
     else:
         required = [
@@ -1032,10 +2030,12 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
             args.redis_error_rate,
         ]
         if not all(required):
+            timing = _finish_timing(started_monotonic, started_at)
             return {
                 "exitCode": 2,
                 "summary": "stackctl deploy prod-hosted requires service/image/config/step/SLO arguments",
                 "details": [],
+                **timing,
             }
         cmd = [
             "bash",
@@ -1068,9 +2068,18 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
                 "CONFIG_VERSION": args.to_config,
                 "REPLICAS": replicas,
                 "DRY_RUN": args.dry_run,
+                "SEED_BOX_IMAGE_REPOSITORY": os.environ.get(
+                    "SEED_BOX_IMAGE_REPOSITORY",
+                    "ghcr.io/openstudio2022/quwoquan/seed-box",
+                ),
+                "RECOMMENDATION_SERVICE_IMAGE_REPOSITORY": os.environ.get(
+                    "RECOMMENDATION_SERVICE_IMAGE_REPOSITORY",
+                    "ghcr.io/openstudio2022/quwoquan/recommendation-service",
+                ),
             },
         )
         if deploy_result.returncode != 0:
+            timing = _finish_timing(started_monotonic, started_at)
             write_json(
                 report_dir / "report.json",
                 {
@@ -1081,6 +2090,7 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
                     "exitCode": deploy_result.returncode,
                     "stdout": deploy_result.stdout,
                     "stderr": deploy_result.stderr,
+                    **timing,
                 },
             )
             _write_summary_bundle(
@@ -1090,6 +2100,7 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
                 status="failed",
                 summary="stackctl deploy failed during prod apply",
                 details=_command_details(deploy_result),
+                timing=timing,
             )
             _write_stdout_markdown(
                 report_dir,
@@ -1100,27 +2111,176 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
                 "summary": "stackctl deploy failed during prod apply",
                 "details": _command_details(deploy_result),
                 "reportDir": relpath(report_dir),
+                **timing,
             }
-        result = run(cmd)
+        if dry_run_requested:
+            result = subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="prod dry-run skipped config_release_apply_stage.sh and remained read-only",
+                stderr="",
+            )
+        else:
+            result = run(cmd)
+    run_post_deploy_checks = result.returncode == 0 and not (
+        args.target == "prod-hosted" and dry_run_requested
+    )
+    if run_post_deploy_checks:
+        for nested_command, nested_scope in (
+            ("health", "full"),
+            ("inspect", "all"),
+            ("doctor", ""),
+        ):
+            nested_dir = report_dir / nested_command
+            if nested_command == "health":
+                nested_args = argparse.Namespace(
+                    command="health",
+                    target=args.target,
+                    scope=nested_scope,
+                    output_format="json",
+                    report_dir=str(nested_dir),
+                )
+                post_deploy_checks.append(command_health(nested_args))
+            elif nested_command == "inspect":
+                nested_args = argparse.Namespace(
+                    command="inspect",
+                    target=args.target,
+                    scope=nested_scope,
+                    output_format="json",
+                    report_dir=str(nested_dir),
+                )
+                post_deploy_checks.append(command_inspect(nested_args))
+            else:
+                nested_args = argparse.Namespace(
+                    command="doctor",
+                    target=args.target,
+                    output_format="json",
+                    report_dir=str(nested_dir),
+                )
+                post_deploy_checks.append(command_doctor(nested_args))
+    post_deploy_failures = [
+        item["summary"]
+        for item in post_deploy_checks
+        if int(item.get("exitCode", 0) or 0) != 0
+    ]
+    final_exit_code = result.returncode
+    findings = list(post_deploy_failures)
+    if final_exit_code == 0 and post_deploy_failures:
+        final_exit_code = 1
+    if args.target == "prod-hosted":
+        stdout_combined = "\n".join(filter(None, [result.stdout, result.stderr]))
+        if "decision=pause" in stdout_combined:
+            rollout_decision = "pause"
+            findings.append("slo gate decision=pause")
+        elif "decision=rollback" in stdout_combined:
+            rollout_decision = "rollback"
+            rollback_reason = "slo gate decision=rollback"
+            findings.append(rollback_reason)
+        elif final_exit_code != 0 and post_deploy_failures:
+            rollback_reason = "post-deploy checks failed"
+            findings.append(rollback_reason)
+        if dry_run_requested and result.returncode == 0:
+            findings.append("prod dry-run: skipped hosted post-deploy health/inspect/doctor and rollback")
+        if rollback_reason and not dry_run_requested:
+            rollback_env = {
+                "CLOUD_PROVIDER": args.cloud_provider,
+                "IMAGE_VERSION": args.from_image,
+                "CONFIG_VERSION": args.from_config,
+                "REPLICAS": str(_replicas_for_step("100")),
+                "DRY_RUN": "false",
+                "SEED_BOX_IMAGE_REPOSITORY": os.environ.get(
+                    "SEED_BOX_IMAGE_REPOSITORY",
+                    "ghcr.io/openstudio2022/quwoquan/seed-box",
+                ),
+                "RECOMMENDATION_SERVICE_IMAGE_REPOSITORY": os.environ.get(
+                    "RECOMMENDATION_SERVICE_IMAGE_REPOSITORY",
+                    "ghcr.io/openstudio2022/quwoquan/recommendation-service",
+                ),
+            }
+            rollback_result = run(
+                ["bash", "agent_ops/deploy/prod/deploy_to_prod.sh"],
+                env=rollback_env,
+            )
+            if rollback_result.returncode == 0:
+                rollback_state = _update_release_state(
+                    args.service,
+                    from_image=args.to_image,
+                    to_image=args.from_image,
+                    from_config=args.to_config,
+                    to_config=args.from_config,
+                    step="100",
+                )
+                for nested_command, nested_scope in (("health", "full"),):
+                    nested_dir = report_dir / "rollback" / nested_command
+                    if nested_command == "health":
+                        nested_args = argparse.Namespace(
+                            command="health",
+                            target=args.target,
+                            scope=nested_scope,
+                            output_format="json",
+                            report_dir=str(nested_dir),
+                        )
+                        rollback_post_checks.append(command_health(nested_args))
+                rollback_failures = [
+                    item["summary"]
+                    for item in rollback_post_checks
+                    if int(item.get("exitCode", 0) or 0) != 0
+                ]
+                findings.extend(f"rollback {item}" for item in rollback_failures)
+                if rollback_failures and final_exit_code == 0:
+                    final_exit_code = 1
+            else:
+                findings.append("live rollback apply failed")
+                final_exit_code = rollback_result.returncode
+        elif rollout_decision == "pause" and final_exit_code == 10:
+            final_exit_code = 10
+    timing = _finish_timing(started_monotonic, started_at)
     write_json(
         report_dir / "report.json",
         {
             "command": "deploy",
             "target": args.target,
             "argv": cmd,
-            "exitCode": result.returncode,
+            "exitCode": final_exit_code,
             "stdout": result.stdout,
             "stderr": result.stderr,
+            "rolloutDecision": rollout_decision,
+            "postDeployChecks": post_deploy_checks,
+            "postDeployFailures": post_deploy_failures,
+            "rollbackPostChecks": rollback_post_checks,
+            "dryRun": dry_run_requested,
+            "rollback": {
+                "triggered": bool(rollback_reason),
+                "reason": rollback_reason,
+                "result": (
+                    {
+                        "exitCode": rollback_result.returncode,
+                        "stdout": rollback_result.stdout,
+                        "stderr": rollback_result.stderr,
+                    }
+                    if rollback_result is not None
+                    else {}
+                ),
+                "releaseState": rollback_state or {},
+            },
+            **timing,
         },
     )
-    write_json(report_dir / "findings.json", {"target": args.target, "issues": []})
+    write_json(report_dir / "findings.json", {"target": args.target, "issues": findings})
     _write_summary_bundle(
         report_dir,
         command="deploy",
         target=args.target,
-        status="ok" if result.returncode == 0 else "failed",
-        summary=f"stackctl deploy {'completed' if result.returncode == 0 else 'failed'} for {args.target}",
-        details=(_command_details(deploy_result) if args.target == "prod-hosted" else []) + _command_details(result),
+        status="ok" if final_exit_code == 0 else "failed",
+        summary=f"stackctl deploy {'completed' if final_exit_code == 0 else 'failed'} for {args.target}",
+        details=(_command_details(deploy_result) if args.target == "prod-hosted" else []) + _command_details(result) + [
+            f"post-deploy {item['summary']}"
+            for item in post_deploy_checks
+        ] + [
+            f"rollback-check {item['summary']}"
+            for item in rollback_post_checks
+        ] + ([f"rollout decision: {rollout_decision}"] if args.target == "prod-hosted" else []) + ([f"rollback triggered: {rollback_reason}"] if rollback_reason else []) + (["dry-run remained read-only"] if dry_run_requested and args.target == "prod-hosted" else []),
+        timing=timing,
     )
     _write_stdout_markdown(
         report_dir,
@@ -1131,13 +2291,22 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
                 if args.target == "prod-hosted"
                 else []
             ),
+            *(
+                [("prod-rollback", "\n".join(filter(None, [rollback_result.stdout, rollback_result.stderr])))]
+                if rollback_result is not None
+                else []
+            ),
         ],
     )
     return {
-        "exitCode": result.returncode,
-        "summary": f"stackctl deploy {'completed' if result.returncode == 0 else 'failed'} for {args.target}",
-        "details": (_command_details(deploy_result) if args.target == "prod-hosted" else []) + _command_details(result),
+        "exitCode": final_exit_code,
+        "summary": f"stackctl deploy {'completed' if final_exit_code == 0 else 'failed'} for {args.target}",
+        "details": (_command_details(deploy_result) if args.target == "prod-hosted" else []) + _command_details(result) + findings + [
+            f"rollback-check {item['summary']}"
+            for item in rollback_post_checks
+        ] + ([f"rollout decision: {rollout_decision}"] if args.target == "prod-hosted" else []) + ([f"rollback triggered: {rollback_reason}"] if rollback_reason else []) + (["dry-run remained read-only"] if dry_run_requested and args.target == "prod-hosted" else []),
         "reportDir": relpath(report_dir),
+        **timing,
     }
 
 
@@ -1347,7 +2516,17 @@ def _network_report(target_name: str) -> dict[str, Any]:
     target = get_target(topology, target_name)
     profile_name = target.get("portProfile")
     if not profile_name:
-        return {"ports": []}
+        public_bases = target.get("publicBases") or {}
+        endpoints = [
+            {"name": name, "url": value}
+            for name, value in public_bases.items()
+            if isinstance(value, str) and value.strip()
+        ]
+        return {
+            "profile": "",
+            "ports": [],
+            "publicEndpoints": endpoints,
+        }
     manifest = load_port_manifest()
     ports = []
     for role in _expected_local_roles(target_name):
@@ -1355,7 +2534,11 @@ def _network_report(target_name: str) -> dict[str, Any]:
             continue
         port = canonical_port(manifest, profile_name, role)
         ports.append({"name": role, "port": port, "open": socket_probe(port)})
-    return {"profile": profile_name, "ports": ports}
+    return {
+        "profile": profile_name,
+        "ports": ports,
+        "publicEndpoints": [],
+    }
 
 
 def _expected_local_roles(target_name: str) -> list[str]:
@@ -1422,7 +2605,12 @@ def _local_log_report(target_name: str) -> dict[str, Any]:
     for name, path in candidates.items():
         if path.exists():
             hits.append({"name": name, "path": relpath(path)})
-    return {"paths": hits}
+    extra: dict[str, Any] = {}
+    if target_name == "gamma-hosted":
+        extra["gammaDeployState"] = _read_json_payload(ROOT / "artifacts" / "ecs-onebox" / "deploy-report.json") or {}
+    if target_name == "prod-hosted":
+        extra["prodReleaseState"] = _load_release_state("seed-box")
+    return {"paths": hits, **extra}
 
 
 def _data_report(target_name: str) -> dict[str, Any]:
@@ -1447,7 +2635,8 @@ def _metrics_report(topology: dict[str, Any], target_name: str) -> dict[str, Any
         "probes": [
             {"name": item["name"], "url": item["url"]}
             for item in checks
-        ]
+        ],
+        "scriptProbes": _script_probe_plan_for_target(topology, target_name),
     }
 
 

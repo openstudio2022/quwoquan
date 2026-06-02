@@ -20,10 +20,7 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 
 LEGACY_PROFILES = {"daily_full", "pr_smoke"}
 PROFILE_PATTERN = re.compile(
-    r"""(?:validation_profile|--profile)\s*[=:]\s*['"]?(\w+)['"]?"""
-)
-PROFILE_OPTIONS_PATTERN = re.compile(
-    r"""^\s*-\s+(\w+)\s*$""", re.MULTILINE
+    r"""(?:validation_profile|--profile)[ \t]*[=:][ \t]*['"]?([A-Za-z0-9_]+)['"]?"""
 )
 
 
@@ -34,6 +31,8 @@ def load_valid_profiles() -> set:
 
 def scan_file(path: Path, valid: set) -> List[str]:
     errors = []
+    if path.resolve() == Path(__file__).resolve():
+        return errors
     content = path.read_text(encoding="utf-8")
 
     for match in PROFILE_PATTERN.finditer(content):
@@ -49,11 +48,16 @@ def scan_file(path: Path, valid: set) -> List[str]:
             if not profile_name.startswith("$") and profile_name not in {
                 "true", "false", "string", "choice",
             }:
-                pass  # dynamic reference, skip
+                line_num = content[:match.start()].count("\n") + 1
+                errors.append(
+                    f"{path.relative_to(REPO_ROOT)}:{line_num}: "
+                    f"references undefined profile '{profile_name}'"
+                )
 
     for legacy in LEGACY_PROFILES:
-        if legacy in content:
-            line_num = content[:content.index(legacy)].count("\n") + 1
+        pattern = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(legacy)}(?![A-Za-z0-9_])")
+        for match in pattern.finditer(content):
+            line_num = content[:match.start()].count("\n") + 1
             errors.append(
                 f"{path.relative_to(REPO_ROOT)}:{line_num}: "
                 f"contains legacy profile name '{legacy}'"
@@ -72,6 +76,9 @@ def main() -> int:
     for yml in sorted(WORKFLOW_DIR.glob("*.yml")):
         errors.extend(scan_file(yml, valid))
 
+    for py in sorted((REPO_ROOT / "agent_ops").rglob("*.py")):
+        errors.extend(scan_file(py, valid))
+
     for py in sorted(SCRIPTS_DIR.glob("run_gamma_patrol*.py")):
         errors.extend(scan_file(py, valid))
 
@@ -79,8 +86,9 @@ def main() -> int:
     if makefile.exists():
         content = makefile.read_text(encoding="utf-8")
         for legacy in LEGACY_PROFILES:
-            if legacy in content:
-                line_num = content[:content.index(legacy)].count("\n") + 1
+            pattern = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(legacy)}(?![A-Za-z0-9_])")
+            for match in pattern.finditer(content):
+                line_num = content[:match.start()].count("\n") + 1
                 errors.append(
                     f"Makefile:{line_num}: contains legacy profile name '{legacy}'"
                 )

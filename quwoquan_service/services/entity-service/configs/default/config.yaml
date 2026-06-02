@@ -3,6 +3,10 @@ service:
   http:
     addr: ":18084"
 
+mongo:
+  uri: ""
+  database: "quwoquan_entity"
+
 config:
   # Config release contract
   # CONFIG_VERSION must be injected by deployment pipeline in prod.

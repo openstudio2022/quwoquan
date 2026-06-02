@@ -25,6 +25,7 @@ var supportedBehaviorActions = func() map[string]struct{} {
 
 type BehaviorEventInput struct {
 	UserID          string   `json:"userId"`
+	DeviceActorID   string   `json:"deviceActorId"`
 	SessionID       string   `json:"sessionId"`
 	FeedSessionID   string   `json:"feedSessionId"`
 	ContentID       string   `json:"contentId"`
@@ -116,7 +117,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		}
 		userID := normalizeAnonymousSubAccountID(eventInput.UserID)
 		contentID := strings.TrimSpace(firstNonEmptyLocal(eventInput.ContentID, eventInput.PostID))
-		if contentID == "" {
+		if contentID == "" && action != "assistant_interest" {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "contentId 必填", "missing contentId")
 		}
 		duration := eventInput.Duration
@@ -135,6 +136,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		}
 		signal := rtrec.BehaviorSignal{
 			UserID:                userID,
+			DeviceActorID:         strings.TrimSpace(eventInput.DeviceActorID),
 			SessionID:             strings.TrimSpace(eventInput.SessionID),
 			FeedSessionID:         strings.TrimSpace(eventInput.FeedSessionID),
 			ContentID:             contentID,
@@ -158,6 +160,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		signals = append(signals, signal)
 		projectedEvents = append(projectedEvents, map[string]any{
 			"userId":                userID,
+			"deviceActorId":         signal.DeviceActorID,
 			"sessionId":             signal.SessionID,
 			"contentId":             contentID,
 			"action":                action,
@@ -195,6 +198,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		for i, sig := range signals {
 			rawEvents[i] = persistence.RawBehaviorEvent{
 				UserID:                sig.UserID,
+				DeviceActorID:         sig.DeviceActorID,
 				SessionID:             sig.SessionID,
 				ContentID:             sig.ContentID,
 				Action:                sig.Action,
@@ -219,17 +223,17 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		dateStr := occurredAt.Format("2006-01-02")
 		for _, sig := range signals {
 			dwellMs := int64(sig.Duration * 1000)
-			_ = s.metricsStore.IncrementMetric(ctx, dateStr, "action", sig.Action, sig.Action, dwellMs, sig.EngagementDepth)
+			_ = s.metricsStore.IncrementMetric(ctx, dateStr, persistence.DailyMetricDimensionAction, sig.Action, sig.Action, dwellMs, sig.EngagementDepth)
 			if sig.ContentID != "" {
-				_ = s.metricsStore.IncrementMetric(ctx, dateStr, "content", sig.ContentID, sig.Action, dwellMs, sig.EngagementDepth)
+				_ = s.metricsStore.IncrementMetric(ctx, dateStr, persistence.DailyMetricDimensionContent, sig.ContentID, sig.Action, dwellMs, sig.EngagementDepth)
 			}
 			if sig.AuthorID != "" {
-				_ = s.metricsStore.IncrementMetric(ctx, dateStr, "author", sig.AuthorID, sig.Action, dwellMs, sig.EngagementDepth)
+				_ = s.metricsStore.IncrementMetric(ctx, dateStr, persistence.DailyMetricDimensionAuthor, sig.AuthorID, sig.Action, dwellMs, sig.EngagementDepth)
 			}
 			// 交集转化北极星（S6）：交集维度上有归因的行动（关注/进圈子/加联系人等）按维度累计，
 			// 供「交集转化率 = 交集行动数 / 新增可解释交集数」按 dimension 下钻。
 			if sig.IntersectionDimension != "" {
-				_ = s.metricsStore.IncrementMetric(ctx, dateStr, "intersection", sig.IntersectionDimension, sig.Action, dwellMs, sig.EngagementDepth)
+				_ = s.metricsStore.IncrementMetric(ctx, dateStr, persistence.DailyMetricDimensionIntersection, sig.IntersectionDimension, sig.Action, dwellMs, sig.EngagementDepth)
 			}
 		}
 	}

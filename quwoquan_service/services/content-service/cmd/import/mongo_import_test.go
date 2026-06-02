@@ -40,7 +40,8 @@ func samplePosts() []PostDoc {
 	return []PostDoc{
 		{PostRef: "posts/article/体验/甲居藏寨体验/1", ContentType: "article", Title: "甲居藏寨体验", Angle: "体验", Seq: 1,
 			EntityRefs: []string{"地点/景区/甲居藏寨"}, TagRefs: []string{"Topic/旅行"}, Template: "journal",
-			GeneratorModel: "agent/x", ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "d1"},
+			GeneratorModel: "agent/x", ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "d1",
+			SourceTaskId: "旅行/环线/川西环线/川西大环线自驾"},
 		{PostRef: "posts/article/攻略/色达攻略/1", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
 			EntityRefs: []string{"地点/景区/色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "d2"},
 	}
@@ -49,7 +50,9 @@ func samplePosts() []PostDoc {
 func sampleEntities() []EntityDoc {
 	return []EntityDoc{
 		{EntityRef: "地点/景区/甲居藏寨", Domain: "地点", Etype: "景区", Name: "甲居藏寨", Label: "甲居藏寨",
-			TagRefs: []string{"Entity/地点/景区"}, Page: "# 甲居藏寨\n", HasPage: true},
+			TagRefs: []string{"Entity/地点/景区"}, Page: "# 甲居藏寨\n", HasPage: true,
+			ConditionProfile: map[string]any{"regions": []any{"高原", "山地"}, "seasons": []any{"夏", "秋"}, "altitudeMeters": 3500},
+			SourceTaskId:     "旅行/环线/川西环线/川西大环线自驾"},
 		{EntityRef: "地点/景区/色达", Domain: "地点", Etype: "景区", Name: "色达", Label: "色达", HasPage: false},
 	}
 }
@@ -73,10 +76,17 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 		t.Fatalf("want 2 docs, got %d", count)
 	}
 	var got struct {
+		ID              string    `bson:"_id"`
 		Title           string    `bson:"title"`
 		Angle           string    `bson:"angle"`
 		EntityRefs      []string  `bson:"entityRefs"`
+		TagRefs         []string  `bson:"tagRefs"`
+		Body            string    `bson:"body"`
+		Summary         string    `bson:"summary"`
 		ArticleMarkdown string    `bson:"articleMarkdown"`
+		ArticleTemplate string    `bson:"articleTemplate"`
+		MarkdownDigest  string    `bson:"articleMarkdownDigest"`
+		SourceTaskId    string    `bson:"sourceTaskId"`
 		CreatedAt       time.Time `bson:"createdAt"`
 		UpdatedAt       time.Time `bson:"updatedAt"`
 	}
@@ -86,8 +96,26 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	if got.Title != "甲居藏寨体验" || got.Angle != "体验" || got.ArticleMarkdown == "" {
 		t.Fatalf("fields wrong: %+v", got)
 	}
+	if got.ID != "posts/article/体验/甲居藏寨体验/1" {
+		t.Fatalf("post _id must use stable postRef, got %q", got.ID)
+	}
 	if len(got.EntityRefs) != 1 || got.EntityRefs[0] != "地点/景区/甲居藏寨" {
 		t.Fatalf("entityRefs wrong: %+v", got.EntityRefs)
+	}
+	if len(got.TagRefs) != 1 || got.TagRefs[0] != "Topic/旅行" {
+		t.Fatalf("tagRefs wrong: %+v", got.TagRefs)
+	}
+	if got.Body != got.ArticleMarkdown || got.Body == "" {
+		t.Fatalf("body must mirror articleMarkdown for online read/search: %+v", got)
+	}
+	if got.Summary != "d1" || got.MarkdownDigest != "d1" {
+		t.Fatalf("summary/digest must mirror articleDigest: %+v", got)
+	}
+	if got.ArticleTemplate != "journal" {
+		t.Fatalf("articleTemplate must mirror template: %+v", got)
+	}
+	if got.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
+		t.Fatalf("sourceTaskId not persisted: %q", got.SourceTaskId)
 	}
 	if got.CreatedAt.IsZero() || got.UpdatedAt.IsZero() {
 		t.Fatalf("createdAt/updatedAt must be set: %+v", got)
@@ -153,14 +181,19 @@ func TestMongoUpsertEntitiesPageFlag(t *testing.T) {
 		t.Fatalf("want 2 entities, got %d", n)
 	}
 	var withPage struct {
-		HasPage bool   `bson:"hasPage"`
-		Page    string `bson:"page"`
+		HasPage          bool           `bson:"hasPage"`
+		Page             string         `bson:"page"`
+		SourceTaskId     string         `bson:"sourceTaskId"`
+		ConditionProfile map[string]any `bson:"conditionProfile"`
 	}
 	if err := coll.FindOne(ctx, bson.M{"entityRef": "地点/景区/甲居藏寨"}).Decode(&withPage); err != nil {
 		t.Fatal(err)
 	}
 	if !withPage.HasPage || withPage.Page == "" {
 		t.Fatalf("甲居藏寨 should have page: %+v", withPage)
+	}
+	if withPage.SourceTaskId == "" || withPage.ConditionProfile == nil {
+		t.Fatalf("entity sourceTaskId/conditionProfile not persisted: %+v", withPage)
 	}
 	var noPage struct {
 		HasPage bool `bson:"hasPage"`
@@ -233,5 +266,81 @@ func TestMongoLoadThenUpsertFromPublishTree(t *testing.T) {
 	}
 	if c, _ := ec.CountDocuments(ctx, bson.M{}); c != 1 {
 		t.Fatalf("want 1 entity (sample subset), got %d", c)
+	}
+	var inserted struct {
+		PostRef     string    `bson:"postRef"`
+		Status      string    `bson:"status"`
+		Visibility  string    `bson:"visibility"`
+		PublishedAt time.Time `bson:"publishedAt"`
+	}
+	if err := pc.FindOne(ctx, bson.M{"postRef": "posts/article/攻略/色达攻略/1"}).Decode(&inserted); err != nil {
+		t.Fatal(err)
+	}
+	if inserted.Status != "published" || inserted.Visibility != "public" {
+		t.Fatalf("post must be searchable/discoverable (published/public): %+v", inserted)
+	}
+	if inserted.PublishedAt.IsZero() {
+		t.Fatalf("post publishedAt must be populated: %+v", inserted)
+	}
+}
+
+// TestMongoUpsertDiscoveryFeed 验证 Path A 同写 rm_discovery_feed：
+// postId=postRef、status/visibility 可召回、sourceTaskId 透传、conditionProfile 从主实体 join 冗余。
+func TestMongoUpsertDiscoveryFeed(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	root := fixturePublish(t)
+	posts, err := LoadPosts(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ents, err := LoadEntities(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	feed := db.Collection("rm_discovery_feed")
+	n, err := UpsertDiscoveryFeed(ctx, feed, posts, conditionProfileIndex(ents), time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("want 2 feed items, got %d", n)
+	}
+	var item struct {
+		PostId           string         `bson:"postId"`
+		Status           string         `bson:"status"`
+		Visibility       string         `bson:"visibility"`
+		TagRefs          []string       `bson:"tagRefs"`
+		SourceTaskId     string         `bson:"sourceTaskId"`
+		ConditionProfile map[string]any `bson:"conditionProfile"`
+		RecScore         float64        `bson:"recScore"`
+	}
+	if err := feed.FindOne(ctx, bson.M{"postId": "posts/article/体验/甲居藏寨体验/1"}).Decode(&item); err != nil {
+		t.Fatal(err)
+	}
+	if item.Status != "published" || item.Visibility != "public" {
+		t.Fatalf("feed item must be discoverable (published/public): %+v", item)
+	}
+	if item.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
+		t.Fatalf("feed sourceTaskId missing: %+v", item)
+	}
+	if item.ConditionProfile == nil {
+		t.Fatalf("feed conditionProfile not joined from entity: %+v", item)
+	}
+	if _, ok := item.ConditionProfile["altitudeMeters"]; !ok {
+		t.Fatalf("conditionProfile.altitudeMeters missing: %+v", item.ConditionProfile)
+	}
+	// 无画像实体的文章：conditionProfile 应缺省（nil），不阻断 tag/hot/explore 召回。
+	var second struct {
+		Status       string `bson:"status"`
+		SourceTaskId string `bson:"sourceTaskId"`
+	}
+	if err := feed.FindOne(ctx, bson.M{"postId": "posts/article/攻略/色达攻略/1"}).Decode(&second); err != nil {
+		t.Fatal(err)
+	}
+	if second.Status != "published" {
+		t.Fatalf("色达攻略 feed item not discoverable: %+v", second)
 	}
 }

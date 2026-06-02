@@ -138,7 +138,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
-      expect(find.text('创作'), findsOneWidget);
+      expect(find.text('作品'), findsOneWidget);
     });
 
     testWidgets('旅程 A2：切换到圈子 Tab', (tester) async {
@@ -274,7 +274,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
-      expect(find.text('创作'), findsOneWidget);
+      expect(find.text('作品'), findsOneWidget);
     });
 
     testWidgets('旅程 F3：一级 tab 吸顶后切换不会把整页头部重置回内容区', (tester) async {
@@ -324,7 +324,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
-      expect(find.text('创作'), findsOneWidget);
+      expect(find.text('作品'), findsOneWidget);
     });
   });
 

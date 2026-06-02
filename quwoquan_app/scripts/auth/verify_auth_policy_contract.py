@@ -43,14 +43,15 @@ AUTH_PUBLIC_OPERATIONS = {
 }
 
 # 明确需要账号身份的核心入口：必须 required，防止漏标回退为 public。
+# 注意：点赞/分享已按「游客设备态可写」策略下放到 MUST_BE_DEVICE_WRITABLE；
+# 收藏（Favorite）属个人资产，仍保持 required（与点赞/分享口径不同）。
 MUST_BE_REQUIRED = {
     "CreatePost",
     "UpdatePost",
     "DeletePost",
     "CreateComment",
-    "LikePost",
     "FavoritePost",
-    "SharePost",
+    "UnfavoritePost",
     "SendMessage",
     "ListConversations",
     "GetConversation",
@@ -60,6 +61,16 @@ MUST_BE_REQUIRED = {
     "ListPersonas",
     "CreatePersona",
     "ListCredentials",
+}
+
+# 游客设备态可写入口（like/share）：必须是 optional（auth_mode=optional +
+# anonymous_policy=allow），既不能回退为 required（会重新拦截游客设备态写入），
+# 也不能放成 public（仍需登录用户走账号维度）。维度分层由云侧 deviceActorId 计数实现。
+MUST_BE_DEVICE_WRITABLE = {
+    "LikePost",
+    "UnlikePost",
+    "SharePost",
+    "UnsharePost",
 }
 
 
@@ -129,6 +140,15 @@ def main() -> int:
             errors.append(f"核心受限入口 {op} 缺失（service.yaml 未定义）")
         elif mode != "required":
             errors.append(f"核心受限入口 {op} 必须是 required，当前为 {mode}")
+
+    for op in MUST_BE_DEVICE_WRITABLE:
+        mode = op_to_mode.get(op)
+        if mode is None:
+            errors.append(f"游客设备态可写入口 {op} 缺失（service.yaml 未定义）")
+        elif mode != "optional":
+            errors.append(
+                f"游客设备态可写入口 {op} 必须是 optional（anonymous_policy=allow），当前为 {mode}"
+            )
 
     generated = parse_generated_policy()
     for op, mode in op_to_mode.items():

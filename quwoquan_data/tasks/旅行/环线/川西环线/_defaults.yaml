@@ -1,0 +1,12 @@
+schemaVersion: quwoquan.task.defaults
+# 川西环线默认：沿线地形菜单（高原/雪山/山地森林）+ 适宜自驾季节（夏秋，冬季多封山）。
+# 具体每段按锚点实体真实海拔/物候在 produce/brief 注入。
+content:
+  conditionAxes:
+    regions:
+    - 高原
+    - 雪山
+    - 山地森林
+    seasons:
+    - 夏
+    - 秋

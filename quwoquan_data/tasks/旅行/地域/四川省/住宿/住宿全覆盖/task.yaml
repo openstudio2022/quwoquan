@@ -1,0 +1,28 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/住宿/住宿全覆盖
+title: 四川省住宿全覆盖
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 住宿
+parentTaskId: 旅行/地域/四川省/_省域总览
+status: draft
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/住宿
+  coverageTargets:
+  - entityType: 地点/住宿
+    name: 峨眉山蓝光己庄温泉度假村
+content:
+  angles:
+  - 体验
+  - 攻略
+  emphasis:
+  - 住宿体验
+  - 周边与性价比
+acceptance: {}
+provenance:
+  createdAt: '2026-05-15T00:00:00+08:00'
+  createdBy: bootstrap

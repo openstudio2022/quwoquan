@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "quwoquan.task.run",
+  "runId": "run_20260601_082426",
+  "taskId": "校园/地域/全国/高校/首批院校全覆盖",
+  "startedAt": "2026-06-01T08:24:26+08:00",
+  "finishedAt": "2026-06-01T08:24:26+08:00",
+  "owner": "pilot",
+  "batches": [],
+  "delta": {
+    "entitiesAdded": 0,
+    "postsAdded": 0,
+    "entitiesUpdated": 0,
+    "postsUpdated": 0
+  },
+  "sessionSummary": "adopt 历史3268校→publish归属校园任务+回填sourceTaskId, 重建索引, ship alpha/beta/gamma各675篇",
+  "decisions": [],
+  "nextSuggested": [
+    "按学校目录扩 coverageTargets / 按省拆子任务以深做角度"
+  ]
+}

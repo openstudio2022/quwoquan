@@ -102,11 +102,15 @@ def write_agent_draft(
     covered_facts: Sequence[str],
     session_trace: str | None = None,
     extracted_entities: Sequence[dict[str, Any]] | None = None,
+    style_family: str | None = None,
+    opening_strategy: str | None = None,
 ) -> None:
     """会话模型创作正文写回（SOP 与测试 fixture 共用）。generator 固定为 agent。
 
     extracted_entities: 正文中挖掘出的专有实体，形如 [{"name":"洛绒牛场","type":"自然景观","evidenceRef":"..."}]，
     供 produce review 生成实体 sidecar / 关联实体主页。
+    style_family / opening_strategy: agent 按原文体裁+证据自选的最终文风族与开篇策略 id，
+    供 review 开篇门按所选 styleFamily 的 allowedOpenings markers 语义化校验，避免千篇一律开头。
     """
     article = draft_article_path(task_id, batch_id, ref)
     article.parent.mkdir(parents=True, exist_ok=True)
@@ -118,6 +122,8 @@ def write_agent_draft(
             "generator": GENERATOR_AGENT,
             "model": model,
             "sessionTrace": session_trace,
+            "styleFamily": style_family,
+            "openingStrategy": opening_strategy,
             "citedSourcePaths": list(cited_source_paths),
             "coveredFacts": list(covered_facts),
             "extractedEntities": list(extracted_entities or []),

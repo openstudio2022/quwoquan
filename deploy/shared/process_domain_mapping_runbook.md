@@ -153,7 +153,7 @@ make gate-full
 
 ## 4.1 local-gamma mirror（本地组合拓扑预测试）
 
-`local-gamma mirror` 用于提交前在本机验证组合拓扑，不改变本文件的四环境映射：
+`local-gamma mirror` 用于提交前在本机验证组合拓扑，不改变本文件的当前环境映射：
 
 1. 运行时仍使用 `APP_ENV=gamma`，不得新增 `local-gamma` 环境名。
 2. 本地 Docker compose 的进程/domain 归属必须按 `gamma` 映射设计，不能引入本地独有 domain 绑定。

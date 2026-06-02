@@ -26,6 +26,7 @@ import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
+import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_header.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_lifestyle_tab.dart';
@@ -294,6 +295,16 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     );
     final state = ref.watch(profileNotifierProvider(widget.userId));
     final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      final justLoggedIn =
+          next.isAuthenticated && (previous == null || !previous.isAuthenticated);
+      if (justLoggedIn) {
+        maybeResumeFollowContinuation(notifier);
+      }
+    });
     final userData = ref.watch(userDataProvider);
     final bg = SettingsSemanticConstants.conversationSheetPanelBackground(
       isDark,
@@ -382,7 +393,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       ),
     );
   }
-
 }
 
 enum _ProfileMoreAction { share, block, report }

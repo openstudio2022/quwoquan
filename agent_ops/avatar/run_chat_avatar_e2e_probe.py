@@ -189,9 +189,26 @@ def request_json(
     ctx = ssl._create_unverified_context()
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
         raw = resp.read()
+        content_type = str(resp.headers.get("Content-Type", "")).lower()
+        if raw and "json" not in content_type:
+            preview = raw.decode("utf-8", errors="replace")[:400]
+            if "<html" in preview.lower():
+                raise ProbeFailure("gateway_response_html", f"{method} {path} returned html: {preview}")
+            raise ProbeFailure(
+                "gateway_response_not_json",
+                f"{method} {path} returned content-type={content_type or '<missing>'}: {preview}",
+            )
         if not raw:
-            return {}
-        return json.loads(raw.decode("utf-8"))
+            raise ProbeFailure("gateway_response_empty", f"{method} {path} returned empty body")
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            preview = raw.decode("utf-8", errors="replace")[:400]
+            category = "gateway_response_html" if "<html" in preview.lower() else "gateway_response_not_json"
+            raise ProbeFailure(
+                category,
+                f"{method} {path} returned invalid json: {exc}; body={preview}",
+            ) from exc
 
 
 def request_ok(args: argparse.Namespace, url: str, timeout: int = 8) -> bool:
@@ -210,6 +227,8 @@ def classify_http_error(exc: BaseException) -> str:
         return "auth_failed"
     if isinstance(exc, urllib.error.URLError):
         return "gateway_unreachable"
+    if isinstance(exc, json.JSONDecodeError):
+        return "gateway_response_not_json"
     return "unknown"
 
 

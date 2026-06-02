@@ -221,12 +221,17 @@ type discoveryTabDef struct {
 
 // homeChannelDef：首页频道运营可配置项（端 meta 默认 + /v1/config/app 远程覆盖）。
 type homeChannelDef struct {
-	ID          string            `yaml:"id"`
-	LabelKey    string            `yaml:"label_key"`
-	Template    string            `yaml:"template"`
-	FeedQuery   map[string]string `yaml:"feed_query"`
-	MoodCopyKey string            `yaml:"mood_copy_key"`
-	Order       int               `yaml:"order"`
+	ID                      string            `yaml:"id"`
+	LabelKey                string            `yaml:"label_key"`
+	Template                string            `yaml:"template"`
+	LayoutTemplate          string            `yaml:"layout_template"`
+	PhoneColumns            int               `yaml:"phone_columns"`
+	SupportsFullSpanModules bool              `yaml:"supports_full_span_modules"`
+	IntersectionModulePolicy string           `yaml:"intersection_module_policy"`
+	ContentCardPolicy       string            `yaml:"content_card_policy"`
+	FeedQuery               map[string]string `yaml:"feed_query"`
+	MoodCopyKey             string            `yaml:"mood_copy_key"`
+	Order                   int               `yaml:"order"`
 }
 
 type discoveryRailDef struct {
@@ -3143,7 +3148,17 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 
 	// Generate track methods - collect positional and named params separately.
 	for _, ev := range trackedEvents {
-		positional := []string{"String postId"}
+		hasPostId := false
+		for _, pf := range ev.PayloadFields {
+			if pf == "postId" {
+				hasPostId = true
+				break
+			}
+		}
+		var positional []string
+		if hasPostId {
+			positional = append(positional, "String postId")
+		}
 		var named []string
 		for _, pf := range ev.PayloadFields {
 			if pf == "postId" {
@@ -3154,6 +3169,8 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 				positional = append(positional, "int dwellMs")
 			case "authorId":
 				positional = append(positional, "String authorId")
+			case "circleId":
+				positional = append(positional, "String circleId")
 			case "entityRefs":
 				positional = append(positional, "List<String> entityRefs")
 			case "tagRefs":
@@ -3168,6 +3185,16 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 				named = append(named, "String contentType = ''")
 			case "shareTarget":
 				named = append(named, "String shareTarget = ''")
+			case "intersectionDimension":
+				named = append(named, "String intersectionDimension = ''")
+			case "intersectionTagRefs":
+				named = append(named, "List<String> intersectionTagRefs = const <String>[]")
+			case "intersectionId":
+				named = append(named, "String intersectionId = ''")
+			case "intersectionClass":
+				named = append(named, "String intersectionClass = ''")
+			case "intersectionEvidenceId":
+				named = append(named, "String intersectionEvidenceId = ''")
 			}
 		}
 		sig := strings.Join(positional, ", ")
@@ -3177,7 +3204,9 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 		b.WriteString(fmt.Sprintf("  static void %s(%s) {\n", ev.DartMethod, sig))
 		b.WriteString("    _enqueue(<String, dynamic>{\n")
 		b.WriteString(fmt.Sprintf("      'type': '%s',\n", ev.Type))
-		b.WriteString("      'postId': postId,\n")
+		if hasPostId {
+			b.WriteString("      'postId': postId,\n")
+		}
 		for _, pf := range ev.PayloadFields {
 			if pf == "postId" {
 				continue
@@ -3298,6 +3327,11 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("  final String id;\n")
 	b.WriteString("  final String labelKey;\n")
 	b.WriteString("  final String template;\n")
+	b.WriteString("  final String layoutTemplate;\n")
+	b.WriteString("  final int phoneColumns;\n")
+	b.WriteString("  final bool supportsFullSpanModules;\n")
+	b.WriteString("  final String intersectionModulePolicy;\n")
+	b.WriteString("  final String contentCardPolicy;\n")
 	b.WriteString("  final Map<String, String> feedQuery;\n")
 	b.WriteString("  final String moodCopyKey;\n")
 	b.WriteString("  final int order;\n\n")
@@ -3305,6 +3339,11 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("    required this.id,\n")
 	b.WriteString("    required this.labelKey,\n")
 	b.WriteString("    required this.template,\n")
+	b.WriteString("    required this.layoutTemplate,\n")
+	b.WriteString("    required this.phoneColumns,\n")
+	b.WriteString("    required this.supportsFullSpanModules,\n")
+	b.WriteString("    required this.intersectionModulePolicy,\n")
+	b.WriteString("    required this.contentCardPolicy,\n")
 	b.WriteString("    required this.feedQuery,\n")
 	b.WriteString("    required this.moodCopyKey,\n")
 	b.WriteString("    required this.order,\n")
@@ -3465,10 +3504,15 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 
 	b.WriteString("  static const List<HomeChannelConfig> homeChannels = <HomeChannelConfig>[\n")
 	for _, ch := range uc.HomeChannels {
-		b.WriteString(fmt.Sprintf("    HomeChannelConfig(id: %s, labelKey: %s, template: %s, feedQuery: %s, moodCopyKey: %s, order: %d),\n",
+		b.WriteString(fmt.Sprintf("    HomeChannelConfig(id: %s, labelKey: %s, template: %s, layoutTemplate: %s, phoneColumns: %d, supportsFullSpanModules: %t, intersectionModulePolicy: %s, contentCardPolicy: %s, feedQuery: %s, moodCopyKey: %s, order: %d),\n",
 			dartStringLiteral(ch.ID),
 			dartStringLiteral(ch.LabelKey),
 			dartStringLiteral(ch.Template),
+			dartStringLiteral(ch.LayoutTemplate),
+			ch.PhoneColumns,
+			ch.SupportsFullSpanModules,
+			dartStringLiteral(ch.IntersectionModulePolicy),
+			dartStringLiteral(ch.ContentCardPolicy),
 			feedQueryDartLiteral(ch.FeedQuery),
 			dartStringLiteral(ch.MoodCopyKey),
 			ch.Order))

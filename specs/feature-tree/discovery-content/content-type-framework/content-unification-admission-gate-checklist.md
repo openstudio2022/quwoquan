@@ -37,7 +37,7 @@
 ### A1. 频道端侧统一消费 `homeChannels`（含远程覆盖、去硬编码、去漂移）
 - [x] **频道集合决策（产品决策，先定）**：结论 = 把现有 7 频道（following/recommend/campus/travel/photography/tech/car）全部纳入 `ui_config.home_channels` 默认集，统一由运营配置管理。
 - [x] `home_primary_tab_strip.dart` 去 `homeTabIds` 硬编码，改消费 `homeChannelsProvider`（`ContentUIConfig.homeChannels` 默认 + `/v1/config/app` 远程覆盖合并，按 order 排序）；`recommendedTabId` 对齐 `recommend`。
-- [x] `home_page._buildBody` 去硬编码 switch，按频道 `template`（`single_column_relations` / `masonry_recommend` / `intersection_rail_masonry`）路由 `MomentSocialFeed`；`channelId` 与 `channel.id` 对齐，消除 `recommend → 'moment'` 漂移。
+- [x] `home_page._buildBody` 去硬编码 switch，按频道 `template`（`single_column_relations` / `masonry_recommend` / `intersection_rail_masonry`）路由 `HomeMultiFormFeed`；`channelId` 与 `channel.id` 对齐，消除 `recommend → 'moment'` 漂移。
 - [x] 远程覆盖链路接通：`HomeChannelsRemoteOverride.fromAppConfigRoot` 解析 `/v1/config/app` → 合并进 `ContentRuntimeConfigState.homeChannels` → 失败/缺省回退 meta 默认。
 - [x] 验收：频道增删改/调序仅改云侧配置即在端生效（不发版）；拉取失败回退默认；端默认与远程同 schema。
 - [x] 测试：频道 provider 合并/回退单测（`home_channels_remote_override_test`）；strip/`_buildBody` 模板路由 widget 测试（`home_channel_template_routing_test`）；`post_ui_config_contract_test` 7 频道契约。
@@ -54,7 +54,7 @@
 - [x] 测试：对象卡行动回流带 dimension+tagRefs 的 UI 触发点测试（`home_intersection_action_attribution_test`）。
 
 ### A4. 内容卡交集理由位口径一致
-- [x] 抽共享 `IntersectionReasonChip`（`primaryText` 单一口径真相源）；feed（`MomentSocialFeed`）、沉浸 viewer（`works_immersive_viewer` caption）、内容详情页（`article_detail_page` header）同源接入，`displayText` 只读、无来源不展示。
+- [x] 抽共享 `IntersectionReasonChip`（`primaryText` 单一口径真相源）；feed（`HomeMultiFormFeed`）、沉浸 viewer（`works_immersive_viewer` caption）、内容详情页（`article_detail_page` header）同源接入，`displayText` 只读、无来源不展示。
 - [x] 测试：`intersection_reason_chip_widget_test`（primaryText 口径 + fromReasons + 双主题）；`works_immersive_viewer_widget_test` 沉浸 caption 接入断言；feed 既有用例守护。
 - [~] 转发卡：当前仓库无独立「转发/引用卡」组件；共享 chip 口径已就绪，待该 surface 落地时直接采用（不阻断 A4 出口）。
 
@@ -84,7 +84,7 @@
 ### D1. 统一展示 model（R24，收敛四套，全量硬切）
 - [x] 新建单一只读 presentation model `ContentSurfaceView` + 单一 `ContentSurfaceViewMapper`，覆盖 micro/image/video/article 四媒体类型（`lib/ui/content/models/`）；T1 投影契约 6 例全绿。
 - [x] **share surface** 经统一 model 接入（`ContentShareTemplateBuilder.build(surfaceView:)`），四类型同源 parity 测试全绿。
-- [x] **feed**（`moment_social_feed` 卡片体）接入统一 model；脱离 `PostSummaryView`。
+- [x] **feed**（`home_multi_form_feed` 卡片体）接入统一 model；脱离 `PostSummaryView`。
 - [x] **detail**（`article_detail_page`）接入统一 model（`ContentSurfaceView.fromArticleDetailPayload`，富渲染经 `surfaceView.article(pages/document)` 消费，pageflip 几何不动）。
 - [x] **immersive**（image/video viewer + `works_immersive_viewer`）接入统一 model（`MediaViewerExtra.posts → List<ContentSurfaceView>` 级联迁移，受 pageflip 规则约束）。
 - [x] **硬切收尾**：删除旧投影类（`PostSummaryView` / `projectPostMap` / `_shareSeedForPost`）与迁移 flag `unified_surface_view`，无双读、无 `@Deprecated` 共存路径；旧 wire 行序列化方法统一命名为 `toWireMap`。
@@ -96,7 +96,7 @@
 - [ ] Mock/Remote 同步拆分（`implements` 子接口），`app_providers.dart` 注册；契约测试覆盖。
 
 ### D3. 超大文件强拆（R03，tech-debt 跟踪）
-- [ ] `works_immersive_viewer.dart`、`discovery_page.dart`、`moment_social_feed.dart` 拆到每件 <500 行（不动 pageflip 受控文件）。
+- [ ] `works_immersive_viewer.dart`、`discovery_page.dart`、`home_multi_form_feed.dart` 拆到每件 <500 行（不动 pageflip 受控文件）。
 - [ ] 现有 widget 测试全绿无回归；像素/布局不变。
 - 说明：R03 大文件未纳入 `gate_repo.sh --scope app` 强制项，作为 tech-debt 跟踪，**不阻塞**本阶段准入出口。
 

@@ -10,10 +10,18 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
-  const LoginPage({super.key, this.reason, this.redirect});
+  const LoginPage({
+    super.key,
+    this.reason,
+    this.redirect,
+    this.dismissFallback,
+    this.allowGuestDismissPop = true,
+  });
 
   final String? reason;
   final String? redirect;
+  final String? dismissFallback;
+  final bool allowGuestDismissPop;
 
   @override
   ConsumerState<LoginPage> createState() => _LoginPageState();
@@ -352,11 +360,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final redirect = widget.redirect;
     if (redirect != null && redirect.isNotEmpty) {
       context.go(redirect);
-    } else if (context.canPop()) {
+    } else if (widget.allowGuestDismissPop && context.canPop()) {
       // 行内拦截（评论/点赞等）以 push 进入：登录成功后回到原页面原 tab。
       context.pop();
     } else {
-      context.go(AppRoutePaths.home);
+      context.go(
+        safeLoginDismissFallback(
+          redirect: widget.redirect,
+          dismissFallback: widget.dismissFallback,
+        ),
+      );
     }
   }
 
@@ -369,20 +382,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   /// 游客关闭 / 稍后登录：尽量原路返回，但绝不返回到「需要登录」的受限路由，
   /// 否则路由守卫会立刻再次把登录页弹出来，形成死循环。
   ///
-  /// - 若 [LoginPage.redirect] 指向受限路由（如 /chat、/profile/personas），
-  ///   一律安全回首页（游客可浏览）。
-  /// - 否则若可 pop（行内拦截以 push 进入，且来源页可浏览），原路返回。
-  /// - 兜底回首页。
+  /// 优先使用显式传入的 [LoginPage.dismissFallback]，否则再从 redirect 推导安全页。
+  /// 对底栏强入口（创作/消息）或首页内受限状态（如关注频道）必须禁用 guest pop，
+  /// 统一回到稳定可浏览的底层页面，避免再次触发登录门。
   void _dismissAsGuest() {
-    final redirect = widget.redirect;
-    final redirectIsGated =
-        redirect != null &&
-        redirect.isNotEmpty &&
-        requiredRouteGateForLocation(Uri.parse(redirect).path) != null;
-    if (!redirectIsGated && context.canPop()) {
+    final fallback = safeLoginDismissFallback(
+      redirect: widget.redirect,
+      dismissFallback: widget.dismissFallback,
+    );
+    if (widget.allowGuestDismissPop && context.canPop()) {
       context.pop();
     } else {
-      context.go(AppRoutePaths.home);
+      context.go(fallback);
     }
   }
 }

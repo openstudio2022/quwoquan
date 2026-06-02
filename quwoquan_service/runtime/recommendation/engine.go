@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	experiments "quwoquan_service/runtime/experiments"
 	learning "quwoquan_service/runtime/learning"
+	"quwoquan_service/runtime/recpolicy"
 )
 
 // FeedType identifies the kind of recommendation feed.
@@ -108,39 +108,9 @@ type RecallRequest struct {
 }
 
 // ScoringWeights controls the relative importance of each scoring dimension.
-// Tunable via runtime/experiments AB framework.
-type ScoringWeights struct {
-	TagRelevance    float64
-	AuthorAffinity  float64
-	Popularity      float64
-	Freshness       float64
-	SocialPrior     float64
-	ExploreBoost    float64
-	NegativePenalty float64
-	DwellBonus      float64
-	EntityAffinity  float64
-	TopicMatch      float64
-	AudienceMatch   float64
-	FormatMatch     float64
-}
-
-// DefaultWeights returns production-default scoring weights.
-func DefaultWeights() ScoringWeights {
-	return ScoringWeights{
-		TagRelevance:    3.0,
-		AuthorAffinity:  1.5,
-		Popularity:      2.0,
-		Freshness:       1.5,
-		SocialPrior:     1.0,
-		ExploreBoost:    0.5,
-		NegativePenalty: 5.0,
-		DwellBonus:      0.8,
-		EntityAffinity:  1.2,
-		TopicMatch:      1.0,
-		AudienceMatch:   0.8,
-		FormatMatch:     0.6,
-	}
-}
+// It is an alias for recpolicy.WeightPreset: scoring weights are policy data
+// (metadata-driven, hot-reloadable), never hand-coded constants.
+type ScoringWeights = recpolicy.WeightPreset
 
 // Engine orchestrates the full recommendation pipeline:
 //
@@ -150,41 +120,36 @@ func DefaultWeights() ScoringWeights {
 type Engine struct {
 	sessions SessionReader
 	sources  []CandidateSource
-	weights  ScoringWeights
 
 	scorer    ModelScorer
 	features  FeatureProvider
 	preRanker PreRanker
 
-	exploreFraction  float64
-	maxAuthorPerFeed int
-	recallTimeout    time.Duration
-	featureTimeout   time.Duration
+	recallTimeout  time.Duration
+	featureTimeout time.Duration
 
 	socialMiner *SocialInterestMiner
 
-	expResolver experiments.Resolver
-	logger      *slog.Logger
-	feedback    *FeedbackRecorder
+	// policyStore is the single source of scoring weights, secondary
+	// coefficients, AB experiments, and segment targeting. Never nil; defaults
+	// to the codegen baseline. Hot-reloadable via recpolicy.StartSyncLoop.
+	policyStore *recpolicy.Store
+
+	logger   *slog.Logger
+	feedback *FeedbackRecorder
 }
 
 // EngineOption configures the Engine.
 type EngineOption func(*Engine)
 
-func WithWeights(w ScoringWeights) EngineOption {
-	return func(e *Engine) { e.weights = w }
-}
-
-func WithExploreFraction(f float64) EngineOption {
-	return func(e *Engine) { e.exploreFraction = f }
-}
-
-func WithMaxAuthorPerFeed(n int) EngineOption {
-	return func(e *Engine) { e.maxAuthorPerFeed = n }
-}
-
-func WithExperimentResolver(r experiments.Resolver) EngineOption {
-	return func(e *Engine) { e.expResolver = r }
+// WithPolicyStore injects the recommendation policy store. When omitted, the
+// engine uses the codegen baseline policy.
+func WithPolicyStore(s *recpolicy.Store) EngineOption {
+	return func(e *Engine) {
+		if s != nil {
+			e.policyStore = s
+		}
+	}
 }
 
 func WithLogger(l *slog.Logger) EngineOption {
@@ -224,16 +189,14 @@ func WithSocialMiner(m *SocialInterestMiner) EngineOption {
 // sessions accepts *HotPath, *SessionCache, or any SessionReader.
 func NewEngine(sessions SessionReader, sources []CandidateSource, opts ...EngineOption) *Engine {
 	e := &Engine{
-		sessions:         sessions,
-		sources:          sources,
-		weights:          DefaultWeights(),
-		scorer:           &RuleScorer{},
-		features:         &NullFeatureProvider{},
-		preRanker:        &NullPreRanker{},
-		exploreFraction:  0.1,
-		maxAuthorPerFeed: 3,
-		recallTimeout:    150 * time.Millisecond,
-		featureTimeout:   50 * time.Millisecond,
+		sessions:       sessions,
+		sources:        sources,
+		scorer:         &RuleScorer{},
+		features:       &NullFeatureProvider{},
+		preRanker:      &NullPreRanker{},
+		policyStore:    recpolicy.NewStoreFromBaseline(),
+		recallTimeout:  150 * time.Millisecond,
+		featureTimeout: 50 * time.Millisecond,
 	}
 	for _, opt := range opts {
 		opt(e)
@@ -272,15 +235,6 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	session, err := e.sessions.GetSessionState(ctx, req.UserID, req.SessionID)
 	if err != nil {
 		session = &SessionState{UserID: req.UserID, SessionID: req.SessionID}
-	}
-
-	weights := e.weights
-	modelBucket := "rule"
-	modelVersion := "champion"
-	if e.expResolver != nil {
-		weights = ResolveWeights(ctx, e.expResolver, req.UserID)
-		modelBucket = ResolveModelBucket(ctx, e.expResolver, req.UserID)
-		modelVersion = ResolveModelVersion(ctx, e.expResolver, req.UserID)
 	}
 
 	// Stage 2: Parallel recall from all sources
@@ -346,11 +300,27 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		}
 	}
 
+	// Stage 5.5: Resolve scoring policy now that user segments are known.
+	// Weights, secondary coefficients, AB buckets, and segment targeting all
+	// come from the hot-reloadable policy (no hand-coded constants). Bucket
+	// hashing keys on userID for stable assignment; segments gate eligibility
+	// and drive preset overrides / weight deltas.
+	policy := e.policyStore.Current()
+	var userSegments []string
+	if userFeatures != nil {
+		userSegments = userFeatures.Segments
+	}
+	scoringBucket := policy.ResolveBucketOr(recpolicy.ExpScoringWeights, req.UserID, userSegments, policy.DefaultPreset)
+	resolved := policy.ResolveWeights(scoringBucket, userSegments)
+	modelBucket := policy.ResolveBucketOr(recpolicy.ExpModelVsRule, req.UserID, userSegments, "rule")
+	modelVersion := policy.ResolveBucketOr(recpolicy.ExpModelVersion, req.UserID, userSegments, "champion")
+
 	scoringFeatures := &ScoringFeatures{
 		Session:       session,
 		User:          userFeatures,
-		Weights:       weights,
-		ExploreRate:   e.exploreFraction,
+		Weights:       resolved.Weights,
+		Scorer:        resolved.Scorer,
+		ExploreRate:   resolved.Scorer.ExploreFraction,
 		Deterministic: req.Sort == FeedSortRecommend, // stable ordering for recommend + cursor pagination (no random explore boost)
 	}
 
@@ -417,9 +387,10 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	releaseCandidates(recallBuf)
 	releaseCandidates(filteredBuf)
 
-	// Stage 7: Rerank (diversity + author dedup)
+	// Stage 7: Rerank (diversity + author dedup) — diversity/cold-start
+	// thresholds come from the resolved policy, not hand-coded constants.
 	rerankStart := time.Now()
-	reranked := e.rerank(scored, windowLimit)
+	reranked := e.rerank(scored, windowLimit, resolved.Scorer)
 	rerankLatency := time.Since(rerankStart)
 
 	topicEntropy := computeTopicEntropy(reranked)
@@ -490,7 +461,10 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			ResultCount:        len(items),
 			SourceBreakdown:    sourceBreakdown,
 			ModelUsed:          modelBucket,
-			ExperimentBucket:   modelBucket,
+			ExperimentBucket:   scoringBucket,
+			PolicyVersion:      resolved.PolicyVersion,
+			ScoringPreset:      resolved.Preset,
+			Segment:            resolved.AppliedSegment,
 			TopicEntropy:       topicEntropy,
 			AuthorRepeatRate:   authorRepeatRate,
 			AuthorHHI:          authorHHI,
@@ -624,7 +598,7 @@ func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, ses
 
 // rerank applies diversity constraints: content type variety, author dedup, tag dedup,
 // explore injection, and cold-start minimum guarantee.
-func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
+func (e *Engine) rerank(scored []ScoredCandidate, limit int, scorer recpolicy.ScorerConfig) []ScoredCandidate {
 	if len(scored) == 0 {
 		return scored
 	}
@@ -635,10 +609,9 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 	typeCount := make(map[string]int)
 	authorCount := make(map[string]int)
 	maxPerType := (limit / 3) + 1
-	maxPerAuthor := e.maxAuthorPerFeed
-	if maxPerAuthor <= 0 {
-		maxPerAuthor = 3
-	}
+	maxPerAuthor := scorer.MaxAuthorPerFeed
+	coldStartAgeHours := scorer.ColdStartAgeHours
+	coldStartViewThreshold := scorer.ColdStartViewThreshold
 
 	// Tag dedup: track recent top tags to avoid consecutive same-tag content
 	recentTopTags := make([]string, 0, 3)
@@ -678,7 +651,7 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 			continue
 		}
 		ageHours := time.Since(s.Candidate.PublishedAt).Hours()
-		if ageHours < 24 && s.Candidate.ViewCount < 100 {
+		if ageHours < coldStartAgeHours && s.Candidate.ViewCount < coldStartViewThreshold {
 			coldStartBuffer = append(coldStartBuffer, s)
 			continue
 		}
@@ -696,7 +669,7 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 	}
 
 	// Explore injection: at least 1 per 5 items
-	exploreTarget := int(float64(limit) * e.exploreFraction)
+	exploreTarget := int(float64(limit) * scorer.ExploreFraction)
 	if exploreTarget < 1 && len(exploreBuffer) > 0 {
 		exploreTarget = 1
 	}

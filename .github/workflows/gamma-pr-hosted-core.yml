@@ -37,15 +37,25 @@ jobs:
       - name: Resolve gamma URLs
         id: urls
         run: |
-          PUBLIC_HOST="${GAMMA_ECS_PUBLIC_HOST:-118.31.239.122}"
-          BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18000}"
-          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:18086}"
-          MEDIA_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-${BASE_URL}}"
+          mapfile -t RESOLVED < <(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("deploy/shared/environment_topology_manifest.yaml").read_text(encoding="utf-8"))
+          target = manifest["targets"]["gamma-hosted"]
+          public = target["publicBases"]
+          print(public["api"])
+          print(public["productOps"])
+          print(public["mediaAvatar"])
+          PY
+          )
+          BASE_URL="${GAMMA_BASE_URL:-${RESOLVED[0]}}"
+          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-${RESOLVED[1]}}"
+          MEDIA_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-${RESOLVED[2]}}"
           echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "product_ops_base_url=${PRODUCT_OPS_BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "media_base_url=${MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
         env:
-          GAMMA_ECS_PUBLIC_HOST: ${{ vars.GAMMA_ECS_PUBLIC_HOST || vars.GAMMA_ECS_HOST }}
           GAMMA_BASE_URL: ${{ vars.GAMMA_BASE_URL }}
           GAMMA_PRODUCT_OPS_BASE_URL: ${{ vars.GAMMA_PRODUCT_OPS_BASE_URL }}
           MEDIA_AVATAR_CDN_BASE_URL: ${{ vars.MEDIA_AVATAR_CDN_BASE_URL }}

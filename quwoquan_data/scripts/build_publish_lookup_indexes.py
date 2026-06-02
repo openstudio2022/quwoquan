@@ -140,6 +140,7 @@ def build_entity_index() -> tuple[int, list[Path]]:
             "tagRefs": data.get("tagRefs", []),
             "tagCount": len(data.get("tagRefs", [])),
             "sourceRef": data.get("sourceRef", ""),
+            "sourceTaskId": data.get("sourceTaskId"),
             "updatedAt": data.get("updatedAt", NOW_ISO),
         }
         records_by_file[f"{safe_slug(domain)}__{safe_slug(etype)}__{fanout}.ndjson"].append(record)
@@ -195,6 +196,8 @@ def build_post_index(entity_lookup: dict[str, dict]) -> tuple[int, list[Path]]:
             "entityGeoTagRef": geo_ref,
             "tagRefs": data.get("tagRefs", []),
             "tagCount": len(data.get("tagRefs", [])),
+            "sourceTaskId": data.get("sourceTaskId"),
+            "sourceBatchId": data.get("sourceBatchId"),
             "updatedAt": data.get("updatedAt", NOW_ISO),
         }
         records_by_file[f"{safe_slug(content_type)}__{safe_slug(angle)}__{fanout}.ndjson"].append(record)

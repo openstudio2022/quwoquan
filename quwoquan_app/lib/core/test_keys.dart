@@ -124,6 +124,9 @@ class TestKeys {
   static const modalBottomSheetPanel = ValueKey<String>(
     'modal_bottom_sheet_panel',
   );
+  static const modalBottomSheetQuickActionsRail = ValueKey<String>(
+    'modal_bottom_sheet_quick_actions_rail',
+  );
 
   // ── Feed / Grid ──────────────────────────────────────────────────────
   static const photoFeedGrid = ValueKey<String>('photo_feed_grid');

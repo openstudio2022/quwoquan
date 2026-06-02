@@ -2,7 +2,7 @@
 
 ## 功能说明
 
-统一定义四环境（`alpha / beta / gamma / prod`）的 topology schema、public/upstream/origin 分层、artifact policy、host allowlist、secret scope 与 package purity 门禁。
+统一定义当前环境集合（如 `alpha / beta / gamma / prod`）的 topology schema、public/upstream/origin 分层、artifact policy、host allowlist、secret scope 与 package purity 门禁。
 
 统一真相源：
 
@@ -11,7 +11,7 @@
 
 ## 核心约束
 
-- 四环境都必须声明完整 `edge / media / service / data` 子网与 public base 字段。
+- 当前环境集合都必须声明完整 `edge / media / service / data` 子网与 public base 字段。
 - `alpha` 只能通过 `mockBoundaryFlags` 区分，不得删字段、删平面、删 schema。
 - 本地 host 端口必须来自 1000 端口块 + plane + 10 端口槽位模型，canonical 端口以 `0` 结尾。
 - App / Service env package 都必须携带 topology schema 版本、artifact policy 摘要与机器可读报告。
@@ -29,7 +29,7 @@
 
 ## 验收标准
 
-- A1：四环境 topology schema 完整且一致。
+- A1：当前环境集合的 topology schema 完整且一致。
 - A3：环境包与产物隔离由门禁自动阻断。
 - A7：public base / upstream base / origin base 语义不混用。
 - A8：本地、hosted、prod 的 artifact policy 与 host allowlist 可审计。

@@ -20,6 +20,10 @@ class CloudRequestHeaders {
   /// and AppLog. Delegates to AppTraceContextStore to guarantee a single ID
   /// per app lifecycle.
   static String get sessionId => AppTraceContextStore.instance.sessionId;
+
+  /// 隐私安全的派生设备标识（installId hash 派生）。游客设备态点赞/分享以此作为
+  /// 设备维度计数键；登录用户也携带（用于同设备识别），但云侧账号维度优先、不并账。
+  static String? get deviceActorId => AppTraceContextStore.instance.deviceActorId;
   static final Random _rng = Random();
 
   static const String appVersion = String.fromEnvironment(
@@ -59,6 +63,7 @@ class CloudRequestHeaders {
     return <String, String>{
       'X-Client-Page-Id': pageId,
       'X-Client-Session-Id': sessionId,
+      'X-Client-Device-Actor-Id': ?deviceActorId,
       'X-Client-Sent-At': nowIso,
       'X-Client-Device-Platform': platform(),
       'X-Client-App-Version': appVersion,
@@ -107,6 +112,7 @@ class CloudRequestHeaders {
       'X-Client-Operation-Id': operationId,
       if (routeId != null && routeId.isNotEmpty) 'X-Client-Route-Id': routeId,
       'X-Client-Session-Id': sessionId,
+      'X-Client-Device-Actor-Id': ?deviceActorId,
       'X-Client-Sent-At': nowIso,
       'X-Client-Device-Platform': platform(),
       'X-Client-App-Version': appVersion,

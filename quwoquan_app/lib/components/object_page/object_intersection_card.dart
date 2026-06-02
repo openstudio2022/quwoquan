@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 
 /// 对象页统一交集卡（V3，合规共享层）。
 ///
@@ -13,8 +13,9 @@ import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 /// 文案口径约束（全局验收 G2 / 军规 R27）：
 /// - 标题 [title]、更多入口文案 [moreLabel] 由调用方按对象类型传入（UITextConstants / l10n），
 ///   组件本身不硬编码业务中文；
-/// - 每条交集点只读消费 [IntersectionReason.displayText]，端不本地拼装交集句；
-/// - 无来源（reasons 为空或 displayText 全空）→ [fromReasons] 返回 null，调用方据此不展示。
+/// - 每条交集点通过共享原子 [IntersectionEntity] 渲染（真实头像 + 名字 + 维度 chip +
+///   共同点安静 chip；概率交集标「推荐」），端不本地拼装交集句；
+/// - 无来源（reasons 为空或无可渲染身份）→ [fromReasons] 返回 null，调用方据此不展示。
 class ObjectIntersectionCard extends StatelessWidget {
   const ObjectIntersectionCard({
     super.key,
@@ -43,7 +44,8 @@ class ObjectIntersectionCard extends StatelessWidget {
   final void Function(IntersectionReason reason)? onReasonTap;
   final VoidCallback? onMoreTap;
 
-  /// 便捷构造：过滤无 displayText 的来源，全空则返回 null（不展示，保证 G2）。
+  /// 便捷构造：过滤无可渲染身份（displayName/label/displayText 全空）的来源，
+  /// 全空则返回 null（不展示，保证 G2）。
   static Widget? fromReasons({
     required String title,
     required List<IntersectionReason>? reasons,
@@ -56,7 +58,12 @@ class ObjectIntersectionCard extends StatelessWidget {
     Key? key,
   }) {
     final usable = (reasons ?? const <IntersectionReason>[])
-        .where((r) => r.displayText.trim().isNotEmpty)
+        .where(
+          (r) =>
+              r.displayName.trim().isNotEmpty ||
+              r.label.trim().isNotEmpty ||
+              r.displayText.trim().isNotEmpty,
+        )
         .toList();
     if (usable.isEmpty) return null;
     return ObjectIntersectionCard(
@@ -82,10 +89,6 @@ class ObjectIntersectionCard extends StatelessWidget {
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
     );
     final visible = reasons.take(maxVisible).toList();
     final hasMore =
@@ -132,28 +135,10 @@ class ObjectIntersectionCard extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.intraGroupSm),
           ...visible.map(
-            (r) => Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onReasonTap == null ? null : () => onReasonTap!(r),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: IntersectionReasonChip(
-                        text: r.displayText,
-                        isDark: isDark,
-                      ),
-                    ),
-                    if (onReasonTap != null)
-                      Icon(
-                        CupertinoIcons.chevron_forward,
-                        size: AppSpacing.fourteen,
-                        color: fgSecondary,
-                      ),
-                  ],
-                ),
-              ),
+            (r) => IntersectionEntity(
+              reason: r,
+              isDark: isDark,
+              onTap: onReasonTap == null ? null : () => onReasonTap!(r),
             ),
           ),
           if (hasMore) ...[

@@ -1,0 +1,78 @@
+version: 1
+read_model: ObjectPageRolloutContext
+
+description: |
+  对象页灰度上下文。用于端侧展示、新模板、小趣主动提示和推荐策略变体的 cohort 判断。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+  - product-ops
+
+client_projection:
+  dart_class: ObjectPageRolloutContext
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/object_page_rollout_context.g.dart
+  fields:
+    - name: enabled
+      dart_type: bool
+      nullable: false
+      source: enabled
+      aliases: [enabled]
+      default: "false"
+    - name: cohort
+      dart_type: String
+      nullable: false
+      source: cohort
+      aliases: [cohort]
+      default: "''"
+    - name: region
+      dart_type: String
+      nullable: false
+      source: region
+      aliases: [region]
+      default: "''"
+    - name: city
+      dart_type: String
+      nullable: false
+      source: city
+      aliases: [city]
+      default: "''"
+    - name: campus
+      dart_type: String
+      nullable: false
+      source: campus
+      aliases: [campus]
+      default: "''"
+    - name: appVersion
+      dart_type: String
+      nullable: false
+      source: appVersion
+      aliases: [appVersion]
+      default: "''"
+    - name: experimentBucket
+      dart_type: String
+      nullable: false
+      source: experimentBucket
+      aliases: [experimentBucket]
+      default: "''"
+    - name: objectType
+      dart_type: String
+      nullable: false
+      source: objectType
+      aliases: [objectType]
+      default: "''"
+    - name: assistantProactiveEnabled
+      dart_type: bool
+      nullable: false
+      source: assistantProactiveEnabled
+      aliases: [assistantProactiveEnabled]
+      default: "false"
+    - name: relationEvidenceEnabled
+      dart_type: bool
+      nullable: false
+      source: relationEvidenceEnabled
+      aliases: [relationEvidenceEnabled]
+      default: "false"

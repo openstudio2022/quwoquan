@@ -55,6 +55,28 @@ class ContractFixtureRuntimeLoader {
     return _seedSet('user/test_fixtures/scenarios/user_scenarios.json', ref);
   }
 
+  static Map<String, dynamic>? followingSubjectSeedSet([
+    String ref = 'following_subject_core',
+  ]) {
+    final decoded = _loadMetadataJson(
+      'user/following_subject/test_fixtures/scenarios/following_subject_scenarios.json',
+    );
+    final scenarios = decoded?['scenarios'];
+    if (scenarios is! List) {
+      return null;
+    }
+    for (final scenario in scenarios.whereType<Map>()) {
+      final casted = scenario.cast<String, dynamic>();
+      if (casted['name'] == 'list_three_subject_types') {
+        final response = casted['response'];
+        if (response is Map) {
+          return response.cast<String, dynamic>();
+        }
+      }
+    }
+    return null;
+  }
+
   static Map<String, dynamic>? seedManifest([String env = 'alpha']) {
     final preferredPath =
         env == 'alpha' && _fixtureProfile == 'lite'

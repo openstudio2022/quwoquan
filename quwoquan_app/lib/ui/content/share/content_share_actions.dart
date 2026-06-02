@@ -48,7 +48,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
     try {
       switch (action.id) {
         case 'copy_link':
-          await Clipboard.setData(ClipboardData(text: template.deeplink));
+          await Clipboard.setData(ClipboardData(text: template.landingUrl));
           if (context.mounted) {
             AppToast.show(context, UITextConstants.shareLinkCopied);
           }
@@ -114,7 +114,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
     return <String>[
       template.shareTitle,
       if (template.shareSummary.trim().isNotEmpty) template.shareSummary.trim(),
-      template.deeplink,
+      template.landingUrl,
     ].where((line) => line.trim().isNotEmpty).join('\n');
   }
 
@@ -215,7 +215,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
     );
     _paintText(
       canvas,
-      template.deeplink,
+      template.landingUrl,
       Offset(128, deeplinkTop + 48),
       style: const TextStyle(
         fontSize: AppTypography.sharePosterDeeplink,

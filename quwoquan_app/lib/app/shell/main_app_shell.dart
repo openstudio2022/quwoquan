@@ -125,6 +125,31 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   @override
   Widget build(BuildContext context) {
     _cachePageAccessDependencies();
+    // 登录后续接：底栏加号里「加好友/发起群聊/建圈子」被拦截时登记了
+    // OpenSheetContinuation；登录成功（auth 翻转为已认证）时由始终在场的外壳
+    // 自动续接打开对应面板，避免「登录回来动作丢失」。
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      final justLoggedIn =
+          next.isAuthenticated && (previous == null || !previous.isAuthenticated);
+      if (!justLoggedIn) {
+        return;
+      }
+      final pending = ref
+          .read(authContinuationProvider.notifier)
+          .take<OpenSheetContinuation>();
+      if (pending == null || !mounted) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) {
+          return;
+        }
+        GlobalQuickActionSheet.resumeSheetContinuation(context, pending.sheet);
+      });
+    });
     final themeDark = ref.watch(isDarkProvider);
     final isFeaturedActive =
         _currentIndex == MainTabDestination.featured.bottomNavIndex;
@@ -208,12 +233,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       ),
     );
     if (nextTab == MainTabDestination.create) {
-      if (!_ensureLoggedInFor(
-        AuthGateReason.createPost,
-        AppRoutePaths.createEntry,
-      )) {
-        return;
-      }
+      // 加号入口后置登录：先无条件打开动作面板，登录拦截下沉到具体动作
+      // （写文章/发图片/发视频走 /create 路由门，加好友/群聊/建圈子在动作上拦截）。
       unawaited(GlobalQuickActionSheet.show(context));
       return;
     }
@@ -223,8 +244,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       return;
     }
 
-    // 「我的」tab 允许游客直接进入：MyProfilePage 在未登录时渲染占位页 +
-    // 内嵌登录按钮，不在此处拦截，避免登录页关闭后无法原路返回。
+    // 「我的」tab 为强登录入口：游客切到「我」立即弹登录，登录成功进入 /profile，
+    // 关闭则安全回首页（allowGuestDismissPop=false）。这里在 tap 级（动作门）拦截，
+    // 不把 /profile 接入路由级守卫，避免登录页关闭后原路回 /profile 再次命中守卫
+    // 形成死循环；MyProfilePage 的游客占位仅作为深链兜底。
+    if (nextTab == MainTabDestination.profile &&
+        !_ensureLoggedInFor(AuthGateReason.profileTab, AppRoutePaths.profile)) {
+      return;
+    }
 
     if (nextTab == MainTabDestination.featured) {
       _selectMainTab(nextTab);
@@ -277,8 +304,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     if (_currentIndex != MainTabDestination.home.bottomNavIndex) {
       _selectMainTab(MainTabDestination.home);
     }
-    context.push(
-      AppRoutePaths.login(reason: reason.name, redirect: redirect),
+    openLoginPage(
+      context,
+      reasonName: reason.name,
+      redirect: redirect,
+      dismissFallback: AppRoutePaths.home,
+      // 强入口已先归位首页：关闭只 go 首页，禁止 pop 回到 create/chat/profile
+      // 这类受限路由再次触发守卫，从根上杜绝「关闭→又弹登录」死循环。
+      allowGuestDismissPop: false,
     );
     return false;
   }

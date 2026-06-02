@@ -140,7 +140,7 @@ func TestTickSkillSubscriptionCronCreatesM9P0SkillMessages(t *testing.T) {
 			cron:           "0 8 * * *",
 			tickNow:        "2026-04-29T08:00:00Z",
 			wantTitle:      "每日助手：早间计划",
-			wantSummaryHit: []string{"为什么提醒你", "今日重点", "学习计划"},
+			wantSummaryHit: []string{"为什么提醒你", "会议准备", "学习计划"},
 		},
 		{
 			skillID:        SkillNewsBriefing,
@@ -160,7 +160,7 @@ func TestTickSkillSubscriptionCronCreatesM9P0SkillMessages(t *testing.T) {
 			cron:           "0 9 * * *",
 			tickNow:        "2026-04-29T09:00:00Z",
 			wantTitle:      "股票哨兵：重大消息摘要",
-			wantSummaryHit: []string{"为什么提醒你", "重大信息", "非投资建议"},
+			wantSummaryHit: []string{"为什么提醒你", "消息面", "非投资建议"},
 		},
 		{
 			skillID:        SkillTravelJourneyManager,
@@ -170,7 +170,7 @@ func TestTickSkillSubscriptionCronCreatesM9P0SkillMessages(t *testing.T) {
 			cron:           "0 7 * * *",
 			tickNow:        "2026-04-29T07:00:00Z",
 			wantTitle:      "出行管家：今日行程提醒",
-			wantSummaryHit: []string{"为什么提醒你", "天气", "拥堵"},
+			wantSummaryHit: []string{"为什么提醒你", "天气", "路况"},
 		},
 	}
 

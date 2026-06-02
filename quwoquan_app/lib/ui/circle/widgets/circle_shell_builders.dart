@@ -1,6 +1,45 @@
 part of 'circle_shell.dart';
 
 extension _CircleShellBuilders on _CircleShellState {
+  /// 圈子关注：游客显示「未关注」，点击先引导登录；已登录直接 toggle。
+  void _gatedCircleFollow(BuildContext context, CircleStateNotifier notifier) {
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      unawaited(notifier.toggleFollow());
+      return;
+    }
+    unawaited(requireLogin(ref, context, AuthGateReason.follow));
+  }
+
+  /// 加入圈子：游客显示「未加入」，点击先登记续接再引导登录；登录成功后自动加入。
+  void _gatedJoinCircle(BuildContext context, CircleStateNotifier notifier) {
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      unawaited(notifier.joinCircle());
+      return;
+    }
+    ref
+        .read(authContinuationProvider.notifier)
+        .set(JoinCircleContinuation(circleId: widget.circleId));
+    unawaited(requireLogin(ref, context, AuthGateReason.joinCircle));
+  }
+
+  /// 登录后续接加入圈子：登录成功且续接圈子与本页一致、尚未加入时自动补完加入。
+  void maybeResumeJoinContinuation(CircleStateNotifier notifier) {
+    final pending = ref
+        .read(authContinuationProvider.notifier)
+        .take<JoinCircleContinuation>();
+    if (pending == null) {
+      return;
+    }
+    if (pending.circleId != widget.circleId) {
+      ref.read(authContinuationProvider.notifier).set(pending);
+      return;
+    }
+    final state = ref.read(circleStateProvider(widget.circleId));
+    if (!_isMemberLike(state) && state.joinStatus != 'pending') {
+      unawaited(notifier.joinCircle());
+    }
+  }
+
   Widget _buildSummaryCard(
     BuildContext context, {
     required bool isDark,
@@ -76,6 +115,7 @@ extension _CircleShellBuilders on _CircleShellState {
               stats: state.circleStats.forDetailRow(circle),
             ),
             SizedBox(height: AppSpacing.sm),
+            _buildIntersectionCard(isDark, circle?.tags ?? const <String>[]),
             CircleActionBar(
               isDark: isDark,
               role: state.role,
@@ -93,11 +133,11 @@ extension _CircleShellBuilders on _CircleShellState {
                 state: state,
                 initialTab: CircleEditSettingsTab.settings,
               ),
-              onFollow: notifier.toggleFollow,
+              onFollow: () => _gatedCircleFollow(context, notifier),
               onJoinCircle:
                   _isMemberLike(state) || state.joinStatus == 'pending'
                   ? null
-                  : notifier.joinCircle,
+                  : () => _gatedJoinCircle(context, notifier),
               onOpenChat: hasConversation
                   ? () => _openChat(context, circle!.conversationId!)
                   : null,
@@ -139,6 +179,33 @@ extension _CircleShellBuilders on _CircleShellState {
           ],
         ),
       ),
+    );
+  }
+
+  /// 圈子交集卡「你认识的人在这」：当前用户 × 圈子的事实交集（relationship/identity 优先）。
+  /// 无可解析交集（空/异步未就绪）则不占位（G2 不造假）。
+  Widget _buildIntersectionCard(bool isDark, List<String> tags) {
+    final query = ObjectIntersectionQuery(
+      objectAId: ref.watch(currentUserIdProvider),
+      objectAType: 'user',
+      objectBId: widget.circleId,
+      objectBType: 'circle',
+    );
+    if (!query.isResolvable) {
+      return const SizedBox.shrink();
+    }
+    final reasons = ref.watch(objectSharedReasonsProvider(query)).asData?.value;
+    final card = ObjectIntersectionCard.fromReasons(
+      title: UITextConstants.circleIntersectionTitle,
+      reasons: reasons,
+      isDark: isDark,
+    );
+    if (card == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.sm),
+      child: card,
     );
   }
 
@@ -390,6 +457,20 @@ extension _CircleShellBuilders on _CircleShellState {
     final memberLocked = !_canAccessMemberSpaces(state);
 
     final child = switch (_activeTabId) {
+      'home' =>
+        contentLocked
+            ? _buildGateCard(
+                context,
+                title: UITextConstants.visibilityPrivate,
+                description: UITextConstants.circleVisibilityMembersDescription,
+                keySuffix: 'home',
+              )
+            : SectionCreations(
+                circleId: widget.circleId,
+                isDark: isDark,
+                role: state.role,
+                inlineScroll: true,
+              ),
       'content' =>
         contentLocked
             ? _buildGateCard(
@@ -404,30 +485,7 @@ extension _CircleShellBuilders on _CircleShellState {
                 role: state.role,
                 inlineScroll: true,
               ),
-      'discussion' =>
-        contentLocked
-            ? _buildGateCard(
-                context,
-                title: UITextConstants.visibilityPrivate,
-                description: UITextConstants.circleVisibilityMembersDescription,
-                keySuffix: 'discussion',
-              )
-            : Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  AppSpacing.containerSm,
-                  AppSpacing.containerMd,
-                  0,
-                ),
-                child: _SectionSurface(
-                  isDark: isDark,
-                  child: SectionInteraction(
-                    circleId: widget.circleId,
-                    isDark: isDark,
-                  ),
-                ),
-              ),
-      'assets' =>
+      'groups' =>
         memberLocked
             ? _buildGateCard(
                 context,
@@ -435,7 +493,7 @@ extension _CircleShellBuilders on _CircleShellState {
                 description: circle?.joinPolicy == 'approval'
                     ? UITextConstants.circleJoinApprovalDescription
                     : UITextConstants.circleJoinOpenDescription,
-                keySuffix: 'assets',
+                keySuffix: 'groups',
               )
             : Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -468,6 +526,29 @@ extension _CircleShellBuilders on _CircleShellState {
                   ],
                 ),
               ),
+      'members' =>
+        contentLocked
+            ? _buildGateCard(
+                context,
+                title: UITextConstants.visibilityPrivate,
+                description: UITextConstants.circleVisibilityMembersDescription,
+                keySuffix: 'members',
+              )
+            : Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.containerMd,
+                  AppSpacing.containerSm,
+                  AppSpacing.containerMd,
+                  0,
+                ),
+                child: _SectionSurface(
+                  isDark: isDark,
+                  child: SectionInteraction(
+                    circleId: widget.circleId,
+                    isDark: isDark,
+                  ),
+                ),
+              ),
       _ => const SizedBox.shrink(),
     };
 
@@ -476,5 +557,4 @@ extension _CircleShellBuilders on _CircleShellState {
       child: child,
     );
   }
-
 }

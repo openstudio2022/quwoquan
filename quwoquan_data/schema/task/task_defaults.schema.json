@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "任务默认值（继承基线）— quwoquan_data/tasks/<前缀路径>/_defaults.yaml。按 taskId 路径前缀就近覆盖：全局 → 垂类 → 组织轴 → 地域键。task.yaml 只声明特有 override，未声明字段沿链继承。",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": "quwoquan.task.defaults" },
+    "scope": {
+      "type": "object",
+      "description": "scope 维度默认（如 tagRefs 通用挂载）",
+      "properties": {
+        "tagRefs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "content": {
+      "type": "object",
+      "description": "深度维度默认（驱动 produce 的 10D 矩阵）；list 字段被 task 显式声明时整体替换",
+      "properties": {
+        "angles": { "type": "array", "items": { "type": "string" }, "description": "内容角度/意图默认集" },
+        "audiences": { "type": "array", "items": { "type": "string" }, "description": "受众人格 id 默认集" },
+        "carriers": { "type": "array", "items": { "type": "string" }, "description": "载体默认：article/gallery/review/video" },
+        "emphasis": { "type": "array", "items": { "type": "string" }, "description": "内容强调点/选题侧重默认" },
+        "conditionAxes": {
+          "type": "object",
+          "properties": {
+            "regions": { "type": "array", "items": { "type": "string" }, "description": "地域条件维默认（该地域真实地形全谱）" },
+            "seasons": { "type": "array", "items": { "type": "string" }, "description": "季节条件维默认（默认四季）" }
+          }
+        }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "properties": {
+        "minEntities": { "type": "integer" },
+        "minPostsPerEntity": { "type": "integer" },
+        "requiredAngles": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "required": ["schemaVersion"]
+}

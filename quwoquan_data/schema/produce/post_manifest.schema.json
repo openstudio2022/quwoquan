@@ -35,7 +35,9 @@
     "publishLayout": { "type": "string" },
     "publishAngle": { "type": "string" },
     "publishTitle": { "type": "string" },
-    "publishSeq": { "type": "integer" }
+    "publishSeq": { "type": "integer" },
+    "sourceTaskId": { "type": ["string", "null"], "description": "溯源：生成此内容的任务 id（task trace/hydrate）" },
+    "sourceBatchId": { "type": ["string", "null"], "description": "溯源：生成此内容的批次 id" }
   },
   "required": ["topicId", "contentType", "entityRefs", "tagRefs", "sourceUrls", "generator"]
 }

@@ -334,59 +334,62 @@ class _MoreActionQuickSection extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: AppSpacing.containerXs),
         child: SizedBox(
           height: AppSpacing.avatarRailHeight + AppSpacing.containerSm,
-          child: ListView.separated(
+          child: SingleChildScrollView(
+            key: TestKeys.modalBottomSheetQuickActionsRail,
             scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
-            itemBuilder: (context, index) {
-              final action = actions[index];
-              return SizedBox(
-                width: AppSpacing.avatarUserLg + AppSpacing.twenty,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onTap(action),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: AppSpacing.avatarUserLg,
-                          height: AppSpacing.avatarUserLg,
-                          decoration: BoxDecoration(
-                            color: iconSurface,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: iconBorder,
-                              width: AppSpacing.hairline,
+            child: Row(
+              children: [
+                for (var index = 0; index < actions.length; index++) ...[
+                  if (index > 0) SizedBox(width: AppSpacing.intraGroupXs),
+                  SizedBox(
+                    width: AppSpacing.avatarUserLg + AppSpacing.twenty,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onTap(actions[index]),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: AppSpacing.avatarUserLg,
+                              height: AppSpacing.avatarUserLg,
+                              decoration: BoxDecoration(
+                                color: iconSurface,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: iconBorder,
+                                  width: AppSpacing.hairline,
+                                ),
+                              ),
+                              child: Center(
+                                child: _QuickActionIcon(
+                                  action: actions[index],
+                                  color: secondaryText,
+                                ),
+                              ),
                             ),
-                          ),
-                          child: Center(
-                            child: _QuickActionIcon(
-                              action: action,
-                              color: secondaryText,
+                            SizedBox(height: AppSpacing.intraGroupSm),
+                            Text(
+                              actions[index].label,
+                              style: TextStyle(
+                                fontSize: AppTypography.sm,
+                                color: primaryText,
+                                fontWeight: AppTypography.medium,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
+                          ],
                         ),
-                        SizedBox(height: AppSpacing.intraGroupSm),
-                        Text(
-                          action.label,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm,
-                            color: primaryText,
-                            fontWeight: AppTypography.medium,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
-            separatorBuilder: (context, index) =>
-                SizedBox(width: AppSpacing.intraGroupXs),
-            itemCount: actions.length,
+                ],
+              ],
+            ),
           ),
         ),
       ),

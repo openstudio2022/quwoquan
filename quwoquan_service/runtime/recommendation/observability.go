@@ -23,6 +23,9 @@ type PipelineMetrics struct {
 	SourceBreakdown    map[string]int `json:"sourceBreakdown,omitempty"`
 	ModelUsed          string         `json:"modelUsed,omitempty"`
 	ExperimentBucket   string         `json:"experimentBucket,omitempty"`
+	PolicyVersion      string         `json:"policyVersion,omitempty"`
+	ScoringPreset      string         `json:"scoringPreset,omitempty"`
+	Segment            string         `json:"segment,omitempty"`
 	TopicEntropy       float64        `json:"topicEntropy,omitempty"`
 	AuthorRepeatRate   float64        `json:"authorRepeatRate,omitempty"`
 	AuthorHHI          float64        `json:"authorHhi,omitempty"`
@@ -106,6 +109,18 @@ var (
 		Help:      "Number of results returned per request.",
 		Buckets:   []float64{0, 5, 10, 20, 30, 50, 100},
 	})
+
+	// pipelinePolicyAttribution attributes every served request to its
+	// resolved policy version, scoring preset, and population segment so the
+	// large-loop feedback dashboard can compare KPI by policy×preset×segment.
+	// All label values are bounded (policyVersion ∈ released versions, preset ∈
+	// weightPresets, segment ∈ segments.yaml ∪ {"none"}).
+	pipelinePolicyAttribution = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "requests_by_policy_total",
+		Help:      "Requests attributed by resolved policy version, scoring preset, and segment.",
+	}, []string{"policy_version", "preset", "segment"})
 )
 
 // RecordMetrics observes Prometheus metrics from a single pipeline execution.
@@ -139,6 +154,20 @@ func RecordMetrics(m PipelineMetrics) {
 	pipelineTotalLatency.WithLabelValues(bucket).Observe(m.TotalLatency.Seconds())
 	pipelineCandidates.Observe(float64(m.CandidateCount))
 	pipelineResults.Observe(float64(m.ResultCount))
+
+	policyVersion := strings.TrimSpace(m.PolicyVersion)
+	if policyVersion == "" {
+		policyVersion = "unknown"
+	}
+	preset := strings.TrimSpace(m.ScoringPreset)
+	if preset == "" {
+		preset = "default"
+	}
+	segment := strings.TrimSpace(m.Segment)
+	if segment == "" {
+		segment = "none"
+	}
+	pipelinePolicyAttribution.WithLabelValues(policyVersion, preset, segment).Inc()
 }
 
 // RecordModelTimeout increments the model timeout counter.
@@ -168,6 +197,15 @@ func LogMetrics(logger *slog.Logger, m PipelineMetrics) {
 	}
 	if m.ExperimentBucket != "" {
 		attrs = append(attrs, slog.String("bucket", m.ExperimentBucket))
+	}
+	if m.PolicyVersion != "" {
+		attrs = append(attrs, slog.String("policyVersion", m.PolicyVersion))
+	}
+	if m.ScoringPreset != "" {
+		attrs = append(attrs, slog.String("preset", m.ScoringPreset))
+	}
+	if m.Segment != "" {
+		attrs = append(attrs, slog.String("segment", m.Segment))
 	}
 	if m.TopicEntropy > 0 {
 		attrs = append(attrs, slog.Float64("topicEntropy", m.TopicEntropy))

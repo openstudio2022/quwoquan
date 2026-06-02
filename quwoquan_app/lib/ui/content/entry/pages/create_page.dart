@@ -154,7 +154,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
           );
         }
         _syncControllersFromState(ref.read(createEditorProvider));
-        await _applyInitialActionIfNeeded();
+        await _runAfterOverlayDismissed(_applyInitialActionIfNeeded);
       }
 
       if (!mounted) {
@@ -211,6 +211,25 @@ class _CreatePageState extends ConsumerState<CreatePage> {
       default:
         return CreateEditorKind.text;
     }
+  }
+
+  Future<void> _runAfterOverlayDismissed(Future<void> Function() action) {
+    final completer = Completer<void>();
+    // 让动作面板或路由退场完至少一帧后再继续 push，避免透明蒙层退场
+    // 与相册/相机页首帧叠在一起时短暂闪成黑屏。
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        completer.complete();
+        return;
+      }
+      try {
+        await action();
+        completer.complete();
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
   }
 
   Future<void> _applyInitialActionIfNeeded() async {
@@ -911,18 +930,23 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     if (!mounted || action == null) {
       return;
     }
-    switch (action) {
-      case _CreateMediaOption.addImages:
-        await _pickImagesForCurrentEditor();
-      case _CreateMediaOption.capture:
-        await _openCameraForCurrentEditor(
-          forcedMode: isVideoState
-              ? MediaPickerEntryMode.video
-              : MediaPickerEntryMode.image,
-        );
-      case _CreateMediaOption.video:
-        await _pickVideoForMedia();
-    }
+    await _runAfterOverlayDismissed(() async {
+      switch (action) {
+        case _CreateMediaOption.addImages:
+          await _pickImagesForCurrentEditor();
+          return;
+        case _CreateMediaOption.capture:
+          await _openCameraForCurrentEditor(
+            forcedMode: isVideoState
+                ? MediaPickerEntryMode.video
+                : MediaPickerEntryMode.image,
+          );
+          return;
+        case _CreateMediaOption.video:
+          await _pickVideoForMedia();
+          return;
+      }
+    });
   }
 
   Future<void> _editCurrentVideo() async {

@@ -38,10 +38,10 @@
     {
       "domain": "user",
       "fixturePath": "user/test_fixtures/scenarios/user_scenarios.json",
-      "refs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "settings_core"],
+      "refs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "following_subject_core", "settings_core"],
       "resetScope": "fixture_user_*",
       "targetStore": "user-service:test_store",
-      "verifiedEndpoints": ["/v1/user/profile"]
+      "verifiedEndpoints": ["/v1/user/profile", "/v1/user/following-subjects"]
     },
     {
       "domain": "entity",
@@ -49,7 +49,7 @@
       "refs": ["entity_homepage_core", "entity_claim_core", "entity_picker_core"],
       "resetScope": "fixture_entity_*",
       "targetStore": "entity-service:test_store",
-      "verifiedEndpoints": ["/v1/entity/homepages"]
+      "verifiedEndpoints": ["/v1/homepages/search", "/v1/homepages/{homepageId}/object-page-bundle"]
     },
     {
       "domain": "integration",

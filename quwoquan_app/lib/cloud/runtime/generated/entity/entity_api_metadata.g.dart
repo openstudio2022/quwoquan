@@ -18,6 +18,7 @@ class EntityApiMetadata {
     'GetHomepageRelatedGroups': '/v1/homepages/{homepageId}/related-groups',
     'GetHomepageReviewSummary': '/v1/homepages/{homepageId}/review-summary',
     'GetHomepageShell': '/v1/homepages/{homepageId}/shell',
+    'GetObjectPageBundle': '/v1/homepages/{homepageId}/object-page-bundle',
     'IntakeHomepageCandidate': '/v1/homepages/candidates',
     'PublishHomepageCandidate': '/v1/homepages/candidates/{homepageId}:publish',
     'ReviewHomepageClaimRequest': '/v1/homepages/{homepageId}/claim-requests/{claimRequestId}:review',
@@ -34,6 +35,7 @@ class EntityApiMetadata {
     'GetHomepageRelatedGroups': 'GET',
     'GetHomepageReviewSummary': 'GET',
     'GetHomepageShell': 'GET',
+    'GetObjectPageBundle': 'GET',
     'IntakeHomepageCandidate': 'POST',
     'PublishHomepageCandidate': 'POST',
     'ReviewHomepageClaimRequest': 'POST',
@@ -51,6 +53,7 @@ class EntityApiMetadata {
     'GetHomepageRelatedGroups': 'public',
     'GetHomepageReviewSummary': 'public',
     'GetHomepageShell': 'public',
+    'GetObjectPageBundle': 'public',
     'IntakeHomepageCandidate': 'required',
     'PublishHomepageCandidate': 'required',
     'ReviewHomepageClaimRequest': 'required',
@@ -66,6 +69,7 @@ class EntityApiMetadata {
   static const String getHomepageRelatedGroupsOperation = 'GetHomepageRelatedGroups';
   static const String getHomepageReviewSummaryOperation = 'GetHomepageReviewSummary';
   static const String getHomepageShellOperation = 'GetHomepageShell';
+  static const String getObjectPageBundleOperation = 'GetObjectPageBundle';
   static const String intakeHomepageCandidateOperation = 'IntakeHomepageCandidate';
   static const String publishHomepageCandidateOperation = 'PublishHomepageCandidate';
   static const String reviewHomepageClaimRequestOperation = 'ReviewHomepageClaimRequest';
@@ -107,6 +111,12 @@ class EntityApiMetadata {
   static const String getHomepageShellPathTemplate = '/v1/homepages/{homepageId}/shell';
   static String getHomepageShellPath({required String homepageId}) {
     return _fillPath(getHomepageShellPathTemplate, <String, String>{
+      'homepageId': homepageId,
+    });
+  }
+  static const String getObjectPageBundlePathTemplate = '/v1/homepages/{homepageId}/object-page-bundle';
+  static String getObjectPageBundlePath({required String homepageId}) {
+    return _fillPath(getObjectPageBundlePathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }

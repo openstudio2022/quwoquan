@@ -8,10 +8,20 @@ import json
 import os
 import subprocess
 import sys
+import urllib.parse
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+FAIL_FAST_EXIT_CODE = 86
+FAIL_FAST_CATEGORIES = {
+    "device_not_found",
+    "gateway_unreachable",
+    "gateway_response_not_json",
+    "gateway_response_empty",
+    "gateway_response_html",
+    "stream_decode_error",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,6 +61,15 @@ def discover_device_ids(platform: str) -> list[str]:
     return ids
 
 
+def parse_gateway_port(raw_url: str) -> int:
+    parsed = urllib.parse.urlparse(raw_url)
+    if parsed.port is not None:
+        return int(parsed.port)
+    if parsed.scheme == "https":
+        return 443
+    return 80
+
+
 def main() -> int:
     args = parse_args()
     env_name = os.environ.get("API_CONTRACT_ENV", "").strip()
@@ -82,6 +101,9 @@ def main() -> int:
         "--report",
         f"artifacts/device-matrix/chat-avatar/{env_name}-{args.platform}.json",
     ]
+    report_path = (
+        REPO_ROOT / "artifacts" / "device-matrix" / "chat-avatar" / f"{env_name}-{args.platform}.json"
+    )
     for device_id in device_ids:
         command.extend(["--device-id", device_id])
     base_url = (
@@ -94,10 +116,38 @@ def main() -> int:
     media_url = os.environ.get("MEDIA_AVATAR_CDN_BASE_URL", "").strip()
     if media_url:
         command.extend(["--media-base-url", media_url])
+    if env_name == "beta" and not base_url:
+        default_beta_gateway = os.environ.get(
+            "BETA_LOCAL_GATEWAY_BASE_URL", "http://127.0.0.1:18000"
+        ).strip()
+        command.extend(["--gateway-base-url", default_beta_gateway])
+        if not media_url:
+            command.extend(
+                [
+                    "--media-base-url",
+                    os.environ.get(
+                        "BETA_LOCAL_MEDIA_BASE_URL", "http://127.0.0.1:18100"
+                    ).strip(),
+                ]
+            )
     token = os.environ.get("GAMMA_TEST_AUTH_TOKEN", "").strip()
     if token:
         command.extend(["--test-auth-token", token])
-    return subprocess.call(command, cwd=str(REPO_ROOT))
+    code = subprocess.call(command, cwd=str(REPO_ROOT))
+    if report_path.exists():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            report = {}
+        failure_category = str(report.get("failureCategory") or "").strip()
+        blocking_reason = str(report.get("blockingReason") or "").strip()
+        if failure_category in FAIL_FAST_CATEGORIES:
+            print(
+                f"::error::[chat-avatar-matrix-fail-fast/{failure_category}] {blocking_reason or 'matrix failed with fail-fast category'}",
+                file=sys.stderr,
+            )
+            return FAIL_FAST_EXIT_CODE
+    return code
 
 
 if __name__ == "__main__":

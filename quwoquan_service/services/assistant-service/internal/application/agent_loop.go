@@ -174,7 +174,8 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 		return nil, nil, err
 	}
 	if err := appendEvent(projector.Event("assistant.turn.completed", map[string]any{
-		"status": "completed",
+		"status":      "completed",
+		"emergedTags": collectEmergedTags(result),
 	})); err != nil {
 		return nil, nil, err
 	}
@@ -795,6 +796,49 @@ func mergeReferences(primary []map[string]any, fallback []map[string]any) []map[
 		appendOne(reference)
 	}
 	return merged
+}
+
+// collectEmergedTags 汇总本轮 ReAct 各步 app_search 命中内容的类目（categoryId / subCategory），
+// 去重后归到 Topic 维度生成路径制 tagRef，作为对话浮现的兴趣标签随 turn.completed 下发，
+// 供端侧合成 assistant_interest 行为回流推荐特征（rm_recommend_feature）。
+func collectEmergedTags(result ReactResult) []string {
+	seen := map[string]struct{}{}
+	tags := []string{}
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		tagRef := "Topic/" + value
+		if _, ok := seen[tagRef]; ok {
+			return
+		}
+		seen[tagRef] = struct{}{}
+		tags = append(tags, tagRef)
+	}
+	consume := func(m map[string]any) {
+		add(stringValue(m["categoryId"]))
+		add(stringValue(m["subCategory"]))
+	}
+	for _, step := range result.Steps {
+		raw, ok := step.Tool.Completed.Result["results"]
+		if !ok {
+			continue
+		}
+		switch items := raw.(type) {
+		case []any:
+			for _, item := range items {
+				if m, ok := item.(map[string]any); ok {
+					consume(m)
+				}
+			}
+		case []map[string]any:
+			for _, m := range items {
+				consume(m)
+			}
+		}
+	}
+	return tags
 }
 
 func toolResultReliable(step ReactStepResult) bool {

@@ -13,6 +13,14 @@ class IntersectionReason {
   final String actionType;
   final String actionTargetId;
   final String source;
+  final String intersectionId;
+  final String intersectionClass;
+  final String avatarUrl;
+  final String displayName;
+  final String confidenceLabel;
+  final String modelReasonBucket;
+  final String freshAt;
+  final String expiresAt;
 
   IntersectionReason({
     this.dimension = '',
@@ -26,6 +34,14 @@ class IntersectionReason {
     this.actionType = '',
     this.actionTargetId = '',
     this.source = '',
+    this.intersectionId = '',
+    this.intersectionClass = 'fact',
+    this.avatarUrl = '',
+    this.displayName = '',
+    this.confidenceLabel = '',
+    this.modelReasonBucket = '',
+    this.freshAt = '',
+    this.expiresAt = '',
   });
 
   factory IntersectionReason.fromMap(Map<String, dynamic> m) {
@@ -41,6 +57,14 @@ class IntersectionReason {
       actionType: m['actionType']?.toString() ?? '',
       actionTargetId: m['actionTargetId']?.toString() ?? '',
       source: m['source']?.toString() ?? '',
+      intersectionId: m['intersectionId']?.toString() ?? '',
+      intersectionClass: m['intersectionClass']?.toString() ?? 'fact',
+      avatarUrl: m['avatarUrl']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? '',
+      confidenceLabel: m['confidenceLabel']?.toString() ?? '',
+      modelReasonBucket: m['modelReasonBucket']?.toString() ?? '',
+      freshAt: m['freshAt']?.toString() ?? '',
+      expiresAt: m['expiresAt']?.toString() ?? '',
     );
   }
 
@@ -57,6 +81,14 @@ class IntersectionReason {
       'actionType': actionType,
       'actionTargetId': actionTargetId,
       'source': source,
+      'intersectionId': intersectionId,
+      'intersectionClass': intersectionClass,
+      'avatarUrl': avatarUrl,
+      'displayName': displayName,
+      'confidenceLabel': confidenceLabel,
+      'modelReasonBucket': modelReasonBucket,
+      'freshAt': freshAt,
+      'expiresAt': expiresAt,
     };
   }
 
@@ -72,6 +104,14 @@ class IntersectionReason {
     String? actionType,
     String? actionTargetId,
     String? source,
+    String? intersectionId,
+    String? intersectionClass,
+    String? avatarUrl,
+    String? displayName,
+    String? confidenceLabel,
+    String? modelReasonBucket,
+    String? freshAt,
+    String? expiresAt,
   }) {
     return IntersectionReason(
       dimension: dimension ?? this.dimension,
@@ -85,6 +125,14 @@ class IntersectionReason {
       actionType: actionType ?? this.actionType,
       actionTargetId: actionTargetId ?? this.actionTargetId,
       source: source ?? this.source,
+      intersectionId: intersectionId ?? this.intersectionId,
+      intersectionClass: intersectionClass ?? this.intersectionClass,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      displayName: displayName ?? this.displayName,
+      confidenceLabel: confidenceLabel ?? this.confidenceLabel,
+      modelReasonBucket: modelReasonBucket ?? this.modelReasonBucket,
+      freshAt: freshAt ?? this.freshAt,
+      expiresAt: expiresAt ?? this.expiresAt,
     );
   }
 }

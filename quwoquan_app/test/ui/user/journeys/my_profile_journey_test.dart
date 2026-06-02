@@ -12,8 +12,8 @@ import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_lifestyle_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
-/// T4 旅程：我的主页一级 4 Tab（创作/圈子/互动/生活）端到端可达，
-/// 生活 Tab 走 codegen 子页 + contract seed 渲染真实记录。
+/// T4 旅程：我的主页一级 4 Tab（作品/圈子/互动/看点）端到端可达，
+/// 看点 Tab 走 codegen lifestyle 子页 + contract seed 渲染真实记录。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
 
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -91,7 +91,7 @@ void main() {
     await _pumpFrames(tester);
     expect(find.byType(ProfileInteractionTab), findsOneWidget);
 
-    await tester.tap(_inlinePrimaryTab('生活'));
+    await tester.tap(_inlinePrimaryTab('看点'));
     await _pumpFrames(tester);
     expect(find.byType(ProfileLifestyleTab), findsOneWidget);
     expect(find.text('足迹'), findsOneWidget);

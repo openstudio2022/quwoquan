@@ -18,12 +18,13 @@ import (
 )
 
 type ContentHandler struct {
-	feedService     *application.FeedService
-	postService     *application.PostService
-	reportService   *application.ReportService
-	behaviorService *application.BehaviorService
-	importService   *application.BulkImportService
-	healthChecker   *rthealth.Checker
+	feedService         *application.FeedService
+	postService         *application.PostService
+	reportService       *application.ReportService
+	behaviorService     *application.BehaviorService
+	importService       *application.BulkImportService
+	intersectionService *application.IntersectionService
+	healthChecker       *rthealth.Checker
 }
 
 func NewContentHandler(
@@ -54,6 +55,11 @@ func WithBulkImportService(svc *application.BulkImportService) ContentHandlerOpt
 
 func WithHealthChecker(c *rthealth.Checker) ContentHandlerOption {
 	return func(h *ContentHandler) { h.healthChecker = c }
+}
+
+// WithIntersectionService 注入交集统一体验服务（事实/概率合并、冷却窗口、已读水位）。
+func WithIntersectionService(svc *application.IntersectionService) ContentHandlerOption {
+	return func(h *ContentHandler) { h.intersectionService = svc }
 }
 
 func (h *ContentHandler) Routes() http.Handler {
@@ -741,7 +747,7 @@ func (h *ContentHandler) handleGetRecommendation(w http.ResponseWriter, r *http.
 }
 
 func (h *ContentHandler) handleLikePost(w http.ResponseWriter, r *http.Request, postID string) {
-	likeCount, changed, err := h.postService.LikePost(r.Context(), postID, resolveUserID(r))
+	likeCount, changed, err := h.postService.LikePost(r.Context(), postID, resolveUserID(r), resolveDeviceActorID(r))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -755,7 +761,7 @@ func (h *ContentHandler) handleLikePost(w http.ResponseWriter, r *http.Request, 
 }
 
 func (h *ContentHandler) handleUnlikePost(w http.ResponseWriter, r *http.Request, postID string) {
-	likeCount, changed, err := h.postService.UnlikePost(r.Context(), postID, resolveUserID(r))
+	likeCount, changed, err := h.postService.UnlikePost(r.Context(), postID, resolveUserID(r), resolveDeviceActorID(r))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -801,6 +807,7 @@ func (h *ContentHandler) handleSharePost(w http.ResponseWriter, r *http.Request,
 		r.Context(),
 		postID,
 		resolveUserID(r),
+		resolveDeviceActorID(r),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -819,6 +826,7 @@ func (h *ContentHandler) handleUnsharePost(w http.ResponseWriter, r *http.Reques
 		r.Context(),
 		postID,
 		resolveUserID(r),
+		resolveDeviceActorID(r),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -836,6 +844,7 @@ func (h *ContentHandler) handleGetReactionState(w http.ResponseWriter, r *http.R
 	liked, favorited, shared := h.postService.GetReactionState(
 		postID,
 		resolveUserID(r),
+		resolveDeviceActorID(r),
 	)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"postId":    postID,
@@ -1265,6 +1274,16 @@ func resolveUserID(r *http.Request) string {
 		return v
 	}
 	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
+}
+
+// resolveDeviceActorID extracts the privacy-safe derived device actor id from
+// query param deviceActorId → X-Client-Device-Actor-Id header. Used for guest
+// device-dimension like/share counting (separate from account dimension).
+func resolveDeviceActorID(r *http.Request) string {
+	if v := strings.TrimSpace(r.URL.Query().Get("deviceActorId")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(r.Header.Get("X-Client-Device-Actor-Id"))
 }
 
 func resolveViewerCircleIDs(r *http.Request) []string {

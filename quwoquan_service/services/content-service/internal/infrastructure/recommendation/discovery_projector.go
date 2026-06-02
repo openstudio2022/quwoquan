@@ -114,6 +114,10 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 		"assistantUsePolicy": strVal(event.Payload, "assistantUsePolicy"),
 		"circleIds":          anySlice(event.Payload, "circleIds"),
 		"entityRefs":         anySlice(event.Payload, "entityRefs"),
+		"sourceTaskId":       strVal(event.Payload, "sourceTaskId"),
+		// conditionProfile 为实体级画像：在线 Post 事件 payload 暂不携带，
+		// 由绑定实体（canonicalEntityId→entity.conditionProfile）派生后注入；冷启动 cmd/import 路径直接冗余。
+		"conditionProfile": anyMap(event.Payload, "conditionProfile"),
 	}
 	if publishedAt := parseEventTime(strVal(event.Payload, "publishedAt"), event.OccurredAt); !publishedAt.IsZero() {
 		set["publishedAt"] = publishedAt
@@ -235,6 +239,13 @@ func parseEventTime(raw string, fallback time.Time) time.Time {
 		return time.Time{}
 	}
 	return fallback.UTC()
+}
+
+func anyMap(m map[string]any, key string) map[string]any {
+	if v, ok := m[key].(map[string]any); ok {
+		return v
+	}
+	return nil
 }
 
 func anySlice(m map[string]any, key string) []string {

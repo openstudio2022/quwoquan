@@ -9,6 +9,30 @@ on:
     branches:
       - main
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      checkout_ref:
+        description: Caller commit SHA/ref for checkout
+        required: false
+        type: string
+        default: ''
+      base_sha:
+        description: Explicit diff base SHA
+        required: false
+        type: string
+        default: ''
+      head_sha:
+        description: Explicit diff head SHA
+        required: false
+        type: string
+        default: ''
+    outputs:
+      critical_path_seconds:
+        description: Delivery Gate critical path seconds
+        value: ${{ jobs.delivery_gate_summary.outputs.critical_path_seconds }}
+      summary_result:
+        description: Delivery Gate summary result
+        value: ${{ jobs.delivery_gate_summary.outputs.summary_result }}
 
 jobs:
   topology_regression:
@@ -24,14 +48,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - id: detect
         name: Detect impacted scopes
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-          HEAD_SHA: ${{ github.sha }}
+          BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || '' }}
+          HEAD_SHA: ${{ inputs.head_sha || github.sha }}
         run: |
           python3 agent_ops/ci/detect_ci_impacted_scopes.py \
             --base-sha "${BASE_SHA}" \
@@ -58,6 +83,8 @@ jobs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -90,6 +117,8 @@ jobs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -125,6 +154,8 @@ jobs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -151,9 +182,15 @@ jobs:
       - ops_portal
     if: always()
     runs-on: ubuntu-latest
+    outputs:
+      critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
+      summary_result: ${{ steps.summary.outputs.result }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - name: 输出 Delivery Gate 耗时摘要
+        id: timing
         env:
           TOPOLOGY_SECONDS: ${{ needs.topology_regression.outputs.duration_seconds }}
           SERVICE_SECONDS: ${{ needs.quwoquan_service.outputs.duration_seconds }}
@@ -176,8 +213,11 @@ jobs:
             --phase "quwoquan_service=${SERVICE_SECONDS}" \
             --phase "quwoquan_app=${APP_SECONDS}" \
             --phase "ops_portal=${PORTAL_SECONDS}" \
+            --write-json "artifacts/ci-timing/delivery-gate-summary.json" \
             --write-step-summary
+          echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
       - name: 汇总并阻断失败项
+        id: summary
         env:
           TOPOLOGY: ${{ needs.topology_regression.result }}
           SERVICE: ${{ needs.quwoquan_service.result }}
@@ -205,6 +245,16 @@ jobs:
           expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope gate 输出"
           expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
           if [ "${fail}" -ne 0 ]; then
+            echo "result=failure" >> "$GITHUB_OUTPUT"
             echo "::error::Delivery Gate 未全部成功；请按上列分项修复后重跑。"
             exit 1
           fi
+          echo "result=success" >> "$GITHUB_OUTPUT"
+      - name: Upload delivery gate timing summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-gate-timing-summary
+          path: artifacts/ci-timing/delivery-gate-summary.json
+          if-no-files-found: error
+          compression-level: 0

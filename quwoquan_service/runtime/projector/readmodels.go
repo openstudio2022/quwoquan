@@ -141,64 +141,6 @@ func (p *ChatInboxProjector) onMessageRead(ctx context.Context, event eventstore
 	return p.store.UpdateFields(ctx, "chat_inbox", convID, map[string]any{"unreadCount": 0})
 }
 
-// UserProfileViewProjector builds the unified user profile view.
-type UserProfileViewProjector struct {
-	store  ReadModelStore
-	logger *slog.Logger
-}
-
-func NewUserProfileViewProjector(store ReadModelStore, logger *slog.Logger) *UserProfileViewProjector {
-	return &UserProfileViewProjector{store: store, logger: logger}
-}
-
-func (p *UserProfileViewProjector) Name() string { return "UserProfileViewProjector" }
-
-func (p *UserProfileViewProjector) EventTypes() []string {
-	return []string{"UserRegistered", "ProfileUpdated", "FollowCreated", "FollowDeleted", "ContentReacted"}
-}
-
-func (p *UserProfileViewProjector) Project(ctx context.Context, event eventstore.StoredEvent) error {
-	userID := event.Metadata.UserID
-	if userID == "" {
-		userID, _ = event.Payload["userId"].(string)
-	}
-	if userID == "" {
-		return nil
-	}
-
-	switch event.Type {
-	case "UserRegistered":
-		return p.store.Upsert(ctx, "user_profile_view", userID,
-			map[string]any{
-				"userId":    userID,
-				"nickname":  event.Payload["nickname"],
-				"createdAt": event.OccurredAt,
-			},
-			map[string]any{"_id": userID},
-		)
-	case "ProfileUpdated":
-		set := map[string]any{}
-		for _, key := range []string{"nickname", "bio", "avatarUrl", "tags"} {
-			if v, ok := event.Payload[key]; ok {
-				set[key] = v
-			}
-		}
-		return p.store.UpdateFields(ctx, "user_profile_view", userID, set)
-	case "FollowCreated":
-		return p.store.IncrementField(ctx, "user_profile_view", userID, "followingCount", 1)
-	case "FollowDeleted":
-		return p.store.IncrementField(ctx, "user_profile_view", userID, "followingCount", -1)
-	case "ContentReacted":
-		action, _ := event.Payload["action"].(string)
-		if action != "" {
-			return p.store.IncrementField(ctx, "user_profile_view", userID, "stats."+action+"Count", 1)
-		}
-		return nil
-	default:
-		return nil
-	}
-}
-
 // RecommendFeatureProjector builds the recommendation feature wide table.
 type RecommendFeatureProjector struct {
 	store  ReadModelStore

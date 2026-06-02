@@ -26,7 +26,7 @@ MEDIA_MODE="${MEDIA_MODE:-}"
 LOCAL_PUBLIC_HOST="${LOCAL_PUBLIC_HOST:-}"
 MEDIA_BASE_URL="${MEDIA_BASE_URL:-}"
 GATEWAY_BASE_URL_OVERRIDE="${GATEWAY_BASE_URL_OVERRIDE:-}"
-DEVICE_DISCOVERY_SCRIPT="$ROOT_DIR/quwoquan_app/scripts/device/discover_flutter_mobile_devices.py"
+DEV_UP_HELPER="$ROOT_DIR/agent_ops/deploy/lib/dev_up.py"
 
 mkdir -p "$STATE_DIR"
 
@@ -275,64 +275,12 @@ resolve_device_id_if_needed() {
   if [[ "$START_APP" != "1" || -n "$DEVICE_ID" ]]; then
     return 0
   fi
-  local devices_json
-  devices_json="$(python3 "$DEVICE_DISCOVERY_SCRIPT" --app-dir "$ROOT_DIR/quwoquan_app")"
-  python3 - "$devices_json" <<'PY' >"$STATE_DIR/device_choices.tsv"
-import json
-import sys
-
-payload = json.loads(sys.argv[1])
-for device in payload.get("devices") or []:
-    print(
-        "\t".join(
-            [
-                str(device.get("id", "")).strip(),
-                str(device.get("name", "")).strip(),
-                str(device.get("targetPlatform", "")).strip(),
-            ]
-        )
-    )
-PY
-  DEVICE_CHOICES=()
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    DEVICE_CHOICES+=("$line")
-  done <"$STATE_DIR/device_choices.tsv"
-  if [[ "${#DEVICE_CHOICES[@]}" -eq 0 ]]; then
-    echo "GATE_BLOCK: no Flutter mobile device is visible for beta app launch." >&2
+  DEVICE_ID="$(python3 "$DEV_UP_HELPER" pick-device --app-dir "$ROOT_DIR/quwoquan_app")"
+  if [[ -z "$DEVICE_ID" ]]; then
+    echo "GATE_BLOCK: failed to resolve Flutter device id for beta launch." >&2
     exit 2
   fi
-  if [[ "${#DEVICE_CHOICES[@]}" -eq 1 ]]; then
-    IFS=$'\t' read -r DEVICE_ID _ <<<"${DEVICE_CHOICES[0]}"
-    echo "[beta] auto selected Flutter device: ${DEVICE_CHOICES[0]}"
-    return 0
-  fi
-  if [[ ! -t 0 || ! -t 1 ]]; then
-    echo "GATE_BLOCK: multiple Flutter devices visible; rerun with DEVICE_ID=<id> or --device-id <id>." >&2
-    printf '%s\n' "${DEVICE_CHOICES[@]}" >&2
-    exit 2
-  fi
-  echo "[beta] multiple Flutter devices visible; pick one:"
-  local idx=1
-  local choice
-  for choice in "${DEVICE_CHOICES[@]}"; do
-    IFS=$'\t' read -r id name platform <<<"$choice"
-    echo "  [$idx] $name ($id, $platform)"
-    idx=$((idx + 1))
-  done
-  local selected=""
-  while [[ -z "$selected" ]]; do
-    printf 'Select device [1-%d]: ' "${#DEVICE_CHOICES[@]}"
-    local line=""
-    IFS= read -r line || true
-    if [[ "$line" =~ ^[0-9]+$ ]] && (( line >= 1 && line <= ${#DEVICE_CHOICES[@]} )); then
-      local selected_index=$((line - 1))
-      selected="${DEVICE_CHOICES[$selected_index]}"
-      break
-    fi
-    echo "Invalid selection."
-  done
-  IFS=$'\t' read -r DEVICE_ID _ <<<"$selected"
-  echo "[beta] selected Flutter device: $selected"
+  echo "[beta] selected Flutter device: $DEVICE_ID"
 }
 
 case "$ACTION" in

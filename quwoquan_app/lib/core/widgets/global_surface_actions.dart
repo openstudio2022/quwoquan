@@ -420,31 +420,90 @@ class GlobalQuickActionSheet {
           _QuickActionSheet(rootContext: context, priority: priority),
     );
   }
+
+  /// 进入创建流（写文章/发图片/发视频）。/create 路由门负责未登录拦截与登录后回源。
+  static void openCreateAction(BuildContext context, EditorStartAction action) {
+    context.go(AppRoutePaths.create(type: action.name));
+  }
+
+  /// 发起群聊。已登录直接进入；登录后续接由 [OpenSheetContinuation] 在外壳消费。
+  static void openStartGroupChat(BuildContext context) {
+    context.push(AppRoutePaths.startGroupChat);
+  }
+
+  /// 打开「加好友」面板（账号态动作）。
+  static void openAddContact(BuildContext context) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (_) => const _AddContactSheet(),
+    );
+  }
+
+  /// 打开「建圈子」编辑页（账号态动作）。
+  static void openCreateCircle(BuildContext context) {
+    Navigator.of(context)
+        .push<String>(
+          CupertinoPageRoute<String>(
+            settings: const RouteSettings(
+              name: PageAccessInternalRoutes.globalSurfaceCircleEditCreate,
+            ),
+            builder: (_) => const CircleEditSettingsPage.create(),
+          ),
+        )
+        .then((circleId) {
+          if (!context.mounted || circleId == null || circleId.isEmpty) {
+            return;
+          }
+          context.push(AppRoutePaths.circleDetail(id: circleId));
+        });
+  }
+
+  /// 登录成功后消费 [OpenSheetContinuation]：续接打开对应面板/流程。
+  /// 由始终在场的外壳（MainAppShell）调用，确保 context 在路由树内、续接稳定。
+  static void resumeSheetContinuation(
+    BuildContext context,
+    AuthContinuationSheet sheet,
+  ) {
+    switch (sheet) {
+      case AuthContinuationSheet.addContact:
+        openAddContact(context);
+      case AuthContinuationSheet.startGroupChat:
+        openStartGroupChat(context);
+      case AuthContinuationSheet.createCircle:
+        openCreateCircle(context);
+    }
+  }
 }
 
-class _QuickActionSheet extends StatelessWidget {
+class _QuickActionSheet extends ConsumerWidget {
   const _QuickActionSheet({required this.rootContext, required this.priority});
 
   final BuildContext rootContext;
   final CreateActionSheetPriority priority;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return CreateActionSheet(
       onCreateAction: (action) => _openCreateAction(context, action),
-      onContinueFromDraft: () => _openContinueFromDraft(context),
-      onStartGroupChat: () => _openStartGroupChat(context),
-      onAddContact: () => _openAddContact(context),
-      onCreateCircle: () => _openCreateCircle(context),
+      onContinueFromDraft: () => _openContinueFromDraft(context, ref),
+      onStartGroupChat: () => _openStartGroupChat(context, ref),
+      onAddContact: () => _openAddContact(context, ref),
+      onCreateCircle: () => _openCreateCircle(context, ref),
       onCancel: () => Navigator.of(context).pop(),
       priority: priority,
     );
   }
 
-  void _openContinueFromDraft(BuildContext sheetContext) {
+  void _openContinueFromDraft(BuildContext sheetContext, WidgetRef ref) {
     Navigator.of(sheetContext).pop();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!rootContext.mounted) {
+        return;
+      }
+      // 草稿属账号资产：未登录先引导登录（登录后用户回到加号面板再续）。
+      if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+        unawaited(requireLogin(ref, rootContext, AuthGateReason.createPost));
         return;
       }
       unawaited(
@@ -455,45 +514,68 @@ class _QuickActionSheet extends StatelessWidget {
 
   void _openCreateAction(BuildContext sheetContext, EditorStartAction action) {
     Navigator.of(sheetContext).pop();
-    rootContext.go(AppRoutePaths.create(type: action.name));
-  }
-
-  void _openStartGroupChat(BuildContext sheetContext) {
-    Navigator.of(sheetContext).pop();
-    rootContext.push(AppRoutePaths.startGroupChat);
-  }
-
-  void _openAddContact(BuildContext sheetContext) {
-    Navigator.of(sheetContext).pop();
+    // Wait for the transparent quick-action sheet to finish dismissing before
+    // replacing the root route, otherwise the entry sheet reverse transition
+    // and CreatePage's immediate picker/camera push can flash a black frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!rootContext.mounted) return;
-      showCupertinoModalPopup<void>(
-        context: rootContext,
-        barrierColor: Colors.transparent,
-        builder: (_) => const _AddContactSheet(),
-      );
+      if (!rootContext.mounted) {
+        return;
+      }
+      // /create 路由门负责未登录拦截与登录后按 redirect 回源。
+      GlobalQuickActionSheet.openCreateAction(rootContext, action);
     });
   }
 
-  void _openCreateCircle(BuildContext sheetContext) {
+  void _openStartGroupChat(BuildContext sheetContext, WidgetRef ref) {
     Navigator.of(sheetContext).pop();
+    _gatedSheetAction(
+      ref,
+      reason: AuthGateReason.startGroupChat,
+      sheet: AuthContinuationSheet.startGroupChat,
+      openNow: () => GlobalQuickActionSheet.openStartGroupChat(rootContext),
+    );
+  }
+
+  void _openAddContact(BuildContext sheetContext, WidgetRef ref) {
+    Navigator.of(sheetContext).pop();
+    _gatedSheetAction(
+      ref,
+      reason: AuthGateReason.addContact,
+      sheet: AuthContinuationSheet.addContact,
+      openNow: () => GlobalQuickActionSheet.openAddContact(rootContext),
+    );
+  }
+
+  void _openCreateCircle(BuildContext sheetContext, WidgetRef ref) {
+    Navigator.of(sheetContext).pop();
+    _gatedSheetAction(
+      ref,
+      reason: AuthGateReason.createCircle,
+      sheet: AuthContinuationSheet.createCircle,
+      openNow: () => GlobalQuickActionSheet.openCreateCircle(rootContext),
+    );
+  }
+
+  /// 账号态动作门：已登录直接执行；未登录先登记续接再引导登录，登录成功后由
+  /// 外壳消费 [OpenSheetContinuation] 自动续接，避免「登录回来什么都没发生」。
+  void _gatedSheetAction(
+    WidgetRef ref, {
+    required AuthGateReason reason,
+    required AuthContinuationSheet sheet,
+    required VoidCallback openNow,
+  }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!rootContext.mounted) return;
-      Navigator.of(rootContext)
-          .push<String>(
-            CupertinoPageRoute<String>(
-              settings: const RouteSettings(
-                name: PageAccessInternalRoutes.globalSurfaceCircleEditCreate,
-              ),
-              builder: (_) => const CircleEditSettingsPage.create(),
-            ),
-          )
-          .then((circleId) {
-            if (!rootContext.mounted || circleId == null || circleId.isEmpty) {
-              return;
-            }
-            rootContext.push(AppRoutePaths.circleDetail(id: circleId));
-          });
+      if (!rootContext.mounted) {
+        return;
+      }
+      if (ref.read(authSessionControllerProvider).isAuthenticated) {
+        openNow();
+        return;
+      }
+      ref.read(authContinuationProvider.notifier).set(
+            OpenSheetContinuation(sheet),
+          );
+      unawaited(requireLogin(ref, rootContext, reason));
     });
   }
 }

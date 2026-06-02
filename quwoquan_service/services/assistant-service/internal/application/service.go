@@ -63,10 +63,11 @@ type AssistantService struct {
 	cache         rtredis.Client
 	publisher     repository.EventPublisher
 	projector     Projector
-	appMessages   AppMessageStore
-	subscriptions SkillSubscriptionStore
-	agentLoop     *AgentLoop
-	mu            sync.RWMutex
+	appMessages       AppMessageStore
+	subscriptions     SkillSubscriptionStore
+	proactiveInterest ProactiveInterestReader
+	agentLoop         *AgentLoop
+	mu                sync.RWMutex
 	conversations map[string]assistant.AssistantConversation
 	turns         map[string]assistant.AssistantTurn
 	cronClaims    map[string]bool
@@ -93,6 +94,13 @@ func WithAgentLoop(loop *AgentLoop) AssistantServiceOption {
 
 func WithSkillSubscriptionStore(store SkillSubscriptionStore) AssistantServiceOption {
 	return func(s *AssistantService) { s.subscriptions = store }
+}
+
+// WithProactiveInterestReader injects the user-domain interest profile reader
+// used to personalize proactive (cron) skill output. When unset, proactive
+// output degrades to non-personalized copy.
+func WithProactiveInterestReader(reader ProactiveInterestReader) AssistantServiceOption {
+	return func(s *AssistantService) { s.proactiveInterest = reader }
 }
 
 func NewAssistantService(events EventStore, consents ConsentStore, cache rtredis.Client, opts ...AssistantServiceOption) *AssistantService {

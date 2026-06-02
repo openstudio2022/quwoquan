@@ -4,7 +4,8 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 ///
 /// 真相源：端默认为 [ContentUIConfig.homeChannels]（发布自带 fallback）；
 /// 运营经 `GET /v1/config/app` 的 `content.home_channels` 远程整体覆盖（不发版即生效）。
-/// 与 `ui_config.home_channels` 同 schema（id/label_key/template/feed_query/mood_copy_key/order）。
+/// 与 `ui_config.home_channels` 同 schema（id/label_key/template/layout_template/
+/// phone_columns/intersection_module_policy/content_card_policy/feed_query/mood_copy_key/order）。
 /// 解析失败 / 缺失 / 空列表 → 返回 null，调用方回退端默认。
 class HomeChannelsRemoteOverride {
   const HomeChannelsRemoteOverride._();
@@ -31,8 +32,25 @@ class HomeChannelsRemoteOverride {
           id: id,
           labelKey: (m['label_key'] ?? m['labelKey'] ?? '').toString(),
           template: (m['template'] ?? '').toString(),
+          layoutTemplate: (m['layout_template'] ?? m['layoutTemplate'] ?? '')
+              .toString(),
+          phoneColumns: _asInt(m['phone_columns'] ?? m['phoneColumns']),
+          supportsFullSpanModules:
+              _asBool(
+                m['supports_full_span_modules'] ?? m['supportsFullSpanModules'],
+              ) ??
+              false,
+          intersectionModulePolicy:
+              (m['intersection_module_policy'] ??
+                      m['intersectionModulePolicy'] ??
+                      '')
+                  .toString(),
+          contentCardPolicy:
+              (m['content_card_policy'] ?? m['contentCardPolicy'] ?? '')
+                  .toString(),
           feedQuery: _parseFeedQuery(m['feed_query'] ?? m['feedQuery']),
-          moodCopyKey: (m['mood_copy_key'] ?? m['moodCopyKey'] ?? '').toString(),
+          moodCopyKey: (m['mood_copy_key'] ?? m['moodCopyKey'] ?? '')
+              .toString(),
           order: _asInt(m['order']),
         ),
       );
@@ -57,5 +75,15 @@ class HomeChannelsRemoteOverride {
     if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
+  }
+
+  static bool? _asBool(Object? value) {
+    if (value is bool) return value;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true') return true;
+      if (normalized == 'false') return false;
+    }
+    return null;
   }
 }

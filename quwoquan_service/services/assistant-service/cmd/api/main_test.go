@@ -102,6 +102,19 @@ func TestSearchProviderTimeoutKeepsRealtimeBudget(t *testing.T) {
 	}
 }
 
+func TestContentSearchQueryCandidatesStripsAppSearchPrefixes(t *testing.T) {
+	got := contentSearchQueryCandidates("站内查找四川大学攻略指南")
+	want := []string{"站内查找四川大学攻略指南", "四川大学攻略指南"}
+	if len(got) != len(want) {
+		t.Fatalf("candidates=%v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("candidates[%d]=%q want %q (all=%v)", i, got[i], want[i], got)
+		}
+	}
+}
+
 func TestShouldTryWeatherLookupUsesModelLocationAndSearchQueries(t *testing.T) {
 	if !shouldTryWeatherLookup("", "Shenzhen weather", "", "Shenzhen", nil) {
 		t.Fatal("weather intent with locationSearchName should route to weather lookup")

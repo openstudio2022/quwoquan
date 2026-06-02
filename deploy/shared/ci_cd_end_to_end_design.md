@@ -2,7 +2,7 @@
 
 > 目标：进入 `main` 前完成 pull request required checks 阻断验证；进入 `main` 后再执行发布后续动作。主干门禁统一为 `03 + 04 + 05`。
 
-**四环境总览**（alpha / beta / gamma / prod、波次关系）：见 [environment_matrix.md](environment_matrix.md)。
+**环境拓扑总览**（alpha / beta / gamma / prod、波次关系）：见 [environment_matrix.md](environment_matrix.md)。
 官方自动化入口统一为 `agent_ops/deploy/stackctl.py`；workflow、CLI、Cursor/skill 共享同一命令面与 JSON 报告契约。
 
 ## 1. 当前 Workflows

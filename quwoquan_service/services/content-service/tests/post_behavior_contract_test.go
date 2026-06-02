@@ -10,12 +10,21 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+
+	rtrec "quwoquan_service/runtime/recommendation"
+	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
+	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
 // TestLikePost verifies the like endpoint route is registered.
@@ -156,6 +165,84 @@ func TestBehaviorBatchWireAliases(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
 	}
+}
+
+// TestBehaviorBatchAssistantInterestAllowsEmptyContentID verifies the Phase 3
+// flywheel contract: assistant_interest is a tag-only signal and must not be
+// rejected when contentId/postId are absent.
+func TestBehaviorBatchAssistantInterestAllowsEmptyContentID(t *testing.T) {
+	payload := `{
+		"userId":"user_assistant_interest_001",
+		"sessionId":"sess_assistant_interest_001",
+		"events":[
+			{
+				"action":"assistant_interest",
+				"userId":"user_assistant_interest_001",
+				"tagRefs":["Topic/旅行","Topic/景区"]
+			}
+		]
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 for assistant_interest without contentId, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBehaviorBatchAssistantInterestProjectsTagInteraction(t *testing.T) {
+	ctx := context.Background()
+	featureColl := mongoDB.Collection("rm_recommend_feature")
+	if _, err := featureColl.DeleteMany(ctx, bson.M{"userId": "user_assistant_interest_projector_001"}); err != nil {
+		t.Fatalf("clean recommend feature: %v", err)
+	}
+	behaviorService := application.NewBehaviorService(
+		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
+		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
+		application.WithBehaviorProjector(&recommendOnlyProjectorAdapter{
+			p: recinfra.NewRecommendFeatureProjector(mongoDB),
+		}),
+	)
+
+	err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+		{
+			UserID:    "user_assistant_interest_projector_001",
+			SessionID: "sess_assistant_interest_projector_001",
+			Action:    "assistant_interest",
+			Tags:      []string{"Topic/旅行", "Topic/旅行主题"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("process assistant_interest: %v", err)
+	}
+
+	var got struct {
+		UserFeatures struct {
+			TagInteraction map[string]int `bson:"tagInteraction"`
+		} `bson:"userFeatures"`
+	}
+	if err := featureColl.FindOne(ctx, bson.M{"userId": "user_assistant_interest_projector_001"}).Decode(&got); err != nil {
+		t.Fatalf("find recommend feature: %v", err)
+	}
+	if got.UserFeatures.TagInteraction["Topic/旅行"] != 1 || got.UserFeatures.TagInteraction["Topic/旅行主题"] != 1 {
+		t.Fatalf("tagInteraction not projected: %+v", got.UserFeatures.TagInteraction)
+	}
+}
+
+type recommendOnlyProjectorAdapter struct {
+	p *recinfra.RecommendFeatureProjector
+}
+
+func (a *recommendOnlyProjectorAdapter) Project(ctx context.Context, event application.ProjectorEvent) error {
+	return a.p.Project(ctx, recinfra.ProjectorEvent{
+		Type:          event.Type,
+		AggregateType: event.AggregateType,
+		AggregateID:   event.AggregateID,
+		Payload:       event.Payload,
+		OccurredAt:    event.OccurredAt,
+	})
 }
 
 // TestBehaviorBatchRejectsLike verifies that like must use the dedicated route

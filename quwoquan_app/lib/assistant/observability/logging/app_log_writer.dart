@@ -22,6 +22,9 @@ class AppLogWriter {
     required Map<String, dynamic> payload,
     DateTime? at,
   }) async {
+    if (kIsWeb) {
+      return 'web://app-log/$subDirectory/$fileName';
+    }
     final time = at ?? DateTime.now();
     return _enqueueWrite(() async {
       final dayDir = await _ensureDayDirectory(time);
@@ -45,6 +48,9 @@ class AppLogWriter {
     required Map<String, dynamic> payload,
     DateTime? at,
   }) async {
+    if (kIsWeb) {
+      return 'web://app-log/$subDirectory/$fileName';
+    }
     final time = at ?? DateTime.now();
     return _enqueueWrite(() async {
       final dayDir = await _ensureDayDirectory(time);

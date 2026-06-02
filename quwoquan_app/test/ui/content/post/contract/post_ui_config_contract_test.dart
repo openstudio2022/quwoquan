@@ -29,27 +29,30 @@ void main() {
       );
     });
 
-    test('home_channels order is monotonic 0..6 matching declared sequence', () {
-      final ordered = <HomeChannelConfig>[...ContentUIConfig.homeChannels]
-        ..sort((a, b) => a.order.compareTo(b.order));
-      expect(
-        ordered.map((c) => c.order).toList(),
-        equals(<int>[0, 1, 2, 3, 4, 5, 6]),
-        reason: 'order 必须连续单调，运营调序仅改 order 即生效',
-      );
-      expect(
-        ordered.map((c) => c.id).toList(),
-        equals(<String>[
-          'following',
-          'recommend',
-          'campus',
-          'travel',
-          'photography',
-          'tech',
-          'car',
-        ]),
-      );
-    });
+    test(
+      'home_channels order is monotonic 0..6 matching declared sequence',
+      () {
+        final ordered = <HomeChannelConfig>[...ContentUIConfig.homeChannels]
+          ..sort((a, b) => a.order.compareTo(b.order));
+        expect(
+          ordered.map((c) => c.order).toList(),
+          equals(<int>[0, 1, 2, 3, 4, 5, 6]),
+          reason: 'order 必须连续单调，运营调序仅改 order 即生效',
+        );
+        expect(
+          ordered.map((c) => c.id).toList(),
+          equals(<String>[
+            'following',
+            'recommend',
+            'campus',
+            'travel',
+            'photography',
+            'tech',
+            'car',
+          ]),
+        );
+      },
+    );
 
     test('home_channels templates belong to the finite template set', () {
       // 端只实现有限频道模板类型，运营选模板+配参数，不做无限动态布局。
@@ -67,6 +70,74 @@ void main() {
       }
     });
 
+    test(
+      'home_channels layout policies support phone dual-column discovery',
+      () {
+        const allowedLayoutTemplates = <String>{
+          'singleColumnRelations',
+          'dualColumnDiscovery',
+        };
+        const allowedIntersectionPolicies = <String>{
+          'none',
+          'spotlightSegment',
+          'campusSpotlight',
+          'segmentInsert',
+          'inlineOnly',
+        };
+        const allowedCardPolicies = <String>{
+          'richRelation',
+          'compactVisual',
+          'articleFullSpan',
+        };
+
+        for (final channel in ContentUIConfig.homeChannels) {
+          expect(
+            allowedLayoutTemplates.contains(channel.layoutTemplate),
+            isTrue,
+            reason: '频道 ${channel.id} layoutTemplate 不在有限集合',
+          );
+          expect(
+            channel.phoneColumns,
+            inInclusiveRange(1, 2),
+            reason: '手机端只允许单列或双列',
+          );
+          expect(
+            allowedIntersectionPolicies.contains(
+              channel.intersectionModulePolicy,
+            ),
+            isTrue,
+            reason: '频道 ${channel.id} 交集模块策略非法',
+          );
+          expect(
+            allowedCardPolicies.contains(channel.contentCardPolicy),
+            isTrue,
+            reason: '频道 ${channel.id} 卡片策略非法',
+          );
+        }
+
+        final following = ContentUIConfig.homeChannels.firstWhere(
+          (c) => c.id == 'following',
+        );
+        expect(following.phoneColumns, equals(1));
+        expect(following.layoutTemplate, equals('singleColumnRelations'));
+
+        for (final id in <String>[
+          'recommend',
+          'campus',
+          'travel',
+          'photography',
+          'tech',
+          'car',
+        ]) {
+          final channel = ContentUIConfig.homeChannels.firstWhere(
+            (c) => c.id == id,
+          );
+          expect(channel.phoneColumns, equals(2), reason: '$id 手机端应为双列发现流');
+          expect(channel.contentCardPolicy, equals('compactVisual'));
+        }
+      },
+    );
+
     test('following channel uses single_column_relations template', () {
       final following = ContentUIConfig.homeChannels.firstWhere(
         (c) => c.id == 'following',
@@ -75,23 +146,31 @@ void main() {
       expect(following.feedQuery['category'], equals('following'));
     });
 
-    test('each channel has non-empty labelKey + feedQuery + resolvable moodCopy', () {
-      for (final channel in ContentUIConfig.homeChannels) {
-        expect(channel.labelKey, isNotEmpty, reason: '频道 ${channel.id} 缺 labelKey');
-        expect(
-          channel.feedQuery,
-          isNotEmpty,
-          reason: '频道 ${channel.id} 缺 feedQuery',
-        );
-        // moodCopyKey 必须可被端文案解析器解析（端只读展示、不本地拼）。
-        final mood = UITextConstants.homeChannelMoodCopy(channel.moodCopyKey);
-        expect(
-          mood,
-          isNotEmpty,
-          reason: '频道 ${channel.id} 的 moodCopyKey ${channel.moodCopyKey} 无法解析',
-        );
-      }
-    });
+    test(
+      'each channel has non-empty labelKey + feedQuery + resolvable moodCopy',
+      () {
+        for (final channel in ContentUIConfig.homeChannels) {
+          expect(
+            channel.labelKey,
+            isNotEmpty,
+            reason: '频道 ${channel.id} 缺 labelKey',
+          );
+          expect(
+            channel.feedQuery,
+            isNotEmpty,
+            reason: '频道 ${channel.id} 缺 feedQuery',
+          );
+          // moodCopyKey 必须可被端文案解析器解析（端只读展示、不本地拼）。
+          final mood = UITextConstants.homeChannelMoodCopy(channel.moodCopyKey);
+          expect(
+            mood,
+            isNotEmpty,
+            reason:
+                '频道 ${channel.id} 的 moodCopyKey ${channel.moodCopyKey} 无法解析',
+          );
+        }
+      },
+    );
   });
 
   group('ContentUIConfig — ui_config_scenarios contract', () {
@@ -265,44 +344,49 @@ void main() {
       );
     });
 
-    test('article distribution profiles cover follow list and circle dual column', () {
-      final ids = ContentUIConfig.articleDistributionProfiles
-          .map((profile) => profile.id)
-          .toList();
-      expect(
-        ids,
-        containsAll(<String>[
-          'follow_list_with_optional_cover',
-          'circle_dual_column_with_optional_cover',
-        ]),
-      );
-    });
+    test(
+      'article distribution profiles cover follow list and circle dual column',
+      () {
+        final ids = ContentUIConfig.articleDistributionProfiles
+            .map((profile) => profile.id)
+            .toList();
+        expect(
+          ids,
+          containsAll(<String>[
+            'follow_list_with_optional_cover',
+            'circle_dual_column_with_optional_cover',
+          ]),
+        );
+      },
+    );
 
-    test('article reader profiles freeze full screen stage and top nav page fraction', () {
-      final ids = ContentUIConfig.articleReaderProfiles
-          .map((profile) => profile.id)
-          .toList();
-      expect(
-        ids,
-        containsAll(<String>[
-          'full_screen_book_stage',
-          'top_nav_with_page_fraction',
-        ]),
-      );
-      final fullScreen = ContentUIConfig.articleReaderProfiles.firstWhere(
-        (profile) => profile.id == 'full_screen_book_stage',
-      );
-      expect(fullScreen.pageIndicatorAnchor, equals('top_after_back'));
-      expect(fullScreen.supportsPageCurl, isTrue);
-    });
+    test(
+      'article reader profiles freeze full screen stage and top nav page fraction',
+      () {
+        final ids = ContentUIConfig.articleReaderProfiles
+            .map((profile) => profile.id)
+            .toList();
+        expect(
+          ids,
+          containsAll(<String>[
+            'full_screen_book_stage',
+            'top_nav_with_page_fraction',
+          ]),
+        );
+        final fullScreen = ContentUIConfig.articleReaderProfiles.firstWhere(
+          (profile) => profile.id == 'full_screen_book_stage',
+        );
+        expect(fullScreen.pageIndicatorAnchor, equals('top_after_back'));
+        expect(fullScreen.supportsPageCurl, isTrue);
+      },
+    );
 
     test('article template recommendations cover核心圈子频道', () {
       final tech = ContentUIConfig.articleTemplateRecommendations.firstWhere(
         (entry) => entry.categoryId == 'tech',
       );
-      final humanity = ContentUIConfig.articleTemplateRecommendations.firstWhere(
-        (entry) => entry.categoryId == 'humanity',
-      );
+      final humanity = ContentUIConfig.articleTemplateRecommendations
+          .firstWhere((entry) => entry.categoryId == 'humanity');
       expect(
         tech.recommendedArticleTemplates,
         containsAll(<String>['tech', 'diffuse']),

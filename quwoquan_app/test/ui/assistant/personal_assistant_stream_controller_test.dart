@@ -7,6 +7,8 @@ import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dar
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/notification/app_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/notification/app_message_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -595,6 +597,89 @@ void main() {
       final state = container.read(personalAssistantStreamControllerProvider);
       expect(state.feedbackMessage, contains('太频繁'));
     });
+
+    // ── P3 飞轮小循环：turn.completed emergedTags → assistant_interest 回流 ──
+    test('turn.completed 的 emergedTags 合成 assistant_interest 行为回流', () async {
+      final behaviorRepo = MockBehaviorRepository();
+      final container = _containerWith(
+        assistantRepository: _FakeAssistantRepository(
+          events: <AssistantStreamEventWire>[
+            _event(seq: 1, eventType: 'turn_started'),
+            _event(
+              seq: 2,
+              eventType: 'final_answer',
+              payload: const <String, dynamic>{'text': '稻城亚丁秋季最佳。'},
+            ),
+            _event(
+              seq: 3,
+              eventType: 'assistant.turn.completed',
+              payload: const <String, dynamic>{
+                'status': 'completed',
+                'emergedTags': <String>['Topic/旅行', 'Topic/景区', 'Topic/旅行'],
+              },
+            ),
+          ],
+        ),
+        behaviorRepository: behaviorRepo,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(personalAssistantStreamControllerProvider.notifier)
+          .send('稻城亚丁什么时候去最好');
+      await container.read(contentBehaviorTrackerProvider).flush();
+
+      final interest = behaviorRepo.recorded
+          .where((e) => e.action == BehaviorAction.assistantInterest)
+          .toList();
+      expect(interest, hasLength(1));
+      expect(interest.single.tags, equals(<String>['Topic/旅行', 'Topic/景区']));
+      expect(interest.single.contentId, isEmpty);
+    });
+
+    test('无 turn.completed emergedTags 时不回流 assistant_interest', () async {
+      final behaviorRepo = MockBehaviorRepository();
+      final container = _containerWith(
+        assistantRepository: _FakeAssistantRepository(
+          events: <AssistantStreamEventWire>[
+            _event(
+              seq: 1,
+              eventType: 'final_answer',
+              payload: const <String, dynamic>{'text': '没有命中站内内容。'},
+            ),
+          ],
+        ),
+        behaviorRepository: behaviorRepo,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(personalAssistantStreamControllerProvider.notifier)
+          .send('一个不触发站内检索的问题');
+      await container.read(contentBehaviorTrackerProvider).flush();
+
+      expect(behaviorRepo.recorded, isEmpty);
+    });
+
+    test('extractAssistantEmergedTags 仅取 turn.completed 并去重过滤空值', () {
+      final tags = extractAssistantEmergedTags(<AssistantStreamEventWire>[
+        _event(
+          seq: 1,
+          eventType: 'final_answer',
+          payload: const <String, dynamic>{
+            'emergedTags': <String>['Topic/应忽略'],
+          },
+        ),
+        _event(
+          seq: 2,
+          eventType: 'assistant.turn.completed',
+          payload: const <String, dynamic>{
+            'emergedTags': <String>['Topic/旅行', ' Topic/景区 ', 'Topic/旅行', ''],
+          },
+        ),
+      ]);
+      expect(tags, equals(<String>['Topic/旅行', 'Topic/景区']));
+    });
   });
 }
 
@@ -602,6 +687,7 @@ ProviderContainer _containerWith({
   required AssistantRepository assistantRepository,
   AppMessageRepository? appMessageRepository,
   AssistantHistoryLoader? historyLoader,
+  BehaviorRepository? behaviorRepository,
 }) {
   return ProviderContainer(
     overrides: [
@@ -619,6 +705,8 @@ ProviderContainer _containerWith({
       ),
       if (historyLoader != null)
         assistantHistoryLoaderProvider.overrideWithValue(historyLoader),
+      if (behaviorRepository != null)
+        behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
     ],
   );
 }

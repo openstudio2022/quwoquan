@@ -39,7 +39,7 @@ import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 
 /// 发现页 — 双轨道架构
 ///
@@ -526,7 +526,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
     // 点滴频道：信息流
     if (tabId == 'moment') {
-      return MomentSocialFeed(
+      return HomeMultiFormFeed(
         isDark: isDark,
         onUserTap:
             (
@@ -642,7 +642,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           children: [
             Padding(
               padding: EdgeInsets.symmetric(horizontal: horizontal),
-              child: _MomentPostCard(
+              child: _DiscoveryMicroPostCard(
                 item: dto,
                 isDark: isDark,
                 isFirst: isFirst,
@@ -913,9 +913,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       return;
     }
     final postViews = feedPosts
-        ?.map(
-          (dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()),
-        )
+        ?.map((dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()))
         .toList();
     final viewerPosts = feedPosts ?? <PostBaseDto>[post];
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
@@ -1029,8 +1027,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     final enableIdentityTemplate = ref.read(
       contentFeatureFlagProvider('enable_identity_share_template'),
     );
-    final surfaceView =
-        ContentSurfaceViewMapper.fromDto(post, wire: wire?.toWireMap());
+    final surfaceView = ContentSurfaceViewMapper.fromDto(
+      post,
+      wire: wire?.toWireMap(),
+    );
     return ContentShareTemplateBuilder.build(
       surfaceView: surfaceView,
       enableIdentityTemplate: enableIdentityTemplate,
@@ -1079,8 +1079,8 @@ String _toDate(DateTime time) {
   return '${time.year}-${time.month.toString().padLeft(2, '0')}-${time.day.toString().padLeft(2, '0')}';
 }
 
-/// 微趣卡片：1:1 复制 MomentPost.tsx 结构（简化版，后续补全转发引用、九宫格等）
-class _MomentPostCard extends StatefulWidget {
+/// 发现页点滴卡片：承接 micro/moment 内容 identity 的社交卡展示。
+class _DiscoveryMicroPostCard extends StatefulWidget {
   final PostBaseDto item;
   final bool isDark;
   final bool isFirst;
@@ -1092,7 +1092,7 @@ class _MomentPostCard extends StatefulWidget {
   final void Function(PostBaseDto)? onMoreTap;
   final void Function(String action, PostBaseDto post)? onBehavior;
 
-  const _MomentPostCard({
+  const _DiscoveryMicroPostCard({
     required this.item,
     required this.isDark,
     this.isFirst = false,
@@ -1106,10 +1106,11 @@ class _MomentPostCard extends StatefulWidget {
   });
 
   @override
-  State<_MomentPostCard> createState() => _MomentPostCardState();
+  State<_DiscoveryMicroPostCard> createState() =>
+      _DiscoveryMicroPostCardState();
 }
 
-class _MomentPostCardState extends State<_MomentPostCard>
+class _DiscoveryMicroPostCardState extends State<_DiscoveryMicroPostCard>
     with SingleTickerProviderStateMixin {
   bool _isLiked = false;
   late AnimationController _likeAnimationController;

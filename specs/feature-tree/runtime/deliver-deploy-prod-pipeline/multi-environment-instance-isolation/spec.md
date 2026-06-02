@@ -40,7 +40,7 @@
 | 关联节点 | 说明 |
 |----------|------|
 | `local-gamma-mirror` | 复用 gamma 语义做本地左移，但本特性要求其保持单套切换语义 |
-| `multi-environment-wave-deployment` | 复用四环境统一语义，不新增新环境枚举 |
+| `multi-environment-wave-deployment` | 复用统一环境链语义，不新增额外环境枚举 |
 | `gray-release-to-prod` | gamma/prod 的发布口径不因端侧多实例而改变 |
 
 ## 支持矩阵
@@ -60,3 +60,10 @@
 - A4：beta 启动链路在启动新栈前会停止旧栈、回收固定端口并清理残留子进程。
 - A5：gamma 部署 / local-gamma mirror 切换遵循单套清理后重启语义，不出现第二套并行栈。
 - A6：至少一条 `T4` 验证覆盖 alpha / beta / gamma 三个端侧实例分别运行在不同模拟器。
+
+## A3 一键入口口径
+
+- 开发者一键启动统一入口为 `python3 agent_ops/deploy/stackctl.py up --env <env> [--device-id <id>]`。
+- `make dev-up ENV=<env> [DEVICE_ID=<id>]` 只是 `stackctl up --env` 的 Makefile 薄包装，不得演化出第二套启动逻辑。
+- `--env` 只暴露 `alpha / beta / gamma / prod-sim / prod`；`--target` 保留给 CI、runbook 与高级调试，二者互斥。
+- `prod` 一键启动语义是“连接已部署 prod-hosted 云端 + 本地启动 App/浏览器”，不是在本地再起一套 prod 服务栈。

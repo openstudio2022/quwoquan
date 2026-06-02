@@ -37,6 +37,7 @@ MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-}"
 APP_CURRENT_USER_ID="${APP_CURRENT_USER_ID:-fixture_user_current}"
 ASSISTANT_SEED_REFS="${ASSISTANT_SEED_REFS:-assistant_p0_core}"
 FLUTTER_DEVICE_ID="${FLUTTER_DEVICE_ID:-}"
+DEV_UP_HELPER="$ROOT_DIR/agent_ops/deploy/lib/dev_up.py"
 SKIP_APP=0
 KILL_EXISTING=1
 RESTART_STACK=1
@@ -493,56 +494,7 @@ detect_device_kind() {
 }
 
 resolve_single_flutter_device() {
-  python3 - "$ROOT_DIR" <<'PY'
-import json
-import subprocess
-import sys
-from pathlib import Path
-
-root = Path(sys.argv[1])
-cmd = [sys.executable, str(root / "quwoquan_app" / "scripts" / "device" / "discover_flutter_mobile_devices.py")]
-result = subprocess.run(cmd, cwd=str(root), text=True, capture_output=True, check=False)
-if result.returncode != 0:
-    print(result.stderr.strip() or result.stdout.strip(), file=sys.stderr)
-    raise SystemExit(1)
-payload = json.loads(result.stdout)
-devices = list(payload.get("devices") or [])
-if not devices:
-    print("GATE_BLOCK: no Flutter mobile device is visible for beta app launch.", file=sys.stderr)
-    raise SystemExit(2)
-if len(devices) == 1:
-    print(str(devices[0].get("id") or "").strip())
-    raise SystemExit(0)
-
-print("[app-beta-manual] multiple Flutter devices visible; pick one:", file=sys.stderr)
-for idx, device in enumerate(devices, 1):
-    print(
-        f"  [{idx}] {device.get('name', '')} ({device.get('id', '')}, {device.get('targetPlatform', '')})",
-        file=sys.stderr,
-    )
-
-try:
-    tty_in = open("/dev/tty", "r")
-    tty_out = open("/dev/tty", "w")
-except OSError:
-    print("GATE_BLOCK: no TTY available; rerun with --device-id <id>.", file=sys.stderr)
-    raise SystemExit(2)
-
-while True:
-    tty_out.write(f"Select device [1-{len(devices)}]: ")
-    tty_out.flush()
-    line = tty_in.readline()
-    if not line:
-        print("GATE_BLOCK: no selection received; rerun with --device-id <id>.", file=sys.stderr)
-        raise SystemExit(2)
-    choice = line.strip()
-    if choice.isdigit():
-        n = int(choice)
-        if 1 <= n <= len(devices):
-            print(str(devices[n - 1].get("id") or "").strip())
-            raise SystemExit(0)
-    print(f"  invalid selection: {choice!r}", file=sys.stderr)
-PY
+  python3 "$DEV_UP_HELPER" pick-device --app-dir "$ROOT_DIR/quwoquan_app"
 }
 
 if [[ "$SKIP_APP" != "1" && -z "$FLUTTER_DEVICE_ID" ]]; then

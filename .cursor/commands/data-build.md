@@ -11,8 +11,9 @@ description: 数据工程 · 实体/标签/主页构建阶段
 基于 catalog 生成标准化实体、标签层级树和实体主页。
 
 ## 输入
-- `--task {taskId}` `--batch {batchId}`
-- catalog.ndjson（来自 explore）
+- `--task {taskId}` `--batch {batchId}` `--stage {prepare|validate|all}`
+- coverageTargets：来自 `tasks/{taskId}/task.yaml` 的 `scope.coverageTargets`（每项 `{entityType, name}`，经 _defaults 继承解析）
+- SOP：`sop/主页/{领域}/{类型}/{guide,template,example}.md`（全局单一真相源，不拷进任务）
 
 ## 实体三层目录
 
@@ -31,23 +32,28 @@ entities/
   活动/赛事/成都马拉松/
 ```
 
-## 三段式
+## 三段式（与三层目录实体模型一致）
 
-### prepare
-为每个实体生成 `inputs/normalize_extract/{entityName}.json`，写 `assistant_tasks/normalize_extract.json`。
+### prepare — `qwq-data build --task {id} --batch {b} --stage prepare`
+为每个 coverageTarget 写产出契约 `batches/{b}/build/inputs/entity_page/{ref}.json`，并写
+`assistant_tasks/entity_page.json`。每个契约 payload 含：
+- `name/domain/etype/entityRef/outputDir`（产出目录 = `entities/{领域}/{类型}/{名称}/`）
+- `sopDir/sopTemplate/sopGuide/sopExample`（全局 SOP 路径，按需注入）
+- `minChars=800`、`conditionAxes`（effective）、`regionMenu/seasonMenu`（catalog 合法取值）
 
-### agent（模型执行）
-1. 归一化名称（中文规范名）
-2. 推导领域/类型分类（对应 `tags/实体类型/{领域}/{类型}`）
-3. 推导 tagRefs（路径格式）、geoTagRef
-4. 物化到 `entities/{领域}/{类型}/{名称}/`：
-   - `_entity.json`：无 entityId/entityType（从目录推导），含 aliases/tagRefs/geoTagRef/description/createdAt/updatedAt
-   - `page.md`：按 `sop/主页/{领域}/{类型}/template.md` 模板生成，>= 800 字，嵌入 /entity/ + /tag/ + asset:// 引用
+### agent（模型执行，ReAct）
+1. 归一化名称（中文规范名）、推导领域/类型分类（对应 `tags/实体类型/{领域}/{类型}`）、tagRefs/geoTagRef
+2. 检索真实素材（不足→再检索；见 `/data-download`），按 `sopTemplate` 物化到 `outputDir`：
+   - `page.md`：按 SOP 模板，**去空白 ≥ 800 字**，嵌入 /entity/ + /tag/ + asset:// 引用
+   - `_entity.json`：含 `label/domain/type/sourceTaskId`，地形/季节确定时写
+     `conditionProfile{regions[],seasons[],altitudeMeters,notes}`，**regions/seasons 取值须 ∈ regionMenu/seasonMenu**
    - `manifest.json`：含 tagRefs/assets/timestamps
-5. 物化标签到 `tags/{dim}/{path}/_definition.json`：无 tagId，含 label/labelEn/description/timestamps
+3. 标签物化到 `tags/{dim}/{path}/_definition.json`（无 tagId，含 label/labelEn/description/timestamps）
 
-### validate
-- 每个 entity 有 _entity.json + page.md + manifest.json
-- page.md >= 800 字，含 /entity/ + /tag/ + asset:// 引用，无独立标签/相关实体章节
-- 所有 tagRefs 指向存在的 tags 目录
-- SOP 模板存在：`sop/主页/{领域}/{类型}/guide.md + template.md + example.md`
+### validate（采纳门）— `qwq-data build --task {id} --stage validate`
+逐 coverageTarget 校验，全绿 exit 0、否则 exit 1（阻断 promote）：
+- 三件套齐全：`_entity.json + page.md + manifest.json`
+- `page.md` 去空白 ≥ 800 字
+- `_entity.json` 必填 `label/domain/type/sourceTaskId`，且 domain/type 与目录一致
+- 若写 `conditionProfile`：须含 regions 或 seasons，且取值 ∈ `region_catalog`/`season_catalog`
+- 通过即「采纳」，`promote --copy-entities` 据此把主页拷入 publish，发布门 `entity_homepage_exists` 放行 entityRefs

@@ -80,6 +80,11 @@ Future<void> _pumpShell(
   CircleRepository? mock,
   VoidCallback? onBack,
 }) async {
+  // 对象主页改版后圈子壳层内容更长，默认 800x600 视口会触发 NestedScrollView
+  // 的 pinned tab/吸顶层覆盖，导致动作栏命中测试失败。这里放大视口让壳层完整内联展示。
+  tester.view.physicalSize = const Size(1080, 3600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(_scopedApp(mock: mock, onBack: onBack));
   // CircleShell 不主动 watch 登录态，这里显式触发 auth session 构建并 hydrate，
   // 让加入/关注按钮的 requireLogin 在已登录态下放行。
@@ -109,7 +114,34 @@ void main() {
           of: find.byKey(
             const ValueKey<String>('circle-shell-primary-tabs-inline'),
           ),
-          matching: find.text(UITextConstants.circleWorksTab),
+          matching: find.text('首页'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('circle-shell-primary-tabs-inline'),
+          ),
+          matching: find.text('内容'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('circle-shell-primary-tabs-inline'),
+          ),
+          matching: find.text('群或组织'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('circle-shell-primary-tabs-inline'),
+          ),
+          matching: find.text('成员'),
         ),
         findsOneWidget,
       );
@@ -119,16 +151,16 @@ void main() {
       await _pumpShell(tester, mock: _PrivateVisitorCircleRepository());
 
       expect(
-        find.byKey(const ValueKey<String>('circle-shell-gate-content')),
+        find.byKey(const ValueKey<String>('circle-shell-gate-home')),
         findsOneWidget,
       );
 
-      await tester.tap(find.text(UITextConstants.circleAssetsTab).first);
+      await tester.tap(find.text('群或组织').first);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(
-        find.byKey(const ValueKey<String>('circle-shell-gate-assets')),
+        find.byKey(const ValueKey<String>('circle-shell-gate-groups')),
         findsOneWidget,
       );
     });
@@ -183,13 +215,13 @@ void main() {
     testWidgets('审批加入后切换为待审核状态', (tester) async {
       await _pumpShell(tester, mock: _ApprovalVisitorCircleRepository());
 
-      await tester.tap(
-        find.descendant(
-          of: find.byType(CircleActionBar),
-          matching: find.text(UITextConstants.circleJoinApproval),
-        ),
+      final joinFinder = find.descendant(
+        of: find.byType(CircleActionBar),
+        matching: find.text(UITextConstants.circleJoinApproval),
       );
+      await tester.tap(joinFinder);
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
 
       expect(
         find.descendant(

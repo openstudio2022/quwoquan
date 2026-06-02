@@ -30,9 +30,17 @@ class HomepageDetailPageRouteExtra {
     this.selectionMode = false,
     this.initialSummary,
     this.referralSource,
+    this.feedRequestId = '',
+    this.recommendationTraceId = '',
+    this.experimentBucket = '',
+    this.rolloutCohort = '',
   });
 
   final bool selectionMode;
   final HomepageSummary? initialSummary;
   final ReferralSource? referralSource;
+  final String feedRequestId;
+  final String recommendationTraceId;
+  final String experimentBucket;
+  final String rolloutCohort;
 }

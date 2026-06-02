@@ -131,11 +131,11 @@ class SettingsPage extends ConsumerWidget {
                     _SettingsRow(
                       icon: CupertinoIcons.person_crop_circle_badge_checkmark,
                       label: UITextConstants.profileLoginNow,
-                      onTap: () => context.push(
-                        AppRoutePaths.login(
-                          reason: AuthPromptReason.actionRequired.name,
-                          redirect: AppRoutePaths.settings,
-                        ),
+                      onTap: () => openLoginPage(
+                        context,
+                        reasonName: AuthPromptReason.actionRequired.name,
+                        redirect: AppRoutePaths.settings,
+                        dismissFallback: AppRoutePaths.settings,
                       ),
                     ),
                     SettingsInsetFormSectionDivider(isDark: isDark),
@@ -288,8 +288,13 @@ class SettingsPage extends ConsumerWidget {
     if (!context.mounted || !navigateToLogin) {
       return;
     }
-    context.go(
-      AppRoutePaths.login(reason: AuthPromptReason.manualLoggedOut.name),
+    // 退出登录是「强入口」：用 replace + 禁止 guest pop，关闭只安全回首页，
+    // 不会 pop 回 settings 这类需要账号的页面再次触发守卫。
+    openLoginPage(
+      context,
+      reasonName: AuthPromptReason.manualLoggedOut.name,
+      replace: true,
+      allowGuestDismissPop: false,
     );
   }
 }

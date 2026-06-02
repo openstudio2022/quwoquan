@@ -1,0 +1,109 @@
+version: 1
+# 旅游/校园内容源类别注册表 ——「全」的硬约束唯一真相源。
+#
+# agent 在 download source_plan 阶段必须按类别全面采源（搞户外看路书/经纬度/地形，
+# 床车旅行看安营 APP 的营地信息……），download「源类别覆盖门」据此校验每实体覆盖 ≥N 类源。
+# platform 字段须能归类到下列 category（examplePlatforms / platformAliases），未知平台不计入覆盖。
+coveragePolicy:
+  travel:
+    minCategoriesPerEntity: 3
+    coreCategories: [encyclopedia, travelogue, official]
+  campus:
+    minCategoriesPerEntity: 2
+    coreCategories: [school_official, forum]
+categories:
+  - id: encyclopedia
+    label: 百科词条
+    verticals: [travel, campus]
+    description: 权威结构化事实（位置/历史/门票/开放/海拔），用于 factEvidence 与数值可回溯。
+    evidenceFocus: [fact, geo, season]
+    examplePlatforms: [维基百科, 百度百科, 维基, wikipedia, baike, 搜狗百科]
+  - id: official
+    label: 官方信息
+    verticals: [travel]
+    description: 景区官网 / 文旅局 / 官方公众号，门票/开放时间/预约/公告的一手来源。
+    evidenceFocus: [fact, season]
+    examplePlatforms: [官网, 文旅, 文旅局, 景区官网, 官方公众号, gov, 官方网站]
+  - id: travelogue
+    label: 社区游记
+    verticals: [travel]
+    description: 真实第一人称体验/动机/取舍/避坑，提供 emotionEvidence 与叙事线。
+    evidenceFocus: [emotion, mainline, decision]
+    examplePlatforms: [马蜂窝, 携程, 携程攻略, 携程游记, 小红书, 穷游, 知乎, 游记, 蚂蜂窝]
+  - id: video
+    label: 短视频/中视频
+    verticals: [travel, campus]
+    description: 视频游记/Vlog，画面感与实况，补充视觉与节奏证据。
+    evidenceFocus: [emotion, visual]
+    examplePlatforms: [抖音, B站, 哔哩哔哩, bilibili, 视频号, 西瓜视频, 快手]
+  - id: outdoor_route
+    label: 户外路书/轨迹
+    verticals: [travel]
+    description: 路书、GPS 轨迹、经纬度、地形与海拔剖面（搞户外就看路书/经纬度/地形信息）。
+    evidenceFocus: [route, geo]
+    examplePlatforms: [两步路, 六只脚, 行者, 户外路书, foooooot, 轨迹, 等高线, 海拔图, 户外助手]
+  - id: camping
+    label: 营地/床车
+    verticals: [travel]
+    description: 营地点位、补给、床车与房车自驾营地信息（床车旅行有安营 APP 讲营地信息）。
+    evidenceFocus: [camp, geo, fact]
+    examplePlatforms: [安营, 营天下, 保姆车, 营地, 房车营地, 床车, 露营地图]
+  - id: map_geo
+    label: 地图与地理
+    verticals: [travel, campus]
+    description: 地图、导航、经纬度、距离与海拔，校验里程/坐标类数值。
+    evidenceFocus: [geo, route]
+    examplePlatforms: [高德地图, 高德, 百度地图, 谷歌地图, google maps, 腾讯地图, 地图]
+  - id: weather
+    label: 天气与气候
+    verticals: [travel]
+    description: 气候、最佳季节、温度与天气窗口，支撑 conditionContext/季节判断。
+    evidenceFocus: [season, fact]
+    examplePlatforms: [中国天气, 天气网, 墨迹天气, 气象, weather, 气候]
+  - id: review
+    label: 点评测评
+    verticals: [travel, campus]
+    description: 用户评分/点评，提供口碑与劝退点对比。
+    evidenceFocus: [emotion, decision]
+    examplePlatforms: [大众点评, 猫途鹰, tripadvisor, 点评, 评分]
+  - id: transport
+    label: 交通到达
+    verticals: [travel]
+    description: 交通班次/自驾路况/到达方式，支撑到达与里程事实。
+    evidenceFocus: [fact, route]
+    examplePlatforms: [12306, 航旅纵横, 飞猪, 携程交通, 路况, 班车, 航班]
+  - id: lodging
+    label: 住宿
+    verticals: [travel]
+    description: 酒店/民宿/青旅信息与价位，支撑住宿取舍。
+    evidenceFocus: [fact, decision]
+    examplePlatforms: [携程酒店, airbnb, 爱彼迎, 青旅, 民宿, 美团酒店, 去哪儿]
+  - id: guidebook
+    label: 权威旅游指南
+    verticals: [travel]
+    description: Lonely Planet / 国家地理等权威指南，提供专业视角与背景。
+    evidenceFocus: [fact, mainline]
+    examplePlatforms: [lonely planet, 孤独星球, 国家地理, national geographic, 走遍全球]
+  - id: school_official
+    label: 学校官方
+    verticals: [campus]
+    description: 学校官网/教务/官微，校历/政策/设施一手信息。
+    evidenceFocus: [fact]
+    examplePlatforms: [学校官网, 教务处, 官微, 校官网, 学工处]
+  - id: forum
+    label: 校园社区
+    verticals: [campus]
+    description: 校园论坛/贴吧/超话/树洞，真实学生口碑与避坑。
+    evidenceFocus: [emotion, decision]
+    examplePlatforms: [贴吧, 超话, 校园论坛, 树洞, 知乎, 微博]
+# 平台别名 → categoryId（examplePlatforms 之外的常见英文/拼写，值为 null 表示通用兜底不计覆盖）。
+platformAliases:
+  web: null
+  unknown: null
+  mafengwo: travelogue
+  ctrip: travelogue
+  xiaohongshu: travelogue
+  rednote: travelogue
+  douyin: video
+  amap: map_geo
+  2bulu: outdoor_route

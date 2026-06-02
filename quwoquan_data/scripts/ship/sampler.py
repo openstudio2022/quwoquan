@@ -108,7 +108,9 @@ def build_sample_bundle(
     envs = manifest.get("environments") or {}
     if env not in envs:
         raise KeyError(f"environment '{env}' not in content_sampling_manifest")
-    cfg = envs[env]
+    # defaults 提供环境缺省（比例 10% / 上限 1000）；env 显式键覆盖。
+    defaults = manifest.get("defaults") or {}
+    cfg = {**defaults, **(envs[env] or {})}
     salt = str(manifest.get("salt") or "")
     ratio = float(cfg.get("sampleRatio", 1.0))
 

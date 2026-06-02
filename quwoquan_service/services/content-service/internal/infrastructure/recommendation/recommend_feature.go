@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ type RecommendFeatureProjector struct {
 	coll              *mongo.Collection
 	entityPropagation *rtrec.EntityInterestPropagation
 	signalProcessor   rtrec.SignalProcessor
+	interestAgg       *InterestProfileAggregator
 }
 
 func NewRecommendFeatureProjector(db *mongo.Database, opts ...RecommendFeatureProjectorOption) *RecommendFeatureProjector {
@@ -36,6 +38,15 @@ func WithEntityPropagation(ep *rtrec.EntityInterestPropagation) RecommendFeature
 
 func WithSignalProcessor(sp rtrec.SignalProcessor) RecommendFeatureProjectorOption {
 	return func(p *RecommendFeatureProjector) { p.signalProcessor = sp }
+}
+
+// WithInterestAggregator wires the derived interest-profile aggregator so the
+// projector recomputes the interest profile and population segments after each
+// behavior batch: segments are persisted into rm_recommend_feature.segments and
+// UserInterestRecomputed is published (the profile itself lives in the user
+// domain's rm_user_profile_view, not in this wide table).
+func WithInterestAggregator(agg *InterestProfileAggregator) RecommendFeatureProjectorOption {
+	return func(p *RecommendFeatureProjector) { p.interestAgg = agg }
 }
 
 func (p *RecommendFeatureProjector) Name() string { return "RecommendFeatureProjector" }
@@ -116,8 +127,8 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 		return nil
 	}
 
-	events, ok := event.Payload["events"].([]any)
-	if !ok || len(events) == 0 {
+	events := behaviorPayloadEvents(event.Payload["events"])
+	if len(events) == 0 {
 		return nil
 	}
 
@@ -137,11 +148,7 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 	typeImpressions := map[string]int{}
 	typeEngagements := map[string]int{}
 
-	for _, raw := range events {
-		ev, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
+	for _, ev := range events {
 		tags := anySlice(ev, "tagRefs")
 		for _, t := range tags {
 			tagCounts[t]++
@@ -256,8 +263,34 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 	}
 
 	opts := options.UpdateOne().SetUpsert(true)
-	_, err := p.coll.UpdateOne(ctx, bson.M{"userId": userID}, update, opts)
-	return err
+	if _, err := p.coll.UpdateOne(ctx, bson.M{"userId": userID}, update, opts); err != nil {
+		return err
+	}
+	// Derive the consumer-facing interest profile in place. Failure here must
+	// not abort (and thus retry) the non-idempotent $inc projection above.
+	if p.interestAgg != nil {
+		if rerr := p.interestAgg.Recompute(ctx, userID); rerr != nil {
+			slog.Warn("interest profile recompute failed", "userId", userID, "err", rerr)
+		}
+	}
+	return nil
+}
+
+func behaviorPayloadEvents(raw any) []map[string]any {
+	switch items := raw.(type) {
+	case []map[string]any:
+		return items
+	case []any:
+		out := make([]map[string]any, 0, len(items))
+		for _, item := range items {
+			if m, ok := item.(map[string]any); ok {
+				out = append(out, m)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func depthLevelKey(level int) string {
@@ -408,49 +441,53 @@ func NewFeatureStore(db *mongo.Database) *FeatureStore {
 
 // UserFeatures holds aggregated user-level features for scoring.
 type UserFeatures struct {
-	UserID             string                `bson:"userId"`
-	TagInteraction     map[string]int        `bson:"tagInteraction"`
-	AuthorInteraction  map[string]int        `bson:"authorInteraction"`
-	TotalEvents        int                   `bson:"totalEvents"`
-	TotalLikes         int                   `bson:"totalLikes"`
-	TotalFavorites     int                   `bson:"totalFavorites"`
-	TotalShares        int                   `bson:"totalShares"`
-	TopicAffinities    map[string]float64    `bson:"topicAffinities"`
-	AudienceAffinities map[string]float64    `bson:"audienceAffinities"`
-	FormatAffinities   map[string]float64    `bson:"formatAffinities"`
-	EntityAffinities   map[string]float64    `bson:"entityAffinities"`
-	AvgEngagementDepth float64               `bson:"avgEngagementDepth"`
-	DepthDistribution  map[string]int        `bson:"depthDistribution"`
-	SourceDistribution map[string]int        `bson:"sourceDistribution"`
-	CircleTagAffinities map[string]float64   `bson:"circleTagAffinities"`
-	SocialInterestScore float64              `bson:"socialInterestScore"`
+	UserID                   string             `bson:"userId"`
+	TagInteraction           map[string]int     `bson:"tagInteraction"`
+	AuthorInteraction        map[string]int     `bson:"authorInteraction"`
+	TotalEvents              int                `bson:"totalEvents"`
+	TotalLikes               int                `bson:"totalLikes"`
+	TotalFavorites           int                `bson:"totalFavorites"`
+	TotalShares              int                `bson:"totalShares"`
+	TopicAffinities          map[string]float64 `bson:"topicAffinities"`
+	AudienceAffinities       map[string]float64 `bson:"audienceAffinities"`
+	FormatAffinities         map[string]float64 `bson:"formatAffinities"`
+	EntityAffinities         map[string]float64 `bson:"entityAffinities"`
+	AvgEngagementDepth       float64            `bson:"avgEngagementDepth"`
+	DepthDistribution        map[string]int     `bson:"depthDistribution"`
+	SourceDistribution       map[string]int     `bson:"sourceDistribution"`
+	CircleTagAffinities      map[string]float64 `bson:"circleTagAffinities"`
+	SocialInterestScore      float64            `bson:"socialInterestScore"`
 	EntityInstanceAffinities map[string]float64 `bson:"entityInstanceAffinities"`
-	TypeImpressions    map[string]int        `bson:"typeImpressions"`
-	TypeEngagements    map[string]int        `bson:"typeEngagements"`
+	TypeImpressions          map[string]int     `bson:"typeImpressions"`
+	TypeEngagements          map[string]int     `bson:"typeEngagements"`
+	// Segments is the rule-based population membership (top-level field), set by
+	// InterestProfileAggregator.Recompute. Drives policy segment targeting.
+	Segments []string `bson:"segments"`
 }
 
 func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*UserFeatures, error) {
 	var doc struct {
-		UserID       string `bson:"userId"`
+		UserID       string   `bson:"userId"`
+		Segments     []string `bson:"segments"`
 		UserFeatures struct {
-			TagInteraction     map[string]int     `bson:"tagInteraction"`
-			AuthorInteraction  map[string]int     `bson:"authorInteraction"`
-			TotalEvents        int                `bson:"totalEvents"`
-			TotalLikes         int                `bson:"totalLikes"`
-			TotalFavorites     int                `bson:"totalFavorites"`
-			TotalShares        int                `bson:"totalShares"`
-			TopicAffinities    map[string]float64 `bson:"topicAffinities"`
-			AudienceAffinities map[string]float64 `bson:"audienceAffinities"`
-			FormatAffinities   map[string]float64 `bson:"formatAffinities"`
-			EntityAffinities   map[string]float64 `bson:"entityAffinities"`
-			AvgEngagementDepth float64            `bson:"avgEngagementDepth"`
-			DepthDistribution  map[string]int     `bson:"depthDistribution"`
-			SourceDistribution map[string]int     `bson:"sourceDistribution"`
-			CircleTagAffinities  map[string]float64 `bson:"circleTagAffinities"`
-			SocialInterestScore  float64            `bson:"socialInterestScore"`
+			TagInteraction           map[string]int     `bson:"tagInteraction"`
+			AuthorInteraction        map[string]int     `bson:"authorInteraction"`
+			TotalEvents              int                `bson:"totalEvents"`
+			TotalLikes               int                `bson:"totalLikes"`
+			TotalFavorites           int                `bson:"totalFavorites"`
+			TotalShares              int                `bson:"totalShares"`
+			TopicAffinities          map[string]float64 `bson:"topicAffinities"`
+			AudienceAffinities       map[string]float64 `bson:"audienceAffinities"`
+			FormatAffinities         map[string]float64 `bson:"formatAffinities"`
+			EntityAffinities         map[string]float64 `bson:"entityAffinities"`
+			AvgEngagementDepth       float64            `bson:"avgEngagementDepth"`
+			DepthDistribution        map[string]int     `bson:"depthDistribution"`
+			SourceDistribution       map[string]int     `bson:"sourceDistribution"`
+			CircleTagAffinities      map[string]float64 `bson:"circleTagAffinities"`
+			SocialInterestScore      float64            `bson:"socialInterestScore"`
 			EntityInstanceAffinities map[string]float64 `bson:"entityInstanceAffinities"`
-			TypeImpressions    map[string]int `bson:"typeImpressions"`
-			TypeEngagements    map[string]int `bson:"typeEngagements"`
+			TypeImpressions          map[string]int     `bson:"typeImpressions"`
+			TypeEngagements          map[string]int     `bson:"typeEngagements"`
 		} `bson:"userFeatures"`
 	}
 
@@ -464,6 +501,7 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 
 	return &UserFeatures{
 		UserID:                   doc.UserID,
+		Segments:                 doc.Segments,
 		TagInteraction:           doc.UserFeatures.TagInteraction,
 		AuthorInteraction:        doc.UserFeatures.AuthorInteraction,
 		TotalEvents:              doc.UserFeatures.TotalEvents,
@@ -546,6 +584,7 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 		SourceDistribution:       raw.SourceDistribution,
 		CircleTagAffinities:      raw.CircleTagAffinities,
 		SocialInterestScore:      raw.SocialInterestScore,
+		Segments:                 raw.Segments,
 	}
 	s.cache.put(userID, vec)
 	return vec, nil

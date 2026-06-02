@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       validation_profile:
-        description: '验证 profile：pr_light / manual_full / nightly_full（影响环境集与是否要求全平台）'
+        description: '验证 profile：pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod'
         required: false
         default: pr_light
         type: choice
@@ -19,6 +19,8 @@ on:
           - pr_light
           - manual_full
           - nightly_full
+          - release_candidate
+          - mainline_auto_prod
       env_json:
         description: '矩阵环境 JSON 数组，例如 ["alpha","beta","gamma"] 或 ["gamma"]（留空则按 profile 决定）'
         required: false
@@ -37,13 +39,18 @@ on:
         required: false
         default: ''
       matrix_kind:
-        description: assistant 或 chat-avatar（留空则按 profile 决定）
+        description: assistant / chat-avatar / JSON 数组（留空则按 profile 决定）
         required: false
         default: ''
   workflow_call:
     inputs:
+      checkout_ref:
+        description: Caller commit SHA/ref for checkout
+        required: false
+        type: string
+        default: ''
       validation_profile:
-        description: 'pr_light / manual_full / nightly_full'
+        description: 'pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod'
         required: false
         type: string
         default: pr_light
@@ -55,8 +62,8 @@ on:
       allow_missing_platforms:
         description: '是否允许缺席平台跳过 (overrides profile default)'
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: ''
       gamma_base_url:
         description: '可选覆盖 gamma 网关（默认走 secrets.GAMMA_BASE_URL）'
         required: false
@@ -68,10 +75,38 @@ on:
         type: string
         default: ''
       matrix_kind:
-        description: 'assistant or chat-avatar (overrides profile default)'
+        description: 'assistant / chat-avatar / JSON array (overrides profile default)'
         required: false
         type: string
         default: ''
+    outputs:
+      discover_duration_seconds:
+        description: 发现设备阶段耗时
+        value: ${{ jobs.discover_devices.outputs.duration_seconds }}
+      mobile_duration_seconds:
+        description: 设备矩阵阶段耗时
+        value: ${{ jobs.mobile_matrix.outputs.duration_seconds }}
+      android_result:
+        description: Android 矩阵结果
+        value: ${{ jobs.mobile_matrix.outputs.android_result }}
+      ios_result:
+        description: iOS 矩阵结果
+        value: ${{ jobs.mobile_matrix.outputs.ios_result }}
+      allow_missing_platforms:
+        description: 当前 profile 是否允许缺席平台
+        value: ${{ jobs.discover_devices.outputs.allow_missing_platforms }}
+      has_android:
+        description: 是否发现 Android 设备
+        value: ${{ jobs.discover_devices.outputs.has_android }}
+      has_ios:
+        description: 是否发现 iOS 设备
+        value: ${{ jobs.discover_devices.outputs.has_ios }}
+      critical_path_seconds:
+        description: discover + mobile 的关键路径时长
+        value: ${{ jobs.app_env_device_matrix_summary.outputs.critical_path_seconds }}
+      summary_result:
+        description: 汇总 gate 结果
+        value: ${{ jobs.app_env_device_matrix_summary.outputs.summary_result }}
 
 concurrency:
   group: app-env-device-matrix-${{ github.event.pull_request.number || github.ref }}
@@ -84,9 +119,11 @@ jobs:
     runs-on: [self-hosted, macOS]
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+      profile: ${{ steps.discover.outputs.profile }}
       env_json: ${{ steps.discover.outputs.env_json }}
       allow_missing_platforms: ${{ steps.discover.outputs.allow_missing_platforms }}
       matrix_kind: ${{ steps.discover.outputs.matrix_kind }}
+      artifact_key: ${{ steps.discover.outputs.artifact_key }}
       gamma_base_url: ${{ steps.discover.outputs.gamma_base_url }}
       media_base_url: ${{ steps.discover.outputs.media_base_url }}
       has_android: ${{ steps.discover.outputs.has_android }}
@@ -98,8 +135,11 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - name: 解析当前触发下的矩阵默认值（按 validation_profile 分层）
-        id: defaults
+        id: discover_defaults
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_PROFILE: ${{ inputs.validation_profile }}
@@ -113,30 +153,68 @@ jobs:
           if [ "${EVENT_NAME}" = "pull_request" ]; then
             PROFILE="pr_light"
           fi
-          case "${PROFILE}" in
-            nightly_full)
-              DEFAULT_ENV_JSON='["alpha","beta","gamma"]'
-              DEFAULT_ALLOW_MISSING="false"
-              DEFAULT_MATRIX_KIND="assistant"
-              ;;
-            manual_full)
-              DEFAULT_ENV_JSON='["gamma"]'
-              DEFAULT_ALLOW_MISSING="false"
-              DEFAULT_MATRIX_KIND="assistant"
-              ;;
-            *)
-              DEFAULT_ENV_JSON='["alpha","beta"]'
-              DEFAULT_ALLOW_MISSING="true"
-              DEFAULT_MATRIX_KIND="assistant"
-              ;;
-          esac
+          python3 agent_ops/ci/resolve_gamma_validation_profile.py \
+            --profile "${PROFILE}" \
+            --github-output "$GITHUB_OUTPUT" >/tmp/app-env-device-matrix-profile.json
+          DEFAULT_ENV_JSON="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/app-env-device-matrix-profile.json').read_text(encoding='utf-8'))
+          print(json.dumps(payload.get('device_envs') or [], ensure_ascii=False))
+          PY
+          )"
+          DEFAULT_ALLOW_MISSING="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/app-env-device-matrix-profile.json').read_text(encoding='utf-8'))
+          print('true' if bool(payload.get('allow_missing_platforms', False)) else 'false')
+          PY
+          )"
+          DEFAULT_MATRIX_KIND="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/app-env-device-matrix-profile.json').read_text(encoding='utf-8'))
+          print(str(payload.get('default_matrix_kind', '') or 'assistant'))
+          PY
+          )"
+          DEFAULT_MATRIX_KINDS_JSON="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/app-env-device-matrix-profile.json').read_text(encoding='utf-8'))
+          print(json.dumps(payload.get('matrix_kinds') or ['assistant'], ensure_ascii=False))
+          PY
+          )"
           ENV_JSON="${INPUT_ENV_JSON:-${DEFAULT_ENV_JSON}}"
           ALLOW_MISSING="${INPUT_ALLOW_MISSING_PLATFORMS:-${DEFAULT_ALLOW_MISSING}}"
-          MATRIX_KIND="${INPUT_MATRIX_KIND:-${DEFAULT_MATRIX_KIND}}"
+          MATRIX_KIND="${INPUT_MATRIX_KIND:-${DEFAULT_MATRIX_KINDS_JSON}}"
+          ARTIFACT_KEY="$(MATRIX_KIND_VALUE="${MATRIX_KIND}" python3 - <<'PY'
+          import json
+          import os
+          import re
+
+          raw = (os.environ.get('MATRIX_KIND_VALUE') or '').strip()
+          if not raw:
+              print('assistant')
+              raise SystemExit(0)
+          if raw.startswith('['):
+              items = [str(item).strip() for item in json.loads(raw) if str(item).strip()]
+          else:
+              items = [item.strip() for item in raw.split(',') if item.strip()]
+          if len(items) != 1:
+              print('multi-kind')
+              raise SystemExit(0)
+          print(re.sub(r'[^a-zA-Z0-9._-]+', '-', items[0]) or 'assistant')
+          PY
+          )"
           echo "profile=${PROFILE}" >> "$GITHUB_OUTPUT"
           echo "env_json=${ENV_JSON}" >> "$GITHUB_OUTPUT"
           echo "allow_missing_platforms=${ALLOW_MISSING}" >> "$GITHUB_OUTPUT"
           echo "matrix_kind=${MATRIX_KIND}" >> "$GITHUB_OUTPUT"
+          echo "artifact_key=${ARTIFACT_KEY}" >> "$GITHUB_OUTPUT"
           echo "gamma_base_url=${INPUT_GAMMA_BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "media_base_url=${INPUT_MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
       - name: 校验 self-hosted macOS runner
@@ -215,10 +293,11 @@ jobs:
           )
           android = data.get("android") or []
           ios = data.get("ios") or []
-          env_json = """${{ steps.defaults.outputs.env_json }}"""
-          matrix_kind = """${{ steps.defaults.outputs.matrix_kind }}"""
-          gamma_base_url = """${{ steps.defaults.outputs.gamma_base_url }}"""
-          media_base_url = """${{ steps.defaults.outputs.media_base_url }}"""
+          env_json = """${{ steps.discover_defaults.outputs.env_json }}"""
+          matrix_kind = """${{ steps.discover_defaults.outputs.matrix_kind }}"""
+          artifact_key = """${{ steps.discover_defaults.outputs.artifact_key }}"""
+          gamma_base_url = """${{ steps.discover_defaults.outputs.gamma_base_url }}"""
+          media_base_url = """${{ steps.discover_defaults.outputs.media_base_url }}"""
 
           def fmt(items):
               return ", ".join(f'{item["name"]}({item["id"]})' for item in items)
@@ -231,12 +310,14 @@ jobs:
           summary = "；".join(summary_parts) if summary_parts else "未发现 iOS/Android 设备"
 
           with open(output_path, "a", encoding="utf-8") as fh:
+              print('profile=${{ steps.discover_defaults.outputs.profile }}', file=fh)
               print(f'env_json={env_json}', file=fh)
               print(
-                  'allow_missing_platforms=${{ steps.defaults.outputs.allow_missing_platforms }}',
+                  'allow_missing_platforms=${{ steps.discover_defaults.outputs.allow_missing_platforms }}',
                   file=fh,
               )
               print(f'matrix_kind={matrix_kind}', file=fh)
+              print(f'artifact_key={artifact_key}', file=fh)
               print(f'gamma_base_url={gamma_base_url}', file=fh)
               print(f'media_base_url={media_base_url}', file=fh)
               print(f'has_android={"true" if android else "false"}', file=fh)
@@ -386,13 +467,43 @@ jobs:
             fi
             sleep $((attempts * 5))
           done
+      - name: Bootstrap beta-local stack for mainline auto prod
+        if: ${{ needs.discover_devices.outputs.profile == 'mainline_auto_prod' }}
+        working-directory: ${{ github.workspace }}/repo
+        env:
+          AUTO_OPEN_OPS: "0"
+          START_APP: "0"
+        run: |
+          set -euo pipefail
+          python3 agent_ops/deploy/stackctl.py package --env beta --include-services --report-dir artifacts/stackctl/beta/mainline-package
+          python3 agent_ops/deploy/stackctl.py up --target beta-local --report-dir artifacts/stackctl/beta/mainline-up
+          python3 agent_ops/deploy/stackctl.py health --target beta-local --scope full --report-dir artifacts/stackctl/beta/mainline-health
+          python3 agent_ops/deploy/stackctl.py inspect --target beta-local --scope all --report-dir artifacts/stackctl/beta/mainline-inspect
       - id: run_matrix
         name: Run mobile matrix environments
         working-directory: ${{ github.workspace }}/repo
+        env:
+          BETA_LOCAL_GATEWAY_BASE_URL: http://127.0.0.1:18000
+          BETA_LOCAL_MEDIA_BASE_URL: http://127.0.0.1:18100
+          ASSISTANT_MATRIX_GATEWAY_BASE_URL: http://127.0.0.1:18000
+          ASSISTANT_MATRIX_GATEWAY_HEALTH_URL: http://127.0.0.1:18000
+          CHAT_AVATAR_GATEWAY_BASE_URL: http://127.0.0.1:18000
         run: |
           ENV_NAMES="$(python3 - <<'PY'
           import json
           print("\n".join(json.loads("""${{ needs.discover_devices.outputs.env_json }}""")))
+          PY
+          )"
+          MATRIX_KINDS="$(python3 - <<'PY'
+          import json
+          raw = """${{ needs.discover_devices.outputs.matrix_kind }}""".strip()
+          if not raw:
+              items = ["assistant"]
+          elif raw.startswith('['):
+              items = [str(item).strip() for item in json.loads(raw) if str(item).strip()]
+          else:
+              items = [item.strip() for item in raw.split(',') if item.strip()]
+          print("\n".join(items or ["assistant"]))
           PY
           )"
           failures=0
@@ -402,16 +513,39 @@ jobs:
             local platform="$1"
             local result_var="$2"
             local step_failures=0
+            local fail_fast=0
             while IFS= read -r env_name; do
               [ -n "${env_name}" ] || continue
-              echo "::group::Run ${env_name} on ${platform} (self-hosted)"
-              export API_CONTRACT_ENV="${env_name}"
-              if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
-                python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --platform "${platform}" || step_failures=$((step_failures + 1))
-              else
-                python3 agent_ops/assistant/run_assistant_device_matrix_ci.py --platform "${platform}" || step_failures=$((step_failures + 1))
+              while IFS= read -r matrix_kind; do
+                [ -n "${matrix_kind}" ] || continue
+                echo "::group::Run ${env_name}/${matrix_kind} on ${platform} (self-hosted)"
+                export API_CONTRACT_ENV="${env_name}"
+                set +e
+                if [ "${matrix_kind}" = "chat-avatar" ]; then
+                  python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --platform "${platform}"
+                  matrix_exit_code=$?
+                else
+                  python3 agent_ops/assistant/run_assistant_device_matrix_ci.py --platform "${platform}"
+                  matrix_exit_code=$?
+                fi
+                set -e
+                if [ "${matrix_exit_code}" -eq 86 ]; then
+                  echo "::warning::${platform}/${env_name}/${matrix_kind} hit fail-fast category; stop remaining ${platform} matrix items."
+                  step_failures=$((step_failures + 1))
+                  fail_fast=1
+                elif [ "${matrix_exit_code}" -ne 0 ]; then
+                  step_failures=$((step_failures + 1))
+                fi
+                echo "::endgroup::"
+                if [ "${fail_fast}" -eq 1 ]; then
+                  break
+                fi
+              done <<EOF_KINDS
+          ${MATRIX_KINDS}
+          EOF_KINDS
+              if [ "${fail_fast}" -eq 1 ]; then
+                break
               fi
-              echo "::endgroup::"
             done <<EOF
           ${ENV_NAMES}
           EOF
@@ -444,24 +578,34 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-mobile
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
           path: |
             ${{ github.workspace }}/repo/artifacts/device-matrix/*-android.json
             ${{ github.workspace }}/repo/artifacts/device-matrix/*-ios.json
             ${{ github.workspace }}/repo/artifacts/device-matrix/assistant_device_matrix_logs/**
             ${{ github.workspace }}/repo/artifacts/device-matrix/chat-avatar/**
+            ${{ github.workspace }}/repo/artifacts/stackctl/beta/**
           if-no-files-found: ignore
           compression-level: 0
+      - name: Teardown beta-local stack after mainline auto prod
+        if: ${{ always() && needs.discover_devices.outputs.profile == 'mainline_auto_prod' }}
+        continue-on-error: true
+        working-directory: ${{ github.workspace }}/repo
+        run: |
+          python3 agent_ops/deploy/stackctl.py down \
+            --target beta-local \
+            --report-dir artifacts/stackctl/beta/mainline-down
       - name: Retry mobile matrix report upload
         if: always() && steps.upload_mobile_matrix_report.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-mobile
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
           path: |
             ${{ github.workspace }}/repo/artifacts/device-matrix/*-android.json
             ${{ github.workspace }}/repo/artifacts/device-matrix/*-ios.json
             ${{ github.workspace }}/repo/artifacts/device-matrix/assistant_device_matrix_logs/**
             ${{ github.workspace }}/repo/artifacts/device-matrix/chat-avatar/**
+            ${{ github.workspace }}/repo/artifacts/stackctl/beta/**
           if-no-files-found: ignore
           compression-level: 0
           overwrite: true
@@ -483,24 +627,33 @@ jobs:
       - mobile_matrix
     if: always()
     runs-on: ubuntu-latest
+    outputs:
+      critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
+      summary_result: ${{ steps.summary.outputs.result }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - name: 输出 App Env Device Matrix 耗时摘要
+        id: timing
         env:
           SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
           DISCOVER_SECONDS: ${{ needs.discover_devices.outputs.duration_seconds }}
           MOBILE_SECONDS: ${{ needs.mobile_matrix.outputs.duration_seconds }}
         run: |
           if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
+            echo "critical_path_seconds=0" >> "$GITHUB_OUTPUT"
             python3 agent_ops/ci/render_ci_timing_summary.py \
               --gate-key 05.app_env_device_matrix_pr \
               --title "05. App Env Device Matrix" \
               --critical-path-seconds 0 \
               --phase "pr_default_skip=0" \
               --note "PR 默认跳过 self-hosted mobile matrix；启用后以 discover + 设备矩阵 artifacts 为准。" \
+              --write-json "artifacts/ci-timing/app-env-device-matrix-summary.json" \
               --write-step-summary
           else
             CRITICAL_PATH_SECONDS=$(( ${DISCOVER_SECONDS:-0} + ${MOBILE_SECONDS:-0} ))
+            echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
             python3 agent_ops/ci/render_ci_timing_summary.py \
               --gate-key 05.app_env_device_matrix_pr \
               --title "05. App Env Device Matrix" \
@@ -508,9 +661,11 @@ jobs:
               --phase "discover_devices=${DISCOVER_SECONDS:-0}" \
               --phase "mobile_matrix=${MOBILE_SECONDS:-0}" \
               --note "self-hosted matrix 已统一为单 runner 单 checkout 的 mobile job；PR 默认允许缺席平台跳过，已发现的平台必须成功，详细耗时保存在 device-matrix artifacts。" \
+              --write-json "artifacts/ci-timing/app-env-device-matrix-summary.json" \
               --write-step-summary
           fi
       - name: 汇总并阻断失败项
+        id: summary
         env:
           SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
           DISCOVER: ${{ needs.discover_devices.result }}
@@ -522,6 +677,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
             echo "::notice::self-hosted mobile matrix is disabled for this PR; summary gate passes by default."
             exit 0
           fi
@@ -536,6 +692,7 @@ jobs:
             --has-android "${HAS_ANDROID}" \
             --has-ios "${HAS_IOS}" \
             "${args[@]}"
+          echo "result=success" >> "$GITHUB_OUTPUT"
       - name: 下载设备矩阵 artifacts
         if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         uses: actions/download-artifact@v4
@@ -549,3 +706,11 @@ jobs:
             --artifact-root "${RUNNER_TEMP}/app-env-device-matrix-artifacts" \
             --report-glob "**/*-android.json" \
             --report-glob "**/*-ios.json"
+      - name: Upload app env timing summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-env-device-matrix-timing-summary
+          path: artifacts/ci-timing/app-env-device-matrix-summary.json
+          if-no-files-found: error
+          compression-level: 0

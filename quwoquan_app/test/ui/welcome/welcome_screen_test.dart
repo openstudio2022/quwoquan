@@ -46,6 +46,21 @@ void main() {
   }
 
   group('WelcomeScreen · 主动式 AI Native 升级', () {
+    testWidgets('首帧即展示可识别品牌内容，花瓣不再从纯空状态开始', (tester) async {
+      await tester.pumpWidget(wrap());
+
+      expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
+      expect(find.text(UITextConstants.welcomeMainSlogan), findsOneWidget);
+
+      final flower = tester.widget<WelcomeFlowerMark>(
+        find.byType(WelcomeFlowerMark),
+      );
+      expect(flower.petalProgresses, hasLength(8));
+      expect(flower.petalProgresses.every((value) => value > 0.7), isTrue);
+
+      await settle(tester);
+    });
+
     testWidgets('中央渲染新主 slogan「遇见同趣，绽放热爱」', (tester) async {
       await tester.pumpWidget(wrap());
       await tester.pump();

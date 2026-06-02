@@ -3,7 +3,7 @@
 ## 功能说明
 - 提供统一配置运行时能力，支持 env/file/secrets/config-center 多源读取与优先级合并。
 - 提供动态刷新、版本快照、灰度发布与回滚审计，保障系统参数可控变更。
-- 提供四环境 topology / packaging / host allowlist / secret scope 的统一真相源与门禁。
+- 提供多环境 topology / packaging / host allowlist / secret scope 的统一真相源与门禁。
 - 提供面向 Cursor / CLI / CI 复用的环境运维命令面与机器可读报告契约。
 
 ## 约束

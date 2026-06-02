@@ -15,6 +15,7 @@
 | `metadata-driven-client-data-contract` | 客户端 **消费侧** 与 `contracts/metadata` codegen 对齐：UI/Mock/Remote 同源类型与缺口清单 |
 | `article-editor-refactor` | 沉浸文章编辑器完全重构：WYSIWYG 卡片编辑、底栏五工具 + 撤销重做、排版/样式/序号/图与环绕等（规格见同目录 `article-editor-refactor/spec.md`） |
 | `local-cache-architecture` | 客户端对象级缓存、查询快照、资源缓存、端云同步一致性与用户分层清理入口 |
+| `public-content-web-entry` | 公开内容 Web 入口闭环：公开 HTML SEO 投影、站外 HTTPS 分享、PC 内容浏览与安装转化 |
 
 ## 职责边界
 
@@ -25,7 +26,7 @@
 ## 与父/子节点关系
 
 - 父节点：`runtime` L1（基础设施与运行时层）
-- 子节点：`app-locale-infrastructure`（L3）、`app-theme-infrastructure`（L3，待建）、`error-permission-display-semantics`（L3）、`page-layout-semantics`（L3）、`dart-semantic-gate`（L3）、`ios-native-page-enforcement`（L3）、`metadata-driven-client-data-contract`（L3）、`article-editor-refactor`（L3）、`local-cache-architecture`（L3）
+- 子节点：`app-locale-infrastructure`（L3）、`app-theme-infrastructure`（L3，待建）、`error-permission-display-semantics`（L3）、`page-layout-semantics`（L3）、`dart-semantic-gate`（L3）、`ios-native-page-enforcement`（L3）、`metadata-driven-client-data-contract`（L3）、`article-editor-refactor`（L3）、`local-cache-architecture`（L3）、`public-content-web-entry`（L3）
 
 ## 约束
 

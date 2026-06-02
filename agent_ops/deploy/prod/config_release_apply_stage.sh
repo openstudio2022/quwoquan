@@ -74,13 +74,16 @@ echo "$gate_output"
 case "$gate_code" in
   0)
     echo "OK: stage=$STEP decision=continue service=$SERVICE"
+    exit 0
     ;;
   10)
     echo "WARN: stage=$STEP decision=pause service=$SERVICE"
+    exit 10
     ;;
   20)
     echo "WARN: stage=$STEP decision=rollback service=$SERVICE -> rolling back to $FROM_CONFIG"
     bash "$ROOT/agent_ops/deploy/prod/config_release_rollback.sh" --service "$SERVICE" --to-config-version "$FROM_CONFIG"
+    exit 20
     ;;
   *)
     echo "FAIL: unexpected SLO gate exit code: $gate_code" >&2

@@ -80,6 +80,36 @@ void main() {
       expect(groups.first.name, isNotEmpty);
     });
 
+    test('getObjectPageBundle 返回统一对象页网络契约', () async {
+      const id = 'homepage_sight_west_lake';
+      final bundle = await repo.getObjectPageBundle(
+        id,
+        referralSource: 'entity_page',
+        feedRequestId: 'feed-1',
+        recommendationTraceId: 'trace-1',
+        experimentBucket: 'A',
+        rolloutCohort: 'city-hz',
+      );
+
+      expect(bundle.objectType, 'homepage');
+      expect(bundle.objectId, id);
+      expect(bundle.canonicalEntityId, 'entity:homepage:$id');
+      expect(bundle.objectPageTemplate, isNotEmpty);
+      expect(bundle.tagRefs, isNotEmpty);
+      expect(bundle.intersectionReasons, isNotEmpty);
+      expect(bundle.intersections, isNotEmpty);
+      expect(bundle.intersections.first.evidenceItems, isNotEmpty);
+      expect(bundle.intersections.first.confidenceLabel, isNotEmpty);
+      expect(bundle.highlightItems, isNotEmpty);
+      expect(bundle.relatedObjects, isNotEmpty);
+      expect(bundle.relationEdges, isNotEmpty);
+      expect(bundle.assistantContext?.referralSource, 'entity_page');
+      expect(bundle.assistantContext?.feedRequestId, 'feed-1');
+      expect(bundle.assistantContext?.relationEdgeIds, isNotEmpty);
+      expect(bundle.rolloutContext?.cohort, 'city-hz');
+      expect(bundle.rolloutContext?.relationEvidenceEnabled, isTrue);
+    });
+
     test('getHomepageRelatedGroups 缺省 groups 时返回空列表', () async {
       final r = MockHomepageRepository();
       final created = await r.intakeHomepageCandidate(
@@ -312,6 +342,115 @@ void main() {
       expect(detail.id, 'h-min');
       expect(detail.homepageType, 'sight');
       expect(detail.title, 'Minimal');
+    });
+
+    test('getObjectPageBundle 解析 query 上下文和嵌套 projection', () async {
+      Uri? capturedUri;
+      final client = MockClient((request) async {
+        capturedUri = request.url;
+        return http.Response(
+          json.encode({
+            'objectType': 'homepage',
+            'objectId': 'h-bundle',
+            'canonicalEntityId': 'entity:h-bundle',
+            'title': 'Bundle',
+            'objectPageTemplate': 'campus',
+            'tagRefs': ['publish/v1/tags/campus'],
+            'intersectionReasons': [
+              {
+                'dimension': 'interest',
+                'displayText': '你们都关注校园摄影',
+                'tagRefs': ['publish/v1/tags/campus'],
+                'sharedCount': 1,
+              },
+            ],
+            'intersections': [
+              {
+                'intersectionId': 'i1',
+                'dimension': 'interest',
+                'objectKind': 'homepage',
+                'objectId': 'h-bundle',
+                'shortLabel': '共同关注',
+                'evidenceLabel': '校园摄影',
+                'confidenceLabel': '公开资料',
+                'tagRefs': ['publish/v1/tags/campus'],
+                'evidenceItems': [
+                  {
+                    'evidenceId': 'ev1',
+                    'evidenceType': 'tag',
+                    'evidenceObjectId': 'publish/v1/tags/campus',
+                    'evidenceLabel': '校园摄影',
+                    'source': 'tagRef',
+                    'visibility': 'public',
+                  },
+                ],
+              },
+            ],
+            'highlightItems': [
+              {'postId': 'p1', 'title': '校园看点'},
+            ],
+            'relatedObjects': [
+              {'circleId': 'c1', 'name': '摄影圈', 'memberCount': 8},
+            ],
+            'relationEdges': [
+              {
+                'edgeId': 'e1',
+                'edgeType': 'circle_under_entity',
+                'sourceObjectType': 'circle',
+                'sourceObjectId': 'c1',
+                'targetObjectType': 'homepage',
+                'targetObjectId': 'h-bundle',
+                'canonicalEntityId': 'entity:h-bundle',
+                'confidence': 0.9,
+              },
+            ],
+            'assistantContext': {
+              'objectType': 'homepage',
+              'objectId': 'h-bundle',
+              'canonicalEntityId': 'entity:h-bundle',
+              'referralSource': 'entity_page',
+              'feedRequestId': 'feed-1',
+            },
+            'rolloutContext': {
+              'enabled': true,
+              'cohort': 'cohort-a',
+              'relationEvidenceEnabled': true,
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final repo = RemoteHomepageRepository(
+        httpClient: CloudHttpClient(client: client),
+        baseUrl: 'https://gw.test',
+      );
+
+      final bundle = await repo.getObjectPageBundle(
+        'h-bundle',
+        referralSource: 'entity_page',
+        feedRequestId: 'feed-1',
+        recommendationTraceId: 'trace-1',
+        experimentBucket: 'A',
+        rolloutCohort: 'cohort-a',
+      );
+
+      expect(capturedUri?.path, '/v1/homepages/h-bundle/object-page-bundle');
+      expect(capturedUri?.queryParameters['referralSource'], 'entity_page');
+      expect(capturedUri?.queryParameters['feedRequestId'], 'feed-1');
+      expect(capturedUri?.queryParameters['recommendationTraceId'], 'trace-1');
+      expect(capturedUri?.queryParameters['experimentBucket'], 'A');
+      expect(capturedUri?.queryParameters['rolloutCohort'], 'cohort-a');
+      expect(bundle.canonicalEntityId, 'entity:h-bundle');
+      expect(bundle.intersectionReasons.single.displayText, '你们都关注校园摄影');
+      expect(
+        bundle.intersections.single.evidenceItems.single.evidenceType,
+        'tag',
+      );
+      expect(bundle.intersections.single.confidenceLabel, '公开资料');
+      expect(bundle.relationEdges.single.edgeType, 'circle_under_entity');
+      expect(bundle.assistantContext?.feedRequestId, 'feed-1');
+      expect(bundle.rolloutContext?.relationEvidenceEnabled, isTrue);
     });
   });
 }

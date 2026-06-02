@@ -94,6 +94,8 @@
 
 Web 首屏以内容消费为主，承担「可读、可看、可转发」的轻量入口；高频互动、创作、RTC、来电、原生视频编辑等能力优先引导到 App。Web 不复制一套产品流程，仍复用同一 IA / route / surface / 埋点语义，只在布局密度、导航壳与安装提示上做差异。
 
+公开内容入口的完整闭环规格（Markdown 真相源、SEO HTML、站外 HTTPS 分享、PC Pinterest 体验）见 [`public-content-web-entry/spec.md`](../public-content-web-entry/spec.md)。本文件只保留跨平台壳层与能力防腐约束；SEO HTML 不能由 Flutter Web 单独承担，必须从同一 `articleMarkdown` 派生公开 HTML 投影。
+
 ### 断点语义扩展
 
 `AppSpacing` 增加 `wideBreakpoint=1024` 与 `responsiveWideValue`，形成四级语义：

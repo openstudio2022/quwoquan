@@ -8,7 +8,7 @@ events:
     consumers: [recommendation-engine, notification-service, assistant-service]
     channel: event_store
     payload_entity: Post
-    payload_fields: [_id, authorId, contentType, contentIdentity, title, tagRefs, entityRefs, location, primaryHomepageId, circleIds, groupId, nodeId, createdAt]
+    payload_fields: [_id, authorId, contentType, contentIdentity, title, tagRefs, entityRefs, location, primaryHomepageId, circleIds, groupId, nodeId, createdAt, sourceTaskId]
     recommend_impact: content_index_refresh
 
   - name: PostPublished
@@ -17,7 +17,7 @@ events:
     consumers: [recommendation-engine, notification-service]
     channel: event_store
     payload_entity: Post
-    payload_fields: [_id, authorId, contentType, contentIdentity, status, primaryHomepageId, groupId, nodeId, publishedAt, lastActiveAt]
+    payload_fields: [_id, authorId, contentType, contentIdentity, status, primaryHomepageId, groupId, nodeId, publishedAt, lastActiveAt, sourceTaskId]
 
   - name: PostUpdated
     description: 内容更新

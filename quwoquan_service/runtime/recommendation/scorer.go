@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/rand"
 	"time"
+
+	"quwoquan_service/runtime/recpolicy"
 )
 
 // ScoredCandidate is a candidate with a model-assigned score.
@@ -17,10 +19,14 @@ type ScoredCandidate struct {
 
 // ScoringFeatures packages all inputs needed by a scorer.
 type ScoringFeatures struct {
-	Session      *SessionState
-	User         *UserFeatureVector
-	Weights      ScoringWeights
-	ExploreRate  float64
+	Session *SessionState
+	User    *UserFeatureVector
+	Weights ScoringWeights
+	// Scorer carries the secondary coefficients (popularity sub-weights,
+	// freshness half-life, formula mix factors) resolved from the policy.
+	// Never hand-coded in the scorer; sourced from recpolicy.
+	Scorer        recpolicy.ScorerConfig
+	ExploreRate   float64
 	Deterministic bool // when true (e.g. cursor pagination), skip random explore boost for stable ordering
 }
 
@@ -42,6 +48,14 @@ type RuleScorer struct{}
 func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, candidates []ContentCandidate) ([]ScoredCandidate, error) {
 	now := time.Now()
 	w := features.Weights
+	sc := features.Scorer
+	// Half-life is policy-validated > 0; guard only against a zero-value
+	// ScorerConfig reaching here (would divide by zero in freshness decay).
+	halfLife := sc.FreshnessHalfLifeHours
+	if halfLife <= 0 {
+		halfLife = recpolicy.Baseline().Scorer.FreshnessHalfLifeHours
+		sc = recpolicy.Baseline().Scorer
+	}
 	session := features.Session
 	if session == nil {
 		session = &SessionState{}
@@ -81,21 +95,21 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		}
 		detail["longTermTagBoost"] = longTermTagBoost
 
-		// Popularity: log-scaled weighted engagement
+		// Popularity: log-scaled weighted engagement (coefficients from policy)
 		popularity := math.Log1p(
-			float64(c.ViewCount)*0.1 +
-				float64(c.LikeCount)*1.0 +
-				float64(c.CommentCount)*1.5 +
-				float64(c.ShareCount)*2.0,
+			float64(c.ViewCount)*sc.Popularity.ViewCoefficient +
+				float64(c.LikeCount)*sc.Popularity.LikeCoefficient +
+				float64(c.CommentCount)*sc.Popularity.CommentCoefficient +
+				float64(c.ShareCount)*sc.Popularity.ShareCoefficient,
 		)
 		detail["popularity"] = popularity
 
-		// Freshness: exponential decay, half-life 24h
+		// Freshness: exponential decay, half-life from policy
 		ageHours := now.Sub(c.PublishedAt).Hours()
 		if ageHours < 0 {
 			ageHours = 0
 		}
-		freshness := math.Exp(-ageHours / 24.0)
+		freshness := math.Exp(-ageHours / halfLife)
 		detail["freshness"] = freshness
 
 		// Exploration boost: random perturbation for diversity (disabled when Deterministic for cursor pagination)
@@ -108,7 +122,7 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		// User engagement rate bonus (active users get slightly different treatment)
 		engagementBonus := 0.0
 		if user != nil && user.EngagementRate > 0 {
-			engagementBonus = math.Log1p(user.EngagementRate) * 0.5
+			engagementBonus = math.Log1p(user.EngagementRate) * sc.EngagementBonusFactor
 		}
 		detail["engagementBonus"] = engagementBonus
 
@@ -117,12 +131,12 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		if user != nil && len(user.CircleTagAffinities) > 0 {
 			for _, tag := range c.Tags {
 				if aff, ok := user.CircleTagAffinities[tag]; ok {
-					socialPrior += aff * 0.5
+					socialPrior += aff * sc.CircleTagAffinityFactor
 				}
 			}
 		}
 		if user != nil && user.SocialInterestScore > 0 {
-			socialPrior += math.Log1p(user.SocialInterestScore) * 0.3
+			socialPrior += math.Log1p(user.SocialInterestScore) * sc.SocialInterestFactor
 		}
 		detail["socialPrior"] = socialPrior
 
@@ -131,7 +145,7 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		if session != nil && len(session.NegativeIDs) > 0 {
 			for _, tag := range c.Tags {
 				if tw, ok := session.TagWeights[tag]; ok && tw < 0 {
-					negativePenalty += math.Abs(tw) * 0.1
+					negativePenalty += math.Abs(tw) * sc.NegativePenaltyFactor
 				}
 			}
 		}
@@ -150,7 +164,7 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 			if user.EntityAffinities != nil {
 				for _, ref := range c.EntityRefs {
 					if aff, ok := user.EntityAffinities[ref]; ok {
-						entityAffinity += aff * 0.4
+						entityAffinity += aff * sc.EntityCategoryFactor
 					}
 				}
 			}
@@ -161,7 +175,7 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		enerBoost := 0.0
 		if user != nil && user.TypeENER != nil {
 			if ener, ok := user.TypeENER[c.ContentType]; ok && ener > 0 {
-				enerBoost = math.Log1p(ener*10) * 0.5
+				enerBoost = math.Log1p(ener*10) * sc.ENERBonusFactor
 			}
 		}
 		detail["enerBoost"] = enerBoost
@@ -193,7 +207,7 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		detail["audienceMatch"] = audienceMatch
 		detail["formatMatch"] = formatMatch
 
-		score := w.TagRelevance*(tagScore+longTermTagBoost*0.3) +
+		score := w.TagRelevance*(tagScore+longTermTagBoost*sc.LongTermTagBoostFactor) +
 			w.AuthorAffinity*authorAffinity +
 			w.Popularity*popularity +
 			w.Freshness*freshness +

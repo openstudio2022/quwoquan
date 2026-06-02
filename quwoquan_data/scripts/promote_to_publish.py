@@ -106,44 +106,42 @@ def promote_from_posts_root(posts_root: Path, dry_run: bool) -> tuple[int, int]:
     pd = publish_data()
     count = 0
     skipped = 0
-    for type_dir in sorted(posts_root.iterdir()):
-        if not type_dir.is_dir():
+    # 以 manifest.json 为锚定位 post 包：兼容 produce 面 posts/<type>/<标题>/<seq>/ 与历史单层 <type>/<ref>/。
+    for manifest_path in sorted(posts_root.rglob("manifest.json")):
+        topic_dir = manifest_path.parent
+        # 只接受真正的 post 包（含正文），排除 review/ 等 sidecar 子目录。
+        if not (topic_dir / "article.md").exists() and not (topic_dir / "gallery.md").exists():
             continue
-        content_type = type_dir.name
-        for topic_dir in sorted(type_dir.iterdir()):
-            if not topic_dir.is_dir():
-                continue
-            manifest_path = topic_dir / "manifest.json"
-            if not manifest_path.exists():
-                continue
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("reviewDecision") not in (None, "approved"):
-                print(f"[promote] SKIP (not approved): {topic_dir.name}")
-                skipped += 1
-                continue
+        rel = topic_dir.relative_to(posts_root)
+        content_type = rel.parts[0] if rel.parts else "article"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("reviewDecision") not in (None, "approved"):
+            print(f"[promote] SKIP (not approved): {rel}")
+            skipped += 1
+            continue
 
-            # 发布门：账本发布态 + 实体主页存在性。返回过滤后的 post 内容或 None（不可发布）。
-            verdict = apply_publish_filter(topic_dir, pd.root)
-            if not verdict.publishable:
-                print(f"[promote] SKIP (publish gate): {topic_dir.name} :: {verdict.reasons}")
-                skipped += 1
-                continue
-            if verdict.filtered_entities:
-                print(f"[promote] filtered entityRefs (no homepage): {verdict.filtered_entities}")
-            if verdict.discarded_assets:
-                print(f"[promote] discarded assets: {verdict.discarded_assets}")
+        # 发布门：账本发布态 + 实体主页存在性。返回过滤后的 post 内容或 None（不可发布）。
+        verdict = apply_publish_filter(topic_dir, pd.root)
+        if not verdict.publishable:
+            print(f"[promote] SKIP (publish gate): {rel} :: {verdict.reasons}")
+            skipped += 1
+            continue
+        if verdict.filtered_entities:
+            print(f"[promote] filtered entityRefs (no homepage): {verdict.filtered_entities}")
+        if verdict.discarded_assets:
+            print(f"[promote] discarded assets: {verdict.discarded_assets}")
 
-            resolved_type, angle, title, seq = _resolve_publish_target(
-                verdict.manifest, topic_dir.name
-            )
-            dst = _publish_post_dir(pd.root, resolved_type or content_type, angle, title, seq)
-            if dry_run:
-                print(f"[promote] would copy {topic_dir} -> {dst}")
-            else:
-                _remove_stale_publish_post(pd.root, resolved_type or content_type, title, seq, angle)
-                _copy_post_tree(topic_dir, dst)
-                verdict.write_into(dst)
-            count += 1
+        resolved_type, angle, title, seq = _resolve_publish_target(
+            verdict.manifest, topic_dir.name
+        )
+        dst = _publish_post_dir(pd.root, resolved_type or content_type, angle, title, seq)
+        if dry_run:
+            print(f"[promote] would copy {topic_dir} -> {dst}")
+        else:
+            _remove_stale_publish_post(pd.root, resolved_type or content_type, title, seq, angle)
+            _copy_post_tree(topic_dir, dst)
+            verdict.write_into(dst)
+        count += 1
 
     return count, skipped
 

@@ -13,12 +13,15 @@ import (
 
 	"gopkg.in/yaml.v3"
 	rtgov "quwoquan_service/runtime/governance"
+	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
+	rtmongo "quwoquan_service/runtime/mongodb"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	httpadapter "quwoquan_service/services/entity-service/internal/adapters/http"
 	"quwoquan_service/services/entity-service/internal/application"
+	"quwoquan_service/services/entity-service/internal/infrastructure/persistence"
 )
 
 type config struct {
@@ -28,6 +31,11 @@ type config struct {
 			Addr string `yaml:"addr"`
 		} `yaml:"http"`
 	} `yaml:"service"`
+
+	Mongo struct {
+		URI      string `yaml:"uri"`
+		Database string `yaml:"database"`
+	} `yaml:"mongo"`
 }
 
 func main() {
@@ -42,6 +50,24 @@ func main() {
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "entity-service", SamplingRatio: 0.1})
 	defer otelShutdown()
 
+	var stateStore application.HomepageStateStore
+	var mongoPing func(context.Context) error
+	mongoURI := getenvOrDefault("ENTITY_MONGO_URI", cfg.Mongo.URI)
+	if mongoURI != "" {
+		mongoDBName := getenvOrDefault("ENTITY_MONGO_DATABASE", cfg.Mongo.Database)
+		if mongoDBName == "" {
+			mongoDBName = "quwoquan_entity"
+		}
+		mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: mongoURI}, "entity-service")
+		stateStore = persistence.NewMongoHomepageStateStore(
+			mongoClient.Database(mongoDBName).Collection("homepage_state"),
+		)
+		mongoPing = func(hctx context.Context) error {
+			return mongoClient.Ping(hctx, nil)
+		}
+		defer mongoClient.Disconnect(ctx)
+	}
+
 	ioLogger := robs.NewIOAccessLogger(os.Stdout)
 	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, robs.TraceLogLevelInfo, nil)
 	if err != nil {
@@ -52,13 +78,14 @@ func main() {
 		log.Fatalf("entity-service exception logger init failed: %v", err)
 	}
 
-	handler := httpadapter.NewHandler(application.NewHomepageService()).Routes()
+	homepageService := application.NewHomepageServiceWithStore(ctx, stateStore)
+	handler := httpadapter.NewHandler(homepageService).Routes()
 	rootMux := http.NewServeMux()
-	rootMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
+	healthChecker := rthealth.NewChecker()
+	if mongoPing != nil {
+		healthChecker.Register("mongodb", mongoPing)
+	}
+	rootMux.HandleFunc("/healthz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
 	rootMux.Handle("/", handler)
 	serverCfg := rthttp.HTTPServerMiddlewareConfig{

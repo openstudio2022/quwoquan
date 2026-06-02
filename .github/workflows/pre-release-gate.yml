@@ -12,13 +12,14 @@ on:
   workflow_dispatch:
     inputs:
       validation_profile:
-        description: '验证 profile：pr_light（默认）或 manual_full'
+        description: '验证 profile：pr_light（默认）/ manual_full / mainline_auto_prod'
         required: false
         default: pr_light
         type: choice
         options:
           - pr_light
           - manual_full
+          - mainline_auto_prod
 
 concurrency:
   group: pre-release-${{ github.event.pull_request.number || github.ref }}
@@ -37,7 +38,7 @@ jobs:
         run: |
           PROFILE="${{ inputs.validation_profile || 'pr_light' }}"
           echo "profile=${PROFILE}" >> "$GITHUB_OUTPUT"
-          if [ "${PROFILE}" = "manual_full" ]; then
+          if [ "${PROFILE}" = "manual_full" ] || [ "${PROFILE}" = "mainline_auto_prod" ]; then
             echo "use_ecs_deploy=true" >> "$GITHUB_OUTPUT"
           else
             echo "use_ecs_deploy=false" >> "$GITHUB_OUTPUT"

@@ -25,6 +25,7 @@ type PostDoc struct {
 	GeneratorModel  string   `json:"generatorModel" bson:"generatorModel"`
 	ArticleMarkdown string   `json:"articleMarkdown" bson:"articleMarkdown"`
 	ArticleDigest   string   `json:"articleDigest" bson:"articleDigest"`
+	SourceTaskId    string   `json:"sourceTaskId" bson:"sourceTaskId"`
 }
 
 // EntityDoc 是灌入运行库的实体文档（与 publish entity _entity.json + page.md 对齐）。
@@ -37,6 +38,9 @@ type EntityDoc struct {
 	TagRefs   []string `json:"tagRefs" bson:"tagRefs"`
 	Page      string   `json:"page" bson:"page"`
 	HasPage   bool     `json:"hasPage" bson:"hasPage"`
+	// ConditionProfile 条件画像（L3 实体级 {regions/seasons/altitudeMeters}），从 _entity.json 透传到运行库。
+	ConditionProfile map[string]any `json:"conditionProfile" bson:"conditionProfile"`
+	SourceTaskId     string         `json:"sourceTaskId" bson:"sourceTaskId"`
 }
 
 // SampleBundle 是端云桥契约：某环境应灌入的 ref 子集。
@@ -79,6 +83,7 @@ type postManifest struct {
 	PublishTitle   string   `json:"publishTitle"`
 	PublishAngle   string   `json:"publishAngle"`
 	PublishSeq     int      `json:"publishSeq"`
+	SourceTaskId   string   `json:"sourceTaskId"`
 }
 
 // LoadPosts 从 publish/posts 加载文章；filter 非空时只保留其中的 postRef。
@@ -134,6 +139,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			GeneratorModel:  m.GeneratorModel,
 			ArticleMarkdown: article,
 			ArticleDigest:   m.ArticleDigest,
+			SourceTaskId:    m.SourceTaskId,
 		})
 		return nil
 	})
@@ -144,10 +150,12 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 }
 
 type entityFile struct {
-	Label   string   `json:"label"`
-	Domain  string   `json:"domain"`
-	Type    string   `json:"type"`
-	TagRefs []string `json:"tagRefs"`
+	Label            string         `json:"label"`
+	Domain           string         `json:"domain"`
+	Type             string         `json:"type"`
+	TagRefs          []string       `json:"tagRefs"`
+	ConditionProfile map[string]any `json:"conditionProfile"`
+	SourceTaskId     string         `json:"sourceTaskId"`
 }
 
 // LoadEntities 从 publish/entities 加载实体；filter 非空时只保留其中的 entityRef。
@@ -204,9 +212,11 @@ func LoadEntities(publishRoot string, filter map[string]bool) ([]EntityDoc, erro
 			Etype:     etype,
 			Name:      name,
 			Label:     label,
-			TagRefs:   ef.TagRefs,
-			Page:      page,
-			HasPage:   hasPage,
+			TagRefs:          ef.TagRefs,
+			Page:             page,
+			HasPage:          hasPage,
+			ConditionProfile: ef.ConditionProfile,
+			SourceTaskId:     ef.SourceTaskId,
 		})
 		return nil
 	})

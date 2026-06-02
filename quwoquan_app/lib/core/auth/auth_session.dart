@@ -1,11 +1,31 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+
+/// 派生隐私安全的设备 actor 标识（installId hash 派生，非原始设备 ID）。
+///
+/// 用带版本前缀的 salt 对 installId 做 SHA-256，取前 32 位 hex，既稳定可复算、
+/// 又不回传原始 installId/设备 ID。游客以此作为设备维度计数键；登录用户也携带。
+String deriveDeviceActorId(String installId) {
+  final trimmed = installId.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  final digest = sha256.convert(utf8.encode('qwq-device-actor-v1:$trimmed'));
+  return digest.toString().substring(0, 32);
+}
+
+void _syncDeviceActorId(String installId) {
+  AppTraceContextStore.instance.deviceActorId = deriveDeviceActorId(installId);
+}
 
 enum AuthSessionStatus { restoring, guest, authenticated }
 
@@ -212,6 +232,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   Future<void> restore() async {
     try {
       final stored = await _store.read();
+      _syncDeviceActorId(stored.installId);
       if (stored.accessToken.isNotEmpty &&
           stored.refreshToken.isNotEmpty &&
           stored.ownerId.isNotEmpty) {
@@ -248,6 +269,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   Future<void> applyLoginResult(AuthLoginResultDto result) async {
     await _store.saveLoginResult(result);
     final stored = await _store.read();
+    _syncDeviceActorId(stored.installId);
     state = AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: stored.accessToken,
@@ -263,6 +285,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   Future<void> continueAsGuest({AuthPromptReason? reason}) async {
     await _store.markLaunchPromptDismissed();
     final stored = await _store.read();
+    _syncDeviceActorId(stored.installId);
     state = AuthSessionState(
       status: AuthSessionStatus.guest,
       promptReason: reason,

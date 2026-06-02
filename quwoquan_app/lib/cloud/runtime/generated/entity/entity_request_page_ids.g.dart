@@ -11,6 +11,7 @@ class EntityRequestPageIds {
     'GetHomepageRelatedGroups': 'entity.homepage.related_groups',
     'GetHomepageReviewSummary': 'entity.homepage.review_summary',
     'GetHomepageShell': 'entity.homepage.shell',
+    'GetObjectPageBundle': 'entity.get.object.page.bundle',
     'IntakeHomepageCandidate': 'entity.homepage.candidate.intake',
     'PublishHomepageCandidate': 'entity.homepage.candidate.publish',
     'ReviewHomepageClaimRequest': 'entity.homepage.claim.review',
@@ -26,6 +27,7 @@ class EntityRequestPageIds {
   static const String getHomepageRelatedGroups = 'entity.homepage.related_groups';
   static const String getHomepageReviewSummary = 'entity.homepage.review_summary';
   static const String getHomepageShell = 'entity.homepage.shell';
+  static const String getObjectPageBundle = 'entity.get.object.page.bundle';
   static const String intakeHomepageCandidate = 'entity.homepage.candidate.intake';
   static const String publishHomepageCandidate = 'entity.homepage.candidate.publish';
   static const String reviewHomepageClaimRequest = 'entity.homepage.claim.review';

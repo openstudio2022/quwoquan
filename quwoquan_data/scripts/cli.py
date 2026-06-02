@@ -53,6 +53,7 @@ def main() -> None:
     from verify.handler import register_parser as reg_verify
     from annotate.handler import register_parser as reg_annotate
     from ship.handler import register_parser as reg_ship
+    from task.handler import register_parser as reg_task
 
     reg_explore(subparsers)
     reg_build(subparsers)
@@ -66,6 +67,7 @@ def main() -> None:
     reg_verify(subparsers)
     reg_annotate(subparsers)
     reg_ship(subparsers)
+    reg_task(subparsers)
 
     p_reset = subparsers.add_parser("reset", help="Clear runtime data")
     p_reset.add_argument("--include-release", action="store_true", help="Also clear release/")

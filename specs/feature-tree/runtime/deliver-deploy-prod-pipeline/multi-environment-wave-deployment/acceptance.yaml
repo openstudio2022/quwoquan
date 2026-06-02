@@ -14,23 +14,33 @@ gwt_acceptance:
   GWT1:
     title: multi environment wave deployment GWT
     given:
-    - 前置条件明确。
+    - 仓库保持当前 `alpha-local / beta-local / gamma-hosted / prod-hosted` 混合拓扑。
+    - "`main` 后需要自动串行推进当前环境链，而不是绑定固定数量环境或新增第二套 hosted beta。"
     when:
-    - 用户或系统动作发生。
+    - "`main` 入库触发多环境自动 promotion workflow。"
     then:
-    - 可观察结果符合预期。
+    - 主链按 `alpha-local -> beta-local -> gamma-hosted -> prod-hosted` 固定顺序推进。
+    - "`prod` 内部灰度只表现为 rollout stage，而不是独立环境名。"
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 环境矩阵、workflow、runbook、gray rollout stage 与 profile 口径一致。
+    edge_cases:
+    - beta 继续依赖 self-hosted macOS runner 与本地设备，不引入新的 beta hosted。
+    - "`prod full` 自动推进失败时必须能回滚，但回滚仍属于 `prod` 生命周期。"
+    contract_refs:
+    - deploy/shared/environment_matrix.md
+    - deploy/shared/gray_rollout_stages.yaml
+    performance_points:
+    - "`mainline_auto_prod` blocking critical path `<= 900s`"
     evidence:
       primary:
       - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T3_app_api_integration
     tests:
-      planned: []
+      planned:
+      - 环境矩阵与 `gray_rollout_stages.yaml` 同步描述主链与 prod stage
+      - main promotion workflow 通过 timing summary 证明关键路径预算
       recorded: []
     status: pending
 execution:

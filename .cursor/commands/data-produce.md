@@ -45,8 +45,18 @@ posts/article/内容角度/攻略/峨眉山攻略指南/1/
 3. 含 /entity/{领域}/{类型}/{名称} 引用（三层路径）
 4. 含 /tag/{tagPath} 引用
 
-### review
-交叉校验内容质量和引用一致性。
+### review（ReAct 质量归因）
+交叉校验内容质量与引用一致性，过三门（生成者出处 / 模板指纹 / 出处改写）+ 事实门
+（must-include facts / 数值可溯源）。质量欠佳时**先归因再回退到对应阶段**，不要原地反复重写：
+
+| 归因 | 判据 | 回退动作 |
+|---|---|---|
+| 证据不足 | retained 源 < 2、质量普遍 C/Reject、事实门 must-include 缺失 | 回 `/data-download` ReAct 第 3 步：换更具体检索词再检索/补权威源 |
+| 模板/SOP 失配 | 源充足但版式/结构/风格不达 SOP 标准、指纹门告警 | 调整路由模板 / SOP few-shot（不改源），重走 compose |
+| 创作执行问题 | 源与模板均达标但成稿跑题/啰嗦/引用错 | 同模板重写 article.md |
+
+每次「证据是否充足 / 质量归因 / 回退决策」经 `/data-reflect` 记入 run 反思账本，
+沉淀到 `notes.md`，并由 `task resume` 下次加载，加速同类任务。
 
 ## manifest.json（无 topicId）
 ```json

@@ -1,0 +1,78 @@
+version: 1
+read_model: ObjectMembership
+
+description: |
+  用户与组织型对象的成员关系。与关注关系分离，用于同校、校友、同事等强事实交集。
+
+source_entities:
+  - Homepage
+  - UserProfile
+
+consumers:
+  - app
+  - recommendation
+  - assistant
+
+client_projection:
+  dart_class: ObjectMembership
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/object_membership.g.dart
+  fields:
+    - name: membershipId
+      dart_type: String
+      nullable: false
+      source: membershipId
+      aliases: [membershipId]
+      default: "''"
+    - name: userId
+      dart_type: String
+      nullable: false
+      source: userId
+      aliases: [userId]
+      default: "''"
+    - name: organizationObjectId
+      dart_type: String
+      nullable: false
+      source: organizationObjectId
+      aliases: [organizationObjectId]
+      default: "''"
+    - name: organizationObjectType
+      dart_type: String
+      nullable: false
+      source: organizationObjectType
+      aliases: [organizationObjectType]
+      default: "'organization'"
+    - name: role
+      dart_type: String
+      nullable: false
+      source: role
+      aliases: [role]
+      default: "''"
+    - name: status
+      dart_type: String
+      nullable: false
+      source: status
+      aliases: [status]
+      default: "'self_declared'"
+    - name: evidenceSource
+      dart_type: String
+      nullable: false
+      source: evidenceSource
+      aliases: [evidenceSource]
+      default: "''"
+    - name: visibility
+      dart_type: String
+      nullable: false
+      source: visibility
+      aliases: [visibility]
+      default: "'public'"
+    - name: joinedAt
+      dart_type: DateTime?
+      nullable: true
+      source: joinedAt
+      aliases: [joinedAt]
+    - name: expiresAt
+      dart_type: DateTime?
+      nullable: true
+      source: expiresAt
+      aliases: [expiresAt]

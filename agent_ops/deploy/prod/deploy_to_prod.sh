@@ -12,6 +12,8 @@ CONFIG_VERSION="${CONFIG_VERSION:-}"
 REPLICAS="${REPLICAS:-2}"
 DRY_RUN="${DRY_RUN:-true}"
 PROD_KUBECONFIG="${PROD_KUBECONFIG:-}"
+SEED_BOX_IMAGE_REPOSITORY="${SEED_BOX_IMAGE_REPOSITORY:-ghcr.io/openstudio2022/quwoquan/seed-box}"
+RECOMMENDATION_SERVICE_IMAGE_REPOSITORY="${RECOMMENDATION_SERVICE_IMAGE_REPOSITORY:-ghcr.io/openstudio2022/quwoquan/recommendation-service}"
 
 OVERLAY="$ROOT/deploy/service/seed-box/kustomize/overlays/prod"
 KUSTOMIZATION="deploy/kustomization/${CLOUD_PROVIDER}-prod"
@@ -26,13 +28,41 @@ if [[ -n "$IMAGE_VERSION" && -n "$CONFIG_VERSION" ]]; then
   BACKUP="$(mktemp)"
   cp "$OVERLAY/kustomization.yaml" "$BACKUP"
   trap "mv '$BACKUP' '$OVERLAY/kustomization.yaml'" EXIT
-  sed -i.bak \
-    -e "s/CONFIG_VERSION=[^[:space:]]*/CONFIG_VERSION=$CONFIG_VERSION/" \
-    -e "s/IMAGE_VERSION=[^[:space:]]*/IMAGE_VERSION=$IMAGE_VERSION/" \
-    -e "s/REPLICAS=[0-9]*/REPLICAS=$REPLICAS/" \
-    -e "s/HPA_MIN_REPLICAS=[0-9]*/HPA_MIN_REPLICAS=$REPLICAS/" \
-    -e "s/newTag: [^[:space:]]*/newTag: $IMAGE_VERSION/" \
-    "$OVERLAY/kustomization.yaml"
+  python3 - "$OVERLAY/kustomization.yaml" "$CONFIG_VERSION" "$IMAGE_VERSION" "$REPLICAS" "$SEED_BOX_IMAGE_REPOSITORY" "$RECOMMENDATION_SERVICE_IMAGE_REPOSITORY" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+config_version = sys.argv[2]
+image_version = sys.argv[3]
+replicas = sys.argv[4]
+seed_box_repo = sys.argv[5]
+recommendation_repo = sys.argv[6]
+text = path.read_text(encoding="utf-8")
+text = re.sub(r"CONFIG_VERSION=[^\s]*", f"CONFIG_VERSION={config_version}", text)
+text = re.sub(r"IMAGE_VERSION=[^\s]*", f"IMAGE_VERSION={image_version}", text)
+text = re.sub(r"REPLICAS=\d+", f"REPLICAS={replicas}", text)
+text = re.sub(r"HPA_MIN_REPLICAS=\d+", f"HPA_MIN_REPLICAS={replicas}", text)
+text = text.replace("name: ghcr.io/openstudio2022/quwoquan/seed-box", f"name: {seed_box_repo}")
+text = text.replace(
+    "name: ghcr.io/openstudio2022/quwoquan/recommendation-service",
+    f"name: {recommendation_repo}",
+)
+text = re.sub(
+    r"(name:\s*" + re.escape(seed_box_repo) + r"\s+newTag:\s*)[^\s]+",
+    rf"\g<1>{image_version}",
+    text,
+    flags=re.MULTILINE,
+)
+text = re.sub(
+    r"(name:\s*" + re.escape(recommendation_repo) + r"\s+newTag:\s*)[^\s]+",
+    rf"\g<1>{image_version}",
+    text,
+    flags=re.MULTILINE,
+)
+path.write_text(text, encoding="utf-8")
+PY
   rm -f "$OVERLAY/kustomization.yaml.bak"
 fi
 

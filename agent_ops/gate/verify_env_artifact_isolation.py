@@ -16,7 +16,7 @@ from agent_ops.deploy.lib.environment_topology import (
 )
 
 # 隔离校验对象是每个环境包的「生效配置」（env overlay），不是 config-provider-layering
-# 的 dev 默认基层，也不是共享的四环境拓扑清单：
+# 的 dev 默认基层，也不是共享的多环境拓扑清单：
 #   - default_app_runtime.yaml / default_config.yaml 是 default+env 分层的基层（打包契约
 #     verify_environment_packaging_contract 强制其随包存在），运行期被 env overlay 覆盖，
 #     其 dev 默认 URL（127.0.0.1 等）在 prod 不生效。

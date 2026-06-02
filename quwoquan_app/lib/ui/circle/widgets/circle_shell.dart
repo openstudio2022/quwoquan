@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +10,8 @@ import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -41,9 +45,10 @@ class CircleShell extends ConsumerStatefulWidget {
 
 class _CircleShellState extends ConsumerState<CircleShell> {
   static const List<String> _defaultSections = <String>[
+    'home',
     'content',
-    'discussion',
-    'assets',
+    'groups',
+    'members',
   ];
   static const double _cardRadius = AppSpacing.radiusTwenty;
   static const double _surfaceBridge = _cardRadius;
@@ -69,23 +74,15 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         ? visible.map((section) => section.sectionType).toSet()
         : <String>{'works', 'interaction', 'chat', 'storage'};
     final tabs = <_TabSpec>[];
+    tabs.add(const _TabSpec(type: 'home', label: '首页'));
     if (available.contains('works')) {
-      tabs.add(
-        _TabSpec(type: 'content', label: UITextConstants.circleWorksTab),
-      );
+      tabs.add(const _TabSpec(type: 'content', label: '内容'));
     }
     if (available.contains('interaction')) {
-      tabs.add(
-        _TabSpec(
-          type: 'discussion',
-          label: UITextConstants.circleInteractionTab,
-        ),
-      );
+      tabs.add(const _TabSpec(type: 'members', label: '成员'));
     }
     if (available.contains('chat') || available.contains('storage')) {
-      tabs.add(
-        _TabSpec(type: 'assets', label: UITextConstants.circleAssetsTab),
-      );
+      tabs.add(const _TabSpec(type: 'groups', label: '群或组织'));
     }
     if (tabs.isNotEmpty) return tabs;
     return _defaultSections
@@ -93,9 +90,10 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           (type) => _TabSpec(
             type: type,
             label: switch (type) {
-              'content' => UITextConstants.circleWorksTab,
-              'discussion' => UITextConstants.circleInteractionTab,
-              'assets' => UITextConstants.circleAssetsTab,
+              'home' => '首页',
+              'content' => '内容',
+              'groups' => '群或组织',
+              'members' => '成员',
               _ => type,
             },
           ),
@@ -313,6 +311,16 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     final isDark = ref.watch(isDarkProvider);
     final state = ref.watch(circleStateProvider(widget.circleId));
     final circleCtrl = ref.read(circleStateProvider(widget.circleId).notifier);
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      final justLoggedIn =
+          next.isAuthenticated && (previous == null || !previous.isAuthenticated);
+      if (justLoggedIn) {
+        maybeResumeJoinContinuation(circleCtrl);
+      }
+    });
     final circle = state.circleData;
     final bg = AppColors.iosPageBackground(context);
     final surface = AppColors.iosProfileSurface(context);
@@ -444,4 +452,3 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     return true;
   }
 }
-

@@ -134,7 +134,7 @@
 | `quwoquan_app/lib/ui/discovery/pages/discovery_page.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/discovery/pages/home_page.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/discovery/providers/discovery_state.dart` | ui | full | no | — |
-| `quwoquan_app/lib/ui/discovery/widgets/moment_social_feed.dart` | ui | full | yes | — |
+| `quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart` | ui | full | yes | — |
 | `quwoquan_app/lib/ui/entity/pages/homepage_status_report_page.dart` | ui | full | yes | `divider`×1 |
 | `quwoquan_app/lib/ui/entity/widgets/homepage_detail_shell.dart` | ui | full | yes | `divider`×1 |

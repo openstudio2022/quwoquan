@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -25,6 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--critical-path-seconds", type=int, required=True)
     parser.add_argument("--phase", action="append", default=[])
     parser.add_argument("--note", action="append", default=[])
+    parser.add_argument("--write-json", default="")
     parser.add_argument("--write-step-summary", action="store_true")
     return parser.parse_args()
 
@@ -100,6 +102,46 @@ def render_markdown(
     return "\n".join(lines) + "\n"
 
 
+def build_payload(
+    *,
+    title: str,
+    gate_key: str,
+    gate_budget: Dict[str, Any],
+    critical_path_seconds: int,
+    phases: List[Tuple[str, int]],
+    notes: List[str],
+) -> Dict[str, Any]:
+    budget_seconds = int(gate_budget.get("budgetSeconds", 0) or 0)
+    critical_definition = str(gate_budget.get("criticalPath", "")).strip()
+    status = "within_budget" if critical_path_seconds <= budget_seconds else "over_budget"
+    delta = critical_path_seconds - budget_seconds
+    phase_budgets = gate_budget.get("phaseBudgetsSeconds") or {}
+    return {
+        "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "gateKey": gate_key,
+        "title": title,
+        "budgetSeconds": budget_seconds,
+        "criticalPathSeconds": critical_path_seconds,
+        "budgetStatus": status,
+        "deltaSeconds": delta,
+        "criticalPathDefinition": critical_definition,
+        "phaseBudgetsSeconds": phase_budgets,
+        "phases": [
+            {
+                "key": key,
+                "seconds": seconds,
+                "budgetSeconds": (
+                    int(phase_budgets[key])
+                    if isinstance(phase_budgets.get(key), int)
+                    else None
+                ),
+            }
+            for key, seconds in phases
+        ],
+        "notes": [note.strip() for note in notes if note.strip()],
+    }
+
+
 def main() -> int:
     args = parse_args()
     budget_path = Path(args.budget_file)
@@ -107,8 +149,17 @@ def main() -> int:
         budget_path = REPO_ROOT / budget_path
     phases = [parse_key_value(item) for item in args.phase]
     gate_budget = load_budget(budget_path, args.gate_key)
+    title = args.title.strip() or args.gate_key
     markdown = render_markdown(
-        title=args.title.strip() or args.gate_key,
+        title=title,
+        gate_key=args.gate_key,
+        gate_budget=gate_budget,
+        critical_path_seconds=args.critical_path_seconds,
+        phases=phases,
+        notes=args.note,
+    )
+    payload = build_payload(
+        title=title,
         gate_key=args.gate_key,
         gate_budget=gate_budget,
         critical_path_seconds=args.critical_path_seconds,
@@ -116,6 +167,15 @@ def main() -> int:
         notes=args.note,
     )
     print(markdown)
+    if args.write_json.strip():
+        json_path = Path(args.write_json.strip())
+        if not json_path.is_absolute():
+            json_path = REPO_ROOT / json_path
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     if args.write_step_summary:
         summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "").strip()
         if summary_path:

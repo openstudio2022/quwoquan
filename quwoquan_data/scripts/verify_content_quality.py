@@ -8,8 +8,15 @@ import re
 import sys
 from pathlib import Path
 
+from _common.article_package import sha256_file
+from _common.entity_annotation import annotation_publish_issues
+from _common.intersection_signal import intersection_hint_issues
 from _common.paths import batch_command_root
+from _common.provenance import provenance_issues
 from template.condition import REGION_LOCKED_TERMS
+
+# asset:// 引用 token：允许中文实体名（assetId 可读化后含中文）。
+_ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
 
 
 FORBIDDEN = ["冷启动", "批次", "角色：", "占位", "contract_fixture", "isSystemBuiltin", "routingReason"]
@@ -49,6 +56,8 @@ def verify_posts(posts_root: Path) -> list[str]:
             issues.append(f"{manifest_path}: tagRefs must contain at least 2 refs")
         if not isinstance(entity_refs, list):
             issues.append(f"{manifest_path}: entityRefs must be an array")
+        if not manifest.get("sourceTaskId"):
+            issues.append(f"{manifest_path}: missing sourceTaskId provenance (task trace/hydrate 必需)")
 
         found_region_terms = sorted({term for term in REGION_LOCKED_TERMS if term in article})
         if found_region_terms and not _authorized_region(manifest):
@@ -57,11 +66,74 @@ def verify_posts(posts_root: Path) -> list[str]:
                 "conditionContext.region in manifest (地域专有现象必须由 region 条件授权)"
             )
 
-        asset_ids = _asset_ids(manifest)
-        for asset_ref in re.findall(r"asset://([A-Za-z0-9_./-]+)", article):
-            normalized = asset_ref.split("/")[-1]
-            if normalized not in asset_ids and asset_ref not in asset_ids:
-                issues.append(f"{article_path}: asset ref not in manifest: {asset_ref}")
+        issues.extend(asset_closure_issues(post_dir, manifest))
+        # 出处强制门：交付 post 必须有完整且一致的 provenance.json。
+        issues.extend(provenance_issues(post_dir, manifest))
+        # 实体标注强制门：manifest.entityRefs 每个实体必须在正文 inline 标注并登记闭环。
+        issues.extend(annotation_publish_issues(article, entity_refs if isinstance(entity_refs, list) else []))
+        # 「明」交集信号强制门：每个 post 必须有完备的 intersectionHints（对齐 IntersectionReason 闭集）。
+        issues.extend(intersection_hint_issues(manifest.get("intersectionHints"), manifest))
+    return issues
+
+
+def _asset_index(manifest: dict) -> tuple[dict[str, str], dict[str, str]]:
+    """返回 (assetId→fileName, assetId→sha256)。fileName 取顶层 assets；sha256 取 articleAssetManifest。"""
+    id_to_file: dict[str, str] = {}
+    for asset in manifest.get("assets") or []:
+        if isinstance(asset, dict) and asset.get("assetId"):
+            id_to_file[str(asset["assetId"])] = str(asset.get("fileName") or "")
+    id_to_sha: dict[str, str] = {}
+    for asset in (manifest.get("articleAssetManifest") or {}).get("assets") or []:
+        if isinstance(asset, dict) and asset.get("assetId"):
+            id_to_sha[str(asset["assetId"])] = str(asset.get("sha256") or "")
+    return id_to_file, id_to_sha
+
+
+def _referenced_asset_ids(post_dir: Path) -> set[str]:
+    """收集 article.md + gallery.md 内的全部 asset:// 引用 id（含 frontmatter coverImage）。"""
+    refs: set[str] = set()
+    for md_name in ("article.md", "gallery.md"):
+        md_path = post_dir / md_name
+        if not md_path.is_file():
+            continue
+        for ref in _ASSET_REF_RE.findall(md_path.read_text(encoding="utf-8")):
+            refs.add(ref.split("/")[-1])
+    return refs
+
+
+def asset_closure_issues(post_dir: Path, manifest: dict) -> list[str]:
+    """asset:// 引用闭环：引用 → manifest.assets → fileName → 物理文件 → sha256 全链可追。
+
+    评审痛点「图片找不到对应资源文件」的硬门：
+    1. 正向——article/gallery 的每个 asset:// 引用都能在 manifest 命中（assetId 或 fileName）；
+    2. 物理——每个声明 asset 的 assets/<fileName> 真实存在于盘上；
+    3. 一致——若 articleAssetManifest 记录了 sha256，则物理文件摘要必须与之一致。
+    """
+    issues: list[str] = []
+    id_to_file, id_to_sha = _asset_index(manifest)
+    known_ids = set(id_to_file) | set(id_to_sha)
+    file_names = {name for name in id_to_file.values() if name}
+    assets_dir = post_dir / "assets"
+
+    for ref in sorted(_referenced_asset_ids(post_dir)):
+        if ref not in known_ids and ref not in file_names:
+            issues.append(f"{post_dir}: asset ref not in manifest: {ref}")
+
+    for asset_id, file_name in id_to_file.items():
+        if not file_name:
+            issues.append(f"{post_dir}: asset {asset_id} missing fileName in manifest")
+            continue
+        physical = assets_dir / file_name
+        if not physical.is_file():
+            issues.append(f"{post_dir}: asset file missing on disk: assets/{file_name} (assetId={asset_id})")
+            continue
+        expected = id_to_sha.get(asset_id)
+        if expected:
+            actual = sha256_file(physical)
+            if actual != expected:
+                issues.append(
+                    f"{post_dir}: asset sha256 mismatch for {file_name}: manifest={expected} disk={actual}"
+                )
     return issues
 
 
@@ -73,20 +145,6 @@ def _authorized_region(manifest: dict) -> bool:
     if not isinstance(context, dict):
         return False
     return bool(context.get("region"))
-
-
-def _asset_ids(manifest: dict) -> set[str]:
-    assets = manifest.get("articleAssetManifest", {}).get("assets")
-    if not isinstance(assets, list):
-        assets = manifest.get("assets", [])
-    ids: set[str] = set()
-    for asset in assets or []:
-        if isinstance(asset, dict):
-            for key in ("assetId", "fileName"):
-                value = asset.get(key)
-                if isinstance(value, str):
-                    ids.add(value)
-    return ids
 
 
 def main() -> None:

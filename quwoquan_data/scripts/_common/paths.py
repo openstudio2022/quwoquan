@@ -21,8 +21,58 @@ SCHEMA_ROOT = DATA_ROOT / "schema"
 SOP_ROOT = DATA_ROOT / "sop"
 
 TASKS_ROOT = RUNTIME_ROOT / "tasks"
+# committed 任务规格根（受版本控制；与 runtime/tasks 同 taskId 对应）
+COMMITTED_TASKS_ROOT = Path(os.environ.get("QWQ_COMMITTED_TASKS_ROOT", DATA_ROOT / "tasks"))
 COMMANDS = ("explore", "build", "download", "produce", "reconcile", "publish")
 NOW_ISO = "2026-05-15T00:00:00+08:00"
+
+
+# ─── taskId ↔ 目录 互转 ────────────────────────────────────────────
+# taskId 即斜杠路径：<vertical>/<organizeBy>/<key>[/<category>]/<name>
+# committed: tasks/<taskId>/   runtime: runtime/tasks/<taskId>/（task_root 已支持嵌套）
+def normalize_task_id(task_id: str) -> str:
+    return task_id.strip().strip("/")
+
+
+def task_id_from_committed_path(path: Path) -> str:
+    """从 committed 目录反推 taskId。"""
+    return str(Path(path).resolve().relative_to(COMMITTED_TASKS_ROOT.resolve())).replace(os.sep, "/")
+
+
+def committed_task_root(task_id: str) -> Path:
+    return COMMITTED_TASKS_ROOT / normalize_task_id(task_id)
+
+
+def committed_task_spec(task_id: str) -> Path:
+    return committed_task_root(task_id) / "task.yaml"
+
+
+def committed_task_progress(task_id: str) -> Path:
+    return committed_task_root(task_id) / "progress.json"
+
+
+def committed_task_runs_dir(task_id: str) -> Path:
+    return committed_task_root(task_id) / "runs"
+
+
+def committed_task_notes(task_id: str) -> Path:
+    return committed_task_root(task_id) / "notes.md"
+
+
+def iter_committed_task_specs() -> list[Path]:
+    """扫描全部 committed task.yaml（registry 实时生成依据，不维护第二真相源）。"""
+    if not COMMITTED_TASKS_ROOT.is_dir():
+        return []
+    return sorted(COMMITTED_TASKS_ROOT.rglob("task.yaml"))
+
+
+# ─── 并发锁（runtime 侧）─────────────────────────────────────────────
+def task_lock_path(task_id: str) -> Path:
+    return task_root(task_id) / ".lock"
+
+
+def publish_lock_path() -> Path:
+    return PUBLISH_ROOT / ".promote.lock"
 
 
 # ─── publish 单一主线（已去版本化）───────────────────────────────

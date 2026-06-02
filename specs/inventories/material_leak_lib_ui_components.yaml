@@ -780,7 +780,7 @@ files:
     zone: ui
     material_import: none
     imports_cupertino: false
-  - path: quwoquan_app/lib/ui/discovery/widgets/moment_social_feed.dart
+  - path: quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart
     zone: ui
     material_import: full
     imports_cupertino: true

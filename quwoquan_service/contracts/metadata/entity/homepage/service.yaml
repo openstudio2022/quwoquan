@@ -51,6 +51,13 @@ api_routes:
     response_entity: HomepageShellView
 
   - method: GET
+    path: /v1/homepages/{homepageId}/object-page-bundle
+    operation: GetObjectPageBundle
+    description: 获取对象页统一 Bundle（身份、交集、看点、关系边、小趣上下文和灰度上下文）
+    query_params: [referralSource, feedRequestId, recommendationTraceId, experimentBucket, rolloutCohort]
+    response_entity: ObjectPageBundle
+
+  - method: GET
     path: /v1/homepages/{homepageId}/review-summary
     operation: GetHomepageReviewSummary
     description: 获取共享主页评分与口碑摘要
