@@ -1,0 +1,7 @@
+schemaVersion: quwoquan.task.defaults
+# 全局任务默认（最顶层继承基线）。所有 task 未声明字段从这里起继承。
+content:
+  carriers:
+  - article
+acceptance:
+  minPostsPerEntity: 1

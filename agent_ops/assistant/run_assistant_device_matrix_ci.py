@@ -12,12 +12,20 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
+import urllib.parse
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+FAIL_FAST_EXIT_CODE = 86
+FAIL_FAST_CATEGORIES = {
+    "device_not_found",
+    "gateway_unreachable",
+    "missing_model_api_key",
+    "device_bridge_failed",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -115,6 +123,15 @@ def diagnose_gamma_failure() -> None:
         )
 
 
+def parse_gateway_port(raw_url: str) -> int:
+    parsed = urllib.parse.urlparse(raw_url)
+    if parsed.port is not None:
+        return int(parsed.port)
+    if parsed.scheme == "https":
+        return 443
+    return 80
+
+
 def main() -> int:
     args = parse_args()
     env_name = os.environ.get("API_CONTRACT_ENV", "").strip()
@@ -154,12 +171,13 @@ def main() -> int:
 
     command = [
         sys.executable,
-        str(REPO_ROOT / "scripts" / "run_assistant_device_matrix.py"),
+        str(REPO_ROOT / "agent_ops" / "assistant" / "run_assistant_device_matrix.py"),
         "--env",
         env_name,
         "--report",
         f"artifacts/device-matrix/{env_name}-{args.platform}.json",
     ]
+    report_path = REPO_ROOT / "artifacts" / "device-matrix" / f"{env_name}-{args.platform}.json"
     for device_id in device_ids:
         command.extend(["--device-id", device_id])
 
@@ -175,7 +193,27 @@ def main() -> int:
         command.extend(["--skip-beta-services", "--gateway-base-url", gamma_base_url])
 
     if env_name == "beta":
-        command.extend(["--service-start-timeout-seconds", "180"])
+        beta_gateway_base_url = os.environ.get(
+            "ASSISTANT_MATRIX_GATEWAY_BASE_URL", ""
+        ).strip()
+        beta_gateway_health_url = os.environ.get(
+            "ASSISTANT_MATRIX_GATEWAY_HEALTH_URL", beta_gateway_base_url
+        ).strip()
+        if beta_gateway_base_url:
+            gateway_port = parse_gateway_port(beta_gateway_base_url)
+            command.extend(
+                [
+                    "--skip-beta-services",
+                    "--gateway-base-url",
+                    beta_gateway_base_url,
+                    "--gateway-health-url",
+                    beta_gateway_health_url or beta_gateway_base_url,
+                    "--gateway-port",
+                    str(gateway_port),
+                ]
+            )
+        else:
+            command.extend(["--service-start-timeout-seconds", "180"])
 
     # iOS 26+ 等新模拟器在全场景 smoke 下容易超过默认 420s（见 beta-ios 矩阵报告：
     # iPhone 17 Pro 上多次 SIGTERM/timeout），为 beta/gamma 的 iOS 矩阵单独放宽。
@@ -187,6 +225,21 @@ def main() -> int:
             command.extend(["--test-timeout-seconds", ios_test_timeout])
 
     code = subprocess.call(command, cwd=str(REPO_ROOT))
+    if report_path.exists():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            report = {}
+        failure_category = str(report.get("failureCategory") or "").strip()
+        blocking_reason = str(report.get("blockingReason") or report.get("failureReason") or "").strip()
+        if failure_category in FAIL_FAST_CATEGORIES:
+            if env_name == "gamma" and code != 0:
+                diagnose_gamma_failure()
+            print(
+                f"::error::[assistant-matrix-fail-fast/{failure_category}] {blocking_reason or 'matrix failed with fail-fast category'}",
+                file=sys.stderr,
+            )
+            return FAIL_FAST_EXIT_CODE
     if env_name == "gamma" and code != 0:
         diagnose_gamma_failure()
     return code

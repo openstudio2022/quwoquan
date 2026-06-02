@@ -82,7 +82,7 @@ func (r *HashResolver) Resolve(_ context.Context, experimentID string, subjectKe
 		}, nil
 	}
 
-	bucket := assignBucket(experimentID, subjectKey, exp.Buckets)
+	bucket := AssignBucket(experimentID, subjectKey, exp.Buckets)
 	return Assignment{
 		ExperimentID:    experimentID,
 		Bucket:          bucket,
@@ -91,7 +91,10 @@ func (r *HashResolver) Resolve(_ context.Context, experimentID string, subjectKe
 	}, nil
 }
 
-func assignBucket(expID, subjectKey string, buckets []BucketDef) string {
+// AssignBucket deterministically maps (expID, subjectKey) to one of buckets via
+// consistent FNV hashing on weightPct ranges. Exported so policy resolvers reuse
+// the single canonical hashing impl instead of duplicating it.
+func AssignBucket(expID, subjectKey string, buckets []BucketDef) string {
 	h := fnv.New32a()
 	h.Write([]byte(expID + ":" + subjectKey))
 	hash := h.Sum32()

@@ -16340,6 +16340,18 @@
           "message": "契约设置诊断事件"
         }
       ]
+    },
+    "following_subject_core": {
+      "description": "用户关注对象动态：用户、圈子与实体主页三类对象同源进入对象页网络。",
+      "fixtureSource": "user/following_subject/test_fixtures/scenarios/following_subject_scenarios.json",
+      "subjectTypes": [
+        "user",
+        "circle",
+        "homepage"
+      ],
+      "verifiedEndpoints": [
+        "/v1/user/following-subjects"
+      ]
     }
   },
   "scenarios": [
@@ -16353,6 +16365,7 @@
         "persona_core",
         "profile_feed_core",
         "relationship_core",
+        "following_subject_core",
         "settings_core"
       ],
       "uiExpectations": {

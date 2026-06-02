@@ -16,9 +16,14 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackImpression
-    payload_fields: [postId, contentType, feedPosition]
+    payload_fields: [postId, contentType, feedPosition, intersectionId, intersectionDimension, intersectionClass, intersectionEvidenceId]
     ml_signal: weak_positive
     signal_weight: 0.1
+    notes: |
+      交集曝光归因（交集统一体验）：当帖/卡承载交集理由时，随曝光带
+      intersectionId / intersectionDimension / intersectionClass(fact|affinity) /
+      intersectionEvidenceId，闭合「交集曝光 → 点击 → 转化」漏斗，并供推荐冷却窗口判定。
+      非交集曝光时这些字段为空，不影响普通内容曝光归因。
 
   - type: dwell
     description: 停留时长（视口内累计时长，单位毫秒）
@@ -36,9 +41,12 @@ behavior_events:
     batch: false
     batch_route: POST /v1/content/behaviors
     dart_method: trackClick
-    payload_fields: [postId, contentType, feedPosition]
+    payload_fields: [postId, contentType, feedPosition, intersectionId, intersectionDimension, intersectionClass, intersectionEvidenceId]
     ml_signal: strong_positive
     signal_weight: 0.5
+    notes: |
+      交集点击归因：交集卡点击进入对象页时，随点击带 intersectionId/dimension/class/evidenceId，
+      使曝光→点击→转化漏斗可按维度与事实/概率类别下钻。
 
   - type: dislike
     description: 用户明确标记"不感兴趣"
@@ -190,6 +198,20 @@ behavior_events:
       totalUnits 为总时长（秒）。与 content_depth 互补但语义不同：
       play_progress 是实时里程碑，content_depth 是退出时汇总。
 
+  - type: assistant_interest
+    description: 小艺对话中浮现的兴趣标签回流（对话兴趣 → 推荐特征，不绑定具体 post）
+    trigger: assistant_turn_emerged_tags
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackAssistantInterest
+    payload_fields: [tagRefs]
+    ml_signal: moderate_positive
+    signal_weight: 1.6
+    notes: |
+      由小艺（assistant）每轮对话产出的 diagnostics.emergedTags 合成上报，
+      payload 只带 tagRefs（路径制标签），不绑定 postId；
+      经 ProcessBatch → RecommendFeatureProjector 进 rm_recommend_feature 的 tagInteraction。
+
 # ── 二、推荐特征声明 ────────────────────────────────────────────────────
 # 由 codegen_rec_model_python 生成 Python Pydantic ContentFeatures model
 # 特征权重由推荐服务内部决定，不在此声明
@@ -275,6 +297,8 @@ training_sample:
 
   context_fields:
     - name: user_id
+      type: str
+    - name: device_actor_id
       type: str
     - name: session_id
       type: str

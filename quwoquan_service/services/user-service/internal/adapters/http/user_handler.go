@@ -28,6 +28,7 @@ type UserHandler struct {
 	subAccount       *application.SubAccountService
 	contactDiscovery *application.ContactDiscoveryService
 	invite           *application.InviteService
+	interestProfile  *application.InterestProfileService
 }
 
 func NewUserHandler(
@@ -43,6 +44,7 @@ func NewUserHandler(
 	subAccount *application.SubAccountService,
 	contactDiscovery *application.ContactDiscoveryService,
 	invite *application.InviteService,
+	interestProfile *application.InterestProfileService,
 ) *UserHandler {
 	return &UserHandler{
 		profile:          profile,
@@ -57,6 +59,7 @@ func NewUserHandler(
 		subAccount:       subAccount,
 		contactDiscovery: contactDiscovery,
 		invite:           invite,
+		interestProfile:  interestProfile,
 	}
 }
 
@@ -104,6 +107,7 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/users/{userId}/works", h.handleListUserWorks)
 	mux.HandleFunc("GET /v1/users/{userId}/life-items", h.handleListUserLifeItems)
 	mux.HandleFunc("GET /v1/users/{userId}/likes", h.handleListUserLikes)
+	mux.HandleFunc("GET /v1/users/{userId}/interest-profile", h.handleGetUserInterestProfile)
 
 	mux.HandleFunc("GET /v1/user/settings/notifications", h.handleGetNotificationSettings)
 	mux.HandleFunc("PATCH /v1/user/settings/notifications", h.handleUpdateNotificationSettings)
@@ -1088,6 +1092,23 @@ func (h *UserHandler) handleListUserLifeItems(w http.ResponseWriter, r *http.Req
 
 func (h *UserHandler) handleListUserLikes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": []any{}, "nextCursor": ""})
+}
+
+// handleGetUserInterestProfile serves the user-domain derived interest profile
+// (rm_user_profile_view.interestProfile). Consumed by assistant-service for
+// proactive service and by recommendation-engine for policy self-tuning.
+func (h *UserHandler) handleGetUserInterestProfile(w http.ResponseWriter, r *http.Request) {
+	userID := r.PathValue("userId")
+	if userID == "" {
+		writeInvalidArg(w, r, "userId path param required")
+		return
+	}
+	view, err := h.interestProfile.Get(r.Context(), userID)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 func (h *UserHandler) handleGetNotificationSettings(w http.ResponseWriter, r *http.Request) {

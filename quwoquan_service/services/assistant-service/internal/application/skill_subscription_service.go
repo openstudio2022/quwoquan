@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -192,7 +193,9 @@ func (s *AssistantService) normalizeSkillSubscriptionInput(userID string, input 
 }
 
 func (s *AssistantService) createProactiveTurnMessage(ctx context.Context, subscription assistant.SkillSubscription, now time.Time) (assistant.AssistantTurn, assistant.AppMessage, error) {
-	proactive := BuildP0ProactiveSkillResult(subscription, now)
+	profile := s.loadProactiveInterestProfile(ctx, subscription.Owner.OwnerID)
+	proactive := BuildP0ProactiveSkillResult(subscription, profile, now)
+	recordProactivePersonalization(proactive)
 	conversation, err := s.CreateConversation(ctx, subscription.Owner.OwnerID, assistant.CreateConversationInput{
 		Summary: "主动订阅：" + displaySkillName(subscription.SkillID),
 	})
@@ -229,6 +232,23 @@ func (s *AssistantService) createProactiveTurnMessage(ctx context.Context, subsc
 		return assistant.AssistantTurn{}, assistant.AppMessage{}, err
 	}
 	return turn, message, nil
+}
+
+// loadProactiveInterestProfile reads the user's derived interest profile for
+// proactive personalization. It is strictly best-effort: a nil reader or a read
+// failure degrades to non-personalized output (returns nil) and never blocks the
+// proactive message; failures are recorded for observability.
+func (s *AssistantService) loadProactiveInterestProfile(ctx context.Context, userID string) *ProactiveInterestProfile {
+	if s.proactiveInterest == nil || strings.TrimSpace(userID) == "" {
+		return nil
+	}
+	profile, err := s.proactiveInterest.GetInterestProfile(ctx, userID)
+	if err != nil {
+		slog.WarnContext(ctx, "assistant proactive interest profile read failed; degrading to non-personalized",
+			slog.String("userId", userID), slog.String("error", err.Error()))
+		return nil
+	}
+	return profile
 }
 
 func (s *AssistantService) claimSubscriptionTick(subscriptionID string, now time.Time) bool {

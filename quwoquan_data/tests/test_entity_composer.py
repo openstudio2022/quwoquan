@@ -152,6 +152,30 @@ def test_is_entity_brief_classification():
     assert is_entity_brief(route_like) is False
 
 
+def test_normalize_entity_refs_full_path():
+    """回归：主实体引用必须补全为发布门可识别的全路径 /entity/{domain}/{type}/{name}。
+
+    历史 bug：composer 仅拼 /entity/{name}，publish_filter._parse_entity_ref 需 domain/type/name
+    三段，导致主实体被误判「无主页」过滤，post 失去实体关联。
+    """
+    from _common.entity_extract import normalize_entity_refs
+    from _common.publish_filter import _parse_entity_ref
+
+    # 短名 + subject.type 补全
+    assert normalize_entity_refs(["稻城亚丁"], "地点/景区") == ["/entity/地点/景区/稻城亚丁"]
+    # 已是 domain/type/name（无 /entity/ 前缀）
+    assert normalize_entity_refs(["地点/博物馆/三星堆博物馆"], "地点/博物馆") == [
+        "/entity/地点/博物馆/三星堆博物馆"
+    ]
+    # 已带 /entity/ 前缀的全路径，原样规范化
+    assert normalize_entity_refs(["/entity/地点/景区/四姑娘山"], "地点/景区") == [
+        "/entity/地点/景区/四姑娘山"
+    ]
+    # 输出必须被 publish_filter 解析为完整三段（修复前会解析失败 → 过滤）
+    domain, etype, name = _parse_entity_ref(normalize_entity_refs(["稻城亚丁"], "地点/景区")[0])
+    assert (domain, etype, name) == ("地点", "景区", "稻城亚丁")
+
+
 def test_entity_placeholder_blocks_then_agent_draft_green():
     _seed_sources()
     brief = _entity_brief()
@@ -183,6 +207,13 @@ def test_entity_e2e_materialize_verify_green():
     assert review["decision"] == "approved", review["issues"]
     posts = materialize_posts(TASK, BATCH, "article")
     assert posts, "materialize produced no entity post"
+    # 回归：materialized manifest 的 entityRefs 必须是发布门可识别的全路径。
+    import json as _json
+    from _common.publish_filter import _parse_entity_ref
+
+    mani = _json.loads((Path(str(posts[0])) / "manifest.json").read_text(encoding="utf-8"))
+    assert mani["entityRefs"] == [f"/entity/地点/博物馆/{ENTITY}"], mani["entityRefs"]
+    assert _parse_entity_ref(mani["entityRefs"][0]) == ("地点", "博物馆", ENTITY)
     roots, issues = verify_scope(task=TASK, batch=BATCH, scope="current")
     assert roots, "verify found no posts root"
     assert not issues, "entity pilot verify must be green:\n" + "\n".join(issues[:40])

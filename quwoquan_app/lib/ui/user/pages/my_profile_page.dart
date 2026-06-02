@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -242,11 +241,11 @@ class _LoggedOutProfileSummaryCard extends StatelessWidget {
                 AppSpacing.minInteractiveSize,
                 AppSpacing.buttonHeightLg,
               ),
-              onPressed: () => context.push(
-                AppRoutePaths.login(
-                  reason: AuthPromptReason.actionRequired.name,
-                  redirect: AppRoutePaths.profile,
-                ),
+              onPressed: () => openLoginPage(
+                context,
+                reasonName: AuthPromptReason.actionRequired.name,
+                redirect: AppRoutePaths.profile,
+                dismissFallback: AppRoutePaths.profile,
               ),
               child: Text(
                 UITextConstants.profileLoginNow,

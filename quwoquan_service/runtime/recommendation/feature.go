@@ -43,6 +43,12 @@ type UserFeatureVector struct {
 	CircleTagAffinities map[string]float64 `json:"circleTagAffinities,omitempty"`
 	SocialInterestScore float64            `json:"socialInterestScore"`
 
+	// Population segments (rule-based, from segments.yaml), computed by the
+	// content-service InterestProfileAggregator and $set into rm_recommend_feature.
+	// Priority-sorted; drive policy segment targeting (preset override / weight deltas)
+	// and experiment eligibility without recomputation in the engine.
+	Segments []string `json:"segments,omitempty"`
+
 	// Embedding (Phase 5+, populated by dual-tower inference)
 	UserEmbedding []float64 `json:"userEmbedding,omitempty"`
 }

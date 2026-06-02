@@ -40,6 +40,10 @@ class ContentBehaviorTracker {
     String? feedRequestId,
     int? position,
     ReferralSource? referralSource,
+    String? intersectionId,
+    String? intersectionDimension,
+    String? intersectionClass,
+    String? intersectionEvidenceId,
   }) {
     if (_impressionSeen.contains(contentId)) return;
     _impressionSeen.add(contentId);
@@ -51,6 +55,10 @@ class ContentBehaviorTracker {
       feedRequestId: feedRequestId,
       position: position,
       referralSource: referralSource,
+      intersectionId: intersectionId,
+      intersectionDimension: intersectionDimension,
+      intersectionClass: intersectionClass,
+      intersectionEvidenceId: intersectionEvidenceId,
     ));
   }
 
@@ -83,6 +91,10 @@ class ContentBehaviorTracker {
     String? feedRequestId,
     int? position,
     ReferralSource? referralSource,
+    String? intersectionId,
+    String? intersectionDimension,
+    String? intersectionClass,
+    String? intersectionEvidenceId,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
@@ -92,6 +104,10 @@ class ContentBehaviorTracker {
       feedRequestId: feedRequestId,
       position: position,
       referralSource: referralSource,
+      intersectionId: intersectionId,
+      intersectionDimension: intersectionDimension,
+      intersectionClass: intersectionClass,
+      intersectionEvidenceId: intersectionEvidenceId,
     ));
   }
 
@@ -221,6 +237,24 @@ class ContentBehaviorTracker {
       referralSource: referralSource,
       intersectionDimension: intersectionDimension,
       intersectionTagRefs: intersectionTagRefs,
+    ));
+  }
+
+  /// 记录小艺对话浮现兴趣（assistant_interest）。不绑定具体 post，仅回流路径制 tagRefs。
+  ///
+  /// 经 reportEvents → 云侧 BehaviorBatchReported → RecommendFeatureProjector
+  /// 的 tagInteraction 累加，使对话兴趣进入推荐特征（rm_recommend_feature）。
+  void trackAssistantInterest(List<String> tagRefs) {
+    final normalized = tagRefs
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (normalized.isEmpty) return;
+    _add(BehaviorEvent(
+      contentId: '',
+      action: BehaviorAction.assistantInterest,
+      tags: normalized,
     ));
   }
 

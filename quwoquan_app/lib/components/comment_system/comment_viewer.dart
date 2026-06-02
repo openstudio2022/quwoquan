@@ -86,6 +86,30 @@ class _CommentInputState extends ConsumerState<CommentInput> {
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
 
+    // 登录后续接：游客提交评论被拦截后已登记 continuation，登录成功（auth 翻转为
+    // 已认证）时自动续提原文本，避免「登录回来评论丢了」。
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      final justLoggedIn =
+          next.isAuthenticated && (previous == null || !previous.isAuthenticated);
+      if (!justLoggedIn) {
+        return;
+      }
+      final pending = ref
+          .read(authContinuationProvider.notifier)
+          .take<SubmitCommentContinuation>();
+      if (pending == null || pending.content.trim().isEmpty) {
+        return;
+      }
+      widget.onSubmit?.call(pending.content);
+      _controller.clear();
+      if (widget.replyTo != null) {
+        widget.onCancelReply?.call();
+      }
+    });
+
     return Container(
       key: TestKeys.commentInputBar,
       padding: CommentResponsive.getModalPadding(context),
@@ -435,7 +459,18 @@ class _CommentInputState extends ConsumerState<CommentInput> {
       return;
     }
 
-    // 评论需要账号身份：未登录先经统一拦截器引导登录。
+    // 评论需要账号身份：未登录先登记待续接评论，再经统一拦截器引导登录；
+    // 登录成功后由 build 内 ref.listen 自动续提，输入文本在登录期间保留不清空。
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      ref
+          .read(authContinuationProvider.notifier)
+          .set(
+            SubmitCommentContinuation(
+              content: content,
+              replyToCommentId: widget.replyTo?.id,
+            ),
+          );
+    }
     final allowed = await requireLogin(ref, context, AuthGateReason.comment);
     if (!allowed) {
       return;

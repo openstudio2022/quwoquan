@@ -57,10 +57,14 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":
 		h.handleGetFeed(w, r)
+	case "GetFeedIntersections":
+		h.handleGetFeedIntersections(w, r)
 	case "GetHelperRead":
 		h.handleNotImplemented(w, r, operation)
 	case "GetMediaAsset":
 		h.handleNotImplemented(w, r, operation)
+	case "GetMyIntersectionSummary":
+		h.handleGetMyIntersectionSummary(w, r)
 	case "GetPost":
 		h.handleGetPost(w, r)
 	case "GetReactionState":
@@ -79,12 +83,16 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "ListCommentsForPostAuthor":
 		h.handleNotImplemented(w, r, operation)
+	case "ListMyIntersections":
+		h.handleListMyIntersections(w, r)
 	case "ListProfileInteractionActivitiesReceived":
 		h.handleNotImplemented(w, r, operation)
 	case "ListProfileInteractionActivitiesSent":
 		h.handleNotImplemented(w, r, operation)
 	case "ListUserPosts":
 		h.handleNotImplemented(w, r, operation)
+	case "MarkIntersectionsVisited":
+		h.handleMarkIntersectionsVisited(w, r)
 	case "PromotePostToWork":
 		h.handleNotImplemented(w, r, operation)
 	case "PublishPost":
@@ -93,6 +101,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "ReportBehaviors":
 		h.handleReportBehaviors(w, r)
+	case "ReportIntersectionExposure":
+		h.handleReportIntersectionExposure(w, r)
 	case "RepostToCircle":
 		h.handleNotImplemented(w, r, operation)
 	case "RequestOriginalImageAccess":
@@ -131,7 +141,12 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "DELETE", pathTemplate: "/v1/content/comments/{commentId}/like", operation: "UnlikeComment"},
 	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/like", operation: "LikeComment"},
 	{method: "GET", pathTemplate: "/v1/content/feed", operation: "GetFeed"},
+	{method: "GET", pathTemplate: "/v1/content/feed/intersections", operation: "GetFeedIntersections"},
 	{method: "GET", pathTemplate: "/v1/content/helper-read/{contentId}", operation: "GetHelperRead"},
+	{method: "GET", pathTemplate: "/v1/content/intersections", operation: "ListMyIntersections"},
+	{method: "POST", pathTemplate: "/v1/content/intersections/exposure", operation: "ReportIntersectionExposure"},
+	{method: "GET", pathTemplate: "/v1/content/intersections/summary", operation: "GetMyIntersectionSummary"},
+	{method: "POST", pathTemplate: "/v1/content/intersections/visit", operation: "MarkIntersectionsVisited"},
 	{method: "POST", pathTemplate: "/v1/content/media/uploads/{sessionId}:abort", operation: "AbortMediaUpload"},
 	{method: "POST", pathTemplate: "/v1/content/media/uploads/{sessionId}:complete", operation: "CompleteMediaUpload"},
 	{method: "POST", pathTemplate: "/v1/content/media/uploads:init", operation: "InitMediaUpload"},

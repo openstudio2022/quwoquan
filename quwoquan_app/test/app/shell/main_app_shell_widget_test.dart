@@ -4,10 +4,12 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/app/shell/web_app_install_banner.dart';
+import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
@@ -17,8 +19,10 @@ import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
+import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _buildShell(String location, {bool authenticated = true}) {
@@ -66,6 +70,153 @@ Widget _buildDarkShell(String location, {bool authenticated = true}) {
       ),
     ),
   );
+}
+
+Widget _buildShellRouter({required bool authenticated}) {
+  return ProviderScope(
+    overrides: [
+      authSessionStoreProvider.overrideWithValue(
+        _TestAuthSessionStore(authenticated: authenticated),
+      ),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+      routerConfig: GoRouter(
+        initialLocation: AppRoutePaths.home,
+        routes: [
+          GoRoute(
+            path: AppRoutePaths.home,
+            builder: (context, state) =>
+                MainAppShell(currentLocation: state.uri.path, child: const SizedBox.shrink()),
+          ),
+          GoRoute(
+            path: AppRoutePaths.loginPathTemplate,
+            builder: (context, state) => LoginPage(
+              reason: state.uri.queryParameters['reason'],
+              redirect: state.uri.queryParameters['redirect'],
+              dismissFallback:
+                  state.uri.queryParameters[loginDismissFallbackQueryParam],
+              allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+                state.uri.queryParameters[loginGuestDismissPopQueryParam],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// 复刻生产路由守卫的「受限直达路由 → 登录」逻辑，用于回归「深链进入受限路由
+/// 后关闭登录页又被守卫立刻弹出」的死循环。守卫触发的登录必须 allowGuestDismissPop=false。
+Widget _buildGuardedRouter({required bool authenticated, required String initialLocation}) {
+  return ProviderScope(
+    overrides: [
+      authSessionStoreProvider.overrideWithValue(
+        _TestAuthSessionStore(authenticated: authenticated),
+      ),
+    ],
+    child: _GuardedRouterHost(initialLocation: initialLocation),
+  );
+}
+
+class _GuardedRouterHost extends ConsumerStatefulWidget {
+  const _GuardedRouterHost({required this.initialLocation});
+
+  final String initialLocation;
+
+  @override
+  ConsumerState<_GuardedRouterHost> createState() => _GuardedRouterHostState();
+}
+
+class _GuardedRouterHostState extends ConsumerState<_GuardedRouterHost> {
+  late final ValueNotifier<int> _refresh;
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh = ValueNotifier<int>(0);
+    _router = GoRouter(
+      initialLocation: widget.initialLocation,
+      refreshListenable: _refresh,
+      redirect: (context, state) {
+        final auth = ref.read(authSessionControllerProvider);
+        final loc = state.matchedLocation;
+        if (loc == AppRoutePaths.loginPathTemplate) {
+          return null;
+        }
+        if (auth.status != AuthSessionStatus.restoring) {
+          final gate = requiredRouteGateForLocation(loc);
+          if (gate != null && !auth.isAuthenticated) {
+            return buildLoginRouteLocation(
+              reasonName: gate.name,
+              redirect: state.uri.toString(),
+              dismissFallback: AppRoutePaths.home,
+              allowGuestDismissPop: false,
+            );
+          }
+        }
+        return null;
+      },
+      routes: [
+        GoRoute(
+          path: AppRoutePaths.home,
+          builder: (context, state) => MainAppShell(
+            currentLocation: state.uri.path,
+            child: const SizedBox.shrink(),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutePaths.chat,
+          builder: (context, state) =>
+              const Scaffold(body: Center(child: Text('CHAT_PAGE'))),
+        ),
+        GoRoute(
+          path: AppRoutePaths.loginPathTemplate,
+          builder: (context, state) => LoginPage(
+            reason: state.uri.queryParameters['reason'],
+            redirect: state.uri.queryParameters['redirect'],
+            dismissFallback:
+                state.uri.queryParameters[loginDismissFallbackQueryParam],
+            allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+              state.uri.queryParameters[loginGuestDismissPopQueryParam],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _router.dispose();
+    _refresh.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (_, _) {
+      _refresh.value++;
+    });
+    return MaterialApp.router(
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+      routerConfig: _router,
+    );
+  }
 }
 
 class _TestAuthSessionStore implements AuthSessionStore {
@@ -216,6 +367,127 @@ void main() {
 
       expect(find.text(UITextConstants.createActionWrite), findsOneWidget);
       expect(find.text(UITextConstants.createActionGallery), findsOneWidget);
+    });
+
+    testWidgets('游客点加号先开动作面板（不弹登录），后置到具体动作再拦截', (tester) async {
+      AuthGate.resetDebounce();
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildShellRouter(authenticated: false));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.byIcon(CupertinoIcons.plus),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 加号后置登录：先出现动作面板，不弹登录页。
+      expect(find.byType(LoginPage), findsNothing);
+      expect(find.text(UITextConstants.createActionWrite), findsOneWidget);
+      expect(find.text(UITextConstants.addSameInterest), findsOneWidget);
+
+      // 选「加好友」这一账号态动作时才触发登录。
+      await tester.tap(find.text(UITextConstants.addSameInterest));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsOneWidget);
+
+      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsNothing);
+      expect(find.byType(MainAppShell), findsOneWidget);
+      expect(find.byType(HomePage), findsOneWidget);
+      expect(find.byType(BottomNavigationWidget), findsOneWidget);
+      expect(find.text('Page Not Found'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('游客点击首页关注 tab 关闭登录页后回首页且不回环', (tester) async {
+      AuthGate.resetDebounce();
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildShellRouter(authenticated: false));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.followingChannelId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsOneWidget);
+
+      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsNothing);
+      expect(find.byType(MainAppShell), findsOneWidget);
+      expect(find.byType(HomePage), findsOneWidget);
+      expect(find.byType(BottomNavigationWidget), findsOneWidget);
+      expect(find.text('Page Not Found'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('游客点「我」弹登录，关闭回首页且不回环（强登录入口）', (tester) async {
+      AuthGate.resetDebounce();
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildShellRouter(authenticated: false));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.byIcon(FluentIcons.person_circle_24_regular),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsOneWidget);
+
+      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsNothing);
+      expect(find.byType(MainAppShell), findsOneWidget);
+      expect(find.byType(HomePage), findsOneWidget);
+      expect(find.text('Page Not Found'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('游客深链直达 /chat 被守卫拦截，关闭登录页后回首页且不死循环', (tester) async {
+      AuthGate.resetDebounce();
+      _suppressExpectedErrors();
+      await tester.pumpWidget(
+        _buildGuardedRouter(
+          authenticated: false,
+          initialLocation: AppRoutePaths.chat,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 守卫应把 /chat 直达重定向到登录页，而非展示受限的会话页。
+      expect(find.byType(LoginPage), findsOneWidget);
+      expect(find.text('CHAT_PAGE'), findsNothing);
+
+      // 关闭登录页：必须 go 到安全兜底（首页），禁止 pop 回 /chat 再次命中守卫。
+      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsNothing);
+      expect(find.text('CHAT_PAGE'), findsNothing);
+      expect(find.byType(MainAppShell), findsOneWidget);
+      expect(find.text('Page Not Found'), findsNothing);
+
+      // 再 pump 一帧确认守卫没有把登录页二次弹出（无死循环）。
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(LoginPage), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('底部导航上下留白对称且使用统一语义 token', (tester) async {

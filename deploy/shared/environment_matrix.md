@@ -1,6 +1,6 @@
-# 部署环境矩阵（四环境 · 一套代码）
+# 部署环境矩阵（多环境拓扑 · 一套代码）
 
-> **总览**：正式环境语义统一为 **alpha → beta → gamma → prod**。`alpha` 与 `beta` 都是开发期本地验证；`gamma` 是云侧类生产集成验证；`prod` 是全量生产（**灰度放量与回滚由云侧发布策略、观测与审批在 prod 语义下完成，不单独拆分环境名**）。
+> **总览**：正式环境语义统一为 **alpha → beta → gamma → prod**。当前冻结拓扑为 **`alpha-local / beta-local / gamma-hosted / prod-hosted`**。`alpha` 与 `beta` 都是开发期本地验证；`gamma` 是云侧类生产集成验证；`prod` 是全量生产（**灰度放量与回滚由云侧发布策略、观测与自动回滚在 prod 语义下完成，不单独拆分环境名**）。
 >
 > **拓扑唯一源**：
 > - 领域/进程归属：[`process_domain_mapping.yaml`](process_domain_mapping.yaml)
@@ -18,14 +18,36 @@
 
 **配置约束**：服务公开 `APP_ENV` 只允许 `alpha|beta|gamma|prod`，运行时只读取同名配置目录。禁止通过 `local` / `integration` 目录做兼容映射。
 
+## 1.0 自动推进主链
+
+`main` 入库后的权威主链固定为：
+
+```text
+repo verify/package
+  -> alpha-local
+  -> beta-local
+  -> gamma-hosted
+  -> prod-hosted(initial)
+  -> prod-hosted(checks)
+  -> prod-hosted(full)
+```
+
+约束：
+
+- `alpha-local` 与 `beta-local` 保持本地 topology，不新增 hosted beta。
+- `gamma-hosted` 是 `main` blocking promotion 的 hosted 阶段；`gamma-local` 仅用于提交前 local-gamma mirror。
+- `prod-hosted(initial|checks|full)` 都属于同一个 `prod` 环境生命周期，不得抽象成 `prod-gray` 或额外环境名。
+- `mainline_auto_prod` blocking critical path 必须 `<= 900s`。
+
 ## 1.0 环境真相源与官方入口
 
 统一口径：
 
-- 四环境都必须声明完整 `edge / media / service / data` 子网、public base、host allowlist、artifact policy 与 mock boundary。
+- 当前环境集合都必须声明完整 `edge / media / service / data` 子网、public base、host allowlist、artifact policy 与 mock boundary。
 - `alpha` 不是“删平面”的简化环境，而是“拓扑同构但边界 mock”。
 - 本地 host 暴露端口必须来自 `deploy/shared/local_env_port_manifest.yaml` 的 1000 端口块 + plane + 10 端口槽位模型。
 - 官方自动化入口统一为 `agent_ops/deploy/stackctl.py`（包装脚本：`agent_ops/deploy/stackctl.sh` / `agent_ops/deploy/stackctl`）。底层脚本可保留，但只作为实现细节。
+- GitHub Actions、Cursor skill、runbook 与手动命令都必须复用同一套 `stackctl` 子命令，不得复制第二套健康检查、探针或回滚语义。
 
 ## 1.0.1 Artifact Policy
 
@@ -52,6 +74,23 @@
 - `gamma` 服务端任意时刻只允许一套 ECS gamma 或一套 local-gamma mirror；并行只允许多个端侧实例同时接入同一套 gamma。
 - 不得因本地脚本便利性把 beta 或 gamma 扩展成多套长期并行环境。
 
+## 1.1.1 主链 profile 分层
+
+`deploy/shared/gamma_validation_suites.json` 是多环境 promotion 期间 hosted / self-hosted 验证 profile 的唯一真相源：
+
+| Profile | 主要触发位置 | 作用 |
+|---|---|---|
+| `pr_light` | `04` / `05` PR 默认 | 轻量收敛，不承担 `main` 后自动 promotion |
+| `manual_full` | `08` | 手动完整 hosted gamma 复验 |
+| `nightly_full` | `09` | 每晚完整 hosted + self-hosted 全量验证 |
+| `release_candidate` | 手动发布前 | 发布前高置信度回归 |
+| `mainline_auto_prod` | `07` | `main` 自动 promotion 的高信号阻断链 |
+
+设计要求：
+
+- `mainline_auto_prod` 必须只保留能证明端云正确性的最小阻断链，避免 Patrol/full semantic 把主链拖出 900 秒预算。
+- full semantic、Patrol、全设备全旅程继续留在 `nightly_full` / `release_candidate`。
+
 ## 1.2 本地端口 Profile
 
 | Profile | 端口块 | API Edge | Product Ops Edge | Media Edge | Media Origin | 示例服务槽位 |
@@ -70,9 +109,15 @@
 ## 2. 波次关系
 
 ```text
-alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-hosted device evidence)
-                                                 → prod(生产：含灰度与全量)
+alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-hosted evidence)
+                                                 → prod(initial → checks → full)
 ```
+
+说明：
+
+- `alpha` 与 `beta` 可在自有阶段内尽量并行，但 `gamma -> prod` 必须严格串行。
+- `prod initial` 后必须完成 `health + inspect + doctor + integration probes + SLO gate`，才允许自动进入 `prod full`。
+- `prod full` 失败时必须自动回滚到上一稳定 `image/config`。
 
 ### 2.1 local-gamma mirror（提交前本地预测试）
 
@@ -117,8 +162,29 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 |------|-------------|----------|
 | `alpha` | 单服务 `APP_ENV=alpha go test ./...`；端侧 `flutter test` | 单实例用例绿 |
 | `beta` | `python3 agent_ops/deploy/stackctl.py up --target beta-local`；App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 本地 Android/iOS 设备矩阵通过，且新启动前会 stop 旧 beta 栈 |
-| `gamma` | `python3 agent_ops/deploy/stackctl.py health --target gamma-hosted`；`09` nightly 完整 ECS deploy + full semantic + Patrol UI + 全设备矩阵 | PR gate：readiness 绿；nightly/manual_full：hosted + self-hosted 全绿并带证据 |
-| `prod` | `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted ...` 与 runbook 审批 | 灰度指标与回滚条件达标；全量观测稳定 |
+| `gamma` | `python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted ...` 或 `health --target gamma-hosted` | `mainline_auto_prod` / `manual_full` / `nightly_full` 对应 hosted 与 self-hosted 证据全绿 |
+| `prod` | `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted ...` | `prod initial -> checks -> full` 全自动通过，失败自动回滚，关键路径不超过 900 秒 |
+
+### 4.1 开发者一键启动
+
+日常本地端云联调统一使用：
+
+```bash
+make dev-up ENV=<alpha|beta|gamma|prod-sim|prod> [DEVICE_ID=<flutter-device-id>]
+```
+
+等价官方入口：
+
+```bash
+python3 agent_ops/deploy/stackctl.py up --env <alpha|beta|gamma|prod-sim|prod> [--device-id <id>]
+```
+
+约束：
+
+- 用户面只允许选择 **环境** 与 **端侧设备**；gateway / media / seed / host 不作为一键启动独立参数暴露。
+- `gamma` 的一键启动默认指 `gamma-local` mirror；`gamma-hosted` 仍走 `stackctl deploy/health`。
+- `prod` 的一键启动不在本地 `up` 服务栈，只做 `prod-hosted` edge health 检查后拉起本地 App/浏览器连接已部署云端。
+- `--target` 保留给 CI / runbook / 高级调试；开发者优先使用 `--env`。
 
 提交前本地左移：
 

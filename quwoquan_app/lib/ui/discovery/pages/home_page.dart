@@ -19,15 +19,15 @@ import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/unified_object_card.dart';
+import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
-import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -114,7 +114,14 @@ class _HomePageState extends ConsumerState<HomePage>
     // 保持当前频道不变（不切到空白的关注流）。
     if (id == HomePrimaryTabStrip.followingChannelId &&
         !AuthGate.isAuthenticated(ref)) {
-      unawaited(requireLogin(ref, context, AuthGateReason.followingFeed));
+      unawaited(
+        requireLogin(
+          ref,
+          context,
+          AuthGateReason.followingFeed,
+          dismissFallback: AppRoutePaths.home,
+        ),
+      );
       return;
     }
     setState(() => _activeChannelId = id);
@@ -234,7 +241,7 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   /// 按频道 template 路由到 Feed 模板组件（去硬编码 switch）；
-  /// channelId = channel.id（取数/气质文案/桶 key 真相源），template 驱动单列/多列/今日交集流。
+  /// channelId = channel.id（取数/气质文案/桶 key 真相源），template 驱动单列/多列/发现交集流。
   Widget _buildBody(
     bool isDark,
     List<HomeChannelConfig> channels,
@@ -250,7 +257,7 @@ class _HomePageState extends ConsumerState<HomePage>
     if (channel == null) {
       return const SizedBox.shrink();
     }
-    return MomentSocialFeed(
+    return HomeMultiFormFeed(
       key: ValueKey<String>('home-feed-${channel.id}'),
       isDark: isDark,
       channelId: channel.id,
@@ -260,35 +267,24 @@ class _HomePageState extends ConsumerState<HomePage>
         _openFeedPost(post, index, feedPosts: feedPosts);
       },
       onIntersectionObjectOpen: _openIntersectionObject,
-      onIntersectionObjectAction: _handleIntersectionObjectAction,
     );
   }
 
-  /// 今日交集对象卡行动按钮（关注/加入/加好友）：交集行动回流。
-  /// 带 intersectionDimension + intersectionTagRefs，便于推荐归因还原交集来源。
-  void _handleIntersectionObjectAction(IntersectionReason reason) {
-    final targetId = reason.actionTargetId.trim();
-    if (targetId.isEmpty) return;
-    ref
-        .read(contentBehaviorTrackerProvider)
-        .trackFollow(
-          targetId,
-          referralSource: ReferralSource.organicFeed,
-          feedRequestId: ref
-              .read(feedSessionProvider.notifier)
-              .currentFeedRequestId,
-          intersectionDimension: reason.dimension,
-          intersectionTagRefs: reason.tagRefs,
-        );
-    // 行动回流后跳到对象页，让用户完成实际关注/加入（关系写入归属对象页）。
-    _openIntersectionObject(reason);
-  }
-
-  /// 今日交集对象卡跳转：按对象类型路由到对应对象/聚合页。
+  /// 发现交集对象卡跳转：按对象类型路由到对应对象/聚合页。
   /// 路由全部来自 metadata codegen（[AppRoutePaths]），不在此硬编码 path。
   void _openIntersectionObject(IntersectionReason reason) {
     final targetId = reason.actionTargetId.trim();
     if (targetId.isEmpty) return;
+    // 交集漏斗归因（点击）：携带 intersectionId/dimension/class，闭合曝光→点击→转化。
+    if (reason.intersectionId.isNotEmpty) {
+      ref.read(contentBehaviorTrackerProvider).trackClick(
+            targetId,
+            referralSource: ReferralSource.organicFeed,
+            intersectionId: reason.intersectionId,
+            intersectionDimension: reason.dimension,
+            intersectionClass: reason.intersectionClass,
+          );
+    }
     final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);
     switch (kind) {
       case UnifiedObjectKind.person:

@@ -29,6 +29,8 @@ from _common.content_review import (
 )
 from _common.draft_io import (
     GENERATOR_AGENT,
+    PLACEHOLDER_MARKER,
+    drafts_dir,
     is_placeholder,
     read_draft_article,
     read_draft_meta,
@@ -37,7 +39,8 @@ from _common.draft_io import (
     write_prompt,
     write_writing_pack,
 )
-from _common.entity_extract import build_entities_sidecar
+from _common.entity_extract import build_entities_sidecar, normalize_entity_refs
+from _common.entity_annotation import merge_entity_refs
 from _common.fact_coverage import fact_covered
 from _common.image_safety import assess_image, assess_asset_sources, is_near_duplicate, STATUS_UNSAFE
 from _common.io import read_json
@@ -52,6 +55,7 @@ from _common.review_ledger import (
     save_ledger,
 )
 from _common.stage_reports import write_gate_report, write_repair_report, write_stage_result
+from _common.style_catalog import detect_opening_strategy, family_allowed_openings
 from _common.template_fingerprints import template_fingerprint_issues
 from _common.writing_pack import build_writing_pack, render_prompt_md
 
@@ -293,7 +297,7 @@ def _compose_payload_from_pack(
         "summary": _build_summary(article),
         "articleMarkdown": article,
         "carrier": carrier,
-        "entityRefs": [f"/entity/{item}" for item in brief.get("entityRefs") or []],
+        "entityRefs": merge_entity_refs(brief, draft_meta),
         "tagRefs": list(brief.get("tagRefs") or []),
         "sourceUrls": list(quality_payload.get("sourceUrls") or []),
         "sourcePaths": list(quality_payload.get("sourcePaths") or []),
@@ -360,7 +364,17 @@ def review_route_draft(
     compose_payload = _compose_payload_from_pack(ref, brief, quality_payload, pack, body, draft_meta)
     write_stage_result(task_id, batch_id, "produce", "compose", ref, compose_payload)
 
-    route_checks = _route_review_checks(body, brief, evidence_bundle, quality_payload, compose_payload)
+    route_checks = _route_review_checks(
+        body,
+        brief,
+        evidence_bundle,
+        quality_payload,
+        compose_payload,
+        task_id=task_id,
+        batch_id=batch_id,
+        ref=ref,
+        draft_meta=draft_meta,
+    )
     route_checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
@@ -521,6 +535,11 @@ def _route_review_checks(
     evidence_bundle: Mapping[str, Any],
     quality_payload: Mapping[str, Any],
     compose_payload: Mapping[str, Any],
+    *,
+    task_id: str = "",
+    batch_id: str = "",
+    ref: str = "",
+    draft_meta: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     carrier = str(compose_payload.get("carrier") or "article")
     if carrier == "gallery":
@@ -530,12 +549,16 @@ def _route_review_checks(
             "imageGate": _check_image_gate(compose_payload),
             "galleryCaption": _check_gallery_caption(article, brief, quality_payload),
         }
+    style_family, opening_strategy = _resolve_style_opening(brief, draft_meta)
     checks = {
         "routeCoverage": _check_route_coverage(article, brief, evidence_bundle),
         "narrativeContinuity": _check_narrative_continuity(article, brief, evidence_bundle),
         "provenanceRewrite": _check_provenance_rewrite(article, brief, quality_payload),
         "evidenceQuality": _check_evidence_quality(article, brief, quality_payload, compose_payload),
-        "travelogueDensity": _check_travelogue_density(article, brief),
+        "travelogueDensity": _check_travelogue_density(
+            article, brief, style_family=style_family, opening_strategy=opening_strategy
+        ),
+        "crossArticleSimilarity": _check_cross_article_similarity(task_id, batch_id, ref, article),
         "carrierConsistency": _check_carrier_consistency(compose_payload),
         "mixedLayout": _check_mixed_layout(article),
         "imageGate": _check_image_gate(compose_payload),
@@ -670,8 +693,19 @@ def _opening_paragraph(article: str) -> str:
     return paragraphs[0] if paragraphs else ""
 
 
-def _check_travelogue_density(article: str, brief: Mapping[str, Any]) -> dict[str, Any]:
-    """游记感密度门：出发动机 + 显式喜欢/不喜欢 + 取舍判断 + 注意事项就地融入。"""
+def _check_travelogue_density(
+    article: str,
+    brief: Mapping[str, Any],
+    *,
+    style_family: str = "",
+    opening_strategy: str = "",
+) -> dict[str, Any]:
+    """游记感密度门：开篇钩子（按所选体裁多策略，破"千篇一律"）+ 显式喜欢/不喜欢 + 取舍判断 + 注意事项就地融入。
+
+    开篇不再强制单一"出发动机"：按 styleFamily 的 allowedOpenings 用 detect_opening_strategy 语义化校验，
+    开篇须真正落地该体裁允许的任一开篇策略；若 draft_meta 声明了 openingStrategy，正文开篇须与之一致（诚信）。
+    无 styleFamily 时回退原 MOTIVATION_MARKERS，向后兼容。
+    """
     issues: list[str] = []
     opening_required = bool((brief.get("openingTension") or {}).get("required", True))
     feelings = brief.get("explicitFeelings") or {"requireLike": True, "requireDislike": True}
@@ -679,8 +713,18 @@ def _check_travelogue_density(article: str, brief: Mapping[str, Any]) -> dict[st
     tips_policy = brief.get("tipsEmbeddingPolicy") or {"forbidStandaloneBlock": True}
 
     opening = _opening_paragraph(article)
-    if opening_required and not any(marker in opening for marker in MOTIVATION_MARKERS):
-        issues.append("opening lacks departure motivation/tension")
+    if opening_required:
+        detected = detect_opening_strategy(opening, style_family)
+        if detected is None:
+            allowed = family_allowed_openings(style_family)
+            issues.append(
+                f"opening lacks a real hook for styleFamily '{style_family or 'default'}'; "
+                f"adopt one of {allowed} (现为套路化/千篇一律开头)"
+            )
+        elif opening_strategy and opening_strategy != detected:
+            issues.append(
+                f"declared openingStrategy '{opening_strategy}' not reflected in opening (detected '{detected}')"
+            )
     if feelings.get("requireLike", True) and not any(m in article for m in LIKE_FEELING_MARKERS):
         issues.append("missing explicit positive feeling (like)")
     if feelings.get("requireDislike", True) and not any(m in article for m in DISLIKE_FEELING_MARKERS):
@@ -697,7 +741,58 @@ def _check_travelogue_density(article: str, brief: Mapping[str, Any]) -> dict[st
     return {
         "passed": not issues,
         "issues": issues,
-        "suggestions": ["开头补出发动机，正文写清喜欢与不喜欢，注意事项就地融入而非另起清单。"] if issues else [],
+        "suggestions": ["开篇换用所选体裁的真实钩子，正文写清喜欢与不喜欢，注意事项就地融入而非另起清单。"] if issues else [],
+    }
+
+
+def _resolve_style_opening(brief: Mapping[str, Any], draft_meta: Mapping[str, Any] | None) -> tuple[str, str]:
+    """最终 styleFamily（agent 自选优先于 blueprint 默认）与所声明的 openingStrategy。"""
+    meta = draft_meta or {}
+    style_family = str(meta.get("styleFamily") or brief.get("styleFamily") or "")
+    opening_strategy = str(meta.get("openingStrategy") or "")
+    return style_family, opening_strategy
+
+
+def _check_cross_article_similarity(
+    task_id: str,
+    batch_id: str,
+    ref: str,
+    article: str,
+    *,
+    threshold: float = 0.65,
+) -> dict[str, Any]:
+    """跨篇相似度门（破量产"千篇一律"）：本篇开篇若与同批其他文章开篇字符级 jaccard 过高则判 revision。
+
+    专治"X 的水/风景，我在屏幕上看了无数遍，总怕亲眼一看会不过如此"这类换实体名不换句式的批量套路开头。
+    """
+    opening = _opening_paragraph(article)
+    if not opening:
+        return {"passed": True, "issues": [], "suggestions": []}
+    issues: list[str] = []
+    directory = drafts_dir(task_id, batch_id)
+    suffix = ".article.md"
+    if directory.is_dir():
+        for other in sorted(directory.glob(f"*{suffix}")):
+            other_ref = other.name[: -len(suffix)]
+            if other_ref == ref:
+                continue
+            try:
+                other_text = other.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if PLACEHOLDER_MARKER in other_text:
+                continue
+            other_opening = _opening_paragraph(other_text)
+            if not other_opening:
+                continue
+            sim = _jaccard(opening, other_opening)
+            if sim > threshold:
+                issues.append(f"opening too similar to sibling '{other_ref}' (jaccard={sim:.2f})")
+                break
+    return {
+        "passed": not issues,
+        "issues": issues,
+        "suggestions": ["换一种开篇策略/切入角度，避免与同批文章雷同（同质开头会被批量识别）。"] if issues else [],
     }
 
 
@@ -818,6 +913,8 @@ def _review_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks["routeCoverage"]["passed"] or not checks["narrativeContinuity"]["passed"]:
         return "agent_compose"
     if not checks.get("travelogueDensity", {"passed": True})["passed"]:
+        return "agent_compose"
+    if not checks.get("crossArticleSimilarity", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("mixedLayout", {"passed": True})["passed"]:
         return "agent_compose"

@@ -114,12 +114,12 @@ WorksFeedProvider (AsyncNotifier<CursorPage<PostBaseDto>>)
     │       ├── VideoAutoPlayItem (VideoPostDto)
     │       └── ArticleCardItem   (ArticlePostDto + blocks)
     │
-MomentFeedProvider (独立，moment category 不变)
+MicroFeedProvider (独立，moment category 仅作为既有 wire identity 保留)
     │
-    └── MomentSocialFeed
-            ├── MomentImageGrid
-            ├── MomentTextCard (5行截断)
-            └── MomentVideoCard (入焦自动播放)
+    └── HomeMultiFormFeed / DiscoveryMicroPostCard
+            ├── HomeFeedImageGrid
+            ├── HomeFeedTextCard (5行截断)
+            └── HomeFeedVideoCard (入焦自动播放)
 ```
 
 ## 未来演进

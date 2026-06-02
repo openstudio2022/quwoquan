@@ -63,7 +63,7 @@ discovery_adjacent:
   - path: quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
     category: migrate_done_partially
     notes: 并行 raw 路径已 ArticleDetailWireKeys + ContentPostImmersiveWireKeys；标题/计数等通用键可继续收口。
-  - path: quwoquan_app/lib/ui/discovery/widgets/moment_social_feed.dart
+  - path: quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart
     category: adjacent
     notes: mock fallback 使用 ContentMockData wire + postBaseDtoFromMap。
 

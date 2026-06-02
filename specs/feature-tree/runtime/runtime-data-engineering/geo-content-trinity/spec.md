@@ -20,9 +20,9 @@
 
 - `[workflow.md](workflow.md)` — 数据工程运行工作流
 - `[command-matrix.md](command-matrix.md)` — `data-`* 阶段命令与内部 `crawl` 映射
-- `config/geo_catalog_config.sichuan.yaml`
-- `config/entity_naming_rules.yaml`
-- `config/geo_band_rules.sichuan.yaml`
+- `specs/assets/runtime-data-engineering/geo-content-trinity/config/geo_catalog_config.sichuan.yaml`
+- `specs/assets/runtime-data-engineering/geo-content-trinity/config/entity_naming_rules.yaml`
+- `specs/assets/runtime-data-engineering/geo-content-trinity/config/geo_band_rules.sichuan.yaml`
 
 ## 目标用户
 

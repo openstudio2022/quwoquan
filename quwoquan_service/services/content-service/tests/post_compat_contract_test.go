@@ -134,3 +134,53 @@ func TestPost_CurrentReadBackfillsIdentityAndAssistantUsePolicy(t *testing.T) {
 		t.Fatalf("expected assistantUsePolicy=inherit, got %v", result["assistantUsePolicy"])
 	}
 }
+
+func TestPostSearch_DerivesCategoriesFromTopicTagRefs(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	now := time.Now().UTC()
+	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), bson.M{
+		"_id":         "search_topic_post_1",
+		"authorId":    "search_author",
+		"contentType": "article",
+		"title":       "内容语义标签搜索",
+		"body":        "这篇文章用于验证站内搜索语义标签。",
+		"tagRefs":     []string{"Topic/旅行", "Topic/景区", "Entity/地点/景区"},
+		"entityRefs":  []string{"地点/景区/四川大学"},
+		"status":      "published",
+		"visibility":  "public",
+		"createdAt":   now,
+		"updatedAt":   now,
+		"publishedAt": now,
+	})
+	if err != nil {
+		t.Fatalf("insert search post: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/search?query=%E6%97%85%E8%A1%8C", nil)
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var result struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(result.Items) != 1 {
+		t.Fatalf("expected 1 search result, got %d: %s", len(result.Items), rec.Body.String())
+	}
+	item := result.Items[0]
+	if item["postId"] != "search_topic_post_1" {
+		t.Fatalf("unexpected postId: %+v", item)
+	}
+	if item["matchedField"] != "tagRefs" {
+		t.Fatalf("expected matchedField=tagRefs, got %+v", item)
+	}
+	if item["categoryId"] != "旅行" || item["subCategory"] != "景区" {
+		t.Fatalf("expected category/subCategory from tagRefs, got %+v", item)
+	}
+}

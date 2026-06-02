@@ -2,7 +2,7 @@
 
 ## 功能定位
 
-统一定义服务配置加载与覆盖的分层模型，确保云侧 alpha、beta、gamma、prod 四套环境以同一逻辑运行，避免配置漂移与服务内重复实现。端侧 App 构建环境为 alpha、beta、gamma、prod；生产只有一个 App 包，灰度由应用市场分发策略、端侧上下文与云侧灰度策略共同决定。
+统一定义服务配置加载与覆盖的分层模型，确保云侧当前环境集合（如 alpha、beta、gamma、prod）以同一逻辑运行，避免配置漂移与服务内重复实现。端侧 App 构建环境为 alpha、beta、gamma、prod；生产只有一个 App 包，灰度由应用市场分发策略、端侧上下文与云侧灰度策略共同决定。
 
 本节点作为 `runtime-config` 的核心子组件，承载配置来源优先级、环境识别、版本兼容校验与发布化接入约束。
 
@@ -16,7 +16,7 @@
 - 统一部署映射：`environments -> deploy process -> domains`
 - 拓扑一致性：`beta`、`gamma`、`prod` 的进程-领域映射保持一致
 - 端侧生产包唯一：不存在 `app-prod-gray`；生产灰度由云侧发布波次与策略表达，不单独占用环境枚举。
-- 统一 environment topology：四环境共享 `environment_topology_manifest.yaml` schema，alpha 仅通过 mock boundary 差异化。
+- 统一 environment topology：当前环境集合共享 `environment_topology_manifest.yaml` schema，alpha 仅通过 mock boundary 差异化。
 - 统一环境包策略：app/service 包的 host allowlist、secret scope、dataSource 与 purity gate 由 manifest 驱动。
 - 统一自动化入口：环境打包、校验、健康检查与巡检统一经 `stackctl` 暴露机器可读报告。
 

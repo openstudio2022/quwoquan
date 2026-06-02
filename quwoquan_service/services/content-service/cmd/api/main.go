@@ -18,7 +18,6 @@ import (
 	rtmongo "quwoquan_service/runtime/mongodb"
 	rtotel "quwoquan_service/runtime/otel"
 
-	rtexp "quwoquan_service/runtime/experiments"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -27,6 +26,7 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
+	rtrecpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/content-service/internal/adapters/http"
 	"quwoquan_service/services/content-service/internal/application"
@@ -110,13 +110,6 @@ type config struct {
 		CDNTTLMin       int    `yaml:"cdn_ttl_minutes"`
 		UseSSL          bool   `yaml:"use_ssl"`
 	} `yaml:"oss"`
-
-	Experiments map[string]experimentConfig `yaml:"experiments"`
-}
-
-type experimentConfig struct {
-	Enabled bool           `yaml:"enabled"`
-	Buckets map[string]int `yaml:"buckets"`
 }
 
 func main() {
@@ -233,8 +226,28 @@ func main() {
 
 		// In-process projectors: discovery feed + recommendation features.
 		discoveryProjector := recinfra.NewDiscoveryFeedProjector(db)
-		recommendProjector := recinfra.NewRecommendFeatureProjector(db, recinfra.WithEntityPropagation(entityPropagation), recinfra.WithSignalProcessor(bufferedWriter))
+		// Rule-based segment SSOT, loaded from segments.yaml (env-overridable
+		// path). Population definitions stay a separate SSOT from policy.yaml
+		// (scoring strategy); the engine reads resolved memberships from
+		// rm_recommend_feature.segments. Load failure degrades membership only.
+		segmentsPath := os.Getenv("QWQ_SEGMENTS_PATH")
+		if segmentsPath == "" {
+			segmentsPath = "contracts/metadata/recommendation/rec_model/segments.yaml"
+		}
+		segDefs, segErr := recinfra.LoadSegments(segmentsPath)
+		if segErr != nil {
+			log.Printf("WARN: load segment definitions from %s: %v (segment membership disabled)", segmentsPath, segErr)
+		}
+		interestAgg := recinfra.NewInterestProfileAggregator(db, recinfra.DefaultInterestProfileConfig(), eventPub, recinfra.WithSegments(segDefs))
+		recommendProjector := recinfra.NewRecommendFeatureProjector(db, recinfra.WithEntityPropagation(entityPropagation), recinfra.WithSignalProcessor(bufferedWriter), recinfra.WithInterestAggregator(interestAgg))
 		sharedProjector = &projectorAdapter{discovery: discoveryProjector, recommend: recommendProjector}
+
+		// Periodic raw-affinity decay so $inc growth never permanently
+		// fossilizes stale interests. A per-day Redis single-flight lock
+		// (SET NX) ensures only one replica runs the non-idempotent $multiply
+		// decay each day. Read-time freshness decay (ComputeInterestProfile) is
+		// separate; this decays the stored affinity counters themselves.
+		startDailyAffinityDecay(ctx, interestAgg, router.Scene("general"), logger)
 		postServiceOpts = append(postServiceOpts, application.WithProjector(sharedProjector))
 		recOpts = append(recOpts, rtrec.WithFeatureProvider(recinfra.NewFeatureStore(db)))
 
@@ -358,43 +371,25 @@ func main() {
 		log.Printf("content-service rec-model-service enabled url=%s timeout=%v", cfg.RecModelService.URL, timeout)
 	}
 
-	// AB experiment resolver — reads from config if available, falls back to defaults
-	expResolver := rtexp.NewHashResolver()
-	if expCfg, ok := cfg.Experiments[rtrec.ExpRecWeights]; ok && expCfg.Enabled {
-		buckets := make([]rtexp.BucketDef, 0, len(expCfg.Buckets))
-		for name, pct := range expCfg.Buckets {
-			buckets = append(buckets, rtexp.BucketDef{Name: name, WeightPct: pct})
-		}
-		expResolver.Register(&rtexp.Experiment{
-			ID: rtrec.ExpRecWeights, Buckets: buckets, PolicyVersion: "v1-config", Enabled: true,
-		})
-	} else {
-		rtrec.RegisterRecWeightsExperiment(expResolver)
+	// Recommendation scoring policy — single source of weights, secondary
+	// coefficients, AB experiments, and segment targeting (policy.yaml). The
+	// store seeds from the codegen baseline (fail-safe) and hot-reloads the
+	// live YAML via validate-before-swap + last-good retention, so editing the
+	// metadata takes effect without restart and a bad edit never degrades
+	// scoring. Replaces the former per-service experiment registration; there
+	// is no second source of experiment/weight config.
+	policyStore := rtrecpolicy.NewStoreFromBaseline()
+	policyPath := os.Getenv("QWQ_REC_POLICY_PATH")
+	if policyPath == "" {
+		policyPath = "contracts/metadata/recommendation/rec_model/policy.yaml"
 	}
-	if expCfg, ok := cfg.Experiments[rtrec.ExpModelVsRule]; ok && expCfg.Enabled {
-		buckets := make([]rtexp.BucketDef, 0, len(expCfg.Buckets))
-		for name, pct := range expCfg.Buckets {
-			buckets = append(buckets, rtexp.BucketDef{Name: name, WeightPct: pct})
-		}
-		expResolver.Register(&rtexp.Experiment{
-			ID: rtrec.ExpModelVsRule, Buckets: buckets, PolicyVersion: "v1-config", Enabled: true,
-		})
+	if _, statErr := os.Stat(policyPath); statErr == nil {
+		go rtrecpolicy.StartSyncLoop(ctx, policyStore, logger, rtrecpolicy.SyncConfig{Path: policyPath})
+		log.Printf("content-service rec policy hot-reload enabled path=%s baseline=%s", policyPath, rtrecpolicy.BaselinePolicyVersion)
 	} else {
-		rtrec.RegisterModelVsRuleExperiment(expResolver)
+		log.Printf("content-service rec policy using codegen baseline=%s (no live file at %s)", rtrecpolicy.BaselinePolicyVersion, policyPath)
 	}
-	if expCfg, ok := cfg.Experiments[rtrec.ExpModelVersion]; ok && expCfg.Enabled {
-		buckets := make([]rtexp.BucketDef, 0, len(expCfg.Buckets))
-		for name, pct := range expCfg.Buckets {
-			buckets = append(buckets, rtexp.BucketDef{Name: name, WeightPct: pct})
-		}
-		expResolver.Register(&rtexp.Experiment{
-			ID: rtrec.ExpModelVersion, Buckets: buckets, PolicyVersion: "v1-config", Enabled: true,
-		})
-	} else {
-		rtrec.RegisterModelVersionExperiment(expResolver)
-	}
-	recOpts = append(recOpts, rtrec.WithExperimentResolver(expResolver))
-	log.Printf("content-service experiment resolver registered: %s, %s, %s", rtrec.ExpRecWeights, rtrec.ExpModelVsRule, rtrec.ExpModelVersion)
+	recOpts = append(recOpts, rtrec.WithPolicyStore(policyStore))
 
 	engine := rtrec.NewEngine(sessionCache, candidateSources, recOpts...)
 	feedService := application.NewFeedService(engine, source)
@@ -416,6 +411,12 @@ func main() {
 	if bulkImportService != nil {
 		handlerOpts = append(handlerOpts, httpadapter.WithBulkImportService(bulkImportService))
 	}
+
+	// 交集统一体验服务：跨会话冷却窗口（rec:icool ZSET）+ per-dimension 已读水位
+	// （cache:viewer_intersections）+ 事实/概率合并排序。事实数据由环境 seed 驱动，
+	// 服务端不伪造（默认空源）；router 通过 ForKey 前缀路由到 rec/general 场景。
+	intersectionService := application.NewIntersectionService(router)
+	handlerOpts = append(handlerOpts, httpadapter.WithIntersectionService(intersectionService))
 
 	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService, handlerOpts...).Routes()
 
@@ -806,6 +807,56 @@ func parseBoolEnv(key string, fallback bool) bool {
 		return false
 	default:
 		return fallback
+	}
+}
+
+// dailyAffinityDecayCheckInterval is how often each replica checks whether the
+// daily affinity decay still needs to run; the per-day Redis lock makes the
+// actual decay run at most once per UTC day across all replicas.
+const dailyAffinityDecayCheckInterval = time.Hour
+
+// startDailyAffinityDecay launches a background ticker that decays raw affinity
+// counters once per UTC day. With multiple replicas a per-day Redis
+// single-flight lock (SET NX) guarantees only one replica performs the
+// non-idempotent $multiply decay, preventing over-decay. A nil aggregator
+// degrades to a no-op; a nil lock degrades to an unguarded single run.
+func startDailyAffinityDecay(ctx context.Context, agg *recinfra.InterestProfileAggregator, lock rtredis.Client, logger *slog.Logger) {
+	if agg == nil {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(dailyAffinityDecayCheckInterval)
+		defer ticker.Stop()
+		runDailyAffinityDecayOnce(ctx, agg, lock, logger)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				runDailyAffinityDecayOnce(ctx, agg, lock, logger)
+			}
+		}
+	}()
+}
+
+// runDailyAffinityDecayOnce acquires the per-day single-flight lock and, if won,
+// decays one day's worth of half-life from every user's affinity counters.
+func runDailyAffinityDecayOnce(ctx context.Context, agg *recinfra.InterestProfileAggregator, lock rtredis.Client, logger *slog.Logger) {
+	if lock != nil {
+		key := "rec:affinity-decay:lock:" + time.Now().UTC().Format("2006-01-02")
+		// TTL > 24h so the daily key survives until the next day's key takes
+		// over; the date in the key, not the TTL, scopes one run per day.
+		won, err := lock.SetNX(ctx, key, "1", 26*time.Hour)
+		if err != nil {
+			logger.Warn("affinity decay lock acquire failed; skipping tick", "err", err)
+			return
+		}
+		if !won {
+			return // another replica already ran (or is running) today
+		}
+	}
+	if err := agg.DecayAll(ctx, 1); err != nil {
+		logger.Warn("affinity decay failed", "err", err)
 	}
 }
 

@@ -45,3 +45,15 @@ redis:
       read_timeout_ms: 200
       write_timeout_ms: 200
       dial_timeout_ms: 500
+
+# app_search 直连 content-service 站内检索；默认空（回退 fake/外部搜索），
+# 各环境可在 override 配置或 CONTENT_SEARCH_BASE_URL 注入真实网关地址。
+content_search:
+  base_url: ""
+  timeout_ms: 5000
+
+# 主动 skill 个性化：读取 user-service 兴趣画像（GET /v1/users/{userId}/interest-profile）。
+# 默认空（主动输出不个性化）；各环境可注入真实 user-service 地址。
+user_profile:
+  base_url: ""
+  timeout_ms: 5000

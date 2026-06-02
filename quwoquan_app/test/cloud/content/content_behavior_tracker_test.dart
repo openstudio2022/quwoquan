@@ -189,5 +189,28 @@ void main() {
       expect(json['intersectionDimension'], equals('identity'));
       expect(json['intersectionTagRefs'], contains('Entity/机构/学校/西电'));
     });
+
+    // ── P3 飞轮：小艺对话浮现兴趣回流（assistant_interest，不绑定具体 post）──
+    test('assistant_interest 回流 tagRefs，不绑 post，去重并过滤空值', () async {
+      tracker.trackAssistantInterest(
+        const <String>['Topic/旅行', ' Topic/景区 ', 'Topic/旅行', '', '   '],
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.assistantInterest);
+      expect(event.contentId, isEmpty);
+      expect(event.tags, equals(<String>['Topic/旅行', 'Topic/景区']));
+
+      final json = event.toJson();
+      expect(json['action'], equals('assistant_interest'));
+      expect(json['tagRefs'], equals(<String>['Topic/旅行', 'Topic/景区']));
+    });
+
+    test('assistant_interest 全空 tagRefs 不上报', () async {
+      tracker.trackAssistantInterest(const <String>['', '  ']);
+      await tracker.flush();
+      expect(repo.recorded, isEmpty);
+    });
   });
 }

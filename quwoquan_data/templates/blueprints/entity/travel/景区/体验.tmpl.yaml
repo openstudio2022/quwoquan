@@ -15,6 +15,9 @@ creatorPersona:
   mustNotClaim: [官方推荐, 商业合作]
 editorialIntent: 以真实体验和感官细节描述景区，但保留事实边界。
 render: { articleTemplate: journal, fontPreset: handwritten }
+conditionAxes:
+  region: { applicable: true, slot: 地形适应 }
+  season: { applicable: true, slot: 季节体验 }
 structure:
   required: [初见印象, 核心体验, 意外收获, 离开时的感受]
   optional: [同行者故事, 再次来访的理由]

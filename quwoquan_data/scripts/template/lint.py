@@ -12,6 +12,8 @@ from template.condition import scan_region_locked_terms, validate_region_season
 from template.creator import validate_creators
 from template.recommend import validate_recommendation_contract
 from template.registry import TemplateRegistry, tag_exists
+from template.source import validate_source_catalog
+from template.style import validate_style_catalog
 
 
 ARTICLE_TEMPLATES = {"gentle", "ritual", "diffuse", "journal", "tech"}
@@ -102,6 +104,8 @@ def lint_all() -> list[str]:
     errors.extend(validate_recommendation_contract(registry))
     errors.extend(validate_creators(registry))
     errors.extend(validate_region_season(registry))
+    errors.extend(validate_source_catalog(registry))
+    errors.extend(validate_style_catalog(registry))
     return errors
 
 

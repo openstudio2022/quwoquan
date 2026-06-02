@@ -1,6 +1,6 @@
 # Deliver → Prod 端到端运行手册
 
-**四环境与 prod rollout stage** 见 [environment_matrix.md](environment_matrix.md)（与本文阶段编号一致：alpha / beta / gamma / prod，其中 `local-gamma mirror` 是 `gamma` 的本地左移拓扑，不是第五环境）。
+**环境拓扑链与 prod rollout stage** 见 [environment_matrix.md](environment_matrix.md)（与本文阶段编号一致：alpha / beta / gamma / prod，其中 `local-gamma mirror` 是 `gamma` 的本地左移拓扑，不是额外环境）。
 
 ## 1. 目标
 

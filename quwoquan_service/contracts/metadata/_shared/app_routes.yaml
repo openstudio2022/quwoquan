@@ -82,6 +82,9 @@ routes:
   - id: profileStats
     path: /profile/stats
     query_params: [type]
+  - id: myIntersections
+    path: /profile/intersections
+    query_params: [dimension]
   - id: chatDetail
     path: /chat/{id}
   - id: chatSettings

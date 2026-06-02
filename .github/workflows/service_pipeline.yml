@@ -18,8 +18,11 @@ on:
     branches:
       - main
     paths:
+      - '.github/workflows/**'
+      - 'agent_ops/**'
       - 'quwoquan_service/**'
       - 'deploy/**'
+      - 'releases/**'
   workflow_dispatch:
 
 env:
@@ -27,13 +30,71 @@ env:
   IMAGE_PREFIX: ${{ github.repository }}
 
 jobs:
+  prepare-release:
+    name: Prepare mainline release artifact
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      image_version: ${{ steps.versions.outputs.image_version }}
+      config_version: ${{ steps.versions.outputs.config_version }}
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    steps:
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+      - name: Generate versions
+        id: versions
+        env:
+          GITHUB_RUN_NUMBER_VALUE: ${{ github.run_number }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime as dt
+          import os
+          stamp = dt.datetime.now(dt.timezone.utc)
+          run_number = os.environ["GITHUB_RUN_NUMBER_VALUE"]
+          print(f"image_version=1.{stamp.strftime('%Y%m%d')}.{run_number}")
+          print(f"config_version=v{stamp.strftime('%Y.%m.%d')}.{run_number}")
+          PY
+      - name: Generate mainline release artifact
+        run: |
+          rm -rf .mainline-release-artifact
+          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
+            --output-dir .mainline-release-artifact \
+            --git-sha "${GITHUB_SHA}" \
+            --run-number "${{ github.run_number }}" \
+            --repository "${{ github.repository }}" \
+            --registry "${{ env.REGISTRY }}" \
+            --image-version "${{ steps.versions.outputs.image_version }}" \
+            --config-version "${{ steps.versions.outputs.config_version }}"
+      - name: Upload mainline release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mainline-release-artifact
+          path: .mainline-release-artifact/**
+          if-no-files-found: error
+          compression-level: 0
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
   build-go:
     name: Go 构建与测试
     runs-on: ubuntu-latest
+    needs: [prepare-release]
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     defaults:
       run:
         working-directory: quwoquan_service
     steps:
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
 
       - name: 设置 Go
@@ -55,19 +116,105 @@ jobs:
         run: make build
 
       # L2 由 delivery-gate 负责，此处仅 build
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
-  build-python:
-    name: 构建 rec-model-service 镜像
+  build-seed-box:
+    name: 构建 seed-box 镜像
     runs-on: ubuntu-latest
+    needs: [prepare-release]
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     permissions:
       contents: read
       packages: write
     steps:
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
+      - name: Download mainline release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mainline-release-artifact
+          path: .mainline-release-artifact
+      - name: Unpack generated release snapshots
+        run: |
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
 
-      - name: 提取短 commit SHA
-        id: sha
-        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          root = Path(".mainline-release-artifact")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          for rel_path in manifest.get("releaseFiles", {}).values():
+              src = root / rel_path
+              dst = Path(rel_path)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+          PY
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: 登录镜像仓库
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: 构建并推送 seed-box 镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/service/seed-box/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/seed-box:${{ needs.prepare-release.outputs.image_version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/seed-box:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  build-python:
+    name: 构建 rec-model-service 镜像
+    runs-on: ubuntu-latest
+    needs: [prepare-release]
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+      - name: Download mainline release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mainline-release-artifact
+          path: .mainline-release-artifact
+      - name: Unpack generated release snapshots
+        run: |
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path(".mainline-release-artifact")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          for rel_path in manifest.get("releaseFiles", {}).values():
+              src = root / rel_path
+              dst = Path(rel_path)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+          PY
 
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -86,19 +233,51 @@ jobs:
           file: quwoquan_service/services/rec-model-service/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/recommendation-service:${{ steps.sha.outputs.short }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/recommendation-service:${{ needs.prepare-release.outputs.image_version }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/recommendation-service:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   validate-deploy:
     name: 校验 Kustomize 部署
     needs:
+      - prepare-release
       - build-go
+      - build-seed-box
       - build-python
     runs-on: ubuntu-latest
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
+      - name: Download mainline release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mainline-release-artifact
+          path: .mainline-release-artifact
+      - name: Unpack generated release snapshots
+        run: |
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path(".mainline-release-artifact")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          for rel_path in manifest.get("releaseFiles", {}).values():
+              src = root / rel_path
+              dst = Path(rel_path)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+          PY
 
       - name: 安装 kustomize
         run: bash agent_ops/deploy/shared/install_kustomize.sh
@@ -142,3 +321,62 @@ jobs:
             kustomize build deploy/service/coturn/kustomize/overlays/$env > /dev/null
             echo "coturn overlay $env OK"
           done
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  service_pipeline_summary:
+    name: 02. Service Pipeline
+    needs:
+      - prepare-release
+      - build-go
+      - build-seed-box
+      - build-python
+      - validate-deploy
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render service pipeline timing summary
+        id: timing
+        env:
+          PREPARE_SECONDS: ${{ needs.prepare-release.outputs.duration_seconds }}
+          BUILD_GO_SECONDS: ${{ needs.build-go.outputs.duration_seconds }}
+          BUILD_SEED_BOX_SECONDS: ${{ needs.build-seed-box.outputs.duration_seconds }}
+          BUILD_PYTHON_SECONDS: ${{ needs.build-python.outputs.duration_seconds }}
+          VALIDATE_SECONDS: ${{ needs.validate-deploy.outputs.duration_seconds }}
+        run: |
+          PREPARE="${PREPARE_SECONDS:-0}"
+          BUILD_GO="${BUILD_GO_SECONDS:-0}"
+          BUILD_SEED_BOX="${BUILD_SEED_BOX_SECONDS:-0}"
+          BUILD_PYTHON="${BUILD_PYTHON_SECONDS:-0}"
+          VALIDATE="${VALIDATE_SECONDS:-0}"
+          FANOUT="${BUILD_GO}"
+          if [ "${BUILD_SEED_BOX}" -gt "${FANOUT}" ]; then FANOUT="${BUILD_SEED_BOX}"; fi
+          if [ "${BUILD_PYTHON}" -gt "${FANOUT}" ]; then FANOUT="${BUILD_PYTHON}"; fi
+          CRITICAL_PATH_SECONDS=$(( PREPARE + FANOUT + VALIDATE ))
+          python3 agent_ops/ci/render_ci_timing_summary.py \
+            --gate-key 02.service_pipeline \
+            --title "02. Service Pipeline" \
+            --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
+            --phase "prepare_release=${PREPARE}" \
+            --phase "build_go=${BUILD_GO}" \
+            --phase "build_seed_box=${BUILD_SEED_BOX}" \
+            --phase "build_recommendation_service=${BUILD_PYTHON}" \
+            --phase "validate_deploy=${VALIDATE}" \
+            --note "02 负责 mainline release artifact、镜像构建推送与部署清单校验；该耗时必须计入真实 commit-to-prod。" \
+            --write-json "artifacts/ci-timing/service-pipeline-summary.json" \
+            --write-step-summary
+          echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
+      - name: Upload service pipeline timing summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-pipeline-timing-summary
+          path: artifacts/ci-timing/service-pipeline-summary.json
+          if-no-files-found: error
+          compression-level: 0

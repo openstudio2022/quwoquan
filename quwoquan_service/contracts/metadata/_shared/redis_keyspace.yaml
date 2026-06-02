@@ -100,6 +100,18 @@ key_patterns:
     hash_tag: userId
     description: Session 实时兴趣向量（最近一次行为信号的 JSON 快照）
 
+  - pattern: "rec:icool:{<userId>}"
+    redis_scene: rec
+    ttl_seconds: 2592000
+    type: sorted_set
+    hash_tag: userId
+    description: |
+      交集推荐跨会话冷却集（intersection cooldown）。
+      member = 交集对象 id，score = 冷却过期 unix 秒。
+      交集曝光未转化即 ZADD（默认 14 天，policy.yaml intersectionCooldownDays 可配）；
+      下发前 ZRANGEBYSCORE (now, +inf) 视为冷却中并排除，过期成员自然解禁。
+      TTL 30 天为兜底上限，避免无限增长（与会话级 rec:exposed 区分）。
+
   # ─── general 场景 ────────────────────────────────────────────────
   - pattern: "cache:{entity}:{id}"
     redis_scene: general
@@ -112,6 +124,14 @@ key_patterns:
     ttl_seconds: 300
     type: hash
     description: 助手当前页面上下文（多模态理解输入）
+
+  - pattern: "cache:viewer_intersections:{userId}"
+    redis_scene: general
+    ttl_seconds: 900
+    type: string
+    description: |
+      「我的交集」事实读模型聚合缓存（viewer_object_intersections 物化结果的 summary/list 快照）。
+      请求期命中缓存即返回，避免重复聚合；事实更新或保鲜重算时主动失效。
 
   - pattern: "content_analysis:{postId}"
     redis_scene: general

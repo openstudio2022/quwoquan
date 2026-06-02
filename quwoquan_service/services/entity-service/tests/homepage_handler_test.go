@@ -65,6 +65,88 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 	if _, ok := shell["contentPreview"].([]any); !ok {
 		t.Fatalf("expected shell.contentPreview array")
 	}
+
+	bundle := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/v1/homepages/"+homepageID+"/object-page-bundle?referralSource=test&feedRequestId=feed-1&recommendationTraceId=trace-1&experimentBucket=A&rolloutCohort=cohort-a",
+		nil,
+		http.StatusOK,
+	)
+	if got := stringField(t, bundle, "objectType"); got != "homepage" {
+		t.Fatalf("expected homepage objectType, got %q", got)
+	}
+	if got := stringField(t, bundle, "canonicalEntityId"); got == "" {
+		t.Fatalf("expected canonicalEntityId in bundle")
+	}
+	if edges := sliceField(t, bundle, "relationEdges"); len(edges) == 0 {
+		t.Fatalf("expected relationEdges in bundle")
+	}
+	assistantContext, ok := bundle["assistantContext"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected assistantContext object")
+	}
+	if assistantContext["referralSource"] != "test" {
+		t.Fatalf("expected referralSource propagated, got %v", assistantContext["referralSource"])
+	}
+	rolloutContext, ok := bundle["rolloutContext"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected rolloutContext object")
+	}
+	if rolloutContext["cohort"] != "cohort-a" {
+		t.Fatalf("expected rollout cohort propagated, got %v", rolloutContext["cohort"])
+	}
+}
+
+func TestHomepageTypeSupportsCampusAndTravelPhoto(t *testing.T) {
+	server := httptest.NewServer(
+		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	)
+	defer server.Close()
+
+	for _, item := range []struct {
+		id               string
+		expectedType     string
+		expectedTemplate string
+	}{
+		{
+			id:               "fixture_homepage_university_pku",
+			expectedType:     "university",
+			expectedTemplate: "campus",
+		},
+		{
+			id:               "fixture_homepage_travel_photo_west_lake",
+			expectedType:     "travel_photo",
+			expectedTemplate: "travel_photo",
+		},
+	} {
+		bundle := requestJSON(
+			t,
+			server.Client(),
+			http.MethodGet,
+			server.URL+"/v1/homepages/"+item.id+"/object-page-bundle",
+			nil,
+			http.StatusOK,
+		)
+		if got := stringField(t, bundle, "objectPageTemplate"); got != item.expectedTemplate {
+			t.Fatalf("expected template %q for %s, got %q", item.expectedTemplate, item.id, got)
+		}
+		if got := stringField(t, bundle, "canonicalEntityId"); got == "" {
+			t.Fatalf("expected canonicalEntityId for %s", item.id)
+		}
+		detail := requestJSON(
+			t,
+			server.Client(),
+			http.MethodGet,
+			server.URL+"/v1/homepages/"+item.id,
+			nil,
+			http.StatusOK,
+		)
+		if got := stringField(t, detail, "homepageType"); got != item.expectedType {
+			t.Fatalf("expected homepageType %q for %s, got %q", item.expectedType, item.id, got)
+		}
+	}
 }
 
 func TestHomepageGovernanceLifecycle(t *testing.T) {

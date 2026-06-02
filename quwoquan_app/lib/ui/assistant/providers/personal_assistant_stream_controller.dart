@@ -13,6 +13,7 @@ import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_a
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -505,6 +506,17 @@ class PersonalAssistantStreamController
         'turn completed turnId=${turn.turnId} answerLength=${answer.length} '
         'events=${events.length} processLines=${processSummary.lines.length}',
       );
+      if (!failed) {
+        // 对话浮现兴趣回流（P3 飞轮小循环）：从 turn.completed envelope 取
+        // 云侧 collectEmergedTags 下发的路径制 tagRefs，合成 assistant_interest
+        // 行为上报，进入推荐特征（rm_recommend_feature.tagInteraction）。不绑定 post。
+        final emergedTags = extractAssistantEmergedTags(events);
+        if (emergedTags.isNotEmpty) {
+          ref
+              .read(contentBehaviorTrackerProvider)
+              .trackAssistantInterest(emergedTags);
+        }
+      }
       unawaited(refreshManagementSummary());
     } catch (error, stackTrace) {
       debugPrint('personal assistant stream failed: $error\n$stackTrace');
@@ -522,6 +534,26 @@ class PersonalAssistantStreamController
     };
     state = state.copyWith(feedbackMessage: '已记录反馈：$label');
   }
+}
+
+/// 从流式事件中提取小艺对话浮现的兴趣标签（路径制 tagRef）。
+///
+/// 读取 `assistant.turn.completed` envelope 的 `payload['emergedTags']`（云侧
+/// `collectEmergedTags` 下发的 `List<String>`），去重并过滤空值。
+List<String> extractAssistantEmergedTags(List<AssistantStreamEventWire> events) {
+  final result = <String>[];
+  final seen = <String>{};
+  for (final event in events) {
+    if (event.eventType != 'assistant.turn.completed') continue;
+    final raw = event.payload['emergedTags'];
+    if (raw is! List) continue;
+    for (final item in raw) {
+      final tag = item.toString().trim();
+      if (tag.isEmpty || !seen.add(tag)) continue;
+      result.add(tag);
+    }
+  }
+  return result;
 }
 
 void _debugPersonalAssistant(String message) {

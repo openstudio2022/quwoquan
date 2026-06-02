@@ -33,6 +33,7 @@ class UserRequestPageIds {
     'GetRelationship': 'user.relationship',
     'GetRelationshipCapability': 'user.get.relationship.capability',
     'GetSubAccountProfile': 'user.get.sub.account.profile',
+    'GetUserInterestProfile': 'user.get.user.interest.profile',
     'GetUserProfile': 'user.profile',
     'IgnoreGreetingRequest': 'user.ignore.greeting.request',
     'InitiateContactDiscovery': 'user.initiate.contact.discovery',
@@ -40,6 +41,7 @@ class UserRequestPageIds {
     'ListCredentials': 'user.list.credentials',
     'ListFollowers': 'user.followers',
     'ListFollowing': 'user.following',
+    'ListFollowingSubjects': 'user.list.following.subjects',
     'ListGreetingInbox': 'user.list.greeting.inbox',
     'ListGreetingOutbox': 'user.list.greeting.outbox',
     'ListMyInvites': 'user.list.my.invites',
@@ -54,6 +56,7 @@ class UserRequestPageIds {
     'LoginWithPhone': 'user.login.with.phone',
     'LoginWithWechat': 'user.login.with.wechat',
     'Logout': 'user.logout',
+    'MarkFollowingSubjectVisited': 'user.mark.following.subject.visited',
     'PullUserSync': 'user.pull.user.sync',
     'RefreshToken': 'user.refresh.token',
     'RegisterDevice': 'user.register.device',
@@ -103,6 +106,7 @@ class UserRequestPageIds {
   static const String getRelationship = 'user.relationship';
   static const String getRelationshipCapability = 'user.get.relationship.capability';
   static const String getSubAccountProfile = 'user.get.sub.account.profile';
+  static const String getUserInterestProfile = 'user.get.user.interest.profile';
   static const String getUserProfile = 'user.profile';
   static const String ignoreGreetingRequest = 'user.ignore.greeting.request';
   static const String initiateContactDiscovery = 'user.initiate.contact.discovery';
@@ -110,6 +114,7 @@ class UserRequestPageIds {
   static const String listCredentials = 'user.list.credentials';
   static const String listFollowers = 'user.followers';
   static const String listFollowing = 'user.following';
+  static const String listFollowingSubjects = 'user.list.following.subjects';
   static const String listGreetingInbox = 'user.list.greeting.inbox';
   static const String listGreetingOutbox = 'user.list.greeting.outbox';
   static const String listMyInvites = 'user.list.my.invites';
@@ -124,6 +129,7 @@ class UserRequestPageIds {
   static const String loginWithPhone = 'user.login.with.phone';
   static const String loginWithWechat = 'user.login.with.wechat';
   static const String logout = 'user.logout';
+  static const String markFollowingSubjectVisited = 'user.mark.following.subject.visited';
   static const String pullUserSync = 'user.pull.user.sync';
   static const String refreshToken = 'user.refresh.token';
   static const String registerDevice = 'user.register.device';

@@ -10,6 +10,7 @@ import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/app_router.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
+import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
@@ -22,6 +23,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
     show appLogUploaderProvider;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 
 void logQuwoquanAppException({
   required String source,
@@ -94,7 +96,7 @@ Widget wrapWithQuwoquanAppAppearance({
   );
 }
 
-/// 根组件：单一 [MaterialApp.router]（含 /welcome 与主壳），与 [AppPageAccessNavigatorObserver] 同源埋点。
+/// 根组件：冷启动先直出轻量欢迎页，首帧后再并行恢复会话、装配路由与预热首页。
 class QuWoQuanAppRoot extends ConsumerStatefulWidget {
   const QuWoQuanAppRoot({super.key});
 
@@ -104,6 +106,10 @@ class QuWoQuanAppRoot extends ConsumerStatefulWidget {
 
 class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     with WidgetsBindingObserver {
+  bool _startupWarmupStarted = false;
+  bool _routerEnabled = false;
+  AuthPromptReason? _pendingStartupLoginReason;
+
   @override
   void initState() {
     super.initState();
@@ -143,6 +149,12 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   }
 
   @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    _syncWindowDerivedState();
+  }
+
+  @override
   void didChangeAccessibilityFeatures() {
     super.didChangeAccessibilityFeatures();
     final mediaQuery = MediaQuery.maybeOf(context);
@@ -176,11 +188,17 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
 
   void _initializeApp() {
     try {
+      _syncWindowDerivedState();
       ref
           .read(themeProvider.notifier)
           .updateSystemBrightness(
             WidgetsBinding.instance.platformDispatcher.platformBrightness,
           );
+      // 串并行关系：
+      // 1. 首帧只渲染轻量欢迎页，不创建 GoRouter，也不读取本地登录态。
+      // 2. 首帧后并行启动 auth 恢复、外观设置、日志上传、首页 feed 预热。
+      // 3. 欢迎结束后再装配完整路由，此时首页可直接消费已预热数据。
+      ref.read(authSessionControllerProvider);
       ref.read(appLogUploaderProvider);
       unawaited(
         ref.read(appearanceSettingsControllerProvider.notifier).ensureLoaded(),
@@ -188,15 +206,35 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       AppStartupRuntime.instance.schedulePostFirstFrameWarmup(
         (provider) => ref.read(provider),
       );
+      if (mounted && !_startupWarmupStarted) {
+        setState(() => _startupWarmupStarted = true);
+      }
     } catch (e) {
       // 初始化错误由上层观测处理
     }
   }
 
+  void _syncWindowDerivedState() {
+    final view = View.maybeOf(context);
+    if (view == null) {
+      return;
+    }
+    final mediaQuery = MediaQueryData.fromView(view);
+    ref.read(responsiveProvider.notifier).updateFromMediaQueryData(mediaQuery);
+    ref
+        .read(accessibilityProvider.notifier)
+        .updateFromMediaQueryData(mediaQuery);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final router = ref.watch(appRouterProvider);
     final snapshot = ref.watch(appearanceSnapshotProvider);
+
+    if (!_routerEnabled) {
+      return _buildStartupWelcomeApp(snapshot);
+    }
+
+    final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
       title: '趣我圈',
@@ -213,27 +251,96 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       ],
       supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
       locale: const Locale('zh', 'CN'),
-      builder: (context, child) {
-        final mediaQuery = MediaQuery.of(context);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          ref
-              .read(responsiveProvider.notifier)
-              .updateFromMediaQueryData(mediaQuery);
-          ref
-              .read(accessibilityProvider.notifier)
-              .updateFromMediaQueryData(mediaQuery);
-          ref
-              .read(themeProvider.notifier)
-              .updateSystemBrightness(
-                WidgetsBinding.instance.platformDispatcher.platformBrightness,
-              );
-        });
-        return wrapWithQuwoquanAppAppearance(
-          context: context,
-          snapshot: snapshot,
-          child: child ?? const SizedBox.shrink(),
-        );
+      builder: (context, child) => wrapWithQuwoquanAppAppearance(
+        context: context,
+        snapshot: snapshot,
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+  }
+
+  Widget _buildStartupWelcomeApp(AppearanceSnapshot snapshot) {
+    final loginPrompt = _startupWarmupStarted
+        ? _startupLoginPromptConfig(ref.watch(authSessionControllerProvider))
+        : null;
+    return MaterialApp(
+      title: '趣我圈',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: snapshot.themeMode,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+      locale: const Locale('zh', 'CN'),
+      builder: (context, child) => wrapWithQuwoquanAppAppearance(
+        context: context,
+        snapshot: snapshot,
+        child: child ?? const SizedBox.shrink(),
+      ),
+      home: WelcomeScreen(
+        loginPrompt: loginPrompt,
+        onFinish: _completeStartupWelcome,
+      ),
+    );
+  }
+
+  WelcomeLoginPromptConfig? _startupLoginPromptConfig(AuthSessionState auth) {
+    final reason = auth.promptReason;
+    if (auth.status != AuthSessionStatus.guest ||
+        reason == null ||
+        reason == AuthPromptReason.actionRequired ||
+        reason == AuthPromptReason.sessionExpired) {
+      return null;
+    }
+    return WelcomeLoginPromptConfig(
+      title: UITextConstants.welcomeLoginPromptTitle,
+      subtitle: UITextConstants.welcomeLoginPromptSubtitle,
+      onLogin: () {
+        _completeStartupWelcome(loginReason: reason);
+      },
+      onContinueAsGuest: () async {
+        await ref
+            .read(authSessionControllerProvider.notifier)
+            .continueAsGuest();
+        if (!mounted) {
+          return;
+        }
+        _completeStartupWelcome();
       },
     );
+  }
+
+  void _completeStartupWelcome({AuthPromptReason? loginReason}) {
+    if (_routerEnabled) {
+      return;
+    }
+    _pendingStartupLoginReason = loginReason;
+    ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
+    AppStartupRuntime.instance.scheduleHomeReadyReport(
+      (provider) => ref.read(provider),
+    );
+    if (mounted) {
+      setState(() => _routerEnabled = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final reason = _pendingStartupLoginReason;
+        if (reason == null || !mounted) {
+          return;
+        }
+        _pendingStartupLoginReason = null;
+        // 启动态强入口：统一走 buildLoginRouteLocation（禁止 guest pop），
+        // 关闭只安全回首页，避免裸拼 login 路由绕过防回环契约。
+        ref.read(appRouterProvider).go(
+          buildLoginRouteLocation(
+            reasonName: reason.name,
+            allowGuestDismissPop: false,
+          ),
+        );
+      });
+    }
   }
 }

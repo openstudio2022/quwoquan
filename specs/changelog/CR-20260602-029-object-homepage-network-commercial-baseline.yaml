@@ -1,0 +1,117 @@
+id: CR-20260602-029
+title: 对象主页网络一流商用升级基线
+slug: object-homepage-network-commercial-baseline
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/object-homepage-network
+  - specs/feature-tree/object-homepage-network/intersection-unified-experience
+  - specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign
+  - specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign
+  - specs/feature-tree/shared-homepage-network
+  - specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout
+  - specs/feature-tree/recommendation-platform
+  - specs/feature-tree/assistant-run-learning
+  - quwoquan_service/contracts/metadata/entity/homepage
+  - quwoquan_service/contracts/metadata/content/post
+  - quwoquan_app/lib/components/object_page
+
+entries:
+  - timestamp: "2026-06-02T08:35:00+08:00"
+    summary: >-
+      冻结“对象主页网络升级”一流商用基线：用户主页、圈子/群组主页、共享主页一次性端云一体重构；
+      明确三类主页定位、统一四段式信息架构、设计系统、交集证据可视化、防迷路系统、小艺主动服务、
+      灰度运营、埋点到实时推荐闭环与 T1-T4 验收。同步把四项上线硬债列为开发准入：HomepageType
+      枚举与模板架构清漂、entity-service 主页读模型产品化、评论关联实体、数据工程实体与运行时
+      Homepage 单一对象键。
+    reason: >-
+      用户要求从设计师、产品总监和产品运营视角复核现有规划，并选择端云一体、一次性全量开发；
+      为避免只做 UI 美化而推荐/小艺/运营闭环断裂，需先把跨域对象页网络规格、设计与验收纳入特性树。
+    change_type:
+      - baseline
+      - feature
+      - metadata
+      - observability
+      - rollout
+    changed_documents:
+      - path: specs/feature-tree/object-homepage-network/spec.md
+        sections:
+          - 定位
+          - 能力范围
+          - 验收重点
+      - path: specs/feature-tree/object-homepage-network/design.md
+        sections:
+          - 核心数据流
+          - 运营灰度设计
+          - 埋点与实时推荐闭环
+          - 小艺主动服务设计
+      - path: specs/feature-tree/object-homepage-network/acceptance.yaml
+        sections:
+          - DA1
+          - DA2
+          - DA3
+          - DA4
+          - DA5
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 全量开发不等于全量开放；发布必须按地域、版本、白名单、experimentBucket、对象类型和环境灰度。
+      - 前台不出现“对象主页网络”术语；用户只感知用户主页、群组主页和具体对象主页。
+      - 不保留旧 resonance、旧扁平标签或端侧拼接交集文案的兼容分支。
+  - timestamp: "2026-06-02T21:10:00+08:00"
+    summary: >-
+      新增 L2 能力 intersection-unified-experience：把交集从 demo 占位（问小趣 dock + 端拼整句 +
+      大关注按钮 + 无头像/无名字）收口为端云一体、事实与概率分通道、带保鲜期与跨会话推荐冷却窗口、
+      统一视觉的对象交集网络。覆盖我的主页交集聚合入口（总数 + 最多 3 维度红点 + 自上次新增 + 打开清零）、
+      他人/实体/圈子主页交集卡、首页与各频道（含校园、旅行）交集推荐重设计。扩展 IntersectionReason，
+      新增 recommendation/intersection 域 service/fields/events/policy 与 viewer_object_intersection 读模型，
+      落地 object_page_bundle.intersections，behaviors 补交集归因，redis_keyspace 登记 rec:icool 冷却集。
+    reason: >-
+      用户以设计师与推荐算法专家视角复核现有交集体验，指出 demo 不可用：我的主页交集入口缺失、
+      首页推荐卡视觉粗糙、校园/旅行频道无交集、缺事实 vs 概率区分与保鲜期/推荐窗口。要求端云一体一次性
+      全量重构并给出入口×维度×展示×性能×验收矩阵。
+    change_type:
+      - feature
+      - metadata
+      - observability
+      - rollout
+    changed_documents:
+      - path: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md
+        sections:
+          - 交集维度
+          - 入口×维度×展示×性能×验收矩阵
+          - 事实vs概率分通道
+      - path: specs/feature-tree/object-homepage-network/intersection-unified-experience/design.md
+        sections:
+          - 核心数据流
+          - 保鲜期与冷却窗口
+          - metadata与服务设计
+      - path: specs/feature-tree/object-homepage-network/intersection-unified-experience/acceptance.yaml
+        sections:
+          - SIT1
+          - SIT2
+          - SIT3
+          - SIT4
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 事实交集必须带证据可回查；算法只用于排序，不伪装事实。
+      - 推荐冷却跨会话持久（rec:icool 默认 14 天可配），区别于现有会话级 rec:exposed。
+      - 红色仅用于未读/新增数字；交集卡去掉大关注按钮，点卡进对象页。

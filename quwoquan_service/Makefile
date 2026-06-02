@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-rec-model-python codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop
 
 SCENARIO ?= content_feed
 DB ?= quwoquan_content
@@ -10,6 +10,8 @@ ML_GUARDRAIL_DRY_RUN ?= true
 ML_GUARDRAIL_OUT ?=
 ML_DRIFT_BASELINE_DATE ?=
 ML_DRIFT_OUT ?=
+FLYWHEEL_REQUIRE_CLOSED ?= false
+FLYWHEEL_OUT ?=
 ML_PYTHON ?= $(if $(wildcard services/rec-model-service/.venv/bin/python),services/rec-model-service/.venv/bin/python,python3)
 
 # ─── Quality Gate ────────────────────────────────────────────────────
@@ -66,7 +68,7 @@ lint:
 verify-metadata:
 	go run ./tools/verify_metadata/ contracts/metadata
 
-codegen: codegen-content-service codegen-circle-service codegen-storage codegen-rec-model-python codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-content-service codegen-circle-service codegen-storage codegen-rec-model-python codegen-rec-policy codegen-control-plane-runtime codegen-ops-portal
 
 codegen-app:
 	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service
@@ -85,6 +87,9 @@ codegen-circle-service:
 
 codegen-rec-model-python:
 	go run ./tools/codegen_rec_model_python --metadata-dir contracts/metadata --service-dir recommendation/rec_model --output-dir services/rec-model-service/generated
+
+codegen-rec-policy:
+	go run ./tools/codegen_rec_policy --metadata-dir contracts/metadata --out-dir runtime/recpolicy
 
 codegen-storage:
 	@echo "=== codegen-storage: user-service ==="
@@ -122,6 +127,15 @@ verify-ml-features:
 
 verify-ml-tests:
 	$(ML_PYTHON) -m pytest services/rec-model-service/tests -q
+
+verify-rec-policy-advisor:
+	$(ML_PYTHON) -m pytest scripts/recommendation/test_rec_policy_advisor.py -q
+
+verify-content-flywheel-tests:
+	$(ML_PYTHON) -m pytest scripts/recommendation/test_eval_content_flywheel_loop.py -q
+
+verify-content-flywheel-loop:
+	$(ML_PYTHON) scripts/recommendation/eval_content_flywheel_loop.py --mongodb-uri "$(MONGODB_URI)" $(if $(filter 1 true yes,$(FLYWHEEL_REQUIRE_CLOSED)),--require-closed-loop,) $(if $(strip $(FLYWHEEL_OUT)),--output "$(FLYWHEEL_OUT)",)
 
 verify-ml-model-quality:
 	$(ML_PYTHON) scripts/ml/evaluate_gate.py --scenario "$(SCENARIO)" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "eval_report_$(SCENARIO).json"

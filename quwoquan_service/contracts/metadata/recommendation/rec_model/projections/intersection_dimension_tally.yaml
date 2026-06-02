@@ -1,0 +1,40 @@
+version: 1
+read_model: IntersectionDimensionTally
+description: |
+  「我的交集」单个维度的计数与未读统计（B1 契约）。
+  dimension 与 IntersectionReason.dimension 闭集对齐；count 为该维度可见事实交集总数；
+  newCount 为自上次查看（已读水位）以来的新增数，端侧据此显示红点。
+  label 为后端提供的用户语言维度短名（如"身份""地点""内容""兴趣""关系"），端不本地拼装。
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: IntersectionDimensionTally
+  base_class: ""
+  output_path: cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart
+  fields:
+    - name: dimension
+      dart_type: String
+      nullable: false
+      source: dimension
+      aliases: [dimension]
+      default: "''"
+    - name: label
+      dart_type: String
+      nullable: false
+      source: label
+      aliases: [label]
+      default: "''"
+    - name: count
+      dart_type: int
+      nullable: false
+      source: count
+      aliases: [count]
+      default: "0"
+    - name: newCount
+      dart_type: int
+      nullable: false
+      source: newCount
+      aliases: [newCount]
+      default: "0"

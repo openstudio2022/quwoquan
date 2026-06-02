@@ -45,7 +45,7 @@ routeCoverageExpectations:
 structure:
   required: [产品类型, 行程概览, 成团与退改, 费用构成, 强度与适合人群, 避坑提醒]
   optional: [购物与自费, 散团衔接]
-hooks: ["跟团走{name}，先看懂行程强度和隐藏费用", "这条线适不适合跟团，关键看天数和海拔"]
+hooks: ["跟团走{name}，先看懂行程强度和隐藏费用", "这条线适不适合跟团，关键看天数和强度"]
 mustIncludeFacts: [行程天数, 集合方式, 费用包含, 自费项目, 退改规则, 强度说明]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 零购物]
 wordCount: { min: 1200, max: 2200 }

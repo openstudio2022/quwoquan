@@ -12,7 +12,7 @@
 
 当前同一篇内容（micro/image/video/article）在四个消费 surface 上各自维护一套展示数据结构与 fallback 逻辑，形成 R24「展示模型碎片化」债务：
 
-1. **feed（发现流）**：`moment_social_feed.dart` 直接消费裸 `PostBaseDto` 子类，字段抽取与 fallback 散落在 widget 内。
+1. **feed（发现流）**：`home_multi_form_feed.dart` 直接消费裸 `PostBaseDto` 子类，字段抽取与 fallback 散落在 widget 内。
 2. **immersive（沉浸浏览）**：`works_immersive_viewer.dart` 通过 `_rawArticleDataFor` / `_wireMapForPresentation` 自拼 `Map<String, Object?>` 再构造 `ArticleDetailView`，存在裸 Map 中转。
 3. **detail（详情页）**：`post_summary_view.dart` 的 `PostSummaryView.fromDto({wire})` + `PostReadUiBundle` / `post_read_projection_facade.dart` 又一套投影。
 4. **share（分享卡）**：`content_share_template.dart` 各自的 fallback 抽取。
@@ -64,7 +64,7 @@ micro/image/video/article 的差异由 `ContentSurfaceView` 内的强类型可�
 ### F3. 四 surface 接入统一 model
 
 - feed / immersive / detail / share 四 surface 改为消费 `ContentSurfaceView`。
-- 接入顺序与 D3 超大文件强拆协同：接入即顺带拆分 `works_immersive_viewer` / `discovery_page` / `moment_social_feed`。
+- 接入顺序与 D3 超大文件强拆协同：接入即顺带拆分 `works_immersive_viewer` / `discovery_page` / `home_multi_form_feed`。
 
 ### F4. 迁移灰度与回滚
 

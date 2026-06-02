@@ -15,16 +15,23 @@ sit_acceptance:
     title: deliver deploy prod pipeline 能力 SIT
     story_refs: []
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
-    performance_points: []
+    - "`main` 入库后存在单一自动 promotion workflow，能按 `alpha-local -> beta-local -> gamma-hosted -> prod-hosted` 固定顺序执行。"
+    - "`stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。"
+    - "`prod initial -> prod checks -> prod full` 之间的健康检查、只读集成探针、SLO gate 与 auto rollback 可验证。"
+    performance_points:
+    - "`mainline_auto_prod` blocking critical path `<= 900s`，并有机器可读 timing summary 证据。"
     evidence:
       primary:
       - T2_module_interaction
       - T3_app_api_integration
       supporting:
       - T1_static_contract
+      - T4_end_to_end_journey
     tests:
-      planned: []
+      planned:
+      - "`deploy/shared/gamma_validation_suites.json` 新增 `mainline_auto_prod` profile，并由 workflow / verify 脚本消费。"
+      - "`stackctl deploy/health/inspect/doctor` 在 beta/gamma/prod 阶段输出统一证据。"
+      - "`07. Deploy To Prod (Auto)` 通过主链 timing summary 与 stage artifacts 证明 900 秒预算与 rollback 闭环。"
       recorded: []
     status: pending
 execution:

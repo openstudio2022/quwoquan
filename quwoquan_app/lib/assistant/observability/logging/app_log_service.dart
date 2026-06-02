@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_policy.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_redactor.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_writer.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 
 class AppLogContext {
   const AppLogContext({
@@ -36,12 +35,10 @@ class AppLogContext {
 
 class AppLogService {
   AppLogService._({
-    required AppLogWriter writer,
-    required AppLogPolicy policy,
-    required AppLogRedactor redactor,
-  }) : _writer = writer,
-       _policy = policy,
-       _redactor = redactor;
+    required this._writer,
+    required this._policy,
+    required this._redactor,
+  });
 
   static final AppLogService instance = AppLogService._(
     writer: AppLogWriter(),
@@ -96,7 +93,7 @@ class AppLogService {
       ts: DateTime.now().toIso8601String(),
       env: kReleaseMode ? 'release' : 'debug',
       appVersion: '',
-      platform: Platform.operatingSystem,
+      platform: platformWireName(currentAppPlatform),
       logType: logType,
       level: level,
       sessionId: context.sessionId,

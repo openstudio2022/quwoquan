@@ -20,6 +20,9 @@ type BulkImportItem struct {
 	PublishedAt string   `json:"publishedAt"`
 	CoverURL    string   `json:"coverUrl"`
 	BodyLength  int      `json:"bodyLength"`
+	// SourceTaskID 内容溯源任务 id；ConditionProfile 条件画像 {regions/seasons/altitudeMeters}（从主实体冗余）。
+	SourceTaskID     string         `json:"sourceTaskId"`
+	ConditionProfile map[string]any `json:"conditionProfile"`
 }
 
 // BulkImportStore persists imported items to the discovery feed collection.

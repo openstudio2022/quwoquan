@@ -12,9 +12,10 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 from _common.io import write_json  # noqa: E402
 from _common.paths import ensure_batch_layout, batch_command_root  # noqa: E402
 from _common.content_evidence import anonymize_source_markdown, score_source_markdown  # noqa: E402
+from _common.source_catalog import coverage_issues, source_category_coverage, vertical_from_task_id  # noqa: E402
 from _common.stage_reports import write_gate_report, write_stage_result  # noqa: E402
-from download.source_inputs import curated_sources_for_entity, source_frontmatter  # noqa: E402
-from download.fetch import fetch_source  # noqa: E402
+from download.source_inputs import curated_sources_for_entity, curated_images_for_entity, source_frontmatter  # noqa: E402
+from download.fetch import fetch_source, fetch_image  # noqa: E402
 from download.prepare import prepare_source_plan, prepare_source_screen  # noqa: E402
 
 
@@ -40,7 +41,9 @@ def handle_download(args: argparse.Namespace) -> None:
     print(f"[download] Work dir: {dl_root}")
     print(f"[download] Steps: source_plan → fetch → source_screen")
 
-    entities = [{"entityId": entity_id, "canonicalName": entity_id, "entityType": "travel"} for entity_id in entity_ids]
+    entity_type = getattr(args, "entity_type", "") or ""
+    vertical = vertical_from_task_id(task_id)
+    entities = [{"entityId": entity_id, "canonicalName": entity_id, "entityType": entity_type} for entity_id in entity_ids]
     prepare_source_plan(task_id, batch_id, entities)
     for entity in entities:
         planned_sources = [
@@ -63,17 +66,30 @@ def handle_download(args: argparse.Namespace) -> None:
                 "sources": planned_sources,
             },
         )
+        # 源类别覆盖门（「全」硬约束）：≥2 源 + 覆盖 ≥N 类（含核心类），杜绝同质单一来源。
+        coverage = source_category_coverage(planned_sources, vertical=vertical)
+        plan_issues: list[str] = []
+        if len(planned_sources) < 2:
+            plan_issues.append("sourcePlan: fewer than 2 planned sources")
+        plan_issues.extend(coverage_issues(planned_sources, vertical=vertical, entity_id=entity["entityId"]))
         write_gate_report(
             task_id=task_id,
             batch_id=batch_id,
             command="download",
             step="source_plan",
             ref=entity["entityId"],
-            passed=len(planned_sources) >= 2,
-            issues=[] if len(planned_sources) >= 2 else ["sourcePlan: fewer than 2 planned sources"],
-            evidence_summary={"plannedSourceCount": len(planned_sources)},
+            passed=not plan_issues,
+            issues=plan_issues,
+            evidence_summary={
+                "plannedSourceCount": len(planned_sources),
+                "coveredCategories": coverage["coveredCategories"],
+                "coveredCount": coverage["coveredCount"],
+                "minCategories": coverage["minCategories"],
+                "missingCore": coverage["missingCore"],
+                "unknownPlatforms": coverage["unknownPlatforms"],
+            },
             next_step="fetch",
-            fallback_stage="source_plan" if len(planned_sources) < 2 else None,
+            fallback_stage="source_plan" if plan_issues else None,
         )
 
     fetched_sources: list[dict] = []
@@ -127,6 +143,37 @@ def handle_download(args: argparse.Namespace) -> None:
                     "entityId": entity_id,
                 }
             )
+
+        image_specs = curated_images_for_entity(task_id, batch_id, entity_id)
+        image_manifest: list[dict] = []
+        if image_specs:
+            images_dir = entity_dir / "images"
+            for idx, spec in enumerate(image_specs, start=1):
+                meta = fetch_image(spec["url"], images_dir, index=idx)
+                if meta is None:
+                    continue
+                meta["license"] = spec.get("license", "")
+                meta["credit"] = spec.get("credit", "")
+                image_manifest.append(meta)
+            if image_manifest:
+                write_json(
+                    images_dir / "index.json",
+                    {"entity": entity_id, "imageCount": len(image_manifest), "images": image_manifest},
+                )
+        write_gate_report(
+            task_id=task_id,
+            batch_id=batch_id,
+            command="download",
+            step="image_fetch",
+            ref=entity_id,
+            passed=len(image_manifest) >= 1,
+            issues=[]
+            if image_manifest
+            else ["imageFetch: 未下到真实图片，请在 source_plan 提供可用 imageUrls(CC/PD/授权)"],
+            evidence_summary={"plannedImages": len(image_specs), "downloadedImages": len(image_manifest)},
+            next_step="quality_analysis",
+            fallback_stage="source_plan" if not image_manifest else None,
+        )
 
     prepare_source_screen(task_id, batch_id, fetched_sources)
     for source in fetched_sources:
@@ -194,4 +241,5 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--task", required=True, help="Task ID")
     p.add_argument("--batch", required=True, help="Batch ID")
     p.add_argument("--entity-ids", required=True, help="Comma-separated entity IDs")
+    p.add_argument("--entity-type", default="", help="实体类型(可选，仅记录到 source_plan)")
     p.set_defaults(handler=handle_download)

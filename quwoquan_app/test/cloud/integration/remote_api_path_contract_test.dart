@@ -848,6 +848,36 @@ void main() {
     });
 
     test(
+      'getObjectPageBundle → GET /v1/homepages/{homepageId}/object-page-bundle',
+      () async {
+        await repo.getObjectPageBundle(
+          'hp1',
+          referralSource: 'entity_page',
+          feedRequestId: 'feed-1',
+          recommendationTraceId: 'trace-1',
+          experimentBucket: 'A',
+          rolloutCohort: 'city-hz',
+        );
+        expect(log.last.method, 'GET');
+        expect(
+          log.last.path,
+          EntityApiMetadata.getObjectPageBundlePath(homepageId: 'hp1'),
+        );
+        expect(log.last.query['referralSource'], 'entity_page');
+        expect(log.last.query['feedRequestId'], 'feed-1');
+        expect(log.last.query['recommendationTraceId'], 'trace-1');
+        expect(log.last.query['experimentBucket'], 'A');
+        expect(log.last.query['rolloutCohort'], 'city-hz');
+        _expectSurfaceOperationHeaders(
+          log.last.headers,
+          clientPageId: EntityRequestPageIds.getObjectPageBundle,
+          surfaceId: AppUiSurfaces.homepageDetail.id,
+          operationId: EntityApiMetadata.getObjectPageBundleOperation,
+        );
+      },
+    );
+
+    test(
       'getHomepageReviewSummary → GET /v1/homepages/{homepageId}/review-summary',
       () async {
         await repo.getHomepageReviewSummary('hp1');

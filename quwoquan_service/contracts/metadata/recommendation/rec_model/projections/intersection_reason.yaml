@@ -11,6 +11,13 @@ description: |
     source:    tagRef | geoTagRef | entityRef | followEdge | contact
     actionType: follow | join | add_contact | view_object
     relationKind: follow | contact | mutual（relationship 维度无标签锚点时使用）
+    intersectionClass: fact | affinity（fact = 可向用户说明的事实交集；affinity = 算法概率推荐，不伪装事实）
+
+  展示字段（统一视觉系统消费）：
+    avatarUrl / displayName 用于头像 + 名字卡（端不再用整句 displayText 占位）。
+    confidenceLabel 仅对 affinity 展示"推荐认识/可能合得来"等克制文案。
+    freshAt / expiresAt 为保鲜期锚点（ISO8601 字符串，过期由后端重算，端只读）。
+    modelReasonBucket 为 affinity 模型理由桶（埋点与灰度用，端不直接展示原文）。
 
 consumers:
   - app
@@ -84,4 +91,52 @@ client_projection:
       nullable: false
       source: source
       aliases: [source]
+      default: "''"
+    - name: intersectionId
+      dart_type: String
+      nullable: false
+      source: intersectionId
+      aliases: [intersectionId]
+      default: "''"
+    - name: intersectionClass
+      dart_type: String
+      nullable: false
+      source: intersectionClass
+      aliases: [intersectionClass]
+      default: "'fact'"
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: avatarUrl
+      aliases: [avatarUrl]
+      default: "''"
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName]
+      default: "''"
+    - name: confidenceLabel
+      dart_type: String
+      nullable: false
+      source: confidenceLabel
+      aliases: [confidenceLabel]
+      default: "''"
+    - name: modelReasonBucket
+      dart_type: String
+      nullable: false
+      source: modelReasonBucket
+      aliases: [modelReasonBucket]
+      default: "''"
+    - name: freshAt
+      dart_type: String
+      nullable: false
+      source: freshAt
+      aliases: [freshAt]
+      default: "''"
+    - name: expiresAt
+      dart_type: String
+      nullable: false
+      source: expiresAt
+      aliases: [expiresAt]
       default: "''"

@@ -47,7 +47,7 @@ allowed:
     maxCount: 1
   - path: ui/discovery/pages/discovery_page.dart
     maxCount: 3
-  - path: ui/discovery/widgets/moment_social_feed.dart
+  - path: ui/discovery/widgets/home_multi_form_feed.dart
     maxCount: 1
   - path: ui/discovery/widgets/works_immersive_viewer.dart
     maxCount: 5

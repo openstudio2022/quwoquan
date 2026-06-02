@@ -240,7 +240,7 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
         status: compliant
-        note: section_creations 主路径 postBaseDtoFromMap + PostReadSurfaceId.circleWorks + 沉浸 wire；见 post_projection_spec
+        note: section_creations 主路径 postBaseDtoFromMap + PostReadSurfaceId.circleWorks + 沉浸 wire；对象页网络 IA 为 首页/内容/群或组织/成员，首屏 ObjectPageContext 小趣 dock；见 post_projection_spec
         target_dto: CircleDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
@@ -285,15 +285,21 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/user/pages/other_profile_page.dart
         status: compliant
-        note: profile_works_tab / profile_moments_tab 显式 profileWorks|profileMoments + readPresentation
+        note: profile_works_tab / profile_moments_tab 显式 profileWorks|profileMoments + readPresentation；对象页网络 Tab 显示为 看点/作品/圈子/互动，首屏 ObjectPageContext 小趣 dock
         target_dto: UserProfileDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/my_profile_page.dart
         status: compliant
-        note: 同 other_profile_page（本人态）；未登录态登录 CTA 消费 AuthSessionState
+        note: 同 other_profile_page（本人态）；未登录态登录 CTA 消费 AuthSessionState；对象页网络 Tab 显示为 看点/作品/圈子/互动
         target_dto: UserProfileDto
         target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
+      - path: quwoquan_app/lib/ui/user/pages/my_intersection_inbox_page.dart
+        status: compliant
+        note: 我的交集分维度列表，消费 GET /v1/content/intersections（list）+ POST /v1/content/intersections/visit（打开即清零已读水位）；IntersectionRepository 三层，intersectionRepositoryProvider 切换
+        target_dto: IntersectionReason
+        target_read_projection: IntersectionInboxSummary
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/login_page.dart
         status: compliant
@@ -346,8 +352,8 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/entity/pages/homepage_detail_page.dart
         status: compliant
-        note: HomepageDetail/HomepageShellData；ActivePersonaContextViewData 无 dynamic
-        target_dto: HomepageDetail
+        note: HomepageDetail/HomepageShellData/ObjectPageBundle；首屏 IntersectionReason + ObjectRelationEdge + ObjectPageContext；ActivePersonaContextViewData 无 dynamic
+        target_dto: ObjectPageBundle
       - path: quwoquan_app/lib/ui/entity/pages/suggest_homepage_page.dart
         status: compliant
         note: HomepageSuggestionDraft + HomepageRepository

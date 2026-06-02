@@ -355,7 +355,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 		ContentIdentity:     contentIdentity,
 		Title:               strings.TrimSpace(asString(payload["title"])),
 		Body:                strings.TrimSpace(asString(payload["body"])),
-		TagRefs:                asStringSlice(payload["tagRefs"]),
+		TagRefs:             asStringSlice(payload["tagRefs"]),
 		EntityRefs:          asStringSlice(payload["entityRefs"]),
 		MediaUrls:           asStringSlice(payload["mediaUrls"]),
 		CoverUrl:            strings.TrimSpace(asString(payload["coverUrl"])),
@@ -455,7 +455,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 				"assistantUsePolicy": post.AssistantUsePolicy,
 				"circleIds":          asStringSlice(post.CircleIds),
 				"title":              post.Title,
-				"tagRefs":               post.TagRefs,
+				"tagRefs":            post.TagRefs,
 				"coverUrl":           post.CoverUrl,
 			},
 			OccurredAt: now,
@@ -626,7 +626,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 				"circleIds":          asStringSlice(post.CircleIds),
 				"assistantUsePolicy": post.AssistantUsePolicy,
 				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
-				"tagRefs":               asStringSlice(post.TagRefs),
+				"tagRefs":            asStringSlice(post.TagRefs),
 				"entityRefs":         asStringSlice(post.EntityRefs),
 			},
 			OccurredAt: now.Format(time.RFC3339),
@@ -647,7 +647,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 				"circleIds":          asStringSlice(post.CircleIds),
 				"assistantUsePolicy": post.AssistantUsePolicy,
 				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
-				"tagRefs":               asStringSlice(post.TagRefs),
+				"tagRefs":            asStringSlice(post.TagRefs),
 				"entityRefs":         asStringSlice(post.EntityRefs),
 			},
 			OccurredAt: now,
@@ -715,7 +715,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
-		"tagRefs":               asStringSlice(post.TagRefs),
+		"tagRefs":            asStringSlice(post.TagRefs),
 		"coverUrl":           post.CoverUrl,
 	}, now)
 	s.projectPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
@@ -729,7 +729,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
-		"tagRefs":               asStringSlice(post.TagRefs),
+		"tagRefs":            asStringSlice(post.TagRefs),
 		"coverUrl":           post.CoverUrl,
 	}, now)
 	return post, nil
@@ -810,7 +810,7 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		"title":              post.Title,
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
-		"tagRefs":               asStringSlice(post.TagRefs),
+		"tagRefs":            asStringSlice(post.TagRefs),
 		"assistantUsePolicy": post.AssistantUsePolicy,
 	}, now)
 	s.projectPostEvent(ctx, "PostPromotedToWork", post, map[string]any{
@@ -825,7 +825,7 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		"title":              post.Title,
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
-		"tagRefs":               asStringSlice(post.TagRefs),
+		"tagRefs":            asStringSlice(post.TagRefs),
 		"assistantUsePolicy": post.AssistantUsePolicy,
 	}, now)
 	return post, nil
@@ -939,7 +939,7 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
-		"tagRefs":               asStringSlice(post.TagRefs),
+		"tagRefs":            asStringSlice(post.TagRefs),
 		"coverUrl":           post.CoverUrl,
 	}, now)
 	s.projectPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
@@ -953,7 +953,7 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
-		"tagRefs":               asStringSlice(post.TagRefs),
+		"tagRefs":            asStringSlice(post.TagRefs),
 		"coverUrl":           post.CoverUrl,
 	}, now)
 	return map[string]any{
@@ -995,7 +995,9 @@ func (s *PostService) applyShareRecordLocked(
 	return post.ShareCount, changed, hasActiveShareForUser(shares, userID)
 }
 
-func (s *PostService) SharePost(ctx context.Context, postID, userID string) (int64, bool, bool, error) {
+// SharePost 写入权威分享记录（幂等）。actor 维度由 userID（账号）优先、否则
+// deviceActorID（游客设备维度）解析；账号维度与设备维度独立累加、不并账。
+func (s *PostService) SharePost(ctx context.Context, postID, userID, deviceActorID string) (int64, bool, bool, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
 		return 0, false, false, rterr.NewAppError(
@@ -1011,23 +1013,21 @@ func (s *PostService) SharePost(ctx context.Context, postID, userID string) (int
 			"post deleted",
 		)
 	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = AnonymousFallbackSubAccountID
-	}
+	actorKey := reactionActorKey(userID, deviceActorID)
 
 	s.mu.Lock()
 	shareCount, changed, shared := s.applyShareRecordLocked(
 		ctx,
 		post,
-		directShareKey(userID),
-		userID,
+		directShareKey(actorKey),
+		actorKey,
 		true)
 	s.mu.Unlock()
 	return shareCount, changed, shared, nil
 }
 
-func (s *PostService) UnsharePost(ctx context.Context, postID, userID string) (int64, bool, bool, error) {
+// UnsharePost 取消权威分享记录（幂等）。actor 维度解析与 SharePost 一致。
+func (s *PostService) UnsharePost(ctx context.Context, postID, userID, deviceActorID string) (int64, bool, bool, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
 		return 0, false, false, rterr.NewAppError(
@@ -1036,17 +1036,14 @@ func (s *PostService) UnsharePost(ctx context.Context, postID, userID string) (i
 			"post not found",
 		)
 	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = AnonymousFallbackSubAccountID
-	}
+	actorKey := reactionActorKey(userID, deviceActorID)
 
 	s.mu.Lock()
 	shareCount, changed, shared := s.applyShareRecordLocked(
 		ctx,
 		post,
-		directShareKey(userID),
-		userID,
+		directShareKey(actorKey),
+		actorKey,
 		false)
 	s.mu.Unlock()
 	return shareCount, changed, shared, nil
@@ -1330,7 +1327,9 @@ func (s *PostService) GetPostForViewer(
 	return post, true, false, false
 }
 
-func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int64, bool, error) {
+// LikePost 点赞（幂等 upsert）。actor 维度由 userID（账号）优先、否则 deviceActorID
+// （隐私安全派生设备标识，游客设备维度）解析；账号维度与设备维度独立计数、不并账。
+func (s *PostService) LikePost(ctx context.Context, postID, userID, deviceActorID string) (int64, bool, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
 		return 0, false, rterr.NewAppError(
@@ -1339,10 +1338,7 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int6
 			"post not found",
 		)
 	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = AnonymousFallbackSubAccountID
-	}
+	actorKey := reactionActorKey(userID, deviceActorID)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1351,11 +1347,11 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int6
 		byPost = map[string]contentReactionState{}
 		s.reactions[post.ID] = byPost
 	}
-	state := byPost[userID]
+	state := byPost[actorKey]
 	changed := !state.Liked
 	if changed {
 		state.Liked = true
-		byPost[userID] = state
+		byPost[actorKey] = state
 		post.LikeCount++
 		post.UpdatedAt = time.Now().UTC()
 		_ = s.store.Update(ctx, post.ID, post)
@@ -1363,7 +1359,8 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int6
 	return post.LikeCount, changed, nil
 }
 
-func (s *PostService) UnlikePost(ctx context.Context, postID, userID string) (int64, bool, error) {
+// UnlikePost 取消点赞（幂等）。actor 维度解析与 LikePost 一致。
+func (s *PostService) UnlikePost(ctx context.Context, postID, userID, deviceActorID string) (int64, bool, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
 		return 0, false, rterr.NewAppError(
@@ -1372,10 +1369,7 @@ func (s *PostService) UnlikePost(ctx context.Context, postID, userID string) (in
 			"post not found",
 		)
 	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = AnonymousFallbackSubAccountID
-	}
+	actorKey := reactionActorKey(userID, deviceActorID)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1384,11 +1378,11 @@ func (s *PostService) UnlikePost(ctx context.Context, postID, userID string) (in
 		byPost = map[string]contentReactionState{}
 		s.reactions[post.ID] = byPost
 	}
-	state := byPost[userID]
+	state := byPost[actorKey]
 	changed := state.Liked
 	if changed {
 		state.Liked = false
-		byPost[userID] = state
+		byPost[actorKey] = state
 		if post.LikeCount > 0 {
 			post.LikeCount--
 		}
@@ -1466,17 +1460,19 @@ func (s *PostService) UnfavoritePost(ctx context.Context, postID, userID string)
 	return post.FavoriteCount, changed, nil
 }
 
-func (s *PostService) GetReactionState(postID, userID string) (liked, favorited, shared bool) {
+// GetReactionState 读取当前 actor 的互动状态。actor 维度由 userID（账号）优先、
+// 否则 deviceActorID（游客设备维度）解析，使游客也能读回自身设备态点赞/分享。
+func (s *PostService) GetReactionState(postID, userID, deviceActorID string) (liked, favorited, shared bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	normalizedPostID := strings.TrimSpace(postID)
-	normalizedUserID := strings.TrimSpace(userID)
-	shared = hasActiveShareForUser(s.reshares[normalizedPostID], normalizedUserID)
+	actorKey := reactionActorKey(userID, deviceActorID)
+	shared = hasActiveShareForUser(s.reshares[normalizedPostID], actorKey)
 	byPost, ok := s.reactions[normalizedPostID]
 	if !ok {
 		return false, false, shared
 	}
-	state, ok := byPost[normalizedUserID]
+	state, ok := byPost[actorKey]
 	if !ok {
 		return false, false, shared
 	}
@@ -2499,6 +2495,8 @@ func (s *PostService) SearchPosts(
 				{field: "title", value: post.Title},
 				{field: "summary", value: post.Summary},
 				{field: "body", value: post.Body},
+				{field: "tagRefs", value: strings.Join(asStringSlice(post.TagRefs), " ")},
+				{field: "entityRefs", value: strings.Join(asStringSlice(post.EntityRefs), " ")},
 				{field: "authorDisplayName", value: post.AuthorDisplayNameSnapshot},
 				{field: "locationName", value: post.LocationName},
 			}
@@ -2528,6 +2526,11 @@ func (s *PostService) SearchPosts(
 		if coverURL == "" {
 			coverURL = strings.TrimSpace(post.VideoUrl)
 		}
+		categoryID, subCategory := deriveSearchTopicCategories(
+			asStringSlice(post.TagRefs),
+			req.CategoryID,
+			req.SubCategory,
+		)
 		results = append(results, postmodel.PostSearchItemView{
 			PostId:            post.ID,
 			ContentType:       post.ContentType,
@@ -2540,8 +2543,8 @@ func (s *PostService) SearchPosts(
 			AuthorAvatarUrl:   post.AuthorAvatarUrlSnapshot,
 			CircleId:          primaryCircleID,
 			CircleName:        "",
-			CategoryId:        strings.TrimSpace(req.CategoryID),
-			SubCategory:       strings.TrimSpace(req.SubCategory),
+			CategoryId:        categoryID,
+			SubCategory:       subCategory,
 			LikeCount:         post.LikeCount,
 			HighlightText:     highlight,
 			MatchedField:      matchedField,
@@ -2556,6 +2559,50 @@ func (s *PostService) SearchPosts(
 		nextCursor = results[len(results)-1].PostId
 	}
 	return results, nextCursor, nil
+}
+
+func deriveSearchTopicCategories(tagRefs []string, fallbackCategory string, fallbackSubCategory string) (string, string) {
+	topics := make([]string, 0, 2)
+	seen := map[string]struct{}{}
+	addTopic := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		topics = append(topics, value)
+	}
+	for _, raw := range tagRefs {
+		tag := strings.Trim(strings.TrimSpace(raw), "/")
+		if tag == "" {
+			continue
+		}
+		parts := strings.Split(tag, "/")
+		if len(parts) < 2 || !strings.EqualFold(strings.TrimSpace(parts[0]), "Topic") {
+			continue
+		}
+		for _, part := range parts[1:] {
+			addTopic(part)
+			if len(topics) >= 2 {
+				break
+			}
+		}
+		if len(topics) >= 2 {
+			break
+		}
+	}
+	category := strings.TrimSpace(fallbackCategory)
+	subCategory := strings.TrimSpace(fallbackSubCategory)
+	if len(topics) > 0 {
+		category = topics[0]
+	}
+	if len(topics) > 1 {
+		subCategory = topics[1]
+	}
+	return category, subCategory
 }
 
 func (s *PostService) GetHelperRead(ctx context.Context, postID string) (map[string]any, error) {
@@ -2738,7 +2785,7 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"title":              post.Title,
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
-		"tagRefs":               asStringSlice(post.TagRefs),
+		"tagRefs":            asStringSlice(post.TagRefs),
 	}
 }
 

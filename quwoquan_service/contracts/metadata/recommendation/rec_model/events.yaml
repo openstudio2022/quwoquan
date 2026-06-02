@@ -1,3 +1,12 @@
 version: 1
-# 推荐模型服务为纯 API 门面，不产生领域事件
-events: []
+# 推荐模型服务为 API 门面；唯一对外领域事件是兴趣画像派生结果，由托管推荐运行时的
+# content-service 在行为投影后发布(Redis direct)，经 user-service 投影到
+# rm_user_profile_view.interestProfile(user 域单一真相源)。
+events:
+  - name: UserInterestRecomputed
+    description: 用户兴趣画像重算（content 基于 rm_recommend_feature 四维 affinities 派生 topN 兴趣 + 生命周期分层 + 半衰期新鲜度衰减，并按 segments.yaml 规则匹配人群 segment）
+    producer: content-service
+    consumers: [user-service]
+    channel: direct
+    payload_fields: [userId, interestProfile, segments]
+    recommend_impact: user_interest_profile_refresh

@@ -86,6 +86,7 @@ const (
 // BehaviorSignal represents a user behavior event for hot path processing.
 type BehaviorSignal struct {
 	UserID          string    `json:"userId"`
+	DeviceActorID   string    `json:"deviceActorId,omitempty"`
 	SessionID       string    `json:"sessionId"`
 	FeedSessionID   string    `json:"feedSessionId,omitempty"`
 	ContentID       string    `json:"contentId"`
@@ -141,6 +142,8 @@ var SignalWeights = map[string]float64{
 	// 交集转化三类行动（S6）：关注人 follow / 进圈子 join_circle / 加联系人 add_contact。
 	"join_circle": 4.0,
 	"add_contact": 4.5,
+	// 小艺对话浮现兴趣回流（P3）：payload 仅带 tagRefs，不绑定具体 post。
+	"assistant_interest": 1.6,
 }
 
 // ReferralSourceMultiplier maps referral sources to tag weight multipliers.

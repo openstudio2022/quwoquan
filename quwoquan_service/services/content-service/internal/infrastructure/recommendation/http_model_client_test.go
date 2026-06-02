@@ -10,6 +10,7 @@ import (
 	"time"
 
 	rtrec "quwoquan_service/runtime/recommendation"
+	"quwoquan_service/runtime/recpolicy"
 )
 
 func TestHTTPModelServiceClient_Predict_Unreachable(t *testing.T) {
@@ -41,7 +42,8 @@ func TestCascadeScorer_FallbackWhenHTTPClientFails(t *testing.T) {
 	now := time.Now()
 	features := &rtrec.ScoringFeatures{
 		Session: &rtrec.SessionState{UserID: "u1", SessionID: "s1"},
-		Weights: rtrec.DefaultWeights(),
+		Weights: recpolicy.Baseline().WeightPresets["control"],
+		Scorer:  recpolicy.Baseline().Scorer,
 	}
 	candidates := []rtrec.ContentCandidate{
 		{ContentID: "c1", ContentType: "post", AuthorID: "a1", PublishedAt: now, LikeCount: 10},

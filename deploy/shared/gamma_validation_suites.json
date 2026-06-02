@@ -94,6 +94,22 @@
         "requireAllPlatforms": true,
         "matrixKinds": ["assistant", "chat-avatar"]
       }
+    },
+    "mainline_auto_prod": {
+      "description": "main 自动 promotion 阻断链：只保留 15 分钟内能证明端云正确性的最小链路。包含 beta self-hosted 设备矩阵、gamma hosted readiness/T3/assistant protocol smoke/chat avatar probe，以及 prod 初始灰度后的只读 health/inspect/doctor/integration probes。",
+      "deploysGamma": true,
+      "readinessBlocking": true,
+      "smokeCases": [
+        "assistant_api_protocol_smoke",
+        "chat_avatar_api_probe"
+      ],
+      "smokeCasesBlocking": true,
+      "uiJourneys": [],
+      "deviceMatrix": {
+        "envs": ["beta"],
+        "requireAllPlatforms": true,
+        "matrixKinds": ["assistant", "chat-avatar"]
+      }
     }
   },
   "smokeCases": {

@@ -32,7 +32,7 @@ func BenchmarkGetFeed_SingleSource(b *testing.B) {
 		Action: "like", Tags: []string{"tag0", "tag1"},
 	})
 
-	engine := NewEngine(hp, []CandidateSource{source}, WithExploreFraction(0))
+	engine := NewEngine(hp, []CandidateSource{source}, WithPolicyStore(noExplorePolicyStore()))
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -70,7 +70,7 @@ func BenchmarkGetFeed_WithSessionCache(b *testing.B) {
 	})
 
 	cache := NewSessionCache(hp, 2*time.Second, 10000)
-	engine := NewEngine(cache, []CandidateSource{source}, WithExploreFraction(0))
+	engine := NewEngine(cache, []CandidateSource{source}, WithPolicyStore(noExplorePolicyStore()))
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -113,7 +113,7 @@ func BenchmarkGetFeed_MultiSource(b *testing.B) {
 	}
 
 	cache := NewSessionCache(hp, 2*time.Second, 10000)
-	engine := NewEngine(cache, sources, WithExploreFraction(0))
+	engine := NewEngine(cache, sources, WithPolicyStore(noExplorePolicyStore()))
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -226,7 +226,7 @@ func BenchmarkGetFeed_WithPool(b *testing.B) {
 	})
 
 	cache := NewSessionCache(hp, 2*time.Second, 10000)
-	engine := NewEngine(cache, []CandidateSource{source}, WithExploreFraction(0))
+	engine := NewEngine(cache, []CandidateSource{source}, WithPolicyStore(noExplorePolicyStore()))
 
 	b.ResetTimer()
 	b.ReportAllocs()

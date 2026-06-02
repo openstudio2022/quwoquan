@@ -7,22 +7,35 @@ node:
   parent_domain_service: product-ops-growth
   parent_business_capability: feedback-optimization-loop
 scope:
-  summary: optimization evaluation and release  baseline comparison 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: >-
+    基线对照 / champion-challenger：control/champion/rule 为基线，AB 分桶 + PipelineMetrics
+    按 preset×segment×bucket 归因，护栏以相对基线 minRatio 比对，reject 支配，达标才进人审。
+  in_scope:
+  - policy.yaml 基线身份（defaultPreset=control / champion / rule）+ AB 分桶
+  - PipelineMetrics 与 rec_requests_by_policy_total 按 preset×segment×bucket 归因
+  - rec_policy_advisor 逐指标相对基线 minRatio 比对 + reject 支配 + 样本不足 hold
+  out_of_scope:
+  - 候选激活/灰度（product-ops 控制面 + ops-portal 人审双签）
 gwt_acceptance:
   GWT1:
-    title: optimization evaluation and release  baseline comparison GWT
+    title: 候选相对基线逐指标对照得出发布建议
     given:
-    - 前置条件明确。
+    - policy.yaml 定义 control 基线与候选 preset，护栏含相对 minRatio 与绝对 minSamples。
+    - 给定候选 cohort 多项 KPI（部分达标、部分跌破基线）。
     when:
-    - 用户或系统动作发生。
+    - rec_policy_advisor 逐指标与基线对照。
     then:
-    - 可观察结果符合预期。
+    - 全部指标达标且样本充足 → recommend_review。
+    - 任一指标跌破基线 minRatio → 整体 reject（reject 支配 review）。
+    - 样本不足或缺 baseline → hold。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
+    - 相对基线对照 + reject 支配 + 样本门槛的发布判定可由单测证明。
+    edge_cases:
+    - 多指标混合（达标 + 跌破）→ reject。
+    - 缺 baseline preset → hold（不误判 reject）。
+    contract_refs:
+    - contracts/metadata/recommendation/rec_model/policy.yaml
+    - contracts/metadata/_control_plane/product/workflow.yaml
     performance_points: []
     evidence:
       primary:
@@ -31,8 +44,11 @@ gwt_acceptance:
       supporting: []
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - scripts/recommendation/test_rec_policy_advisor.py
+      - runtime/recommendation/engine_test.go::TestModelVsRuleExperiment_PolicyResolvesValidBucket
+      - make verify-rec-policy-advisor
+    status: implemented
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

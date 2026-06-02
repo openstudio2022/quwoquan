@@ -17,6 +17,7 @@ void main() {
       expect(requiredRouteGateForLocation(AppRoutePaths.home), isNull);
       expect(requiredRouteGateForLocation(AppRoutePaths.circles), isNull);
       expect(requiredRouteGateForLocation(AppRoutePaths.globalSearch), isNull);
+      expect(requiredRouteGateForLocation('/following'), isNull);
     });
 
     test('「我的」私密子页需要登录', () {
@@ -57,6 +58,66 @@ void main() {
       expect(
         requiredRouteGateForLocation(AppRoutePaths.chatDetail(id: 'c1')),
         AuthGateReason.openChat,
+      );
+    });
+
+    test('防死循环：buildLoginRouteLocation 可关闭 guest pop（关闭只走安全兜底）', () {
+      final loc = buildLoginRouteLocation(
+        reasonName: AuthGateReason.openChat.name,
+        redirect: AppRoutePaths.chat,
+        dismissFallback: AppRoutePaths.home,
+        allowGuestDismissPop: false,
+      );
+      final uri = Uri.parse(loc);
+      expect(uri.path, AppRoutePaths.loginPathTemplate);
+      expect(uri.queryParameters[loginGuestDismissPopQueryParam], '0');
+      expect(
+        loginGuestDismissCanPopFromQuery(
+          uri.queryParameters[loginGuestDismissPopQueryParam],
+        ),
+        isFalse,
+      );
+      // 即便游客 pop 失败兜底，也只会落到安全页而非受限路由。
+      expect(
+        safeLoginDismissFallback(
+          redirect: AppRoutePaths.chat,
+          dismissFallback: AppRoutePaths.home,
+        ),
+        AppRoutePaths.home,
+      );
+    });
+
+    test('行内动作门默认允许 guest pop（登录关闭原路返回可浏览页）', () {
+      final loc = buildLoginRouteLocation(
+        reasonName: AuthGateReason.comment.name,
+      );
+      final uri = Uri.parse(loc);
+      expect(uri.queryParameters[loginGuestDismissPopQueryParam], '1');
+      expect(
+        loginGuestDismissCanPopFromQuery(
+          uri.queryParameters[loginGuestDismissPopQueryParam],
+        ),
+        isTrue,
+      );
+    });
+
+    test('safeLoginDismissFallback 会把受限路由和首页关注态降级到安全页', () {
+      expect(
+        safeLoginDismissFallback(redirect: AppRoutePaths.chat),
+        AppRoutePaths.home,
+      );
+      expect(
+        safeLoginDismissFallback(redirect: AppRoutePaths.createEntry),
+        AppRoutePaths.home,
+      );
+      expect(safeLoginDismissFallback(redirect: '/following'), AppRoutePaths.home);
+      expect(
+        safeLoginDismissFallback(redirect: AppRoutePaths.profilePersonas),
+        AppRoutePaths.profile,
+      );
+      expect(
+        safeLoginDismissFallback(dismissFallback: AppRoutePaths.settings),
+        AppRoutePaths.settings,
       );
     });
   });

@@ -3,13 +3,38 @@ name: Gamma ECS Pre Hosted Core
 on:
   workflow_call:
     inputs:
+      checkout_ref:
+        description: Caller commit SHA/ref for checkout
+        required: false
+        type: string
+        default: ''
+      image_version:
+        description: Target image version for gamma mirror
+        required: false
+        type: string
+        default: ''
+      config_version:
+        description: Target config version for gamma mirror
+        required: false
+        type: string
+        default: ''
+      release_artifact_name:
+        description: Optional artifact name containing generated release snapshots
+        required: false
+        type: string
+        default: ''
+      skip_upload:
+        description: Reuse existing remote tree and only sync release snapshots
+        required: false
+        type: boolean
+        default: false
       assistant_scenario_id:
         description: 单场景 smoke 可填 scenario id；留空则跑全部 gamma 场景
         required: false
         type: string
         default: travel_journey_basic
       assistant_smoke_profile:
-        description: ui_sanity 或 full_semantic
+        description: protocol / ui_sanity / full_semantic
         required: false
         type: string
         default: ui_sanity
@@ -72,26 +97,72 @@ jobs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - name: Download resolved release artifact
+        if: ${{ inputs.release_artifact_name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.release_artifact_name }}
+          path: .mainline-release-artifact
+      - name: Unpack generated release snapshots
+        if: ${{ inputs.release_artifact_name != '' }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path(".mainline-release-artifact")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          for rel_path in manifest.get("releaseFiles", {}).values():
+              src = root / rel_path
+              dst = Path(rel_path)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+          PY
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Create tarball
         run: |
-          BUNDLE_PATH="${RUNNER_TEMP}/gamma-ecs-bundle.tgz"
-          tar \
-            --exclude='.git' \
-            --exclude='.dart_tool' \
-            --exclude='build' \
-            --exclude='node_modules' \
-            --exclude='.venv' \
-            --exclude='__pycache__' \
-            --exclude='.pytest_cache' \
-            --exclude='.mypy_cache' \
-            --exclude='quwoquan_app/.dart_tool' \
-            --exclude='quwoquan_app/build' \
-            --exclude='apps/ops-portal/node_modules' \
-            -czf "${BUNDLE_PATH}" .
-          cp "${BUNDLE_PATH}" gamma-ecs-bundle.tgz
+          if [ "${{ inputs.skip_upload }}" = "true" ] || [ -n "${{ inputs.release_artifact_name }}" ]; then
+            mkdir -p .gamma-minimal-bundle
+            mkdir -p .gamma-minimal-bundle/quwoquan_app
+            cp -R agent_ops .gamma-minimal-bundle/agent_ops
+            cp -R deploy .gamma-minimal-bundle/deploy
+            cp -R quwoquan_app/scripts .gamma-minimal-bundle/quwoquan_app/scripts
+            cp -R quwoquan_service .gamma-minimal-bundle/quwoquan_service
+            tar \
+              --exclude='.git' \
+              --exclude='.dart_tool' \
+              --exclude='build' \
+              --exclude='node_modules' \
+              --exclude='.venv' \
+              --exclude='__pycache__' \
+              --exclude='.pytest_cache' \
+              --exclude='.mypy_cache' \
+              --exclude='quwoquan_app/.dart_tool' \
+              --exclude='quwoquan_app/build' \
+              --exclude='apps/ops-portal/node_modules' \
+              -C ".gamma-minimal-bundle" \
+              -czf "${RUNNER_TEMP}/gamma-ecs-bundle.tgz" .
+          else
+            tar \
+              --exclude='.git' \
+              --exclude='.dart_tool' \
+              --exclude='build' \
+              --exclude='node_modules' \
+              --exclude='.venv' \
+              --exclude='__pycache__' \
+              --exclude='.pytest_cache' \
+              --exclude='.mypy_cache' \
+              --exclude='quwoquan_app/.dart_tool' \
+              --exclude='quwoquan_app/build' \
+              --exclude='apps/ops-portal/node_modules' \
+              -czf "${RUNNER_TEMP}/gamma-ecs-bundle.tgz" .
+          fi
+          cp "${RUNNER_TEMP}/gamma-ecs-bundle.tgz" gamma-ecs-bundle.tgz
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
@@ -115,6 +186,8 @@ jobs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -128,7 +201,7 @@ jobs:
         run: |
           PUBLIC_HOST="${GAMMA_ECS_PUBLIC_HOST:-118.31.239.122}"
           BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18000}"
-          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:18086}"
+          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:19010}"
           MEDIA_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-${BASE_URL}}"
           echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "product_ops_base_url=${PRODUCT_OPS_BASE_URL}" >> "$GITHUB_OUTPUT"
@@ -162,7 +235,9 @@ jobs:
         run: bash agent_ops/deploy/gamma/deploy_gamma_ecs.sh
         env:
           GAMMA_ECS_STAGE: pre
-          GAMMA_DEPLOY_IMAGE_VERSION: 0.0.${{ github.run_number }}
+          GAMMA_ECS_SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
+          GAMMA_DEPLOY_IMAGE_VERSION: ${{ inputs.image_version || format('0.0.{0}', github.run_number) }}
+          GAMMA_DEPLOY_CONFIG_VERSION: ${{ inputs.config_version }}
           GAMMA_ECS_LOCAL_TARBALL: ${{ github.workspace }}/bundle/gamma-ecs-bundle.tgz
           GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
           GAMMA_ECS_SSH_KEY: ${{ secrets.GAMMA_ECS_SSH_KEY }}
@@ -196,6 +271,8 @@ jobs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -238,6 +315,8 @@ jobs:
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -281,10 +360,26 @@ jobs:
       ASSISTANT_SMOKE_MAX_IDLE_TICKS: ${{ inputs.assistant_smoke_max_idle_ticks }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Assistant protocol smoke (mainline_auto_prod)
+        if: ${{ inputs.assistant_smoke_profile == 'protocol' }}
+        run: |
+          python3 agent_ops/assistant/run_assistant_runtime_smoke.py \
+            --env cloud-gamma-pre \
+            --base-url "${GAMMA_BASE_URL}" \
+            --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
+            --scenario-id "${ASSISTANT_SCENARIO_ID}" \
+            --report artifacts/assistant-runtime-smoke/cloud-gamma-pre/report.json \
+            --timeout-seconds 75 \
+            --stall-timeout-seconds 12
+        env:
+          GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       - name: 准备 personal_assistant/.env
+        if: ${{ inputs.assistant_smoke_profile != 'protocol' }}
         run: |
           if [ -d quwoquan_app/personal_assistant ]; then
             mkdir -p quwoquan_app/personal_assistant
@@ -295,13 +390,16 @@ jobs:
             fi
           fi
       - uses: subosito/flutter-action@v2
+        if: ${{ inputs.assistant_smoke_profile != 'protocol' }}
         with:
           channel: stable
           cache: true
       - name: 安装 Flutter 依赖
+        if: ${{ inputs.assistant_smoke_profile != 'protocol' }}
         working-directory: quwoquan_app
         run: flutter pub get
       - name: Assistant gamma smoke (remote)
+        if: ${{ inputs.assistant_smoke_profile != 'protocol' }}
         working-directory: quwoquan_app
         run: |
           args=(
@@ -319,6 +417,13 @@ jobs:
             args+=(--dart-define=ASSISTANT_SCENARIO_ID="${ASSISTANT_SCENARIO_ID}")
           fi
           "${args[@]}"
+      - name: Upload assistant smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assistant-runtime-smoke-gamma-pre
+          path: artifacts/assistant-runtime-smoke/cloud-gamma-pre/**
+          if-no-files-found: ignore
       - id: finish
         if: always()
         name: Finish timer
@@ -338,6 +443,8 @@ jobs:
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -376,6 +483,9 @@ jobs:
     outputs:
       critical_path_seconds: ${{ steps.critical_path.outputs.critical_path_seconds }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: critical_path
         name: Compute critical path
         env:
@@ -395,7 +505,21 @@ jobs:
           FANOUT_SECONDS="${API_SECONDS}"
           if [ "${ASSISTANT_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${ASSISTANT_SECONDS}"; fi
           if [ "${CHAT_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${CHAT_SECONDS}"; fi
-          echo "critical_path_seconds=$(( PACKAGE_SECONDS + DEPLOY_SECONDS + READY_SECONDS + FANOUT_SECONDS ))" >> "$GITHUB_OUTPUT"
+          CRITICAL_PATH_SECONDS=$(( PACKAGE_SECONDS + DEPLOY_SECONDS + READY_SECONDS + FANOUT_SECONDS ))
+          python3 agent_ops/ci/render_ci_timing_summary.py \
+            --gate-key 04.pre_release_gate_full \
+            --title "Gamma ECS Hosted Summary" \
+            --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
+            --phase "gamma_package_bundle=${PACKAGE_SECONDS}" \
+            --phase "gamma_deploy_ecs_pre=${DEPLOY_SECONDS}" \
+            --phase "gamma_environment_ready=${READY_SECONDS}" \
+            --phase "gamma_api_contract=${API_SECONDS}" \
+            --phase "assistant_runtime_smoke=${ASSISTANT_SECONDS}" \
+            --phase "chat_avatar_api_probe=${CHAT_SECONDS}" \
+            --note "该关键路径复用 gamma hosted pre/full 预算模型，供 mainline auto prod 汇总诊断直接消费。" \
+            --write-json "artifacts/ci-timing/gamma-hosted-summary.json" \
+            --write-step-summary
+          echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
       - name: Assert hosted jobs
         env:
           PACKAGE_RESULT: ${{ needs.package_gamma_bundle.result }}
@@ -423,3 +547,11 @@ jobs:
           if [ "${fail}" -ne 0 ]; then
             exit 1
           fi
+      - name: Upload gamma hosted timing summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-hosted-timing-summary
+          path: artifacts/ci-timing/gamma-hosted-summary.json
+          if-no-files-found: error
+          compression-level: 0

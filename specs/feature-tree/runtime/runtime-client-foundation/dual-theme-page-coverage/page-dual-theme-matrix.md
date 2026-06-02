@@ -35,7 +35,7 @@
 
 | path | domain | entry | dual_theme | exemption_reason | owner | evidence |
 |------|--------|-------|------------|------------------|-------|----------|
-| `lib/ui/discovery/pages/home_page.dart` | discovery | Tab 根 | full | | TBD | `ref.watch(isDarkProvider)` 传入 `_buildBody` / `MomentSocialFeed` / tab strip。 |
+| `lib/ui/discovery/pages/home_page.dart` | discovery | Tab 根 | full | | TBD | `ref.watch(isDarkProvider)` 传入 `_buildBody` / `HomeMultiFormFeed` / tab strip。 |
 | `lib/ui/discovery/pages/discovery_page.dart` | discovery | 壳内子视图 | full | | TBD | 网格卡角标 `ColorType.mediaThumbnailOverlay*`；竖滑视频 UI `videoImmersionOverlay*` / `videoImmersionBottomGradientEnd`；`post_preview_list_tile` 阴影 `dropShadow`。 |
 
 ---

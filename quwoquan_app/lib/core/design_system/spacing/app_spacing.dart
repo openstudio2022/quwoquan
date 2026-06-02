@@ -38,17 +38,18 @@ class AppSpacing {
   static const double expandedBreakpoint = 600.0;
   static const double wideBreakpoint = 1024.0;
 
-  /// Web/桌面内容主列最大宽度：内容优先，避免 PC 上无限拉宽导致阅读疲劳。
+  /// Web/桌面公开内容入口布局语义尺寸。
   static const double webContentMaxWidth = 1120.0;
-
-  /// Web 顶部安装提示条的移动端高度。
   static const double webInstallBannerCompactHeight = 72.0;
-
-  /// Web 顶部安装提示条的宽屏高度。
   static const double webInstallBannerWideHeight = 56.0;
-
-  /// Web 宽屏侧栏语义宽度（后续 adaptive_app_shell 使用）。
   static const double webNavigationRailWidth = 96.0;
+  static const double webPcHeaderHeight = 64.0;
+  static const double webPcMasonryColumnWidth = 236.0;
+  static const double webPcMasonryGap = 20.0;
+  static const double webPcReadingMinWidth = 720.0;
+  static const double webPcReadingMaxWidth = 820.0;
+  static const double webPcRightRailWidth = 280.0;
+  static const double webPcInstallCtaCardWidth = 260.0;
 
   // ==================== 基础间距 ====================
   /// 极小间距: 4.0
@@ -936,6 +937,21 @@ class AppSpacing {
           wide: containerLg,
         ),
       );
+
+  static int webPcMasonryColumns(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final horizontalPadding = webShellContentPadding(context).horizontal;
+    final usable = (width - horizontalPadding).clamp(0, webContentMaxWidth);
+    final columnAndGap = webPcMasonryColumnWidth + webPcMasonryGap;
+    final columns = ((usable + webPcMasonryGap) / columnAndGap).floor();
+    return columns.clamp(2, 5).toInt();
+  }
+
+  static double webPcReadingWidth(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final usable = width - webPcRightRailWidth - webPcMasonryGap * 2;
+    return usable.clamp(webPcReadingMinWidth, webPcReadingMaxWidth).toDouble();
+  }
 
   // ==================== 响应式内容网格 ====================
 

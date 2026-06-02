@@ -1,0 +1,87 @@
+{
+  "seedRefs": [
+    {
+      "name": "following_subject_core",
+      "description": "用户关注对象动态：用户、圈子与实体主页三类对象同源进入对象页网络。",
+      "scenarioRefs": [
+        "list_three_subject_types",
+        "mark_visited_clears_unread"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "list_three_subject_types",
+      "viewerSubAccountId": "user_001",
+      "response": {
+        "items": [
+          {
+            "subjectId": "user_travel_photographer",
+            "subjectType": "user",
+            "displayName": "旅行摄影师",
+            "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
+            "coverUrl": "",
+            "subtitle": "刚更新了川西路线",
+            "targetRouteId": "user_profile",
+            "targetObjectId": "user_travel_photographer",
+            "followedAt": "2026-05-20T08:00:00Z",
+            "lastVisitedAt": "2026-06-01T08:00:00Z",
+            "latestChangedAt": "2026-06-02T00:30:00Z",
+            "unreadChangeCount": 2,
+            "hasUnreadChanges": true,
+            "latestChangeReason": "发布了新内容"
+          },
+          {
+            "subjectId": "circle_sichuan_travel",
+            "subjectType": "circle",
+            "displayName": "四川旅行圈",
+            "avatarUrl": "",
+            "coverUrl": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=240",
+            "subtitle": "圈内有新攻略",
+            "targetRouteId": "circle_detail",
+            "targetObjectId": "circle_sichuan_travel",
+            "followedAt": "2026-05-22T08:00:00Z",
+            "lastVisitedAt": "2026-06-02T01:00:00Z",
+            "latestChangedAt": "2026-06-02T01:00:00Z",
+            "unreadChangeCount": 0,
+            "hasUnreadChanges": false,
+            "latestChangeReason": ""
+          },
+          {
+            "subjectId": "homepage_jiuzhaigou",
+            "subjectType": "homepage",
+            "displayName": "九寨沟",
+            "avatarUrl": "",
+            "coverUrl": "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=240",
+            "subtitle": "地点动态有更新",
+            "targetRouteId": "homepage_detail",
+            "targetObjectId": "homepage_jiuzhaigou",
+            "followedAt": "2026-05-24T08:00:00Z",
+            "lastVisitedAt": "2026-05-30T08:00:00Z",
+            "latestChangedAt": "2026-06-01T12:20:00Z",
+            "unreadChangeCount": 1,
+            "hasUnreadChanges": true,
+            "latestChangeReason": "新增问答和口碑"
+          }
+        ],
+        "nextCursor": null
+      }
+    },
+    {
+      "name": "mark_visited_clears_unread",
+      "viewerSubAccountId": "user_001",
+      "request": {
+        "subjectId": "homepage_jiuzhaigou",
+        "subjectType": "homepage",
+        "visitedAt": "2026-06-02T08:00:00Z",
+        "clientRequestId": "client-request-001"
+      },
+      "response": {
+        "subjectId": "homepage_jiuzhaigou",
+        "subjectType": "homepage",
+        "lastVisitedAt": "2026-06-02T08:00:00Z",
+        "hasUnreadChanges": false
+      }
+    }
+  ]
+}

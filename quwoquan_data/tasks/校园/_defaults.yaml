@@ -1,0 +1,23 @@
+schemaVersion: quwoquan.task.defaults
+# 校园垂类默认：全角度全集 + 校园受众全集 + 四季（新生秋 / 毕业夏 / 考研冬 / 选课春）。
+# 校园内容以学校实体为主、地形条件维弱，故默认不设 regions。
+content:
+  angles:
+  - 新生攻略
+  - 校园日记
+  - 校园评测
+  - 选课攻略
+  - 考研经验
+  - 校招经验
+  audiences:
+  - freshmanStudent
+  - prospectiveStudent
+  - campusParent
+  - examCandidate
+  - jobSeeker
+  conditionAxes:
+    seasons:
+    - 春
+    - 夏
+    - 秋
+    - 冬

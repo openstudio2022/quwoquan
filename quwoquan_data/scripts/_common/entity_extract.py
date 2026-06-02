@@ -50,6 +50,29 @@ def entity_ref(domain: str, etype: str, name: str) -> str:
     return f"/entity/{domain}/{etype}/{name}"
 
 
+def normalize_entity_refs(raw_refs: Sequence[Any] | None, subject_type: str | None) -> list[str]:
+    """把 compose-brief 的实体引用补全为发布门可识别的全路径 /entity/{domain}/{type}/{name}。
+
+    单一真相源：domain/type 取自 compose input 的 subject.type（如 "地点/景区"），不维护第二套
+    实体类型映射；已是全路径（含 domain/type）的引用原样规范化，短名引用按 subject 补全。
+    publish_filter 据此精确定位 entities/{domain}/{type}/{name}/page.md，避免主实体被误过滤。
+    """
+    domain, etype = resolve_domain_etype(subject_type)
+    out: list[str] = []
+    for item in raw_refs or []:
+        s = str(item).strip().strip("/")
+        if not s:
+            continue
+        parts = s.split("/")
+        if parts and parts[0] == "entity":
+            parts = parts[1:]
+        if len(parts) >= 3:
+            out.append("/entity/" + "/".join(parts))
+        else:
+            out.append(entity_ref(domain, etype, parts[-1]))
+    return out
+
+
 def homepage_exists(domain: str, etype: str, name: str, task_id: str) -> bool:
     if (PUBLISH_ROOT / "entities" / domain / etype / name / "page.md").is_file():
         return True
@@ -76,24 +99,30 @@ def generate_entity_homepage(
     *,
     evidence: str = "",
     source_ref: str = "",
+    condition_profile: Mapping[str, Any] | None = None,
 ) -> Path:
-    """在 task entities 下生成最小实体主页 + _entity.json，使实体可关联查看。"""
+    """在 task entities 下生成最小实体主页 + _entity.json，使实体可关联查看。
+
+    condition_profile（L3 实体条件画像：真实地形 regions / 最佳季节 seasons / 海拔 altitudeMeters）
+    仅在显式传入且非空时写入，plan/brief 据此精确注入 conditionContext；缺省时不写，回退地域全谱。
+    """
     data = task_data(task_id)
     ent_dir = data.entity_dir(domain, etype, name)
     ent_dir.mkdir(parents=True, exist_ok=True)
     page = data.entity_page(domain, etype, name)
     page.write_text(_stub_entity_page(name, domain, etype, evidence), encoding="utf-8")
-    write_json(
-        data.entity_json(domain, etype, name),
-        {
-            "label": name,
-            "domain": domain,
-            "type": etype,
-            "tagRefs": [],
-            "sourceRef": source_ref,
-            "generatedBy": "produce.entity_extract",
-        },
-    )
+    payload: dict[str, Any] = {
+        "label": name,
+        "domain": domain,
+        "type": etype,
+        "tagRefs": [],
+        "sourceRef": source_ref,
+        "generatedBy": "produce.entity_extract",
+        "sourceTaskId": task_id,
+    }
+    if condition_profile:
+        payload["conditionProfile"] = dict(condition_profile)
+    write_json(data.entity_json(domain, etype, name), payload)
     return page
 
 

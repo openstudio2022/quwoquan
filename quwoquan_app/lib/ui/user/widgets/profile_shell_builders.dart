@@ -54,6 +54,51 @@ extension _ProfileShellBuilders on _ProfileShellState {
     );
   }
 
+  /// 关注：游客显示「未关注」，点击先登记续接再引导登录；已登录直接 toggle。
+  void _gatedToggleFollow(BuildContext context, ProfileNotifier notifier) {
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      unawaited(notifier.toggleFollow());
+      return;
+    }
+    ref
+        .read(authContinuationProvider.notifier)
+        .set(FollowProfileContinuation(subAccountId: widget.userId));
+    unawaited(requireLogin(ref, context, AuthGateReason.follow));
+  }
+
+  /// 私信：经 `/chat/*` 路由门保障，按钮层显式带统一 reason，未登录引导登录后进入会话。
+  void _gatedOpenMessage(BuildContext context) {
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      context.push(AppRoutePaths.chatDetail(id: widget.userId));
+      return;
+    }
+    openLoginPage(
+      context,
+      reasonName: AuthGateReason.sendMessage.name,
+      redirect: AppRoutePaths.chatDetail(id: widget.userId),
+      dismissFallback: AppRoutePaths.home,
+    );
+  }
+
+  /// 登录后续接关注：登录成功（auth 翻转为已认证）且续接对象与本主页一致、当前未关注时，
+  /// 自动补完关注，避免游客「点关注→登录回来什么都没发生」。
+  void maybeResumeFollowContinuation(ProfileNotifier notifier) {
+    final pending = ref
+        .read(authContinuationProvider.notifier)
+        .take<FollowProfileContinuation>();
+    if (pending == null) {
+      return;
+    }
+    if (pending.subAccountId != widget.userId) {
+      // 续接对象不是本主页：放回槽位交由对应主页消费。
+      ref.read(authContinuationProvider.notifier).set(pending);
+      return;
+    }
+    if (!ref.read(profileNotifierProvider(widget.userId)).isFollowing) {
+      unawaited(notifier.toggleFollow());
+    }
+  }
+
   Widget _buildSummarySection(
     BuildContext context, {
     required bool isDark,
@@ -75,7 +120,9 @@ extension _ProfileShellBuilders on _ProfileShellState {
     return Container(
       decoration: BoxDecoration(
         color: summarySurface,
-        borderRadius: BorderRadius.circular(_ProfileShellState._profileCardRadius),
+        borderRadius: BorderRadius.circular(
+          _ProfileShellState._profileCardRadius,
+        ),
         border: Border.all(color: summaryBorder, width: AppSpacing.hairline),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -103,6 +150,11 @@ extension _ProfileShellBuilders on _ProfileShellState {
             ),
             SizedBox(height: AppSpacing.md),
             _buildIntersectionCard(isDark),
+            if (widget.mode == ProfileMode.mine) ...[
+              MyIntersectionInboxCard(isDark: isDark),
+              SizedBox(height: AppSpacing.md),
+            ],
+            SizedBox(height: AppSpacing.md),
             ProfileStatsRow(
               isDark: isDark,
               profile: state.profile,
@@ -123,9 +175,8 @@ extension _ProfileShellBuilders on _ProfileShellState {
                 onManagePersonas: personaManagementEnabled
                     ? () => context.push(AppRoutePaths.profilePersonas)
                     : null,
-                onFollow: notifier.toggleFollow,
-                onMessage: () =>
-                    context.push(AppRoutePaths.chatDetail(id: widget.userId)),
+                onFollow: () => _gatedToggleFollow(context, notifier),
+                onMessage: () => _gatedOpenMessage(context),
                 onGreet: () => _showGreetDialog(context),
                 onVoiceCall: () => _startCall(context, 'voice'),
                 onVideoCall: () => _startCall(context, 'video'),
@@ -381,10 +432,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
   }) {
     final tabs = UserProfileUIConfig.profileTabs
         .map(
-          (tab) => TabItem(
-            id: tab.id,
-            label: UITextConstants.contentLabelForKey(tab.labelKey),
-          ),
+          (tab) => TabItem(id: tab.id, label: _profileObjectTabLabel(tab.id)),
         )
         .toList(growable: false);
     final surface = Container(
@@ -414,6 +462,16 @@ extension _ProfileShellBuilders on _ProfileShellState {
       ignoring: opacity <= 0.02,
       child: Opacity(opacity: opacity, child: surface),
     );
+  }
+
+  String _profileObjectTabLabel(String tabId) {
+    return switch (tabId) {
+      'creations' => '作品',
+      'circles' => '圈子',
+      'interaction' => '互动',
+      'lifestyle' => '看点',
+      _ => UITextConstants.contentLabelForKey(tabId),
+    };
   }
 
   Widget _buildInlineTabContent(BuildContext context, bool isDark) {

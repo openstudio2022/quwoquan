@@ -10,16 +10,16 @@ class UITextConstants {
   static const String homeTabPhotography = '摄影';
   static const String homeTabTech = '科技';
   static const String homeTabCarFriends = '车之家';
-  // 今日交集顶部流标题
-  static const String homeTodayIntersection = '今日交集';
+  // 首页交集顶部流标题
+  static const String homeTodayIntersection = '发现交集';
   // 频道气质文案（下拉加载留白露出；moodCopyKey 来自 ContentUIConfig.homeChannels）
-  static const String homeMoodFollowing = '和在意的人的交集';
-  static const String homeMoodRecommend = '和同趣的人的交集';
-  static const String homeMoodCampus = '和同窗的交集';
-  static const String homeMoodTravel = '和远方的交集';
-  static const String homeMoodPhotography = '和光影的交集';
-  static const String homeMoodTech = '和同行的交集';
-  static const String homeMoodCar = '和同好的交集';
+  static const String homeMoodFollowing = '关注对象的新动态';
+  static const String homeMoodRecommend = '为你挑选新的交集';
+  static const String homeMoodCampus = '看看同校与校园动态';
+  static const String homeMoodTravel = '看看地点与旅途动态';
+  static const String homeMoodPhotography = '看看影像与同好动态';
+  static const String homeMoodTech = '看看科技与同行动态';
+  static const String homeMoodCar = '看看车友与同好动态';
 
   /// 频道气质文案解析：moodCopyKey（运营配置/codegen 真相源）→ 展示文案。
   /// 无匹配时返回空串，调用方据此「不展示」。
@@ -67,7 +67,7 @@ class UITextConstants {
     }
   }
 
-  // ==================== 统一对象推荐卡（今日交集对象） ====================
+  // ==================== 统一对象推荐卡（发现交集对象） ====================
   // 对象行动按钮动词（actionType 真相源来自 IntersectionReason.actionType，
   // 此处仅做动词映射，不拼装交集文案——交集句以 displayText 为准）。
   static const String homeObjectActionFollow = '关注';
@@ -76,6 +76,10 @@ class UITextConstants {
   static const String homeObjectActionView = '查看';
   // 共同点计数后缀（仅数字格式化，非交集句拼装）。
   static const String homeObjectSharedCountSuffix = ' 个共同点';
+  static const String followingSubjectStripTitle = '关注动态';
+  static const String followingSubjectEmptyTitle = '还没有关注的人、圈子或地点';
+  static const String followingSubjectEmptySubtitle =
+      '去推荐、校园、旅行里关注感兴趣的对象，回来这里查看它们的新动态。';
 
   /// 对象行动按钮文案解析：actionType（IntersectionReason 真相源）→ 动词。
   /// 无匹配回退「查看」。
@@ -262,6 +266,9 @@ class UITextConstants {
   static const String authGateTitleMediaUpload = '登录后上传素材';
   static const String authGateTitleReport = '登录后提交举报';
   static const String authGateTitleJoinCircle = '登录后加入圈子';
+  static const String authGateTitleAddContact = '登录后添加好友';
+  static const String authGateTitleStartGroupChat = '登录后发起群聊';
+  static const String authGateTitleCreateCircle = '登录后创建圈子';
   static const String authGateTitleGeneric = '登录后继续使用';
 
   // 轻提示：触发受限动作时在原页面给出的短提示（先提示，再进入登录页）。
@@ -269,17 +276,20 @@ class UITextConstants {
   static const String authGatePromptCreate = '登录后即可发布内容';
   static const String authGatePromptOpenChat = '登录后查看消息';
   static const String authGatePromptSendMessage = '登录后即可发送消息';
-  static const String authGatePromptComment = '登录后即可评论';
+  static const String authGatePromptComment = '登录后即可评论，评论会按账号发布并沉淀到对象页';
   static const String authGatePromptLike = '登录后即可点赞';
   static const String authGatePromptFavorite = '登录后即可收藏';
   static const String authGatePromptFollow = '登录后即可关注';
-  static const String authGatePromptFollowingFeed = '登录后查看关注的内容';
+  static const String authGatePromptFollowingFeed = '登录后查看你关注的人、圈子和地点动态';
   static const String authGatePromptShare = '登录后即可同步分享';
   static const String authGatePromptPersona = '登录后即可管理分身';
   static const String authGatePromptSettingsAccount = '登录后即可管理账号';
   static const String authGatePromptMediaUpload = '登录后即可上传素材';
   static const String authGatePromptReport = '登录后即可提交举报';
   static const String authGatePromptJoinCircle = '登录后即可加入圈子';
+  static const String authGatePromptAddContact = '登录后即可添加好友';
+  static const String authGatePromptStartGroupChat = '登录后即可发起群聊';
+  static const String authGatePromptCreateCircle = '登录后即可创建圈子';
   static const String authGatePromptGeneric = '登录后即可继续';
 
   // 协议未勾选约束提示（对应 AUTH.CONSENT.REQUIRED）。
@@ -403,7 +413,35 @@ class UITextConstants {
   // 对象页统一交集卡标题（你和对象的交集，由各壳按对象类型传入）
   static const String profileMutualIntersectionTitle = '你们的交集';
   static const String homepageIntersectionTitle = '你和这里的交集';
-  static const String intersectionMoreLabel = '查看全部交集';
+  static const String circleIntersectionTitle = '你认识的人在这';
+  static const String intersectionMoreLabel = '全部交集';
+  // 我的主页「我的交集」聚合入口
+  static const String myIntersectionsTitle = '我的交集';
+  static const String myIntersectionsSubtitle = '谁和你产生了新的交集';
+  static const String intersectionExpandMore = '展开更多';
+  static const String intersectionCollapse = '收起';
+  static const String myIntersectionsEmpty = '还没有新的交集，去发现更多有交集的人和圈子';
+  static const String intersectionNewBadgeSuffix = '条新增';
+  // 推荐（概率）交集标签：不伪装事实
+  static const String intersectionAffinityLabel = '推荐';
+  // 交集维度短标签（端展示用，真相源仍为服务端 dimension 枚举）
+  static const Map<String, String> intersectionDimensionShortLabels =
+      <String, String>{
+        'identity': '身份',
+        'location': '足迹',
+        'content': '内容',
+        'relationship': '关系',
+        'interest': '兴趣',
+      };
+
+  static String intersectionDimensionShortLabel(String dimension) =>
+      intersectionDimensionShortLabels[dimension] ?? dimension;
+
+  /// 共同点安静 chip：「N 共同点」。
+  static String intersectionSharedChip(int count) => '$count 共同点';
+
+  /// 首页/频道交集模块头：「N 位与你有交集」（N 为红色数字，文案不含数字）。
+  static const String intersectionSpotlightHeaderPrefix = '位与你有交集';
 
   // ==================== 我的主页 ====================
   static const String editProfile = '编辑资料';

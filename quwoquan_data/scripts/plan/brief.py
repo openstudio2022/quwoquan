@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from _common.io import read_json
+from _common.paths import PUBLISH_ROOT, TASKS_ROOT
 from template.blueprint import collect_tag_refs
 from template.recommend import build_recommendation_manifest
 from template.registry import TemplateRegistry
@@ -24,7 +26,7 @@ def resolve_compose_brief(
     subject = _subject_ref(blueprint, request)
     refs = entity_refs or []
     tag_refs = _merge_tag_refs(registry, blueprint, creator)
-    condition = _resolve_condition(registry, blueprint, request)
+    condition = _resolve_condition(registry, blueprint, request, entity_refs=refs)
     if condition["tagRefs"]:
         tag_refs = [t for t in dict.fromkeys(tag_refs + condition["tagRefs"]) if t and t != "None"]
     must_include = _dedupe(list(blueprint.get("mustIncludeFacts", [])) + condition["facts"])
@@ -101,12 +103,48 @@ def _normalize_optional_mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _entity_condition_profile(entity_ref: str) -> dict[str, Any] | None:
+    """L3：按 entityRef（形如 地点/景区/稻城亚丁，可含 /entity/ 前缀）读取实体真实条件画像。
+
+    从实体 _entity.json 的 conditionProfile 取真实地形(regions)/最佳季节(seasons)/海拔，
+    publish 单一主线优先，回退任意 runtime task；缺失或无 regions/seasons 时返回 None。
+    """
+    parts = [p for p in str(entity_ref).strip().strip("/").split("/") if p]
+    if parts and parts[0] == "entity":
+        parts = parts[1:]
+    if len(parts) < 3:
+        return None
+    domain, etype, name = parts[0], parts[1], "/".join(parts[2:])
+    rel = Path("entities") / domain / etype / name / "_entity.json"
+    candidates: list[Path] = [PUBLISH_ROOT / rel]
+    if TASKS_ROOT.exists():
+        candidates.extend(sorted(TASKS_ROOT.rglob(str(rel))))
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            data = read_json(path)
+        except Exception:
+            continue
+        profile = data.get("conditionProfile") if isinstance(data, dict) else None
+        if isinstance(profile, dict) and (profile.get("regions") or profile.get("seasons")):
+            return profile
+    return None
+
+
 def _resolve_condition(
-    registry: TemplateRegistry, blueprint: dict[str, Any], request: RouteRequest
+    registry: TemplateRegistry,
+    blueprint: dict[str, Any],
+    request: RouteRequest,
+    entity_refs: list[str] | None = None,
 ) -> dict[str, Any]:
     """按 region/season 从 catalog 注入条件化 facts/图位/标签，并产出 conditionContext。
 
-    模板保持地域/季节无关：仅当 conditionAxes 声明 applicable 且请求带 region/season 时注入。
+    分层取值（覆盖广 + 精确）：
+    - 模板保持地域/季节无关：仅当 conditionAxes 声明 applicable 时才注入 catalog facts/图位。
+    - effective region/season：显式 request.region/season（最高） > 实体 conditionProfile 主值 > 无。
+    - entity 模式下实体真实画像（多地形/最佳季节/海拔）始终注入 context.entityProfile，
+      独立于模板敏感性，让正文事实精确；缺失实体画像时回退地域全谱并记 entityProfileFallback。
     """
     axes = blueprint.get("conditionAxes") or {}
     facts: list[str] = []
@@ -114,39 +152,65 @@ def _resolve_condition(
     tag_refs: list[str] = []
     context: dict[str, Any] = {}
 
+    refs = [r for r in (entity_refs or []) if r]
+    entity_profile: dict[str, Any] | None = None
+    if request.subject_kind == "entity" and refs:
+        entity_profile = _entity_condition_profile(refs[0])
+    profile_regions = [str(r) for r in (entity_profile or {}).get("regions") or []]
+    profile_seasons = [str(s) for s in (entity_profile or {}).get("seasons") or []]
+    eff_region = request.region or (profile_regions[0] if profile_regions else None)
+    eff_season = request.season or (profile_seasons[0] if profile_seasons else None)
+
     region_axis = axes.get("region") or {}
-    if request.region and region_axis.get("applicable"):
+    if eff_region and region_axis.get("applicable"):
         regions = registry.catalogs.get("region_catalog", {}).get("regions", {})
-        profile = regions.get(request.region)
+        profile = regions.get(eff_region)
         if profile:
             facts.extend(str(f) for f in profile.get("conditionFacts", []))
             for hint in profile.get("imageHints", []):
                 image_slots.append({"slot": str(hint), "imageLayout": "wrapRight", "conditionSource": "region"})
             tag_refs.extend(str(t) for t in profile.get("tagRefs", []))
             context["region"] = {
-                "name": request.region,
+                "name": eff_region,
                 "label": profile.get("label"),
                 "slot": region_axis.get("slot"),
                 "packing": profile.get("packing", []),
                 "riskNotes": profile.get("riskNotes", []),
+                "source": "request" if request.region else ("entityProfile" if profile_regions else "request"),
             }
 
     season_axis = axes.get("season") or {}
-    if request.season and season_axis.get("applicable"):
+    if eff_season and season_axis.get("applicable"):
         seasons = registry.catalogs.get("season_catalog", {}).get("seasons", {})
-        profile = seasons.get(request.season)
+        profile = seasons.get(eff_season)
         if profile:
             facts.extend(str(f) for f in profile.get("conditionFacts", []))
             for hint in profile.get("imageHints", []):
                 image_slots.append({"slot": str(hint), "imageLayout": "wrapLeft", "conditionSource": "season"})
             tag_refs.extend(str(t) for t in profile.get("tagRefs", []))
             context["season"] = {
-                "name": request.season,
+                "name": eff_season,
                 "label": profile.get("label"),
                 "slot": season_axis.get("slot"),
                 "packing": profile.get("packing", []),
                 "crowdNotes": profile.get("crowdNotes", []),
+                "source": "request" if request.season else ("entityProfile" if profile_seasons else "request"),
             }
+
+    if entity_profile:
+        context["entityProfile"] = {
+            "entityRef": refs[0],
+            "regions": profile_regions,
+            "seasons": profile_seasons,
+            "altitudeMeters": entity_profile.get("altitudeMeters"),
+            "notes": entity_profile.get("notes"),
+            "conditionSource": "entityConditionProfile",
+        }
+    elif request.subject_kind == "entity" and refs:
+        context["entityProfileFallback"] = {
+            "entityRef": refs[0],
+            "reason": "no_condition_profile; uses region/season menu",
+        }
 
     return {"facts": facts, "imageSlots": image_slots, "tagRefs": tag_refs, "context": context}
 

@@ -26,13 +26,33 @@ def sha256_file(path: Path) -> str:
 def asset_id_from_object_key(object_key: str) -> str:
     """Stable, readable, collision-free asset id derived from objectKey.
 
-    旧实现把非 ASCII（如中文 topicId）整段塌缩成一长串下划线，既不可读又会在
-    "纯中文 topicId" 之间撞 id。新实现：保留可读 ASCII token、把连续非法字符折叠为
-    单个 `_`，再追加 objectKey 的 sha1 前 8 位保证唯一。
+    旧实现把非 ASCII（如中文实体名）整段塌缩成一长串下划线，导致 assetId 看不出
+    对应哪张图 / 哪个实体（评审痛点）。新实现：保留可读 token（含中文实体名），
+    把连续非法字符折叠为单个 `_`，再追加 objectKey 的 sha1 前 8 位保证唯一。
+    系统内 entityRefs/tagRefs 本就大量使用中文路径，assetId 含中文与之一致，且
+    asset:// 仅在 manifest/markdown 内部闭环（由 verify_asset_refs 校验）。
     """
-    ascii_part = re.sub(r"[^a-zA-Z0-9]+", "_", object_key).strip("_")
+    readable = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff]+", "_", object_key).strip("_")
     digest = hashlib.sha1(object_key.encode("utf-8")).hexdigest()[:8]
-    return f"data_asset_{ascii_part}_{digest}" if ascii_part else f"data_asset_{digest}"
+    return f"data_asset_{readable}_{digest}" if readable else f"data_asset_{digest}"
+
+
+# 图片角色 → 语义说明词（gallery caption 兜底用，避免直接堆实体名/文件名）。
+_ROLE_CAPTION_WORDS = {"cover": "封面", "closing": "回望", "node": "实景"}
+
+
+def semantic_asset_caption(item: dict[str, Any]) -> str:
+    """图片语义说明：优先用创作时写的 caption；否则按 实体名·角色 兜底，绝不退回文件名。"""
+    caption = str(item.get("caption") or "").strip()
+    name = str(item.get("entityName") or "").strip()
+    role = str(item.get("role") or "").strip()
+    # caption 若只是裸实体名（旧行为），用角色补一层语义；agent 写的真实说明原样保留。
+    if caption and caption != name:
+        return caption
+    role_word = _ROLE_CAPTION_WORDS.get(role, "实景")
+    if name:
+        return f"{name} · {role_word}"
+    return caption or "配图"
 
 
 def infer_format_angle(tag_refs: list[str]) -> str:
@@ -48,7 +68,7 @@ def build_gallery_markdown(title: str, assets: list[dict[str, Any]]) -> str:
     lines = [f"# {title}｜图集\n", "> 冷启动配图清单，正文通过 asset:// 引用。\n"]
     for item in assets:
         aid = item.get("assetId", "")
-        caption = item.get("caption") or item.get("fileName", "")
+        caption = semantic_asset_caption(item)
         lines.append(f"- **{caption}**: `asset://{aid}`\n")
     return "".join(lines)
 

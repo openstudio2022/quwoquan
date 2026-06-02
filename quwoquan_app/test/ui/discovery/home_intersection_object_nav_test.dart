@@ -3,11 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/unified_object_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// A2：今日交集对象卡点击 → 按对象类型路由（路由来自 metadata codegen）。
+/// A2：发现交集对象卡点击 → 按对象类型路由（路由来自 metadata codegen）。
 Widget _buildApp() {
   return ProviderScope(
     child: ScreenUtilInit(
@@ -71,35 +71,38 @@ void main() {
     _suppressExpectedErrors();
     await tester.pumpWidget(_buildApp());
     await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
 
-    // recommend 默认频道展示今日交集对象卡（mock m1 = 关注作者 u1）。
-    expect(find.byType(UnifiedObjectCard), findsWidgets);
+    // recommend 频道交集（getFeedIntersections）：person「林清越」→ /user/u_lin。
+    expect(find.byType(IntersectionEntity), findsWidgets);
     final personCard = find.descendant(
-      of: find.byType(UnifiedObjectCard),
-      matching: find.text('你和 TA 都来自新东方校友圈'),
+      of: find.byType(IntersectionEntity),
+      matching: find.text('林清越'),
     );
-    expect(personCard, findsOneWidget);
+    expect(personCard, findsWidgets);
 
-    await tester.tap(personCard);
+    await tester.tap(personCard.first);
     await tester.pumpAndSettle();
 
-    expect(find.text('USER:u1'), findsOneWidget);
+    expect(find.text('USER:u_lin'), findsOneWidget);
   });
 
-  testWidgets('点击「地点」对象卡 → 跳 /homepages/{id}（metadata 路由）', (tester) async {
+  testWidgets('点击概率交集对象卡（推荐）→ 跳 /user/{id}（metadata 路由）', (tester) async {
     _suppressExpectedErrors();
     await tester.pumpWidget(_buildApp());
     await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
 
-    final placeCard = find.descendant(
-      of: find.byType(UnifiedObjectCard),
-      matching: find.text('你和 TA 都去过 西湖'),
+    // recommend 频道含概率（affinity）交集「陆衡」→ 标「推荐」，点卡仍进对象页。
+    final affinityCard = find.descendant(
+      of: find.byType(IntersectionEntity),
+      matching: find.text('陆衡'),
     );
-    expect(placeCard, findsOneWidget);
+    expect(affinityCard, findsWidgets);
 
-    await tester.tap(placeCard);
+    await tester.tap(affinityCard.first);
     await tester.pumpAndSettle();
 
-    expect(find.text('HOMEPAGE:hp_west_lake'), findsOneWidget);
+    expect(find.text('USER:u_lu'), findsOneWidget);
   });
 }

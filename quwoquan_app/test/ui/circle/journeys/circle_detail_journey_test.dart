@@ -122,7 +122,7 @@ void main() {
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text(UITextConstants.circleWorksTab), findsWidgets);
+      expect(find.text('内容'), findsWidgets);
     });
 
     testWidgets('旅程 A3：从详情页返回到列表页', (tester) async {
@@ -227,7 +227,7 @@ void main() {
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text(UITextConstants.circleWorksTab), findsWidgets);
+      expect(find.text('内容'), findsWidgets);
 
       await _settleIgnoringTabPaintErrors(tester);
 

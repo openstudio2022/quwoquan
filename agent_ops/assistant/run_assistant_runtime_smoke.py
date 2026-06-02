@@ -194,9 +194,37 @@ def request_json(
     try:
         with urllib.request.urlopen(req, timeout=timeout_seconds, context=ctx) as resp:
             payload = resp.read()
+            content_type = str(resp.headers.get("Content-Type", "")).lower()
+            if payload and "json" not in content_type:
+                body_preview = payload.decode("utf-8", errors="replace")[:400]
+                category = "gateway_response_html" if "<html" in body_preview.lower() else "gateway_response_not_json"
+                raise ProbeFailure(
+                    category,
+                    "request {0} {1} returned content-type={2}: {3}".format(
+                        method,
+                        path,
+                        content_type or "<missing>",
+                        body_preview,
+                    ),
+                )
             if not payload:
                 return {}
-            return json.loads(payload.decode("utf-8"))
+            try:
+                return json.loads(payload.decode("utf-8"))
+            except json.JSONDecodeError as exc:
+                body_preview = payload.decode("utf-8", errors="replace")[:400]
+                category = "gateway_response_empty" if not body_preview.strip() else "gateway_response_not_json"
+                if "<html" in body_preview.lower():
+                    category = "gateway_response_html"
+                raise ProbeFailure(
+                    category,
+                    "request {0} {1} returned invalid json: {2}; body={3}".format(
+                        method,
+                        path,
+                        exc,
+                        body_preview,
+                    ),
+                ) from exc
     except urllib.error.HTTPError as exc:
         body_text = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
         category = "auth_failed" if exc.code in (401, 403) else "http_error"
@@ -285,6 +313,10 @@ def decode_sse_frame(lines: List[str]) -> Optional[Dict[str, Any]]:
             end = min(exc.pos + 180, len(raw_payload))
             snippet = raw_payload[start:end].replace("\n", "\\n").replace("\r", "\\r")
             message = "{0} | snippet={1}".format(message, snippet)
+        if "<html" in raw_payload.lower():
+            raise ProbeFailure("gateway_response_html", message)
+        if not raw_payload.strip():
+            raise ProbeFailure("gateway_response_empty", message)
         raise ProbeFailure("stream_decode_error", message)
     payload["_sseEventName"] = event_name
     return payload

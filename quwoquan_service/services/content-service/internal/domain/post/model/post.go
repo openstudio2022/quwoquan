@@ -22,6 +22,9 @@ type Comment struct {
 	Content                   string    `json:"content" bson:"content"`
 	ReplyToCommentId          string    `json:"replyToCommentId" bson:"replyToCommentId"`
 	ReplyToUserId             string    `json:"replyToUserId" bson:"replyToUserId"`
+	EntityRefs                []string  `json:"entityRefs" bson:"entityRefs"`
+	PrimaryHomepageId         string    `json:"primaryHomepageId" bson:"primaryHomepageId"`
+	CanonicalEntityId         string    `json:"canonicalEntityId" bson:"canonicalEntityId"`
 	AssistantMentioned        bool      `json:"assistantMentioned" bson:"assistantMentioned"`
 	AssistantReplySource      string    `json:"assistantReplySource" bson:"assistantReplySource"`
 	AssistantCorrectionStatus string    `json:"assistantCorrectionStatus" bson:"assistantCorrectionStatus"`
@@ -33,16 +36,17 @@ type Comment struct {
 
 // ContentReaction domain model.
 type ContentReaction struct {
-	ID          string    `json:"_id" bson:"_id"`
-	PostId      string    `json:"postId" bson:"postId"`
-	UserId      string    `json:"userId" bson:"userId"`
-	Liked       bool      `json:"liked" bson:"liked"`
-	Favorited   bool      `json:"favorited" bson:"favorited"`
-	Shared      bool      `json:"shared" bson:"shared"`
-	Reported    bool      `json:"reported" bson:"reported"`
-	LikedAt     time.Time `json:"likedAt" bson:"likedAt"`
-	FavoritedAt time.Time `json:"favoritedAt" bson:"favoritedAt"`
-	UpdatedAt   time.Time `json:"updatedAt" bson:"updatedAt"`
+	ID            string    `json:"_id" bson:"_id"`
+	PostId        string    `json:"postId" bson:"postId"`
+	UserId        string    `json:"userId" bson:"userId"`
+	DeviceActorId string    `json:"deviceActorId" bson:"deviceActorId"`
+	Liked         bool      `json:"liked" bson:"liked"`
+	Favorited     bool      `json:"favorited" bson:"favorited"`
+	Shared        bool      `json:"shared" bson:"shared"`
+	Reported      bool      `json:"reported" bson:"reported"`
+	LikedAt       time.Time `json:"likedAt" bson:"likedAt"`
+	FavoritedAt   time.Time `json:"favoritedAt" bson:"favoritedAt"`
+	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
 }
 
 // DeletedPostTombstone domain model.
@@ -119,6 +123,7 @@ type Post struct {
 	Location                  GeoPoint       `json:"location" bson:"location"`
 	LocationName              string         `json:"locationName" bson:"locationName"`
 	PrimaryHomepageId         string         `json:"primaryHomepageId" bson:"primaryHomepageId"`
+	CanonicalEntityId         string         `json:"canonicalEntityId" bson:"canonicalEntityId"`
 	PrimaryHomepageType       string         `json:"primaryHomepageType" bson:"primaryHomepageType"`
 	PrimaryHomepageSnapshot   map[string]any `json:"primaryHomepageSnapshot" bson:"primaryHomepageSnapshot"`
 	Status                    string         `json:"status" bson:"status"`
@@ -146,6 +151,7 @@ type Post struct {
 	UpdatedAt                 time.Time      `json:"updatedAt" bson:"updatedAt"`
 	PublishedAt               time.Time      `json:"publishedAt" bson:"publishedAt"`
 	LastActiveAt              time.Time      `json:"lastActiveAt" bson:"lastActiveAt"`
+	SourceTaskId              string         `json:"sourceTaskId" bson:"sourceTaskId"`
 	DeletedAt                 time.Time      `json:"deletedAt" bson:"deletedAt"`
 }
 

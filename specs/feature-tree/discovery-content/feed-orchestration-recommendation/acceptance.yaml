@@ -16,6 +16,10 @@ sit_acceptance:
     story_refs: []
     done_when:
     - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    - 首页频道按 metadata layout policy 呈现：关注单列、精品侵入式、推荐/校园/旅行/摄影手机双列发现流，文章/口碑/强交集解释可 full-span。
+    - 同一个 PostBaseDto / ContentSurfaceView / IntersectionReason 支持单列、双列、侵入式和对象页承接，不新增第二套首页业务列表。
+    - 交集模块从 feed intersectionReasons 或 tag-service shared-tags 同源派生，用户行动回流 intersectionDimension / intersectionTagRefs。
+    - 关注频道登录后展示关注对象顶部列表，覆盖用户、圈子、地点和事物主页；上次访问后变化以红点提示，点击对象并进入主页后可消红点。
     performance_points: []
     evidence:
       primary:
@@ -23,8 +27,15 @@ sit_acceptance:
       - T3_app_api_integration
       supporting:
       - T1_static_contract
+      - T4_e2e_journey
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/test/ui/content/post/contract/post_ui_config_contract_test.dart
+      - quwoquan_app/test/ui/discovery/home_feed_layout_policy_test.dart
+      - quwoquan_app/test/ui/discovery/home_channel_template_routing_test.dart
+      - quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+      - quwoquan_app/test/ui/discovery/following_subject_strip_test.dart
+      - quwoquan_app/test/cloud/user/following_subject_repository_test.dart
       recorded: []
     status: pending
 execution:

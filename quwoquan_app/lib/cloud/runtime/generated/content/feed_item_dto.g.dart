@@ -41,6 +41,8 @@ class FeedItemDto {
   final List<Map<String, dynamic>>? cards;
   final int? articlePresentationVersion;
   final List<IntersectionReason>? intersectionReasons;
+  final String? sourceTaskId;
+  final Map<String, dynamic>? conditionProfile;
 
   const FeedItemDto({
     required this.id,
@@ -80,6 +82,8 @@ class FeedItemDto {
     this.cards,
     this.articlePresentationVersion,
     this.intersectionReasons,
+    this.sourceTaskId,
+    this.conditionProfile,
   });
 
   factory FeedItemDto.fromMap(Map<String, dynamic> m) {
@@ -121,6 +125,8 @@ class FeedItemDto {
       cards: _parseMapList(m['cards']),
       articlePresentationVersion: (m['articlePresentationVersion'] as num?)?.toInt() ?? null,
       intersectionReasons: m['intersectionReasons'] == null ? null : _parseProjectionDtoList(m['intersectionReasons'], IntersectionReason.fromMap),
+      sourceTaskId: m['sourceTaskId']?.toString() ?? null,
+      conditionProfile: _parseStringKeyMap(m['conditionProfile']) ?? null,
     );
   }
 
@@ -163,6 +169,8 @@ class FeedItemDto {
       'cards': cards,
       'articlePresentationVersion': articlePresentationVersion,
       'intersectionReasons': intersectionReasons,
+      'sourceTaskId': sourceTaskId,
+      'conditionProfile': conditionProfile,
     };
   }
 
@@ -204,6 +212,8 @@ class FeedItemDto {
     List<Map<String, dynamic>>? cards,
     int? articlePresentationVersion,
     List<IntersectionReason>? intersectionReasons,
+    String? sourceTaskId,
+    Map<String, dynamic>? conditionProfile,
   }) {
     return FeedItemDto(
       id: id ?? this.id,
@@ -243,6 +253,8 @@ class FeedItemDto {
       cards: cards ?? this.cards,
       articlePresentationVersion: articlePresentationVersion ?? this.articlePresentationVersion,
       intersectionReasons: intersectionReasons ?? this.intersectionReasons,
+      sourceTaskId: sourceTaskId ?? this.sourceTaskId,
+      conditionProfile: conditionProfile ?? this.conditionProfile,
     );
   }
 

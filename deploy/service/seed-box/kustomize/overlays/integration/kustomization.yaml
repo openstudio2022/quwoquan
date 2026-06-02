@@ -4,9 +4,9 @@ resources:
   - ../../base
 namespace: seed-box-integration
 images:
-  - name: seed-box/seed-box
+  - name: ghcr.io/openstudio2022/quwoquan/seed-box
     newTag: v2026.02.28.0
-  - name: seed-box/recommendation-service
+  - name: ghcr.io/openstudio2022/quwoquan/recommendation-service
     newTag: v2026.02.28.0
 generatorOptions:
   disableNameSuffixHash: true

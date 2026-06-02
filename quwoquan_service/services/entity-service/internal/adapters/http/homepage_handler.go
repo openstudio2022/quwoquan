@@ -161,6 +161,26 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, summary)
+	case "object-page-bundle":
+		if r.Method != http.MethodGet || len(segments) != 2 {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		query := r.URL.Query()
+		bundle, err := h.service.GetObjectPageBundle(
+			r.Context(),
+			homepageID,
+			query.Get("referralSource"),
+			query.Get("feedRequestId"),
+			query.Get("recommendationTraceId"),
+			query.Get("experimentBucket"),
+			query.Get("rolloutCohort"),
+		)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, bundle)
 	case "claim-requests":
 		h.handleClaimRequests(w, r, homepageID, segments)
 	case "claimed-basics":

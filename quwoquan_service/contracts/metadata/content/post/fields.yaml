@@ -99,7 +99,7 @@ entities:
         ops_exposure: read
         recommend_feature: true
         tag_ref: true
-        description: 路径制 tagRef 列表；唯一真相源为数据工程 publish/v1/tags（四分组路径 id），已废弃扁平 tag_taxonomy.yaml
+        description: 路径制 tagRef 列表；唯一真相源为数据工程 publish/v1/tags（四分组路径 id）
 
       - name: entityRefs
         type: "[]string"
@@ -259,6 +259,16 @@ entities:
         api_exposure: read_write
         ops_exposure: read
         description: 内容绑定的 canonical 共享主页 ID
+
+      - name: canonicalEntityId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: 内容绑定共享主页对应的数据工程实体归一 ID；与 primaryHomepageId 一一映射或为空
 
       - name: primaryHomepageType
         type: enum
@@ -508,6 +518,16 @@ entities:
         recommend_feature: true
         description: 最近活跃时间（发帖 / 评论 / 回复都会刷新）
 
+      - name: sourceTaskId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: 内容溯源——生成此内容的数据工程任务 id（task trace / 效果回流按 sourceTask 归因）
+
       - name: deletedAt
         type: timestamp
         constraints: [NULLABLE]
@@ -596,6 +616,35 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: entityRefs
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: 评论关联实体引用；用于 comment_about_entity 关系边
+
+      - name: primaryHomepageId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 评论主要关联共享主页 ID；允许用户评论明确指向某个对象
+
+      - name: canonicalEntityId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: 评论主要关联数据工程实体归一 ID；由 primaryHomepageId 或 entityRefs 归一得到
 
       - name: assistantMentioned
         type: bool
@@ -952,6 +1001,15 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: deviceActorId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 隐私安全的派生设备标识（installId hash 派生，非原始设备 ID）。游客以此维度独立计数；登录用户写入时仅做关联，不与账号维度并账
 
       - name: liked
         type: bool

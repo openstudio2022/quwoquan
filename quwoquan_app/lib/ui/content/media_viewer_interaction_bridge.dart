@@ -216,11 +216,9 @@ void syncPostLikeIntent(
   required bool isLiked,
   required int likeCount,
 }) {
-  // 防御性兜底：未登录绝不写本地乐观态 / outbox。UI 入口已用 requireLogin 拦截，
-  // 这里只是防止任何遗漏路径让游客写入。
-  if (!ref.read(authSessionControllerProvider).isAuthenticated) {
-    return;
-  }
+  // 点赞为「游客设备态可写」：游客与登录用户均可写本地乐观态 + outbox。
+  // 云侧按 deviceActorId（游客）/ userId（登录）独立计数、不并账；设备头由
+  // CloudRequestHeaders 统一注入，故此处无需区分登录态。
   ref
       .read(postInteractionStateProvider.notifier)
       .setLiked(postId, isLiked, likeCount: likeCount);
@@ -242,6 +240,8 @@ void syncPostSaveIntent(
   required bool isSaved,
   required int bookmarkCount,
 }) {
+  // 收藏属个人资产，仍需真实账号（FavoritePost=required）。防御性兜底：未登录绝不
+  // 写本地乐观态 / outbox；UI 入口已用 requireLogin 拦截，这里防止遗漏路径。
   if (!ref.read(authSessionControllerProvider).isAuthenticated) {
     return;
   }
@@ -288,9 +288,9 @@ Future<bool> syncPostShareIntent(
   required String postId,
   required int baselineShareCount,
 }) async {
-  if (!ref.read(authSessionControllerProvider).isAuthenticated) {
-    return false;
-  }
+  // 分享为「游客设备态可写」：游客与登录用户均可写入权威分享记录。云侧按
+  // deviceActorId（游客）/ userId（登录）独立累加、不并账；设备头由
+  // CloudRequestHeaders 统一注入。
   ref
       .read(postInteractionStateProvider.notifier)
       .stageOptimisticShare(postId, baseShareCount: baselineShareCount);

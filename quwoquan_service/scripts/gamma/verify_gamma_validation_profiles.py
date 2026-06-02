@@ -17,7 +17,13 @@ from typing import Any, Dict, List
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SUITES_PATH = REPO_ROOT / "deploy" / "shared" / "gamma_validation_suites.json"
 KNOWN_ENVS = {"alpha", "beta", "gamma", "local-gamma", "prod"}
-VALID_PROFILES = {"pr_light", "manual_full", "nightly_full", "release_candidate"}
+VALID_PROFILES = {
+    "pr_light",
+    "manual_full",
+    "nightly_full",
+    "release_candidate",
+    "mainline_auto_prod",
+}
 LEGACY_PROFILES = {"daily_full", "pr_smoke"}
 
 

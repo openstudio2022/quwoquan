@@ -1,0 +1,49 @@
+version: 2
+node:
+  id: runtime-data-engineering
+  level: L2_business_capability
+  path: specs/feature-tree/runtime/runtime-data-engineering
+  title: runtime data engineering
+  parent_domain_service: runtime
+scope:
+  summary: 运行时数据工程发布物、校验和环境数据同源验收范围。
+  in_scope:
+    - tagRef 发布物。
+    - canonical entity 与 entityRef。
+    - relationEdge 候选事实。
+    - seed manifest 与环境数据隔离。
+  out_of_scope:
+    - 在线推荐排序实现。
+    - 业务服务在线写路径。
+sit_acceptance:
+  SIT1:
+    title: 数据工程同源输入验收
+    done_when:
+      - tagRef、canonicalEntityId、entityRef、relationEdge 有明确发布物或 fixture 来源。
+      - alpha/beta/gamma/prod 数据策略不漂移。
+      - 对象主页网络可引用同一数据工程输入构建交集、推荐和小艺上下文。
+    integration_points:
+      - quwoquan_data/publish/v1/tags
+      - quwoquan_service/contracts/metadata
+      - quwoquan_service/contracts/metadata/_shared/test_fixtures
+      - quwoquan_app/lib/cloud/services
+    performance_points: []
+    evidence:
+      primary:
+        - T1_contract
+        - T3_cross_service_integration
+      supporting:
+        - T2_module_interaction
+    tests:
+      planned:
+        - quwoquan_data/scripts/verify_content_quality.py
+        - quwoquan_app/scripts/env/verify_app_seed_manifests.py
+        - quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+    - make gate

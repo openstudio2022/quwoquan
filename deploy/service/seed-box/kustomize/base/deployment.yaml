@@ -24,7 +24,7 @@ spec:
               app.kubernetes.io/name: seed-box
       initContainers:
         - name: recommendation-service-config-bootstrap
-          image: seed-box/recommendation-service:latest
+          image: ghcr.io/openstudio2022/quwoquan/recommendation-service:latest
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
@@ -51,7 +51,7 @@ spec:
               mountPath: /work
       containers:
         - name: seed-box
-          image: seed-box/seed-box:latest
+          image: ghcr.io/openstudio2022/quwoquan/seed-box:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -62,13 +62,67 @@ spec:
             - name: SERVICE_NAME
               value: seed-box
             - name: CONFIG_ROOT
-              value: /etc/seed-box-config
+              value: /app/runtime-config
             - name: CONFIG_VERSION
               value: v0.0.0
             - name: IMAGE_VERSION
               value: v0.0.0
+            - name: SEED_BOX_HTTP_ADDR
+              value: ":8080"
+            - name: REC_MODEL_SERVICE_ENABLED
+              value: "true"
             - name: REC_MODEL_SERVICE_URL
               value: http://127.0.0.1:8000
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: MONGO_URI
+                  optional: true
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: MONGO_URI
+                  optional: true
+            - name: POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: POSTGRES_DSN
+                  optional: true
+            - name: REDIS_ADDR
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: REDIS_ADDR
+                  optional: true
+            - name: CIRCLE_MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: CIRCLE_MONGO_URI
+                  optional: true
+            - name: CIRCLE_REDIS_ADDR
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: CIRCLE_REDIS_ADDR
+                  optional: true
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: AUTH_JWT_SECRET
+                  optional: true
+            - name: CHAT_GROUP_AVATAR_CDN_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: CHAT_GROUP_AVATAR_CDN_BASE_URL
+                  optional: true
+            - name: CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT
+              value: /tmp/chat-media
           readinessProbe:
             httpGet:
               path: /healthz
@@ -95,7 +149,7 @@ spec:
               cpu: "1"
               memory: 1Gi
         - name: recommendation-service
-          image: seed-box/recommendation-service:latest
+          image: ghcr.io/openstudio2022/quwoquan/recommendation-service:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: rec-http
@@ -146,48 +200,6 @@ spec:
             httpGet:
               path: /health
               port: rec-http
-            failureThreshold: 30
-            periodSeconds: 5
-          resources:
-            requests:
-              cpu: 200m
-              memory: 256Mi
-            limits:
-              cpu: "1"
-              memory: 1Gi
-        - name: user-service
-          image: seed-box/user-service:latest
-          imagePullPolicy: IfNotPresent
-          ports:
-            - name: user-http
-              containerPort: 18081
-          env:
-            - name: APP_ENV
-              value: gamma
-            - name: SERVICE_NAME
-              value: user-service
-            - name: CONFIG_ROOT
-              value: /etc/seed-box-config
-            - name: CONFIG_VERSION
-              value: v0.0.0
-            - name: IMAGE_VERSION
-              value: v0.0.0
-          readinessProbe:
-            httpGet:
-              path: /healthz
-              port: user-http
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /livez
-              port: user-http
-            initialDelaySeconds: 15
-            periodSeconds: 20
-          startupProbe:
-            httpGet:
-              path: /startupz
-              port: user-http
             failureThreshold: 30
             periodSeconds: 5
           resources:

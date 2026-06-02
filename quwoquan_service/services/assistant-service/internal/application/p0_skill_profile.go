@@ -23,9 +23,23 @@ type P0ProactiveSkillResult struct {
 	Why         string
 	Evidence    []string
 	NextActions []string
+	// Personalization attribution (set when an interest profile is applied).
+	Personalized    bool
+	InterestTags    []string
+	MatchedSegments []string
+	LifecycleStage  string
 }
 
-func BuildP0ProactiveSkillResult(subscription assistant.SkillSubscription, now time.Time) P0ProactiveSkillResult {
+// BuildP0ProactiveSkillResult renders a P0 proactive skill payload. When
+// profile is non-nil and carries signal, the result is personalized with the
+// user's interest tags / segments / lifecycle stage (interest tags are also
+// woven into Prompt so the downstream model generates more relevant content).
+// A nil profile yields the baseline (non-personalized) output unchanged.
+func BuildP0ProactiveSkillResult(subscription assistant.SkillSubscription, profile *ProactiveInterestProfile, now time.Time) P0ProactiveSkillResult {
+	return personalizeProactive(buildP0ProactiveBase(subscription, now), profile)
+}
+
+func buildP0ProactiveBase(subscription assistant.SkillSubscription, now time.Time) P0ProactiveSkillResult {
 	skillID := strings.TrimSpace(subscription.SkillID)
 	queries := compactStrings(subscription.SearchQueryPlan.Queries)
 	rawText := strings.TrimSpace(subscription.SearchQueryPlan.RawText)
@@ -42,10 +56,10 @@ func BuildP0ProactiveSkillResult(subscription assistant.SkillSubscription, now t
 		return P0ProactiveSkillResult{
 			SkillID:  skillID,
 			Title:    dailyAssistantTitle(rawText),
-			Summary:  why + " 今日重点：会议准备、学习计划、作息提醒。建议先处理高优先级事项。",
+			Summary:  why + " 今日可优先安排会议准备、学习计划与作息提醒，建议先处理高优先级事项。",
 			Prompt:   "每日助手主动简报：" + rawText,
 			Why:      why,
-			Evidence: []string{"fake_todo: 2 个高优先级事项", "fake_calendar: 1 场会议", "fake_study: 30 分钟学习计划"},
+			Evidence: proactiveEvidence(queries, now),
 			NextActions: []string{
 				"先处理高优先级工作事项",
 				"为会议预留准备时间",
@@ -56,10 +70,10 @@ func BuildP0ProactiveSkillResult(subscription assistant.SkillSubscription, now t
 		return P0ProactiveSkillResult{
 			SkillID:  skillID,
 			Title:    "新闻简报：" + firstQueryOrDefault(queries, "关注话题"),
-			Summary:  why + " 公开来源显示" + evidenceText + "有新摘要，可继续追问来源详情。",
+			Summary:  why + " 已按你的订阅关键词" + evidenceText + "整理关注方向，可继续追问具体话题与公开来源。",
 			Prompt:   "新闻简报主动摘要：" + rawText,
 			Why:      why,
-			Evidence: []string{"fake_news: 人工智能芯片进展", "fake_news: 模型更新", "fake_news: 产业政策摘要"},
+			Evidence: proactiveEvidence(queries, now),
 			NextActions: []string{
 				"查看来源摘要",
 				"追问某个话题的详细影响",
@@ -70,10 +84,10 @@ func BuildP0ProactiveSkillResult(subscription assistant.SkillSubscription, now t
 		return P0ProactiveSkillResult{
 			SkillID:  skillID,
 			Title:    "股票哨兵：重大消息摘要",
-			Summary:  why + " 模拟消息显示关注公司出现重大信息变化；本提醒仅作信息摘要，非投资建议。",
+			Summary:  why + " 已按你订阅的标的整理消息面关注要点；本提醒仅作信息摘要，非投资建议。",
 			Prompt:   "股票哨兵主动摘要：" + rawText + "。必须包含非投资建议边界。",
 			Why:      why,
-			Evidence: []string{"fake_market: 盘前波动扩大", "fake_news: 公司公告摘要", "fake_sector: 行业政策变化"},
+			Evidence: proactiveEvidence(queries, now),
 			NextActions: []string{
 				"核对公开公告原文",
 				"查看自选股消息面",
@@ -84,10 +98,10 @@ func BuildP0ProactiveSkillResult(subscription assistant.SkillSubscription, now t
 		return P0ProactiveSkillResult{
 			SkillID:  skillID,
 			Title:    "出行管家：今日行程提醒",
-			Summary:  why + " 模拟天气、路况和景点拥堵显示出发前需要调整时间。",
+			Summary:  why + " 出行前建议关注天气、路况与热门景点排队，预留弹性时间。",
 			Prompt:   "出行旅程主动提醒：" + rawText,
 			Why:      why,
-			Evidence: []string{"fake_weather: 午后有阵雨", "fake_traffic: 高峰路段拥堵", "fake_poi: 热门景点排队升高"},
+			Evidence: proactiveEvidence(queries, now),
 			NextActions: []string{
 				"提前 30 分钟出发",
 				"准备雨具",
@@ -101,10 +115,61 @@ func BuildP0ProactiveSkillResult(subscription assistant.SkillSubscription, now t
 			Summary:     fmt.Sprintf("你订阅的 %s 已在 %s 生成提醒。", skillID, now.UTC().Format("15:04")),
 			Prompt:      rawText,
 			Why:         why,
-			Evidence:    []string{"fake_subscription: cron 命中"},
+			Evidence:    proactiveEvidence(queries, now),
 			NextActions: []string{"打开找私助查看详情"},
 		}
 	}
+}
+
+// personalizeProactive layers a user's derived interest profile onto a baseline
+// proactive result. It is additive (never removes baseline copy) so non-profile
+// callers and existing assertions are unaffected: interest tags / segments /
+// lifecycle drive a lifecycle-aware lead-in, a "why" suffix, and explicit
+// profile context appended to Prompt for the downstream model.
+func personalizeProactive(base P0ProactiveSkillResult, profile *ProactiveInterestProfile) P0ProactiveSkillResult {
+	if profile == nil {
+		return base
+	}
+	tags := topInterestTags(profile, 3)
+	segments := compactStrings(profile.Segments)
+	lifecycle := strings.TrimSpace(profile.LifecycleStage)
+	if len(tags) == 0 && len(segments) == 0 && lifecycle == "" {
+		return base
+	}
+	base.Personalized = true
+	base.InterestTags = tags
+	base.MatchedSegments = segments
+	base.LifecycleStage = lifecycle
+	if len(tags) > 0 {
+		base.Evidence = append(base.Evidence, "兴趣画像匹配："+strings.Join(tags, "、"))
+	}
+	if len(segments) > 0 {
+		base.Evidence = append(base.Evidence, "命中人群："+strings.Join(segments, "、"))
+	}
+
+	switch lifecycle {
+	case "dormant":
+		base.Summary = "好久不见，根据你的兴趣画像为你精选了相关更新。" + base.Summary
+	case "new":
+		base.Summary = "为刚开始的你，结合可观察到的偏好做了轻度个性化。" + base.Summary
+	}
+
+	promptCtx := make([]string, 0, 3)
+	if len(tags) > 0 {
+		joined := strings.Join(tags, "、")
+		base.Why = base.Why + "（已结合你的兴趣画像：" + joined + "）"
+		promptCtx = append(promptCtx, "兴趣标签："+joined)
+	}
+	if len(segments) > 0 {
+		promptCtx = append(promptCtx, "人群："+strings.Join(segments, "、"))
+	}
+	if lifecycle != "" {
+		promptCtx = append(promptCtx, "生命周期："+lifecycle)
+	}
+	if len(promptCtx) > 0 {
+		base.Prompt = base.Prompt + " [用户兴趣画像] " + strings.Join(promptCtx, "；")
+	}
+	return base
 }
 
 func IsP0ProactiveSkill(skillID string) bool {
@@ -155,4 +220,19 @@ func queryEvidence(queries []string) string {
 		return "关注话题"
 	}
 	return strings.Join(queries, "、")
+}
+
+// proactiveEvidence renders the real, auditable basis for a proactive reminder:
+// the user's subscription query plan plus the cron trigger time. It deliberately
+// carries no fabricated external-data rows (no fake_news / fake_market /
+// fake_weather): the assistant does not yet ingest those live sources, so the
+// only honest baseline evidence is the subscription itself; personalizeProactive
+// later appends the user's interest-profile match when a profile is available.
+func proactiveEvidence(queries []string, now time.Time) []string {
+	evidence := make([]string, 0, 2)
+	if joined := strings.Join(compactStrings(queries), "、"); joined != "" {
+		evidence = append(evidence, "订阅关注："+joined)
+	}
+	evidence = append(evidence, "触发时间："+now.UTC().Format("15:04")+"（cron 命中）")
+	return evidence
 }

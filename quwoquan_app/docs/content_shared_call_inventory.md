@@ -8,7 +8,7 @@
 |------|------|
 | `lib/ui/discovery/pages/discovery_page.dart` | `mockDiscoveryWireFallback` + `ContentMockData.discovery*`；分享/wire 用 `prototypeDiscoveryWireRowForMock` |
 | `lib/ui/discovery/pages/home_page.dart` | `MediaViewerExtra.rawPostsById`：`prototypeDiscoveryWireRowForMock` |
-| `lib/ui/discovery/widgets/moment_social_feed.dart` | 同上 fallback + wire |
+| `lib/ui/discovery/widgets/home_multi_form_feed.dart` | 同上 fallback + wire |
 | `lib/ui/discovery/widgets/works_immersive_viewer.dart` | `_rawPostById`：`prototypeDiscoveryWireRowForMock` |
 
 ## 2. 非内容域：保留 `appContentRepositoryProvider`

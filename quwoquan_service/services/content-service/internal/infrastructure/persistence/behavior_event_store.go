@@ -23,6 +23,7 @@ type BehaviorEventStore interface {
 // RawBehaviorEvent is the persistent form of a user behavior event.
 type RawBehaviorEvent struct {
 	UserID          string   `bson:"userId"`
+	DeviceActorID   string   `bson:"deviceActorId,omitempty"`
 	SessionID       string   `bson:"sessionId"`
 	ContentID       string   `bson:"contentId"`
 	Action          string   `bson:"action"`

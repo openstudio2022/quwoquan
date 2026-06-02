@@ -370,6 +370,7 @@ def run_matrix_test(
                     "screenClass": device["screenClass"],
                     "gatewayBaseUrl": device["gatewayBaseUrl"],
                     "status": "failed",
+                    "failureCategory": "device_bridge_failed",
                     "failureReason": "adb reverse gateway mapping failed",
                     "evidence": {
                         "runDirectory": repo_relative(run_dir),
@@ -510,6 +511,15 @@ def run_matrix_test(
             "screenClass": device["screenClass"],
             "gatewayBaseUrl": device["gatewayBaseUrl"] if env_name in {"beta", "gamma"} else "",
             "status": "passed" if result["exitCode"] == 0 else "failed",
+            "failureCategory": (
+                "test_timeout"
+                if result.get("timedOut")
+                else (
+                    "gateway_or_transport_flake"
+                    if result.get("retryAttempted")
+                    else "test_body_failed"
+                )
+            ) if result["exitCode"] != 0 else "",
             "evidence": {
                 "runDirectory": repo_relative(run_dir),
                 "deviceManifestPath": device_manifest_path,
@@ -569,6 +579,9 @@ def main() -> int:
         "startedAt": utc_now(),
         "endedAt": "",
         "status": "running",
+        "failureCategory": "",
+        "blockingReason": "",
+        "retryable": False,
         "requestedEnvironments": requested_envs,
         "devices": [],
         "runs": [],
@@ -598,6 +611,11 @@ def main() -> int:
             and not os.environ.get("ASSISTANT_MODEL_API_KEY", "").strip()
         ):
             report["status"] = "gate_block"
+            report["failureCategory"] = "missing_model_api_key"
+            report["blockingReason"] = (
+                "APP_ENV=beta requires ASSISTANT_MODEL_API_KEY for model_provider=openai_compatible"
+            )
+            report["retryable"] = False
             report["failureReason"] = (
                 "GATE_BLOCK: APP_ENV=beta requires ASSISTANT_MODEL_API_KEY "
                 "for model_provider=openai_compatible"
@@ -623,6 +641,9 @@ def main() -> int:
             devices = [device for device in devices if device["id"] in allowed]
         if not devices:
             report["status"] = "failed"
+            report["failureCategory"] = "device_not_found"
+            report["blockingReason"] = "no mobile Flutter devices available"
+            report["retryable"] = True
             report["failureReason"] = "no mobile Flutter devices available"
             return write_report_and_exit(report, report_path, 1)
 
@@ -645,6 +666,9 @@ def main() -> int:
             )
             if not report["betaServices"]["gatewayReachable"]:
                 report["status"] = "failed"
+                report["failureCategory"] = "gateway_unreachable"
+                report["blockingReason"] = "beta gateway health check failed"
+                report["retryable"] = True
                 report["failureReason"] = "beta gateway health check failed"
                 return write_report_and_exit(report, report_path, 1)
 
@@ -661,6 +685,9 @@ def main() -> int:
                         )
                         if not report["betaServices"]["gatewayReachable"]:
                             report["status"] = "failed"
+                            report["failureCategory"] = "gateway_unreachable"
+                            report["blockingReason"] = "beta gateway health check failed before device run"
+                            report["retryable"] = True
                             report["failureReason"] = (
                                 "beta gateway health check failed before device run"
                             )
@@ -675,6 +702,24 @@ def main() -> int:
                 failed = failed or result["exitCode"] != 0
         collect_real_chain_evidence(args, report)
         report["status"] = "failed" if failed else "passed"
+        if failed:
+            first_failed = next(
+                (item for item in report["runs"] if int(item.get("exitCode", 0) or 0) != 0),
+                {},
+            )
+            report["failureCategory"] = str(first_failed.get("failureCategory") or "test_body_failed")
+            report["blockingReason"] = str(
+                first_failed.get("failureReason")
+                or first_failed.get("outputSummary")
+                or "assistant device matrix failed"
+            )
+            report["retryable"] = report["failureCategory"] in {
+                "device_bridge_failed",
+                "gateway_or_transport_flake",
+                "gateway_unreachable",
+                "test_timeout",
+                "device_not_found",
+            }
         return write_report_and_exit(report, report_path, 1 if failed else 0)
     finally:
         stop_process(gateway_process)

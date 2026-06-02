@@ -1,0 +1,114 @@
+version: 1
+read_model: FollowingSubjectItemView
+
+description: |
+  首页关注频道顶部“关注动态”列表项。
+
+source_entities:
+  - FollowingSubject
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: FollowingSubjectItemViewDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/following_subject_item_view_dto.g.dart
+  fields:
+    - name: subjectId
+      dart_type: String
+      nullable: false
+      source: subjectId
+      aliases: [subjectId]
+      default: "''"
+
+    - name: subjectType
+      dart_type: String
+      nullable: false
+      source: subjectType
+      aliases: [subjectType]
+      default: "''"
+
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName, name, title]
+      default: "''"
+
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: avatarUrl
+      aliases: [avatarUrl]
+      default: "''"
+
+    - name: coverUrl
+      dart_type: String
+      nullable: false
+      source: coverUrl
+      aliases: [coverUrl]
+      default: "''"
+
+    - name: subtitle
+      dart_type: String
+      nullable: false
+      source: subtitle
+      aliases: [subtitle]
+      default: "''"
+
+    - name: targetRouteId
+      dart_type: String
+      nullable: false
+      source: targetRouteId
+      aliases: [targetRouteId]
+      default: "''"
+
+    - name: targetObjectId
+      dart_type: String
+      nullable: false
+      source: targetObjectId
+      aliases: [targetObjectId, subjectId]
+      default: "''"
+
+    - name: followedAt
+      dart_type: String
+      nullable: false
+      source: followedAt
+      aliases: [followedAt]
+      default: "''"
+
+    - name: lastVisitedAt
+      dart_type: String
+      nullable: false
+      source: lastVisitedAt
+      aliases: [lastVisitedAt]
+      default: "''"
+
+    - name: latestChangedAt
+      dart_type: String
+      nullable: false
+      source: latestChangedAt
+      aliases: [latestChangedAt]
+      default: "''"
+
+    - name: unreadChangeCount
+      dart_type: int
+      nullable: false
+      source: unreadChangeCount
+      aliases: [unreadChangeCount]
+      default: "0"
+
+    - name: hasUnreadChanges
+      dart_type: bool
+      nullable: false
+      source: hasUnreadChanges
+      aliases: [hasUnreadChanges]
+      default: "false"
+
+    - name: latestChangeReason
+      dart_type: String
+      nullable: false
+      source: latestChangeReason
+      aliases: [latestChangeReason]
+      default: "''"

@@ -26,8 +26,10 @@ class ContentApiMetadata {
     'GetAppConfig': '/v1/config/app',
     'GetCounters': '/v1/content/posts/{postId}/counters',
     'GetFeed': '/v1/content/feed',
+    'GetFeedIntersections': '/v1/content/feed/intersections',
     'GetHelperRead': '/v1/content/helper-read/{contentId}',
     'GetMediaAsset': '/v1/content/media/{mediaId}',
+    'GetMyIntersectionSummary': '/v1/content/intersections/summary',
     'GetPost': '/v1/content/posts/{postId}',
     'GetReactionState': '/v1/content/posts/{postId}/reactions',
     'GetRecommendation': '/v1/content/recommend',
@@ -38,13 +40,16 @@ class ContentApiMetadata {
     'ListComments': '/v1/content/posts/{postId}/comments',
     'ListCommentsByAuthor': '/v1/content/users/me/comments',
     'ListCommentsForPostAuthor': '/v1/content/users/me/received-comments',
+    'ListMyIntersections': '/v1/content/intersections',
     'ListProfileInteractionActivitiesReceived': '/v1/content/sub-accounts/{subAccountId}/interactions/received',
     'ListProfileInteractionActivitiesSent': '/v1/content/sub-accounts/{subAccountId}/interactions/sent',
     'ListUserPosts': '/v1/content/sub-accounts/{subAccountId}/posts',
+    'MarkIntersectionsVisited': '/v1/content/intersections/visit',
     'PromotePostToWork': '/v1/content/posts/{postId}:promoteToWork',
     'PublishPost': '/v1/content/posts/{postId}/publish',
     'QuoteToCircle': '/v1/content/posts/{postId}/quote',
     'ReportBehaviors': '/v1/content/behaviors',
+    'ReportIntersectionExposure': '/v1/content/intersections/exposure',
     'RepostToCircle': '/v1/content/posts/{postId}/repost',
     'RequestOriginalImageAccess': '/v1/content/media/{mediaId}/original:access',
     'ResolveReport': '/v1/content/reports/{reportId}',
@@ -75,8 +80,10 @@ class ContentApiMetadata {
     'GetAppConfig': 'GET',
     'GetCounters': 'GET',
     'GetFeed': 'GET',
+    'GetFeedIntersections': 'GET',
     'GetHelperRead': 'GET',
     'GetMediaAsset': 'GET',
+    'GetMyIntersectionSummary': 'GET',
     'GetPost': 'GET',
     'GetReactionState': 'GET',
     'GetRecommendation': 'POST',
@@ -87,13 +94,16 @@ class ContentApiMetadata {
     'ListComments': 'GET',
     'ListCommentsByAuthor': 'GET',
     'ListCommentsForPostAuthor': 'GET',
+    'ListMyIntersections': 'GET',
     'ListProfileInteractionActivitiesReceived': 'GET',
     'ListProfileInteractionActivitiesSent': 'GET',
     'ListUserPosts': 'GET',
+    'MarkIntersectionsVisited': 'POST',
     'PromotePostToWork': 'POST',
     'PublishPost': 'POST',
     'QuoteToCircle': 'POST',
     'ReportBehaviors': 'POST',
+    'ReportIntersectionExposure': 'POST',
     'RepostToCircle': 'POST',
     'RequestOriginalImageAccess': 'POST',
     'ResolveReport': 'PATCH',
@@ -125,36 +135,41 @@ class ContentApiMetadata {
     'GetAppConfig': 'public',
     'GetCounters': 'public',
     'GetFeed': 'optional',
+    'GetFeedIntersections': 'optional',
     'GetHelperRead': 'public',
     'GetMediaAsset': 'public',
+    'GetMyIntersectionSummary': 'required',
     'GetPost': 'public',
     'GetReactionState': 'optional',
     'GetRecommendation': 'public',
     'GetReport': 'public',
     'InitMediaUpload': 'required',
     'LikeComment': 'required',
-    'LikePost': 'required',
+    'LikePost': 'optional',
     'ListComments': 'public',
     'ListCommentsByAuthor': 'required',
     'ListCommentsForPostAuthor': 'required',
+    'ListMyIntersections': 'required',
     'ListProfileInteractionActivitiesReceived': 'required',
     'ListProfileInteractionActivitiesSent': 'required',
     'ListUserPosts': 'public',
+    'MarkIntersectionsVisited': 'required',
     'PromotePostToWork': 'required',
     'PublishPost': 'required',
     'QuoteToCircle': 'required',
     'ReportBehaviors': 'public',
+    'ReportIntersectionExposure': 'required',
     'RepostToCircle': 'required',
     'RequestOriginalImageAccess': 'required',
     'ResolveReport': 'public',
     'SearchPosts': 'required',
     'SelectAutoVideoCover': 'required',
     'SelectManualVideoCover': 'required',
-    'SharePost': 'required',
+    'SharePost': 'optional',
     'UnfavoritePost': 'required',
     'UnlikeComment': 'required',
-    'UnlikePost': 'required',
-    'UnsharePost': 'required',
+    'UnlikePost': 'optional',
+    'UnsharePost': 'optional',
     'UpdatePost': 'required',
     'UpdatePostCircles': 'required',
     'UpdatePostSettings': 'required',
@@ -173,8 +188,10 @@ class ContentApiMetadata {
   static const String getAppConfigOperation = 'GetAppConfig';
   static const String getCountersOperation = 'GetCounters';
   static const String getFeedOperation = 'GetFeed';
+  static const String getFeedIntersectionsOperation = 'GetFeedIntersections';
   static const String getHelperReadOperation = 'GetHelperRead';
   static const String getMediaAssetOperation = 'GetMediaAsset';
+  static const String getMyIntersectionSummaryOperation = 'GetMyIntersectionSummary';
   static const String getPostOperation = 'GetPost';
   static const String getReactionStateOperation = 'GetReactionState';
   static const String getRecommendationOperation = 'GetRecommendation';
@@ -185,13 +202,16 @@ class ContentApiMetadata {
   static const String listCommentsOperation = 'ListComments';
   static const String listCommentsByAuthorOperation = 'ListCommentsByAuthor';
   static const String listCommentsForPostAuthorOperation = 'ListCommentsForPostAuthor';
+  static const String listMyIntersectionsOperation = 'ListMyIntersections';
   static const String listProfileInteractionActivitiesReceivedOperation = 'ListProfileInteractionActivitiesReceived';
   static const String listProfileInteractionActivitiesSentOperation = 'ListProfileInteractionActivitiesSent';
   static const String listUserPostsOperation = 'ListUserPosts';
+  static const String markIntersectionsVisitedOperation = 'MarkIntersectionsVisited';
   static const String promotePostToWorkOperation = 'PromotePostToWork';
   static const String publishPostOperation = 'PublishPost';
   static const String quoteToCircleOperation = 'QuoteToCircle';
   static const String reportBehaviorsOperation = 'ReportBehaviors';
+  static const String reportIntersectionExposureOperation = 'ReportIntersectionExposure';
   static const String repostToCircleOperation = 'RepostToCircle';
   static const String requestOriginalImageAccessOperation = 'RequestOriginalImageAccess';
   static const String resolveReportOperation = 'ResolveReport';
@@ -261,6 +281,7 @@ class ContentApiMetadata {
     });
   }
   static const String getFeedPath = '/v1/content/feed';
+  static const String getFeedIntersectionsPath = '/v1/content/feed/intersections';
   static const String getHelperReadPathTemplate = '/v1/content/helper-read/{contentId}';
   static String getHelperReadPath({required String contentId}) {
     return _fillPath(getHelperReadPathTemplate, <String, String>{
@@ -273,6 +294,7 @@ class ContentApiMetadata {
       'mediaId': mediaId,
     });
   }
+  static const String getMyIntersectionSummaryPath = '/v1/content/intersections/summary';
   static const String getPostPathTemplate = '/v1/content/posts/{postId}';
   static String getPostPath({required String postId}) {
     return _fillPath(getPostPathTemplate, <String, String>{
@@ -313,6 +335,7 @@ class ContentApiMetadata {
   }
   static const String listCommentsByAuthorPath = '/v1/content/users/me/comments';
   static const String listCommentsForPostAuthorPath = '/v1/content/users/me/received-comments';
+  static const String listMyIntersectionsPath = '/v1/content/intersections';
   static const String listProfileInteractionActivitiesReceivedPathTemplate = '/v1/content/sub-accounts/{subAccountId}/interactions/received';
   static String listProfileInteractionActivitiesReceivedPath({required String subAccountId}) {
     return _fillPath(listProfileInteractionActivitiesReceivedPathTemplate, <String, String>{
@@ -331,6 +354,7 @@ class ContentApiMetadata {
       'subAccountId': subAccountId,
     });
   }
+  static const String markIntersectionsVisitedPath = '/v1/content/intersections/visit';
   static const String promotePostToWorkPathTemplate = '/v1/content/posts/{postId}:promoteToWork';
   static String promotePostToWorkPath({required String postId}) {
     return _fillPath(promotePostToWorkPathTemplate, <String, String>{
@@ -350,6 +374,7 @@ class ContentApiMetadata {
     });
   }
   static const String reportBehaviorsPath = '/v1/content/behaviors';
+  static const String reportIntersectionExposurePath = '/v1/content/intersections/exposure';
   static const String repostToCirclePathTemplate = '/v1/content/posts/{postId}/repost';
   static String repostToCirclePath({required String postId}) {
     return _fillPath(repostToCirclePathTemplate, <String, String>{

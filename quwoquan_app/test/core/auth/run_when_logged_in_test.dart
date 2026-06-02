@@ -65,7 +65,9 @@ void main() {
                 onPressed: () => runWhenLoggedIn(
                   ref,
                   context,
-                  AuthGateReason.like,
+                  // 评论提交仍需登录，用作「通用受限写动作」门控样例；
+                  // 点赞/分享已下放为游客设备态可写，不再适合作为门控样例。
+                  AuthGateReason.comment,
                   () => executed = true,
                 ),
                 child: const Text('act'),

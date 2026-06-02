@@ -101,7 +101,7 @@ jobs:
           PUBLIC_HOST="${GAMMA_ECS_PUBLIC_HOST:-118.31.239.122}"
           # 与 compose 中 gamma-proxy 默认映射一致（ECS onebox 常用 18000→Caddy:80；勿用 content 直出端口充当网关）
           BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18000}"
-          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:18086}"
+          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:19010}"
           echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "product_ops_base_url=${PRODUCT_OPS_BASE_URL}" >> "$GITHUB_OUTPUT"
         env:

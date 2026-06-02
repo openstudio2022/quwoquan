@@ -9,7 +9,16 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage_muta
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_context.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_rollout_context.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/object_intersection.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/object_intersection_evidence.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/object_relation_edge.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
+
+part 'entity_object_page_bundle_mock.dart';
 
 abstract class HomepageRepository {
   Future<List<HomepageSummary>> searchHomepages({
@@ -23,6 +32,15 @@ abstract class HomepageRepository {
   Future<HomepageDetail> getHomepageDetail(String homepageId);
 
   Future<HomepageShellData> getHomepageShell(String homepageId);
+
+  Future<ObjectPageBundle> getObjectPageBundle(
+    String homepageId, {
+    String referralSource = '',
+    String feedRequestId = '',
+    String recommendationTraceId = '',
+    String experimentBucket = '',
+    String rolloutCohort = '',
+  });
 
   Future<HomepageReviewSummaryData> getHomepageReviewSummary(String homepageId);
 
@@ -189,6 +207,26 @@ class MockHomepageRepository implements HomepageRepository {
       contentPreview: homepage.contentPreview,
       questionPreview: homepage.questionPreview,
       relatedGroups: homepage.relatedGroups,
+    );
+  }
+
+  @override
+  Future<ObjectPageBundle> getObjectPageBundle(
+    String homepageId, {
+    String referralSource = '',
+    String feedRequestId = '',
+    String recommendationTraceId = '',
+    String experimentBucket = '',
+    String rolloutCohort = '',
+  }) async {
+    final homepage = _requireHomepage(homepageId);
+    return _objectPageBundleFromHomepage(
+      homepage,
+      referralSource: referralSource,
+      feedRequestId: feedRequestId,
+      recommendationTraceId: recommendationTraceId,
+      experimentBucket: experimentBucket,
+      rolloutCohort: rolloutCohort,
     );
   }
 
@@ -627,6 +665,44 @@ class RemoteHomepageRepository implements HomepageRepository {
         context: _contextForSurface(
           AppUiSurfaces.homepageDetail,
           operationId: EntityApiMetadata.getHomepageShellOperation,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<ObjectPageBundle> getObjectPageBundle(
+    String homepageId, {
+    String referralSource = '',
+    String feedRequestId = '',
+    String recommendationTraceId = '',
+    String experimentBucket = '',
+    String rolloutCohort = '',
+  }) async {
+    final decoded = await _httpClient.getJson(
+      _uri(
+        EntityApiMetadata.getObjectPageBundlePath(homepageId: homepageId),
+        queryParameters: <String, String>{
+          if (referralSource.isNotEmpty) 'referralSource': referralSource,
+          if (feedRequestId.isNotEmpty) 'feedRequestId': feedRequestId,
+          if (recommendationTraceId.isNotEmpty)
+            'recommendationTraceId': recommendationTraceId,
+          if (experimentBucket.isNotEmpty) 'experimentBucket': experimentBucket,
+          if (rolloutCohort.isNotEmpty) 'rolloutCohort': rolloutCohort,
+        },
+      ),
+      headers: _headersForSurface(
+        AppUiSurfaces.homepageDetail,
+        operationId: EntityApiMetadata.getObjectPageBundleOperation,
+        clientPageId: EntityRequestPageIds.getObjectPageBundle,
+      ),
+    );
+    return ObjectPageBundle.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: _contextForSurface(
+          AppUiSurfaces.homepageDetail,
+          operationId: EntityApiMetadata.getObjectPageBundleOperation,
         ),
       ),
     );

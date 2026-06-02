@@ -1,0 +1,124 @@
+"""单会话多实体批处理编排 ——「日产 10 万级」的吞吐路径（不引入外部模型，仍是会话 agent）。
+
+评审痛点：逐实体 prepare→创作→review 往返太慢。批处理把 N 个实体的写作契约聚合成一份
+batch prompt，让同一个会话 agent 在一次会话内产出 N 篇，分别写回各 drafts/{ref}.article.md，
+再统一过 annotate-entities / review 门 + 结构化记录。
+
+CLI 仍不拼接任何正文：只聚合 per-ref writing_pack 摘要 + 回写协议 + 跨篇多样性约束。
+"""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Mapping, Sequence
+
+from _common.draft_io import drafts_dir, is_placeholder, read_draft_article, read_writing_pack
+from _common.io import write_json
+
+BATCH_PACK_SCHEMA = "quwoquan_data.batch_pack"
+
+
+def plan_batches(refs: Sequence[str], batch_size: int) -> list[list[str]]:
+    """把 refs 均匀切成每组至多 batch_size 个（batch_size<1 视为 1）。"""
+    size = max(1, int(batch_size))
+    items = [str(r) for r in refs if r]
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
+def batch_dir(task_id: str, batch_id: str) -> Path:
+    return drafts_dir(task_id, batch_id) / "_batch"
+
+
+def build_batch_pack(task_id: str, batch_id: str, seq: int, group_refs: Sequence[str]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for ref in group_refs:
+        pack = read_writing_pack(task_id, batch_id, ref) or {}
+        items.append(
+            {
+                "ref": ref,
+                "title": pack.get("title"),
+                "styleFamily": pack.get("styleFamily"),
+                "mustIncludeFacts": list(pack.get("mustIncludeFacts") or [])[:6],
+                "writingPack": f"{ref}.writing_pack.json",
+                "prompt": f"{ref}.prompt.md",
+                "articleOut": f"{ref}.article.md",
+                "hasPack": bool(pack),
+            }
+        )
+    return {
+        "schemaVersion": BATCH_PACK_SCHEMA,
+        "batchSeq": seq,
+        "refCount": len(items),
+        "items": items,
+    }
+
+
+def render_batch_prompt(pack: Mapping[str, Any]) -> str:
+    items = pack.get("items") or []
+    lines = [
+        f"# 批量单会话创作（本批 {len(items)} 篇）",
+        "",
+        "在**同一个会话**内逐篇创作以下文章；每篇都要：",
+        "- 严格遵循该篇 `writingPack` / `prompt` 的事实、证据与约束；",
+        "- 按该篇 `styleFamily` 自选合适开篇策略，**跨篇之间开篇与章节结构必须显著不同**（避免千篇一律，会过跨篇相似度门）；",
+        "- 创作完成后把正文**覆盖写回**该篇 `articleOut`（generator=agent），并在 `draft_meta` 记录 styleFamily / openingStrategy / extractedEntities。",
+        "",
+        "完成全部后运行：`qwq-data produce --stage annotate-entities` 再 `--stage review --materialize`。",
+        "",
+        "## 篇目清单",
+    ]
+    for index, item in enumerate(items, 1):
+        lines.append(
+            f"{index}. ref=`{item.get('ref')}` | 标题：{item.get('title') or '(见 pack)'} | "
+            f"文风：{item.get('styleFamily') or '(自选)'}"
+        )
+        lines.append(f"   - 契约：`{item.get('writingPack')}`，指令：`{item.get('prompt')}`，写回：`{item.get('articleOut')}`")
+        facts = item.get("mustIncludeFacts") or []
+        if facts:
+            lines.append(f"   - 必含事实（节选）：{('；'.join(map(str, facts)))}")
+    return "\n".join(lines) + "\n"
+
+
+def write_batch(task_id: str, batch_id: str, seq: int, group_refs: Sequence[str]) -> dict[str, Any]:
+    pack = build_batch_pack(task_id, batch_id, seq, group_refs)
+    out_dir = batch_dir(task_id, batch_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    write_json(out_dir / f"{seq}.batch_pack.json", pack)
+    (out_dir / f"{seq}.batch_prompt.md").write_text(render_batch_prompt(pack), encoding="utf-8")
+    return pack
+
+
+def batch_pack_issues(pack: Mapping[str, Any]) -> list[str]:
+    """批 pack 完整性：非空、各 ref 已 prepare（有 writing_pack）、回写路径齐备。"""
+    issues: list[str] = []
+    items = pack.get("items") or []
+    if not items:
+        issues.append("batch pack has no items")
+    for item in items:
+        ref = item.get("ref")
+        if not item.get("hasPack"):
+            issues.append(f"ref missing writing_pack (先跑 compose-brief): {ref}")
+        if not item.get("articleOut"):
+            issues.append(f"ref missing articleOut path: {ref}")
+    return issues
+
+
+def batch_completion_status(task_id: str, batch_id: str, group_refs: Sequence[str]) -> dict[str, Any]:
+    """统计该批 agent 创作进度（done=非占位草稿，pending=尚未创作）。"""
+    done: list[str] = []
+    pending: list[str] = []
+    for ref in group_refs:
+        article = read_draft_article(task_id, batch_id, ref)
+        (pending if is_placeholder(article) else done).append(ref)
+    return {"total": len(list(group_refs)), "done": done, "pending": pending}
+
+
+__all__ = [
+    "BATCH_PACK_SCHEMA",
+    "plan_batches",
+    "batch_dir",
+    "build_batch_pack",
+    "render_batch_prompt",
+    "write_batch",
+    "batch_pack_issues",
+    "batch_completion_status",
+]

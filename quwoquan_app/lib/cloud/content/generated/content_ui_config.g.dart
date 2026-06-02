@@ -5,6 +5,11 @@ class HomeChannelConfig {
   final String id;
   final String labelKey;
   final String template;
+  final String layoutTemplate;
+  final int phoneColumns;
+  final bool supportsFullSpanModules;
+  final String intersectionModulePolicy;
+  final String contentCardPolicy;
   final Map<String, String> feedQuery;
   final String moodCopyKey;
   final int order;
@@ -13,6 +18,11 @@ class HomeChannelConfig {
     required this.id,
     required this.labelKey,
     required this.template,
+    required this.layoutTemplate,
+    required this.phoneColumns,
+    required this.supportsFullSpanModules,
+    required this.intersectionModulePolicy,
+    required this.contentCardPolicy,
     required this.feedQuery,
     required this.moodCopyKey,
     required this.order,
@@ -160,13 +170,13 @@ class ContentUIConfig {
   const ContentUIConfig._();
 
   static const List<HomeChannelConfig> homeChannels = <HomeChannelConfig>[
-    HomeChannelConfig(id: "following", labelKey: "home_tab_following", template: "single_column_relations", feedQuery: <String, String>{"category": "following", "identity": "moment"}, moodCopyKey: "home_mood_following", order: 0),
-    HomeChannelConfig(id: "recommend", labelKey: "home_tab_recommend", template: "intersection_rail_masonry", feedQuery: <String, String>{"category": "micro", "identity": "moment"}, moodCopyKey: "home_mood_recommend", order: 1),
-    HomeChannelConfig(id: "campus", labelKey: "home_tab_campus", template: "intersection_rail_masonry", feedQuery: <String, String>{"category": "campus"}, moodCopyKey: "home_mood_campus", order: 2),
-    HomeChannelConfig(id: "travel", labelKey: "home_tab_travel", template: "masonry_recommend", feedQuery: <String, String>{"category": "travel"}, moodCopyKey: "home_mood_travel", order: 3),
-    HomeChannelConfig(id: "photography", labelKey: "home_tab_photography", template: "masonry_recommend", feedQuery: <String, String>{"category": "photography"}, moodCopyKey: "home_mood_photography", order: 4),
-    HomeChannelConfig(id: "tech", labelKey: "home_tab_tech", template: "masonry_recommend", feedQuery: <String, String>{"category": "tech"}, moodCopyKey: "home_mood_tech", order: 5),
-    HomeChannelConfig(id: "car", labelKey: "home_tab_car", template: "masonry_recommend", feedQuery: <String, String>{"category": "car"}, moodCopyKey: "home_mood_car", order: 6),
+    HomeChannelConfig(id: "following", labelKey: "home_tab_following", template: "single_column_relations", layoutTemplate: "singleColumnRelations", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "none", contentCardPolicy: "richRelation", feedQuery: <String, String>{"category": "following", "identity": "moment"}, moodCopyKey: "home_mood_following", order: 0),
+    HomeChannelConfig(id: "recommend", labelKey: "home_tab_recommend", template: "intersection_rail_masonry", layoutTemplate: "dualColumnDiscovery", phoneColumns: 2, supportsFullSpanModules: true, intersectionModulePolicy: "spotlightSegment", contentCardPolicy: "compactVisual", feedQuery: <String, String>{"category": "micro", "identity": "moment"}, moodCopyKey: "home_mood_recommend", order: 1),
+    HomeChannelConfig(id: "campus", labelKey: "home_tab_campus", template: "intersection_rail_masonry", layoutTemplate: "dualColumnDiscovery", phoneColumns: 2, supportsFullSpanModules: true, intersectionModulePolicy: "campusSpotlight", contentCardPolicy: "compactVisual", feedQuery: <String, String>{"category": "campus"}, moodCopyKey: "home_mood_campus", order: 2),
+    HomeChannelConfig(id: "travel", labelKey: "home_tab_travel", template: "masonry_recommend", layoutTemplate: "dualColumnDiscovery", phoneColumns: 2, supportsFullSpanModules: true, intersectionModulePolicy: "segmentInsert", contentCardPolicy: "compactVisual", feedQuery: <String, String>{"category": "travel"}, moodCopyKey: "home_mood_travel", order: 3),
+    HomeChannelConfig(id: "photography", labelKey: "home_tab_photography", template: "masonry_recommend", layoutTemplate: "dualColumnDiscovery", phoneColumns: 2, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "compactVisual", feedQuery: <String, String>{"category": "photography"}, moodCopyKey: "home_mood_photography", order: 4),
+    HomeChannelConfig(id: "tech", labelKey: "home_tab_tech", template: "masonry_recommend", layoutTemplate: "dualColumnDiscovery", phoneColumns: 2, supportsFullSpanModules: true, intersectionModulePolicy: "segmentInsert", contentCardPolicy: "compactVisual", feedQuery: <String, String>{"category": "tech"}, moodCopyKey: "home_mood_tech", order: 5),
+    HomeChannelConfig(id: "car", labelKey: "home_tab_car", template: "masonry_recommend", layoutTemplate: "dualColumnDiscovery", phoneColumns: 2, supportsFullSpanModules: true, intersectionModulePolicy: "segmentInsert", contentCardPolicy: "compactVisual", feedQuery: <String, String>{"category": "car"}, moodCopyKey: "home_mood_car", order: 6),
   ];
 
   static const List<DiscoveryTabConfig> discoveryTabs = <DiscoveryTabConfig>[

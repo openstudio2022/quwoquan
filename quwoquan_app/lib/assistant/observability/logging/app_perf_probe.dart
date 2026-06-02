@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 class AppPerfProbe {
   const AppPerfProbe();
 
@@ -9,12 +11,14 @@ class AppPerfProbe {
     String operation = '',
     int? latencyMs,
   }) {
-    final rssBytes = ProcessInfo.currentRss;
+    final rssBytes = kIsWeb ? null : ProcessInfo.currentRss;
     return <String, dynamic>{
       'event': event,
       'route': route,
       if (operation.isNotEmpty) 'operation': operation,
-      'memory': <String, dynamic>{'rssMb': _bytesToMb(rssBytes)},
+      'memory': <String, dynamic>{
+        'rssMb': rssBytes == null ? null : _bytesToMb(rssBytes),
+      },
       'cpu': <String, dynamic>{'processUsagePercent': null},
       'latencyMs': latencyMs,
     };

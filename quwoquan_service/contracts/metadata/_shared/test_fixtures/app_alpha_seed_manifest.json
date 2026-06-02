@@ -87,12 +87,14 @@
         "persona_core",
         "profile_feed_core",
         "relationship_core",
+        "following_subject_core",
         "settings_core"
       ],
       "resetScope": "fixture_user_*",
       "targetStore": "alpha-local-mock+user-service:test_store",
       "verifiedEndpoints": [
-        "/v1/user/profile"
+        "/v1/user/profile",
+        "/v1/user/following-subjects"
       ],
       "deliveryChannels": [
         "app-fixture-json",
@@ -110,7 +112,8 @@
       "resetScope": "fixture_entity_*",
       "targetStore": "alpha-local-mock+entity-service:test_store",
       "verifiedEndpoints": [
-        "/v1/entity/homepages"
+        "/v1/homepages/search",
+        "/v1/homepages/{homepageId}/object-page-bundle"
       ],
       "deliveryChannels": [
         "app-fixture-json",
@@ -176,6 +179,7 @@
       "integration/test_fixtures/scenarios/integration_scenarios.json",
       "notification/test_fixtures/scenarios/notification_scenarios.json",
       "rtc/test_fixtures/scenarios/rtc_scenarios.json",
+      "user/following_subject/test_fixtures/scenarios/following_subject_scenarios.json",
       "assistant/test_fixtures/scenarios/assistant_scenarios.json"
     ]
   },

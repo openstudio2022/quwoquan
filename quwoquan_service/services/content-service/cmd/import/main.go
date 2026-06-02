@@ -78,7 +78,16 @@ func main() {
 	if err != nil {
 		log.Fatalf("upsert entities: %v", err)
 	}
-	log.Printf("[import] OK env=%s upserted posts=%d entities=%d", *env, np, ne)
+
+	// 同写发现流 ReadModel（rm_discovery_feed），让冷启动内容进入 tag/hot/explore 等召回通道；
+	// 与在线 DiscoveryFeedProjector / BulkImport 路径字段一致（sourceTaskId + conditionProfile）。
+	feedColl := client.Database(*postsDB).Collection("rm_discovery_feed")
+	condByEntity := conditionProfileIndex(entities)
+	nf, err := UpsertDiscoveryFeed(ctx, feedColl, posts, condByEntity, now)
+	if err != nil {
+		log.Fatalf("upsert discovery feed: %v", err)
+	}
+	log.Printf("[import] OK env=%s upserted posts=%d entities=%d discoveryFeed=%d", *env, np, ne, nf)
 }
 
 // EnsureUnique 幂等建唯一索引（已存在则忽略）。
@@ -98,13 +107,20 @@ func UpsertPosts(ctx context.Context, coll *mongo.Collection, posts []PostDoc, n
 		doc := bson.M{
 			"postRef": p.PostRef, "contentType": p.ContentType, "title": p.Title,
 			"angle": p.Angle, "seq": p.Seq, "entityRefs": p.EntityRefs, "tagRefs": p.TagRefs,
-			"template": p.Template, "generatorModel": p.GeneratorModel,
-			"articleMarkdown": p.ArticleMarkdown, "articleDigest": p.ArticleDigest,
-			"updatedAt": now,
+			"template": p.Template, "generatorModel": p.GeneratorModel, "articleTemplate": p.Template,
+			"body": p.ArticleMarkdown, "summary": p.ArticleDigest,
+			"articleMarkdown": p.ArticleMarkdown, "articleDigest": p.ArticleDigest, "articleMarkdownDigest": p.ArticleDigest,
+			"sourceTaskId": p.SourceTaskId,
+			// Path A 导入的 publish 主线文章默认视为已公开发布，保证
+			// 在线 search/feed 与 rm_discovery_feed 的 discoverability 口径一致。
+			"status":      "published",
+			"visibility":  "public",
+			"publishedAt": now,
+			"updatedAt":   now,
 		}
 		if _, err := coll.UpdateOne(ctx,
 			bson.M{"postRef": p.PostRef},
-			bson.M{"$set": doc, "$setOnInsert": bson.M{"createdAt": now}},
+			bson.M{"$set": doc, "$setOnInsert": bson.M{"_id": p.PostRef, "createdAt": now}},
 			options.UpdateOne().SetUpsert(true),
 		); err != nil {
 			return n, err
@@ -121,11 +137,66 @@ func UpsertEntities(ctx context.Context, coll *mongo.Collection, entities []Enti
 		doc := bson.M{
 			"entityRef": e.EntityRef, "domain": e.Domain, "etype": e.Etype, "name": e.Name,
 			"label": e.Label, "tagRefs": e.TagRefs, "page": e.Page, "hasPage": e.HasPage,
+			"conditionProfile": e.ConditionProfile, "sourceTaskId": e.SourceTaskId,
 			"updatedAt": now,
 		}
 		if _, err := coll.UpdateOne(ctx,
 			bson.M{"entityRef": e.EntityRef},
 			bson.M{"$set": doc, "$setOnInsert": bson.M{"createdAt": now}},
+			options.UpdateOne().SetUpsert(true),
+		); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+// conditionProfileIndex 建立 entityRef→conditionProfile 映射，供发现流投影按主实体冗余条件画像。
+func conditionProfileIndex(entities []EntityDoc) map[string]map[string]any {
+	idx := make(map[string]map[string]any, len(entities))
+	for _, e := range entities {
+		if len(e.ConditionProfile) > 0 {
+			idx[e.EntityRef] = e.ConditionProfile
+		}
+	}
+	return idx
+}
+
+// UpsertDiscoveryFeed 把发布主线内容同写发现流 ReadModel（rm_discovery_feed）。
+// postId 用稳定 postRef；conditionProfile 取首个命中实体的画像冗余。
+// status/visibility 固定 published/public（冷启动内容均为公开发布），保证召回可见。
+// authorId/coverUrl 由 manifest 契约补齐（P1 produce 侧）后再透传；缺省留空不影响 tag/hot/explore 召回。
+func UpsertDiscoveryFeed(ctx context.Context, coll *mongo.Collection, posts []PostDoc, condByEntity map[string]map[string]any, now time.Time) (int, error) {
+	n := 0
+	for _, p := range posts {
+		var cond map[string]any
+		for _, er := range p.EntityRefs {
+			if c, ok := condByEntity[er]; ok {
+				cond = c
+				break
+			}
+		}
+		set := bson.M{
+			"postId":           p.PostRef,
+			"title":            p.Title,
+			"contentType":      p.ContentType,
+			"contentIdentity":  "work",
+			"tagRefs":          p.TagRefs,
+			"entityRefs":       p.EntityRefs,
+			"sourceTaskId":     p.SourceTaskId,
+			"conditionProfile": cond,
+			"status":           "published",
+			"visibility":       "public",
+			"publishedAt":      now,
+			"updatedAt":        now,
+		}
+		if _, err := coll.UpdateOne(ctx,
+			bson.M{"postId": p.PostRef},
+			bson.M{"$set": set, "$setOnInsert": bson.M{
+				"likeCount": int64(0), "commentCount": int64(0),
+				"favoriteCount": int64(0), "viewCount": int64(0), "recScore": 0.0,
+			}},
 			options.UpdateOne().SetUpsert(true),
 		); err != nil {
 			return n, err

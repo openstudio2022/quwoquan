@@ -109,6 +109,9 @@ Future<void> runQuwoquanApp({
 }
 
 void _installRootIsolateErrorListener() {
+  if (kIsWeb) {
+    return;
+  }
   if (_rootIsolateErrorPort != null) {
     return;
   }

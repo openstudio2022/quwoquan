@@ -1,0 +1,87 @@
+version: 2
+node:
+  id: public-content-web-entry
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry
+  title: public content web entry
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: 公开内容 Web 入口闭环验收范围。
+  in_scope:
+    - 公开内容 Web 入口规格。
+    - 站外分享 HTTPS 链同源。
+    - Markdown-to-SEO-HTML renderer 骨架。
+    - PC 内容优先体验与安装转化规格。
+  out_of_scope:
+    - 完整 PC masonry 首页实现。
+    - 完整 public web SSR/静态服务上线。
+    - 创作、私信、RTC 的桌面化实现。
+gwt_acceptance:
+  GWT1:
+    title: 站外分享默认使用公开 HTTPS 链接
+    given:
+      - 用户在内容分享 Sheet 点击复制链接或系统分享。
+    when:
+      - 分享模板被构建并交给分享 action handler。
+    then:
+      - 站外文本使用 PUBLIC_WEB_BASE_URL + link_templates 的 HTTPS landing URL。
+      - App deep link 保留在模板中，但不作为站外默认复制文本。
+    done_when:
+      - 分享模板测试覆盖 landing URL 与 deep link 双字段。
+      - action handler 测试覆盖 copy/system_share 默认输出 HTTPS。
+    edge_cases:
+      - private 内容不生成可分享 landing URL。
+      - circle_visible 内容保留受控分享提示。
+    contract_refs:
+      - specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md
+      - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
+    performance_points: []
+    evidence:
+      primary:
+        - T2_module_interaction
+      supporting:
+        - T1_contract
+    tests:
+      planned:
+        - quwoquan_app/test/ui/content/share/content_share_template_public_link_test.dart
+      recorded: []
+    status: pending
+  GWT2:
+    title: Markdown 可派生安全 SEO HTML
+    given:
+      - 一篇公开文章提供 articleMarkdown、assetManifest 与公开链接。
+    when:
+      - Markdown-to-SEO-HTML renderer 生成公开页投影。
+    then:
+      - 输出安全 HTML、canonical、OG 与 JSON-LD。
+      - 任意 HTML / script 注入被转义或阻断。
+    done_when:
+      - renderer snapshot 覆盖 heading、paragraph、figure、gallery、callout、HTML escape。
+      - private / circle_visible 权限边界有测试。
+    edge_cases:
+      - Markdown 中包含任意 HTML。
+      - assetManifest 缺失图片。
+      - 摘要为空时从正文派生 description。
+    contract_refs:
+      - specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md
+      - specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/spec.md
+    performance_points: []
+    evidence:
+      primary:
+        - T1_contract
+        - T2_module_interaction
+      supporting: []
+    tests:
+      planned:
+        - quwoquan_app/test/ui/content/seo/markdown_seo_html_renderer_test.dart
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+    - flutter test quwoquan_app/test/ui/content/share/content_share_template_public_link_test.dart
+    - flutter test quwoquan_app/test/ui/content/seo/markdown_seo_html_renderer_test.dart
+  full_gate:
+    - make gate

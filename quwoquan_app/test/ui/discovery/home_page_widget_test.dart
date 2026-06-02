@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -15,9 +16,10 @@ import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
-import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
+import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _buildApp() {
@@ -104,6 +106,7 @@ Widget _buildDarkApp() {
 Widget _buildAppWithStableFollowingArticles() {
   return ProviderScope(
     overrides: [
+      authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       contentRepositoryProvider.overrideWithValue(
         _StableFollowingArticleContentRepository(),
       ),
@@ -153,6 +156,62 @@ Widget _buildAppWithStableFollowingArticles() {
       ),
     ),
   );
+}
+
+Widget _buildAppWithStableFollowingFeed({bool stableArticles = false}) {
+  return ProviderScope(
+    overrides: [
+      authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+      if (stableArticles) ...[
+        contentRepositoryProvider.overrideWithValue(
+          _StableFollowingArticleContentRepository(),
+        ),
+        contentFeatureFlagProvider(
+          'enable_article_distribution_profiles',
+        ).overrideWith((ref) => true),
+      ],
+    ],
+    child: ScreenUtilInit(
+      designSize: const Size(393, 852),
+      child: MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/',
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (context, state) =>
+                  const Scaffold(body: HomePage(routeLocation: '/following')),
+            ),
+            GoRoute(
+              path: '/search',
+              builder: (context, state) => const GlobalSearchPage(
+                launchContext: SearchLaunchContext(entrySurfaceId: '/'),
+              ),
+            ),
+            GoRoute(
+              path: '/user/:username',
+              builder: (context, state) => const SizedBox(),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _AuthenticatedSession extends AuthSessionController {
+  @override
+  AuthSessionState build() {
+    return const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'test-token',
+      ownerId: 'test-user',
+      activeSubAccountId: 'test-sub-account',
+      accountState: 'active',
+      identityOrigin: 'test',
+      installId: 'test-install',
+    );
+  }
 }
 
 class _StableFollowingArticleContentRepository extends MockContentRepository {
@@ -483,7 +542,9 @@ void main() {
       await tester.pumpAndSettle();
 
       final selectedTab = find.byKey(
-        HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.recommendedChannelId),
+        HomePrimaryTabStrip.channelKey(
+          HomePrimaryTabStrip.recommendedChannelId,
+        ),
       );
       final selectedLabel = tester.widget<Text>(
         find
@@ -505,7 +566,7 @@ void main() {
       expect(underlineDecoration.color, AppColors.primaryColor);
     });
 
-    testWidgets('浅色首页一级 Tab 与列表露底使用 post 表面色', (tester) async {
+    testWidgets('浅色首页一级 Tab 与推荐双列露底使用 post 表面色', (tester) async {
       _suppressExpectedErrors();
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
@@ -519,10 +580,10 @@ void main() {
       final tabChrome = tester.widget<Container>(
         find.byKey(const ValueKey<String>('home-primary-tab-chrome')),
       );
-      final listBackground = tester.widget<ColoredBox>(
+      final feedBackground = tester.widget<ColoredBox>(
         find
             .ancestor(
-              of: find.byType(ListView),
+              of: find.byKey(const ValueKey<String>('dual-discovery-card-0')),
               matching: find.byType(ColoredBox),
             )
             .first,
@@ -531,20 +592,20 @@ void main() {
       expect(tabChrome.decoration, isA<BoxDecoration>());
       expect((tabChrome.decoration! as BoxDecoration).color, expectedSurface);
       expect((tabChrome.decoration! as BoxDecoration).border, isNull);
-      expect(listBackground.color, expectedSurface);
+      expect(feedBackground.color, expectedSurface);
     });
 
-    testWidgets('首页 post 之间使用消息列表同源分割线', (tester) async {
+    testWidgets('关注流 post 之间使用消息列表同源分割线', (tester) async {
       _suppressExpectedErrors();
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_buildApp());
+      await tester.pumpWidget(_buildAppWithStableFollowingFeed());
       await tester.pumpAndSettle();
 
       final divider = tester.widget<Divider>(
-        find.byKey(const ValueKey<String>('moment-feed-divider-0')),
+        find.byKey(const ValueKey<String>('home-feed-divider-0')),
       );
       expect(divider.height, AppSpacing.one);
       expect(divider.thickness, AppSpacing.hairline);
@@ -577,11 +638,13 @@ void main() {
       await tester.pumpWidget(_buildApp());
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.byType(MomentSocialFeed), findsOneWidget);
+      expect(find.byType(HomeMultiFormFeed), findsOneWidget);
       expect(find.byType(HomePrimaryTabStrip), findsOneWidget);
       expect(
         find.byKey(
-          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.recommendedChannelId),
+          HomePrimaryTabStrip.channelKey(
+            HomePrimaryTabStrip.recommendedChannelId,
+          ),
         ),
         findsOneWidget,
       );
@@ -596,7 +659,9 @@ void main() {
 
       await tester.tap(
         find.byKey(
-          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.followingChannelId),
+          HomePrimaryTabStrip.channelKey(
+            HomePrimaryTabStrip.followingChannelId,
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -618,12 +683,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_buildApp());
+      await tester.pumpWidget(_buildAppWithStableFollowingFeed());
       await tester.pumpAndSettle();
 
-      final cardFinder = find.byKey(
-        const ValueKey<String>('moment-feed-card-0'),
-      );
+      final cardFinder = find.byKey(const ValueKey<String>('home-feed-card-0'));
       final screenWidth =
           tester.view.physicalSize.width / tester.view.devicePixelRatio;
 
@@ -650,7 +713,7 @@ void main() {
         findsNothing,
       );
       expect(
-        find.byKey(const ValueKey<String>('moment-feed-more-0')),
+        find.byKey(const ValueKey<String>('home-feed-more-0')),
         findsOneWidget,
       );
       expect(
@@ -676,30 +739,21 @@ void main() {
       );
     });
 
-    testWidgets('关注流宽屏下首条 post 收敛到最大宽度', (tester) async {
+    testWidgets('关注流宽屏下首条 post 维持单列全宽关系卡', (tester) async {
       _suppressExpectedErrors();
       _setWideSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_buildApp());
+      await tester.pumpWidget(_buildAppWithStableFollowingFeed());
       await tester.pumpAndSettle();
 
-      final cardFinder = find.byKey(
-        const ValueKey<String>('moment-feed-card-0'),
-      );
+      final cardFinder = find.byKey(const ValueKey<String>('home-feed-card-0'));
       final screenWidth =
           tester.view.physicalSize.width / tester.view.devicePixelRatio;
 
       expect(cardFinder, findsOneWidget);
-      expect(tester.getSize(cardFinder).width, lessThan(screenWidth));
-      final ctx = tester.element(cardFinder);
-      final cols = AppSpacing.feedResponsiveColumns(ctx);
-      final pad = AppSpacing.feedContentHorizontal(ctx);
-      final gap = AppSpacing.postPreviewGridSpacing;
-      final expected =
-          (MediaQuery.sizeOf(ctx).width - 2 * pad - (cols - 1) * gap) / cols;
-      expect(tester.getSize(cardFinder).width, closeTo(expected, 1.0));
+      expect(tester.getSize(cardFinder).width, closeTo(screenWidth, 1.0));
     });
 
     testWidgets('关注流文章卡覆盖封面/标题四种组合', (tester) async {
@@ -806,12 +860,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_buildApp());
+      await tester.pumpWidget(_buildAppWithStableFollowingFeed());
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('moment-feed-more-0')),
-      );
+      await tester.tap(find.byKey(const ValueKey<String>('home-feed-more-0')));
       await tester.pumpAndSettle();
 
       final page = find.byType(HomePage);
@@ -832,7 +884,10 @@ void main() {
       expect(find.text('分享'), findsNothing);
       expect(find.text('查看原图'), findsNothing);
 
-      await tester.drag(find.byType(ListView).last, const Offset(-320, 0));
+      await tester.drag(
+        find.byKey(TestKeys.modalBottomSheetQuickActionsRail),
+        const Offset(-320, 0),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('功能反馈'), findsOneWidget);
@@ -871,13 +926,17 @@ void main() {
       }
       expect(
         find.byKey(
-          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.followingChannelId),
+          HomePrimaryTabStrip.channelKey(
+            HomePrimaryTabStrip.followingChannelId,
+          ),
         ),
         findsOneWidget,
       );
       expect(
         find.byKey(
-          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.recommendedChannelId),
+          HomePrimaryTabStrip.channelKey(
+            HomePrimaryTabStrip.recommendedChannelId,
+          ),
         ),
         findsOneWidget,
       );
@@ -919,12 +978,14 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId),
+        ),
       );
       await tester.pumpAndSettle();
 
       final firstCard = find.byKey(
-        const ValueKey<String>('moment-feed-card-0'),
+        const ValueKey<String>('dual-discovery-card-0'),
       );
       expect(firstCard, findsOneWidget);
 
@@ -936,7 +997,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId),
+        ),
         findsOneWidget,
       );
     });
@@ -947,33 +1010,51 @@ void main() {
       await tester.pumpAndSettle();
 
       final campusBefore = tester.getCenter(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId),
+        ),
       );
       final travelBefore = tester.getCenter(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId),
+        ),
       );
       final campusTopBefore = tester.getTopLeft(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId),
+        ),
       );
       final travelTopBefore = tester.getTopLeft(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId),
+        ),
       );
       await tester.tap(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId),
+        ),
       );
       await tester.pumpAndSettle();
 
       final campusAfter = tester.getCenter(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId),
+        ),
       );
       final travelAfter = tester.getCenter(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId),
+        ),
       );
       final campusTopAfter = tester.getTopLeft(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.campusChannelId),
+        ),
       );
       final travelTopAfter = tester.getTopLeft(
-        find.byKey(HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId)),
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.travelChannelId),
+        ),
       );
       expect(campusAfter.dx, closeTo(campusBefore.dx, 0.1));
       expect(travelAfter.dx, closeTo(travelBefore.dx, 0.1));

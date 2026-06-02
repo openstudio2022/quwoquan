@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "任务规格 — quwoquan_data/tasks/<taskId>/task.yaml。taskId 由目录路径派生：<vertical>/<organizeBy>/<key>[/<category>]/<name>。",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": "quwoquan.task.spec" },
+    "taskId": { "type": "string", "description": "斜杠路径式 id，与 committed/runtime 目录同名，如 旅行/地域/四川省/景区/景区全覆盖" },
+    "title": { "type": "string", "description": "人读任务名，如 四川省景区全覆盖" },
+    "taskArchetype": {
+      "type": "string",
+      "enum": ["region_category_coverage", "province_overview", "loop_route", "theme_collection"],
+      "description": "任务类型，决定 scope 形态与驱动 skill"
+    },
+    "vertical": {
+      "type": "string",
+      "enum": ["travel", "campus", "photography", "tech", "car"],
+      "description": "一级 tab/垂类，对齐 app home channel"
+    },
+    "organizeBy": {
+      "type": "string",
+      "enum": ["地域", "环线", "主题"],
+      "description": "组织轴；与目录第二层一致"
+    },
+    "key": { "type": "string", "description": "组织键：四川省 / 川西环线 / 风物美食 等" },
+    "entityCategory": { "type": ["string", "null"], "description": "实体类别（地域轴下有），如 景区/古镇/美食/高校" },
+    "parentTaskId": { "type": ["string", "null"], "description": "父任务 id（如 _省域总览）" },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "paused", "done"],
+      "default": "draft"
+    },
+    "scope": {
+      "type": "object",
+      "description": "archetype 相关范围",
+      "properties": {
+        "region": { "type": ["string", "null"], "description": "地域键，如 四川省 / 欧洲 / 泰国" },
+        "entityTypes": { "type": "array", "items": { "type": "string" }, "description": "实体类型路径，如 地点/景区" },
+        "coverageTargets": {
+          "type": "array",
+          "description": "广度目标实体清单（重生成的种子）",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entityType": { "type": "string", "description": "如 地点/景区" },
+              "name": { "type": "string", "description": "实体名，如 九寨沟" }
+            },
+            "required": ["entityType", "name"]
+          }
+        },
+        "tagRefs": { "type": "array", "items": { "type": "string" }, "description": "挂载标签路径（地域/主题/实体维）" },
+        "route": { "type": ["string", "null"], "description": "loop_route 的环线名" },
+        "regions": { "type": "array", "items": { "type": "string" }, "description": "loop_route/theme 跨多地域键" },
+        "anchorEntities": { "type": "array", "items": { "type": "string" }, "description": "loop_route 锚点实体" },
+        "segments": { "type": "array", "items": { "type": "string" }, "description": "loop_route 分段" },
+        "theme": { "type": ["string", "null"], "description": "theme_collection 主题键" }
+      }
+    },
+    "content": {
+      "type": "object",
+      "description": "深度维度（驱动 produce 的 10D 矩阵）。未声明的字段沿 _defaults.yaml 继承链取值；显式声明则整体覆盖（list 替换语义）。只写与继承默认不同的特有 override。",
+      "properties": {
+        "angles": { "type": "array", "items": { "type": "string" }, "description": "内容角度/意图，如 行前指南/路线推荐/探店。多数 task 继承垂类默认，仅实体类别特化时 override" },
+        "audiences": { "type": "array", "items": { "type": "string" }, "description": "受众人格 id（默认继承垂类）" },
+        "carriers": { "type": "array", "items": { "type": "string" }, "description": "载体：article/gallery/review/video（默认继承全局 [article]）" },
+        "emphasis": { "type": "array", "items": { "type": "string" }, "description": "可选 override：内容强调点/选题侧重（如 古镇=人文叙事/古建筑、博物馆=文物/科普）；与继承的 angles 正交，按实体类别声明" },
+        "conditionAxes": {
+          "type": "object",
+          "description": "可选 override：地域/季节条件维。默认不写，继承地域/环线级 _defaults.yaml（该地域真实地形全谱 + 四季/旱雨季）；仅当确有地形/季节限制时 override，且必须是继承全谱子集（lint 校验）。每篇精确条件由实体 conditionProfile 在 plan/brief 注入",
+          "properties": {
+            "regions": { "type": "array", "items": { "type": "string" }, "description": "地域条件维（高原/沿海海岛...）" },
+            "seasons": { "type": "array", "items": { "type": "string" }, "description": "季节条件维（春/夏/秋/冬/雨季/旺季...）" }
+          }
+        }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "description": "验收意图",
+      "properties": {
+        "minEntities": { "type": "integer", "description": "广度下限：实体数" },
+        "minPostsPerEntity": { "type": "integer", "description": "深度下限：每实体文章数" },
+        "requiredAngles": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string", "description": "task new / 会话 owner" }
+      }
+    }
+  },
+  "required": ["schemaVersion", "taskId", "title", "taskArchetype", "vertical", "organizeBy", "key", "scope"]
+}

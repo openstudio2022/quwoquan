@@ -38,6 +38,25 @@ entities:
         api_exposure: read_write
         ops_exposure: read
 
+      - name: canonicalEntityId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: 数据工程实体归一 ID；Homepage 与离线实体页的单一对象键
+
+      - name: objectPageTemplate
+        type: string
+        constraints: [NOT_NULL, DEFAULT_STANDARD]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 对象主页展示模板，如 standard、campus、travel_photo；由 homepageType 与运营配置共同决定
+
       - name: status
         type: enum
         enum_ref: HomepageStatus
@@ -74,7 +93,7 @@ entities:
         ops_exposure: read
         recommend_feature: true
         tag_ref: true
-        description: 路径制 tagRef 列表（对象类目锚点）；真相源 publish/v1/tags（Entity/Topic 分组），已废弃扁平 tag_taxonomy.yaml
+        description: 路径制 tagRef 列表（对象类目锚点）；真相源 publish/v1/tags（Entity/Topic 分组）
 
       - name: coverUrl
         type: string
@@ -163,6 +182,24 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: relationEdges
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 对象主页关系边快照，用于交集、推荐和小趣解释
+
+      - name: assistantContext
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 小趣对象页上下文快照，由后端投影生成，端侧只读
 
       - name: createdAt
         type: timestamp

@@ -49,7 +49,7 @@ for rel in (
     "components/media/shared/toolbar/immersive_engagement_bar.dart",
     "components/media/shared/toolbar/media_viewer_toolbar.dart",
     "ui/discovery/pages/discovery_page.dart",
-    "ui/discovery/widgets/moment_social_feed.dart",
+    "ui/discovery/widgets/home_multi_form_feed.dart",
     "ui/discovery/widgets/works_immersive_viewer.dart",
 ):
     path = LIB / rel

@@ -1,0 +1,35 @@
+version: 1
+# 规则式人群 segment 定义（单一真相源）。基于 user 域派生兴趣画像
+# rm_user_profile_view.interestProfile 的结构化 predicate（AND 语义）匹配；
+# 不做重 ML 聚类（YAGNI）。content-service 在派生画像后用 evaluator 匹配，
+# 随 UserInterestRecomputed 事件带 segments，user-service 投影到
+# rm_user_profile_view.segments（user 域单一真相源），供推荐定向与小艺画像消费。
+#
+# match 语义（同一 segment 内全部条件 AND）：
+#   lifecycle_stages  画像 lifecycleStage 必须 ∈ 列表（空表示不限）
+#   min_tag_scores    topInterests 中存在 (tagRef,dimension) 且 score>=min（逐条 AND）
+# 用户可同时命中多个 segment；命中集合按 priority 降序输出。
+segments:
+  - id: travel_enthusiast
+    name: 旅行兴趣人群
+    description: topic 维度旅行亲和高且非新用户
+    priority: 100
+    match:
+      lifecycle_stages: [active, dormant]
+      min_tag_scores:
+        - { tagRef: 旅行, dimension: topic, min: 0.6 }
+
+  - id: visual_content_lover
+    name: 视觉内容偏好人群
+    description: format 维度偏图文
+    priority: 80
+    match:
+      min_tag_scores:
+        - { tagRef: 图文, dimension: format, min: 0.5 }
+
+  - id: newcomer
+    name: 新用户
+    description: 生命周期 new
+    priority: 10
+    match:
+      lifecycle_stages: [new]

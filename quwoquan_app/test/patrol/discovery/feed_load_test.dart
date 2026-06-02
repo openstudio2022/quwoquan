@@ -23,7 +23,10 @@ import 'package:flutter/widgets.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 
-const _firstFollowingFeedCardKey = ValueKey<String>('moment-feed-card-0');
+const _feedCardProbeKeys = <ValueKey<String>>[
+  ValueKey<String>('home-feed-card-0'),
+  ValueKey<String>('dual-discovery-card-0'),
+];
 
 // dart-define 注入
 const _apiContractEnv = String.fromEnvironment(
@@ -45,16 +48,27 @@ void main() {
         'T4 tests must run with API_CONTRACT_ENV=gamma',
       );
 
-      // ── 等待首页 Following feed 渲染（冷启动需留足时间）───────────────
-      await $(
-        _firstFollowingFeedCardKey,
-      ).waitUntilVisible(timeout: const Duration(seconds: 20));
+      // ── 等待首页真实 feed 卡片渲染（默认推荐频道可能是双列发现卡）───────
+      final visibleFeedCard = await _waitForAnyFeedCard($);
 
       expect(
-        $(_firstFollowingFeedCardKey).visible,
+        visibleFeedCard,
         isTrue,
-        reason: 'At least one following feed card must be visible after load',
+        reason: 'At least one remote gamma feed card must be visible after load',
       );
     },
   );
+}
+
+Future<bool> _waitForAnyFeedCard(PatrolIntegrationTester $) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 40));
+  while (DateTime.now().isBefore(deadline)) {
+    for (final key in _feedCardProbeKeys) {
+      if ($(key).visible) {
+        return true;
+      }
+    }
+    await $.pump(const Duration(milliseconds: 500));
+  }
+  return false;
 }

@@ -30,7 +30,7 @@ type FeatureNode struct {
 }
 
 // ScanFeatureTree scans a three-level directory tree:
-// L1_capability -> L2_feature -> L3_story, while Task remains inside tasks.md.
+// L1_domain_service -> L2_business_capability -> L3_story.
 func ScanFeatureTree(rootDir string) (*TreeIndex, error) {
 	index := &TreeIndex{
 		Version:   1,
@@ -67,7 +67,7 @@ func scanL1(dir, name string) (*FeatureNode, error) {
 	node := &FeatureNode{
 		ID:     name,
 		Name:   name,
-		Level:  "L1_capability",
+		Level:  "L1_domain_service",
 		Path:   dir,
 		Status: deriveNodeStatus(dir),
 	}
@@ -104,7 +104,7 @@ func scanL2(dir, name string) (*FeatureNode, error) {
 	node := &FeatureNode{
 		ID:     name,
 		Name:   name,
-		Level:  "L2_feature",
+		Level:  "L2_business_capability",
 		Path:   dir,
 		Status: deriveNodeStatus(dir),
 	}

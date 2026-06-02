@@ -52,3 +52,10 @@ scenarios:
       - user_profile_soft_deleted
       - all_personas_deleted
       - all_devices_deleted
+
+  - name: get_user_interest_profile
+    command: GetUserInterestProfile
+    assertions:
+      - response_contains_topInterests_dimensionTops_lifecycleStage_segments
+      - empty_read_model_returns_empty_profile_not_error
+      - principal_owner_required_anonymous_denied

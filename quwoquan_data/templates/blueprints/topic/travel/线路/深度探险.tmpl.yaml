@@ -44,14 +44,14 @@ routeCoverageExpectations:
   requireAllPrimaryNodes: true
 structure:
   required: [线路定位, 体能与经验要求, 分段行程, 补给与露营, 风险与应急, 向导与许可, 替代方案]
-  optional: [摄影停靠, 高反适应]
+  optional: [摄影停靠, 地形适应]
 hooks: ["走{name}之前，先确认体能和风险边界", "这条深度线不是打卡，而是算好补给和退路"]
 mustIncludeFacts: [总里程, 高程变化, 补给点, 露营或住宿, 向导需求, 应急避险, 最佳季节]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 零风险]
 wordCount: { min: 1600, max: 3200 }
 imagePlan:
   - { slot: 线路总览, imageLayout: fullWidth }
-  - { slot: 海拔剖面, imageLayout: infographic }
+  - { slot: 地形剖面, imageLayout: infographic }
   - { slot: 节点图集, gallery: masonry }
   - { slot: 风险提示, imageLayout: fullWidth }
 crossRefs: { minEntity: 2, minTag: 5 }

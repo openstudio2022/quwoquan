@@ -2,11 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
+import 'package:quwoquan_app/components/object_page/object_page_sections.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -26,6 +28,7 @@ class HomepageDetailShell extends StatefulWidget {
     required this.errorText,
     required this.detail,
     required this.shell,
+    required this.objectPageBundle,
     required this.viewerOwnerUserId,
     required this.onBack,
     required this.onClaim,
@@ -41,6 +44,7 @@ class HomepageDetailShell extends StatefulWidget {
   final String? errorText;
   final HomepageDetail? detail;
   final HomepageShellData? shell;
+  final ObjectPageBundle? objectPageBundle;
   final String? viewerOwnerUserId;
   final VoidCallback onBack;
   final VoidCallback onClaim;
@@ -56,8 +60,9 @@ class HomepageDetailShell extends StatefulWidget {
 class _HomepageDetailShellState extends State<HomepageDetailShell> {
   static const double _cardRadius = AppSpacing.radiusTwenty;
   static const List<_HomepagePrimaryTabSpec> _tabs = <_HomepagePrimaryTabSpec>[
-    _HomepagePrimaryTabSpec(id: 'overview', label: '概览'),
+    _HomepagePrimaryTabSpec(id: 'overview', label: '首页'),
     _HomepagePrimaryTabSpec(id: 'content', label: '内容'),
+    _HomepagePrimaryTabSpec(id: 'reviews', label: '口碑'),
     _HomepagePrimaryTabSpec(id: 'related', label: '关联'),
   ];
 
@@ -71,7 +76,9 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       widget.shell?.reviewSummary ?? widget.detail?.reviewSummary;
 
   List<HomepageContentPreview> get _contentPreview =>
-      widget.shell?.contentPreview.isNotEmpty == true
+      widget.objectPageBundle?.highlightItems.isNotEmpty == true
+      ? widget.objectPageBundle!.highlightItems
+      : widget.shell?.contentPreview.isNotEmpty == true
       ? widget.shell!.contentPreview
       : widget.detail?.contentPreview ?? const <HomepageContentPreview>[];
 
@@ -81,7 +88,9 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       : widget.detail?.questionPreview ?? const <HomepageQuestionPreview>[];
 
   List<HomepageRelatedGroupSummary> get _relatedGroups =>
-      widget.shell?.relatedGroups.isNotEmpty == true
+      widget.objectPageBundle?.relatedObjects.isNotEmpty == true
+      ? widget.objectPageBundle!.relatedObjects
+      : widget.shell?.relatedGroups.isNotEmpty == true
       ? widget.shell!.relatedGroups
       : widget.detail?.relatedGroups ?? const <HomepageRelatedGroupSummary>[];
 
@@ -322,9 +331,39 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     );
   }
 
+  Widget _buildReviewsTab(BuildContext context) {
+    final detail = widget.detail;
+    if (_reviewSummary == null &&
+        detail?.averageRating == null &&
+        widget.initialSummary?.averageRating == null) {
+      return _buildMessageCard(
+        context,
+        title: '口碑',
+        child: _HomepageEmptyState(
+          icon: CupertinoIcons.chat_bubble_2_fill,
+          title: '还没有口碑沉淀',
+          description: '评论、评分和与实体相关的讨论会按对象维度沉淀在这里。',
+        ),
+      );
+    }
+
+    return _buildSectionBlock(
+      context: context,
+      title: '口碑摘要',
+      child: _HomepageReviewCard(
+        summary: _reviewSummary,
+        fallbackAverageRating:
+            detail?.averageRating ?? widget.initialSummary?.averageRating,
+        fallbackRatingCount:
+            detail?.ratingCount ?? widget.initialSummary?.ratingCount ?? 0,
+      ),
+    );
+  }
+
   Widget _buildActiveTabContent(BuildContext context) {
     return switch (_activeTabId) {
       'content' => _buildContentTab(context),
+      'reviews' => _buildReviewsTab(context),
       'related' => _buildRelatedTab(context),
       _ => _buildOverviewTab(context),
     };

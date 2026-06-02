@@ -9,7 +9,8 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 在本仓库处理环境相关任务时，优先使用统一入口：
 
 - `python3 agent_ops/deploy/stackctl.py package --env <alpha|beta|gamma|prod>`
-- `python3 agent_ops/deploy/stackctl.py up --target <alpha-local|beta-local|gamma-local>`
+- `python3 agent_ops/deploy/stackctl.py up --env <alpha|beta|gamma|prod-sim|prod> [--device-id <id>]`
+- `make dev-up ENV=<alpha|beta|gamma|prod-sim|prod> [DEVICE_ID=<id>]`
 - `python3 agent_ops/deploy/stackctl.py verify [--env <env>] [--kind <topology|config|packaging|all>] [--tier <t1|t2|t3|t4|all>]`
 - `python3 agent_ops/deploy/stackctl.py health --target <target> --scope <edge|media|service|full>`
 - `python3 agent_ops/deploy/stackctl.py inspect --target <target> --kind <logs|network|data|metrics|config|security|all>`
@@ -19,7 +20,7 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 
 ## Rules
 
-1. 不要把 `prod-gray` 当成第五环境。生产灰度是 `prod` 下的 rollout stage。
+1. 不要把 `prod-gray` 当成额外环境。生产灰度是 `prod` 下的 rollout stage。
 2. 不要手写本地 canonical 端口；读取 `deploy/shared/local_env_port_manifest.yaml` 对应 profile。
 3. 不要手写 public topology；读取 `deploy/shared/environment_topology_manifest.yaml`。
 4. 需要环境打包、纯度、URL 契约或 artifact 隔离时，先跑 `stackctl package`，再跑 `stackctl verify --kind ...`；需要 T1~T4 证据时再显式追加 `--tier ...`。
@@ -31,16 +32,22 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 ### 本地 beta 联调
 
 1. `stackctl package --env beta --include-services`
-2. `stackctl up --target beta-local`
+2. `stackctl up --env beta`
 3. `stackctl health --target beta-local --scope full`
 4. `stackctl inspect --target beta-local --kind all`
 
 ### local-gamma mirror
 
 1. `stackctl package --env gamma --include-services`
-2. `stackctl up --target gamma-local`
+2. `stackctl up --env gamma`
 3. `stackctl health --target gamma-local --scope full`
 4. `stackctl inspect --target gamma-local --kind all`
+
+### 本地 prod / prod-sim 连接
+
+1. `prod-sim` 使用 `stackctl up --env prod-sim`
+2. `prod` 使用 `stackctl up --env prod`，它会先对 `prod-hosted` 执行 edge health，再拉起本地 App/浏览器
+3. 不要为 prod attach 另写第二套 gateway/media 参数；public base 统一来自 topology
 
 ### hosted gamma / prod
 

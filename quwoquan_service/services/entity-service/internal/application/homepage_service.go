@@ -44,29 +44,33 @@ type GeoPoint struct {
 }
 
 type Homepage struct {
-	ID              string           `json:"_id"`
-	Title           string           `json:"title"`
-	Subtitle        string           `json:"subtitle,omitempty"`
-	HomepageType    string           `json:"homepageType"`
-	Status          string           `json:"status"`
-	SourceType      string           `json:"sourceType"`
-	ClaimStatus     string           `json:"claimStatus"`
-	CategoryTags    []string         `json:"categoryTags,omitempty"`
-	CoverURL        string           `json:"coverUrl,omitempty"`
-	Address         string           `json:"address,omitempty"`
-	City            string           `json:"city,omitempty"`
-	Location        *GeoPoint        `json:"location,omitempty"`
-	OwnerUserID     string           `json:"ownerUserId,omitempty"`
-	AverageRating   *float64         `json:"averageRating,omitempty"`
-	RatingCount     int              `json:"ratingCount"`
-	ReviewSummary   map[string]any   `json:"reviewSummary,omitempty"`
-	ContentPreview  []map[string]any `json:"contentPreview,omitempty"`
-	QuestionPreview []map[string]any `json:"questionPreview,omitempty"`
-	RelatedGroups   []map[string]any `json:"relatedGroups,omitempty"`
-	CreatedAt       time.Time        `json:"createdAt"`
-	UpdatedAt       time.Time        `json:"updatedAt"`
-	PublishedAt     *time.Time       `json:"publishedAt,omitempty"`
-	OfflineAt       *time.Time       `json:"offlineAt,omitempty"`
+	ID                 string           `json:"_id"`
+	Title              string           `json:"title"`
+	Subtitle           string           `json:"subtitle,omitempty"`
+	HomepageType       string           `json:"homepageType"`
+	CanonicalEntityID  string           `json:"canonicalEntityId"`
+	ObjectPageTemplate string           `json:"objectPageTemplate"`
+	Status             string           `json:"status"`
+	SourceType         string           `json:"sourceType"`
+	ClaimStatus        string           `json:"claimStatus"`
+	CategoryTags       []string         `json:"categoryTags,omitempty"`
+	CoverURL           string           `json:"coverUrl,omitempty"`
+	Address            string           `json:"address,omitempty"`
+	City               string           `json:"city,omitempty"`
+	Location           *GeoPoint        `json:"location,omitempty"`
+	OwnerUserID        string           `json:"ownerUserId,omitempty"`
+	AverageRating      *float64         `json:"averageRating,omitempty"`
+	RatingCount        int              `json:"ratingCount"`
+	ReviewSummary      map[string]any   `json:"reviewSummary,omitempty"`
+	ContentPreview     []map[string]any `json:"contentPreview,omitempty"`
+	QuestionPreview    []map[string]any `json:"questionPreview,omitempty"`
+	RelatedGroups      []map[string]any `json:"relatedGroups,omitempty"`
+	RelationEdges      []map[string]any `json:"relationEdges,omitempty"`
+	AssistantContext   map[string]any   `json:"assistantContext,omitempty"`
+	CreatedAt          time.Time        `json:"createdAt"`
+	UpdatedAt          time.Time        `json:"updatedAt"`
+	PublishedAt        *time.Time       `json:"publishedAt,omitempty"`
+	OfflineAt          *time.Time       `json:"offlineAt,omitempty"`
 }
 
 type HomepageSearchItemView struct {
@@ -88,6 +92,26 @@ type HomepageShellView struct {
 	ContentPreview  []map[string]any `json:"contentPreview,omitempty"`
 	QuestionPreview []map[string]any `json:"questionPreview,omitempty"`
 	RelatedGroups   []map[string]any `json:"relatedGroups,omitempty"`
+}
+
+type ObjectPageBundle struct {
+	ObjectType          string           `json:"objectType"`
+	ObjectID            string           `json:"objectId"`
+	CanonicalEntityID   string           `json:"canonicalEntityId"`
+	Title               string           `json:"title"`
+	Subtitle            string           `json:"subtitle,omitempty"`
+	CoverURL            string           `json:"coverUrl,omitempty"`
+	ObjectPageTemplate  string           `json:"objectPageTemplate"`
+	TagRefs             []string         `json:"tagRefs"`
+	Stats               map[string]any   `json:"stats"`
+	IntersectionReasons []map[string]any `json:"intersectionReasons"`
+	Intersections       []map[string]any `json:"intersections"`
+	HighlightItems      []map[string]any `json:"highlightItems"`
+	ContentSections     map[string]any   `json:"contentSections"`
+	RelatedObjects      []map[string]any `json:"relatedObjects"`
+	RelationEdges       []map[string]any `json:"relationEdges"`
+	AssistantContext    map[string]any   `json:"assistantContext,omitempty"`
+	RolloutContext      map[string]any   `json:"rolloutContext,omitempty"`
 }
 
 type HomepageReviewSummaryView struct {
@@ -131,14 +155,16 @@ type HomepageStatusReport struct {
 }
 
 type HomepageInput struct {
-	Title        string    `json:"title"`
-	Subtitle     string    `json:"subtitle"`
-	HomepageType string    `json:"homepageType"`
-	CategoryTags []string  `json:"categoryTags"`
-	CoverURL     string    `json:"coverUrl"`
-	Address      string    `json:"address"`
-	City         string    `json:"city"`
-	Location     *GeoPoint `json:"location"`
+	Title              string    `json:"title"`
+	Subtitle           string    `json:"subtitle"`
+	HomepageType       string    `json:"homepageType"`
+	CanonicalEntityID  string    `json:"canonicalEntityId"`
+	ObjectPageTemplate string    `json:"objectPageTemplate"`
+	CategoryTags       []string  `json:"categoryTags"`
+	CoverURL           string    `json:"coverUrl"`
+	Address            string    `json:"address"`
+	City               string    `json:"city"`
+	Location           *GeoPoint `json:"location"`
 }
 
 type ClaimRequestInput struct {
@@ -180,19 +206,48 @@ type StatusReportReviewInput struct {
 
 type HomepageService struct {
 	mu            sync.RWMutex
+	store         HomepageStateStore
 	homepages     map[string]*Homepage
 	claimRequests map[string]*HomepageClaimRequest
 	statusReports map[string]*HomepageStatusReport
 	sequence      uint64
 }
 
+type HomepageStateStore interface {
+	Load(ctx context.Context) (*HomepageStateSnapshot, error)
+	Save(ctx context.Context, snapshot HomepageStateSnapshot) error
+}
+
+type HomepageStateSnapshot struct {
+	Homepages     []Homepage             `json:"homepages" bson:"homepages"`
+	ClaimRequests []HomepageClaimRequest `json:"claimRequests" bson:"claimRequests"`
+	StatusReports []HomepageStatusReport `json:"statusReports" bson:"statusReports"`
+	Sequence      uint64                 `json:"sequence" bson:"sequence"`
+	UpdatedAt     time.Time              `json:"updatedAt" bson:"updatedAt"`
+}
+
 func NewHomepageService() *HomepageService {
+	return NewHomepageServiceWithStore(context.Background(), nil)
+}
+
+func NewHomepageServiceWithStore(ctx context.Context, store HomepageStateStore) *HomepageService {
 	svc := &HomepageService{
+		store:         store,
 		homepages:     map[string]*Homepage{},
 		claimRequests: map[string]*HomepageClaimRequest{},
 		statusReports: map[string]*HomepageStatusReport{},
 	}
-	svc.seed()
+	loaded := false
+	if store != nil {
+		if snapshot, err := store.Load(ctx); err == nil && snapshot != nil && len(snapshot.Homepages) > 0 {
+			svc.applySnapshot(snapshot)
+			loaded = true
+		}
+	}
+	if !loaded {
+		svc.seed()
+		_ = svc.persistLocked(ctx)
+	}
 	return svc
 }
 
@@ -285,24 +340,30 @@ func (s *HomepageService) IntakeHomepageCandidate(ctx context.Context, input Hom
 	now := time.Now().UTC()
 	id := s.nextID("homepage")
 	homepage := &Homepage{
-		ID:           id,
-		Title:        strings.TrimSpace(input.Title),
-		Subtitle:     strings.TrimSpace(input.Subtitle),
-		HomepageType: strings.TrimSpace(input.HomepageType),
-		Status:       "candidate",
-		SourceType:   sourceType,
-		ClaimStatus:  "unclaimed",
-		CategoryTags: cloneStrings(input.CategoryTags),
-		CoverURL:     strings.TrimSpace(input.CoverURL),
-		Address:      strings.TrimSpace(input.Address),
-		City:         strings.TrimSpace(input.City),
-		Location:     cloneGeoPoint(input.Location),
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:                 id,
+		Title:              strings.TrimSpace(input.Title),
+		Subtitle:           strings.TrimSpace(input.Subtitle),
+		HomepageType:       strings.TrimSpace(input.HomepageType),
+		CanonicalEntityID:  canonicalEntityID(id, input.CanonicalEntityID),
+		ObjectPageTemplate: objectPageTemplate(input.HomepageType, input.ObjectPageTemplate),
+		Status:             "candidate",
+		SourceType:         sourceType,
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       cloneStrings(input.CategoryTags),
+		CoverURL:           strings.TrimSpace(input.CoverURL),
+		Address:            strings.TrimSpace(input.Address),
+		City:               strings.TrimSpace(input.City),
+		Location:           cloneGeoPoint(input.Location),
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 	s.mu.Lock()
 	s.homepages[id] = homepage
+	err = s.persistLocked(ctx)
 	s.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
 	out := cloneHomepage(homepage)
 	return &out, nil
 }
@@ -330,6 +391,9 @@ func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepage
 	homepage.UpdatedAt = now
 	homepage.PublishedAt = &now
 	applyDefaultShellData(homepage)
+	if err = s.persistLocked(ctx); err != nil {
+		return nil, err
+	}
 	out := cloneHomepage(homepage)
 	return &out, nil
 }
@@ -403,6 +467,35 @@ func (s *HomepageService) GetHomepageRelatedGroups(ctx context.Context, homepage
 	return &HomepageRelatedGroupSummaryView{Groups: cloneObjectSlice(homepage.RelatedGroups)}, nil
 }
 
+func (s *HomepageService) GetObjectPageBundle(
+	ctx context.Context,
+	homepageID string,
+	referralSource string,
+	feedRequestID string,
+	recommendationTraceID string,
+	experimentBucket string,
+	rolloutCohort string,
+) (*ObjectPageBundle, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.GetObjectPageBundle",
+		attribute.String("homepage.id", homepageID),
+		attribute.String("referral.source", referralSource))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	homepage, err := s.GetHomepage(ctx, homepageID)
+	if err != nil {
+		return nil, err
+	}
+	return buildObjectPageBundle(
+		homepage,
+		referralSource,
+		feedRequestID,
+		recommendationTraceID,
+		experimentBucket,
+		rolloutCohort,
+	), nil
+}
+
 func (s *HomepageService) CreateHomepageClaimRequest(
 	ctx context.Context,
 	homepageID string,
@@ -449,6 +542,9 @@ func (s *HomepageService) CreateHomepageClaimRequest(
 	homepage.ClaimStatus = "pending_review"
 	homepage.UpdatedAt = now
 	s.claimRequests[request.ID] = request
+	if err = s.persistLocked(ctx); err != nil {
+		return nil, err
+	}
 	out := *request
 	return &out, nil
 }
@@ -494,6 +590,9 @@ func (s *HomepageService) ReviewHomepageClaimRequest(
 	request.ReviewNote = strings.TrimSpace(input.ReviewNote)
 	request.ReviewedAt = &now
 	homepage.UpdatedAt = now
+	if err = s.persistLocked(ctx); err != nil {
+		return nil, err
+	}
 	out := *request
 	return &out, nil
 }
@@ -541,6 +640,9 @@ func (s *HomepageService) UpdateClaimedHomepageBasics(
 		homepage.Location = cloneGeoPoint(input.Location)
 	}
 	homepage.UpdatedAt = time.Now().UTC()
+	if err = s.persistLocked(ctx); err != nil {
+		return nil, err
+	}
 	out := cloneHomepage(homepage)
 	return &out, nil
 }
@@ -572,6 +674,9 @@ func (s *HomepageService) CreateHomepageStatusReport(
 		CreatedAt:      time.Now().UTC(),
 	}
 	s.statusReports[report.ID] = report
+	if err = s.persistLocked(ctx); err != nil {
+		return nil, err
+	}
 	out := *report
 	return &out, nil
 }
@@ -615,6 +720,9 @@ func (s *HomepageService) ReviewHomepageStatusReport(
 	report.ReviewNote = strings.TrimSpace(input.ReviewNote)
 	report.ReviewedAt = &now
 	homepage.UpdatedAt = now
+	if err = s.persistLocked(ctx); err != nil {
+		return nil, err
+	}
 	out := *report
 	return &out, nil
 }
@@ -631,76 +739,118 @@ func (s *HomepageService) seed() {
 	pubB := now.Add(-48 * time.Hour)
 	pubC := now.Add(-96 * time.Hour)
 	add(&Homepage{
-		ID:            "homepage_sight_west_lake",
-		Title:         "西湖景区",
-		Subtitle:      "杭州西湖核心游览区",
-		HomepageType:  "sight",
-		Status:        "published",
-		SourceType:    "official_seed",
-		ClaimStatus:   "unclaimed",
-		CategoryTags:  []string{"景点", "城市地标", "赏景"},
-		CoverURL:      "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
-		Address:       "浙江省杭州市西湖区",
-		City:          "杭州",
-		Location:      &GeoPoint{Latitude: 30.2431, Longitude: 120.1500},
-		AverageRating: &ratingA,
-		RatingCount:   328,
-		CreatedAt:     now.Add(-10 * 24 * time.Hour),
-		UpdatedAt:     now.Add(-2 * time.Hour),
-		PublishedAt:   &pubA,
+		ID:                 "homepage_sight_west_lake",
+		Title:              "西湖景区",
+		Subtitle:           "杭州西湖核心游览区",
+		HomepageType:       "sight",
+		CanonicalEntityID:  "entity:sight:west_lake",
+		ObjectPageTemplate: "travel_photo",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"景点", "城市地标", "赏景"},
+		CoverURL:           "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+		Address:            "浙江省杭州市西湖区",
+		City:               "杭州",
+		Location:           &GeoPoint{Latitude: 30.2431, Longitude: 120.1500},
+		AverageRating:      &ratingA,
+		RatingCount:        328,
+		CreatedAt:          now.Add(-10 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
 	})
 	add(&Homepage{
-		ID:            "homepage_hotel_bamboo_inn",
-		Title:         "竹隐民宿",
-		Subtitle:      "近景区山景庭院房",
-		HomepageType:  "hotel",
-		Status:        "published",
-		SourceType:    "owner_created",
-		ClaimStatus:   "claimed",
-		OwnerUserID:   "owner_bamboo",
-		CategoryTags:  []string{"民宿", "山景", "亲子"},
-		CoverURL:      "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85",
-		Address:       "浙江省杭州市西湖区龙井路 18 号",
-		City:          "杭州",
-		Location:      &GeoPoint{Latitude: 30.2250, Longitude: 120.1160},
-		AverageRating: &ratingB,
-		RatingCount:   96,
-		CreatedAt:     now.Add(-7 * 24 * time.Hour),
-		UpdatedAt:     now.Add(-3 * time.Hour),
-		PublishedAt:   &pubB,
+		ID:                 "homepage_hotel_bamboo_inn",
+		Title:              "竹隐民宿",
+		Subtitle:           "近景区山景庭院房",
+		HomepageType:       "hotel",
+		CanonicalEntityID:  "entity:hotel:bamboo_inn",
+		ObjectPageTemplate: "standard",
+		Status:             "published",
+		SourceType:         "owner_created",
+		ClaimStatus:        "claimed",
+		OwnerUserID:        "owner_bamboo",
+		CategoryTags:       []string{"民宿", "山景", "亲子"},
+		CoverURL:           "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85",
+		Address:            "浙江省杭州市西湖区龙井路 18 号",
+		City:               "杭州",
+		Location:           &GeoPoint{Latitude: 30.2250, Longitude: 120.1160},
+		AverageRating:      &ratingB,
+		RatingCount:        96,
+		CreatedAt:          now.Add(-7 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-3 * time.Hour),
+		PublishedAt:        &pubB,
 	})
 	add(&Homepage{
-		ID:            "homepage_restaurant_night_market",
-		Title:         "夜巷小馆",
-		Subtitle:      "本地人常去的深夜小馆",
-		HomepageType:  "restaurant",
-		Status:        "published",
-		SourceType:    "imported",
-		ClaimStatus:   "unclaimed",
-		CategoryTags:  []string{"餐厅", "夜宵", "本地推荐"},
-		CoverURL:      "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
-		Address:       "浙江省杭州市上城区河坊街 66 号",
-		City:          "杭州",
-		Location:      &GeoPoint{Latitude: 30.2486, Longitude: 120.1709},
-		AverageRating: &ratingC,
-		RatingCount:   157,
-		CreatedAt:     now.Add(-12 * 24 * time.Hour),
-		UpdatedAt:     now.Add(-90 * time.Minute),
-		PublishedAt:   &pubC,
+		ID:                 "homepage_restaurant_night_market",
+		Title:              "夜巷小馆",
+		Subtitle:           "本地人常去的深夜小馆",
+		HomepageType:       "restaurant",
+		CanonicalEntityID:  "entity:restaurant:night_market",
+		ObjectPageTemplate: "standard",
+		Status:             "published",
+		SourceType:         "imported",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"餐厅", "夜宵", "本地推荐"},
+		CoverURL:           "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
+		Address:            "浙江省杭州市上城区河坊街 66 号",
+		City:               "杭州",
+		Location:           &GeoPoint{Latitude: 30.2486, Longitude: 120.1709},
+		AverageRating:      &ratingC,
+		RatingCount:        157,
+		CreatedAt:          now.Add(-12 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-90 * time.Minute),
+		PublishedAt:        &pubC,
 	})
 	add(&Homepage{
-		ID:           "homepage_vehicle_modelx_candidate",
-		Title:        "Model X 2026 款",
-		Subtitle:     "纯电中大型 SUV 候选主页",
-		HomepageType: "vehicle",
-		Status:       "candidate",
-		SourceType:   "user_suggested",
-		ClaimStatus:  "unclaimed",
-		CategoryTags: []string{"汽车", "新能源"},
-		CoverURL:     "https://images.unsplash.com/photo-1494976388531-d1058494cdd8",
-		City:         "上海",
-		CreatedAt:    now.Add(-5 * time.Hour),
-		UpdatedAt:    now.Add(-5 * time.Hour),
+		ID:                 "homepage_vehicle_modelx_candidate",
+		Title:              "Model X 2026 款",
+		Subtitle:           "纯电中大型 SUV 候选主页",
+		HomepageType:       "vehicle",
+		CanonicalEntityID:  "entity:vehicle:modelx_2026",
+		ObjectPageTemplate: "standard",
+		Status:             "candidate",
+		SourceType:         "user_suggested",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"汽车", "新能源"},
+		CoverURL:           "https://images.unsplash.com/photo-1494976388531-d1058494cdd8",
+		City:               "上海",
+		CreatedAt:          now.Add(-5 * time.Hour),
+		UpdatedAt:          now.Add(-5 * time.Hour),
+	})
+	add(&Homepage{
+		ID:                 "fixture_homepage_university_pku",
+		Title:              "北京大学",
+		Subtitle:           "校园大学主页模板样本",
+		HomepageType:       "university",
+		CanonicalEntityID:  "entity:university:pku",
+		ObjectPageTemplate: "campus",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"校园", "大学", "北京"},
+		City:               "北京",
+		RatingCount:        1280,
+		CreatedAt:          now.Add(-8 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
+	add(&Homepage{
+		ID:                 "fixture_homepage_travel_photo_west_lake",
+		Title:              "西湖旅行摄影机位",
+		Subtitle:           "旅行摄影主页模板样本",
+		HomepageType:       "travel_photo",
+		CanonicalEntityID:  "entity:travel_photo:west_lake",
+		ObjectPageTemplate: "travel_photo",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"旅行摄影", "机位", "杭州"},
+		City:               "杭州",
+		RatingCount:        680,
+		CreatedAt:          now.Add(-8 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
 	})
 	for _, homepage := range s.homepages {
 		if homepage.Status == "published" {
@@ -773,6 +923,18 @@ func applyDefaultShellData(homepage *Homepage) {
 			},
 		}
 	}
+	if strings.TrimSpace(homepage.CanonicalEntityID) == "" {
+		homepage.CanonicalEntityID = canonicalEntityID(homepage.ID, "")
+	}
+	if strings.TrimSpace(homepage.ObjectPageTemplate) == "" {
+		homepage.ObjectPageTemplate = objectPageTemplate(homepage.HomepageType, "")
+	}
+	if len(homepage.RelationEdges) == 0 {
+		homepage.RelationEdges = defaultRelationEdges(homepage)
+	}
+	if homepage.AssistantContext == nil {
+		homepage.AssistantContext = defaultAssistantContext(homepage, "", "", "", "", "")
+	}
 }
 
 func validateHomepageInput(input HomepageInput) error {
@@ -780,11 +942,322 @@ func validateHomepageInput(input HomepageInput) error {
 		return newAppError(400, codeClaimMaterialMissing, "主页标题不能为空", "homepage title is empty")
 	}
 	switch normalize(input.HomepageType) {
-	case "vehicle", "hotel", "restaurant", "sight":
+	case "vehicle", "hotel", "restaurant", "sight", "university", "travel_photo":
 		return nil
 	default:
 		return newAppError(400, codeInvalidHomepageType, "不支持的主页类型", "unsupported homepage type")
 	}
+}
+
+func buildObjectPageBundle(
+	homepage *Homepage,
+	referralSource string,
+	feedRequestID string,
+	recommendationTraceID string,
+	experimentBucket string,
+	rolloutCohort string,
+) *ObjectPageBundle {
+	applyDefaultShellData(homepage)
+	relationEdges := cloneObjectSlice(homepage.RelationEdges)
+	assistantContext := defaultAssistantContext(
+		homepage,
+		referralSource,
+		feedRequestID,
+		recommendationTraceID,
+		experimentBucket,
+		rolloutCohort,
+	)
+	rolloutContext := map[string]any{
+		"enabled":                   true,
+		"cohort":                    nonEmpty(rolloutCohort, "object-homepage-alpha"),
+		"region":                    "",
+		"city":                      homepage.City,
+		"campus":                    campusFromHomepage(homepage),
+		"appVersion":                "",
+		"experimentBucket":          experimentBucket,
+		"objectType":                homepage.HomepageType,
+		"assistantProactiveEnabled": true,
+		"relationEvidenceEnabled":   true,
+	}
+	return &ObjectPageBundle{
+		ObjectType:         "homepage",
+		ObjectID:           homepage.ID,
+		CanonicalEntityID:  homepage.CanonicalEntityID,
+		Title:              homepage.Title,
+		Subtitle:           homepage.Subtitle,
+		CoverURL:           homepage.CoverURL,
+		ObjectPageTemplate: homepage.ObjectPageTemplate,
+		TagRefs:            cloneStrings(homepage.CategoryTags),
+		Stats: map[string]any{
+			"ratingCount":       homepage.RatingCount,
+			"relatedGroupCount": len(homepage.RelatedGroups),
+			"highlightCount":    len(homepage.ContentPreview),
+		},
+		IntersectionReasons: defaultIntersectionReasons(homepage, relationEdges),
+		Intersections:       defaultObjectIntersections(homepage, relationEdges),
+		HighlightItems:      cloneObjectSlice(homepage.ContentPreview),
+		ContentSections: map[string]any{
+			"home":    cloneObjectSlice(homepage.ContentPreview),
+			"reviews": cloneMap(homepage.ReviewSummary),
+			"related": cloneObjectSlice(homepage.RelatedGroups),
+		},
+		RelatedObjects:   cloneObjectSlice(homepage.RelatedGroups),
+		RelationEdges:    relationEdges,
+		AssistantContext: assistantContext,
+		RolloutContext:   rolloutContext,
+	}
+}
+
+func defaultRelationEdges(homepage *Homepage) []map[string]any {
+	edges := make([]map[string]any, 0, 1+len(homepage.RelatedGroups))
+	for i, group := range homepage.RelatedGroups {
+		circleID, _ := group["circleId"].(string)
+		if strings.TrimSpace(circleID) == "" {
+			continue
+		}
+		edges = append(edges, map[string]any{
+			"edgeId":            fmt.Sprintf("%s_circle_%d", homepage.ID, i+1),
+			"edgeType":          "circle_under_entity",
+			"sourceObjectType":  "circle",
+			"sourceObjectId":    circleID,
+			"targetObjectType":  "homepage",
+			"targetObjectId":    homepage.ID,
+			"canonicalEntityId": homepage.CanonicalEntityID,
+			"tagRefs":           cloneStrings(homepage.CategoryTags),
+			"evidenceRefs":      []string{circleID, homepage.ID},
+			"confidence":        0.92,
+			"createdAt":         homepage.UpdatedAt,
+		})
+	}
+	if len(edges) == 0 {
+		edges = append(edges, map[string]any{
+			"edgeId":            homepage.ID + "_co_tagged",
+			"edgeType":          "co_tagged",
+			"sourceObjectType":  "homepage",
+			"sourceObjectId":    homepage.ID,
+			"targetObjectType":  "homepage",
+			"targetObjectId":    homepage.ID,
+			"canonicalEntityId": homepage.CanonicalEntityID,
+			"tagRefs":           cloneStrings(homepage.CategoryTags),
+			"evidenceRefs":      []string{homepage.ID},
+			"confidence":        0.72,
+			"createdAt":         homepage.UpdatedAt,
+		})
+	}
+	return edges
+}
+
+func intersectionDimensionLabel(homepage *Homepage) (dimension string, shortLabel string, evidenceLabel string) {
+	switch homepage.HomepageType {
+	case "university":
+		return "identity", "同校", "你和这所学校有校园交集"
+	case "travel_photo", "sight":
+		return "location", "同游", "你们都到过这里"
+	default:
+		return "interest", "同好", "你们都关注这些内容"
+	}
+}
+
+// defaultIntersectionReasons 生成对象页交集理由（事实通道）。
+// 保鲜期：identity/location 取较长保鲜（30 天），interest 取较短（7 天）。
+// strength 由标签命中数与关系边数推导，避免硬编码单一分值。
+func defaultIntersectionReasons(homepage *Homepage, edges []map[string]any) []map[string]any {
+	dimension, shortLabel, evidenceLabel := intersectionDimensionLabel(homepage)
+	tagShared := len(homepage.CategoryTags)
+	tagStrength := intersectionStrengthFromCount(tagShared, 6)
+	freshTTL := 7 * 24 * time.Hour
+	if dimension == "identity" || dimension == "location" {
+		freshTTL = 30 * 24 * time.Hour
+	}
+	now := time.Now().UTC()
+	reasons := []map[string]any{
+		{
+			"intersectionId":    homepage.ID + "_" + dimension,
+			"intersectionClass": "fact",
+			"dimension":         dimension,
+			"tagRefs":           cloneStrings(homepage.CategoryTags),
+			"relationKind":      "mutual",
+			"relationObjectId":  homepage.ID,
+			"label":             shortLabel,
+			"displayName":       homepage.Title,
+			"avatarUrl":         homepage.CoverURL,
+			"sharedCount":       tagShared,
+			"strength":          tagStrength,
+			"displayText":       evidenceLabel,
+			"confidenceLabel":   "",
+			"actionType":        "view_object",
+			"actionTargetId":    homepage.ID,
+			"source":            "tagRef",
+			"freshAt":           now.Format(time.RFC3339),
+			"expiresAt":         now.Add(freshTTL).Format(time.RFC3339),
+		},
+	}
+	if relObj := relationObjectID(edges); strings.TrimSpace(relObj) != "" {
+		reasons = append(reasons, map[string]any{
+			"intersectionId":    homepage.ID + "_relationship",
+			"intersectionClass": "fact",
+			"dimension":         "relationship",
+			"tagRefs":           cloneStrings(homepage.CategoryTags),
+			"relationKind":      "mutual",
+			"relationObjectId":  relObj,
+			"label":             "相关圈子",
+			"displayName":       "你认识的人在这",
+			"avatarUrl":         "",
+			"sharedCount":       len(edges),
+			"strength":          intersectionStrengthFromCount(len(edges), 4),
+			"displayText":       "这里有你可能想加入的相关圈子",
+			"confidenceLabel":   "",
+			"actionType":        "join",
+			"actionTargetId":    relObj,
+			"source":            "followEdge",
+			"freshAt":           now.Format(time.RFC3339),
+			"expiresAt":         now.Add(7 * 24 * time.Hour).Format(time.RFC3339),
+		})
+	}
+	return reasons
+}
+
+// defaultObjectIntersections 生成结构化事实交集（带证据项），落地 bundle.intersections。
+func defaultObjectIntersections(homepage *Homepage, edges []map[string]any) []map[string]any {
+	dimension, shortLabel, evidenceLabel := intersectionDimensionLabel(homepage)
+	objectKind := "place"
+	switch homepage.HomepageType {
+	case "university":
+		objectKind = "org"
+	case "travel_photo", "sight":
+		objectKind = "place"
+	}
+	evidence := []map[string]any{
+		{
+			"evidenceId":     homepage.ID + "_ev_tag",
+			"evidenceType":   "tag",
+			"evidenceObjectId": homepage.ID,
+			"evidenceLabel":  evidenceLabel,
+			"source":         "tagRef",
+			"referralTarget": homepage.ID,
+			"visibility":     "public",
+		},
+	}
+	return []map[string]any{
+		{
+			"intersectionId":  homepage.ID + "_" + dimension,
+			"dimension":       dimension,
+			"objectKind":      objectKind,
+			"objectId":        homepage.ID,
+			"shortLabel":      shortLabel,
+			"evidenceLabel":   evidenceLabel,
+			"actionType":      "view_object",
+			"actionLabel":     "进入主页",
+			"strength":        intersectionStrengthFromCount(len(homepage.CategoryTags), 6),
+			"confidenceLabel": "",
+			"surfaceScope":    "objectPage",
+			"privacyLevel":    "public",
+			"tagRefs":         cloneStrings(homepage.CategoryTags),
+			"relationEdgeIds": edgeIDs(edges),
+			"evidenceItems":   evidence,
+		},
+	}
+}
+
+func intersectionStrengthFromCount(count int, saturate int) float64 {
+	if saturate <= 0 {
+		saturate = 1
+	}
+	if count <= 0 {
+		return 0.5
+	}
+	v := 0.5 + 0.5*float64(count)/float64(saturate)
+	if v > 1.0 {
+		return 1.0
+	}
+	return v
+}
+
+func edgeIDs(edges []map[string]any) []string {
+	ids := make([]string, 0, len(edges))
+	for _, e := range edges {
+		if id, ok := e["edgeId"].(string); ok && strings.TrimSpace(id) != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func defaultAssistantContext(
+	homepage *Homepage,
+	referralSource string,
+	feedRequestID string,
+	recommendationTraceID string,
+	experimentBucket string,
+	rolloutCohort string,
+) map[string]any {
+	relationEdges := homepage.RelationEdges
+	if len(relationEdges) == 0 {
+		relationEdges = defaultRelationEdges(homepage)
+	}
+	edgeIDs := make([]string, 0, len(relationEdges))
+	for _, edge := range relationEdges {
+		if id, _ := edge["edgeId"].(string); id != "" {
+			edgeIDs = append(edgeIDs, id)
+		}
+	}
+	return map[string]any{
+		"objectType":            "homepage",
+		"objectId":              homepage.ID,
+		"canonicalEntityId":     homepage.CanonicalEntityID,
+		"tagRefs":               cloneStrings(homepage.CategoryTags),
+		"entityRefs":            []string{homepage.CanonicalEntityID},
+		"relationEdgeIds":       edgeIDs,
+		"referralSource":        referralSource,
+		"feedRequestId":         feedRequestID,
+		"recommendationTraceId": recommendationTraceID,
+		"experimentBucket":      experimentBucket,
+		"rolloutCohort":         rolloutCohort,
+	}
+}
+
+func relationObjectID(edges []map[string]any) string {
+	for _, edge := range edges {
+		if id, _ := edge["sourceObjectId"].(string); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
+func canonicalEntityID(homepageID string, explicit string) string {
+	if trimmed := strings.TrimSpace(explicit); trimmed != "" {
+		return trimmed
+	}
+	return "entity:homepage:" + strings.TrimSpace(homepageID)
+}
+
+func objectPageTemplate(homepageType string, explicit string) string {
+	if trimmed := strings.TrimSpace(explicit); trimmed != "" {
+		return trimmed
+	}
+	switch normalize(homepageType) {
+	case "university":
+		return "campus"
+	case "travel_photo", "sight":
+		return "travel_photo"
+	default:
+		return "standard"
+	}
+}
+
+func campusFromHomepage(homepage *Homepage) string {
+	if homepage.HomepageType == "university" {
+		return homepage.Title
+	}
+	return ""
+}
+
+func nonEmpty(value, fallback string) string {
+	if strings.TrimSpace(value) != "" {
+		return value
+	}
+	return fallback
 }
 
 func newAppError(status int, code, userMessage, debugMessage string) *AppError {
@@ -811,6 +1284,8 @@ func cloneHomepage(in *Homepage) Homepage {
 	out.ContentPreview = cloneObjectSlice(in.ContentPreview)
 	out.QuestionPreview = cloneObjectSlice(in.QuestionPreview)
 	out.RelatedGroups = cloneObjectSlice(in.RelatedGroups)
+	out.RelationEdges = cloneObjectSlice(in.RelationEdges)
+	out.AssistantContext = cloneMap(in.AssistantContext)
 	return out
 }
 
@@ -851,6 +1326,74 @@ func cloneObjectSlice(items []map[string]any) []map[string]any {
 		out[i] = cloneMap(items[i])
 	}
 	return out
+}
+
+func (s *HomepageService) applySnapshot(snapshot *HomepageStateSnapshot) {
+	if snapshot == nil {
+		return
+	}
+	for i := range snapshot.Homepages {
+		homepage := cloneHomepage(&snapshot.Homepages[i])
+		s.homepages[homepage.ID] = &homepage
+	}
+	for i := range snapshot.ClaimRequests {
+		request := snapshot.ClaimRequests[i]
+		s.claimRequests[request.ID] = &request
+	}
+	for i := range snapshot.StatusReports {
+		report := snapshot.StatusReports[i]
+		s.statusReports[report.ID] = &report
+	}
+	atomic.StoreUint64(&s.sequence, snapshot.Sequence)
+}
+
+func (s *HomepageService) snapshotLocked() HomepageStateSnapshot {
+	homepages := make([]Homepage, 0, len(s.homepages))
+	for _, homepage := range s.homepages {
+		out := cloneHomepage(homepage)
+		homepages = append(homepages, out)
+	}
+	sort.Slice(homepages, func(i, j int) bool {
+		return homepages[i].ID < homepages[j].ID
+	})
+
+	claimRequests := make([]HomepageClaimRequest, 0, len(s.claimRequests))
+	for _, request := range s.claimRequests {
+		if request != nil {
+			claimRequests = append(claimRequests, *request)
+		}
+	}
+	sort.Slice(claimRequests, func(i, j int) bool {
+		return claimRequests[i].ID < claimRequests[j].ID
+	})
+
+	statusReports := make([]HomepageStatusReport, 0, len(s.statusReports))
+	for _, report := range s.statusReports {
+		if report != nil {
+			statusReports = append(statusReports, *report)
+		}
+	}
+	sort.Slice(statusReports, func(i, j int) bool {
+		return statusReports[i].ID < statusReports[j].ID
+	})
+
+	return HomepageStateSnapshot{
+		Homepages:     homepages,
+		ClaimRequests: claimRequests,
+		StatusReports: statusReports,
+		Sequence:      atomic.LoadUint64(&s.sequence),
+		UpdatedAt:     time.Now().UTC(),
+	}
+}
+
+func (s *HomepageService) persistLocked(ctx context.Context) error {
+	if s.store == nil {
+		return nil
+	}
+	if err := s.store.Save(ctx, s.snapshotLocked()); err != nil {
+		return newAppError(500, codeInternalError, "主页数据暂时不可保存，请稍后重试", err.Error())
+	}
+	return nil
 }
 
 func (s *HomepageService) nextID(prefix string) string {

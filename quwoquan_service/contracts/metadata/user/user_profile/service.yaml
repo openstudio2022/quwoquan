@@ -338,6 +338,18 @@ api_routes:
     description: 用户获赞列表（用户主页-统计-获赞）
     query_params: [cursor, limit]
 
+  - method: GET
+    path: /v1/users/{userId}/interest-profile
+    operation: GetUserInterestProfile
+    description: 读取用户派生兴趣画像（topN 兴趣 + 维度 tops + 生命周期分层 + 新鲜度 + 规则人群 segment）；由 content 基于 rm_recommend_feature 四维 affinities 派生并匹配 segments.yaml 规则人群，经 UserInterestRecomputed 事件投影到 rm_user_profile_view.interestProfile/segments（user 域单一真相源）。供 assistant 主动服务与 recommendation 策略自调消费
+    response_fields: [userId, topInterests, dimensionTops, lifecycleStage, freshnessDays, decayHalfLifeDays, recomputedAt, segments]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
   - method: POST
     path: /v1/user/devices/push-tokens
     operation: RegisterDevice
@@ -364,9 +376,9 @@ consumers:
   - name: platform-ops
     capabilities: [read_profile, write_status, review_proposals]
   - name: recommendation-engine
-    capabilities: [read_profile, read_tags]
+    capabilities: [read_profile, read_tags, read_interest_profile]
   - name: assistant-service
-    capabilities: [read_profile, read_settings, create_proposals]
+    capabilities: [read_profile, read_settings, create_proposals, read_interest_profile]
   - name: notification-service
     capabilities: [read_device, read_settings]
 

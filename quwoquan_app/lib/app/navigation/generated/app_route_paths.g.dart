@@ -220,6 +220,15 @@ class AppRoutePaths {
   }
   static const String profileStatsSegment = 'stats';
 
+  static const String myIntersectionsPathTemplate = '/profile/intersections';
+  static String myIntersections({String? dimension}) {
+    return _buildPath(myIntersectionsPathTemplate, <String, String>{
+    }, <String, String?>{
+      'dimension': dimension,
+    });
+  }
+  static const String myIntersectionsSegment = 'intersections';
+
   static const String chatDetailPathTemplate = '/chat/{id}';
   static String chatDetail({required String id}) {
     return _buildPath(chatDetailPathTemplate, <String, String>{

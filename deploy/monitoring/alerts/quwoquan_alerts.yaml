@@ -236,3 +236,41 @@ groups:
           layer: l4
         annotations:
           summary: "实例 {{ $labels.instance }} FD 使用率 > 80%"
+
+  - name: quwoquan_content_flywheel
+    rules:
+      - alert: InterestRecomputeErrorRateHigh
+        expr: |
+          sum(rate(quwoquan_interest_profile_recompute_total{result="error"}[5m]))
+          / (sum(rate(quwoquan_interest_profile_recompute_total[5m])) + 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "兴趣画像派生失败率 > 5%"
+          description: "content-service InterestProfileAggregator 重算失败 {{ $value | humanizePercentage }}，飞轮上游派生环节受损"
+
+      - alert: InterestProjectionFailures
+        expr: |
+          sum(rate(quwoquan_interest_projection_total{result=~"parse_error|write_error"}[5m])) by (result) > 0
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "user 域兴趣投影持续失败（{{ $labels.result }}）"
+          description: "InterestProfileProjector 消费 UserInterestRecomputed 写 rm_user_profile_view 失败，CQRS 双路投影出现裂口"
+
+      - alert: InterestProjectionFreshnessLagHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_interest_projection_freshness_lag_seconds_bucket[5m])) by (le)
+          ) > 900
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "兴趣投影新鲜度滞后 P95 > 15min"
+          description: "画像 recomputedAt 到投影落库滞后过大，对外画像 API 与小艺主动触达读到陈旧画像"

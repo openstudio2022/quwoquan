@@ -10,6 +10,8 @@ import re
 from typing import Any, Mapping, Sequence
 
 from _common.content_evidence import gate_route_evidence_bundle, public_byline_label
+from _common.entity_extract import normalize_entity_refs
+from _common.entity_annotation import merge_entity_refs
 from _common.content_review import fact_traceability_issues, generator_provenance_issues
 from _common.draft_io import (
     GENERATOR_AGENT,
@@ -33,6 +35,7 @@ from produce.route_workflow import (
     _build_route_assets,
     _build_summary,
     _check_carrier_consistency,
+    _check_cross_article_similarity,
     _check_evidence_quality,
     _check_image_gate,
     _check_provenance_rewrite,
@@ -40,6 +43,7 @@ from produce.route_workflow import (
     _jaccard,
     _load_source_texts,
     _publish_angle,
+    _resolve_style_opening,
     _section_bodies,
     _unique_strings,
 )
@@ -205,7 +209,7 @@ def _compose_payload_from_pack(
         "summary": _build_summary(article),
         "articleMarkdown": article,
         "carrier": carrier,
-        "entityRefs": [f"/entity/{item}" for item in brief.get("entityRefs") or []],
+        "entityRefs": merge_entity_refs(brief, draft_meta),
         "tagRefs": list(brief.get("tagRefs") or []),
         "sourceUrls": list(quality_payload.get("sourceUrls") or []),
         "sourcePaths": list(quality_payload.get("sourcePaths") or []),
@@ -259,7 +263,17 @@ def review_entity_draft(
     compose_payload = _compose_payload_from_pack(ref, brief, quality_payload, pack, body, draft_meta)
     write_stage_result(task_id, batch_id, "produce", "compose", ref, compose_payload)
 
-    checks = _entity_review_checks(body, brief, evidence_bundle, quality_payload, compose_payload)
+    checks = _entity_review_checks(
+        body,
+        brief,
+        evidence_bundle,
+        quality_payload,
+        compose_payload,
+        task_id=task_id,
+        batch_id=batch_id,
+        ref=ref,
+        draft_meta=draft_meta,
+    )
     checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
@@ -327,7 +341,18 @@ def review_entity_draft(
     return payload
 
 
-def _entity_review_checks(article: str, brief: Mapping[str, Any], evidence_bundle: Mapping[str, Any], quality_payload: Mapping[str, Any], compose_payload: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+def _entity_review_checks(
+    article: str,
+    brief: Mapping[str, Any],
+    evidence_bundle: Mapping[str, Any],
+    quality_payload: Mapping[str, Any],
+    compose_payload: Mapping[str, Any],
+    *,
+    task_id: str = "",
+    batch_id: str = "",
+    ref: str = "",
+    draft_meta: Mapping[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
     checks = {
         "entityCoverage": _check_entity_coverage(article, brief, evidence_bundle),
         "provenanceRewrite": _check_provenance_rewrite(article, brief, quality_payload),
@@ -336,7 +361,11 @@ def _entity_review_checks(article: str, brief: Mapping[str, Any], evidence_bundl
         "imageGate": _check_image_gate(compose_payload),
     }
     if str(compose_payload.get("carrier") or "article") != "gallery":
-        checks["travelogueDensity"] = _check_travelogue_density(article, brief)
+        style_family, opening_strategy = _resolve_style_opening(brief, draft_meta)
+        checks["travelogueDensity"] = _check_travelogue_density(
+            article, brief, style_family=style_family, opening_strategy=opening_strategy
+        )
+        checks["crossArticleSimilarity"] = _check_cross_article_similarity(task_id, batch_id, ref, article)
     return checks
 
 
@@ -373,6 +402,8 @@ def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks["entityCoverage"]["passed"]:
         return "agent_compose"
     if not checks.get("travelogueDensity", {"passed": True})["passed"]:
+        return "agent_compose"
+    if not checks.get("crossArticleSimilarity", {"passed": True})["passed"]:
         return "agent_compose"
     image_gate = checks.get("imageGate", {"passed": True})
     if not image_gate["passed"]:

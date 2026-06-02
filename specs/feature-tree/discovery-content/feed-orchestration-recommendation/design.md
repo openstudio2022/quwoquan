@@ -151,3 +151,152 @@
 - A1：四类内容在发现流与详情中均可完成关注、赞、收藏、转发、评论及不感兴趣、不想看此作者、不想看此类、举报；端侧均通过 BehaviorRepository 上报，且 action/authorId/contentType 与契约一致。
 - A7：metadata/OpenAPI 与 runtime 键、SessionState、Engine 过滤逻辑一致；redis_keyspace.yaml 已登记新键。
 - A8：行为上报与过滤的契约测试/单元测试覆盖新增 action 与过滤逻辑。
+
+## 8. 首页交集与多形态信息流改版设计（V8）
+
+### 8.1 展示架构
+
+首页展示层按“数据同源、渲染分流”组织：
+
+```mermaid
+flowchart TD
+  metadataConfig["content/post/ui_config.yaml"] --> channelConfig["HomeChannelConfig"]
+  feedProvider["discoveryFeedProvider(channelId)"] --> postDto["PostBaseDto"]
+  postDto --> surfaceView["ContentSurfaceView"]
+  postDto --> reason["IntersectionReason"]
+  channelConfig --> layoutPolicy["HomeFeedLayoutPolicy"]
+  layoutPolicy --> singleCard["SingleColumnPostCard"]
+  layoutPolicy --> dualCard["DualColumnDiscoveryCard"]
+  layoutPolicy --> fullSpan["FullSpanPostCard"]
+  surfaceView --> singleCard
+  surfaceView --> dualCard
+  surfaceView --> fullSpan
+  reason --> spotlight["IntersectionSpotlightModule"]
+  reason --> chip["IntersectionReasonChip"]
+  reason --> objectCard["ObjectIntersectionCard"]
+```
+
+`PostBaseDto` 是内容数据契约，`ContentSurfaceView` 是 UI 展示模型，`IntersectionReason` 是交集解释契约。任何展示组件只能消费这三者，不得新增本地拼装的交集列表或第二套 post wire。
+
+### 8.2 Metadata layout policy
+
+`content/post/ui_config.yaml` 的 `home_channels` 增加以下字段：
+
+- `layout_template`：`singleColumnRelations` / `dualColumnDiscovery` / `mixedFullSpanDiscovery`。
+- `phone_columns`：手机端列数，关注为 1，发现型频道为 2。
+- `supports_full_span_modules`：是否允许交集 spotlight、文章大卡、对象卡跨全部列。
+- `intersection_module_policy`：`none` / `spotlightSegment` / `campusSpotlight` / `segmentInsert` / `inlineOnly`。
+- `content_card_policy`：`richRelation` / `compactVisual` / `articleFullSpan`。
+
+旧 `template` 字段保留为兼容路由字段，但真实展示策略以新 layout policy 为准。
+
+### 8.3 频道策略
+
+| 频道 | 手机布局 | 交集策略 | 卡片策略 |
+| --- | --- | --- | --- |
+| 关注 | 单列 | none | richRelation |
+| 推荐 | 双列 | spotlight + 段间插卡 | compactVisual |
+| 校园 | 双列 | campus spotlight | compactVisual |
+| 旅行 | 双列 | 段间插卡 + 地点承接 | compactVisual |
+| 摄影 | 双列 | 卡片内轻理由 | compactVisual |
+| 科技 / 汽车 | 双列发现流 | 段间插卡 | compactVisual |
+| 精品 | 侵入式 | 轻浮层 + 小趣解释入口 | immersive |
+
+### 8.4 Sliver 组织
+
+`HomeMultiFormFeed` 拆分为：
+
+- `HomeFeedScrollView`：分页、触底、sliver 编排、曝光触发。
+- `HomeFeedLayoutPolicy`：根据 `HomeChannelConfig` 与 viewport 决定列数、full-span 插入、卡片策略。
+- `HomePostCardRenderer`：按 `ContentSurfaceKind` 与卡片策略选择单列卡、双列发现卡或 full-span 大卡。
+
+手机双列发现流使用 `SliverMasonryGrid.count(crossAxisCount: 2)`；full-span 模块通过 `SliverToBoxAdapter` 插入，避免横向 rail 与瀑布流割裂。
+
+### 8.5 卡片策略
+
+- 单列关系卡保留作者、时间、正文、九宫格、视频卡、底部互动。
+- 双列发现卡重封面和标题，正文最多 2 行，交集理由只展示一行。
+- 文章、口碑、问答、强解释交集卡优先通过详情页与对象页承接；首页频道主布局不再为科技/汽车额外切出独立 full-span 主流。
+- 精品侵入式继续由 `WorksImmersiveViewer` 承载，交集只做轻提示，不打断沉浸。
+
+### 8.6 验证
+
+- T1：`ContentUIConfig.homeChannels` layout policy 契约测试；`HomeFeedLayoutPolicy` 单测；`IntersectionReason` 解析契约。
+- T2：首页 widget 覆盖 390px 手机和 768px 平板；推荐/校园/旅行/关注/精品各频道都应走正确布局。
+- T3：feed `intersectionReasons` 与 tag-service `shared-tags` 真打，验证对象页承接。
+- T4：首页看到交集 → 点击内容/对象 → 小趣解释或关注/加入 → 行为回流推荐。
+
+## 9. 关注页对象列表与未读变化设计（V9）
+
+### 9.1 数据流
+
+```mermaid
+flowchart TD
+  userFollow["FollowEdge:user"] --> aggregator["FollowingSubjectProjection"]
+  circleJoin["Circle membership/follow"] --> aggregator
+  homepageFollow["Homepage follow/subscription"] --> aggregator
+  surfaceChange["User/Circle/Homepage latestChangedAt"] --> aggregator
+  visitState["FollowingSubjectVisitState"] --> aggregator
+  aggregator --> apiList["ListFollowingSubjects"]
+  apiList --> strip["FollowingSubjectStrip"]
+  strip --> route["User/Circle/Homepage route"]
+  route --> markVisited["MarkFollowingSubjectVisited"]
+  markVisited --> visitState
+```
+
+### 9.2 聚合读模型
+
+`FollowingSubjectItemView` 是关注频道顶部列表的唯一数据契约：
+
+- `subjectType`: `user | circle | homepage`
+- `subjectId`
+- `displayName`
+- `avatarUrl` / `coverUrl`
+- `subtitle`
+- `targetRouteId`
+- `targetObjectId`
+- `followedAt`
+- `lastVisitedAt`
+- `latestChangedAt`
+- `unreadChangeCount`
+- `hasUnreadChanges`
+- `latestChangeReason`
+
+### 9.3 访问水位
+
+`FollowingSubjectVisitState` 只记录 viewer 维度访问事实：
+
+- `viewerSubAccountId`
+- `subjectType`
+- `subjectId`
+- `lastVisitedAt`
+- `updatedAt`
+
+`hasUnreadChanges` 由服务端计算：`latestChangedAt > lastVisitedAt` 或 `unreadChangeCount > 0`。
+
+### 9.4 API
+
+- `GET /v1/user/following-subjects`
+  - `operation: ListFollowingSubjects`
+  - `auth: required`
+  - query: `cursor, limit, subjectType`
+- `POST /v1/user/following-subjects/{subjectType}/{subjectId}:mark-visited`
+  - `operation: MarkFollowingSubjectVisited`
+  - `auth: required`
+  - request: `MarkFollowingSubjectVisitedRequest`
+  - response: `FollowingSubjectVisitResult`
+
+### 9.5 端侧组件
+
+- `FollowingSubjectRepository`：三层 Repository，经 Provider 注入。
+- `FollowingSubjectStrip`：关注频道顶部横向对象列表。
+- `FollowingSubjectAvatarTile`：头像/封面、名称、小红点。
+- `FollowingSubjectUnreadDot`：仅表达上次访问后变化，不接入消息 unread。
+
+### 9.6 登录门禁
+
+关注频道必须作为登录态页面处理：
+
+- tab 点击和横滑切入前先 gate。
+- 深链进入时展示登录占位或重定向登录，不发起 following subjects 请求。
+- 文案统一走 `AuthGateReason.followingFeed`，不在页面各自拼提示语。

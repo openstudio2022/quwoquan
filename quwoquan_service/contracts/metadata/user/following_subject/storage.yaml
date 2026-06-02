@@ -1,0 +1,13 @@
+version: 1
+entity: FollowingSubject
+backend: mongodb
+
+collections:
+  following_subject_visit_states:
+    entity: FollowingSubjectVisitState
+    indexes:
+      - name: idx_viewer_subject_unique
+        keys: { viewerSubAccountId: 1, subjectType: 1, subjectId: 1 }
+        unique: true
+      - name: idx_viewer_updated
+        keys: { viewerSubAccountId: 1, updatedAt: -1 }

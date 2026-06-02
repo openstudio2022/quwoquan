@@ -85,7 +85,8 @@
       "resetScope": "fixture_entity_*",
       "targetStore": "entity-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/entity/homepages"
+        "/v1/homepages/search",
+        "/v1/homepages/{homepageId}/object-page-bundle"
       ]
     },
     {

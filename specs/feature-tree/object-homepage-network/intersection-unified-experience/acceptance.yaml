@@ -1,0 +1,112 @@
+version: 2
+node:
+  id: intersection-unified-experience
+  level: L2_business_capability
+  path: specs/feature-tree/object-homepage-network/intersection-unified-experience
+  title: intersection unified experience
+  parent_domain_service: object-homepage-network
+  parent_business_capability: intersection-unified-experience
+scope:
+  summary: 交集统一体验与推荐端云一体验收范围（我的主页聚合入口、对象页交集卡、首页/频道交集推荐、事实与概率分通道、保鲜与冷却）。
+  in_scope:
+    - 我的主页「我的交集」聚合入口：总数 + 最多 3 维度红点 + 自上次新增列表 + 打开清零。
+    - profile/entity/circle 三类主页移除 demo 问小趣 dock。
+    - 首页与各频道（含校园、旅行）交集推荐卡重设计：去关注按钮、头像 + 名字 + 红计数。
+    - IntersectionReason 扩展、recommendation/intersection 域契约、viewer_object_intersection 读模型。
+    - 事实与概率分通道、保鲜期、跨会话推荐冷却窗口、曝光到转化漏斗埋点。
+  out_of_scope:
+    - 交易、支付、预约闭环。
+    - 第二套标签枚举或端侧拼接交集文案。
+    - following_subject 关注列表未读机制改造。
+sit_acceptance:
+  SIT1:
+    title: 我的主页交集聚合入口与清零 SIT
+    story_refs: []
+    done_when:
+      - 我的主页展示交集总数与最多 3 个维度的变化红点/数字，超 3 维度可展开更多。
+      - 点击进入按维度分组列表页，展示自上次查看的新增交集。
+      - 打开列表即推进已读水位并清零红点，无需逐项查看详情。
+    performance_points:
+      - 读模型 viewer_object_intersections 预物化 + 缓存，请求期零打分。
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_app_api_integration
+      supporting:
+        - T1_static_contract
+    tests:
+      planned:
+        - quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
+        - quwoquan_app/test/cloud/intersection/contract/intersection_repository_contract_test.dart
+      recorded: []
+    status: pending
+  SIT2:
+    title: 对象页交集卡与 demo dock 移除 SIT
+    story_refs: []
+    done_when:
+      - profile/entity/circle 三类主页不再出现问小趣 demo dock。
+      - 他人用户主页、实体主页、圈子主页展示事实交集卡，每条有可读证据。
+      - 圈子主页出现「你认识的人有 N 个在这」交集卡。
+    performance_points:
+      - bundle 优先，回退共享 provider。
+    evidence:
+      primary:
+        - T2_module_interaction
+      supporting:
+        - T1_static_contract
+    tests:
+      planned:
+        - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+        - quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      recorded: []
+    status: pending
+  SIT3:
+    title: 首页与频道交集推荐重设计 SIT
+    story_refs: []
+    done_when:
+      - 首页交集卡去掉关注按钮，使用真实头像 + 名字 + 维度 chip + 安静共同点 chip。
+      - 模块头展示「N 位与你有交集」红数字；首页 ≤4 卡、频道 ≤3 卡。
+      - 校园、旅行频道出现频道专属交集推荐。
+      - 事实交集明确证据，概率交集明确标注推荐，混排后统一排序。
+    performance_points:
+      - 事实读模型 + 概率打分混排；过保鲜期/冷却不再出现。
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_app_api_integration
+      supporting:
+        - T1_static_contract
+    tests:
+      planned:
+        - quwoquan_app/test/ui/discovery/widgets/today_intersection_rail_widget_test.dart
+        - quwoquan_app/test/ui/discovery/intersection_channel_widget_test.dart
+      recorded: []
+    status: pending
+  SIT4:
+    title: 保鲜冷却与曝光转化漏斗 SIT
+    story_refs: []
+    done_when:
+      - 曝光未转化的交集对象在配置窗口（默认 14 天）内不再重复推荐。
+      - 事实交集带 computedAt/expiresAt，过期触发重算。
+      - 交集曝光、点击、转化、清零全链路携带 intersectionId/dimension/intersectionClass/cohort 进入行为管道。
+    performance_points:
+      - 冷却查询 O(logN)（Redis sorted set ZRANGEBYSCORE）。
+    evidence:
+      primary:
+        - T3_cross_service_integration
+      supporting:
+        - T1_static_contract
+        - T2_module_interaction
+    tests:
+      planned:
+        - quwoquan_service/tests/recommendation/intersection_window_contract_test.go
+        - quwoquan_app/test/core/trackers/intersection_attribution_test.dart
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+    - make verify-app-page-horizontal-quality
+  full_gate:
+    - make gate-full

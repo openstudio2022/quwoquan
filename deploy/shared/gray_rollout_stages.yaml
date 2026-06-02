@@ -14,7 +14,7 @@ stages:
     auto: true   # 全自动，无需审批
   - name: full
     replicas: 2  # 100%
-    auto: false  # 需人工审批
+    auto: true   # 全自动推进，失败由 SLO gate + rollback 闭环兜底
 
 # 未来 4 副本示例：
 # total_replicas: 4

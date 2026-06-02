@@ -205,14 +205,24 @@ api_routes:
   - method: POST
     path: /v1/content/posts/{postId}/like
     operation: LikePost
-    description: 点赞（幂等 upsert，立即更新 ContentReaction.liked + likeCount）
-    auth: required
+    description: 点赞（幂等 upsert，立即更新 ContentReaction.liked + likeCount）；游客以设备维度（deviceActorId）真实写入，登录用户以账号维度写入，两者独立计数不并账
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
 
   - method: DELETE
     path: /v1/content/posts/{postId}/like
     operation: UnlikePost
-    description: 取消点赞（幂等，立即更新 ContentReaction.liked + likeCount）
-    auth: required
+    description: 取消点赞（幂等，立即更新 ContentReaction.liked + likeCount）；维度与 LikePost 一致（游客=设备维度，登录=账号维度）
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
 
   - method: POST
     path: /v1/content/posts/{postId}/favorite
@@ -229,14 +239,24 @@ api_routes:
   - method: POST
     path: /v1/content/posts/{postId}/share
     operation: SharePost
-    description: 成功分享记录写入（幂等；更新 ContentReaction.shared + shareCount；用于通用分享成功落库，不等同于 telemetry）
-    auth: required
+    description: 成功分享记录写入（幂等；更新 ContentReaction.shared + shareCount；用于通用分享成功落库，不等同于 telemetry）；游客以设备维度（deviceActorId）真实累加，登录用户以账号维度累加，两者独立计数不并账
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
 
   - method: DELETE
     path: /v1/content/posts/{postId}/share
     operation: UnsharePost
-    description: 取消分享记录（幂等；对称更新 ContentReaction.shared + shareCount）
-    auth: required
+    description: 取消分享记录（幂等；对称更新 ContentReaction.shared + shareCount）；维度与 SharePost 一致（游客=设备维度，登录=账号维度）
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
 
   - method: GET
     path: /v1/content/posts/{postId}/counters
@@ -323,6 +343,63 @@ api_routes:
     path: /v1/content/recommend
     operation: GetRecommendation
     description: 推荐请求
+
+  - method: GET
+    path: /v1/content/intersections/summary
+    operation: GetMyIntersectionSummary
+    description: 我的主页「我的交集」聚合摘要（总数 + 各维度计数与自上次查看未读数）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /v1/content/intersections
+    operation: ListMyIntersections
+    description: 我的主页按维度分页交集列表（自上次查看新增在前），打开即用于消费未读
+    query_params: [dimension, cursor, limit]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: POST
+    path: /v1/content/intersections/visit
+    operation: MarkIntersectionsVisited
+    description: 推进某维度（或全部）已读水位并清零未读红点
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /v1/content/feed/intersections
+    operation: GetFeedIntersections
+    description: 首页/频道交集推荐（事实 + 概率混排，已过保鲜期/冷却窗口过滤）
+    query_params: [channel, limit]
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+
+  - method: POST
+    path: /v1/content/intersections/exposure
+    operation: ReportIntersectionExposure
+    description: 交集曝光上报（写跨会话冷却集，曝光未转化在窗口内不再重复推荐）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
 consumers:
   - name: app

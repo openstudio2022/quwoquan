@@ -20,12 +20,16 @@ class ContentBehaviorTracker {
   /// Clears the pending queue. For testing only.
   static void reset() => _queue.clear();
 
-  static void trackImpression(String postId, {String contentType = '', int feedPosition = 0}) {
+  static void trackImpression(String postId, {String contentType = '', int feedPosition = 0, String intersectionId = '', String intersectionDimension = '', String intersectionClass = '', String intersectionEvidenceId = ''}) {
     _enqueue(<String, dynamic>{
       'type': 'impression',
       'postId': postId,
       'contentType': contentType,
       'feedPosition': feedPosition,
+      'intersectionId': intersectionId,
+      'intersectionDimension': intersectionDimension,
+      'intersectionClass': intersectionClass,
+      'intersectionEvidenceId': intersectionEvidenceId,
     });
   }
 
@@ -38,12 +42,16 @@ class ContentBehaviorTracker {
     });
   }
 
-  static void trackClick(String postId, {String contentType = '', int feedPosition = 0}) {
+  static void trackClick(String postId, {String contentType = '', int feedPosition = 0, String intersectionId = '', String intersectionDimension = '', String intersectionClass = '', String intersectionEvidenceId = ''}) {
     _enqueue(<String, dynamic>{
       'type': 'click',
       'postId': postId,
       'contentType': contentType,
       'feedPosition': feedPosition,
+      'intersectionId': intersectionId,
+      'intersectionDimension': intersectionDimension,
+      'intersectionClass': intersectionClass,
+      'intersectionEvidenceId': intersectionEvidenceId,
     });
   }
 
@@ -72,11 +80,33 @@ class ContentBehaviorTracker {
     });
   }
 
-  static void trackFollow(String postId, String authorId) {
+  static void trackFollow(String postId, String authorId, {String intersectionDimension = '', List<String> intersectionTagRefs = const <String>[]}) {
     _enqueue(<String, dynamic>{
       'type': 'follow',
       'postId': postId,
       'authorId': authorId,
+      'intersectionDimension': intersectionDimension,
+      'intersectionTagRefs': intersectionTagRefs,
+    });
+  }
+
+  static void trackJoinCircle(String postId, String circleId, {String intersectionDimension = '', List<String> intersectionTagRefs = const <String>[]}) {
+    _enqueue(<String, dynamic>{
+      'type': 'join_circle',
+      'postId': postId,
+      'circleId': circleId,
+      'intersectionDimension': intersectionDimension,
+      'intersectionTagRefs': intersectionTagRefs,
+    });
+  }
+
+  static void trackAddContact(String postId, String authorId, {String intersectionDimension = '', List<String> intersectionTagRefs = const <String>[]}) {
+    _enqueue(<String, dynamic>{
+      'type': 'add_contact',
+      'postId': postId,
+      'authorId': authorId,
+      'intersectionDimension': intersectionDimension,
+      'intersectionTagRefs': intersectionTagRefs,
     });
   }
 
@@ -103,6 +133,13 @@ class ContentBehaviorTracker {
       'postId': postId,
       'consumedRatio': consumedRatio,
       'totalUnits': totalUnits,
+    });
+  }
+
+  static void trackAssistantInterest(List<String> tagRefs) {
+    _enqueue(<String, dynamic>{
+      'type': 'assistant_interest',
+      'tagRefs': tagRefs,
     });
   }
 

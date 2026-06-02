@@ -4,8 +4,30 @@ extension _HomepageBuilders on _HomepageDetailShellState {
   /// 交集卡「你和这里的交集」：tag-service shared-tags 对象对直打（当前用户 × 实体主页）。
   /// 普通 State 经 Consumer 取 ref；无可解析交集不占位（G2 不造假）。
   Widget _buildIntersectionCard(bool isDark) {
+    final bundleReasons = widget.objectPageBundle?.intersectionReasons;
+    if (bundleReasons != null && bundleReasons.isNotEmpty) {
+      final card = ObjectIntersectionCard.fromReasons(
+        title: UITextConstants.homepageIntersectionTitle,
+        reasons: bundleReasons,
+        isDark: isDark,
+        sharedCount: bundleReasons.fold<int>(
+          0,
+          (sum, reason) => sum + reason.sharedCount,
+        ),
+      );
+      if (card != null) {
+        return Padding(
+          padding: EdgeInsets.only(top: AppSpacing.containerSm),
+          child: card,
+        );
+      }
+    }
     final viewerId = widget.viewerOwnerUserId ?? '';
-    final entityId = widget.initialSummary?.id ?? '';
+    final entityId =
+        widget.objectPageBundle?.canonicalEntityId ??
+        widget.detail?.id ??
+        widget.initialSummary?.id ??
+        '';
     if (viewerId.isEmpty || entityId.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -20,8 +42,10 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         if (!query.isResolvable) {
           return const SizedBox.shrink();
         }
-        final reasons =
-            ref.watch(objectSharedReasonsProvider(query)).asData?.value;
+        final reasons = ref
+            .watch(objectSharedReasonsProvider(query))
+            .asData
+            ?.value;
         final card = ObjectIntersectionCard.fromReasons(
           title: UITextConstants.homepageIntersectionTitle,
           reasons: reasons,
@@ -35,6 +59,30 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           child: card,
         );
       },
+    );
+  }
+
+  Widget _buildRelationRibbon(bool isDark) {
+    final edges = widget.objectPageBundle?.relationEdges;
+    if (edges == null || edges.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: EdgeInsets.only(top: AppSpacing.containerSm),
+      child: ObjectRelationRibbon(edges: edges, isDark: isDark),
+    );
+  }
+
+  Widget _buildIdentityMedia(BuildContext context, String? coverUrl) {
+    final source = (coverUrl ?? '').trim();
+    if (source.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return CircleMediaImage(
+      imageSource: source,
+      fit: BoxFit.cover,
+      placeholder: const SizedBox.shrink(),
+      errorWidget: const SizedBox.shrink(),
     );
   }
 
@@ -217,7 +265,9 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     return Container(
       decoration: BoxDecoration(
         color: summarySurface,
-        borderRadius: BorderRadius.circular(_HomepageDetailShellState._cardRadius),
+        borderRadius: BorderRadius.circular(
+          _HomepageDetailShellState._cardRadius,
+        ),
         border: Border.all(color: summaryBorder, width: AppSpacing.hairline),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -237,11 +287,12 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            HomepageIdentityHeader(
+            ObjectIdentityHeader(
+              kind: ObjectIdentityKind.entity,
               title: reference?.title ?? '主页',
               subtitle: (reference?.subtitle ?? '').trim(),
               metaLine: locationLine,
-              coverUrl: reference?.coverUrl,
+              media: _buildIdentityMedia(context, reference?.coverUrl),
               trailing: _hasMoreActions
                   ? ProfileIosIconButton(
                       key: const ValueKey<String>(
@@ -269,6 +320,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
             SizedBox(height: AppSpacing.containerSm),
             _HomepageStatsRow(stats: stats),
             _buildIntersectionCard(isDark),
+            _buildRelationRibbon(isDark),
             if (!widget.selectionMode) ...<Widget>[
               SizedBox(height: AppSpacing.containerSm),
               _HomepageActionBar(
@@ -398,6 +450,22 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         child: ProfileIosGroupedSection(
           margin: EdgeInsets.zero,
           children: <Widget>[
+            if ((widget.objectPageBundle?.canonicalEntityId ?? '')
+                .trim()
+                .isNotEmpty)
+              ProfileIosGroupedCell(
+                title: '统一对象键',
+                subtitle: widget.objectPageBundle!.canonicalEntityId,
+                showChevron: false,
+              ),
+            if ((widget.objectPageBundle?.objectPageTemplate ?? '')
+                .trim()
+                .isNotEmpty)
+              ProfileIosGroupedCell(
+                title: '对象页模板',
+                subtitle: widget.objectPageBundle!.objectPageTemplate,
+                showChevron: false,
+              ),
             ProfileIosGroupedCell(
               title: '主页状态',
               subtitle: _statusLabel(detail.status),
@@ -431,6 +499,14 @@ extension _HomepageBuilders on _HomepageDetailShellState {
               ProfileIosGroupedCell(
                 title: '分类标签',
                 subtitle: detail.categoryTags.join(' · '),
+                showChevron: false,
+              ),
+            if ((widget.objectPageBundle?.rolloutContext?.cohort ?? '')
+                .trim()
+                .isNotEmpty)
+              ProfileIosGroupedCell(
+                title: '灰度 cohort',
+                subtitle: widget.objectPageBundle!.rolloutContext!.cohort,
                 showChevron: false,
               ),
           ],
@@ -511,5 +587,4 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       children: sections,
     );
   }
-
 }

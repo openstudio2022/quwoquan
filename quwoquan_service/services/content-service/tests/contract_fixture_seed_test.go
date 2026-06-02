@@ -92,7 +92,7 @@ func seedContentContractFixture(t *testing.T, seedRef string) contractSeedEviden
 	}
 	for _, reaction := range seedSet.Reactions {
 		if reaction.Liked {
-			if _, _, err := testPostService.LikePost(ctx, reaction.PostID, reaction.UserID); err != nil {
+			if _, _, err := testPostService.LikePost(ctx, reaction.PostID, reaction.UserID, ""); err != nil {
 				t.Fatalf("seed content like %s: %v", reaction.PostID, err)
 			}
 			inserted++

@@ -18,6 +18,7 @@ collections:
       - { name: idx_posts_moderation, keys: { moderationStatus: 1, createdAt: -1 } }
       - { name: idx_posts_source, keys: { sourceType: 1, sourcePostId: 1 }, sparse: true }
       - { name: idx_posts_article_markdown_digest, keys: { articleMarkdownDigest: 1 }, sparse: true }
+      - { name: idx_posts_canonical_entity, keys: { canonicalEntityId: 1, publishedAt: -1 }, sparse: true }
       - { name: idx_posts_review_author_poi, keys: { authorId: 1, primaryHomepageId: 1 }, unique: true, partialFilterExpression: { contentType: "review", deletedAt: null }, description: "一人一 POI 一评：同作者对同 POI 的有效 review 唯一" }
       - { name: idx_posts_review_poi, keys: { primaryHomepageId: 1, contentType: 1, publishedAt: -1 }, sparse: true, description: "POI 口碑聚合/召回索引" }
     search_indexes:
@@ -44,6 +45,8 @@ collections:
       - { name: idx_comments_author, keys: { authorId: 1, createdAt: -1 } }
       - { name: idx_comments_reply, keys: { replyToCommentId: 1 }, sparse: true }
       - { name: idx_comments_hot, keys: { postId: 1, likeCount: -1, createdAt: -1 }, description: "热评排序索引" }
+      - { name: idx_comments_homepage_created, keys: { primaryHomepageId: 1, createdAt: -1 }, sparse: true }
+      - { name: idx_comments_canonical_entity, keys: { canonicalEntityId: 1, createdAt: -1 }, sparse: true }
     search_indexes:
       - name: search_comments_text
         type: text

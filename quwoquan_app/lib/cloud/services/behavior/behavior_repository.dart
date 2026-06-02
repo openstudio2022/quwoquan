@@ -38,7 +38,9 @@ enum BehaviorAction {
   // 交集转化三类行动（S6）：关注人 follow / 进圈子 join_circle / 加联系人 add_contact，
   // 独立 BehaviorAction 以拆分交集转化漏斗。
   joinCircle('join_circle'),
-  addContact('add_contact');
+  addContact('add_contact'),
+  // 小艺对话浮现兴趣回流（P3）：payload 仅带 tagRefs，不绑定具体 post。
+  assistantInterest('assistant_interest');
 
   const BehaviorAction(this.wireValue);
 
@@ -111,6 +113,9 @@ class BehaviorEvent {
     this.pageVisitId,
     this.intersectionDimension,
     this.intersectionTagRefs,
+    this.intersectionId,
+    this.intersectionClass,
+    this.intersectionEvidenceId,
   });
 
   final String contentId;
@@ -161,12 +166,21 @@ class BehaviorEvent {
   /// 交集行动归因（B3）：触发该行为的路径制 tagRef 锚点（来自统一 taxonomy）。
   final List<String>? intersectionTagRefs;
 
+  /// 交集漏斗归因（曝光/点击）：触发该行为的交集稳定标识（intersectionId）。
+  final String? intersectionId;
+
+  /// 交集漏斗归因：交集类别 fact|affinity（事实/概率），用于冷却窗口与分通道观测。
+  final String? intersectionClass;
+
+  /// 交集漏斗归因：被点击/曝光的事实证据项标识（intersectionEvidenceId）。
+  final String? intersectionEvidenceId;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'contentId': contentId,
     'action': action.wireValue,
     if (contentType != null && contentType!.isNotEmpty)
       'contentType': contentType,
-    if (tags != null && tags!.isNotEmpty) 'tags': tags,
+    if (tags != null && tags!.isNotEmpty) 'tagRefs': tags,
     if (duration != null && duration! > 0) 'duration': duration,
     if (feedRequestId != null) 'feedRequestId': feedRequestId,
     if (position != null) 'position': position,
@@ -183,6 +197,12 @@ class BehaviorEvent {
       'intersectionDimension': intersectionDimension,
     if (intersectionTagRefs != null && intersectionTagRefs!.isNotEmpty)
       'intersectionTagRefs': intersectionTagRefs,
+    if (intersectionId != null && intersectionId!.isNotEmpty)
+      'intersectionId': intersectionId,
+    if (intersectionClass != null && intersectionClass!.isNotEmpty)
+      'intersectionClass': intersectionClass,
+    if (intersectionEvidenceId != null && intersectionEvidenceId!.isNotEmpty)
+      'intersectionEvidenceId': intersectionEvidenceId,
   };
 }
 
@@ -563,7 +583,7 @@ class RemoteBehaviorRepository extends BehaviorRepository
       contentId: (json['contentId'] ?? '').toString(),
       action: action,
       contentType: json['contentType'] as String?,
-      tags: (json['tags'] as List?)?.map((item) => item.toString()).toList(),
+      tags: (json['tagRefs'] as List?)?.map((item) => item.toString()).toList(),
       duration: (json['duration'] as num?)?.toDouble(),
       feedRequestId: json['feedRequestId'] as String?,
       position: (json['position'] as num?)?.toInt(),
@@ -581,6 +601,9 @@ class RemoteBehaviorRepository extends BehaviorRepository
       intersectionTagRefs: (json['intersectionTagRefs'] as List?)
           ?.map((item) => item.toString())
           .toList(),
+      intersectionId: json['intersectionId'] as String?,
+      intersectionClass: json['intersectionClass'] as String?,
+      intersectionEvidenceId: json['intersectionEvidenceId'] as String?,
     );
   }
 

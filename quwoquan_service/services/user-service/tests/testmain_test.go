@@ -22,6 +22,7 @@ import (
 	"quwoquan_service/services/user-service/internal/application"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/user-service/internal/infrastructure/projection"
 )
 
 var (
@@ -169,12 +170,18 @@ func TestMain(m *testing.M) {
 	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
 	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
 	inviteService := application.NewInviteService(inviteStore, personaStore)
+	var interestReader application.InterestProfileReader
+	if mongoDB != nil {
+		interestReader = projection.NewMongoInterestProfileReader(mongoDB)
+	}
+	interestProfileService := application.NewInterestProfileService(interestReader)
 
 	// 7. Handler（包裹统一鉴权中间件：Bearer JWT 验签后覆盖 X-Client-User-Id）
 	testHandler = rtauth.Middleware(testAccessVerifier)(httpadapter.NewUserHandler(
 		profileService, searchService, followService, blockService,
 		personaService, workService, lifeItemService, settingService,
 		authService, subAccountService, contactDiscoveryService, inviteService,
+		interestProfileService,
 	).Routes())
 
 	code := m.Run()

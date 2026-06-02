@@ -13,7 +13,7 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 /// 欢迎页
 ///
 /// 与 Figma 原型及趣我圈2026 WelcomeScreen 视觉、动效一致。
-/// 动效顺序：短暂留白 -> 花瓣绽放 -> 文案出现 -> 直接进入首页。
+/// 动效顺序：品牌内容首帧可见 -> 花瓣/文案微动效增强 -> 直接进入首页。
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key, required this.onFinish, this.loginPrompt});
 
@@ -42,12 +42,13 @@ class WelcomeLoginPromptConfig {
 
 class _WelcomeScreenState extends State<WelcomeScreen>
     with TickerProviderStateMixin {
-  static const Duration _initialDelay = Duration(milliseconds: 60);
   static const Duration _petalDuration = Duration(milliseconds: 600);
   static const Duration _petalStagger = Duration(milliseconds: 35);
   static const Duration _postBloomPause = Duration(milliseconds: 240);
   static const Duration _textDuration = Duration(milliseconds: 520);
   static const Duration _finalPause = Duration(milliseconds: 360);
+  static const double _initialPetalProgress = 0.72;
+  static const double _initialTextProgress = 0.86;
 
   late List<AnimationController> _petalControllers;
   late AnimationController _textController;
@@ -64,14 +65,22 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     });
     _petalControllers = List.generate(
       8,
-      (i) => AnimationController(vsync: this, duration: _petalDuration),
+      (i) => AnimationController(
+        vsync: this,
+        duration: _petalDuration,
+        value: _initialPetalProgress,
+      ),
     );
-    _textController = AnimationController(vsync: this, duration: _textDuration);
+    _textController = AnimationController(
+      vsync: this,
+      duration: _textDuration,
+      value: _initialTextProgress,
+    );
 
     Future<void> runSequence() async {
-      await Future<void>.delayed(_initialDelay);
       if (!mounted) return;
       for (var i = 0; i < 8; i++) {
+        if (!mounted) return;
         _petalControllers[i].forward();
         await Future<void>.delayed(_petalStagger);
       }

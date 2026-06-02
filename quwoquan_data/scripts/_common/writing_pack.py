@@ -7,6 +7,33 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from _common.style_catalog import opening_guidance
+
+
+def _load_sop_fewshot(sop_example_ref: str | None) -> dict[str, str] | None:
+    """按 sopExampleRef（相对 DATA_ROOT，如 sop/主页/地点/景区/example.md）读范例 + 同目录 guide。
+
+    sop 是全局单一真相源（按实体类型），这里只读注入做 few-shot，不写不拷；
+    缺失或读失败时返回 None（render 优雅跳过，不报错）。
+    """
+    if not sop_example_ref:
+        return None
+    from _common import paths
+
+    example_path = paths.DATA_ROOT / sop_example_ref
+    try:
+        example = example_path.read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return None
+    guide_path = example_path.parent / "guide.md"
+    try:
+        guide = guide_path.read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        guide = ""
+    if not example and not guide:
+        return None
+    return {"ref": sop_example_ref, "example": example[:1800], "guide": guide[:1200]}
+
 
 def _evidence_points(evidence_bundle: Mapping[str, Any], source_paths: Sequence[str]) -> list[dict[str, Any]]:
     points: list[dict[str, Any]] = []
@@ -67,6 +94,7 @@ def build_writing_pack(
         "minDecisionPoints": int((brief.get("decisionPoints") or {}).get("minPoints", 2)),
         "forbidStandaloneTips": bool((brief.get("tipsEmbeddingPolicy") or {}).get("forbidStandaloneBlock", True)),
     }
+    style_family = str(brief.get("styleFamily") or "")
     return {
         "schemaVersion": "quwoquan_data.writing_pack",
         "ref": ref,
@@ -82,6 +110,8 @@ def build_writing_pack(
         "conditionContext": brief.get("conditionContext") or {},
         "sectionIntents": list(section_intents),
         "narrativeContract": narrative,
+        "styleFamily": style_family,
+        "openingGuidance": opening_guidance(style_family),
         "primaryEntity": story_spine.get("primaryEntity") or "",
         "routeEntities": story_spine.get("routeEntities") or [],
         "progression": story_spine.get("progression") or [],
@@ -91,6 +121,8 @@ def build_writing_pack(
         "sourceUrls": list(source_urls),
         "sourcePaths": list(source_paths),
         "assets": list(assets),
+        "sopExampleRef": brief.get("sopExampleRef"),
+        "sopFewshot": _load_sop_fewshot(brief.get("sopExampleRef")),
     }
 
 
@@ -115,7 +147,14 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     if carrier == "gallery":
         lines.append("- 载体=画报：以图为主、每图配一句自然小字说明；避免大空白；正文简短但仍要有真实感受。")
     else:
-        if nc.get("requireMotivation"):
+        og = pack.get("openingGuidance") or {}
+        opening_opts = og.get("openingStrategies") or []
+        if opening_opts:
+            lines.append(f"- **开篇方式（styleFamily=`{og.get('styleFamily') or pack.get('styleFamily')}`，从下列任选一种真正落地，禁止千篇一律的套路开头）**：")
+            for opt in opening_opts:
+                lines.append(f"  - `{opt.get('id')}`（{opt.get('label')}）：{opt.get('hint')}")
+            lines.append("  按原文体裁与证据择一；若该默认体裁与原文体裁不符，可改选下方候选体裁，并在 draft_meta 写明最终 styleFamily 与 openingStrategy。")
+        elif nc.get("requireMotivation"):
             lines.append("- 开篇写出**出发动机/心情铺垫**（为什么想去、出发前的犹豫或期待），不要一上来就罗列行程。")
         if nc.get("requireLike"):
             lines.append("- 正文写出**具体喜欢/打动你的点**（来自素材，有画面感）。")
@@ -124,12 +163,34 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         lines.append(f"- 给出至少 {nc.get('minDecisionPoints', 2)} 处**取舍判断**（如「如果你…我会建议…」「宁可…也别…」）。")
         if nc.get("forbidStandaloneTips"):
             lines.append("- 注意事项**就地融入**叙述，禁止另起「实用信息/来源平台」清单块。")
+        lines.append("- 以证据点里**信息最完整、最有现场感**的那条原文叙事线为基底做**深度加工**：遵从其观察顺序与思路，再用其它来源补全事实与细节；不要把多个来源平均拼接成模板化清单，也不要每篇都用相同章节套路。")
     lines.append("- 信息必须来自下方素材；**禁止编造**票价/时长/海拔/里程等数字（拿不准就写区间或定性，别杜撰精确值）。")
     lines.append("- 禁止出现平台名/作者名/水印/来源痕迹；禁止逐句搬运素材原文（改写为自己的表达）。")
     forb = pack.get("forbiddenPhrases") or []
     if forb:
         lines.append(f"- 禁用词: {', '.join(forb)}")
     lines.append("")
+    og = pack.get("openingGuidance") or {}
+    candidates = og.get("styleFamilyCandidates") or []
+    if candidates and carrier != "gallery":
+        lines.append("## 体裁候选（默认已按路由选定；仅当原文体裁明显更贴合另一种时改选，并在 draft_meta 写明）")
+        lines.append("")
+        for c in candidates:
+            mark = "（默认）" if c.get("styleFamily") == og.get("styleFamily") else ""
+            lines.append(f"- `{c.get('styleFamily')}`{mark}：{c.get('writingGenre')}")
+        lines.append("")
+    sop = pack.get("sopFewshot") or {}
+    if sop.get("example") or sop.get("guide"):
+        lines.append("## 写作范例与规范（few-shot：模仿其口吻/结构/信息颗粒度，禁止照搬其事实、实体与数字）")
+        lines.append("")
+        if sop.get("example"):
+            lines.append(sop["example"])
+            lines.append("")
+        if sop.get("guide"):
+            lines.append("### 规范要点（sop guide）")
+            lines.append("")
+            lines.append(sop["guide"])
+            lines.append("")
     lines.append("## 必须覆盖的事实")
     lines.append("")
     lines.append(_fmt_list(pack.get("mustIncludeFacts") or []))
@@ -178,6 +239,6 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     lines.append("## 产出方式")
     lines.append("")
     lines.append(f"- 把创作的正文写回 `{pack.get('ref')}.article.md`（覆盖占位）。")
-    lines.append(f"- 在 `{pack.get('ref')}.draft_meta.json` 标注 generator=agent、model、引用了哪些 sourcePath、覆盖了哪些 fact。")
+    lines.append(f"- 在 `{pack.get('ref')}.draft_meta.json` 标注 generator=agent、model、styleFamily、openingStrategy（所选开篇策略 id）、引用了哪些 sourcePath、覆盖了哪些 fact。")
     lines.append("- 之后运行 `produce --stage review` 过门禁；失败按 repair report 修改正文重跑直到全绿。")
     return "\n".join(lines) + "\n"

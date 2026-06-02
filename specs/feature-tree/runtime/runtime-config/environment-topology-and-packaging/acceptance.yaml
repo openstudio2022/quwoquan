@@ -14,11 +14,11 @@ gwt_acceptance:
   GWT1:
     title: environment topology and packaging GWT
     given:
-    - 四环境 topology manifest、local port manifest 与环境包脚本已落地。
+    - 当前环境集合的 topology manifest、local port manifest 与环境包脚本已落地。
     when:
     - 执行 topology、packaging、purity 与 artifact isolation 门禁。
     then:
-    - 四环境 schema、端口 profile、public/upstream URL 契约与 prod 包纯度均满足约束。
+    - 当前环境集合的 schema、端口 profile、public/upstream URL 契约与 prod 包纯度均满足约束。
     done_when:
     - "`stackctl verify` 与 `make gate` 能自动阻断跨环境污染与非法环境枚举。"
     edge_cases: []

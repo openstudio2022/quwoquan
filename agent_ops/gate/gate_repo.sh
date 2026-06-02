@@ -20,6 +20,7 @@ run_service() {
   echo "[gate] quwoquan_service"
   bash agent_ops/scaffold/verify_feature_traceability.sh
   python3 agent_ops/gate/verify_stackctl_args_contract.py
+  python3 agent_ops/gate/verify_dev_up_cli_surface.py
   python3 agent_ops/gate/verify_environment_topology_manifest.py
   python3 agent_ops/gate/verify_local_env_port_manifest.py
   python3 agent_ops/gate/verify_prod_rollout_stackctl_contract.py
@@ -40,6 +41,7 @@ run_service() {
   # topology 由 delivery-gate topology job / make gate 负责，避免重复
   bash quwoquan_service/scripts/deploy/verify_deploy_kustomization.sh
   bash quwoquan_service/scripts/recommendation/verify_recommendation_service_contract.sh
+  python3 quwoquan_service/scripts/recommendation/verify_daily_metrics_dimension_consistency.py
   bash quwoquan_service/scripts/deploy/verify_config_gray_parallel_binding.sh
   bash quwoquan_service/scripts/deploy/verify_gray_rollout_stages.sh
   # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)

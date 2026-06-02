@@ -32,7 +32,7 @@ PROD_ARTIFACT_GLOBS = [
 #   - default_app_runtime.yaml / default_config.yaml 是 config-provider-layering 的
 #     dev 默认基层，运行期被 env overlay 覆盖；打包契约（verify_environment_packaging_contract）
 #     强制 service 包为 default+env 布局，故基层必须随包存在、且合法包含本地默认值。
-#   - environment_topology_manifest.yaml 是共享的四环境拓扑清单，必然含 alpha/beta 本地 token。
+#   - environment_topology_manifest.yaml 是共享的多环境拓扑清单，必然含 alpha/beta 本地 token。
 # 这些 scaffolding 不代表 prod 运行时实际使用的端点，故排除出禁用 token 扫描；
 # prod 生效配置（app_runtime.yaml / service config.yaml / configs/prod/*）仍严格校验。
 EXCLUDED_BASENAMES = frozenset(

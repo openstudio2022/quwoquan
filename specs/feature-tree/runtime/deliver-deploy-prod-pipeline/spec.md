@@ -2,31 +2,34 @@
 
 ## 功能说明
 
-从特性到入库（L1/L2 自测通过），再到 `main` 前 ECS gamma 主门禁验证，再到生产端到端打通的**平台交付流水线**。当前主门禁模型是：
+沿用当前 `alpha-local / beta-local / gamma-hosted / prod-hosted` 混合拓扑，把环境打包、启动、健康检查、端云集成验证、灰度发布与证据归档统一收敛到 `stackctl` 与 GitHub Actions。目标是让 `main` 入库后自动完成 `alpha -> beta -> gamma -> prod` promotion 主链，并在 `prod initial -> prod full` 之间自动执行健康探针、只读集成探针、SLO gate 与 auto rollback。
 
-- `03. Delivery Gate` 负责 L1/L2。
-- `05. App Env Device Matrix` 负责本地 self-hosted alpha/beta Android/iOS 设备矩阵。
-- `04. Pre-Release Gate` 负责 ECS gamma hosted pre 链 + 本地 self-hosted gamma Android/iOS assistant/avatar 旅程。
-- `02/07` 负责 main 后构建与发布后续动作。
+主链分层如下：
+
+- `03. Delivery Gate` 继续负责 PR 前 L1/L2 静态与模块收敛。
+- `04. Pre-Release Gate` 继续负责 PR 前 gamma hosted 轻量预检，不承担 `main` 后真 promotion。
+- `05. App Env Device Matrix` 继续负责 self-hosted 设备矩阵，并新增可供 `main` promotion 复用的 `mainline_auto_prod` profile。
+- `07. Deploy To Prod (Auto)` 演进为 `main` 入库后的单一自动 promotion workflow。
 
 ## 范围
 
-- **deliver 入库**：验收驱动开发 → G3 gate-full → 归档 → G4 提交合入（L1/L2 通过）
-- **ECS gamma 主门禁**：G5a 通过 hosted ECS pre 链部署 gamma onebox / pre，并执行 hosted gamma 探测
-- **本地 self-hosted 设备验证**：G5b 在当前开发 Mac 上执行 alpha/beta/gamma Android+iOS 设备矩阵，并生成可审计证据
-- **灰度到 prod**：G5c 按 config-release 规范灰度步进 5→25→50→100，SLO 卡点
-- **local-gamma left shift**：作为提交前本地预测试，复用 gamma 语义与旅程注册表，但不再作为 merge gate
+- **PR 前置收敛**：`03/04/05` 保持 required checks 名称稳定，继续负责进入 `main` 前的质量收敛。
+- **main 自动 promotion**：`repo verify/package -> alpha-local -> beta-local -> gamma-hosted -> prod initial -> prod checks -> prod full`。
+- **统一验证 profile**：`deploy/shared/gamma_validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`。
+- **统一证据归档**：每个 promotion 阶段必须落 `artifacts/stackctl/<env>/<run-id>/report.json` 与 `summary.md`，workflow 同步上传 artifact。
+- **15 分钟硬预算**：阻断主链的 `critical_path_seconds <= 900`，重型 Patrol/full semantic/全设备全旅程留在 `nightly_full` 与 `release_candidate`。
+- **local-gamma left shift**：仍作为提交前左移预测试拓扑，但不替代 `main` 后自动 promotion。
 
 ## 适用范围与约束
 
-- **适用**：`main` PR 阻断、ECS gamma pre 验证、prod 灰度发布与回滚
-- **当前范围**：`04` 的主部署目标为 ECS gamma / onebox；`08` 为手动 wrapper；prod 仍按现有发布链路推进
-- **不适用**：任何绕过 PR required checks 直接进入 `main` 的路径
+- **适用**：PR 前 required checks、`main` 后自动 promotion、gamma hosted 复验、prod 自动灰度、prod 自动回滚。
+- **不适用**：新增 `beta-hosted`、`prod-gray` 等额外环境名或第二套拓扑命名。
 - **约束**：
-  - `03/04/05` 必须保持稳定 required check 名称。
-  - `04/05` 都要求 Android 与 iOS 两个平台存在且全部通过。
-  - 设备矩阵 artifact 必须包含设备清单、原始日志、命令清单与截图证据。
-  - `deploy/shared/gamma_validation_suites.json` 是 gamma 核心旅程的单源。
+  - `03/04/05` 名称与 required-check 语义必须保持稳定。
+  - `stackctl` 是环境自动化唯一入口；workflow 只编排，不复制第二套环境逻辑。
+  - `prod` 灰度是 `prod` 语义下的 rollout stage，不得再引入独立环境枚举。
+  - `mainline_auto_prod` 只保留高信号阻断链：beta 设备矩阵、gamma readiness/T3/high-signal probes、prod 初始灰度后的只读集成探针。
+  - 自动升 `prod full` 的前提是 auto rollback、SLO gate、stage evidence 与 release-state 一致性先落地。
 
 ## 与父/子节点关系
 
@@ -34,19 +37,18 @@
 
 | 子节点 | 职责 | 优先级 |
 |--------|------|--------|
-| **integration-deploy-and-l3-l4-gate** | 已演进为 ECS gamma 主门禁与本地 self-hosted gamma 旅程 | **优先（前置）** |
-| **multi-cloud-deploy-overlay** | prod 侧部署覆盖层与切换 | **优先** |
-| **gray-release-to-prod** | G5c 灰度步进 + SLO 卡点 + 回滚 | **优先** |
-| **local-gamma-mirror** | 提交前左移预测试，复用 gamma 语义与旅程 | **并行配套** |
-| **multi-environment-instance-isolation** | 端侧多模拟器实例与 beta/gamma 单套服务生命周期 | **并行配套** |
+| **multi-environment-wave-deployment** | 冻结 `alpha-local / beta-local / gamma-hosted / prod-hosted` 拓扑与主链波次关系 | **优先** |
+| **gray-release-to-prod** | `prod initial / prod full`、SLO gate、rollback 与 release-state 一致性 | **优先** |
+| **local-gamma-mirror** | 提交前左移预测试，复用 gamma 语义但不进入 `main` 阻断主链 | **并行配套** |
+| **multi-environment-instance-isolation** | 本地 alpha/beta 多设备并行与 beta/gamma 单套服务生命周期 | **并行配套** |
 
 ## 验收标准概要
 
-- A1：PR 到 `main` 时触发 `03/04/05`，并以 ECS gamma + 本地 Android/iOS 设备验证阻断合入
-- A2：`04` 的 hosted ECS gamma pre 链失败即阻塞发布
-- A3：`04/05` 的 self-hosted Android/iOS 设备矩阵失败即阻塞发布
-- A4：gamma assistant/avatar 基线旅程以 `deploy/shared/gamma_validation_suites.json` 为单源，并预留后续业务对象扩展入口
-- A5：灰度步进 5→25→50→100 可执行
-- A6：每步 SLO 卡点可执行；异常可一键回滚
-- A7：`deliver_to_production_runbook.md` 完整可执行
-- A8：`process_domain_mapping` 校验继续在 gate 中
+- A1：`main` push 触发单一 workflow，按固定顺序执行 `repo verify/package -> alpha-local -> beta-local -> gamma-hosted -> prod initial -> prod checks -> prod full`。
+- A2：`alpha-local` 阶段必须完成环境包、启动与 `stackctl health --scope full`，并落证据产物。
+- A3：`beta-local` 阶段必须完成 `stackctl up/health/inspect` 与 self-hosted beta 设备矩阵，通过后才能进入 gamma。
+- A4：`gamma-hosted` 阶段必须通过 hosted deploy、readiness、T3 API contract、assistant protocol smoke、chat avatar probe，且这些阻断项由 `mainline_auto_prod` 单源描述。
+- A5：`prod initial -> prod checks -> prod full` 默认全自动，不再依赖人工 approval。
+- A6：`prod checks` 或 `prod full` 失败时，workflow 必须自动回滚到上一稳定 `image/config` 并恢复 ready 状态。
+- A7：每个阶段都能输出 `report.json`、`summary.md`、stdout/diagnostics，支持人工排障与 workflow 复用。
+- A8：主链耗时摘要必须落关键路径统计，并以 `critical_path_seconds <= 900` 作为硬门禁。

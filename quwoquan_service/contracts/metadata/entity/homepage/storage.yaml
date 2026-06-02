@@ -8,6 +8,8 @@ collections:
     indexes:
       - { name: idx_homepages_status_updated, keys: { status: 1, updatedAt: -1 } }
       - { name: idx_homepages_type_city, keys: { homepageType: 1, city: 1, updatedAt: -1 }, sparse: true }
+      - { name: idx_homepages_canonical_entity, keys: { canonicalEntityId: 1 }, unique: true }
+      - { name: idx_homepages_template_type, keys: { objectPageTemplate: 1, homepageType: 1, updatedAt: -1 } }
       - { name: idx_homepages_location, keys: { location: "2dsphere" }, sparse: true }
     search_indexes:
       - name: search_homepages_text

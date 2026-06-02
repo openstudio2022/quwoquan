@@ -1,0 +1,167 @@
+version: 1
+# 推荐评分策略元数据（单一真相源 / metadata-first）。
+#
+# 本文件取代 runtime/recommendation 中此前手写的硬编码：
+#   - engine.go DefaultWeights（12 维评分权重）
+#   - experiments.go WeightPresets（control/engagement_heavy/freshness_heavy/explore_heavy 预设）
+#   - scorer.go 二级系数（popularity 子权重、freshness 半衰期、explore_fraction、各混合因子）
+# 现统一由 tools/codegen_rec_policy 生成强类型 baseline（generated/recpolicy/rec_policy.gen.go），
+# 运行时由 runtime/recpolicy.Store 热加载本 YAML（atomic.Pointer + validate-before-swap + last-good），
+# 改 yaml 即生效、无需改代码、无需重启。codegen baseline 仅作 fail-safe（启动前 / 坏 YAML 校验失败时回退），
+# 来自本 metadata 单源 + make gate hash 校验，非手写安全常量、禁“坏 YAML 置零打分”。
+#
+# 生效顺序：metadata → make verify-metadata → make codegen-rec-policy → 业务逻辑 → make test。
+
+# policyVersion 随策略变更递增；落 PipelineMetrics + rec_learning_events 作效果归因主键之一。
+policyVersion: v1
+
+# 全员缺省预设（无实验分桶 / 无 segment 定向命中时）。必须存在于 weightPresets。
+defaultPreset: control
+
+# ---------------------------------------------------------------------------
+# 12 维评分权重预设（对齐 ScoringWeights）。AB 实验分桶名 = 预设名。
+# ---------------------------------------------------------------------------
+weightPresets:
+  control:
+    tagRelevance: 3.0
+    authorAffinity: 1.5
+    popularity: 2.0
+    freshness: 1.5
+    socialPrior: 1.0
+    exploreBoost: 0.5
+    negativePenalty: 5.0
+    dwellBonus: 0.8
+    entityAffinity: 1.2
+    topicMatch: 1.0
+    audienceMatch: 0.8
+    formatMatch: 0.6
+  engagement_heavy:
+    tagRelevance: 2.0
+    authorAffinity: 1.0
+    popularity: 4.0
+    freshness: 1.0
+    socialPrior: 0.5
+    exploreBoost: 0.3
+    negativePenalty: 5.0
+    dwellBonus: 1.5
+    entityAffinity: 1.0
+    topicMatch: 1.2
+    audienceMatch: 1.0
+    formatMatch: 0.8
+  freshness_heavy:
+    tagRelevance: 2.5
+    authorAffinity: 1.5
+    popularity: 1.5
+    freshness: 4.0
+    socialPrior: 1.0
+    exploreBoost: 0.8
+    negativePenalty: 5.0
+    dwellBonus: 0.5
+    entityAffinity: 1.2
+    topicMatch: 0.8
+    audienceMatch: 0.6
+    formatMatch: 0.4
+  explore_heavy:
+    tagRelevance: 2.0
+    authorAffinity: 1.0
+    popularity: 1.5
+    freshness: 1.5
+    socialPrior: 1.0
+    exploreBoost: 2.0
+    negativePenalty: 5.0
+    dwellBonus: 0.5
+    entityAffinity: 1.0
+    topicMatch: 0.6
+    audienceMatch: 0.5
+    formatMatch: 0.4
+
+# ---------------------------------------------------------------------------
+# RuleScorer / Engine 二级系数（此前散落在 scorer.go / engine.go 的隐藏常量）。
+# ---------------------------------------------------------------------------
+scorer:
+  # popularity = log1p(view*viewCoeff + like*likeCoeff + comment*commentCoeff + share*shareCoeff)
+  popularity:
+    viewCoefficient: 0.1
+    likeCoefficient: 1.0
+    commentCoefficient: 1.5
+    shareCoefficient: 2.0
+  # freshness = exp(-ageHours / freshnessHalfLifeHours)
+  freshnessHalfLifeHours: 24.0
+  # rerank 显式探索注入比例（rand 探索扰动幅度同源）
+  exploreFraction: 0.1
+  # 评分公式内各混合因子（彻底消除隐藏字面量）
+  longTermTagBoostFactor: 0.3
+  circleTagAffinityFactor: 0.5
+  socialInterestFactor: 0.3
+  engagementBonusFactor: 0.5
+  enerBonusFactor: 0.5
+  entityCategoryFactor: 0.4
+  negativePenaltyFactor: 0.1
+  # rerank 多样性 / 冷启约束
+  maxAuthorPerFeed: 3
+  coldStartAgeHours: 24.0
+  coldStartViewThreshold: 100
+
+# ---------------------------------------------------------------------------
+# AB 实验：bucket → preset / model。eligibleSegments 为空 = 全员；非空 = 仅命中
+# 任一 segment 的用户参与（分桶主键仍是 userID 哈希，保证稳定）。
+# ---------------------------------------------------------------------------
+experiments:
+  - id: rec_scoring_weights
+    enabled: true
+    eligibleSegments: []
+    buckets:
+      - { name: control, weightPct: 60 }
+      - { name: engagement_heavy, weightPct: 15 }
+      - { name: freshness_heavy, weightPct: 15 }
+      - { name: explore_heavy, weightPct: 10 }
+  - id: rec_model_vs_rule
+    enabled: true
+    eligibleSegments: []
+    buckets:
+      - { name: rule, weightPct: 80 }
+      - { name: model, weightPct: 20 }
+  - id: rec_model_version
+    enabled: true
+    eligibleSegments: []
+    buckets:
+      - { name: champion, weightPct: 90 }
+      - { name: challenger, weightPct: 10 }
+
+# ---------------------------------------------------------------------------
+# segment 定向覆盖（声明式，引擎禁 if-else）。命中 segment 的用户在实验分桶之上
+# 叠加：presetOverride 直接换预设；weightDeltas 在解析后的权重上逐维加减。
+# 多 segment 命中时按 segments.yaml priority 降序，先 override 后 deltas 叠加。
+# ---------------------------------------------------------------------------
+segmentTargeting:
+  - segment: travel_enthusiast
+    presetOverride: engagement_heavy
+  - segment: visual_content_lover
+    weightDeltas:
+      formatMatch: 0.4
+      topicMatch: 0.2
+
+# ---------------------------------------------------------------------------
+# 护栏：策略变更后按 segment×bucket×policyVersion 对照 baseline 预设核心 KPI。
+# action 仅允许 suggest_only —— 护栏只产建议（rec_policy_advisor.py 调 product-ops
+# :simulate 停住），绝不自动改线上 / 自动回滚；生效由人在 ops-portal 走双审。
+# ---------------------------------------------------------------------------
+guardrails:
+  - metric: ctr
+    baselinePreset: control
+    minRatio: 0.95
+    minSamples: 1000
+    window: 24h
+    action: suggest_only
+  - metric: dwell
+    baselinePreset: control
+    minRatio: 0.93
+    minSamples: 1000
+    window: 24h
+    action: suggest_only
+  - metric: next_day_retention
+    baselinePreset: control
+    minRatio: 0.97
+    minSamples: 2000
+    window: 168h
+    action: suggest_only

@@ -31,6 +31,7 @@ import 'package:quwoquan_app/cloud/services/integration/integration_repository.d
 import 'package:quwoquan_app/cloud/services/notification/app_message_repository.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_visit_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
@@ -39,6 +40,7 @@ import 'package:quwoquan_app/cloud/services/user/call_settings_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/invite_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/keyword_block_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/following_subject_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
@@ -1753,6 +1755,18 @@ final userSyncRepositoryProvider = Provider<UserSyncRepository>((ref) {
   );
 });
 
+final followingSubjectRepositoryProvider =
+    Provider<FollowingSubjectRepository>((ref) {
+      final mode = ref.watch(appDataSourceModeProvider);
+      return cloudRepositoryImplForMode(
+        mode,
+        remote: () => RemoteFollowingSubjectRepository(
+          httpClient: ref.watch(cloudHttpClientProvider),
+        ),
+        mock: MockFollowingSubjectRepository.new,
+      );
+    });
+
 /// 当前活动分身上下文。只有 mock 模式允许本地回退；remote 模式必须显式失败，避免关键写路径静默降级到 user。
 final activePersonaContextProvider =
     FutureProvider<ActivePersonaContextViewData>((ref) async {
@@ -1878,6 +1892,18 @@ final reportRepositoryProvider = Provider<ReportRepository>((ref) {
     remote: () =>
         RemoteReportRepository(httpClient: ref.watch(cloudHttpClientProvider)),
     mock: MockReportRepository.new,
+  );
+});
+
+/// Intersection Repository（我的交集聚合 / 列表 / 已读水位 / 频道交集 / 曝光冷却）
+final intersectionRepositoryProvider = Provider<IntersectionRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: () => RemoteIntersectionRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    ),
+    mock: MockIntersectionRepository.new,
   );
 });
 

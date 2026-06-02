@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
+import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 
@@ -16,6 +17,7 @@ class ContentShareTemplate {
     required this.layout,
     required this.permission,
     required this.deeplink,
+    required this.landingUrl,
     required this.landingPage,
     required this.title,
     required this.subtitle,
@@ -32,6 +34,7 @@ class ContentShareTemplate {
   final String layout;
   final String permission;
   final String deeplink;
+  final String landingUrl;
   final String landingPage;
   final String title;
   final String subtitle;
@@ -47,16 +50,22 @@ class ContentShareTemplate {
 class ContentShareTemplateBuilder {
   const ContentShareTemplateBuilder._();
 
-  /// 应用内 scheme 链接（`quwoquan://…`），与发现/作品流 [DefaultContentShareActionHandler] 复制逻辑一致。
-  ///
-  /// 站外 HTTPS 请使用 [AppPublicContentLinks.postWebUrl]。
-  static String appSchemePostUrl(String postId, {String visibility = 'public'}) {
+  /// 应用内 scheme 链接（`quwoquan://…`），仅作为打开 App 的目标。
+  /// 站外复制/系统分享默认必须使用 [publicPostUrl]。
+  static String appSchemePostUrl(
+    String postId, {
+    String visibility = 'public',
+  }) {
     final permission = _normalizeVisibility(visibility);
     return AppLinkTemplates.postAppDeepLink(
       postId,
       visibilityIsCircleVisible: permission == 'circle_visible',
     );
   }
+
+  /// 站外公开 HTTPS 链接，作为复制链接/系统分享的默认 URL。
+  static String publicPostUrl(String postId) =>
+      AppPublicContentLinks.postWebUrl(postId);
 
   static ContentShareTemplate build({
     required ContentSurfaceView surfaceView,
@@ -72,6 +81,7 @@ class ContentShareTemplateBuilder {
         layout: 'blocked',
         permission: permission,
         deeplink: '',
+        landingUrl: '',
         landingPage: 'blocked',
         title: UITextConstants.shareTo,
         subtitle: UITextConstants.sharePrivateBlocked,
@@ -79,9 +89,9 @@ class ContentShareTemplateBuilder {
         shareSummary: blockedSeed.summary,
         coverUrl: blockedSeed.coverUrl,
         actions: const <ContentShareAction>[],
-      isIdentityTemplate: enableIdentityTemplate,
-      isBlocked: true,
-      notice: UITextConstants.sharePrivateBlocked,
+        isIdentityTemplate: enableIdentityTemplate,
+        isBlocked: true,
+        notice: UITextConstants.sharePrivateBlocked,
       );
     }
 
@@ -91,6 +101,7 @@ class ContentShareTemplateBuilder {
       surfaceView.postId,
       visibilityIsCircleVisible: permission == 'circle_visible',
     );
+    final landingUrl = publicPostUrl(surfaceView.postId);
     final summary = _decorateSummary(
       base: shareSeed.summary,
       includeCircleContext: profile.includeCircleContext,
@@ -108,6 +119,7 @@ class ContentShareTemplateBuilder {
       layout: profile.layout,
       permission: permission,
       deeplink: deeplink,
+      landingUrl: landingUrl,
       landingPage: surfaceView.contentIdentity == 'moment'
           ? 'moment_landing'
           : 'work_landing',
@@ -169,7 +181,10 @@ class ContentShareTemplateBuilder {
     switch (view.kind) {
       case ContentSurfaceKind.article:
         return _ShareSeed(
-          title: _clip(title, fallback: UITextConstants.shareSeedWorkFallbackTitle),
+          title: _clip(
+            title,
+            fallback: UITextConstants.shareSeedWorkFallbackTitle,
+          ),
           summary: _clip(body, maxLength: 48),
           coverUrl: cover,
         );

@@ -135,8 +135,8 @@
 | GAMMA_ECS_USER | SSH 用户名 | `root` |
 | GAMMA_ECS_PORT | SSH 端口 | `22` |
 | GAMMA_ECS_REMOTE_DIR | ECS 部署目录 | `/opt/quwoquan/gamma` |
-| GAMMA_BASE_URL | gamma 内容 API 公网基址 | `http://<GAMMA_ECS_HOST>:18080` |
-| GAMMA_PRODUCT_OPS_BASE_URL | gamma Product Ops API 公网基址 | `http://<GAMMA_ECS_HOST>:18086` |
+| GAMMA_BASE_URL | gamma 内容 API 公网基址（gamma-proxy edge） | `http://<GAMMA_ECS_HOST>:18000` |
+| GAMMA_PRODUCT_OPS_BASE_URL | gamma Product Ops API 公网基址（product-ops edge） | `http://<GAMMA_ECS_HOST>:19010` |
 | **GAMMA_ECS_CONTAINER_REGISTRY_MIRROR** | ECS 侧 Podman 的 `docker.io` 镜像加速主机名（大路访问 Docker Hub 慢/超时时强烈推荐） | 留空=直连 Docker Hub |
 | GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS | 远端预拉镜像单镜像超时（秒） | 脚本默认 `600` |
 | GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS | 远端 compose build+up 外层超时（秒） | 脚本默认 `5400` |
@@ -152,7 +152,7 @@
 - **Deploy ECS — pre/prod** 单 Job 超时为 **120** 分钟（含首次镜像 build）；请勿在流水线中途手动 Cancel，否则会向 SSH 子进程发送 SIGTERM（常见于 exit 143）。
 - **回滚**：手动触发 **08c `ecs-onebox-rollback.yml`** 或本地执行 `agent_ops/deploy/gamma/rollback_gamma_ecs.sh`（恢复最近一次 `backup-*.tgz`）。
 - 结构化部署报告：`artifacts/ecs-onebox/deploy-report.json`（成功/失败阶段会上传为 artifact）。
-- ECS 安全组需放行 SSH、`18080`、`18086`（或同步修改 health 探测 URL）。
+- ECS 安全组需放行 SSH、`18000`、`19010`（或同步修改 health 探测 URL）。
 
 ---
 

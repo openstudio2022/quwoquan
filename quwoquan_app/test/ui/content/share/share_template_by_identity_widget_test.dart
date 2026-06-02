@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
@@ -62,6 +63,7 @@ void main() {
 
     expect(template.profileId, 'moment');
     expect(template.deeplink, 'quwoquan://content/post/moment_1');
+    expect(template.landingUrl, AppPublicContentLinks.postWebUrl('moment_1'));
     expect(find.text(UITextConstants.shareTemplateMomentTitle), findsOneWidget);
     expect(find.text(UITextConstants.copyLink), findsOneWidget);
     expect(find.text(UITextConstants.shareActionSavePoster), findsOneWidget);
@@ -183,7 +185,7 @@ void main() {
     await tester.tap(find.text('trigger'));
     await tester.pump();
 
-    expect(copiedText, template.deeplink);
+    expect(copiedText, template.landingUrl);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
   });
@@ -227,6 +229,7 @@ void main() {
 
     expect(template.profileId, 'work');
     expect(template.deeplink, 'quwoquan://content/post/work_1?scope=circle');
+    expect(template.landingUrl, AppPublicContentLinks.postWebUrl('work_1'));
     expect(find.text(UITextConstants.shareTemplateWorkTitle), findsOneWidget);
     expect(
       find.text(UITextConstants.shareCircleVisibilityNotice),

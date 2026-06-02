@@ -53,6 +53,7 @@ import 'package:quwoquan_app/ui/user/pages/legal_document_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
+import 'package:quwoquan_app/ui/user/pages/my_intersection_inbox_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
@@ -108,14 +109,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           loc == AppRoutePaths.loginPathTemplate) {
         return AppRoutePaths.home;
       }
+      // 防自重定向：登录页本身永不再被路由守卫拦截，否则 login→login 死循环。
+      if (done && loc == AppRoutePaths.loginPathTemplate) {
+        return null;
+      }
       // 受限路由守卫：未登录直达需要账号身份的页面时跳全屏登录并带回源。
       // 会话恢复中（restoring）暂不拦截，避免已登录用户出现误跳闪烁。
       if (done && auth.status != AuthSessionStatus.restoring) {
         final gate = requiredRouteGateForLocation(loc);
         if (gate != null && !auth.isAuthenticated) {
-          return AppRoutePaths.login(
-            reason: gate.name,
+          // 路由守卫触发的登录：关闭必须 go 到安全兜底，禁止 pop 回到受限路由，
+          // 否则守卫会立刻再次命中、形成「关闭→又弹登录」死循环（消息/创作深链尤甚）。
+          return buildLoginRouteLocation(
+            reasonName: gate.name,
             redirect: state.uri.toString(),
+            dismissFallback: AppRoutePaths.home,
+            allowGuestDismissPop: false,
           );
         }
       }
@@ -144,6 +153,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           child: LoginPage(
             reason: state.uri.queryParameters['reason'],
             redirect: state.uri.queryParameters['redirect'],
+            dismissFallback:
+                state.uri.queryParameters[loginDismissFallbackQueryParam],
+            allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+              state.uri.queryParameters[loginGuestDismissPopQueryParam],
+            ),
           ),
         ),
       ),
@@ -315,6 +329,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               initialSummary: extra?.initialSummary,
               referralSource:
                   extra?.referralSource ?? ReferralSource.entityPage,
+              feedRequestId: extra?.feedRequestId ?? '',
+              recommendationTraceId: extra?.recommendationTraceId ?? '',
+              experimentBucket: extra?.experimentBucket ?? '',
+              rolloutCohort: extra?.rolloutCohort ?? '',
             ),
           );
         },
@@ -738,6 +756,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: AppRoutePaths.myIntersectionsPathTemplate,
+        pageBuilder: (context, state) {
+          final dimension = state.uri.queryParameters['dimension'] ?? '';
+          return appRoutePage<void>(
+            state: state,
+            child: MyIntersectionInboxPage(dimension: dimension),
+          );
+        },
+      ),
+      GoRoute(
         path: AppRoutePaths.chatDetailPathTemplate.replaceAll('{id}', ':id'),
         pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
@@ -944,7 +972,12 @@ WelcomeLoginPromptConfig? _welcomeLoginPromptConfig(
       if (!context.mounted) {
         return;
       }
-      context.go(AppRoutePaths.login(reason: reason.name));
+      openLoginPage(
+        context,
+        reasonName: reason.name,
+        replace: true,
+        allowGuestDismissPop: false,
+      );
     },
     onContinueAsGuest: () async {
       await ref.read(authSessionControllerProvider.notifier).continueAsGuest();
@@ -974,7 +1007,12 @@ class _CreateEntryRoutePage extends ConsumerWidget {
       onClose: () => context.pop(),
       onSelect: (EditorStartAction action) {
         context.pop();
-        context.go(AppRoutePaths.create(type: action.name));
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) {
+            return;
+          }
+          context.go(AppRoutePaths.create(type: action.name));
+        });
       },
       onContinueFromDraft: () {
         final router = GoRouter.of(context);

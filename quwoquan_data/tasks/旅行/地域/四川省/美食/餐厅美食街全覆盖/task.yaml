@@ -1,0 +1,36 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/美食/餐厅美食街全覆盖
+title: 四川省餐厅美食街全覆盖
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 美食
+parentTaskId: 旅行/地域/四川省/_省域总览
+status: draft
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/餐厅
+  - 地点/美食街
+  coverageTargets:
+  - entityType: 地点/美食街
+    name: 建设路小吃街
+  - entityType: 地点/美食街
+    name: 锦里小吃街
+  - entityType: 地点/餐厅
+    name: 陈麻婆豆腐
+  - entityType: 地点/餐厅
+    name: 陈麻婆豆腐总店
+content:
+  angles:
+  - 探店
+  - 攻略
+  - 美图
+  emphasis:
+  - 在地风味
+  - 探店体验
+acceptance: {}
+provenance:
+  createdAt: '2026-05-15T00:00:00+08:00'
+  createdBy: bootstrap

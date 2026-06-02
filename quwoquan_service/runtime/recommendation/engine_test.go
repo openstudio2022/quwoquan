@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	experiments "quwoquan_service/runtime/experiments"
+	"quwoquan_service/runtime/recpolicy"
 	learning "quwoquan_service/runtime/learning"
 )
 
@@ -274,7 +274,7 @@ func TestEngine_GetFeed_EngagementCountsAffectRanking(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(hp, []CandidateSource{source}, WithExploreFraction(0))
+	engine := NewEngine(hp, []CandidateSource{source}, WithPolicyStore(noExplorePolicyStore()))
 	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
 	if err != nil {
 		t.Fatal(err)
@@ -307,7 +307,7 @@ func TestEngine_GetFeed_ScoresByTagRelevance(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(hp, []CandidateSource{source}, WithExploreFraction(0))
+	engine := NewEngine(hp, []CandidateSource{source}, WithPolicyStore(noExplorePolicyStore()))
 	resp, _ := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
 
 	if len(resp.Items) < 2 {
@@ -335,8 +335,10 @@ func TestEngine_Rerank_AuthorDedup(t *testing.T) {
 	}
 
 	engine := NewEngine(hp, []CandidateSource{source},
-		WithMaxAuthorPerFeed(2),
-		WithExploreFraction(0),
+		WithPolicyStore(testPolicyStore(func(p *recpolicy.RecPolicy) {
+			p.Scorer.MaxAuthorPerFeed = 2
+			p.Scorer.ExploreFraction = 0
+		})),
 	)
 	resp, _ := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 5})
 
@@ -388,18 +390,17 @@ func TestEngine_ABExperiment_AffectsScoring(t *testing.T) {
 	hp := NewHotPath(redis)
 	ctx := context.Background()
 
-	resolver := experiments.NewHashResolver()
-	RegisterRecWeightsExperiment(resolver)
-
 	now := time.Now()
 	source := &mockCandidateSource{candidates: []ContentCandidate{
 		{ContentID: "c1", ContentType: "photo", Tags: []string{"travel"}, PublishedAt: now, LikeCount: 50},
 		{ContentID: "c2", ContentType: "video", Tags: []string{"food"}, PublishedAt: now, LikeCount: 5},
 	}}
 
+	// The baseline policy enables the rec_scoring_weights experiment for all
+	// users; whichever bucket "testuser" hashes into, scoring must still
+	// produce positive scores for both candidates.
 	engine := NewEngine(hp, []CandidateSource{source},
-		WithExperimentResolver(resolver),
-		WithExploreFraction(0),
+		WithPolicyStore(noExplorePolicyStore()),
 	)
 	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "testuser", Limit: 10})
 	if err != nil {
@@ -414,27 +415,6 @@ func TestEngine_ABExperiment_AffectsScoring(t *testing.T) {
 		if item.Score <= 0 {
 			t.Errorf("item %s should have positive score, got %f", item.ContentID, item.Score)
 		}
-	}
-}
-
-func TestResolveWeights_DefaultOnNilResolver(t *testing.T) {
-	ctx := context.Background()
-	w := ResolveWeights(ctx, nil, "u1")
-	def := DefaultWeights()
-	if w.TagRelevance != def.TagRelevance {
-		t.Errorf("expected default TagRelevance %f, got %f", def.TagRelevance, w.TagRelevance)
-	}
-}
-
-func TestResolveWeights_PresetBuckets(t *testing.T) {
-	ctx := context.Background()
-	resolver := experiments.NewHashResolver()
-	RegisterRecWeightsExperiment(resolver)
-
-	// Test a known preset
-	assignment, _ := resolver.Resolve(ctx, ExpRecWeights, "testuser")
-	if _, ok := WeightPresets[assignment.Bucket]; !ok {
-		t.Errorf("assigned bucket %q not in WeightPresets", assignment.Bucket)
 	}
 }
 
@@ -574,6 +554,60 @@ func (f *failingModelScorer) ScoreBatch(_ context.Context, _ *ScoringFeatures, _
 	return nil, fmt.Errorf("model service unavailable")
 }
 
+// capturingScorer records the ScoringFeatures it was handed, so tests can
+// assert what weights/scorer/segments the engine resolved from policy.
+type capturingScorer struct {
+	last *ScoringFeatures
+}
+
+func (c *capturingScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, candidates []ContentCandidate) ([]ScoredCandidate, error) {
+	c.last = features
+	result := make([]ScoredCandidate, len(candidates))
+	for i, cand := range candidates {
+		result[i] = ScoredCandidate{Candidate: cand, Score: float64(cand.LikeCount) + 1}
+	}
+	return result, nil
+}
+
+// TestEngine_SegmentTargeting_DrivesPolicyResolution proves the full T4-3
+// segment plumbing: a user whose feature vector carries a population segment
+// (computed upstream by MatchSegments) makes the engine resolve the policy's
+// segment-targeted preset override — declaratively, with no if-else in the
+// engine and no hand-coded weights.
+func TestEngine_SegmentTargeting_DrivesPolicyResolution(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	source := &mockCandidateSource{candidates: []ContentCandidate{
+		{ContentID: "c1", ContentType: "photo", Tags: []string{"travel"}, PublishedAt: now, LikeCount: 10},
+	}}
+	// travel_enthusiast → presetOverride engagement_heavy in the baseline policy.
+	fp := &mockFeatureProvider{features: map[string]*UserFeatureVector{
+		"seg-user": {Segments: []string{"travel_enthusiast"}},
+	}}
+	cap := &capturingScorer{}
+	engine := NewEngine(hp, []CandidateSource{source},
+		WithFeatureProvider(fp),
+		WithScorer(cap),
+		WithPolicyStore(noExplorePolicyStore()),
+	)
+
+	if _, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "seg-user", SessionID: "s1", Limit: 5}); err != nil {
+		t.Fatal(err)
+	}
+	if cap.last == nil {
+		t.Fatal("scorer never invoked")
+	}
+	// engagement_heavy preset has popularity 4.0 (vs control 2.0).
+	engagementHeavy := recpolicy.Baseline().WeightPresets["engagement_heavy"]
+	if cap.last.Weights.Popularity != engagementHeavy.Popularity {
+		t.Fatalf("segment override not applied: popularity=%v want %v (engagement_heavy)",
+			cap.last.Weights.Popularity, engagementHeavy.Popularity)
+	}
+}
+
 type mockFeatureProvider struct {
 	features map[string]*UserFeatureVector
 }
@@ -665,7 +699,7 @@ func TestEngine_WithFeatureProvider(t *testing.T) {
 
 	engine := NewEngine(hp, []CandidateSource{source},
 		WithFeatureProvider(fp),
-		WithExploreFraction(0),
+		WithPolicyStore(noExplorePolicyStore()),
 	)
 	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
 	if err != nil {
@@ -697,7 +731,8 @@ func TestRuleScorer_UsesUserFeatures(t *testing.T) {
 			AuthorAffinities: map[string]float64{"a2": 3.0},
 			EngagementRate:   0.2,
 		},
-		Weights:     DefaultWeights(),
+		Weights:     recpolicy.Baseline().WeightPresets["control"],
+		Scorer:      recpolicy.Baseline().Scorer,
 		ExploreRate: 0,
 	}
 
@@ -1262,7 +1297,7 @@ func TestRerank_TagDedup_NoThreeConsecutiveSameTag(t *testing.T) {
 	}
 	source := &mockCandidateSource{candidates: candidates}
 
-	engine := NewEngine(hp, []CandidateSource{source}, WithExploreFraction(0))
+	engine := NewEngine(hp, []CandidateSource{source}, WithPolicyStore(noExplorePolicyStore()))
 	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 5})
 	if err != nil {
 		t.Fatal(err)
@@ -1473,21 +1508,20 @@ func TestObservability_ModelTimeoutRecorded(t *testing.T) {
 	RecordModelTimeout()
 }
 
-func TestModelVsRuleExperiment(t *testing.T) {
-	ctx := context.Background()
-	resolver := experiments.NewHashResolver()
-	RegisterModelVsRuleExperiment(resolver)
-
-	bucket := ResolveModelBucket(ctx, resolver, "testuser")
+func TestModelVsRuleExperiment_PolicyResolvesValidBucket(t *testing.T) {
+	p := recpolicy.Baseline()
+	bucket := p.ResolveBucketOr(recpolicy.ExpModelVsRule, "testuser", nil, "rule")
 	if bucket != "rule" && bucket != "model" {
 		t.Errorf("unexpected bucket %q, expected 'rule' or 'model'", bucket)
 	}
 }
 
-func TestResolveModelBucket_NilResolver(t *testing.T) {
-	bucket := ResolveModelBucket(context.Background(), nil, "u1")
+func TestModelVsRule_FallbackWhenExperimentMissing(t *testing.T) {
+	p := recpolicy.Baseline()
+	// An undefined experiment id must fall back to the provided default.
+	bucket := p.ResolveBucketOr("rec_undefined_experiment", "u1", nil, "rule")
 	if bucket != "rule" {
-		t.Errorf("nil resolver should return 'rule', got %q", bucket)
+		t.Errorf("missing experiment should return fallback 'rule', got %q", bucket)
 	}
 }
 

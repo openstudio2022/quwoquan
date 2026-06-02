@@ -200,6 +200,9 @@ stackctl-package:
 stackctl-verify:
 	@python3 agent_ops/deploy/stackctl.py verify $(if $(ENV),--env "$(ENV)",) $(if $(TARGET),--target "$(TARGET)",) $(if $(KIND),--kind "$(KIND)",) $(if $(TIER),--tier "$(TIER)",)
 
+dev-up:
+	@python3 agent_ops/deploy/stackctl.py up $(if $(ENV),--env "$(ENV)",) $(if $(DEVICE_ID),--device-id "$(DEVICE_ID)",) $(if $(SKIP_APP),--skip-app,) $(if $(ROLLOUT_MODE),--rollout-mode "$(ROLLOUT_MODE)",)
+
 stackctl-up:
 	@if [ -z "$(TARGET)" ]; then \
 		echo "FAIL: TARGET is required. Example: make stackctl-up TARGET=beta-local"; \

@@ -23,7 +23,7 @@ ROOTS = [
     APP / "ui" / "content",
     APP / "cloud" / "services" / "content",
     APP / "ui" / "discovery" / "widgets" / "works_immersive_viewer.dart",
-    APP / "ui" / "discovery" / "widgets" / "moment_social_feed.dart",
+    APP / "ui" / "discovery" / "widgets" / "home_multi_form_feed.dart",
     APP / "ui" / "circle" / "widgets" / "section_creations.dart",
     APP / "cloud" / "runtime" / "models" / "content_post_detail_payload.dart",
     APP / "core" / "models" / "media_viewer_extra.dart",

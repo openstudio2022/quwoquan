@@ -42,6 +42,16 @@ void main() {
       expect(event.tags, ['photo']);
       expect(event.duration, 3.5);
     });
+
+    test('toJson 使用 tagRefs wire key（对齐云侧 BehaviorEventInput，无旧 tags 键残留）', () {
+      final json = BehaviorEvent(
+        contentId: 'post_5',
+        action: BehaviorAction.dwell,
+        tags: ['Topic/旅行', 'Entity/地点/景区'],
+      ).toJson();
+      expect(json['tagRefs'], ['Topic/旅行', 'Entity/地点/景区']);
+      expect(json.containsKey('tags'), isFalse);
+    });
   });
 
   group('BehaviorRepository — 异常/边界契约', () {

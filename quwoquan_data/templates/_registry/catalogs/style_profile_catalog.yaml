@@ -10,9 +10,42 @@ renderDefaults:
     allowedTemplates: [gentle, diffuse]
   photography:
     allowedTemplates: [journal, ritual]
+# 开篇策略库（解决"开篇千篇一律"）：每个 styleFamily 通过 allowedOpenings 关联多种可选开篇，
+# agent 按原文体裁 + 证据自选其一并写入 draft_meta.openingStrategy；review 开篇门按所选策略的
+# markers 语义化校验（命中即视为采用了真实钩子，而非套路化罗列）；跨篇相似度门再防雷同。
+openingStrategies:
+  scene_immersion:
+    label: 场景沉浸
+    hint: 用一个具体时间/天气/动作把读者瞬间放进现场，而不是先报地名与行程。
+    markers: ["清晨", "傍晚", "夜里", "推开", "站在", "脚下", "那一刻", "抬头", "转过", "风", "雨", "雾", "阳光", "踩"]
+  personal_motivation:
+    label: 出发动机
+    hint: 写为什么想去、出发前的犹豫或期待，带出真实的个人理由。
+    markers: ["出发前", "动身", "想去", "为什么走", "出门前", "临出发", "犹豫", "期待", "决定走", "一直想", "纠结"]
+  question_hook:
+    label: 设问悬念
+    hint: 用一个真实问题或反差勾住读者，引出全文要回答的事。
+    markers: ["？", "?", "到底", "真的", "值不值", "是不是", "难道", "凭什么"]
+  data_contrast:
+    label: 认知反差
+    hint: 用一个具体数字或常见误解开场，再纠偏。
+    markers: ["其实", "原来", "误以为", "以为", "没想到", "别被", "真相", "实际上", "并不是"]
+  conclusion_first:
+    label: 结论先行
+    hint: 先抛态度/结论，再展开理由，适合攻略与测评。
+    markers: ["先说结论", "直接说", "一句话", "说重点", "结论是", "先讲", "只说一件事"]
+  dialogue_quote:
+    label: 对话引语
+    hint: 用一句对话或当地人的话破题。
+    markers: ["“", "”", "问我", "告诉我", "有人说", "他说", "她说", "当地人"]
+  contrast_compare:
+    label: 对比并置
+    hint: 把两种选择/两类人/两个时刻并置，制造张力。
+    markers: ["有人", "也有人", "比起", "相比", "一边", "另一边", "与其", "不如", "曾经", "如今"]
 styleFamilies:
   实用攻略风:
     render: { articleTemplate: journal, fontPreset: clean }
+    allowedOpenings: [conclusion_first, question_hook, data_contrast]
     styleProfile:
       writingGenre: 攻略体
       visualTone: 纪实风
@@ -25,6 +58,7 @@ styleFamilies:
       - Format/内容角度/攻略
   路线规划风:
     render: { articleTemplate: journal, fontPreset: clean }
+    allowedOpenings: [conclusion_first, scene_immersion, contrast_compare]
     styleProfile:
       writingGenre: 路书体
       visualTone: 电影感
@@ -39,6 +73,7 @@ styleFamilies:
       - Format/视觉风格/视觉调性/电影感
   地理画报风:
     render: { articleTemplate: journal, fontPreset: classic }
+    allowedOpenings: [scene_immersion, data_contrast, question_hook]
     styleProfile:
       writingGenre: 专题报道体
       visualTone: 纪实风
@@ -53,6 +88,7 @@ styleFamilies:
       - Format/表现手法/摄影技法/全景接片
   摄影画报风:
     render: { articleTemplate: journal, fontPreset: clean }
+    allowedOpenings: [scene_immersion, dialogue_quote]
     styleProfile:
       writingGenre: 图文画报体
       visualTone: 电影感
@@ -67,6 +103,7 @@ styleFamilies:
       - Format/表现手法/摄影技法/长曝光
   旅途随笔风:
     render: { articleTemplate: journal, fontPreset: handwritten }
+    allowedOpenings: [scene_immersion, personal_motivation, dialogue_quote]
     styleProfile:
       writingGenre: 游记体
       visualTone: 胶片感
@@ -80,6 +117,7 @@ styleFamilies:
       - Format/内容角度/叙事/旅行叙事
   探店点评风:
     render: { articleTemplate: gentle, fontPreset: clean }
+    allowedOpenings: [scene_immersion, conclusion_first, contrast_compare]
     styleProfile:
       writingGenre: 点评体
       visualTone: 高调明亮
@@ -93,6 +131,7 @@ styleFamilies:
       - Format/内容角度/测评/专业评测
   低预算穷游风:
     render: { articleTemplate: journal, fontPreset: clean }
+    allowedOpenings: [conclusion_first, contrast_compare, data_contrast]
     styleProfile:
       writingGenre: 省钱攻略体
       visualTone: 纪实风
@@ -106,6 +145,7 @@ styleFamilies:
       - Topic/旅行/住宿/青旅住宿
   银发慢游风:
     render: { articleTemplate: gentle, fontPreset: clean }
+    allowedOpenings: [personal_motivation, scene_immersion, conclusion_first]
     styleProfile:
       writingGenre: 慢游攻略体
       visualTone: 高调明亮
@@ -119,6 +159,7 @@ styleFamilies:
       - Topic/旅行/玩法/观光游览
   学长姐攻略风:
     render: { articleTemplate: gentle, fontPreset: rounded }
+    allowedOpenings: [question_hook, conclusion_first, personal_motivation]
     styleProfile:
       writingGenre: 经验分享体
       visualTone: 高调明亮
@@ -131,6 +172,7 @@ styleFamilies:
       - Format/内容角度/攻略/新生攻略
   校园日记风:
     render: { articleTemplate: gentle, fontPreset: handwritten }
+    allowedOpenings: [scene_immersion, personal_motivation, dialogue_quote]
     styleProfile:
       writingGenre: 校园日记体
       visualTone: 高调明亮
@@ -143,6 +185,7 @@ styleFamilies:
       - Format/内容角度/日记/校园日记
   客观评测风:
     render: { articleTemplate: gentle, fontPreset: clean }
+    allowedOpenings: [conclusion_first, data_contrast, contrast_compare]
     styleProfile:
       writingGenre: 测评体
       visualTone: 极简白
@@ -155,6 +198,7 @@ styleFamilies:
       - Format/内容角度/测评/校园评测
   升学经验风:
     render: { articleTemplate: gentle, fontPreset: clean }
+    allowedOpenings: [personal_motivation, question_hook, conclusion_first]
     styleProfile:
       writingGenre: 经验分享体
       visualTone: 极简白

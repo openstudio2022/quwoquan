@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -17,12 +18,20 @@ class HomepageDetailPage extends ConsumerStatefulWidget {
     this.selectionMode = false,
     this.initialSummary,
     this.referralSource = ReferralSource.entityPage,
+    this.feedRequestId = '',
+    this.recommendationTraceId = '',
+    this.experimentBucket = '',
+    this.rolloutCohort = '',
   });
 
   final String homepageId;
   final bool selectionMode;
   final HomepageSummary? initialSummary;
   final ReferralSource referralSource;
+  final String feedRequestId;
+  final String recommendationTraceId;
+  final String experimentBucket;
+  final String rolloutCohort;
 
   @override
   ConsumerState<HomepageDetailPage> createState() => _HomepageDetailPageState();
@@ -33,6 +42,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
   String? _errorText;
   HomepageDetail? _detail;
   HomepageShellData? _shell;
+  ObjectPageBundle? _objectPageBundle;
   String? _viewerOwnerUserId;
 
   @override
@@ -41,10 +51,12 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     unawaited(_load());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        ref.read(contentEngagementTrackerProvider).trackEntityPageView(
-          widget.homepageId,
-          from: widget.referralSource,
-        );
+        ref
+            .read(contentEngagementTrackerProvider)
+            .trackEntityPageView(
+              widget.homepageId,
+              from: widget.referralSource,
+            );
       }
     });
   }
@@ -58,6 +70,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       errorText: _errorText,
       detail: _detail,
       shell: _shell,
+      objectPageBundle: _objectPageBundle,
       viewerOwnerUserId: _viewerOwnerUserId,
       onBack: () => context.pop(),
       onClaim: _openClaim,
@@ -77,6 +90,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       final repository = ref.read(homepageRepositoryProvider);
       late HomepageDetail loadedDetail;
       late HomepageShellData loadedShell;
+      late ObjectPageBundle loadedBundle;
       await Future.wait<void>([
         repository.getHomepageDetail(widget.homepageId).then((d) {
           loadedDetail = d;
@@ -84,6 +98,18 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         repository.getHomepageShell(widget.homepageId).then((s) {
           loadedShell = s;
         }),
+        repository
+            .getObjectPageBundle(
+              widget.homepageId,
+              referralSource: widget.referralSource.value,
+              feedRequestId: widget.feedRequestId,
+              recommendationTraceId: widget.recommendationTraceId,
+              experimentBucket: widget.experimentBucket,
+              rolloutCohort: widget.rolloutCohort,
+            )
+            .then((bundle) {
+              loadedBundle = bundle;
+            }),
       ]);
       ActivePersonaContextViewData? activeContext;
       try {
@@ -98,6 +124,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       setState(() {
         _detail = loadedDetail;
         _shell = loadedShell;
+        _objectPageBundle = loadedBundle;
         _viewerOwnerUserId = ownerId.isEmpty ? null : ownerId;
         _isLoading = false;
       });
