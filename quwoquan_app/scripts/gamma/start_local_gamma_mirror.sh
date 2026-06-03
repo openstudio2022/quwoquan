@@ -675,9 +675,10 @@ if [[ "$skip_build" == "0" ]]; then
   if ! "${compose_cmd[@]}" build; then
     if [[ "${LOCAL_GAMMA_ALLOW_CACHED_IMAGES_ON_BUILD_FAILURE:-1}" == "1" ]] && \
       docker image inspect \
-        quwoquan_service-rec-model-service \
-        quwoquan_service-content-service \
-        quwoquan_service-chat-service >/dev/null 2>&1; then
+        quwoquan_service_rec-model-service \
+        quwoquan_service_content-service \
+        quwoquan_service_chat-service \
+        quwoquan_service_assistant-service >/dev/null 2>&1; then
       echo "[local-gamma] WARN: docker build failed; using existing local service images (set LOCAL_GAMMA_ALLOW_CACHED_IMAGES_ON_BUILD_FAILURE=0 to make this fatal)" >&2
     else
       exit 1
@@ -894,9 +895,6 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_assistant-service_1 -d \
     --net "$network_name" --network-alias assistant-service \
-    -e PATH=/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    -e GOPROXY="${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}" \
-    -e GOSUMDB="${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}" \
     -e SERVICE_NAME=assistant-service -e APP_ENV=gamma \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e ASSISTANT_SERVICE_ADDR=:18087 \
@@ -906,13 +904,10 @@ if [[ "$podman_compose" == "1" ]]; then
     -e ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-1}" \
     -e ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}" \
     -e ASSISTANT_SEARCH_PROVIDER="${ASSISTANT_SEARCH_PROVIDER:-}" \
-    -v "$ROOT/quwoquan_service:/workspace" \
     -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
-    -v quwoquan_service_local-gamma-go-cache:/go \
-    -w /workspace \
     --healthcheck-command "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    "$LOCAL_GAMMA_GO_BOOKWORM_IMAGE" sh -lc "cd services/assistant-service/cmd/api && /usr/local/go/bin/go run ." >/dev/null
+    quwoquan_service_assistant-service >/dev/null
   wait_healthy quwoquan_service_assistant-service_1
 
   podman run --pull=never --name quwoquan_service_tag-service_1 -d \
