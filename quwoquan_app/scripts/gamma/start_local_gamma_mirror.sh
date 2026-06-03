@@ -30,7 +30,8 @@ PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-http://127.0.0.1:${LOC
 MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}}"
 MEDIA_ORIGIN_BASE_URL="${LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL:-}"
 LOCAL_MEDIA_ORIGIN_URL="http://127.0.0.1:${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}"
-DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.m.daocloud.io/library}"
+# daocloud 镜像代理在部分网络下会 EOF；默认直连 Docker Hub，可通过环境变量覆盖。
+DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}"
 HOST_READY_TIMEOUT_SECONDS="${LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS:-360}"
 
 library_image() {
@@ -54,6 +55,7 @@ down=0
 tunnel_pid_file="$ROOT/artifacts/local-gamma/colima-tunnels.pids"
 media_origin_pid_file="$ROOT/artifacts/local-gamma/media-origin.pid"
 stack_report="$ROOT/artifacts/local-gamma/stack_state.json"
+gamma_proxy_ensure_attempts=0
 
 local_gamma_has_existing_stack() {
   if docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null | awk 'NF {found=1} END {exit found ? 0 : 1}'; then
@@ -623,6 +625,7 @@ fi
 
 prepare_config_root
 prepare_media_root
+mkdir -p "$ROOT/artifacts/local-gamma/model-cache"
 start_media_origin
 prepare_caddyfile
 
@@ -928,6 +931,50 @@ else
   # Recreate the local mirror on every gate run so changed host port envs take effect.
   "${compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
   docker volume rm -f quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || true
+  ensure_docker_gamma_proxy_started() {
+    local name="quwoquan_service-gamma-proxy-1"
+    local status=""
+    local health=""
+    local deadline=$((SECONDS + 15))
+    while (( SECONDS < deadline )); do
+      status="$(docker inspect --format '{{.State.Status}}' "$name" 2>/dev/null || true)"
+      if [[ -n "$status" ]]; then
+        break
+      fi
+      sleep 1
+    done
+    if [[ -z "$status" ]]; then
+      echo "[local-gamma] WARN: gamma-proxy container missing after compose up" >&2
+      return 1
+    fi
+    health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$name" 2>/dev/null || true)"
+    if [[ "$status" == "running" ]]; then
+      if [[ "$health" == "healthy" || "$health" == "running" || "$health" == "starting" ]]; then
+        return 0
+      fi
+      echo "[local-gamma] WARN: gamma-proxy running but unhealthy (health=$health)" >&2
+      return 1
+    fi
+    gamma_proxy_ensure_attempts=$((gamma_proxy_ensure_attempts + 1))
+    echo "[local-gamma] gamma-proxy status=$status health=${health:-unknown}; starting explicitly (attempt ${gamma_proxy_ensure_attempts})" >&2
+    if ! docker start "$name" >/dev/null 2>&1; then
+      echo "[local-gamma] WARN: failed to start gamma-proxy explicitly" >&2
+      docker ps -a --filter "name=$name" >&2 || true
+      docker logs --tail 80 "$name" >&2 || true
+      return 1
+    fi
+    for _ in $(seq 1 30); do
+      status="$(docker inspect --format '{{.State.Status}}' "$name" 2>/dev/null || true)"
+      health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$name" 2>/dev/null || true)"
+      if [[ "$status" == "running" && ( "$health" == "healthy" || "$health" == "running" || "$health" == "starting" ) ]]; then
+        return 0
+      fi
+      sleep 1
+    done
+    echo "[local-gamma] WARN: gamma-proxy explicit start did not report ready state (status=$status health=$health)" >&2
+    docker logs --tail 80 "$name" >&2 || true
+    return 1
+  }
   compose_up_failed=0
   if ! "${compose_cmd[@]}" "${compose_up_args[@]}"; then
     # Docker compose may return early while health checks are still converging.
@@ -935,6 +982,7 @@ else
     compose_up_failed=1
     echo "[local-gamma] WARN: compose up reported a startup error; deferring to host readiness probes" >&2
   fi
+  ensure_docker_gamma_proxy_started || true
 fi
 start_colima_tunnels_if_needed
 
@@ -946,8 +994,13 @@ wait_local_gamma_host_ready() {
   local po_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
   local deadline=$(( $(date +%s) + HOST_READY_TIMEOUT_SECONDS ))
+  local last_gamma_proxy_retry=0
   echo "[local-gamma] waiting for host probes (${HOST_READY_TIMEOUT_SECONDS}s): ${gw}/healthz or ${gw_local}/healthz + ${media_edge_local}/healthz + http://127.0.0.1:${po_port}/healthz + http://127.0.0.1:${user_port}/healthz"
   while (( $(date +%s) < deadline )); do
+    if (( $(date +%s) - last_gamma_proxy_retry >= 15 )); then
+      ensure_docker_gamma_proxy_started || true
+      last_gamma_proxy_retry=$(date +%s)
+    fi
     if python3 - <<PY
 import urllib.request
 gateway_urls = ["${gw}/healthz"]
@@ -1034,6 +1087,16 @@ seed_tag_service_data() {
   fi
 }
 seed_tag_service_data
+
+seed_gamma_content_data() {
+  echo "[local-gamma] seeding content posts (gamma curated manifest) ..."
+  if ! python3 "$ROOT/quwoquan_app/scripts/gamma/run_local_gamma_t3.py" --seed-only --report "$ROOT/artifacts/local-gamma/content-seed-report.json"; then
+    echo "[local-gamma] WARN: content seed failed; home/discovery feeds may be empty until seed succeeds" >&2
+    return 0
+  fi
+  echo "[local-gamma] content seed completed"
+}
+seed_gamma_content_data
 
 python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$LOCAL_MEDIA_ORIGIN_URL" "$restarted_from_previous" <<'PY'
 import json
