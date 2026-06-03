@@ -119,9 +119,10 @@ func main() {
 		ServiceName:       "tag-service",
 		ServiceInstanceID: instanceID,
 	}, ioLogger, processLogger, exceptionLogger)
+	corsHandler := rthttp.WithCORS(observed, rthttp.CORSOptionsFromEnv())
 
 	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observed)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           rateLimited,

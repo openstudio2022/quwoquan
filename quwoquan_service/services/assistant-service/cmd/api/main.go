@@ -159,6 +159,7 @@ func main() {
 	var eventStore application.EventStore
 	var profileStore application.LearningProfileStore
 	var subscriptionStore application.SkillSubscriptionStore
+	var appMessageStore application.AppMessageStore
 	if strings.TrimSpace(cfg.MongoDB.URI) != "" {
 		mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "assistant-service")
 		defer func() {
@@ -186,19 +187,27 @@ func main() {
 			log.Printf("WARN: assistant-service ensure skill subscription indexes: %v", err)
 		}
 		subscriptionStore = mongoSubscriptions
+		mongoAppMessages := persistence.NewMongoAppMessageStore(db)
+		if err := mongoAppMessages.EnsureIndexes(ctx); err != nil {
+			log.Printf("WARN: assistant-service ensure app message indexes: %v", err)
+		}
+		appMessageStore = mongoAppMessages
 		healthChecker.Register("mongodb", func(ctx context.Context) error {
 			return mongoClient.Ping(ctx, nil)
 		})
 		log.Printf("assistant-service events storage=mongodb db=%s", dbName)
 		log.Printf("assistant-service learning profile storage=mongodb db=%s", dbName)
 		log.Printf("assistant-service skill subscription storage=mongodb db=%s", dbName)
+		log.Printf("assistant-service app message storage=mongodb db=%s", dbName)
 	} else {
 		eventStore = persistence.NewMemoryEventStore()
 		profileStore = projection.NewMemoryLearningProfileStore()
 		subscriptionStore = persistence.NewMemorySkillSubscriptionStore()
+		appMessageStore = persistence.NewMemoryAppMessageStore()
 		log.Printf("assistant-service events storage=inmemory (no mongodb.uri configured)")
 		log.Printf("assistant-service learning profile storage=inmemory (no mongodb.uri configured)")
 		log.Printf("assistant-service skill subscription storage=inmemory (no mongodb.uri configured)")
+		log.Printf("assistant-service app message storage=inmemory (no mongodb.uri configured)")
 	}
 
 	var consentStore application.ConsentStore
@@ -242,7 +251,7 @@ func main() {
 	assistantOpts := []application.AssistantServiceOption{
 		application.WithLearningProfileStore(profileStore),
 		application.WithEventPublisher(publisher),
-		application.WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		application.WithAppMessageStore(appMessageStore),
 		application.WithSkillSubscriptionStore(subscriptionStore),
 		application.WithAgentLoop(buildAgentLoop(cfg, appEnv)),
 	}
@@ -283,8 +292,9 @@ func main() {
 		SourceID:          "assistant-service",
 		Src:               "assistant-service",
 	}, ioLogger, processLogger, exceptionLogger)
+	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
 	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{Addr: addr, Handler: rateLimited, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: assistantHTTPWriteTimeout(), IdleTimeout: 60 * time.Second}
 	log.Printf("assistant-service listening on %s env=%s (rate_limit=1000/s)", addr, appEnv)
 	if err := rthttp.ListenAndServeGraceful(server, assistantShutdownTimeout()); err != nil {
