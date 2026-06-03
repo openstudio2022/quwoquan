@@ -433,9 +433,10 @@ func main() {
 		SourceID:          "content-service",
 		Src:               "content-service",
 	}, ioLogger, processLogger, exceptionLogger)
+	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
 
 	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 
 	server := &http.Server{
 		Addr:              addr,

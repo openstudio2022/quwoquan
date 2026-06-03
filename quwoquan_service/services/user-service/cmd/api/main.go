@@ -281,6 +281,7 @@ func main() {
 		ServiceName:       "user-service",
 		ServiceInstanceID: instanceID,
 	}, ioLogger, processLogger, exceptionLogger)
+	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
 
 	// 8.2 Interest profile projector: consume content's UserInterestRecomputed
 	// and maintain the user-domain rm_user_profile_view interest read model.
@@ -297,7 +298,7 @@ func main() {
 
 	// 9. Start
 	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           rateLimited,
