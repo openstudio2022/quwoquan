@@ -1,14 +1,10 @@
 # rec-model-service: FastAPI + Python 3.11
-ARG PYTHON_BASE_IMAGE=python:3.11-slim
+ARG PYTHON_BASE_IMAGE=python:3.11
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 FROM ${PYTHON_BASE_IMAGE}
 ARG PIP_INDEX_URL
 ARG PIP_TRUSTED_HOST
-
-# ECS onebox 当前无可用 IPv6；强制 apt 走 IPv4，避免 deb.debian.org 在容器里长时间卡住。
-RUN printf 'Acquire::ForceIPv4 "true";\n' >/etc/apt/apt.conf.d/99force-ipv4 && \
-    apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
