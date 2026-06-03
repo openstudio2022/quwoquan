@@ -129,8 +129,10 @@ jobs:
           if [ "${{ inputs.skip_upload }}" = "true" ] || [ -n "${{ inputs.release_artifact_name }}" ]; then
             mkdir -p .gamma-minimal-bundle
             mkdir -p .gamma-minimal-bundle/quwoquan_app
+            mkdir -p .gamma-minimal-bundle/releases
             cp -R agent_ops .gamma-minimal-bundle/agent_ops
             cp -R deploy .gamma-minimal-bundle/deploy
+            cp -R releases/config .gamma-minimal-bundle/releases/config
             cp -R quwoquan_app/scripts .gamma-minimal-bundle/quwoquan_app/scripts
             cp -R quwoquan_service .gamma-minimal-bundle/quwoquan_service
             tar \

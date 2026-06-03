@@ -82,8 +82,10 @@ jobs:
         if: ${{ !inputs.skip_upload }}
         run: |
           mkdir -p "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_app"
+          mkdir -p "${RUNNER_TEMP}/gamma-minimal-bundle/releases"
           cp -R agent_ops "${RUNNER_TEMP}/gamma-minimal-bundle/agent_ops"
           cp -R deploy "${RUNNER_TEMP}/gamma-minimal-bundle/deploy"
+          cp -R releases/config "${RUNNER_TEMP}/gamma-minimal-bundle/releases/config"
           cp -R quwoquan_app/scripts "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_app/scripts"
           cp -R quwoquan_service "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_service"
           tar \
