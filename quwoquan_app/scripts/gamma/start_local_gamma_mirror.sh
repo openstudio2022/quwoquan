@@ -81,12 +81,34 @@ stop_colima_tunnels() {
 }
 
 stop_media_origin() {
-  if [[ ! -f "$media_origin_pid_file" ]]; then
-    return 0
+  local port="${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}"
+  local pid=""
+  local extra_pid=""
+  local seen=" "
+  local pids=()
+  if [[ -f "$media_origin_pid_file" ]]; then
+    pid="$(cat "$media_origin_pid_file" 2>/dev/null || true)"
+    if [[ -n "$pid" ]]; then
+      pids+=("$pid")
+      seen+=" $pid "
+    fi
   fi
-  local pid
-  pid="$(cat "$media_origin_pid_file" 2>/dev/null || true)"
-  if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
+  while IFS= read -r extra_pid; do
+    [[ -n "$extra_pid" ]] || continue
+    if [[ "$seen" == *" $extra_pid "* ]]; then
+      continue
+    fi
+    pids+=("$extra_pid")
+    seen+=" $extra_pid "
+  done < <(
+    ss -ltnp 2>/dev/null \
+      | awk -v port=":${port}" '$4 ~ port {print}' \
+      | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p'
+  )
+  for pid in "${pids[@]}"; do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      continue
+    fi
     kill "$pid" >/dev/null 2>&1 || true
     local deadline=$((SECONDS + 10))
     while kill -0 "$pid" >/dev/null 2>&1; do
@@ -96,7 +118,7 @@ stop_media_origin() {
       fi
       sleep 0.2
     done
-  fi
+  done
   rm -f "$media_origin_pid_file"
 }
 
