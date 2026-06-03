@@ -218,13 +218,14 @@ services:
       retries: 10
 
   assistant-service:
-    image: "${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-docker.io/library/golang:1.24-bookworm}"
-    working_dir: /workspace
-    command: ["sh", "-lc", "cd services/assistant-service/cmd/api && /usr/local/go/bin/go run ."]
+    build:
+      context: .
+      dockerfile: ../deploy/service/assistant-service/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
+        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
+        GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
     environment:
-      PATH: /go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      GOPROXY: "${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}"
-      GOSUMDB: "${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}"
       SERVICE_NAME: assistant-service
       APP_ENV: gamma
       CONFIG_ROOT: /etc/qwq-config
@@ -246,9 +247,7 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - .:/workspace
       - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
-      - local-gamma-go-cache:/go
     ports:
       - "${LOCAL_GAMMA_ASSISTANT_PORT:-18087}:18087"
     healthcheck:
