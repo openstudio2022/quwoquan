@@ -7,30 +7,261 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: publish-comment-reaction
 scope:
-  summary: comment thread 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 评论 V2 完整闭环，覆盖平铺文章内联评论、沉浸式上压评论、评论/回复/展开/赞踩/输入能力、端云契约、环境种子与性能降级。
+  in_scope:
+  - 平铺文章评论入口滚动定位到正文后的内联评论区。
+  - 图片、视频、文章翻页等沉浸式内容入口打开内容上压评论分屏。
+  - 一级评论、二级回复预览、回复分页展开、默认/最新/最多赞排序。
+  - 文本、emoji、图片附件、@小趣、@联系人或关注对象输入与结构化回显。
+  - 评论赞踩互斥、viewerReaction 重入恢复、删除/举报/回复权限态。
+  - alpha/beta/gamma 非生产环境复杂评论种子与四层测试证据。
+  out_of_scope:
+  - 评论全文搜索。
+  - 评论置顶与评论翻译。
+  - ML rerank，仅保留低延迟 recommended 可解释排序。
 gwt_acceptance:
   GWT1:
-    title: comment thread GWT
+    title: 平铺文章评论入口定位到内联评论区
     given:
-    - 前置条件明确。
+    - 用户打开平铺文章详情页，文章存在可评论状态和已加载评论计数。
     when:
-    - 用户或系统动作发生。
+    - 用户点击底部评论图标或评论计数。
     then:
-    - 可观察结果符合预期。
+    - 页面滚动到正文之后的评论 section，不打开独立弹窗。
+    - 用户可继续向上滑回正文，底部栏保留半宽输入入口、文章赞和转发。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
+    - 内联评论区完成首屏加载，且入口二次点击仍稳定定位。
+    edge_cases:
+    - 评论区为空时展示空态和输入入口。
+    - 评论加载失败时保留文章正文并显示可重试错误态。
+    contract_refs:
+    - content/post service.yaml ListComments
+    performance_points:
+    - 评论 section 首屏 P95 小于 800ms。
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_static_contract
+      - T4_device_journey
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/article_inline_comment_section_test.dart
+      recorded: []
+    status: pending
+  GWT2:
+    title: 沉浸式内容打开上压评论分屏
+    given:
+    - 用户正在浏览图片、视频或文章翻页沉浸式内容。
+    when:
+    - 用户点击评论入口。
+    then:
+    - 当前内容区域上压并保留上下文，评论区在下方加载。
+    - 关闭评论后恢复原沉浸式高度，图片索引、视频进度或 pageflip 状态不丢失。
+    done_when:
+    - 三类沉浸式入口都能完成打开、评论、关闭和恢复。
+    edge_cases:
+    - 打开评论时键盘弹起后内容区域仍可见。
+    - pageflip 只作为宿主 chrome，不改动几何计算链路。
+    contract_refs:
+    - content/post service.yaml ListComments
+    performance_points:
+    - 打开分屏动画小于 300ms。
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T4_device_journey
+    tests:
+      planned:
+      - quwoquan_app/test/components/comment_system/immersive_comment_split_sheet_test.dart
+      recorded: []
+    status: pending
+  GWT3:
+    title: 评论与回复提交支持登录续接和失败保留草稿
+    given:
+    - 用户从任一评论入口打开评论区。
+    when:
+    - 用户以游客身份发起评论或回复，完成登录后继续提交。
+    then:
+    - 登录成功后保留原评论目标、回复目标、正文、附件和 mentions。
+    - 提交失败时保留草稿并展示结构化错误。
+    done_when:
+    - 评论和回复两个路径都能从游客态续接到最终列表回显。
+    edge_cases:
+    - 用户关闭登录页后回到安全态，不重复弹登录。
+    - 弱网超时进入待发送或可重试状态。
+    contract_refs:
+    - content/post service.yaml CreateComment
+    - runtime/errors
+    performance_points:
+    - 乐观渲染小于 100ms，云端确认 P95 小于 500ms。
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T4_device_journey
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/providers/comment_provider_test.dart
+      - quwoquan_app/test/auth/comment_login_continuation_test.dart
+      recorded: []
+    status: pending
+  GWT4:
+    title: 回复预览和展开数量由云端配置控制
+    given:
+    - App Config 返回 reply_preview_count 和 reply_expand_page_size。
+    when:
+    - 用户打开评论列表并展开某条一级评论的回复。
+    then:
+    - 一级评论默认展示 reply_preview_count 条回复，配置不可达时 fallback 为 1。
+    - 每次点击展开追加 reply_expand_page_size 条回复，配置不可达时 fallback 为 10。
+    - 剩余回复数量准确递减。
+    done_when:
+    - Mock、Remote、服务端 contract 对相同配置给出一致结果。
+    edge_cases:
+    - 配置值小于 0 或过大时端云使用契约约束裁剪。
+    - replyNextCursor 为空时不再展示展开入口。
+    contract_refs:
+    - content/post service.yaml ListCommentReplies
+    - app config sys.content.comment.reply_preview_count
+    - app config sys.content.comment.reply_expand_page_size
+    performance_points:
+    - 回复展开查询 P95 小于 500ms。
+    evidence:
+      primary:
+      - T1_static_contract
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/providers/comment_reply_pagination_test.dart
+      - quwoquan_service/services/content-service/tests/comment_thread_contract_test.go
+      recorded: []
+    status: pending
+  GWT5:
+    title: 默认、最新、最多赞三档排序端云一致
+    given:
+    - 评论线程包含不同创建时间、赞数、回复数和踩数的评论。
+    when:
+    - 用户从排序入口选择默认、最新或最多赞。
+    then:
+    - 默认映射为 recommended，latest 按创建时间倒序，most_liked 按赞数优先。
+    - 端侧不维护第二套排序规则，只消费服务端返回顺序。
+    done_when:
+    - 三档排序在 Mock、Remote 和 contract seed 下顺序一致。
+    edge_cases:
+    - recommended 同分时使用稳定 tie-breaker。
+    - 删除或审核隐藏的评论不参与排序。
+    contract_refs:
+    - content/post service.yaml ListComments sort
+    performance_points:
+    - 评论首屏排序查询 P95 小于 800ms。
+    evidence:
+      primary:
+      - T1_static_contract
+      - T3_app_api_integration
+      supporting:
+      - T2_module_interaction
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/providers/comment_sort_test.dart
+      - quwoquan_service/services/content-service/tests/comment_thread_contract_test.go
+      recorded: []
+    status: pending
+  GWT6:
+    title: 评论赞踩互斥并能重入恢复
+    given:
+    - 用户打开含 viewerReaction 的评论列表。
+    when:
+    - 用户点赞、点踩、取消或切换反应。
+    then:
+    - like/dislike/none 三态互斥，数量乐观更新后与云端确认 reconciliation。
+    - 重新进入评论区时状态来自 viewerReaction，不靠本地字符串或 authorId 判断。
+    done_when:
+    - 评论项和评论列表计数都一致，失败时可回滚。
+    edge_cases:
+    - 反复快速点击只保留最终意图。
+    - 无权限反应时展示云端结构化错误。
+    contract_refs:
+    - content/post service.yaml ReactToComment
+    - Comment.viewerReaction
+    performance_points:
+    - 乐观 UI 更新小于 100ms。
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/providers/comment_reaction_test.dart
+      - quwoquan_service/services/content-service/tests/comment_reaction_contract_test.go
+      recorded: []
+    status: pending
+  GWT7:
+    title: 评论输入支持 emoji、图片和 @ 提及
+    given:
+    - 用户打开评论输入面板。
+    when:
+    - 用户输入文本、emoji、选择图片附件并 @小趣 或联系人。
+    then:
+    - 提交请求携带 attachmentMediaIds 和 mentions，列表结构化回显。
+    - 图片上传或审核失败时保留草稿并显示结构化错误。
+    done_when:
+    - alpha/beta/gamma seed 均覆盖图片评论、@小趣、@联系人。
+    edge_cases:
+    - 附件数量超过 App Config 限制时端侧阻止，云侧仍最终裁判。
+    - @ 候选为空时仍固定展示 @小趣。
+    contract_refs:
+    - content/post service.yaml CreateComment
+    - sys.content.comment.attachment.max_images
+    performance_points:
+    - 打开 @ 候选不阻塞输入。
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T4_device_journey
+      supporting:
+      - T3_app_api_integration
+    tests:
+      planned:
+      - quwoquan_app/test/components/comment_system/comment_composer_panel_test.dart
+      - quwoquan_app/integration_test/comment_composer_journey_test.dart
+      recorded: []
+    status: pending
+  GWT8:
+    title: 非生产数据和四层证据完整
+    given:
+    - alpha、beta、gamma 环境准备 content/user/chat seed。
+    when:
+    - 执行评论相关 gate 与端云集成测试。
+    then:
+    - seed 覆盖 20+ 回复线程、图片评论、@小趣、@联系人、viewerReaction=like/dislike/none、排序样本。
+    - T1/T2/T3/T4 均有测试路径或 recorded 证据。
+    done_when:
+    - seed manifest verifiedEndpoints 包含 comments、replies、reaction、attachment。
+    edge_cases:
+    - beta/gamma 禁止读取 Dart mock 数据。
+    - Mock 与 Remote 行为断言一一对应。
+    contract_refs:
+    - content test_fixtures
+    - _shared app_alpha/app_beta seed manifest
     performance_points: []
     evidence:
       primary:
-      - T1_contract
+      - T1_static_contract
       - T2_module_interaction
+      - T3_app_api_integration
+      - T4_device_journey
       supporting: []
     tests:
-      planned: []
+      planned:
+      - quwoquan_service/services/content-service/tests/comment_seed_contract_test.go
+      - quwoquan_app/integration_test/comment_thread_journey_test.dart
       recorded: []
     status: pending
 execution:

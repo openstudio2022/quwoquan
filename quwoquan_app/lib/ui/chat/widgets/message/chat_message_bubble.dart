@@ -491,8 +491,8 @@ class _ReceiptStatusIndicator extends StatelessWidget {
       icon = Icons.access_time;
       color = textColor.withValues(alpha: 0.5);
     } else if (messageStatus == 'failed') {
-      icon = Icons.error_outline;
-      color = AppColors.error;
+      icon = Icons.info_outline;
+      color = textColor.withValues(alpha: 0.58);
     } else if (receiptEnabled && memberCount <= 2 && isRead) {
       icon = Icons.done_all;
       color = AppColors.primaryColor;

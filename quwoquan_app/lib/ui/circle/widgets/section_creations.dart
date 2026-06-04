@@ -44,7 +44,7 @@ class SectionCreations extends ConsumerStatefulWidget {
 
 class _SectionCreationsState extends ConsumerState<SectionCreations> {
   bool _isLoading = true;
-  String? _error;
+  UiErrorSemantic? _errorSemantic;
   List<CircleHubFeedPostEntry> _feedEntries = const [];
   String? _circleCategoryId;
 
@@ -79,7 +79,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   Future<void> _loadFeed() async {
     setState(() {
       _isLoading = true;
-      _error = null;
+      _errorSemantic = null;
     });
     try {
       final circleState = ref.read(circleStateProvider(widget.circleId));
@@ -105,7 +105,12 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = runtimeErrorDisplayMessage(e);
+          _errorSemantic = runtimeErrorSemantic(
+            context,
+            error: e,
+            category: UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+          );
         });
       }
     }
@@ -690,8 +695,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     if (_isLoading) {
       return const Center(child: CupertinoActivityIndicator());
     }
-    if (_error != null) {
-      return _buildErrorCard(fgSecondary);
+    if (_errorSemantic != null) {
+      return _buildErrorCard();
     }
 
     final activeSubTab = circleState.activeSubTab;
@@ -1300,104 +1305,15 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     );
   }
 
-  Widget _buildErrorCard(Color fgSecondary) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final ultraCompact = constraints.maxHeight < AppSpacing.buttonHeightXs;
-        final compact = !ultraCompact && constraints.maxHeight < 120;
-        final horizontalPadding = compact
-            ? AppSpacing.containerSm
-            : AppSpacing.containerMd;
-        final verticalPadding = ultraCompact
-            ? 0.0
-            : compact
-            ? AppSpacing.containerSm
-            : AppSpacing.containerMd;
-        final iconSize = compact ? AppSpacing.iconMedium : AppSpacing.iconLarge;
-        final text = Text(
-          UITextConstants.loadFailed,
-          style: TextStyle(
-            color: fgSecondary,
-            fontSize: compact ? AppTypography.sm : AppTypography.base,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-        );
-
-        if (ultraCompact) {
-          return Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-              child: text,
-            ),
-          );
+  Widget _buildErrorCard() {
+    return AppSectionErrorCard(
+      semantic: _errorSemantic!,
+      margin: EdgeInsets.zero,
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry ||
+            action.type == UiErrorActionType.resubmit) {
+          await _loadFeed();
         }
-
-        if (compact) {
-          final compactContentWidth =
-              (constraints.maxWidth - (horizontalPadding * 2))
-                  .clamp(0.0, double.infinity)
-                  .toDouble();
-          return Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: horizontalPadding,
-                vertical: verticalPadding,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: compactContentWidth),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      CupertinoIcons.exclamationmark_circle,
-                      color: AppColors.error,
-                      size: iconSize,
-                    ),
-                    SizedBox(width: AppSpacing.sm),
-                    Expanded(child: text),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-
-        return Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: horizontalPadding,
-              vertical: verticalPadding,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  CupertinoIcons.exclamationmark_circle,
-                  color: AppColors.error,
-                  size: iconSize,
-                ),
-                SizedBox(height: AppSpacing.sm),
-                text,
-                SizedBox(height: AppSpacing.sm),
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  onPressed: _loadFeed,
-                  child: Text(
-                    UITextConstants.retry,
-                    style: TextStyle(
-                      color: AppColors.primaryColor,
-                      fontSize: AppTypography.base,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
       },
     );
   }

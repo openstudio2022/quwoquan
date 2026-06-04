@@ -12,6 +12,7 @@ api_routes:
     path: /v1/assistant/search/xiaoqu
     operation: SearchXiaoquResults
     description: 小趣搜网络结果 tab 查询（返回 AI 总结与引用，不直接创建完整对话页 UI）
+    request_entity: AssistantSearchXiaoquRequestWire
     request_fields: [userQuery, searchIntensity, subAccountId, personaContextVersion, sourceSurfaceId, fromGlobalSearch]
     response_entity: AssistantSearchResultView
 
@@ -51,8 +52,16 @@ api_routes:
     path: /v1/assistant/page-context
     operation: ReportPageContext
     description: 页面上下文上报
+    request_entity: AssistantReportPageContextRequestWire
     request_fields: [pageType, businessObjects, userAction, userActions, subAccountId, personaContextVersion]
     response_entity: PageContextAck
+
+  - method: GET
+    path: /v1/assistant/personalization
+    operation: GetEntryPersonalization
+    description: 私助半屏入口的欢迎语、chips 与建议行云下发
+    query_params: [source, pageType, tab, dimension, objectId, objectType, experienceLevel]
+    response_entity: AssistantEntryPersonalizationView
 
   - method: GET
     path: /v1/assistant/suggested-actions
@@ -156,6 +165,7 @@ consumers:
       [
         search_xiaoqu_results,
         report_page_context,
+        get_entry_personalization,
         get_suggested_actions,
         report_events,
         list_skills,
@@ -182,6 +192,10 @@ contract_test:
         - name: suggested_actions
           route: GET /v1/assistant/suggested-actions
           assertions: [status_200, actions_relevant_to_page]
+
+        - name: entry_personalization
+          route: GET /v1/assistant/personalization
+          assertions: [status_200, welcome_and_chips_returned]
 
         - name: skill_consent_flow
           routes:

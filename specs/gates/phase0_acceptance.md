@@ -25,7 +25,7 @@
 
 | 校验 | 命令 | 结果 |
 |---|---|---|
-| 真相源残引清零 | `rg migrate_history`（全仓） | 0 命中 |
+| 真相源残引清零 | `rg migrate_history quwoquan_data/scripts quwoquan_data/tasks` | 0 命中（验收文档可保留历史说明） |
 | 任务规格合法 | `cli.py task lint` | OK（13 任务） |
 | 子命令已移除 | `cli.py task --help` | 无 migrate-history |
 | sop 注入回归 | `tests/test_sop_injection.py` | 4 PASS |

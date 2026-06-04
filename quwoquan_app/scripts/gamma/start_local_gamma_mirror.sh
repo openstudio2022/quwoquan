@@ -30,9 +30,19 @@ PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-http://127.0.0.1:${LOC
 MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}}"
 MEDIA_ORIGIN_BASE_URL="${LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL:-}"
 LOCAL_MEDIA_ORIGIN_URL="http://127.0.0.1:${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}"
+LOCAL_GAMMA_TAGS_DIR="${LOCAL_GAMMA_TAGS_DIR:-$ROOT/quwoquan_data/publish/tags}"
+LOCAL_GAMMA_TAG_OBJECTS_FILE="${LOCAL_GAMMA_TAG_OBJECTS_FILE:-$ROOT/quwoquan_service/contracts/metadata/tag/test_fixtures/scenarios/tag_scenarios.json}"
+LOCAL_GAMMA_TAG_DB="${LOCAL_GAMMA_TAG_DB:-quwoquan_tag}"
 # daocloud 镜像代理在部分网络下会 EOF；默认直连 Docker Hub，可通过环境变量覆盖。
 DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}"
 HOST_READY_TIMEOUT_SECONDS="${LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS:-360}"
+LOCAL_GAMMA_STATE_ROOT="${LOCAL_GAMMA_STATE_ROOT:-$ROOT/state/local/gamma}"
+LOCAL_GAMMA_ARTIFACT_ROOT="${LOCAL_GAMMA_ARTIFACT_ROOT:-$ROOT/artifacts/local-gamma}"
+LOCAL_GAMMA_CONFIG_ROOT="${LOCAL_GAMMA_STATE_ROOT}/config-root"
+LOCAL_GAMMA_MEDIA_ROOT="${LOCAL_GAMMA_STATE_ROOT}/media"
+LOCAL_GAMMA_CADDYFILE="${LOCAL_GAMMA_STATE_ROOT}/Caddyfile"
+LOCAL_GAMMA_MODEL_CACHE_ROOT="${LOCAL_GAMMA_STATE_ROOT}/model-cache"
+LOCAL_GAMMA_STACK_REPORT="${LOCAL_GAMMA_STATE_ROOT}/stack_state.json"
 
 library_image() {
   local image="$1"
@@ -52,9 +62,9 @@ skip_build=0
 skip_up=0
 print_env=0
 down=0
-tunnel_pid_file="$ROOT/artifacts/local-gamma/colima-tunnels.pids"
-media_origin_pid_file="$ROOT/artifacts/local-gamma/media-origin.pid"
-stack_report="$ROOT/artifacts/local-gamma/stack_state.json"
+tunnel_pid_file="${LOCAL_GAMMA_STATE_ROOT}/colima-tunnels.pids"
+media_origin_pid_file="${LOCAL_GAMMA_STATE_ROOT}/media-origin.pid"
+stack_report="${LOCAL_GAMMA_STACK_REPORT}"
 gamma_proxy_ensure_attempts=0
 
 local_gamma_has_existing_stack() {
@@ -80,12 +90,25 @@ stop_colima_tunnels() {
   rm -f "$tunnel_pid_file"
 }
 
+list_listening_pids_for_port() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true
+    return 0
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp 2>/dev/null \
+      | awk -v port=":${port}" '$4 ~ port {print}' \
+      | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p'
+  fi
+}
+
 stop_media_origin() {
   local port="${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}"
   local pid=""
   local extra_pid=""
   local seen=" "
-  local pids=()
+  local -a pids=()
   if [[ -f "$media_origin_pid_file" ]]; then
     pid="$(cat "$media_origin_pid_file" 2>/dev/null || true)"
     if [[ -n "$pid" ]]; then
@@ -100,11 +123,11 @@ stop_media_origin() {
     fi
     pids+=("$extra_pid")
     seen+=" $extra_pid "
-  done < <(
-    ss -ltnp 2>/dev/null \
-      | awk -v port=":${port}" '$4 ~ port {print}' \
-      | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p'
-  )
+  done < <(list_listening_pids_for_port "$port")
+  if ((${#pids[@]} == 0)); then
+    rm -f "$media_origin_pid_file"
+    return 0
+  fi
   for pid in "${pids[@]}"; do
     if ! kill -0 "$pid" >/dev/null 2>&1; then
       continue
@@ -123,18 +146,18 @@ stop_media_origin() {
 }
 
 start_media_origin() {
-  # 与 docker `/srv/media`(line ~878 -v artifacts/local-gamma/media:/srv/media) 及
+  # 与 docker `/srv/media` 挂载同源：URL `/media/image/...` 解析为
   # Caddy `root * /srv/media` + `handle /media/*` 同源：URL `/media/image/...` 解析为
-  # `<root>/media/image/...`，curated bundle 实际落在 artifacts/local-gamma/media/media/...，
-  # 故 origin 静态服务 root 必须为 artifacts/local-gamma/media（而非其父目录）。
-  local media_root="$ROOT/artifacts/local-gamma/media"
-  local log_file="$ROOT/artifacts/local-gamma/media-origin.log"
+  # `<root>/media/image/...`，curated bundle 实际落在 state/local/gamma/media/media/...，
+  # 故 origin 静态服务 root 必须为 state/local/gamma/media（而非其父目录）。
+  local media_root="${LOCAL_GAMMA_MEDIA_ROOT}"
+  local log_file="${LOCAL_GAMMA_STATE_ROOT}/media-origin.log"
   mkdir -p "$media_root"
   stop_media_origin
-  (
-    cd "$media_root"
-    python3 -m http.server "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}" --bind 127.0.0.1
-  ) >"$log_file" 2>&1 &
+  nohup python3 -m http.server "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}" \
+    --bind 127.0.0.1 \
+    --directory "$media_root" \
+    </dev/null >"$log_file" 2>&1 &
   local pid="$!"
   echo "$pid" > "$media_origin_pid_file"
   python3 - "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}" <<'PY'
@@ -152,6 +175,7 @@ while time.time() < deadline:
             timeout=2,
         ) as resp:
             if 200 <= int(resp.status) < 300:
+                resp.read()
                 raise SystemExit(0)
             last = f"http {resp.status}"
     except Exception as exc:  # noqa: BLE001
@@ -189,8 +213,8 @@ start_colima_tunnels_if_needed() {
   # user-service 直连健康探针（wait_local_gamma_host_ready）使用 user_port，必须同步开隧道，
   # 否则 colima 下 host 无法直达 user-service 发布端口，host 就绪探测会卡死。
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
-  local ssh_config="$ROOT/artifacts/local-gamma/colima-ssh-config"
-  mkdir -p "$ROOT/artifacts/local-gamma" "$ROOT/artifacts/local-gamma/model-cache"
+  local ssh_config="${LOCAL_GAMMA_STATE_ROOT}/colima-ssh-config"
+  mkdir -p "${LOCAL_GAMMA_STATE_ROOT}" "${LOCAL_GAMMA_MODEL_CACHE_ROOT}"
   stop_colima_tunnels
   colima ssh-config > "$ssh_config"
   : > "$tunnel_pid_file"
@@ -199,7 +223,7 @@ start_colima_tunnels_if_needed() {
       continue
     fi
     ssh -F "$ssh_config" -N -L "127.0.0.1:${port}:127.0.0.1:${port}" colima \
-      > "$ROOT/artifacts/local-gamma/colima-tunnel-${port}.log" 2>&1 &
+      > "${LOCAL_GAMMA_STATE_ROOT}/colima-tunnel-${port}.log" 2>&1 &
     echo "$!" >> "$tunnel_pid_file"
   done
   sleep 2
@@ -235,7 +259,7 @@ if local_gamma_has_existing_stack; then
 fi
 
 prepare_config_root() {
-  local out="$ROOT/artifacts/local-gamma/config-root"
+  local out="${LOCAL_GAMMA_CONFIG_ROOT}"
   rm -rf "$out"
   mkdir -p \
     "$out/configs/content-service/default" \
@@ -430,7 +454,7 @@ YAML
 }
 
 prepare_media_root() {
-  local media="$ROOT/artifacts/local-gamma/media"
+  local media="${LOCAL_GAMMA_MEDIA_ROOT}"
   local canonical_media_root="$ROOT/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
   if [[ -d "$media/media" ]]; then
     echo "[local-gamma] reuse pre-synced gamma curated media bundle: $media"
@@ -441,12 +465,12 @@ prepare_media_root() {
       --output-media-root "$media" >/dev/null
     return 0
   fi
-  echo "[local-gamma] FAIL: curated gamma media bundle is unavailable; sync artifacts/local-gamma/media first" >&2
+  echo "[local-gamma] FAIL: curated gamma media bundle is unavailable; sync state/local/gamma/media first" >&2
   return 1
 }
 
 prepare_caddyfile() {
-  local out="$ROOT/artifacts/local-gamma/Caddyfile"
+  local out="${LOCAL_GAMMA_CADDYFILE}"
   mkdir -p "$(dirname "$out")"
   python3 - "$out" "$MEDIA_ORIGIN_BASE_URL" <<'PY'
 import sys
@@ -463,6 +487,7 @@ if media_origin:
     media_api_block = "\n".join(
         [
             "\thandle /media/* {",
+            "\t\timport media_cors",
             f"\t\treverse_proxy {media_origin}",
             "\t}",
         ]
@@ -474,6 +499,7 @@ if media_origin:
             "gamma-video.quwoquan-env.test,",
             "gamma-upload.quwoquan-env.test {",
             "\timport local_gamma_tls",
+            "\timport media_cors",
             f"\treverse_proxy {media_origin}",
             "}",
         ]
@@ -481,6 +507,7 @@ if media_origin:
     media_pub_block = "\n".join(
         [
             "\thandle /media/* {",
+            "\t\timport media_cors",
             f"\t\treverse_proxy {media_origin}",
             "\t}",
         ]
@@ -489,6 +516,7 @@ else:
     media_api_block = "\n".join(
         [
             "\thandle /media/* {",
+            "\t\timport media_cors",
             "\t\troot * /srv/media",
             "\t\tfile_server",
             "\t}",
@@ -501,6 +529,7 @@ else:
             "gamma-video.quwoquan-env.test,",
             "gamma-upload.quwoquan-env.test {",
             "\timport local_gamma_tls",
+            "\timport media_cors",
             "\troot * /srv/media",
             "\tfile_server",
             "}",
@@ -509,6 +538,7 @@ else:
     media_pub_block = "\n".join(
         [
             "\thandle /media/* {",
+            "\t\timport media_cors",
             "\t\troot * /srv/media",
             "\t\tfile_server",
             "\t}",
@@ -522,6 +552,15 @@ content = f"""{{
 
 (local_gamma_tls) {{
 \ttls internal
+}}
+
+(media_cors) {{
+\theader {{
+\t\tAccess-Control-Allow-Origin "*"
+\t\tAccess-Control-Allow-Methods "GET, HEAD, OPTIONS"
+\t\tAccess-Control-Allow-Headers "*"
+\t\tCross-Origin-Resource-Policy "cross-origin"
+\t}}
 }}
 
 gamma-api.quwoquan-env.test {{
@@ -637,6 +676,79 @@ PY
     --media-base-url "$MEDIA_BASE_URL"
 }
 
+preflight_local_gamma_inputs() {
+  if [[ ! -d "$LOCAL_GAMMA_TAGS_DIR" ]]; then
+    bootstrap_local_gamma_tag_taxonomy || return 1
+  fi
+  if [[ ! -f "$LOCAL_GAMMA_TAG_OBJECTS_FILE" ]]; then
+    echo "[local-gamma] FAIL: missing object_tag_index fixture: $LOCAL_GAMMA_TAG_OBJECTS_FILE" >&2
+    return 1
+  fi
+}
+
+bootstrap_local_gamma_tag_taxonomy() {
+  local publish_root="${LOCAL_GAMMA_TAGS_DIR%/tags}"
+  if [[ "$publish_root" == "$LOCAL_GAMMA_TAGS_DIR" ]]; then
+    echo "[local-gamma] FAIL: LOCAL_GAMMA_TAGS_DIR must end with /tags: $LOCAL_GAMMA_TAGS_DIR" >&2
+    return 1
+  fi
+  echo "[local-gamma] tag taxonomy missing; bootstrapping current source of truth into $LOCAL_GAMMA_TAGS_DIR" >&2
+  mkdir -p "$publish_root"
+  env QWQ_PUBLISH_ROOT="$publish_root" \
+    python3 "$ROOT/quwoquan_data/scripts/bootstrap_tags.py"
+  env QWQ_PUBLISH_ROOT="$publish_root" \
+    python3 "$ROOT/quwoquan_data/scripts/bootstrap_admin_regions.py"
+  env QWQ_PUBLISH_ROOT="$publish_root" \
+    python3 "$ROOT/quwoquan_data/scripts/bootstrap_geo_landmarks.py"
+  env QWQ_PUBLISH_ROOT="$publish_root" \
+    python3 "$ROOT/quwoquan_data/scripts/verify_tag_tree.py"
+  env QWQ_PUBLISH_ROOT="$publish_root" \
+    python3 "$ROOT/quwoquan_data/scripts/build_publish_lookup_indexes.py"
+  if [[ ! -d "$LOCAL_GAMMA_TAGS_DIR" ]]; then
+    echo "[local-gamma] FAIL: tag taxonomy bootstrap finished without creating $LOCAL_GAMMA_TAGS_DIR" >&2
+    return 1
+  fi
+}
+
+preflight_docker_storage() {
+  if ! command -v docker >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "[local-gamma] Docker storage snapshot before compose build:"
+  if ! docker system df; then
+    echo "[local-gamma] WARN: docker system df failed; compose build will report the concrete Docker error" >&2
+  fi
+}
+
+run_compose_build() {
+  local build_log="${LOCAL_GAMMA_STATE_ROOT}/docker-build.log"
+  mkdir -p "$(dirname "$build_log")"
+  rm -f "$build_log"
+  preflight_docker_storage
+  if "${compose_cmd[@]}" build 2>&1 | tee "$build_log"; then
+    rm -f "$build_log"
+    return 0
+  fi
+  if python3 - "$build_log" <<'PY'
+from pathlib import Path
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").lower()
+raise SystemExit(0 if "no space left on device" in text else 1)
+PY
+  then
+    echo "[local-gamma] FAIL: image build exhausted Docker/Colima disk ('no space left on device')." >&2
+    echo "[local-gamma] Reclaim local container storage and rerun:" >&2
+    echo "[local-gamma]   docker system df" >&2
+    echo "[local-gamma]   docker builder prune -af" >&2
+    echo "[local-gamma]   docker image prune -af" >&2
+    echo "[local-gamma]   docker volume prune -f" >&2
+    echo "[local-gamma]   colima stop && colima start --disk 100" >&2
+  fi
+  echo "[local-gamma] FAIL: image build failed; startup aborted. Build log: $build_log" >&2
+  return 1
+}
+
 if [[ "$down" == "1" ]]; then
   stop_colima_tunnels
   stop_media_origin
@@ -647,7 +759,7 @@ fi
 
 prepare_config_root
 prepare_media_root
-mkdir -p "$ROOT/artifacts/local-gamma/model-cache"
+mkdir -p "${LOCAL_GAMMA_MODEL_CACHE_ROOT}" "${LOCAL_GAMMA_ARTIFACT_ROOT}"
 start_media_origin
 prepare_caddyfile
 
@@ -661,6 +773,8 @@ if [[ "$skip_up" == "1" ]]; then
   exit 0
 fi
 
+preflight_local_gamma_inputs
+
 podman_compose=0
 if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose >/dev/null 2>&1; then
   podman_compose=1
@@ -672,18 +786,7 @@ else
 fi
 
 if [[ "$skip_build" == "0" ]]; then
-  if ! "${compose_cmd[@]}" build; then
-    if [[ "${LOCAL_GAMMA_ALLOW_CACHED_IMAGES_ON_BUILD_FAILURE:-1}" == "1" ]] && \
-      docker image inspect \
-        quwoquan_service_rec-model-service \
-        quwoquan_service_content-service \
-        quwoquan_service_chat-service \
-        quwoquan_service_assistant-service >/dev/null 2>&1; then
-      echo "[local-gamma] WARN: docker build failed; using existing local service images (set LOCAL_GAMMA_ALLOW_CACHED_IMAGES_ON_BUILD_FAILURE=0 to make this fatal)" >&2
-    else
-      exit 1
-    fi
-  fi
+  run_compose_build
 fi
 export LOCAL_GAMMA_CONFIG_VERSION="$CONFIG_VERSION"
 export LOCAL_GAMMA_IMAGE_VERSION="$IMAGE_VERSION"
@@ -766,7 +869,7 @@ if [[ "$podman_compose" == "1" ]]; then
     --net "$network_name" --network-alias postgres \
     -e POSTGRES_USER=quwoquan -e POSTGRES_PASSWORD=quwoquan -e POSTGRES_DB=quwoquan \
     -v quwoquan_service_local-gamma-postgres:/var/lib/postgresql/data \
-    -p "${LOCAL_GAMMA_POSTGRES_PORT:-55432}:5432" \
+    -p "${LOCAL_GAMMA_POSTGRES_PORT:-19400}:5432" \
     --healthcheck-command "pg_isready -U quwoquan" \
     --healthcheck-interval 5s --healthcheck-timeout 3s --healthcheck-retries 10 \
     "$LOCAL_GAMMA_POSTGRES_IMAGE" >/dev/null
@@ -774,13 +877,13 @@ if [[ "$podman_compose" == "1" ]]; then
   podman run --pull=never --name quwoquan_service_mongodb_1 -d \
     --net "$network_name" --network-alias mongodb \
     -v quwoquan_service_local-gamma-mongo:/data/db \
-    -p "${LOCAL_GAMMA_MONGO_PORT:-37017}:27017" \
+    -p "${LOCAL_GAMMA_MONGO_PORT:-19410}:27017" \
     "$LOCAL_GAMMA_MONGO_IMAGE" --replSet rs0 --bind_ip_all >/dev/null
 
   podman run --pull=never --name quwoquan_service_redis_1 -d \
     --net "$network_name" --network-alias redis \
     -v quwoquan_service_local-gamma-redis:/data \
-    -p "${LOCAL_GAMMA_REDIS_PORT:-36379}:6379" \
+    -p "${LOCAL_GAMMA_REDIS_PORT:-19420}:6379" \
     --healthcheck-command "redis-cli ping" \
     --healthcheck-interval 5s --healthcheck-timeout 3s --healthcheck-retries 20 \
     "$LOCAL_GAMMA_REDIS_IMAGE" redis-server --appendonly yes >/dev/null
@@ -806,9 +909,9 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PYTHONUNBUFFERED=1 \
     -e MODEL_CACHE_DIR=/app/cache \
-    -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
-    -v "$ROOT/artifacts/local-gamma/model-cache:/app/cache" \
-    -p "${LOCAL_GAMMA_REC_MODEL_PORT:-18090}:8000" \
+    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
+    -v "${LOCAL_GAMMA_MODEL_CACHE_ROOT}:/app/cache" \
+    -p "${LOCAL_GAMMA_REC_MODEL_PORT:-19240}:8000" \
     --healthcheck-command "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 5 \
     quwoquan_service_rec-model-service >/dev/null
@@ -825,9 +928,10 @@ if [[ "$podman_compose" == "1" ]]; then
     -e MONGO_URI=mongodb://mongodb:27017 \
     -e PRODUCT_OPS_REDIS_REC_ADDR=redis:6379 -e PRODUCT_OPS_REDIS_GENERAL_ADDR=redis:6379 \
     -v "$ROOT/quwoquan_service:/workspace" \
-    -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
+    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -v quwoquan_service_local-gamma-go-cache:/go \
-    -p "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-18086}:18086" \
+    -p "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:18086" \
+    -p "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}:18086" \
     -w /workspace \
     --healthcheck-command "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
@@ -842,8 +946,8 @@ if [[ "$podman_compose" == "1" ]]; then
     -e MONGO_URI=mongodb://mongodb:27017 \
     -e CONTENT_REDIS_REC_ADDR=redis:6379 -e CONTENT_REDIS_GENERAL_ADDR=redis:6379 \
     -e REC_MODEL_SERVICE_ENABLED=true -e REC_MODEL_SERVICE_URL=http://rec-model-service:8000 \
-    -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
-    -p "${LOCAL_GAMMA_CONTENT_PORT:-18083}:18080" \
+    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
+    -p "${LOCAL_GAMMA_CONTENT_PORT:-19220}:18080" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
     quwoquan_service_content-service >/dev/null
@@ -864,9 +968,9 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CHAT_GROUP_AVATAR_CDN_BASE_URL="$MEDIA_BASE_URL" \
     -e CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT=/var/lib/quwoquan/chat-media \
     -e RUNTIME_SYNC_PATCH_TTL_HOURS=720 \
-    -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
-    -v "$ROOT/artifacts/local-gamma/media:/var/lib/quwoquan/chat-media" \
-    -p "${LOCAL_GAMMA_CHAT_PORT:-18081}:18081" \
+    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
+    -v "${LOCAL_GAMMA_MEDIA_ROOT}:/var/lib/quwoquan/chat-media" \
+    -p "${LOCAL_GAMMA_CHAT_PORT:-19200}:18081" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
     quwoquan_service_chat-service >/dev/null
@@ -884,10 +988,10 @@ if [[ "$podman_compose" == "1" ]]; then
     -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_user \
     -e REDIS_ADDR=redis:6379 \
     -v "$ROOT/quwoquan_service:/workspace" \
-    -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
+    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -v quwoquan_service_local-gamma-go-cache:/go \
     -w /workspace/services/user-service \
-    -p "${LOCAL_GAMMA_USER_PORT:-18082}:18082" \
+    -p "${LOCAL_GAMMA_USER_PORT:-19210}:18082" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
     "$LOCAL_GAMMA_GO_BOOKWORM_IMAGE" sh -lc "/usr/local/go/bin/go run ./cmd/api" >/dev/null
@@ -904,7 +1008,8 @@ if [[ "$podman_compose" == "1" ]]; then
     -e ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-1}" \
     -e ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}" \
     -e ASSISTANT_SEARCH_PROVIDER="${ASSISTANT_SEARCH_PROVIDER:-}" \
-    -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
+    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
+    -p "${LOCAL_GAMMA_ASSISTANT_PORT:-19230}:18087" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
     quwoquan_service_assistant-service >/dev/null
@@ -920,10 +1025,10 @@ if [[ "$podman_compose" == "1" ]]; then
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e TAG_SERVICE_ADDR=:18092 \
     -e TAG_MONGO_URI=mongodb://mongodb:27017 -e TAG_MONGO_DATABASE=quwoquan_tag \
     -v "$ROOT/quwoquan_service:/workspace" \
-    -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
+    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -v quwoquan_service_local-gamma-go-cache:/go \
     -w /workspace \
-    -p "${LOCAL_GAMMA_TAG_PORT:-18092}:18092" \
+    -p "${LOCAL_GAMMA_TAG_PORT:-19270}:18092" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18092/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
     "$LOCAL_GAMMA_GO_BOOKWORM_IMAGE" sh -lc "cd services/tag-service/cmd/api && /usr/local/go/bin/go run ." >/dev/null
@@ -932,8 +1037,8 @@ if [[ "$podman_compose" == "1" ]]; then
   podman run --pull=never --name quwoquan_service_gamma-proxy_1 -d \
     --net "$network_name" --network-alias gamma-proxy \
     -e LOCAL_GAMMA_TLS_MODE="${LOCAL_GAMMA_TLS_MODE:-internal}" \
-    -v "$ROOT/artifacts/local-gamma/Caddyfile:/etc/caddy/Caddyfile:ro" \
-    -v "$ROOT/artifacts/local-gamma/media:/srv/media:ro" \
+    -v "${LOCAL_GAMMA_CADDYFILE}:/etc/caddy/Caddyfile:ro" \
+    -v "${LOCAL_GAMMA_MEDIA_ROOT}:/srv/media:ro" \
     -v quwoquan_service_local-gamma-caddy-data:/data \
     -v quwoquan_service_local-gamma-caddy-config:/config \
     -p "${LOCAL_GAMMA_HTTP_PORT:-19000}:80" \
@@ -1079,35 +1184,36 @@ if [[ "${compose_up_failed:-0}" == "1" ]]; then
   echo "[local-gamma] WARN: host probes recovered after compose startup reported an error" >&2
 fi
 
-# tag-service 数据灌库（幂等可重跑）：交集 shared-tags 真闭环依赖此步。
-#  - tag_nodes      ← publish/v1/tags（路径制 taxonomy，唯一标签真相源）
+# tag-service 数据在 local-gamma 启动时按当前真相源重建：
+#  - tag_nodes ← publish/tags（路径制 taxonomy，唯一标签真相源）
 #  - object_tag_index ← contracts/metadata/tag 的 contract fixture（与契约测试/app mock 同源）
-# 任一步失败仅告警不中断：契约层仍正确，交集卡走端侧兜底，由 verify 探测数据非空。
+# local-gamma 尚未上线；这里直接清库重建，拒绝保留任何旧索引名、旧数据或兼容路径。
 seed_tag_service_data() {
   local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
   if [[ -z "$mongo_port" ]]; then
-    echo "[local-gamma] WARN: LOCAL_GAMMA_MONGO_PORT unset; skip tag data seed" >&2
-    return 0
+    echo "[local-gamma] FAIL: LOCAL_GAMMA_MONGO_PORT is required for tag data seed" >&2
+    return 1
   fi
   local mongo_uri="mongodb://127.0.0.1:${mongo_port}/?directConnection=true"
-  echo "[local-gamma] seeding tag_nodes (publish/v1/tags -> quwoquan_tag.tag_nodes) ..."
-  if ! ( cd "$ROOT/quwoquan_service" && go run ./services/tag-service/cmd/import \
-      --tags-dir ../quwoquan_data/publish/v1/tags \
-      --mongo-uri "$mongo_uri" --db quwoquan_tag ); then
-    echo "[local-gamma] WARN: tag_nodes import failed (shared-tags may return empty)" >&2
-  fi
-  echo "[local-gamma] seeding object_tag_index (contract fixture -> quwoquan_tag.object_tag_index) ..."
-  if ! ( cd "$ROOT/quwoquan_service" && go run ./services/tag-service/cmd/import-objects \
-      --objects-file contracts/metadata/tag/test_fixtures/scenarios/tag_scenarios.json \
-      --mongo-uri "$mongo_uri" --db quwoquan_tag ); then
-    echo "[local-gamma] WARN: object_tag_index import failed (intersection card falls back to client)" >&2
-  fi
+  local data_release_id="${LOCAL_GAMMA_DATA_RELEASE_ID:-local-gamma-tag-seed}"
+  echo "[local-gamma] rebuilding ${LOCAL_GAMMA_TAG_DB} from current tag sources ..."
+  mongosh "$mongo_uri" --quiet --eval "db.getSiblingDB(\"${LOCAL_GAMMA_TAG_DB}\").dropDatabase()"
+  echo "[local-gamma] seeding tag_nodes (${LOCAL_GAMMA_TAGS_DIR} -> ${LOCAL_GAMMA_TAG_DB}.tag_nodes) ..."
+  ( cd "$ROOT/quwoquan_service" && go run ./services/tag-service/cmd/import \
+      --tags-dir "$LOCAL_GAMMA_TAGS_DIR" \
+      --mongo-uri "$mongo_uri" --db "$LOCAL_GAMMA_TAG_DB" \
+      --release-id "$data_release_id" --source-owner fixture )
+  echo "[local-gamma] seeding object_tag_index (${LOCAL_GAMMA_TAG_OBJECTS_FILE} -> ${LOCAL_GAMMA_TAG_DB}.object_tag_index) ..."
+  ( cd "$ROOT/quwoquan_service" && go run ./services/tag-service/cmd/import-objects \
+      --objects-file "$LOCAL_GAMMA_TAG_OBJECTS_FILE" \
+      --mongo-uri "$mongo_uri" --db "$LOCAL_GAMMA_TAG_DB" \
+      --release-id "$data_release_id" --source-owner fixture )
 }
 seed_tag_service_data
 
 seed_gamma_content_data() {
   echo "[local-gamma] seeding content posts (gamma curated manifest) ..."
-  if ! python3 "$ROOT/quwoquan_app/scripts/gamma/run_local_gamma_t3.py" --seed-only --report "$ROOT/artifacts/local-gamma/content-seed-report.json"; then
+  if ! python3 "$ROOT/quwoquan_app/scripts/gamma/run_local_gamma_t3.py" --seed-only --report "${LOCAL_GAMMA_ARTIFACT_ROOT}/content-seed-report.json"; then
     echo "[local-gamma] WARN: content seed failed; home/discovery feeds may be empty until seed succeeds" >&2
     return 0
   fi

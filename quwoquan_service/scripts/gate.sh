@@ -808,6 +808,14 @@ fi
 "$PYTHON_TEST_RUNNER" -m pytest services/rec-model-service/tests -q \
   || fail "recommendation-service python tests failed"
 
+echo "[gate] running content-flywheel loop pure-function tests"
+make verify-content-flywheel-tests \
+  || fail "content-flywheel loop tests failed"
+
+echo "[gate] running recommendation policy advisor tests"
+make verify-rec-policy-advisor \
+  || fail "recommendation policy advisor tests failed"
+
 echo "[gate] running ML feature consistency checks"
 make verify-ml-features \
   || fail "ML feature consistency checks failed"

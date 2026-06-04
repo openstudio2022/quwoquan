@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
@@ -15,6 +16,7 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 聊天设置/聊天信息页；全屏表单布局复用 [SettingsInsetFormPageScaffold]。
@@ -122,8 +124,44 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     setState(() => _groupName = newName);
                     AppToast.show(context, UITextConstants.groupNameUpdated);
                   }
-                } catch (_) {
-                  /* best-effort: 群名更新失败时保留原名，本页无独立错误提示设施，不改变控制流 */
+                } catch (error) {
+                  if (!mounted) {
+                    return;
+                  }
+                  final resolved = runtimeErrorSemantic(
+                    context,
+                    error: error,
+                    category: UiErrorCategory.submit,
+                    scope: UiErrorScope.global,
+                  );
+                  final semantic = UiErrorSemantic(
+                    category: resolved.category,
+                    scope: resolved.scope,
+                    title: '群名称修改未完成',
+                    message: resolved.message,
+                    secondaryMessage: resolved.secondaryMessage,
+                    primaryAction: const UiErrorAction(
+                      type: UiErrorActionType.retry,
+                      label: UITextConstants.tryAgain,
+                    ),
+                    secondaryAction: resolved.secondaryAction,
+                    dismissible: resolved.dismissible,
+                    sourceCode: resolved.sourceCode,
+                    failureKind: resolved.failureKind,
+                    recoveryAction: resolved.recoveryAction,
+                    presentation: resolved.presentation,
+                    tone: resolved.tone,
+                  );
+                  await AppActionErrorFeedback.show(
+                    context,
+                    semantic: semantic,
+                    onAction: (action) async {
+                      if (action.type == UiErrorActionType.retry ||
+                          action.type == UiErrorActionType.resubmit) {
+                        _showEditGroupNameDialog();
+                      }
+                    },
+                  );
                 }
               }
             },

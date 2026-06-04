@@ -39,11 +39,8 @@ void main() {
       );
     });
 
-    test('创作入口需要登录', () {
-      expect(
-        requiredRouteGateForLocation(AppRoutePaths.createEntry),
-        AuthGateReason.createPost,
-      );
+    test('添加面板入口不拦截，具体创作页需要登录', () {
+      expect(requiredRouteGateForLocation(AppRoutePaths.createEntry), isNull);
       expect(
         requiredRouteGateForLocation(AppRoutePaths.createPathTemplate),
         AuthGateReason.createPost,
@@ -107,10 +104,13 @@ void main() {
         AppRoutePaths.home,
       );
       expect(
-        safeLoginDismissFallback(redirect: AppRoutePaths.createEntry),
+        safeLoginDismissFallback(redirect: AppRoutePaths.createPathTemplate),
         AppRoutePaths.home,
       );
-      expect(safeLoginDismissFallback(redirect: '/following'), AppRoutePaths.home);
+      expect(
+        safeLoginDismissFallback(redirect: '/following'),
+        AppRoutePaths.home,
+      );
       expect(
         safeLoginDismissFallback(redirect: AppRoutePaths.profilePersonas),
         AppRoutePaths.profile,

@@ -18,14 +18,14 @@ from _common.article_package import (  # noqa: E402
     MARKDOWN_VERSION,
     asset_id_from_object_key,
     build_article_asset_manifest,
-    sha256_text,
+    compute_document_sha256,
 )
 
 TITLE = "峨眉山周末·自驾两日的真实体验"
 
 
 def _build_fixture() -> tuple[str, dict]:
-    object_key = "media/image/post/峨眉山周末_自驾/v1/cover.jpg"
+    object_key = "media/objects/sha256/ab/cd/" + ("abcd" * 16) + ".jpg"
     asset_id = asset_id_from_object_key(object_key)
     assets = [
         {
@@ -52,14 +52,15 @@ def _build_fixture() -> tuple[str, dict]:
         ":::\n\n"
         "如果你也想看金顶日出，我会建议把第一天的车程压在六小时内。\n"
     )
-    article_asset_manifest = build_article_asset_manifest(body, assets)
+    render_profile = {"template": "journal", "fontPreset": "clean"}
+    article_asset_manifest = build_article_asset_manifest(body, assets, render_profile=render_profile)
     manifest = {
         "topicId": "峨眉山周末_自驾",
         "publishTitle": TITLE,
         "articleMarkdownVersion": MARKDOWN_VERSION,
         "articleAssetManifest": article_asset_manifest,
-        "articleRenderProfile": {"template": "journal", "fontPreset": "clean"},
-        "articleMarkdownDigest": sha256_text(body),
+        "articleRenderProfile": render_profile,
+        "articleMarkdownDigest": compute_document_sha256(body),
         "generator": "agent",
     }
     return body, manifest
@@ -73,6 +74,9 @@ def test_article_markdown_package_uses_qwq_rich_markdown_triple():
     assert manifest["articleAssetManifest"]["articleMarkdownVersion"] == "qwq-rich-md/1"
     assert manifest["articleRenderProfile"]["template"] == "journal"
     assert manifest["articleRenderProfile"]["fontPreset"] == "clean"
+    assert manifest["articleAssetManifest"]["documentSha256"] == manifest["articleMarkdownDigest"]
+    assert manifest["articleAssetManifest"]["assetManifestSha256"].startswith("sha256:")
+    assert manifest["articleAssetManifest"]["documentVersionSha256"].startswith("sha256:")
 
 
 def test_article_markdown_asset_refs_are_declared_in_manifest():

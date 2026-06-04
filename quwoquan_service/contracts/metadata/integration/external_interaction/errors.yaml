@@ -1,0 +1,118 @@
+version: 1
+aggregate: ExternalInteraction
+domain: INTEGRATION
+
+description: |
+  integration/external_interaction 结构化错误码声明。
+
+errors:
+  - code: INTEGRATION.USER.invalid_external_request
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: invalidExternalRequest
+    l10n_key: externalInteractionInvalidRequest
+    go_const: ErrInvalidExternalRequest
+    user_message:
+      zh: "外部请求参数不完整"
+      en: "External request is invalid"
+
+  - code: INTEGRATION.USER.unsupported_operation
+    kind: USER
+    reason: unsupported_operation
+    http_status: 400
+    recovery_action: surface
+    dart_const: unsupportedOperation
+    l10n_key: externalInteractionUnsupportedOperation
+    go_const: ErrUnsupportedOperation
+    user_message:
+      zh: "暂不支持该外部交互能力"
+      en: "External interaction operation is not supported"
+
+  - code: INTEGRATION.USER.payload_not_allowed
+    kind: USER
+    reason: payload_not_allowed
+    http_status: 400
+    recovery_action: surface
+    dart_const: payloadNotAllowed
+    l10n_key: externalInteractionPayloadNotAllowed
+    go_const: ErrPayloadNotAllowed
+    user_message:
+      zh: "外部请求包含未允许的字段"
+      en: "External request contains disallowed payload fields"
+
+  - code: INTEGRATION.MIDDLEWARE.provider_timeout
+    kind: MIDDLEWARE
+    reason: timeout
+    http_status: 504
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: providerTimeout
+    l10n_key: externalInteractionProviderTimeout
+    go_const: ErrProviderTimeout
+    user_message:
+      zh: "外部供应商响应超时，请稍后重试"
+      en: "External provider timed out, please retry"
+
+  - code: INTEGRATION.MIDDLEWARE.provider_rejected
+    kind: MIDDLEWARE
+    reason: upstream_rejected
+    http_status: 502
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: providerRejected
+    l10n_key: externalInteractionProviderRejected
+    go_const: ErrProviderRejected
+    user_message:
+      zh: "外部供应商暂时拒绝请求，请稍后重试"
+      en: "External provider rejected the request"
+
+  - code: INTEGRATION.SYSTEM.callback_signature_invalid
+    kind: SYSTEM
+    reason: signature_invalid
+    http_status: 401
+    recovery_action: surface
+    dart_const: callbackSignatureInvalid
+    l10n_key: externalInteractionCallbackSignatureInvalid
+    go_const: ErrCallbackSignatureInvalid
+    user_message:
+      zh: "外部回调签名校验失败"
+      en: "External callback signature is invalid"
+
+  - code: INTEGRATION.SYSTEM.dead_letter_created
+    kind: SYSTEM
+    reason: dead_letter
+    http_status: 500
+    recovery_action: escalate
+    dart_const: deadLetterCreated
+    l10n_key: externalInteractionDeadLetterCreated
+    go_const: ErrDeadLetterCreated
+    user_message:
+      zh: "外部交互已进入死信等待处理"
+      en: "External interaction entered dead-letter queue"
+
+  - code: INTEGRATION.SYSTEM.pass_through_not_allowed
+    kind: SYSTEM
+    reason: pass_through_not_allowed
+    http_status: 500
+    recovery_action: escalate
+    dart_const: passThroughNotAllowed
+    l10n_key: externalInteractionPassThroughNotAllowed
+    go_const: ErrPassThroughNotAllowed
+    user_message:
+      zh: "正式环境禁止验证码跳过正确性校验"
+      en: "SMS pass-through is not allowed in production"
+
+  - code: INTEGRATION.SYSTEM.internal_error
+    kind: SYSTEM
+    reason: internal_error
+    http_status: 500
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: internalError
+    l10n_key: externalInteractionInternalError
+    go_const: ErrInternalError
+    user_message:
+      zh: "外部集成网关异常，请稍后重试"
+      en: "External integration gateway internal error"

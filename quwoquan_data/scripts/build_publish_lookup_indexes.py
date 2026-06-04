@@ -11,6 +11,7 @@ import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import NOW_ISO, PUBLISH_ROOT  # noqa: E402
@@ -19,6 +20,7 @@ PUBLISH_MAINLINE = PUBLISH_ROOT
 INDEX_ROOT = PUBLISH_MAINLINE / "index"
 ENTITY_INDEX_ROOT = INDEX_ROOT / "entities"
 POST_INDEX_ROOT = INDEX_ROOT / "posts"
+LINK_TARGET_ROOT = INDEX_ROOT / "link_targets"
 
 
 def safe_slug(value: str) -> str:
@@ -107,6 +109,7 @@ def clear_index_root() -> None:
         shutil.rmtree(INDEX_ROOT)
     ENTITY_INDEX_ROOT.mkdir(parents=True, exist_ok=True)
     POST_INDEX_ROOT.mkdir(parents=True, exist_ok=True)
+    LINK_TARGET_ROOT.mkdir(parents=True, exist_ok=True)
 
 
 def build_entity_index() -> tuple[int, list[Path]]:
@@ -212,11 +215,85 @@ def build_post_index(entity_lookup: dict[str, dict]) -> tuple[int, list[Path]]:
     return post_count, written_files
 
 
+def _tag_counts_from_publish() -> tuple[dict[str, int], dict[str, int]]:
+    """Return tagRef -> post/entity counts without making tag definitions a UI truth source."""
+    post_counts: dict[str, int] = defaultdict(int)
+    entity_counts: dict[str, int] = defaultdict(int)
+    for manifest in sorted(PUBLISH_MAINLINE.rglob("manifest.json")):
+        if "entities" in manifest.parts or "index" in manifest.parts or "posts" not in manifest.parts:
+            continue
+        try:
+            data = read_json(manifest)
+        except Exception:  # noqa: BLE001
+            continue
+        for tag_ref in data.get("tagRefs") or []:
+            if isinstance(tag_ref, str) and tag_ref.strip():
+                post_counts[tag_ref.strip()] += 1
+    for entity_file in sorted(PUBLISH_MAINLINE.rglob("_entity.json")):
+        if "entities" not in entity_file.parts or "index" in entity_file.parts:
+            continue
+        try:
+            data = read_json(entity_file)
+        except Exception:  # noqa: BLE001
+            continue
+        for tag_ref in data.get("tagRefs") or []:
+            if isinstance(tag_ref, str) and tag_ref.strip():
+                entity_counts[tag_ref.strip()] += 1
+    return dict(post_counts), dict(entity_counts)
+
+
+def build_tag_link_target_index() -> tuple[int, list[Path]]:
+    """Build derived tag link targets.
+
+    Tag taxonomy (`publish/tags/**/_definition.json`) remains semantic-only. Whether
+    a tag is clickable is derived from browsable targets: a tag landing page wins,
+    otherwise a search landing is exposed only when there is content to browse.
+    """
+    tags_root = PUBLISH_MAINLINE / "tags"
+    if not tags_root.is_dir():
+        return 0, []
+    post_counts, entity_counts = _tag_counts_from_publish()
+    records: list[dict] = []
+    for definition in sorted(tags_root.rglob("_definition.json")):
+        tag_ref = definition.parent.relative_to(tags_root).as_posix()
+        try:
+            data = read_json(definition)
+        except Exception:  # noqa: BLE001
+            data = {}
+        landing_page = definition.parent / "page.md"
+        post_count = post_counts.get(tag_ref, 0)
+        entity_count = entity_counts.get(tag_ref, 0)
+        if landing_page.is_file():
+            target_kind = "landing"
+            route_path = f"/tag/{quote(tag_ref, safe='/')}"
+        elif post_count or entity_count:
+            target_kind = "search"
+            route_path = f"/search?tagRef={quote(tag_ref, safe='')}"
+        else:
+            target_kind = "none"
+            route_path = ""
+        records.append(
+            {
+                "tagRef": tag_ref,
+                "label": data.get("label") or definition.parent.name,
+                "targetKind": target_kind,
+                "routePath": route_path,
+                "hasHomepage": landing_page.is_file(),
+                "postCount": post_count,
+                "objectCount": entity_count,
+            }
+        )
+    out_path = LINK_TARGET_ROOT / "tags.ndjson"
+    write_ndjson(out_path, sorted(records, key=lambda r: r["tagRef"]))
+    return len(records), [out_path]
+
+
 def build_publish_lookup_indexes() -> dict[str, int]:
     clear_index_root()
     entity_count, entity_files = build_entity_index()
     entity_lookup: dict[str, dict] = globals().get("_ENTITY_LOOKUP", {})
     post_count, post_files = build_post_index(entity_lookup)
+    tag_link_count, tag_link_files = build_tag_link_target_index()
     write_json(
         INDEX_ROOT / "_manifest.json",
         {
@@ -229,10 +306,16 @@ def build_publish_lookup_indexes() -> dict[str, int]:
                 "count": post_count,
                 "files": [str(p.relative_to(PUBLISH_MAINLINE)) for p in post_files],
             },
+            "linkTargets": {
+                "tags": {
+                    "count": tag_link_count,
+                    "files": [str(p.relative_to(PUBLISH_MAINLINE)) for p in tag_link_files],
+                },
+            },
             "updatedAt": NOW_ISO,
         },
     )
-    return {"entities": entity_count, "posts": post_count}
+    return {"entities": entity_count, "posts": post_count, "tagLinkTargets": tag_link_count}
 
 
 def main() -> None:

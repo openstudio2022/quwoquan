@@ -117,6 +117,7 @@ func (h *UserHandler) Routes() http.Handler {
 	// Auth & Credentials
 	mux.HandleFunc("POST /v1/auth/login", h.handleLogin)
 	mux.HandleFunc("POST /v1/auth/otp/send", h.handleSendOtp)
+	mux.HandleFunc("POST /internal/auth/otp-deliveries:callback", h.handleOtpDeliveryCallback)
 	mux.HandleFunc("POST /v1/auth/login/phone", h.handleLoginWithPhone)
 	mux.HandleFunc("POST /v1/auth/login/wechat", h.handleLoginWithWechat)
 	mux.HandleFunc("POST /v1/auth/login/apple", h.handleLoginWithApple)
@@ -1223,6 +1224,33 @@ func (h *UserHandler) handleSendOtp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) handleOtpDeliveryCallback(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	requestID := strings.TrimSpace(anyString(body["requestId"]))
+	status := strings.TrimSpace(anyString(body["status"]))
+	normalizedError := strings.TrimSpace(anyString(body["normalizedError"]))
+	if requestID == "" {
+		writeInvalidArg(w, r, "requestId required")
+		return
+	}
+	if status == "" {
+		writeInvalidArg(w, r, "status required")
+		return
+	}
+	if err := h.auth.HandleOtpDeliveryCallback(r.Context(), requestID, status, normalizedError); err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"requestId": requestID,
+		"accepted":  true,
+	})
 }
 
 func (h *UserHandler) handleLoginWithPhone(w http.ResponseWriter, r *http.Request) {

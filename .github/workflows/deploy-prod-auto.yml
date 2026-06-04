@@ -18,13 +18,13 @@ on:
         required: false
         default: 'aliyun'
       from_image:
-        description: 'Current prod image (empty = resolve from .release-state)'
+        description: 'Current prod image (empty = resolve from state/release)'
         required: false
       to_image:
         description: 'Target image version'
         required: false
       from_config:
-        description: 'Current prod config (empty = resolve from .release-state)'
+        description: 'Current prod config (empty = resolve from state/release)'
         required: false
       to_config:
         description: 'Target config version'
@@ -202,10 +202,10 @@ jobs:
             echo "::error::missing target image/config version; provide workflow inputs or a valid 02 mainline-release-artifact"
             exit 1
           fi
-          STATE=".release-state/seed-box.state"
+          STATE="state/release/seed-box.state"
           if [[ -z "$FROM_IMG" || -z "$FROM_CFG" ]]; then
             if [[ ! -f "$STATE" ]]; then
-              echo "::error::Missing .release-state/seed-box.state; provide from_image/from_config explicitly"
+              echo "::error::Missing state/release/seed-box.state; provide from_image/from_config explicitly"
               exit 1
             fi
             if [[ -z "$FROM_IMG" ]]; then FROM_IMG=$(awk -F= '/^to_image=/{print $2; exit}' "$STATE"); fi

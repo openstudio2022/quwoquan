@@ -83,6 +83,38 @@ void main() {
       },
     );
 
+    test('article asset manifest requests server-side variant generation', () {
+      final document = ArticleDocumentData(
+        nodes: const <ArticleDocumentNode>[
+          ArticleDocumentNode(
+            id: 'fig1',
+            type: ArticleDocumentNodeType.figure,
+            assetId: 'fig1',
+            imageUrl: '/tmp/fig1.jpg',
+          ),
+        ],
+      );
+      final state = CreateEditorState.initial().copyWith(
+        title: 'T',
+        body: 'x' * 200,
+        articleDocument: document,
+        articleCoverImagePath: '/tmp/cover.jpg',
+      );
+
+      final manifest = buildArticleAssetManifestForPayload(state);
+      final assets = manifest['assets'] as List<Object?>;
+      final cover = assets.cast<Map<Object?, Object?>>().firstWhere(
+        (asset) => asset['assetId'] == 'cover',
+      );
+      final variantGeneration =
+          cover['variantGeneration'] as Map<Object?, Object?>;
+
+      expect(variantGeneration['required'], isTrue);
+      expect(variantGeneration['source'], 'server');
+      expect(variantGeneration['profiles'], contains('display'));
+      expect(variantGeneration['profiles'], contains('original'));
+    });
+
     test('article markdown is serialized directly from document nodes', () {
       final document = ArticleDocumentData(
         nodes: const <ArticleDocumentNode>[

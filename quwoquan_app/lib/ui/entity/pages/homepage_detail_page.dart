@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -39,7 +40,7 @@ class HomepageDetailPage extends ConsumerStatefulWidget {
 
 class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
   bool _isLoading = true;
-  String? _errorText;
+  UiErrorSemantic? _errorSemantic;
   HomepageDetail? _detail;
   HomepageShellData? _shell;
   ObjectPageBundle? _objectPageBundle;
@@ -63,11 +64,22 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_errorSemantic != null && !_isLoading) {
+      return AppPageErrorState(
+        semantic: _errorSemantic!,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _load();
+          }
+        },
+      );
+    }
     return HomepageDetailShell(
       selectionMode: widget.selectionMode,
       initialSummary: widget.initialSummary,
       isLoading: _isLoading,
-      errorText: _errorText,
+      errorText: _errorSemantic?.message,
       detail: _detail,
       shell: _shell,
       objectPageBundle: _objectPageBundle,
@@ -84,7 +96,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
   Future<void> _load() async {
     setState(() {
       _isLoading = true;
-      _errorText = null;
+      _errorSemantic = null;
     });
     try {
       final repository = ref.read(homepageRepositoryProvider);
@@ -128,12 +140,17 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         _viewerOwnerUserId = ownerId.isEmpty ? null : ownerId;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _errorText = '主页详情暂时不可用，请稍后重试';
+        _errorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
         _isLoading = false;
       });
     }

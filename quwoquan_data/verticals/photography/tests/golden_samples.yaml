@@ -1,0 +1,11 @@
+schemaVersion: quwoquan.vertical_quality_samples.v1
+vertical: photography
+samples:
+  - id: photography.sample.portrait
+    entityRef: /tag/Topic/摄影/人像摄影
+    requiredEvidenceCategories: [open_license, photographer_site_authorized, stock_authorized]
+    requiredChecks: [license_proof, credit, model_release, aesthetic_quality, duplicate_scan]
+  - id: photography.sample.landscape
+    entityRef: /tag/Topic/摄影/风光摄影
+    requiredEvidenceCategories: [open_license, museum_archive, stock_authorized]
+    requiredChecks: [license_proof, credit, location_traceability, duplicate_scan]

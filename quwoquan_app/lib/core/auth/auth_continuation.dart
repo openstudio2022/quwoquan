@@ -47,6 +47,14 @@ class OpenSheetContinuation extends AuthContinuation {
   final AuthContinuationSheet sheet;
 }
 
+/// 续接「打开首页内部频道」。用于关注频道这类不是独立稳定路由的内部状态：
+/// 关闭登录页回安全首页，登录成功后再明确切到目标频道，避免 pop 回原触发点形成回环。
+class OpenHomeChannelContinuation extends AuthContinuation {
+  const OpenHomeChannelContinuation({required this.channelId});
+
+  final String channelId;
+}
+
 /// 单槽位续接控制器：set 登记、take 按类型取出并清空。
 class AuthContinuationController extends Notifier<AuthContinuation?> {
   @override

@@ -202,11 +202,10 @@ extension _ProfileShellBuilders on _ProfileShellState {
           top: 0,
           bottom: -_ProfileShellState._profileSurfaceBridge,
           child: backgroundUrl != null && backgroundUrl.isNotEmpty
-              ? Image.network(
-                  backgroundUrl,
+              ? AppCachedNetworkImage(
+                  imageUrl: backgroundUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      ColoredBox(color: backgroundColor),
+                  errorWidget: ColoredBox(color: backgroundColor),
                 )
               : ColoredBox(color: backgroundColor.withValues(alpha: 0.75)),
         ),
@@ -337,24 +336,39 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                       ),
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        CircleAvatar(
-                                          radius: AppSpacing.avatarUserSm / 2,
-                                          backgroundColor: actionBackground,
-                                          backgroundImage:
-                                              avatarUrl != null &&
-                                                  avatarUrl.isNotEmpty
-                                              ? NetworkImage(avatarUrl)
-                                              : null,
-                                          child:
-                                              avatarUrl == null ||
-                                                  avatarUrl.isEmpty
-                                              ? Icon(
-                                                  CupertinoIcons
-                                                      .person_crop_circle_fill,
-                                                  size: AppSpacing.iconMedium,
-                                                  color: compactForeground,
-                                                )
-                                              : null,
+                                        ClipOval(
+                                          child: SizedBox(
+                                            width: AppSpacing.avatarUserSm,
+                                            height: AppSpacing.avatarUserSm,
+                                            child:
+                                                avatarUrl != null &&
+                                                    avatarUrl.isNotEmpty
+                                                ? AppCachedNetworkImage(
+                                                    imageUrl: avatarUrl,
+                                                    fit: BoxFit.cover,
+                                                    errorWidget: ColoredBox(
+                                                      color: actionBackground,
+                                                      child: Icon(
+                                                        CupertinoIcons
+                                                            .person_crop_circle_fill,
+                                                        size: AppSpacing
+                                                            .iconMedium,
+                                                        color:
+                                                            compactForeground,
+                                                      ),
+                                                    ),
+                                                  )
+                                                : ColoredBox(
+                                                    color: actionBackground,
+                                                    child: Icon(
+                                                      CupertinoIcons
+                                                          .person_crop_circle_fill,
+                                                      size:
+                                                          AppSpacing.iconMedium,
+                                                      color: compactForeground,
+                                                    ),
+                                                  ),
+                                          ),
                                         ),
                                         SizedBox(width: AppSpacing.containerSm),
                                         Flexible(

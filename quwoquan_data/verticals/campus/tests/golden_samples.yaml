@@ -1,0 +1,11 @@
+schemaVersion: quwoquan.vertical_quality_samples.v1
+vertical: campus
+samples:
+  - id: campus.sample.university
+    entityRef: /entity/机构/学校/清华大学
+    requiredEvidenceCategories: [school_official, forum, map_geo]
+    requiredChecks: [official_fact_traceability, student_life_differentiation, admission_employment]
+  - id: campus.sample.k12
+    entityRef: /entity/机构/学校/北京市十一学校
+    requiredEvidenceCategories: [school_official, forum, map_geo]
+    requiredChecks: [district_policy, commute_context, template_similarity]

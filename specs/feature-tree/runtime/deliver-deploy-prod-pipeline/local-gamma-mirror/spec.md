@@ -25,7 +25,7 @@
 ## 验收标准概要
 
 - A1：规格、设计、验收与计划已落地，明确本地 `T1 -> T4` 左移覆盖与云端不可替代边界。
-- A2：`local-gamma` 文档明确不新增第六环境，endpoint 覆盖只通过本地脚本、runtime define 或未入库 overlay 注入。
+- A2：`local-gamma` 文档明确不新增额外环境，endpoint 覆盖只通过本地脚本、runtime define 或未入库 overlay 注入。
 - A3：本地 Docker mirror 可启动 `gamma` 语义服务，满足 `CONFIG_VERSION`、依赖、health、DNS/TLS 与 media endpoint 前置检查。
 - A4：本地 `T3` runner 使用 `app_gamma_seed_manifest.json` 验证真实 API、真实存储副作用、错误响应和 RemoteRepository 边界。
 - A5：本地 `T4` runner 统一 App 与测试进程 endpoint，至少在一台模拟器或真机完成 Patrol 核心旅程。

@@ -1,31 +1,24 @@
 {
-  "capturedAt": "2026-06-01T08:29:54.002895Z",
+  "capturedAt": "2026-06-04T08:25:44.104192Z",
   "suite": "gamma-patrol-matrix",
   "requestedEnvironments": [
     "local-gamma"
   ],
-  "deviceCount": 2,
+  "deviceCount": 1,
   "devices": [
     {
-      "id": "emulator-5554",
-      "name": "sdk gphone64 arm64",
-      "targetPlatform": "android-arm64",
-      "sdk": "Android 12 (API 31)",
-      "emulator": true,
-      "ephemeral": false
-    },
-    {
-      "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
-      "name": "iPhone 17 Pro",
+      "id": "004155EC-D4FB-4AB3-B830-E1D51E715521",
+      "name": "iPhone 17 Pro Max",
       "targetPlatform": "ios",
       "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-26-3",
       "emulator": true,
-      "ephemeral": false
+      "ephemeral": false,
+      "category": "mobile"
     }
   ],
   "extra": {
     "target": "test/patrol/discovery/feed_load_test.dart",
-    "platform": "all",
+    "platform": "ios",
     "reportPath": "artifacts/local-gamma/t4_report.json"
   }
 }

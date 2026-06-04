@@ -1,15 +1,17 @@
 """Draft IO 规范：会话模型创作正文的落盘契约。
 
-produce 三段式中间产物全部放在 produce/drafts/ 下：
-  {ref}.writing_pack.json  —— CLI prepare 产出的写作契约（证据/图/事实/约束）
-  {ref}.prompt.md          —— 给会话模型的人类可读写作指令
-  {ref}.article.md         —— 会话模型创作的正文（prepare 阶段先写占位）
-  {ref}.draft_meta.json    —— 出处元数据（generator/model/citedSourcePaths/coveredFacts）
+produce 三段式中间产物全部放在 produce/drafts/<ref>/ 包目录下：
+  writing_pack.json  —— CLI prepare 产出的最小写作契约（证据/图/事实/约束）
+  prompt.md          —— 给会话模型的人类可读写作指令
+  article.md         —— 会话模型创作的正文（prepare 阶段先写占位）
+  draft_meta.json    —— 出处元数据（generator/model/citedSourcePaths/coveredFacts）
+  assets/            —— 草稿可引用资产包（只放必要物理文件）
 
 generator 只有 'agent' 能进入交付面；'template'（脚本拼接）与 'pending'（未创作）被门禁拒绝。
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -21,26 +23,35 @@ GENERATOR_TEMPLATE = "template"
 GENERATOR_PENDING = "pending"
 
 PLACEHOLDER_MARKER = "<!-- QWQ_AWAITING_AGENT_DRAFT -->"
+_ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
 
 
 def drafts_dir(task_id: str, batch_id: str) -> Path:
     return batch_command_root(task_id, batch_id, "produce") / "drafts"
 
 
+def draft_package_dir(task_id: str, batch_id: str, ref: str) -> Path:
+    return drafts_dir(task_id, batch_id) / ref
+
+
+def draft_assets_dir(task_id: str, batch_id: str, ref: str) -> Path:
+    return draft_package_dir(task_id, batch_id, ref) / "assets"
+
+
 def writing_pack_path(task_id: str, batch_id: str, ref: str) -> Path:
-    return drafts_dir(task_id, batch_id) / f"{ref}.writing_pack.json"
+    return draft_package_dir(task_id, batch_id, ref) / "writing_pack.json"
 
 
 def prompt_path(task_id: str, batch_id: str, ref: str) -> Path:
-    return drafts_dir(task_id, batch_id) / f"{ref}.prompt.md"
+    return draft_package_dir(task_id, batch_id, ref) / "prompt.md"
 
 
 def draft_article_path(task_id: str, batch_id: str, ref: str) -> Path:
-    return drafts_dir(task_id, batch_id) / f"{ref}.article.md"
+    return draft_package_dir(task_id, batch_id, ref) / "article.md"
 
 
 def draft_meta_path(task_id: str, batch_id: str, ref: str) -> Path:
-    return drafts_dir(task_id, batch_id) / f"{ref}.draft_meta.json"
+    return draft_package_dir(task_id, batch_id, ref) / "draft_meta.json"
 
 
 def write_writing_pack(task_id: str, batch_id: str, ref: str, pack: dict[str, Any]) -> Path:
@@ -66,7 +77,7 @@ def write_placeholder_draft(task_id: str, batch_id: str, ref: str) -> None:
     article = draft_article_path(task_id, batch_id, ref)
     article.parent.mkdir(parents=True, exist_ok=True)
     article.write_text(
-        f"{PLACEHOLDER_MARKER}\n# 待会话模型创作\n\n请阅读同目录 {ref}.prompt.md 与 {ref}.writing_pack.json 后创作正文并覆盖本文件。\n",
+        f"{PLACEHOLDER_MARKER}\n# 待会话模型创作\n\n请阅读同目录 prompt.md 与 writing_pack.json 后创作正文并覆盖 article.md。\n",
         encoding="utf-8",
     )
     write_json(
@@ -77,13 +88,35 @@ def write_placeholder_draft(task_id: str, batch_id: str, ref: str) -> None:
 
 def read_draft_article(task_id: str, batch_id: str, ref: str) -> str | None:
     path = draft_article_path(task_id, batch_id, ref)
-    if not path.exists():
-        return None
-    return path.read_text(encoding="utf-8")
+    return path.read_text(encoding="utf-8") if path.exists() else None
 
 
 def is_placeholder(article: str | None) -> bool:
     return article is None or PLACEHOLDER_MARKER in article
+
+
+def draft_asset_reference_issues(article: str | None, pack: dict[str, Any] | None) -> list[str]:
+    if not article:
+        return []
+    refs = {raw.split("/")[-1] for raw in _ASSET_REF_RE.findall(article)}
+    if not refs:
+        return []
+    assets = (pack or {}).get("assets") or []
+    allowed_ids = {
+        str(asset.get("assetId") or "").strip()
+        for asset in assets
+        if isinstance(asset, dict) and str(asset.get("assetId") or "").strip()
+    }
+    allowed_files = {
+        str(asset.get("fileName") or "").strip()
+        for asset in assets
+        if isinstance(asset, dict) and str(asset.get("fileName") or "").strip()
+    }
+    allowed = allowed_ids | allowed_files
+    dangling = sorted(ref for ref in refs if ref not in allowed)
+    if not dangling:
+        return []
+    return [f"draft asset ref not in writing_pack.assets: {ref}" for ref in dangling]
 
 
 def read_draft_meta(task_id: str, batch_id: str, ref: str) -> dict[str, Any] | None:

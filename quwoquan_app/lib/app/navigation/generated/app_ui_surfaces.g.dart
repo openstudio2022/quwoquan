@@ -156,6 +156,7 @@ class AppUiSurfaces {
     description: '私助半弹层入口',
     operationIds: <String>[
       'ReportPageContext',
+      'GetEntryPersonalization',
       'GetSuggestedActions',
     ],
   );
@@ -177,6 +178,7 @@ class AppUiSurfaces {
       'ReportInteractionEvent',
       'ReportScorecard',
       'ReportPageContext',
+      'GetEntryPersonalization',
       'GetSuggestedActions',
       'GetPolicy',
       'ListSkills',

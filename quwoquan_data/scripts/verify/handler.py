@@ -9,12 +9,28 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from _common.post_verify import legacy_posts_roots
 from verify.gate import gate_verify
+from ship.consistency import report_to_text, scan_release_file, write_consistency_report
 
 
 def handle_verify(args: argparse.Namespace) -> None:
+    if getattr(args, "data_release_file", None):
+        report = scan_release_file(
+            Path(args.data_release_file),
+            publish_root=Path(args.publish_root) if getattr(args, "publish_root", None) else None,
+            metadata_root=Path(args.metadata_root) if getattr(args, "metadata_root", None) else None,
+            phase=getattr(args, "phase", "preflight"),
+        )
+        if getattr(args, "report", None):
+            write_consistency_report(report, Path(args.report))
+        print(report_to_text(report))
+        if report["status"] != "passed":
+            raise SystemExit(1)
+        return
+
     explicit = bool((getattr(args, "task", None) and getattr(args, "batch", None)) or getattr(args, "release", None))
     roots, issues = gate_verify(
         task=getattr(args, "task", None),
@@ -47,6 +63,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--task", help="Task ID (verify a produced batch)")
     p.add_argument("--batch", help="Batch ID")
     p.add_argument("--release", help="Release ID under release/")
+    p.add_argument("--data-release-file", help="Verify publish/env_releases/<releaseId>/<env>.json consistency")
+    p.add_argument("--publish-root", help="Publish root for data release consistency")
+    p.add_argument("--metadata-root", help="Metadata root for fixture user consistency")
+    p.add_argument("--phase", choices=["preflight", "post-write-pre-activation", "post-activation"], default="preflight")
+    p.add_argument("--report", help="Optional data release consistency report output path")
     p.add_argument(
         "--scope",
         choices=["current", "all"],

@@ -1,0 +1,40 @@
+schemaVersion: quwoquan.vertical_coverage.v1
+vertical: photography
+description: 摄影垂类覆盖边界。当前只有标签骨架，缺少独立生产任务与授权图片供应链。
+units:
+  - id: photography.portrait
+    label: 人像摄影系列
+    entityType: Topic/摄影/人像摄影
+    expectedCount: 0
+    source: pending-authorized-portrait-catalog
+    requiredSourceCategories: [open_license, photographer_site_authorized, stock_authorized]
+    requiredAngles: [教程, 作品赏析, 拍摄清单, 授权图集]
+    maturity: gap
+    rightsRequirements: [license_proof, credit, model_release]
+  - id: photography.landscape
+    label: 风景/风光摄影系列
+    entityType: Topic/摄影/风光摄影
+    expectedCount: 0
+    source: pending-authorized-landscape-catalog
+    requiredSourceCategories: [open_license, stock_authorized, museum_archive]
+    requiredAngles: [机位攻略, 技法教程, 作品赏析, 授权图集]
+    maturity: gap
+    rightsRequirements: [license_proof, credit]
+  - id: photography.documentary
+    label: 纪实摄影系列
+    entityType: Topic/摄影/纪实摄影
+    expectedCount: 0
+    source: pending-authorized-documentary-catalog
+    requiredSourceCategories: [open_license, photographer_site_authorized, editorial_reference_only]
+    requiredAngles: [作品赏析, 题材方法, 伦理与授权]
+    maturity: gap
+    rightsRequirements: [license_proof, credit, editorial_scope]
+  - id: photography.still_architecture
+    label: 景物/静物/建筑摄影系列
+    entityType: Topic/摄影
+    expectedCount: 0
+    source: pending-authorized-still-architecture-catalog
+    requiredSourceCategories: [open_license, stock_authorized, photographer_site_authorized]
+    requiredAngles: [布光教程, 构图方法, 作品赏析, 授权图集]
+    maturity: gap
+    rightsRequirements: [license_proof, credit, property_release_if_required]

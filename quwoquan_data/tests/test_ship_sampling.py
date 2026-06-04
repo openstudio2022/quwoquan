@@ -96,6 +96,10 @@ def test_ship_e2e_writes_bundle_and_meta():
     with open(posts_dir / "article__体验__四川省.ndjson", "w", encoding="utf-8") as f:
         for i in range(30):
             f.write(json.dumps({"postRef": f"posts/article/体验/t{i}/1", "contentType": "article", "angle": "体验"}, ensure_ascii=False) + "\n")
+            write_json(
+                tmp_publish / "posts" / "article" / "体验" / f"t{i}" / "1" / "manifest.json",
+                {"contentType": "article", "assets": []},
+            )
     with open(ent_dir / "地点__景区__四川省.ndjson", "w", encoding="utf-8") as f:
         for i in range(20):
             f.write(json.dumps({"entityRef": f"地点/景区/e{i}", "domain": "地点", "etype": "景区"}, ensure_ascii=False) + "\n")
@@ -118,6 +122,40 @@ def test_ship_e2e_writes_bundle_and_meta():
 
         meta = read_json(tmp_publish / "publish_meta.json")
         assert meta["lastShip"] is not None, "ship 应更新 publish_meta.lastShip"
+        assert meta["lastDataReleaseId"], "ship 应记录数据 releaseId"
+        assert (tmp_publish / "env_releases" / meta["lastDataReleaseId"] / "alpha.json").is_file()
+
+
+def test_ship_blocks_prod_apply_without_explicit_confirmation():
+    tmp_publish = Path(tempfile.mkdtemp(prefix="ship_prod_guard_"))
+    posts_dir = tmp_publish / "index" / "posts"
+    ent_dir = tmp_publish / "index" / "entities"
+    posts_dir.mkdir(parents=True, exist_ok=True)
+    ent_dir.mkdir(parents=True, exist_ok=True)
+    import json
+    with open(posts_dir / "article__体验__prod.ndjson", "w", encoding="utf-8") as f:
+        f.write(json.dumps({"postRef": "posts/article/体验/prod/1", "contentType": "article", "angle": "体验"}, ensure_ascii=False) + "\n")
+    write_json(
+        tmp_publish / "posts" / "article" / "体验" / "prod" / "1" / "manifest.json",
+        {"contentType": "article", "assets": []},
+    )
+
+    from ship.handler import handle_ship
+
+    args = argparse.Namespace(
+        release_id=None, task=None, batch=None, copy_entities=False,
+        env="prod", skip_promote=True, skip_index=True,
+        import_to_db=True, mongo_uri="mongodb://prod.example.invalid:27017",
+        data_release_id="rel_prod_guard", mode="upsert", delete_policy="none",
+        source_owner="qwq_data", approved_by=None, dry_run=False, confirm_prod_apply=False,
+    )
+    with _PatchedPublishRoot(tmp_publish):
+        try:
+            handle_ship(args)
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:
+            raise AssertionError("prod apply without --confirm-prod-apply must be blocked")
 
 
 def _run_all() -> None:

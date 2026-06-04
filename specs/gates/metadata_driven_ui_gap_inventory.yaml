@@ -500,6 +500,9 @@ domains:
       - path: quwoquan_app/lib/app/shell/web_app_install_banner.dart
         status: exempt
         note: Web 顶部 App 安装提示；下载 URL 走 dart-define 配置，无云行模型
+      - path: quwoquan_app/lib/app/shell/web_main_app_shell.dart
+        status: exempt
+        note: PC Web 独立宽屏壳；壳层自身无云行模型，首页/精品内容区复用 discoveryFeedMapProvider + PostBaseDto
       - path: quwoquan_app/lib/core/links/app_public_content_links.dart
         status: compliant
         note: 公网 origin 薄层；路径由 _shared/link_templates.yaml → lib/cloud/runtime/generated/link_templates.g.dart（AppLinkTemplates）；门禁 quwoquan_app/scripts/runtime/verify_link_templates_route_ids.py

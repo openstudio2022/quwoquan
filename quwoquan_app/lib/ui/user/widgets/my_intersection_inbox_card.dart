@@ -64,7 +64,11 @@ class _MyIntersectionInboxCardState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _buildHeader(context, summary.totalNewCount),
+          _buildSummaryHeader(
+            context,
+            totalCount: summary.totalCount,
+            totalNew: summary.totalNewCount,
+          ),
           SizedBox(height: AppSpacing.intraGroupSm),
           Wrap(
             spacing: AppSpacing.intraGroupSm,
@@ -112,49 +116,81 @@ class _MyIntersectionInboxCardState
     );
   }
 
-  Widget _buildHeader(BuildContext context, int totalNew) {
+  Widget _buildSummaryHeader(
+    BuildContext context, {
+    required int totalCount,
+    required int totalNew,
+  }) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Icon(
-          CupertinoIcons.circle_grid_hex,
-          size: AppSpacing.iconSmall,
-          color: AppColors.iosAccent(context),
-        ),
-        SizedBox(width: AppSpacing.intraGroupSm),
-        Flexible(
-          child: Text(
-            UITextConstants.myIntersectionsTitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: AppTypography.iosSubheadline,
-              fontWeight: AppTypography.semiBold,
-              color: AppColors.iosLabel(context),
-            ),
+        Container(
+          width: AppSpacing.largeButtonSize,
+          height: AppSpacing.largeButtonSize,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.iosAccent(context).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
           ),
-        ),
-        if (totalNew > 0) ...<Widget>[
-          SizedBox(width: AppSpacing.intraGroupSm),
-          _RedCountBadge(count: totalNew),
-        ],
-        const Spacer(),
-        Flexible(
-          child: Text(
-            UITextConstants.myIntersectionsSubtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.end,
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
+          child: Icon(
+            CupertinoIcons.circle_grid_hex,
+            size: AppSpacing.iconMedium,
+            color: AppColors.iosAccent(context),
           ),
         ),
         SizedBox(width: AppSpacing.intraGroupSm),
-        Icon(
-          CupertinoIcons.chevron_forward,
-          size: AppSpacing.iconSmall,
-          color: AppColors.iosTertiaryLabel(context),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Text(
+                    '$totalCount',
+                    style: TextStyle(
+                      fontSize: AppTypography.iosLargeTitle,
+                      fontWeight: AppTypography.bold,
+                      color: AppColors.iosLabel(context),
+                      height: AppSpacing.textLineHeightSingle,
+                    ),
+                  ),
+                  if (totalNew > 0) ...<Widget>[
+                    SizedBox(width: AppSpacing.intraGroupXs),
+                    _RedCountBadge(count: totalNew),
+                  ],
+                ],
+              ),
+              SizedBox(height: AppSpacing.intraGroupXs),
+              Text(
+                UITextConstants.myIntersectionsTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.semiBold,
+                  color: AppColors.iosLabel(context),
+                ),
+              ),
+              Text(
+                UITextConstants.myIntersectionsSubtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.iosCaption1,
+                  color: AppColors.iosSecondaryLabel(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: AppSpacing.intraGroupSm),
+        Padding(
+          padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
+          child: Icon(
+            CupertinoIcons.chevron_forward,
+            size: AppSpacing.iconSmall,
+            color: AppColors.iosTertiaryLabel(context),
+          ),
         ),
       ],
     );
@@ -196,6 +232,7 @@ class _DimensionPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasNew = tally.newCount > 0;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -227,16 +264,17 @@ class _DimensionPill extends StatelessWidget {
             ),
             SizedBox(width: AppSpacing.intraGroupXs),
             Text(
-              '${tally.count}',
+              hasNew ? '+${tally.newCount}' : '${tally.count}',
               style: TextStyle(
                 fontSize: AppTypography.iosCaption1,
-                color: AppColors.iosSecondaryLabel(context),
+                fontWeight: hasNew
+                    ? AppTypography.semiBold
+                    : AppTypography.regular,
+                color: hasNew
+                    ? AppColors.error
+                    : AppColors.iosSecondaryLabel(context),
               ),
             ),
-            if (tally.newCount > 0) ...<Widget>[
-              SizedBox(width: AppSpacing.intraGroupXs),
-              _RedCountBadge(count: tally.newCount),
-            ],
           ],
         ),
       ),

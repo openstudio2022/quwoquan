@@ -18,6 +18,7 @@ import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
@@ -66,7 +67,7 @@ class _SearchNetworkResultsPageState
   Timer? _debounceTimer;
   int _requestToken = 0;
   bool _isLoading = false;
-  String? _errorText;
+  UiErrorSemantic? _errorSemantic;
   AssistantSearchResultView? _xiaoquResult;
   List<PostSearchItemView> _contentResults = const <PostSearchItemView>[];
   List<HomepageSummary> _homepageResults = const <HomepageSummary>[];
@@ -136,23 +137,33 @@ class _SearchNetworkResultsPageState
           ),
           SizedBox(height: AppSpacing.containerSm),
           Expanded(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.containerMd,
-                0,
-                AppSpacing.containerMd,
-                AppSpacing.containerLg,
-              ),
-              child: ListView(
-                key: ValueKey<String>('network_results_$_activeTabId'),
-                padding: EdgeInsets.zero,
-                children: _buildResultChildren(
-                  isDark: isDark,
-                  fgSecondary: fgSecondary,
-                  activeTab: activeTab,
+            child: _errorSemantic != null && !_isLoading
+                ? AppPageErrorState(
+                    semantic: _errorSemantic!,
+                    onAction: (action) async {
+                      if (action.type == UiErrorActionType.retry ||
+                          action.type == UiErrorActionType.resubmit) {
+                        await _loadResults();
+                      }
+                    },
+                  )
+                : Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.containerMd,
+                      0,
+                      AppSpacing.containerMd,
+                      AppSpacing.containerLg,
+                    ),
+                    child: ListView(
+                      key: ValueKey<String>('network_results_$_activeTabId'),
+                      padding: EdgeInsets.zero,
+                      children: _buildResultChildren(
+                        isDark: isDark,
+                        fgSecondary: fgSecondary,
+                        activeTab: activeTab,
+                      ),
+                    ),
                 ),
-              ),
-            ),
           ),
         ],
       ),
@@ -354,8 +365,6 @@ class _SearchNetworkResultsPageState
         SizedBox(height: AppSpacing.containerMd),
         if (_isLoading)
           _StatusMessage(text: '小趣正在整理综合结果', isDark: isDark, loading: true)
-        else if (_errorText != null)
-          _StatusMessage(text: _errorText!, isDark: isDark)
         else if ((_xiaoquResult?.citations?.length ?? 0) == 0)
           _StatusMessage(text: '暂时没有找到可引用的网络结果', isDark: isDark)
         else
@@ -384,8 +393,6 @@ class _SearchNetworkResultsPageState
         ),
         if (_isLoading)
           _StatusMessage(text: '正在加载共享主页', isDark: isDark, loading: true)
-        else if (_errorText != null)
-          _StatusMessage(text: _errorText!, isDark: isDark)
         else if (_homepageResults.isEmpty)
           _StatusMessage(text: '没有找到相关主页', isDark: isDark)
         else
@@ -403,8 +410,6 @@ class _SearchNetworkResultsPageState
         ),
         if (_isLoading)
           _StatusMessage(text: '正在加载群组结果', isDark: isDark, loading: true)
-        else if (_errorText != null)
-          _StatusMessage(text: _errorText!, isDark: isDark)
         else if (_groupResults.isEmpty)
           _StatusMessage(text: '没有找到相关群组', isDark: isDark)
         else
@@ -422,8 +427,6 @@ class _SearchNetworkResultsPageState
         ),
         if (_isLoading)
           _StatusMessage(text: '正在加载消息结果', isDark: isDark, loading: true)
-        else if (_errorText != null)
-          _StatusMessage(text: _errorText!, isDark: isDark)
         else if (_messageResults.isEmpty)
           _StatusMessage(text: '没有找到相关消息', isDark: isDark)
         else
@@ -446,8 +449,6 @@ class _SearchNetworkResultsPageState
         ),
         if (_isLoading)
           _StatusMessage(text: '正在加载联系人结果', isDark: isDark, loading: true)
-        else if (_errorText != null)
-          _StatusMessage(text: _errorText!, isDark: isDark)
         else if (_contactResults.isEmpty)
           _StatusMessage(text: '没有找到相关联系人', isDark: isDark)
         else
@@ -469,8 +470,6 @@ class _SearchNetworkResultsPageState
       ),
       if (_isLoading)
         _StatusMessage(text: '正在加载网络结果', isDark: isDark, loading: true)
-      else if (_errorText != null)
-        _StatusMessage(text: _errorText!, isDark: isDark)
       else if (_contentResults.isEmpty)
         _StatusMessage(text: '没有找到相关网络结果', isDark: isDark)
       else
@@ -487,9 +486,6 @@ class _SearchNetworkResultsPageState
       return <Widget>[
         _StatusMessage(text: '正在加载应用内结果', isDark: isDark, loading: true),
       ];
-    }
-    if (_errorText != null) {
-      return <Widget>[_StatusMessage(text: _errorText!, isDark: isDark)];
     }
 
     final sections = <Widget>[];
@@ -755,7 +751,7 @@ class _SearchNetworkResultsPageState
     final trimmedQuery = _query.trim();
     setState(() {
       _isLoading = true;
-      _errorText = null;
+      _errorSemantic = null;
       if (_activeTabId == _tabXiaoqu) {
         _xiaoquResult = null;
       } else if (_activeTabId == _tabAll) {
@@ -886,12 +882,17 @@ class _SearchNetworkResultsPageState
         _contentResults = items;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || token != _requestToken) {
         return;
       }
       setState(() {
-        _errorText = '网络结果暂时不可用，请稍后重试';
+        _errorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
         _isLoading = false;
       });
     }
@@ -1099,9 +1100,42 @@ class _SearchNetworkResultsPageState
       if (result is MediaViewerResult) {
         applyMediaViewerResultToInteractionState(ref, result);
       }
-    } catch (_) {
+    } catch (error) {
+      await _showOpenPostFailure(error);
+    }
+  }
+
+  Future<void> _showOpenPostFailure(Object error) async {
+    if (!mounted) {
       return;
     }
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.submit,
+      scope: UiErrorScope.global,
+    );
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: UiErrorSemantic(
+        category: resolved.category,
+        scope: resolved.scope,
+        title: '内容暂时打不开',
+        message: resolved.message,
+        secondaryMessage: resolved.secondaryMessage,
+        primaryAction:
+            resolved.primaryAction ??
+            const UiErrorAction(
+              type: UiErrorActionType.dismiss,
+              label: UITextConstants.confirm,
+            ),
+        secondaryAction: resolved.secondaryAction,
+        dismissible: true,
+        sourceCode: resolved.sourceCode,
+        failureKind: resolved.failureKind,
+        recoveryAction: resolved.recoveryAction,
+      ),
+    );
   }
 
   void _openHomepage(String homepageId) {

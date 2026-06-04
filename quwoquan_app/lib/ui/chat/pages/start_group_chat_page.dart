@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -13,7 +16,10 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -59,6 +65,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   bool _selectedExpanded = false;
   bool _submitting = false;
   String _query = '';
+  bool _isLoading = true;
+  UiErrorSemantic? _pageErrorSemantic;
+  UiErrorSemantic? _submitErrorSemantic;
 
   @override
   void initState() {
@@ -125,15 +134,28 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           _circles = circleSummaries
               .where((circle) => activeCircleIds.contains(circle.id))
               .toList(growable: false);
+          _isLoading = false;
+          _pageErrorSemantic = null;
         });
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted && !widget.isCreateMode) {
         ref
             .read(startGroupMemberWizardProvider(_wizardId).notifier)
             .completeBootstrap(const <String>{});
       }
-      // Fallback: leave empty lists
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _pageErrorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
+      });
     }
   }
 
@@ -175,9 +197,31 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _handleSubmitSelectionError() {
-    AppToast.show(
-      context,
-      widget.isCreateMode ? '发起群聊失败，请稍后重试' : '添加成员失败，请稍后重试',
+    final semantic = UiErrorSemantic(
+      category: UiErrorCategory.submit,
+      scope: UiErrorScope.global,
+      title: widget.isCreateMode ? '发起群聊未完成' : '添加成员未完成',
+      message: widget.isCreateMode
+          ? '这次没有发起成功，稍后可以再试一次。'
+          : '这次没有添加成功，稍后可以再试一次。',
+      primaryAction: const UiErrorAction(
+        type: UiErrorActionType.retry,
+        label: UITextConstants.tryAgain,
+      ),
+      dismissible: true,
+    );
+    _submitErrorSemantic = semantic;
+    unawaited(
+      AppActionErrorFeedback.show(
+        context,
+        semantic: semantic,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _submitSelection();
+          }
+        },
+      ),
     );
   }
 
@@ -379,6 +423,39 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
+    if (_pageErrorSemantic != null && !_isLoading) {
+      return AppScaffold(
+        backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
+        navigationBar: AppNavigationBar(
+          backgroundColor: SettingsSemanticConstants.selectionToolbarBackground(
+            isDark,
+          ),
+          leading: AppNavigationBarIconButton(
+            icon: CupertinoIcons.back,
+            onPressed: widget.onBack,
+          ),
+          middle: Text(
+            widget.isCreateMode
+                ? UITextConstants.startGroupChat
+                : UITextConstants.addMember,
+            style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+          ),
+        ),
+        body: AppPageErrorState(
+          semantic: _pageErrorSemantic!,
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              setState(() {
+                _isLoading = true;
+                _pageErrorSemantic = null;
+              });
+              await _loadData();
+            }
+          },
+        ),
+      );
+    }
     final wizardState = ref.watch(startGroupMemberWizardProvider(_wizardId));
     final selectionReady = widget.isCreateMode || wizardState.isBootstrapLoaded;
     final bgColor = SettingsSemanticConstants.pageBackground(isDark);
@@ -681,6 +758,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                   ),
                   children: [...topChildren, ...relatedChildren],
                 ),
+                if (_isLoading)
+                  const Positioned.fill(
+                    child: Center(child: CupertinoActivityIndicator()),
+                  ),
                 Positioned(
                   right: AppSpacing.sm,
                   top: 0,

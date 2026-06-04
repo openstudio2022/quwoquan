@@ -48,7 +48,10 @@ type AuthService struct {
 	shardDirectory   *ShardDirectory
 	oneTapResolver   OneTapPhoneResolver
 	otp              OtpCodeStore
+	otpChallenges    OtpChallengeStore
+	externalClient   ExternalInteractionClient
 	otpDebugReveal   bool
+	otpPassThrough   SmsOtpPassThroughConfig
 	accessSigner     *rtauth.Signer
 }
 
@@ -84,6 +87,8 @@ func NewAuthService(
 		pcache:           pcache,
 		shardDirectory:   shardDirectory,
 		oneTapResolver:   TokenEncodedOneTapPhoneResolver{},
+		otpChallenges:    NewMemoryOtpChallengeStore(),
+		otpPassThrough:   SmsOtpPassThroughConfig{Mode: SmsOtpPassThroughDisabled},
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -114,11 +119,34 @@ func WithOtpCodeStore(store OtpCodeStore) AuthServiceOption {
 	}
 }
 
+func WithOtpChallengeStore(store OtpChallengeStore) AuthServiceOption {
+	return func(s *AuthService) {
+		if store != nil {
+			s.otpChallenges = store
+		}
+	}
+}
+
+func WithExternalInteractionClient(client ExternalInteractionClient) AuthServiceOption {
+	return func(s *AuthService) {
+		s.externalClient = client
+	}
+}
+
 // WithOtpDebugReveal 在非生产环境下让 SendOtp 返回明文验证码，便于本地/CI 联调。
 // 生产必须为 false。
 func WithOtpDebugReveal(reveal bool) AuthServiceOption {
 	return func(s *AuthService) {
 		s.otpDebugReveal = reveal
+	}
+}
+
+func WithSmsOtpPassThroughConfig(config SmsOtpPassThroughConfig) AuthServiceOption {
+	return func(s *AuthService) {
+		if strings.TrimSpace(config.Mode) == "" {
+			config.Mode = SmsOtpPassThroughDisabled
+		}
+		s.otpPassThrough = config
 	}
 }
 
@@ -664,11 +692,13 @@ func (s *AuthService) issueAccessToken(ownerID string, activeSub *model.Persona)
 type OtpSendResult struct {
 	MaskedPhone      string `json:"maskedPhone"`
 	ExpiresInSeconds int    `json:"expiresInSeconds"`
+	RequestID        string `json:"requestId,omitempty"`
+	ChallengeID      string `json:"challengeId,omitempty"`
+	DeliveryStatus   string `json:"deliveryStatus"`
 	DebugCode        string `json:"debugCode,omitempty"`
 }
 
-// SendOtp 校验号码、限频后生成并存储验证码（真实短信下发由网关/供应商对接，
-// 当前以日志/调试码替代）。
+// SendOtp 校验号码、限频后创建 OTP challenge，并通过 integration-service 提交短信发送。
 func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResult, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.SendOtp")
 	defer func() { rtobs.EndSpan(span, err) }()
@@ -679,6 +709,9 @@ func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResu
 	}
 	if s.otp == nil {
 		return nil, generated.AppErrorFromInternalError("otp store unavailable")
+	}
+	if s.otpChallenges == nil {
+		return nil, generated.AppErrorFromInternalError("otp challenge store unavailable")
 	}
 	allowed, retryAfter, err := s.otp.AllowSend(ctx, normalized)
 	if err != nil {
@@ -692,39 +725,105 @@ func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResu
 	if err != nil {
 		return nil, generated.AppErrorFromInternalError("otp generate")
 	}
-	if err := s.otp.SaveCode(ctx, normalized, code); err != nil {
-		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp save: %v", err))
+	challengeID, err := generateToken()
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError("otp challenge id generate")
+	}
+	requestID, err := generateToken()
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError("otp request id generate")
+	}
+	expiresAt := time.Now().UTC().Add(time.Duration(otpCodeExpirySeconds) * time.Second)
+	challenge := OtpChallenge{
+		ChallengeID:    "otp_ch_" + strings.TrimRight(challengeID, "="),
+		RequestID:      "otp_req_" + strings.TrimRight(requestID, "="),
+		Phone:          normalized,
+		PhoneHash:      hashOTPPhone(normalized),
+		CodeHash:       hashOTPCode("otp_ch_"+strings.TrimRight(challengeID, "="), normalized, code),
+		Status:         OtpChallengeStatusPendingDispatch,
+		IdempotencyKey: "otp:" + normalized + ":" + expiresAt.Format("200601021504"),
+		ExpiresAt:      expiresAt,
+	}
+	challenge, err = s.otpChallenges.CreateChallenge(ctx, challenge)
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge save: %v", err))
 	}
 	result := &OtpSendResult{
 		MaskedPhone:      maskPhoneForDisplay(normalized),
 		ExpiresInSeconds: int(otpCodeExpirySeconds),
+		RequestID:        challenge.RequestID,
+		ChallengeID:      challenge.ChallengeID,
+		DeliveryStatus:   "queued",
 	}
-	if s.otpDebugReveal {
+	passThroughAllowed := s.otpPassThrough.Allows(time.Now().UTC())
+	if s.externalClient != nil {
+		if _, err := s.externalClient.SubmitSMSOTP(ctx, SMSOTPDispatchRequest{
+			RequestID:      challenge.RequestID,
+			ChallengeID:    challenge.ChallengeID,
+			Phone:          normalized,
+			PhoneHash:      challenge.PhoneHash,
+			MaskedPhone:    result.MaskedPhone,
+			Code:           code,
+			IdempotencyKey: challenge.IdempotencyKey,
+			ExpiresAt:      expiresAt,
+		}); err != nil {
+			if !passThroughAllowed {
+				_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, err.Error())
+				return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp integration submit: %v", err))
+			}
+			result.DeliveryStatus = "pass_through"
+			_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
+		} else {
+			_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
+			result.DeliveryStatus = "queued"
+		}
+	} else if passThroughAllowed {
+		result.DeliveryStatus = "pass_through"
+		_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
+	} else {
+		_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, "external interaction client unavailable")
+		return nil, generated.AppErrorFromInternalError("otp external interaction client unavailable")
+	}
+	if passThroughAllowed || s.otpDebugReveal {
 		result.DebugCode = code
 	}
 	return result, nil
 }
 
-// verifyOtp 校验验证码：缺失/过期 -> 过期；不匹配 -> 不匹配；成功后立即清除。
+// verifyOtp 校验验证码：只信任持久化 challenge 状态、hash、过期与一次性消费标记。
 func (s *AuthService) verifyOtp(ctx context.Context, phone, code string) error {
-	if s.otp == nil {
-		return generated.AppErrorFromInternalError("otp store unavailable")
+	if s.otpChallenges == nil {
+		return generated.AppErrorFromInternalError("otp challenge store unavailable")
 	}
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return generated.AppErrorFromInvalidArgument("otpCode required")
 	}
-	stored, found, err := s.otp.ReadCode(ctx, phone)
-	if err != nil {
-		return generated.AppErrorFromInternalError(fmt.Sprintf("otp read: %v", err))
+	now := time.Now().UTC()
+	if s.otpPassThrough.Allows(now) {
+		challenge, err := s.otpChallenges.FindLatestChallenge(ctx, phone, now)
+		if err != nil {
+			return generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge read: %v", err))
+		}
+		if challenge != nil {
+			_ = s.otpChallenges.ConsumeChallenge(ctx, challenge.ChallengeID, now)
+		}
+		return nil
 	}
-	if !found {
+	challenge, err := s.otpChallenges.FindLatestChallenge(ctx, phone, now)
+	if err != nil {
+		return generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge read: %v", err))
+	}
+	if challenge == nil {
 		return generated.AppErrorFromInvalidArgument("otp expired")
 	}
-	if stored != code {
+	if challenge.Status != OtpChallengeStatusActive {
+		return generated.AppErrorFromInvalidArgument("otp not ready")
+	}
+	if challenge.CodeHash != hashOTPCode(challenge.ChallengeID, phone, code) {
 		return generated.AppErrorFromInvalidArgument("otp mismatch")
 	}
-	_ = s.otp.ClearCode(ctx, phone)
+	_ = s.otpChallenges.ConsumeChallenge(ctx, challenge.ChallengeID, now)
 	return nil
 }
 
@@ -738,6 +837,20 @@ func (s *AuthService) LoginWithPhone(ctx context.Context, phone, otpCode, displa
 		return nil, err
 	}
 	return s.LoginWithCredential(ctx, credentialPhone, normalized, displayLabel)
+}
+
+func (s *AuthService) HandleOtpDeliveryCallback(ctx context.Context, requestID string, status string, normalizedError string) error {
+	if s.otpChallenges == nil {
+		return generated.AppErrorFromInternalError("otp challenge store unavailable")
+	}
+	switch strings.TrimSpace(status) {
+	case "delivered", "sent_unconfirmed", "active", "queued":
+		return s.otpChallenges.MarkChallengeDelivered(ctx, strings.TrimSpace(requestID), OtpChallengeStatusActive)
+	case "failed", "dead_letter":
+		return s.otpChallenges.MarkChallengeFailed(ctx, strings.TrimSpace(requestID), normalizedError)
+	default:
+		return generated.AppErrorFromInvalidArgument("otp delivery status unsupported")
+	}
 }
 
 const otpCodeExpirySeconds = 5 * 60

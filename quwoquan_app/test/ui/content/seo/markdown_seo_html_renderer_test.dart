@@ -65,6 +65,7 @@ asset://cover
       expect(doc.html, contains('<blockquote>适合第一次去川西的朋友。</blockquote>'));
       expect(doc.html, contains('<figure>'));
       expect(doc.html, contains('https://cdn.example.com/cover.jpg'));
+      expect(doc.html, contains('data-asset-id="cover"'));
       expect(doc.html, contains('class="qwq-gallery"'));
       expect(doc.html, contains('class="qwq-callout"'));
       expect(doc.openGraph['og:title'], '川西自驾笔记');
@@ -96,6 +97,76 @@ asset://cover
       expect(doc.html, contains('&lt;script&gt;alert(1)&lt;/script&gt;'));
       expect(doc.html, contains('&lt;img src=x onerror=alert(1)&gt;'));
       expect(doc.html, isNot(contains('javascript:alert')));
+    });
+
+    test('resolves objectKey-only asset manifest through shared resolver', () {
+      final doc = renderer.render(
+        const MarkdownSeoRenderInput(
+          postId: 'post_object_key',
+          title: '媒体发布测试',
+          articleMarkdown: '''
+# 媒体发布测试
+
+![封面](asset://cover)
+''',
+          articleAssetManifest: <String, Object?>{
+            'assets': <Object?>[
+              <String, Object?>{
+                'assetId': 'cover',
+                'objectKey':
+                    'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+              },
+            ],
+          },
+        ),
+      );
+
+      expect(
+        doc.html,
+        contains(
+          'https://media.quwoquan.invalid/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+        ),
+      );
+      expect(doc.html, contains('data-asset-id="cover"'));
+    });
+
+    test('renders display variant and keeps asset id for web preview lookup', () {
+      final doc = renderer.render(
+        const MarkdownSeoRenderInput(
+          postId: 'post_variants',
+          title: '媒体变体测试',
+          articleMarkdown: '''
+# 媒体变体测试
+
+![封面](asset://cover)
+''',
+          articleAssetManifest: <String, Object?>{
+            'assets': <Object?>[
+              <String, Object?>{
+                'assetId': 'cover',
+                'variants': <String, Object?>{
+                  'display': <String, Object?>{
+                    'cdnUrl': 'https://cdn.example.com/cover-display.webp',
+                  },
+                  'full': <String, Object?>{
+                    'cdnUrl': 'https://cdn.example.com/cover-full.webp',
+                  },
+                  'original': <String, Object?>{
+                    'objectKey':
+                        'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+                    'requiresAccess': true,
+                  },
+                },
+              },
+            ],
+          },
+        ),
+      );
+
+      expect(doc.html, contains('src="https://cdn.example.com/cover-display.webp"'));
+      expect(doc.html, contains('data-asset-id="cover"'));
+      expect(doc.html, isNot(contains('cover-full.webp')));
+      expect(doc.referencedAssetUrls, contains('https://cdn.example.com/cover-display.webp'));
     });
 
     test('private content is not indexable and exposes no HTML body', () {

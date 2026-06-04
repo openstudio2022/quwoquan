@@ -8,8 +8,9 @@ from _common.article_package import (
     MARKDOWN_VERSION,
     build_article_asset_manifest,
     build_gallery_markdown,
+    compute_document_sha256,
+    compute_document_version_sha256,
     copy_asset_files,
-    sha256_text,
 )
 from _common.paths import batch_command_root, batch_sources_dir
 from _common.io import read_json, write_json
@@ -168,7 +169,25 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
 
         (post_dir / "article.md").write_text(article_md, encoding="utf-8")
 
-        article_asset_manifest = build_article_asset_manifest(article_md, assets)
+        render_profile = compose_payload.get("articleRenderProfile") or {
+            "template": template,
+            "fontPreset": "clean",
+            "layoutPolicy": {
+                "wrapDowngrade": "compactWidthToFullWidth",
+                "galleryDowngrade": "singleColumn",
+            },
+        }
+        article_asset_manifest = build_article_asset_manifest(
+            article_md,
+            assets,
+            render_profile=render_profile,
+        )
+        document_sha256 = compute_document_sha256(article_md)
+        document_version_sha256 = compute_document_version_sha256(
+            document_sha256=document_sha256,
+            asset_manifest_sha256=article_asset_manifest["assetManifestSha256"],
+            render_profile=render_profile,
+        )
         # 最小发布契约：只保留发布/渲染/出处必需字段。
         manifest = {
             "schemaVersion": "quwoquan_data.post_manifest",
@@ -194,21 +213,21 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
             "citedSourceRefs": compose_payload.get("citedSourceRefs") or source_paths,
             "reviewDecision": "approved",
             "articleMarkdownVersion": MARKDOWN_VERSION,
-            "articleMarkdownDigest": sha256_text(article_md),
+            "articleMarkdownDigest": document_sha256,
+            "assetManifestSha256": article_asset_manifest["assetManifestSha256"],
+            "documentVersionSha256": document_version_sha256,
             "articleAssetManifest": article_asset_manifest,
-            "articleRenderProfile": compose_payload.get("articleRenderProfile")
-            or {
-                "template": template,
-                "fontPreset": "clean",
-                "layoutPolicy": {
-                    "wrapDowngrade": "compactWidthToFullWidth",
-                    "galleryDowngrade": "singleColumn",
-                },
-            },
+            "articleRenderProfile": render_profile,
             "publishLayout": compose_payload.get("publishLayout", "travel"),
             "publishAngle": compose_payload.get("publishAngle", ""),
             "publishTitle": publish_title,
             "publishSeq": seq,
+            # 叙事骨架：发布门 storySpine 真相源。优先 compose 显式 storySpine，
+            # 回退到 progression（叙事主线）/ sectionIntents（章节意图），保证发布契约闭合。
+            "storySpine": compose_payload.get("storySpine")
+            or compose_payload.get("progression")
+            or compose_payload.get("sectionIntents")
+            or [],
             # 溯源：内容来自哪个任务/批次（task trace/hydrate、推荐归因消费）
             "sourceTaskId": task_id,
             "sourceBatchId": batch_id,
@@ -216,9 +235,13 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
         # 「明」：预生成内容侧交集锚点（对齐 IntersectionReason 闭集口径），runtime 据此 + 用户补全文案。
         manifest["intersectionHints"] = build_intersection_hints(manifest)
         write_json(post_dir / "manifest.json", manifest)
+        from verify_content_quality import asset_closure_issues
 
-        # 结构化出处：把「给 agent 的输入摘要 / 最终结果 / 原始源 / 补全证据源 / 门结果」汇成
-        # 单一回查入口，明确区分最终结果（final）与中间过程（intermediate），取代分散的 produce_trace.json。
+        closure_issues = asset_closure_issues(post_dir, manifest)
+        if closure_issues:
+            raise RuntimeError("post asset closure failed:\n  - " + "\n  - ".join(closure_issues))
+
+        # 结构化出处：只保留发布追责必需字段，取代分散的 produce_trace.json。
         provenance = build_provenance(
             ref,
             writing_pack=read_writing_pack(task_id, batch_id, ref),

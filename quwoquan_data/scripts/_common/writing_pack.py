@@ -35,7 +35,7 @@ def _load_sop_fewshot(sop_example_ref: str | None) -> dict[str, str] | None:
     return {"ref": sop_example_ref, "example": example[:1800], "guide": guide[:1200]}
 
 
-def _evidence_points(evidence_bundle: Mapping[str, Any], source_paths: Sequence[str]) -> list[dict[str, Any]]:
+def _evidence_points(evidence_bundle: Mapping[str, Any]) -> list[dict[str, Any]]:
     points: list[dict[str, Any]] = []
     for node in evidence_bundle.get("routeNodes") or []:
         name = str(node.get("entityName") or "")
@@ -59,6 +59,40 @@ def _evidence_points(evidence_bundle: Mapping[str, Any], source_paths: Sequence[
     return points
 
 
+def _compact_condition_context(brief: Mapping[str, Any]) -> dict[str, Any]:
+    context = brief.get("conditionContext") or {}
+    if not isinstance(context, Mapping):
+        return {}
+    region = context.get("region")
+    if isinstance(region, Mapping):
+        return {
+            "region": {
+                "label": region.get("label") or region.get("name"),
+                "name": region.get("name") or region.get("label"),
+            }
+        }
+    return {}
+
+
+def _compact_assets(assets: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    keep = ("assetId", "fileName", "caption", "kind", "role", "entityName", "sourcePath", "imageLayout")
+    rows: list[dict[str, Any]] = []
+    for asset in assets:
+        row = {key: asset.get(key) for key in keep if asset.get(key)}
+        if row.get("assetId"):
+            rows.append(row)
+    return rows
+
+
+def _asset_figure_id(asset: Mapping[str, Any], index: int) -> str:
+    role = str(asset.get("role") or "")
+    if role == "cover":
+        return "cover"
+    if role == "closing":
+        return "closing"
+    return f"fig{index}"
+
+
 def build_writing_pack(
     *,
     ref: str,
@@ -73,20 +107,6 @@ def build_writing_pack(
     source_urls: Sequence[str],
     source_paths: Sequence[str],
 ) -> dict[str, Any]:
-    story_spine = evidence_bundle.get("storySpine") or {}
-    images = [
-        {
-            "figureId": ("cover" if a.get("role") == "cover" else ("closing" if a.get("role") == "closing" else f"fig{i}")),
-            "assetId": a.get("assetId"),
-            "role": a.get("role"),
-            "entityName": a.get("entityName"),
-            "caption": a.get("caption"),
-            "imageLayout": a.get("imageLayout"),
-            "sourcePath": a.get("sourcePath"),
-            "imageStatus": a.get("imageStatus"),
-        }
-        for i, a in enumerate(assets, start=1)
-    ]
     narrative = {
         "requireMotivation": bool((brief.get("openingTension") or {}).get("required", True)),
         "requireLike": bool((brief.get("explicitFeelings") or {}).get("requireLike", True)),
@@ -102,27 +122,17 @@ def build_writing_pack(
         "title": str(brief.get("titleHint") or ref),
         "byline": byline,
         "carrier": carrier,
-        "publishLayout": publish_layout,
         "templateId": brief.get("templateId"),
         "wordCount": brief.get("wordCount") or {"min": 700, "max": 1600},
         "forbiddenPhrases": [str(x) for x in (brief.get("forbiddenPhrases") or []) if x],
         "mustIncludeFacts": [str(x) for x in (brief.get("mustIncludeFacts") or []) if x],
-        "conditionContext": brief.get("conditionContext") or {},
+        "conditionContext": _compact_condition_context(brief),
         "sectionIntents": list(section_intents),
         "narrativeContract": narrative,
         "styleFamily": style_family,
-        "openingGuidance": opening_guidance(style_family),
-        "primaryEntity": story_spine.get("primaryEntity") or "",
-        "routeEntities": story_spine.get("routeEntities") or [],
-        "progression": story_spine.get("progression") or [],
-        "evidencePoints": _evidence_points(evidence_bundle, source_paths),
-        "images": images,
-        "tagRefs": [str(x) for x in (brief.get("tagRefs") or []) if x][:6],
-        "sourceUrls": list(source_urls),
-        "sourcePaths": list(source_paths),
-        "assets": list(assets),
+        "evidencePoints": _evidence_points(evidence_bundle),
+        "assets": _compact_assets(assets),
         "sopExampleRef": brief.get("sopExampleRef"),
-        "sopFewshot": _load_sop_fewshot(brief.get("sopExampleRef")),
     }
 
 
@@ -147,7 +157,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     if carrier == "gallery":
         lines.append("- 载体=画报：以图为主、每图配一句自然小字说明；避免大空白；正文简短但仍要有真实感受。")
     else:
-        og = pack.get("openingGuidance") or {}
+        og = pack.get("openingGuidance") or opening_guidance(str(pack.get("styleFamily") or ""))
         opening_opts = og.get("openingStrategies") or []
         if opening_opts:
             lines.append(f"- **开篇方式（styleFamily=`{og.get('styleFamily') or pack.get('styleFamily')}`，从下列任选一种真正落地，禁止千篇一律的套路开头）**：")
@@ -170,7 +180,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     if forb:
         lines.append(f"- 禁用词: {', '.join(forb)}")
     lines.append("")
-    og = pack.get("openingGuidance") or {}
+    og = pack.get("openingGuidance") or opening_guidance(str(pack.get("styleFamily") or ""))
     candidates = og.get("styleFamilyCandidates") or []
     if candidates and carrier != "gallery":
         lines.append("## 体裁候选（默认已按路由选定；仅当原文体裁明显更贴合另一种时改选，并在 draft_meta 写明）")
@@ -179,7 +189,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
             mark = "（默认）" if c.get("styleFamily") == og.get("styleFamily") else ""
             lines.append(f"- `{c.get('styleFamily')}`{mark}：{c.get('writingGenre')}")
         lines.append("")
-    sop = pack.get("sopFewshot") or {}
+    sop = pack.get("sopFewshot") or _load_sop_fewshot(str(pack.get("sopExampleRef") or "")) or {}
     if sop.get("example") or sop.get("guide"):
         lines.append("## 写作范例与规范（few-shot：模仿其口吻/结构/信息颗粒度，禁止照搬其事实、实体与数字）")
         lines.append("")
@@ -222,9 +232,9 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         lines.append("")
     lines.append("## 配图（在正文中用 figure 块插入，按 figureId 与 assetId 对应）")
     lines.append("")
-    for img in pack.get("images") or []:
+    for index, img in enumerate(pack.get("assets") or [], start=1):
         lines.append(
-            f"- figureId=`{img.get('figureId')}` assetId=`{img.get('assetId')}` "
+            f"- figureId=`{_asset_figure_id(img, index)}` assetId=`{img.get('assetId')}` "
             f"实体={img.get('entityName')} 版面={img.get('imageLayout')} 建议说明={img.get('caption')}"
         )
     lines.append("")
@@ -238,7 +248,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     lines.append("")
     lines.append("## 产出方式")
     lines.append("")
-    lines.append(f"- 把创作的正文写回 `{pack.get('ref')}.article.md`（覆盖占位）。")
-    lines.append(f"- 在 `{pack.get('ref')}.draft_meta.json` 标注 generator=agent、model、styleFamily、openingStrategy（所选开篇策略 id）、引用了哪些 sourcePath、覆盖了哪些 fact。")
+    lines.append("- 把创作的正文写回同目录 `article.md`（覆盖占位）。")
+    lines.append("- 在同目录 `draft_meta.json` 标注 generator=agent、model、styleFamily、openingStrategy（所选开篇策略 id）、引用了哪些 sourcePath、覆盖了哪些 fact。")
     lines.append("- 之后运行 `produce --stage review` 过门禁；失败按 repair report 修改正文重跑直到全绿。")
     return "\n".join(lines) + "\n"

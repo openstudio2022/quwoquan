@@ -110,8 +110,7 @@ def test_pilot_e2e_verify_green():
     quality = analyze_route_ref(TASK, BATCH, REF, brief)
     pack = build_route_writing_pack(TASK, BATCH, REF, brief, quality)
     byline = public_byline_label(str(brief.get("templateId")), brief.get("creator") or {})
-    node_names = [str(n) for n in (pack.get("routeEntities") or []) if n] or ENTITIES
-    article = route_article(brief["titleHint"], byline, node_names, pack.get("mustIncludeFacts") or [])
+    article = route_article(brief["titleHint"], byline, ENTITIES, pack.get("mustIncludeFacts") or [])
     write_agent_draft(
         TASK,
         BATCH,

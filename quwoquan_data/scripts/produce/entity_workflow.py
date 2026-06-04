@@ -15,6 +15,7 @@ from _common.entity_annotation import merge_entity_refs
 from _common.content_review import fact_traceability_issues, generator_provenance_issues
 from _common.draft_io import (
     GENERATOR_AGENT,
+    draft_asset_reference_issues,
     is_placeholder,
     read_draft_article,
     read_draft_meta,
@@ -42,6 +43,7 @@ from produce.route_workflow import (
     _check_travelogue_density,
     _jaccard,
     _load_source_texts,
+    _persisted_review_payload,
     _publish_angle,
     _resolve_style_opening,
     _section_bodies,
@@ -147,7 +149,6 @@ def build_entity_writing_pack(
         source_urls=quality_payload.get("sourceUrls") or [],
         source_paths=quality_payload.get("sourcePaths") or [],
     )
-    pack["primaryEntity"] = name
     write_writing_pack(task_id, batch_id, ref, pack)
     write_prompt(task_id, batch_id, ref, render_prompt_md(pack))
     existing = read_draft_meta(task_id, batch_id, ref)
@@ -215,17 +216,13 @@ def _compose_payload_from_pack(
         "sourcePaths": list(quality_payload.get("sourcePaths") or []),
         "template": template,
         "assets": list(pack.get("assets") or []),
-        "publishLayout": pack.get("publishLayout") or ("gallery" if carrier == "gallery" else "entity"),
+        "publishLayout": "gallery" if carrier == "gallery" else "entity",
         "publishAngle": _publish_angle(brief),
         "publishTitle": brief.get("titleHint") or ref,
         "publishSeq": 1,
         "conditionContext": brief.get("conditionContext"),
-        "recommendation": brief.get("recommendation"),
         "composeBriefRef": ref,
-        "sourceQuality": story_spine.get("sourceQuality", []),
         "storySpine": story_spine,
-        "relatedSearchPlan": quality_payload.get("relatedSearchPlan"),
-        "evidenceBundle": evidence_bundle,
         "generator": str(meta.get("generator") or "pending"),
         "generatorModel": meta.get("model"),
         "citedSourceRefs": list(meta.get("citedSourcePaths") or []),
@@ -257,6 +254,7 @@ def review_entity_draft(
     authenticity_issues.extend(generator_provenance_issues(draft_meta))
     body = "" if is_placeholder(article) else str(article)
     authenticity_issues.extend(template_fingerprint_issues(body))
+    authenticity_issues.extend(draft_asset_reference_issues(body, pack))
     source_texts = _load_source_texts(quality_payload.get("sourcePaths") or [])
     traceability = fact_traceability_issues(body, dict(brief), source_texts)
 
@@ -277,7 +275,7 @@ def review_entity_draft(
     checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
-        "suggestions": ["按 prompt.md 由会话模型创作正文并写回 drafts/{ref}.article.md（generator=agent）。"] if authenticity_issues else [],
+        "suggestions": ["按 prompt.md 由会话模型创作正文并写回 drafts/{ref}/article.md（generator=agent）。"] if authenticity_issues else [],
     }
     checks["factTraceability"] = {
         "passed": not traceability,
@@ -304,7 +302,7 @@ def review_entity_draft(
         "humanReviewRequired": human_review_required,
         "generator": compose_payload.get("generator"),
     }
-    write_stage_result(task_id, batch_id, "produce", "review", ref, payload)
+    write_stage_result(task_id, batch_id, "produce", "review", ref, _persisted_review_payload(payload))
     write_gate_report(
         task_id=task_id,
         batch_id=batch_id,

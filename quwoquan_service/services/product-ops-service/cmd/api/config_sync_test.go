@@ -16,7 +16,7 @@ func TestResolveSnapshotPathUsesConfigRoot(t *testing.T) {
 
 func TestResolveSnapshotPathUsesLocalCacheWhenConfigRootMissing(t *testing.T) {
 	got := resolveSnapshotPath("", "product-ops-service", "product-ops-service-beta-control-a-0")
-	want := ".runtime-cache/product-ops-service/product-ops-service-beta-control-a-0.json"
+	want := "state/runtime-cache/product-ops-service/product-ops-service-beta-control-a-0.json"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}

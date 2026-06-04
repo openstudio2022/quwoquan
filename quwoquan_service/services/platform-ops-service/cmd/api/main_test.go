@@ -137,6 +137,23 @@ func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 	}
 }
 
+func TestResolveConfigSchemaPathPrefersWorkspaceMetadataRoot(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", "..", "..", "..", ".."))
+	got := resolveConfigSchemaPath(repoRoot)
+	want := filepath.Join(
+		repoRoot,
+		"quwoquan_service",
+		"contracts",
+		"metadata",
+		"_control_plane",
+		"platform",
+		"config_schema.yaml",
+	)
+	if got != want {
+		t.Fatalf("expected schema path %q, got %q", want, got)
+	}
+}
+
 func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 	server := newServerMux(newTestPlatformService(t))
 

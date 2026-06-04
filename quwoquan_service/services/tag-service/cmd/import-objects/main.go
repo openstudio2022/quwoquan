@@ -11,7 +11,9 @@ import (
 	"flag"
 	"log"
 	"os"
+	"time"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
@@ -57,6 +59,8 @@ func main() {
 	file := flag.String("objects-file", "contracts/metadata/tag/test_fixtures/scenarios/tag_scenarios.json", "path to object-tag manifest JSON (contract fixture or flat manifest)")
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "mongo connection uri")
 	dbName := flag.String("db", "quwoquan_tag", "target database")
+	releaseID := flag.String("release-id", "adhoc", "data release id")
+	sourceOwner := flag.String("source-owner", "qwq_data", "source owner for imported object tag index")
 	flag.Parse()
 
 	raw, err := os.ReadFile(*file)
@@ -92,6 +96,17 @@ func main() {
 		}
 		if err := store.UpsertObjectTags(ctx, e.ObjectID, e.ObjectType, e.TagRefs); err != nil {
 			log.Fatalf("upsert %s/%s: %v", e.ObjectType, e.ObjectID, err)
+		}
+		now := time.Now().UTC()
+		if _, err := coll.UpdateOne(ctx,
+			bson.M{"objectId": e.ObjectID, "objectType": e.ObjectType},
+			bson.M{"$set": bson.M{
+				"releaseId": *releaseID, "visibleFromReleaseId": *releaseID,
+				"sourceOwner": *sourceOwner, "lifecycleStatus": "active",
+				"releaseUpdatedAt": now,
+			}},
+		); err != nil {
+			log.Fatalf("annotate release %s/%s: %v", e.ObjectType, e.ObjectID, err)
 		}
 		count++
 	}

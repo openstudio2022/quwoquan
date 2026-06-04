@@ -159,11 +159,13 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
     this.hint = UITextConstants.globalXiaoquSearchHint,
     this.initialSearchScope = GlobalSearchScope.all,
     this.surface = AppChromeSurface.standard,
+    this.showAssistantLabel = true,
   });
 
   final String hint;
   final GlobalSearchScope initialSearchScope;
   final AppChromeSurface surface;
+  final bool showAssistantLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -245,7 +247,7 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
         SizedBox(width: AppSpacing.intraGroupXs),
         GlobalAssistantEntryButton(
           semanticLabel: UITextConstants.globalXiaoquSearchAsk,
-          showLabel: true,
+          showLabel: showAssistantLabel,
           surface: surface,
           onTap: () => GlobalAssistantLauncher.open(context, ref),
         ),
@@ -572,9 +574,9 @@ class _QuickActionSheet extends ConsumerWidget {
         openNow();
         return;
       }
-      ref.read(authContinuationProvider.notifier).set(
-            OpenSheetContinuation(sheet),
-          );
+      ref
+          .read(authContinuationProvider.notifier)
+          .set(OpenSheetContinuation(sheet));
       unawaited(requireLogin(ref, rootContext, reason));
     });
   }

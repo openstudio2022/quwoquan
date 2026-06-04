@@ -9,27 +9,86 @@ class IntegrationApiMetadata {
   static const String domain = 'integration';
   static const List<String> apiPrefixes = <String>[
     '/v1/integration',
+    '/v1/integrations',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'GetExternalInteractionRequest': '/v1/integrations/external-requests/{requestId}',
     'GetNearbyLocations': '/v1/integration/location/nearby',
+    'ListExternalInteractionAttempts': '/v1/integrations/external-requests/{requestId}/attempts',
+    'ListExternalInteractionDeadLetters': '/v1/integrations/external-requests/dead-letters',
+    'PushDeliveryProviderCallback': '/v1/integrations/push-deliveries:callback',
     'SearchLocations': '/v1/integration/location/search',
+    'SendSmsOtp': '/v1/integrations/sms-otp:send',
+    'SmsOtpProviderCallback': '/v1/integrations/sms-otp:callback',
+    'SubmitExternalInteractionRequest': '/v1/integrations/external-requests',
+    'SubmitPushDelivery': '/v1/integrations/push-deliveries',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'GetExternalInteractionRequest': 'GET',
     'GetNearbyLocations': 'GET',
+    'ListExternalInteractionAttempts': 'GET',
+    'ListExternalInteractionDeadLetters': 'GET',
+    'PushDeliveryProviderCallback': 'POST',
     'SearchLocations': 'GET',
+    'SendSmsOtp': 'POST',
+    'SmsOtpProviderCallback': 'POST',
+    'SubmitExternalInteractionRequest': 'POST',
+    'SubmitPushDelivery': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
+    'GetExternalInteractionRequest': 'public',
     'GetNearbyLocations': 'public',
+    'ListExternalInteractionAttempts': 'public',
+    'ListExternalInteractionDeadLetters': 'public',
+    'PushDeliveryProviderCallback': 'public',
     'SearchLocations': 'public',
+    'SendSmsOtp': 'public',
+    'SmsOtpProviderCallback': 'public',
+    'SubmitExternalInteractionRequest': 'public',
+    'SubmitPushDelivery': 'public',
   };
 
+  static const String getExternalInteractionRequestOperation = 'GetExternalInteractionRequest';
   static const String getNearbyLocationsOperation = 'GetNearbyLocations';
+  static const String listExternalInteractionAttemptsOperation = 'ListExternalInteractionAttempts';
+  static const String listExternalInteractionDeadLettersOperation = 'ListExternalInteractionDeadLetters';
+  static const String pushDeliveryProviderCallbackOperation = 'PushDeliveryProviderCallback';
   static const String searchLocationsOperation = 'SearchLocations';
+  static const String sendSmsOtpOperation = 'SendSmsOtp';
+  static const String smsOtpProviderCallbackOperation = 'SmsOtpProviderCallback';
+  static const String submitExternalInteractionRequestOperation = 'SubmitExternalInteractionRequest';
+  static const String submitPushDeliveryOperation = 'SubmitPushDelivery';
 
+  static const String getExternalInteractionRequestPathTemplate = '/v1/integrations/external-requests/{requestId}';
+  static String getExternalInteractionRequestPath({required String requestId}) {
+    return _fillPath(getExternalInteractionRequestPathTemplate, <String, String>{
+      'requestId': requestId,
+    });
+  }
   static const String getNearbyLocationsPath = '/v1/integration/location/nearby';
+  static const String listExternalInteractionAttemptsPathTemplate = '/v1/integrations/external-requests/{requestId}/attempts';
+  static String listExternalInteractionAttemptsPath({required String requestId}) {
+    return _fillPath(listExternalInteractionAttemptsPathTemplate, <String, String>{
+      'requestId': requestId,
+    });
+  }
+  static const String listExternalInteractionDeadLettersPath = '/v1/integrations/external-requests/dead-letters';
+  static const String pushDeliveryProviderCallbackPath = '/v1/integrations/push-deliveries:callback';
   static const String searchLocationsPath = '/v1/integration/location/search';
+  static const String sendSmsOtpPath = '/v1/integrations/sms-otp:send';
+  static const String smsOtpProviderCallbackPath = '/v1/integrations/sms-otp:callback';
+  static const String submitExternalInteractionRequestPath = '/v1/integrations/external-requests';
+  static const String submitPushDeliveryPath = '/v1/integrations/push-deliveries';
+
+  static String _fillPath(String template, Map<String, String> params) {
+    var path = template;
+    params.forEach((key, value) {
+      path = path.replaceAll('{$key}', Uri.encodeComponent(value));
+    });
+    return path;
+  }
 }

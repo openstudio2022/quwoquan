@@ -5,11 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 APP_DIR="$ROOT_DIR/quwoquan_app"
 ASSISTANT_SERVICE_DIR="$ROOT_DIR/quwoquan_service/services/assistant-service"
 CHAT_SERVICE_DIR="$ROOT_DIR/quwoquan_service/services/chat-service"
-LOG_DIR="$ROOT_DIR/tmp/app_beta_manual"
+LOG_DIR="$ROOT_DIR/state/local/app_beta_manual"
 MANIFEST="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json"
 ASSISTANT_APP_CONFIG="$ROOT_DIR/quwoquan_app/assistant/config.json"
 
 eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
+eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
 
 ASSISTANT_PORT="${ASSISTANT_PORT}"
 CHAT_PORT="${CHAT_PORT}"
@@ -21,8 +22,8 @@ CHAT_MONGO_URI="${CHAT_MONGO_URI:-mongodb://localhost:27017}"
 CHAT_MONGO_DATABASE="${CHAT_MONGO_DATABASE:-quwoquan_chat_local}"
 CHAT_REDIS_ADDR="${CHAT_REDIS_ADDR:-localhost:6379}"
 LOCAL_GAMMA_COMPOSE_FILE="$ROOT_DIR/quwoquan_service/docker-compose.gamma-local.yaml"
-LOCAL_GAMMA_MONGO_PORT="${LOCAL_GAMMA_MONGO_PORT:-37017}"
-LOCAL_GAMMA_REDIS_PORT="${LOCAL_GAMMA_REDIS_PORT:-36379}"
+LOCAL_GAMMA_MONGO_PORT="${LOCAL_GAMMA_MONGO_PORT}"
+LOCAL_GAMMA_REDIS_PORT="${LOCAL_GAMMA_REDIS_PORT}"
 GATEWAY_BASE_URL_EXPLICIT=0
 if [[ -n "${GATEWAY_BASE_URL:-}" ]]; then
   GATEWAY_BASE_URL_EXPLICIT=1
@@ -768,6 +769,9 @@ beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/user/sub-accounts/
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/entity/homepages" "entity fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/integration/locations/pois" "integration fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/app-messages" "notification fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/app-messages/unread-count" "notification unread-count route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/notifications/unread-count" "notification aggregate unread-count route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/content/feed/intersections?limit=4&channel=recommend" "feed intersections fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/rtc/calls" "rtc fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 
 python3 - "$REPORT" "$MANIFEST" "$GATEWAY_BASE_URL" "$ASSISTANT_PORT" "$CHAT_PORT" "$DEVICE_KIND" "$LOCAL_PUBLIC_HOST" "$MEDIA_AVATAR_CDN_BASE_URL" "$MEDIA_IMAGE_CDN_BASE_URL" "$MEDIA_VIDEO_CDN_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "http://127.0.0.1:${MEDIA_ORIGIN_PORT}" "$ADB_REVERSE_ENABLED" "$RESTARTED_FROM_PREVIOUS" "$FLUTTER_DEVICE_ID" "$VERIFY_MODE" "$MEDIA_PREP_MODE" <<'PY'
@@ -839,6 +843,9 @@ report = {
         "/v1/entity/homepages",
         "/v1/integration/locations/pois",
         "/v1/app-messages",
+        "/v1/app-messages/unread-count",
+        "/v1/notifications/unread-count",
+        "/v1/content/feed/intersections?limit=4&channel=recommend",
         "/v1/rtc/calls",
     ],
     "checkedMediaUrls": [

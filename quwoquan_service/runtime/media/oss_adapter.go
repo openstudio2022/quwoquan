@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"path/filepath"
+	"strings"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -79,7 +81,7 @@ func (s *OSSMediaStore) InitUpload(ctx context.Context, opts InitUploadOpts) (*U
 
 	now := time.Now()
 	sessionID := fmt.Sprintf("us_%d", now.UnixNano())
-	ossKey := buildOSSKey(opts.Category, opts.OwnerID, sessionID, opts.FileName)
+	ossKey := buildTemporaryOSSKey(opts.Category, opts.OwnerID, sessionID, opts.FileName)
 
 	presignURL, err := s.generatePresignURL(ctx, ossKey, opts.ContentType)
 	if err != nil {
@@ -95,6 +97,7 @@ func (s *OSSMediaStore) InitUpload(ctx context.Context, opts InitUploadOpts) (*U
 		FileSize:    opts.FileSize,
 		PresignURL:  presignURL,
 		OSSKey:      ossKey,
+		TemporaryOSSKey: ossKey,
 		Status:      "pending",
 		CreatedAt:   now,
 		ExpiresAt:   now.Add(s.config.PresignTTL),
@@ -125,15 +128,39 @@ func (s *OSSMediaStore) CompleteUpload(ctx context.Context, sessionID string, op
 		)
 	}
 
-	exists, _ := s.presigner.HeadObject(ctx, s.config.Bucket, session.OSSKey)
-	if !exists {
+	objectInfo, statErr := s.presigner.StatObject(ctx, s.config.Bucket, session.OSSKey)
+	if statErr != nil {
+		return nil, rterr.NewUnavailable(rterr.ModuleContent, "读取上传对象失败", fmt.Sprintf("stat object failed: %v", statErr))
+	}
+	if objectInfo == nil || !objectInfo.Exists {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "object_not_uploaded"),
 			"文件尚未上传完成", fmt.Sprintf("object %s not found in bucket", session.OSSKey),
 		)
 	}
+	sha256Digest := strings.TrimSpace(objectInfo.Sha256)
+	if sha256Digest == "" {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "object_checksum_missing"),
+			"上传对象缺少摘要",
+			fmt.Sprintf("object %s missing sha256 checksum", session.OSSKey),
+		)
+	}
+	if opts.DeclaredSha256 != "" && opts.DeclaredSha256 != sha256Digest {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"上传对象摘要不匹配",
+			fmt.Sprintf("declared sha256 %s != actual %s", opts.DeclaredSha256, sha256Digest),
+		)
+	}
+	finalOSSKey := buildCASObjectKey(sha256Digest, session.FileName)
+	if finalOSSKey != session.OSSKey {
+		if err := s.presigner.PromoteObject(ctx, s.config.Bucket, session.OSSKey, finalOSSKey, map[string]string{"sha256": sha256Digest}); err != nil {
+			return nil, rterr.NewUnavailable(rterr.ModuleContent, "上传对象转正失败", fmt.Sprintf("promote object failed: %v", err))
+		}
+	}
 
-	cdnURL := s.buildCDNURL(session.OSSKey)
+	cdnURL := s.buildCDNURL(finalOSSKey)
 
 	asset := &MediaAsset{
 		AssetID:     fmt.Sprintf("ma_%d", time.Now().UnixNano()),
@@ -142,9 +169,11 @@ func (s *OSSMediaStore) CompleteUpload(ctx context.Context, sessionID string, op
 		OwnerID:     session.OwnerID,
 		FileName:    session.FileName,
 		ContentType: session.ContentType,
-		FileSize:    session.FileSize,
-		OSSKey:      session.OSSKey,
+		FileSize:    maxInt64(session.FileSize, objectInfo.Size),
+		OSSKey:      finalOSSKey,
+		TemporaryOSSKey: session.OSSKey,
 		CDNURL:      cdnURL,
+		Sha256:      sha256Digest,
 		DurationMs:  opts.DurationMs,
 		Width:       opts.Width,
 		Height:      opts.Height,
@@ -239,9 +268,28 @@ func (s *OSSMediaStore) logAccess(endpoint, status, userID string, durationMs in
 	})
 }
 
-func buildOSSKey(category MediaCategory, ownerID, sessionID, fileName string) string {
+func buildTemporaryOSSKey(category MediaCategory, ownerID, sessionID, fileName string) string {
 	date := time.Now().Format("2006/01/02")
-	return fmt.Sprintf("media/%s/%s/%s/%s_%s", category, date, ownerID, sessionID, fileName)
+	return fmt.Sprintf("uploads/%s/%s/%s/%s_%s", category, date, ownerID, sessionID, fileName)
+}
+
+func buildCASObjectKey(sha256Digest, fileName string) string {
+	raw := strings.TrimPrefix(strings.TrimSpace(sha256Digest), "sha256:")
+	if len(raw) < 4 {
+		return "media/objects/sha256/invalid/invalid/" + raw
+	}
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(fileName)), ".")
+	if ext == "" {
+		ext = "bin"
+	}
+	return fmt.Sprintf("media/objects/sha256/%s/%s/%s.%s", raw[:2], raw[2:4], raw, ext)
+}
+
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // SignCDNURL generates a signed CDN URL with HMAC-SHA256.

@@ -46,7 +46,7 @@ class ArticleDetailPage extends ConsumerStatefulWidget {
 class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   ContentSurfaceView? _surface;
   bool _isLoading = true;
-  Object? _loadError;
+  UiErrorSemantic? _pageErrorSemantic;
 
   /// 交集理由首条 displayText（与 feed/沉浸同口径）；无来源 → null 不展示。
   String? _intersectionReasonText;
@@ -91,7 +91,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       setState(() {
         _surface = surface;
         _isLoading = false;
-        _loadError = null;
+        _pageErrorSemantic = null;
         _intersectionReasonText = IntersectionReasonChip.primaryText(
           detail.post.intersectionReasons,
         );
@@ -111,7 +111,12 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       setState(() {
         _surface = null;
         _isLoading = false;
-        _loadError = e;
+        _pageErrorSemantic = runtimeErrorSemantic(
+          context,
+          error: e,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
       });
     }
   }
@@ -166,14 +171,25 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                 : context.go(AppRoutePaths.home),
           ),
         ),
-        child: Center(
-          child: Text(
-            _loadError?.toString() ?? context.l10n.articleNotFound,
-            style: TextStyle(
-              color: CupertinoColors.secondaryLabel.resolveFrom(context),
-              fontSize: AppTypography.base,
-            ),
-          ),
+        child: AppPageErrorState(
+          semantic:
+              _pageErrorSemantic ??
+              UiErrorSemantic(
+                category: UiErrorCategory.pageLoad,
+                scope: UiErrorScope.page,
+                title: UITextConstants.contentNotLoadedYet,
+                message: context.l10n.articleNotFound,
+                primaryAction: const UiErrorAction(
+                  type: UiErrorActionType.retry,
+                  label: UITextConstants.tryAgain,
+                ),
+              ),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _loadArticle();
+            }
+          },
         ),
       );
     }

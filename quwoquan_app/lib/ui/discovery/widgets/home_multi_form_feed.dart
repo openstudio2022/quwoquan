@@ -5,7 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
@@ -26,8 +25,10 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
@@ -35,6 +36,8 @@ import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_layout_policy.dart';
 import 'package:quwoquan_app/ui/discovery/providers/channel_intersection_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -145,58 +148,31 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final feedPosts = shouldShowFollowingArticles
         ? <PostBaseDto>[...moments, ...articles]
         : dtos;
-    final hasError = feedAsync.value?.error != null;
+    final blockingError = feedAsync.value?.blockingError;
+    final appendError = feedAsync.value?.appendError;
+    final staleDataError = feedAsync.value?.staleDataError;
+    final hasBlockingError = blockingError != null;
 
-    if (feedAsync.isLoading && feedPosts.isEmpty && !hasError) {
+    if (feedAsync.isLoading && feedPosts.isEmpty && !hasBlockingError) {
       return const Center(child: CupertinoActivityIndicator());
     }
 
-    if (hasError && feedPosts.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.interGroupLg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                context.l10n.loadFailed,
-                style: TextStyle(
-                  color: AppColors.error,
-                  fontSize: AppTypography.iosBody,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: AppSpacing.interGroupMd),
-              CupertinoButton(
-                onPressed: () =>
-                    ref.read(discoveryFeedMapProvider.notifier).load(channelId),
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerMd,
-                  vertical: AppSpacing.intraGroupSm,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      CupertinoIcons.arrow_clockwise,
-                      size: AppSpacing.iconSmall,
-                      color: AppColors.iosAccent(context),
-                    ),
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    Text(
-                      context.l10n.retry,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
-                        color: AppColors.iosAccent(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+    if (hasBlockingError && feedPosts.isEmpty) {
+      return AppPageErrorState(
+        semantic: runtimeErrorSemantic(
+          context,
+          error: blockingError,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
         ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await ref
+                .read(discoveryFeedMapProvider.notifier)
+                .load(channelId, force: true);
+          }
+        },
       );
     }
 
@@ -395,9 +371,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
         MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight;
 
     final todayReasons = layoutPolicy.hasIntersectionSpotlight
-        ? (ref
-                  .watch(channelIntersectionReasonsProvider(channelId))
-                  .value ??
+        ? (ref.watch(channelIntersectionReasonsProvider(channelId)).value ??
               const <IntersectionReason>[])
         : const <IntersectionReason>[];
     final shouldShowFollowingSubjects =
@@ -409,6 +383,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
         : IntersectionSpotlightModule(
             reasons: todayReasons,
             isDark: isDark,
+            title: _intersectionSpotlightTitle(),
             onReasonTap: onIntersectionObjectOpen,
           );
 
@@ -433,13 +408,18 @@ class HomeMultiFormFeed extends ConsumerWidget {
                   .skip(segmentIndex + 1)
                   .toList(growable: false),
               isDark: isDark,
-              title: UITextConstants.homeTodayIntersection,
+              title: _intersectionSpotlightTitle(),
               onReasonTap: onIntersectionObjectOpen,
             )
           : null,
       dividerColor: listDividerColor,
       isLoadingMore: feedAsync.value?.isLoading ?? false,
       hasMore: feedAsync.value?.nextCursor?.isNotEmpty ?? false,
+      appendError: appendError,
+      staleDataError: staleDataError,
+      onRetryInitialLoad: () => ref
+          .read(discoveryFeedMapProvider.notifier)
+          .load(channelId, force: true),
       moodCopy: _resolveChannelMoodCopy(),
       headerSliver: headerSliver,
       onReachBottom: () =>
@@ -467,9 +447,9 @@ class HomeMultiFormFeed extends ConsumerWidget {
         .map((reason) => reason.actionTargetId.trim())
         .toList(growable: false);
     unawaited(
-      ref.read(intersectionRepositoryProvider).reportExposure(
-            objectIds: objectIds,
-          ),
+      ref
+          .read(intersectionRepositoryProvider)
+          .reportExposure(objectIds: objectIds),
     );
     final tracker = ref.read(contentBehaviorTrackerProvider);
     for (final reason in exposed) {
@@ -481,6 +461,17 @@ class HomeMultiFormFeed extends ConsumerWidget {
         intersectionDimension: reason.dimension,
         intersectionClass: reason.intersectionClass,
       );
+    }
+  }
+
+  String _intersectionSpotlightTitle() {
+    switch (channelId) {
+      case 'campus':
+        return UITextConstants.intersectionCampusSpotlightTitle;
+      case 'travel':
+        return UITextConstants.intersectionTravelSpotlightTitle;
+      default:
+        return UITextConstants.intersectionRecommendSpotlightTitle;
     }
   }
 
@@ -691,6 +682,9 @@ class _HomeFeedScrollView extends StatefulWidget {
     required this.dividerColor,
     required this.isLoadingMore,
     required this.hasMore,
+    required this.appendError,
+    required this.staleDataError,
+    required this.onRetryInitialLoad,
     required this.onReachBottom,
     this.moodCopy = '',
     this.headerSliver,
@@ -711,6 +705,9 @@ class _HomeFeedScrollView extends StatefulWidget {
   final Color dividerColor;
   final bool isLoadingMore;
   final bool hasMore;
+  final Object? appendError;
+  final Object? staleDataError;
+  final VoidCallback onRetryInitialLoad;
   final VoidCallback onReachBottom;
 
   /// 频道气质文案（来自 ContentUIConfig.homeChannels.moodCopyKey 解析，只读）；空则不展示。
@@ -728,21 +725,47 @@ class _HomeFeedScrollView extends StatefulWidget {
 
 class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
   final ScrollController _controller = ScrollController();
+  Timer? _staleNoticeTimer;
+  Object? _visibleStaleDataError;
 
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onScroll);
+    _syncStaleNotice(previous: null);
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeFeedScrollView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncStaleNotice(previous: oldWidget.staleDataError);
   }
 
   @override
   void dispose() {
+    _staleNoticeTimer?.cancel();
     _controller.removeListener(_onScroll);
     _controller.dispose();
     super.dispose();
   }
 
+  void _syncStaleNotice({required Object? previous}) {
+    final next = widget.staleDataError;
+    if (next == null || identical(next, previous)) {
+      return;
+    }
+    _staleNoticeTimer?.cancel();
+    _visibleStaleDataError = next;
+    _staleNoticeTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (!mounted) return;
+      setState(() => _visibleStaleDataError = null);
+    });
+  }
+
   void _onScroll() {
+    if (_visibleStaleDataError != null) {
+      setState(() => _visibleStaleDataError = null);
+    }
     if (!widget.hasMore || widget.isLoadingMore) return;
     if (!_controller.hasClients) return;
     final position = _controller.position;
@@ -770,6 +793,32 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
     }
     if (widget.topPad > 0) {
       slivers.add(SliverToBoxAdapter(child: SizedBox(height: widget.topPad)));
+    }
+    final visibleStaleDataError = _visibleStaleDataError;
+    if (visibleStaleDataError != null) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              widget.horizontalPad,
+              0,
+              widget.horizontalPad,
+              AppSpacing.containerSm,
+            ),
+            child: AppTransientErrorNotice(
+              semantic: runtimeErrorSemantic(
+                context,
+                error: visibleStaleDataError,
+                category: UiErrorCategory.backgroundAction,
+                scope: UiErrorScope.section,
+                allowRetry: false,
+                presentation: UiErrorPresentation.transientNotice,
+              ),
+              margin: EdgeInsets.zero,
+            ),
+          ),
+        ),
+      );
     }
 
     if (widget.isMultiColumn) {
@@ -850,15 +899,17 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
       SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.only(
-            top: widget.isLoadingMore
+            top: widget.isLoadingMore || widget.appendError != null
                 ? AppSpacing.interGroupMd
                 : AppSpacing.zero,
             bottom: widget.bottomPad,
           ),
-          child: widget.isLoadingMore
+          child: widget.isLoadingMore || widget.appendError != null
               ? _LoadMoreFooter(
                   moodCopy: widget.moodCopy,
                   isDark: widget.isDark,
+                  appendError: widget.appendError,
+                  onRetry: widget.onReachBottom,
                 )
               : const SizedBox.shrink(),
         ),
@@ -870,10 +921,17 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
 
 /// 触底加载 footer：加载指示 + 频道气质文案（只读，空文案不展示）。
 class _LoadMoreFooter extends StatelessWidget {
-  const _LoadMoreFooter({required this.moodCopy, required this.isDark});
+  const _LoadMoreFooter({
+    required this.moodCopy,
+    required this.isDark,
+    required this.appendError,
+    required this.onRetry,
+  });
 
   final String moodCopy;
   final bool isDark;
+  final Object? appendError;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -881,11 +939,29 @@ class _LoadMoreFooter extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
+    final hasError = appendError != null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const CupertinoActivityIndicator(),
-        if (moodCopy.isNotEmpty) ...[
+        if (hasError)
+          AppListAppendErrorFooter(
+            semantic: runtimeErrorSemantic(
+              context,
+              error: appendError!,
+              category: UiErrorCategory.listAppend,
+              scope: UiErrorScope.section,
+              presentation: UiErrorPresentation.appendFooter,
+            ),
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry ||
+                  action.type == UiErrorActionType.resubmit) {
+                onRetry();
+              }
+            },
+          )
+        else
+          const CupertinoActivityIndicator(),
+        if (!hasError && moodCopy.isNotEmpty) ...[
           SizedBox(height: AppSpacing.intraGroupSm),
           Text(
             moodCopy,
@@ -1429,11 +1505,11 @@ class _HomeFeedImageGrid extends StatelessWidget {
     if (url.isEmpty) {
       return _placeholder();
     }
-    return CachedNetworkImage(
+    return AppCachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
-      placeholder: (context, url) => _placeholder(),
-      errorWidget: (context, url, err) => _placeholder(),
+      placeholder: _placeholder(),
+      errorWidget: _placeholder(),
     );
   }
 
@@ -1500,11 +1576,11 @@ class _HomeFeedImageCarouselState extends State<_HomeFeedImageCarousel> {
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => widget.onTap(index),
-                  child: CachedNetworkImage(
+                  child: AppCachedNetworkImage(
                     imageUrl: urls[index],
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => _placeholder(),
-                    errorWidget: (context, url, err) => _placeholder(),
+                    placeholder: _placeholder(),
+                    errorWidget: _placeholder(),
                   ),
                 );
               },

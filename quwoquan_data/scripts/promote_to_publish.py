@@ -173,10 +173,16 @@ def promote_task_entities(task_id: str, dry_run: bool) -> int:
             print(f"[promote] would copy entity {rel.parent}")
         else:
             target.mkdir(parents=True, exist_ok=True)
-            for fname in ("_entity.json", "page.md"):
+            for fname in ("_entity.json", "page.md", "manifest.json"):
                 src_f = entity_json.parent / fname
                 if src_f.exists():
                     shutil.copy2(src_f, target / fname)
+            src_assets = entity_json.parent / "assets"
+            if src_assets.is_dir():
+                dst_assets = target / "assets"
+                if dst_assets.exists():
+                    shutil.rmtree(dst_assets)
+                shutil.copytree(src_assets, dst_assets)
         count += 1
     return count
 

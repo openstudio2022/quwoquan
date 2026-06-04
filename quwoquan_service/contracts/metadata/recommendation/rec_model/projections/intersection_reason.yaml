@@ -18,6 +18,8 @@ description: |
     confidenceLabel 仅对 affinity 展示"推荐认识/可能合得来"等克制文案。
     freshAt / expiresAt 为保鲜期锚点（ISO8601 字符串，过期由后端重算，端只读）。
     modelReasonBucket 为 affinity 模型理由桶（埋点与灰度用，端不直接展示原文）。
+    intersectionPoints 是交集点列表真相源；摘要数字必须由同一 snapshot 下可见点派生，
+    不得成为第二套事实来源。
 
 consumers:
   - app
@@ -26,6 +28,9 @@ client_projection:
   dart_class: IntersectionReason
   base_class: ""
   output_path: cloud/runtime/generated/recommendation/intersection_reason.g.dart
+  dart_imports:
+    - intersection_point.g.dart
+    - intersection_dimension_tally.g.dart
   fields:
     - name: dimension
       dart_type: String
@@ -140,3 +145,69 @@ client_projection:
       source: expiresAt
       aliases: [expiresAt]
       default: "''"
+    - name: intersectionPoints
+      dart_type: List<IntersectionPoint>
+      nullable: false
+      source: intersectionPoints
+      aliases: [intersectionPoints, evidenceItems]
+      list_element_dart_class: IntersectionPoint
+    - name: pointSummarySnapshotId
+      dart_type: String
+      nullable: false
+      source: pointSummarySnapshotId
+      aliases: [pointSummarySnapshotId, recommendationTraceId]
+      default: "''"
+    - name: factPointCount
+      dart_type: int
+      nullable: false
+      source: factPointCount
+      aliases: [factPointCount]
+      default: "0"
+    - name: recommendedPointCount
+      dart_type: int
+      nullable: false
+      source: recommendedPointCount
+      aliases: [recommendedPointCount]
+      default: "0"
+    - name: totalPointCount
+      dart_type: int
+      nullable: false
+      source: totalPointCount
+      aliases: [totalPointCount]
+      default: "0"
+    - name: dimensionPointSummary
+      dart_type: List<IntersectionDimensionTally>
+      nullable: false
+      source: dimensionPointSummary
+      aliases: [dimensionPointSummary]
+      list_element_dart_class: IntersectionDimensionTally
+    - name: pointClassLabel
+      dart_type: String
+      nullable: false
+      source: pointClassLabel
+      aliases: [pointClassLabel]
+      default: "''"
+    - name: recommendationTraceId
+      dart_type: String
+      nullable: false
+      source: recommendationTraceId
+      aliases: [recommendationTraceId]
+      default: "''"
+    - name: lastRecommendedAt
+      dart_type: String
+      nullable: false
+      source: lastRecommendedAt
+      aliases: [lastRecommendedAt]
+      default: "''"
+    - name: seenAt
+      dart_type: String
+      nullable: false
+      source: seenAt
+      aliases: [seenAt]
+      default: "''"
+    - name: rankState
+      dart_type: String
+      nullable: false
+      source: rankState
+      aliases: [rankState]
+      default: "'fresh'"

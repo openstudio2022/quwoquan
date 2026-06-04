@@ -1,6 +1,6 @@
-# 错误与权限统一语义规范
+# 错误、权限与登录门禁统一语义规范
 
-> 适用于所有涉及云端交互与系统权限的端侧页面。  
+> 适用于所有涉及云端交互、系统权限、登录门禁与提交动作的端侧页面。  
 > **特性树**：`runtime/runtime-client-foundation/error-permission-display-semantics`（L3）  
 > 参考：`02-dart-coding.mdc`、`06-semantic-consistency-audit.mdc`、`07-error-permission-semantics.mdc`
 
@@ -82,6 +82,124 @@ networkUnavailable      # 暂时无法加载，请检查网络后重试
 # domain 专属（如 content、integration）
 # 见 contracts/metadata/*/errors.yaml → dart_const → l10n
 ```
+
+### 1.7 统一 UI 错误语义对象
+
+端侧页面不得直接把 `RuntimeFailure` / `CloudException` / 本地校验结果原样泄漏到页面组件，
+必须先提升为一层**面向用户的 UI 语义对象**。推荐字段：
+
+| 字段 | 说明 |
+|------|------|
+| `category` | `pageLoad` / `sectionLoad` / `listAppend` / `submit` / `authRequired` / `permissionRequired` / `validation` / `notFound` / `rateLimited` / `backgroundAction` |
+| `scope` | `page` / `section` / `dialog` / `global` / `inlineField` |
+| `title` | 用户第一眼识别失败类型的标题 |
+| `message` | 主说明文案 |
+| `secondaryMessage` | 可选的补充说明，如“登录后将继续当前操作” |
+| `primaryAction` | `retry` / `login` / `openSettings` / `back` / `dismiss` / `resubmit` |
+| `secondaryAction` | 可选次操作，如“取消”/“稍后” |
+| `sourceCode` | 原始 error code（便于诊断与埋点） |
+| `failureKind` | 原始 `RuntimeFailureKind` |
+| `recoveryAction` | 归一化后的恢复动作，来源于 metadata / runtime recovery / 本地权限状态 |
+
+统一规则：
+
+- **domain code 优先**：若 `CloudException.code` 可解析为 domain error enum，则优先消费该枚举映射的文案。
+- **服务端 `userMessage` 次之**：若 `RuntimeErrorResponse.userMessage` 存在，允许作为首选 message。
+- **runtime kind 回退**：domain code 与 `userMessage` 都不可用时，再退到 `RuntimeFailureKind`。
+- **场景覆盖**：同一错误在不同 `category + scope` 下可以映射为不同标题、按钮与载体。
+
+### 1.8 页面首屏 / 局部区块 / 列表追加语义契约
+
+| 场景 | 影响范围 | 推荐载体 | 主操作 | 禁止 |
+|------|----------|----------|--------|------|
+| **首屏失败且无数据** | 阻塞整页 | `AppPageErrorState` | `重试` / `登录` / `去设置` | 只用 SnackBar / Toast |
+| **局部区块失败** | 页面主框架仍可继续 | `AppSectionErrorCard` | `重试` | 用整页错误替换整个页面 |
+| **首屏失败但有缓存/旧数据** | 非阻塞 | 顶部 banner / 轻量提示 / 区块提示 | 可选 `重试` | 清空旧数据后回退为空白页 |
+| **分页追加失败** | 仅影响继续滚动 | 列表尾部错误行 / sentinel | `重试` | 把已加载内容整体替换成首屏错误页 |
+| **下拉刷新失败** | 不影响当前内容 | `AppActionErrorFeedback` / 轻提示 | 可选 `重试` | 直接清空当前列表 |
+
+列表场景必须显式拆分以下 3 类状态：
+
+1. `initialBlockingError`：首屏失败且当前无内容。
+2. `staleDataError`：已有旧内容但远端刷新失败。
+3. `appendError`：滚动触底加载下一页失败。
+
+### 1.9 表单 / 提交 / 对话框动作失败契约
+
+| 场景 | 推荐载体 | 说明 |
+|------|----------|------|
+| **字段校验失败** | 字段下方提示或 `inlineField` 语义 | 不应伪装成网络错误 |
+| **页面级提交失败** | 页内 `AppSectionErrorCard` 或 `AppActionErrorFeedback` | 保留用户已填写内容，允许继续编辑 |
+| **对话框 / sheet 内提交失败** | `dialog` scope 的 `AppActionErrorFeedback` 或对话框内错误区 | 失败提示应留在当前上下文，不应只剩一条瞬时 toast |
+| **成功后失败回滚** | 动作级反馈 + 恢复建议 | 如点赞失败、发消息失败、上传失败 |
+
+提交类页面必须满足：
+
+- **不得**在 `catch (_) { ... }` 中吞错后写固定字符串。
+- **不得**把字段校验、登录门禁、提交失败三类语义混成同一个分支。
+- **必须**保留表单输入态，失败后允许用户继续修改或重试。
+
+### 1.10 登录门禁语义契约
+
+登录门禁属于**可恢复的交互阻塞**，不是单纯的路由跳转逻辑。
+
+| 场景 | 推荐载体 | 主操作 | 补充说明 |
+|------|----------|--------|----------|
+| **整页内容需登录后可见** | `AppInlineGateState` / `AppPageErrorState` | `登录` | 说明“登录后查看什么” |
+| **单次动作需登录** | `AppActionErrorFeedback` 或轻提示 + 跳登录 | `登录` | 若存在 continuation，应提示“登录后将继续当前操作” |
+| **登录态过期** | `AppActionErrorFeedback` / 页态 | `重新登录` | 与普通 `401 unauthorized` 区分 |
+
+实现约束：
+
+- `AuthGateReason` 是“为什么需要登录”的真相源。
+- `AuthContinuation` 是“登录后将继续什么动作”的真相源。
+- 任何登录门禁提示都必须能够从这两者推导出用户可理解的说明，不得仅显示“请先登录”。
+
+### 1.11 操作级失败反馈契约
+
+后台异步或局部动作失败（点赞、收藏、发消息、预取、上传）应使用更轻量的动作反馈语义：
+
+| 类型 | 推荐载体 | 说明 |
+|------|----------|------|
+| **无可恢复动作** | Toast / 轻提示 | 仅说明失败，不强塞按钮 |
+| **可立即重试** | `AppActionErrorFeedback` + `重试` | 如发送失败、追加失败 |
+| **需用户修正输入** | `AppActionErrorFeedback` / 字段提示 | 如评论超长、内容为空 |
+
+统一原则：
+
+- 按 `recovery_action + 交互场景` 决定按钮是否出现。
+- 有旧内容可继续消费时，优先保留旧内容并给轻提示。
+- 无恢复动作的错误，不得为了“统一”硬塞无意义按钮。
+
+### 1.12 低打扰错误 UX 分层（新增强制口径）
+
+统一错误语义的目标是帮助用户恢复，不是制造“系统警报”。默认禁止使用惊叹三角、红色大标题、强边框和巨大刷新图标。只有账号安全、破坏性动作、权限高风险等确实需要警觉的场景，才允许使用错误色强调。
+
+| 场景 | 影响范围 | 载体 | 停留时间 | 操作 |
+|------|----------|------|----------|------|
+| **下拉刷新失败 / 已有内容刷新失败** | 不影响当前内容 | 顶部轻量胶囊 `transientNotice` | 约 1.8–2.5 秒，回弹后出现，滚动/再次刷新即消失 | 默认无按钮 |
+| **分页追加失败 / 瀑布流触底失败** | 仅影响继续浏览 | 列表尾部 `appendFooter` | 常驻在尾部，直到重试成功或离开列表 | 可点“轻点重试”，继续上滑也可触发重试 |
+| **首屏无数据且页面打不开** | 阻塞整页 | 柔和整页空态 `emptyPage` | 持久显示 | `再试一次` / `去登录` / `去设置` |
+| **局部区块失败** | 不影响页面主框架 | 低强调区块占位 `sectionSoftCard` | 持久显示在区块内 | 可选 `再试一次` |
+| **主动作失败** | 当前动作未完成 | 轻量 dialog / sheet 内错误区 `actionDialog` | 用户确认后消失 | `再试一次` / `我知道了` |
+| **登录/权限门禁** | 可恢复的交互阻塞 | 引导卡 `gateCard` | 按场景持久或弹层 | `去登录` / `去设置` |
+
+文案分层：
+
+- 首屏网络失败：标题“暂时连不上”，说明“检查网络后再试一次，或稍后回来看看。”
+- 下拉刷新失败：“网络不太稳定，刚刚没有刷新成功。”
+- 分页失败：“后面的内容暂时没拉到，上拉再试。”
+- 服务暂不可用：“服务暂时不可用，稍后自动恢复后再试”
+- 内容不存在：“内容不可用了”，说明“可能已被删除或暂时无法查看。”
+- 权限门禁：“需要开启定位权限”，说明“开启后才能展示附近位置。”
+- 登录门禁：“登录后继续”，说明来自 `AuthGateReason` 与 `AuthContinuation`。
+
+实现要求：
+
+- `UiErrorSemantic` 必须携带展示意图（presentation）与语气（tone），页面不得仅按 `category` 自行猜测组件。
+- `AppPageErrorState` 只用于首屏无数据的阻塞错误，不得用于已有内容刷新失败或分页失败。
+- `AppSectionErrorCard` 必须是弱强调，不得使用红色大标题或惊叹图标。
+- 列表页必须为刷新失败和分页失败提供专用载体，禁止把 `staleDataError` / `appendError` 渲染成整页错误卡。
 
 ---
 
@@ -170,6 +288,11 @@ openSettings             # 去设置
 - 颜色、字号、间距必须使用 `AppTypography`、`AppSpacing`、`AppColors` / `colorScheme`
 - 云端错误码映射：优先解析 `CloudException.code`，映射到 domain 对应 l10n；无 code 时使用通用 `loadFailed` / `submitFailed`
 - 权限相关：使用 `geolocator` / `permission_handler` 等统一包，禁止各页面自行实现分散逻辑
+- 登录门禁：统一经 `AuthGateReason` + `AuthContinuation` 推导提示语义；禁止页面自行拼 “请先登录” + 登录路由
+- 列表页：Provider / Notifier 必须显式区分首屏阻塞错误、缓存回退错误、分页追加错误
+- 页面组件不得直接依赖 `RuntimeFailureKind` 决定载体；必须经统一 `UiErrorSemanticResolver`
+- 新页面/新交互若需要错误态，优先复用统一组件：`AppPageErrorState` / `AppSectionErrorCard` / `AppTransientErrorNotice` / `AppListAppendErrorFooter` / `AppActionErrorFeedback` / `AppInlineGateState`
+- 通用错误态禁止默认使用惊叹图标、红色大标题、强边框和巨大刷新图标；列表刷新/分页失败必须使用低打扰载体
 
 ---
 
@@ -225,9 +348,9 @@ test/
 
 | 层级 | 类型 | 验证内容 | 放置路径 |
 |------|------|----------|----------|
-| **L1a** | Contract | CloudException.code → l10n key 映射（可选，非 key 存在性） | `test/cloud/content/location/contract/` |
-| **L1b** | Widget | 权限拒绝、云端错误、加载态 UI 渲染、按钮可见 | `test/ui/content/entry/widgets/` |
-| **L1c** | Journey | 创作流程「选位置 → 失败」的端到端表现 | `test/ui/content/entry/journeys/` |
+| **L1a** | Contract | error code / runtime failure / auth gate → `UiErrorSemantic` 映射 | `test/core/errors/`、`test/cloud/**/contract/` |
+| **L1b** | Widget | 权限拒绝、云端错误、列表首屏失败、分页失败、登录门禁 UI 渲染 | `test/ui/**/widgets/` |
+| **L1c** | Journey | 创作提交流程、选位置失败、未登录续接评论/关注/发消息 | `test/ui/**/journeys/` |
 | **L4** | Patrol | 真机权限弹窗、去设置跳转（advisory） | `test/patrol/content/` |
 
 ### 5.3 L1a 契约测试（极简）

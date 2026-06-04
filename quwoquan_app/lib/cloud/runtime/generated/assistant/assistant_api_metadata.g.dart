@@ -17,6 +17,7 @@ class AssistantApiMetadata {
     'CreateSkillSubscription': '/v1/assistant/skill-subscriptions',
     'GetAssistantConversation': '/v1/assistant/conversations/{conversationId}',
     'GetAssistantTurn': '/v1/assistant/turns/{turnId}',
+    'GetEntryPersonalization': '/v1/assistant/personalization',
     'GetLearningOpsSummary': '/v1/assistant/ops/learning-summary',
     'GetPolicy': '/v1/assistant/policy',
     'GetSkillSubscription': '/v1/assistant/skill-subscriptions/{subscriptionId}',
@@ -43,6 +44,7 @@ class AssistantApiMetadata {
     'CreateSkillSubscription': 'POST',
     'GetAssistantConversation': 'GET',
     'GetAssistantTurn': 'GET',
+    'GetEntryPersonalization': 'GET',
     'GetLearningOpsSummary': 'GET',
     'GetPolicy': 'GET',
     'GetSkillSubscription': 'GET',
@@ -70,6 +72,7 @@ class AssistantApiMetadata {
     'CreateSkillSubscription': 'public',
     'GetAssistantConversation': 'public',
     'GetAssistantTurn': 'public',
+    'GetEntryPersonalization': 'public',
     'GetLearningOpsSummary': 'public',
     'GetPolicy': 'public',
     'GetSkillSubscription': 'public',
@@ -95,6 +98,7 @@ class AssistantApiMetadata {
   static const String createSkillSubscriptionOperation = 'CreateSkillSubscription';
   static const String getAssistantConversationOperation = 'GetAssistantConversation';
   static const String getAssistantTurnOperation = 'GetAssistantTurn';
+  static const String getEntryPersonalizationOperation = 'GetEntryPersonalization';
   static const String getLearningOpsSummaryOperation = 'GetLearningOpsSummary';
   static const String getPolicyOperation = 'GetPolicy';
   static const String getSkillSubscriptionOperation = 'GetSkillSubscription';
@@ -134,6 +138,7 @@ class AssistantApiMetadata {
       'turnId': turnId,
     });
   }
+  static const String getEntryPersonalizationPath = '/v1/assistant/personalization';
   static const String getLearningOpsSummaryPath = '/v1/assistant/ops/learning-summary';
   static const String getPolicyPath = '/v1/assistant/policy';
   static const String getSkillSubscriptionPathTemplate = '/v1/assistant/skill-subscriptions/{subscriptionId}';

@@ -23,6 +23,10 @@ type RedisReadyIndexConfig struct {
 	Queue  string
 }
 
+type redisPendingClaimer interface {
+	XAutoClaim(ctx context.Context, stream string, group string, consumer string, minIdle time.Duration, start string, count int64) ([]rtredis.StreamMessage, string, error)
+}
+
 func NewRedisReadyIndex(cfg RedisReadyIndexConfig) (*RedisReadyIndex, error) {
 	if cfg.Client == nil {
 		return nil, fmt.Errorf("reliabletask: redis ready index client is required")
@@ -94,4 +98,37 @@ func (r *RedisReadyIndex) Ack(ctx context.Context, message ReadyIndexMessage) er
 		stream = r.stream
 	}
 	return r.client.XAck(ctx, stream, r.group, message.RawID)
+}
+
+func (r *RedisReadyIndex) ReclaimPending(ctx context.Context, consumer string, minIdle time.Duration, count int64) ([]ReadyIndexMessage, error) {
+	if err := r.Ensure(ctx); err != nil {
+		return nil, err
+	}
+	claimer, ok := r.client.(redisPendingClaimer)
+	if !ok {
+		return nil, nil
+	}
+	if count <= 0 {
+		count = 100
+	}
+	messages, _, err := claimer.XAutoClaim(ctx, r.stream, r.group, consumer, minIdle, "0-0", count)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ReadyIndexMessage, 0, len(messages))
+	for _, message := range messages {
+		taskID := strings.TrimSpace(message.Values["taskId"])
+		if taskID == "" {
+			_ = r.client.XAck(ctx, message.Stream, r.group, message.ID)
+			continue
+		}
+		out = append(out, ReadyIndexMessage{
+			StreamID: message.Stream,
+			TaskID:   taskID,
+			TaskType: strings.TrimSpace(message.Values["taskType"]),
+			Queue:    strings.TrimSpace(message.Values["queue"]),
+			RawID:    message.ID,
+		})
+	}
+	return out, nil
 }

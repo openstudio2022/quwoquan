@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/core/media/asset_url_resolver.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/markdown/qwq_markdown_ast.dart';
@@ -130,7 +131,13 @@ class ArticleMarkdownCodec {
     Map<String, dynamic>? assetManifest,
   }) {
     final parsed = const QwqMarkdownParser().parse(markdown).document;
-    final assetsById = resolveArticleAssetManifestUrls(assetManifest);
+    final mediaAssetsById = resolveArticleAssetManifestVariants(assetManifest);
+    final assetsById = mediaAssetsById.map(
+      (assetId, variants) => MapEntry(
+        assetId,
+        variants.urlFor(MediaAssetVariantProfile.display),
+      ),
+    )..removeWhere((_, url) => url.isEmpty);
     final nodes = <ArticleDocumentNode>[];
     final title = parsed.frontMatter.title.trim();
     if (title.isNotEmpty) {
@@ -217,6 +224,7 @@ class ArticleMarkdownCodec {
         ? parsed.frontMatter.coverAssetId
         : _assetIdFromUri(parsed.frontMatter.coverImage);
     final coverImageUrl =
+        mediaAssetsById[coverAssetId]?.urlFor(MediaAssetVariantProfile.cover) ??
         assetsById[coverAssetId] ??
         resolveContentMediaUrl(parsed.frontMatter.coverImage);
 
@@ -239,36 +247,17 @@ class ArticleMarkdownCodec {
   static Map<String, String> resolveArticleAssetManifestUrls(
     Map<String, dynamic>? manifest,
   ) {
-    final rawAssets = manifest?['assets'];
-    if (rawAssets is! Iterable) {
-      return const <String, String>{};
-    }
-    final result = <String, String>{};
-    for (final raw in rawAssets) {
-      if (raw is! Map) {
-        continue;
-      }
-      final row = Map<String, dynamic>.from(raw);
-      final assetId = (row['assetId'] ?? row['id'] ?? '').toString().trim();
-      if (assetId.isEmpty) {
-        continue;
-      }
-      final candidate =
-          [
-                row['cdnUrl'],
-                row['url'],
-                row['objectUrl'],
-                row['objectKey'],
-                row['localPath'],
-                row['sourceUrl'],
-              ]
-              .map((value) => value?.toString().trim() ?? '')
-              .firstWhere((value) => value.isNotEmpty, orElse: () => '');
-      if (candidate.isNotEmpty) {
-        result[assetId] = resolveContentMediaUrl(candidate);
-      }
-    }
-    return result;
+    return const AssetUrlResolver().resolveManifestUrls(
+      manifest?.cast<String, Object?>(),
+    );
+  }
+
+  static Map<String, MediaAssetVariants> resolveArticleAssetManifestVariants(
+    Map<String, dynamic>? manifest,
+  ) {
+    return const AssetUrlResolver().resolveManifestVariants(
+      manifest?.cast<String, Object?>(),
+    );
   }
 
   static ArticleDocumentNode _figureNodeFromAssetRef(

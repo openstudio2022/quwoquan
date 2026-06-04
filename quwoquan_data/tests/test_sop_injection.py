@@ -65,7 +65,7 @@ def test_build_pack_injects_sop_into_prompt():
     ref = _seed_sop()
     pack = _build({"sopExampleRef": ref, "titleHint": "峨眉山"})
     assert pack["sopExampleRef"] == ref
-    assert pack["sopFewshot"] and _EXAMPLE_MARK in pack["sopFewshot"]["example"]
+    assert "sopFewshot" not in pack
     prompt = render_prompt_md(pack)
     assert "写作范例与规范" in prompt
     assert _EXAMPLE_MARK in prompt
@@ -74,7 +74,7 @@ def test_build_pack_injects_sop_into_prompt():
 
 def test_render_prompt_without_sop_does_not_crash():
     pack = _build({"titleHint": "无 sop"}, ref="entity-no-sop")
-    assert pack["sopFewshot"] is None
+    assert "sopFewshot" not in pack
     prompt = render_prompt_md(pack)
     assert "写作范例与规范" not in prompt
     assert "## 必须覆盖的事实" in prompt

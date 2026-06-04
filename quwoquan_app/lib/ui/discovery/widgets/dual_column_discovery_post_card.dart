@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 
 /// 手机双列发现卡。
@@ -224,10 +224,10 @@ class _Cover extends StatelessWidget {
               ),
             )
           else
-            CachedNetworkImage(
+            AppCachedNetworkImage(
               imageUrl: visual,
               fit: BoxFit.cover,
-              placeholder: (context, _) => DecoratedBox(
+              placeholder: DecoratedBox(
                 decoration: BoxDecoration(
                   color: AppColorsFunctional.getColor(
                     isDark,
@@ -235,7 +235,7 @@ class _Cover extends StatelessWidget {
                   ),
                 ),
               ),
-              errorWidget: (context, _, _) => DecoratedBox(
+              errorWidget: DecoratedBox(
                 decoration: BoxDecoration(
                   color: AppColorsFunctional.getColor(
                     isDark,

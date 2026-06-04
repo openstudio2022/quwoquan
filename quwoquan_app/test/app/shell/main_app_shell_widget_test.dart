@@ -20,9 +20,11 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
+import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _buildShell(String location, {bool authenticated = true}) {
@@ -92,8 +94,49 @@ Widget _buildShellRouter({required bool authenticated}) {
         routes: [
           GoRoute(
             path: AppRoutePaths.home,
-            builder: (context, state) =>
-                MainAppShell(currentLocation: state.uri.path, child: const SizedBox.shrink()),
+            builder: (context, state) => MainAppShell(
+              currentLocation: state.uri.path,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+          GoRoute(
+            path: AppRoutePaths.loginPathTemplate,
+            builder: (context, state) => LoginPage(
+              reason: state.uri.queryParameters['reason'],
+              redirect: state.uri.queryParameters['redirect'],
+              dismissFallback:
+                  state.uri.queryParameters[loginDismissFallbackQueryParam],
+              allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+                state.uri.queryParameters[loginGuestDismissPopQueryParam],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _buildShellRouterWithStore(AuthSessionStore store) {
+  return ProviderScope(
+    overrides: [authSessionStoreProvider.overrideWithValue(store)],
+    child: MaterialApp.router(
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+      routerConfig: GoRouter(
+        initialLocation: AppRoutePaths.home,
+        routes: [
+          GoRoute(
+            path: AppRoutePaths.home,
+            builder: (context, state) => MainAppShell(
+              currentLocation: state.uri.path,
+              child: const SizedBox.shrink(),
+            ),
           ),
           GoRoute(
             path: AppRoutePaths.loginPathTemplate,
@@ -115,7 +158,10 @@ Widget _buildShellRouter({required bool authenticated}) {
 
 /// 复刻生产路由守卫的「受限直达路由 → 登录」逻辑，用于回归「深链进入受限路由
 /// 后关闭登录页又被守卫立刻弹出」的死循环。守卫触发的登录必须 allowGuestDismissPop=false。
-Widget _buildGuardedRouter({required bool authenticated, required String initialLocation}) {
+Widget _buildGuardedRouter({
+  required bool authenticated,
+  required String initialLocation,
+}) {
   return ProviderScope(
     overrides: [
       authSessionStoreProvider.overrideWithValue(
@@ -177,6 +223,16 @@ class _GuardedRouterHostState extends ConsumerState<_GuardedRouterHost> {
           path: AppRoutePaths.chat,
           builder: (context, state) =>
               const Scaffold(body: Center(child: Text('CHAT_PAGE'))),
+        ),
+        GoRoute(
+          path: AppRoutePaths.createEntry,
+          builder: (context, state) =>
+              const Scaffold(body: Center(child: Text('CREATE_ENTRY_PAGE'))),
+        ),
+        GoRoute(
+          path: AppRoutePaths.createPathTemplate,
+          builder: (context, state) =>
+              const Scaffold(body: Center(child: Text('CREATE_PAGE'))),
         ),
         GoRoute(
           path: AppRoutePaths.loginPathTemplate,
@@ -250,6 +306,47 @@ class _TestAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> markLaunchPromptDismissed() async {}
+}
+
+class _MutableAuthSessionStore implements AuthSessionStore {
+  bool authenticated = false;
+
+  @override
+  Future<StoredAuthSession> read() async {
+    return StoredAuthSession(
+      accessToken: authenticated ? 'access-token' : '',
+      refreshToken: authenticated ? 'refresh-token' : '',
+      ownerId: authenticated ? 'user_001' : '',
+      activeSubAccountId: authenticated ? 'user_001' : '',
+      accountState: authenticated ? 'active' : '',
+      identityOrigin: authenticated ? 'phone' : '',
+      installId: 'install-id',
+      manualLoggedOut: false,
+      launchPromptDismissed: !authenticated,
+    );
+  }
+
+  @override
+  Future<void> saveLoginResult(AuthLoginResultDto result) async {
+    authenticated = true;
+  }
+
+  @override
+  Future<void> updateActiveSubAccount(String subAccountId) async {}
+
+  @override
+  Future<void> clearSession({required bool manualLogout}) async {
+    authenticated = false;
+  }
+
+  @override
+  Future<void> markLaunchPromptDismissed() async {}
+}
+
+String _activeHomeChannel(WidgetTester tester) {
+  return tester
+      .widget<HomePrimaryTabStrip>(find.byType(HomePrimaryTabStrip))
+      .activeChannelId;
 }
 
 void _suppressExpectedErrors() {
@@ -411,10 +508,16 @@ void main() {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShellRouter(authenticated: false));
       await tester.pumpAndSettle();
+      expect(
+        _activeHomeChannel(tester),
+        HomePrimaryTabStrip.recommendedChannelId,
+      );
 
       await tester.tap(
         find.byKey(
-          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.followingChannelId),
+          HomePrimaryTabStrip.channelKey(
+            HomePrimaryTabStrip.followingChannelId,
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -427,9 +530,65 @@ void main() {
       expect(find.byType(LoginPage), findsNothing);
       expect(find.byType(MainAppShell), findsOneWidget);
       expect(find.byType(HomePage), findsOneWidget);
+      expect(
+        _activeHomeChannel(tester),
+        HomePrimaryTabStrip.recommendedChannelId,
+      );
       expect(find.byType(BottomNavigationWidget), findsOneWidget);
       expect(find.text('Page Not Found'), findsNothing);
 
+      // 再 pump 一帧确认没有重新弹回登录页，避免「关闭→回关注态→再次登录」回环。
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(LoginPage), findsNothing);
+      expect(
+        _activeHomeChannel(tester),
+        HomePrimaryTabStrip.recommendedChannelId,
+      );
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('游客点击首页关注 tab 登录成功后进入关注频道目标态', (tester) async {
+      AuthGate.resetDebounce();
+      _suppressExpectedErrors();
+      final store = _MutableAuthSessionStore();
+      await tester.pumpWidget(_buildShellRouterWithStore(store));
+      await tester.pumpAndSettle();
+      expect(
+        _activeHomeChannel(tester),
+        HomePrimaryTabStrip.recommendedChannelId,
+      );
+
+      await tester.tap(
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(
+            HomePrimaryTabStrip.followingChannelId,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(LoginPage), findsOneWidget);
+
+      final loginContext = tester.element(find.byType(LoginPage));
+      final container = ProviderScope.containerOf(loginContext);
+      await container
+          .read(authSessionControllerProvider.notifier)
+          .applyLoginResult(
+            AuthLoginResultDto(
+              accessToken: 'access-token',
+              refreshToken: 'refresh-token',
+              ownerId: 'user_001',
+              accountState: 'active',
+              identityOrigin: 'phone',
+              activeSub: const <String, dynamic>{'id': 'user_001'},
+            ),
+          );
+      GoRouter.of(loginContext).go(AppRoutePaths.home);
+      await tester.pumpAndSettle();
+
+      expect(
+        _activeHomeChannel(tester),
+        HomePrimaryTabStrip.followingChannelId,
+      );
       await tester.pump(const Duration(seconds: 3));
     });
 
@@ -487,6 +646,44 @@ void main() {
       // 再 pump 一帧确认守卫没有把登录页二次弹出（无死循环）。
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(LoginPage), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('游客直达 createEntry 显示动作面板入口，不被创作路由门提前拦截', (tester) async {
+      AuthGate.resetDebounce();
+      _suppressExpectedErrors();
+      await tester.pumpWidget(
+        _buildGuardedRouter(
+          authenticated: false,
+          initialLocation: AppRoutePaths.createEntry,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsNothing);
+      expect(find.text('CREATE_ENTRY_PAGE'), findsOneWidget);
+    });
+
+    testWidgets('游客直达 /create 具体创作页仍被路由门拦截，关闭回首页', (tester) async {
+      AuthGate.resetDebounce();
+      _suppressExpectedErrors();
+      await tester.pumpWidget(
+        _buildGuardedRouter(
+          authenticated: false,
+          initialLocation: AppRoutePaths.create(type: 'write'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsOneWidget);
+      expect(find.text('CREATE_PAGE'), findsNothing);
+
+      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsNothing);
+      expect(find.byType(MainAppShell), findsOneWidget);
+      expect(find.text('Page Not Found'), findsNothing);
       await tester.pump(const Duration(seconds: 3));
     });
 
@@ -574,6 +771,19 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      final router = GoRouter(
+        initialLocation: AppRoutePaths.home,
+        routes: [
+          GoRoute(
+            path: AppRoutePaths.home,
+            builder: (context, state) => MainAppShell(
+              currentLocation: state.uri.path,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
 
       await tester.pumpWidget(
         ProviderScope(
@@ -585,7 +795,7 @@ void main() {
               const _TestAuthSessionStore(authenticated: true),
             ),
           ],
-          child: MaterialApp(
+          child: MaterialApp.router(
             localizationsDelegates: const [
               AppLocalizations.delegate,
               GlobalMaterialLocalizations.delegate,
@@ -593,10 +803,7 @@ void main() {
               GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-            home: MainAppShell(
-              currentLocation: AppRoutePaths.home,
-              child: const SizedBox.shrink(),
-            ),
+            routerConfig: router,
           ),
         ),
       );
@@ -616,12 +823,25 @@ void main() {
       );
     });
 
-    testWidgets('Web 宽屏展示对应安装包入口', (tester) async {
+    testWidgets('Web 宽屏展示欢迎页，进入后使用五入口与上下文 tabs', (tester) async {
       _suppressExpectedErrors();
       tester.view.physicalSize = const Size(1280, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      final router = GoRouter(
+        initialLocation: AppRoutePaths.home,
+        routes: [
+          GoRoute(
+            path: AppRoutePaths.home,
+            builder: (context, state) => MainAppShell(
+              currentLocation: state.uri.path,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
 
       await tester.pumpWidget(
         ProviderScope(
@@ -633,7 +853,7 @@ void main() {
               const _TestAuthSessionStore(authenticated: true),
             ),
           ],
-          child: MaterialApp(
+          child: MaterialApp.router(
             localizationsDelegates: const [
               AppLocalizations.delegate,
               GlobalMaterialLocalizations.delegate,
@@ -641,28 +861,150 @@ void main() {
               GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-            home: MainAppShell(
-              currentLocation: AppRoutePaths.home,
-              child: const SizedBox.shrink(),
-            ),
+            routerConfig: router,
           ),
         ),
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text(UITextConstants.webInstallBannerTitle), findsOneWidget);
+      expect(find.text(UITextConstants.webPcWelcomeHeadline), findsNothing);
+      expect(find.text(UITextConstants.webPcWelcomeSubtitle), findsNothing);
+      expect(find.text(UITextConstants.webPcWelcomeScrollHint), findsNothing);
+      expect(find.text(UITextConstants.webPcBrandName), findsOneWidget);
+      expect(find.text(UITextConstants.webPcWelcomeContinue), findsNothing);
+      expect(find.text(UITextConstants.webPcWelcomeDownload), findsNothing);
+      expect(find.text(UITextConstants.webPcWelcomeLogin), findsNothing);
+      expect(find.byType(WelcomeFlowerMark), findsOneWidget);
+      expect(find.byType(WebAppInstallBanner), findsNothing);
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -260));
+      await tester.pump(const Duration(milliseconds: 300));
+
       expect(
-        find.text(UITextConstants.webInstallBannerIosPackage),
+        find.byKey(const ValueKey<String>('web-primary-home')),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.webInstallBannerAndroidPackage),
+        find.byKey(const ValueKey<String>('web-primary-featured')),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.webInstallBannerShareInstall),
+        find.byKey(const ValueKey<String>('web-primary-create')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey<String>('web-primary-chat')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('web-primary-profile')),
+        findsOneWidget,
+      );
+      expect(find.text(UITextConstants.homeTabFollowing), findsOneWidget);
+      expect(find.text(UITextConstants.homeTabRecommended), findsWidgets);
+      expect(find.text(UITextConstants.webPcSearchHintHome), findsOneWidget);
+      expect(find.text(UITextConstants.globalXiaoquSearchAsk), findsNothing);
+      expect(find.byType(AppCachedNetworkImage), findsWidgets);
+
+      final scrollView = tester.widget<CustomScrollView>(
+        find.byType(CustomScrollView),
+      );
+      scrollView.controller!.jumpTo(0);
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(find.text(UITextConstants.webPcBrandName), findsOneWidget);
+      scrollView.controller!.jumpTo(AppSpacing.webPcWelcomeHeroHeight);
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(
+        find.byKey(const ValueKey<String>('web-toolbar-brand')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('web-primary-featured')),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text(UITextConstants.workFormatFilterAll), findsWidgets);
+      expect(find.text(UITextConstants.workFormatFilterVideo), findsWidgets);
+      expect(find.text(UITextConstants.workFormatFilterImage), findsOneWidget);
+      expect(find.text(UITextConstants.workFormatFilterNote), findsOneWidget);
+      expect(
+        find.text(UITextConstants.webPcSearchHintFeatured),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('web-primary-create')),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text(UITextConstants.webPcCreateTabGallery), findsOneWidget);
+      expect(find.text(UITextConstants.webPcCreateTabText), findsOneWidget);
+      expect(find.text(UITextConstants.webPcCreateTabDrafts), findsOneWidget);
+      expect(find.text(UITextConstants.webPcSearchHintCreate), findsOneWidget);
+    });
+
+    testWidgets('Web 宽屏未登录点创作主入口先进入创建工作台，不直接登录', (tester) async {
+      _suppressExpectedErrors();
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final router = GoRouter(
+        initialLocation: AppRoutePaths.home,
+        routes: [
+          GoRoute(
+            path: AppRoutePaths.home,
+            builder: (context, state) => MainAppShell(
+              currentLocation: state.uri.path,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+          GoRoute(
+            path: AppRoutePaths.loginPathTemplate,
+            builder: (context, state) => const LoginPage(),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            platformCapabilitiesProvider.overrideWithValue(
+              CapabilityProfile.web,
+            ),
+            authSessionStoreProvider.overrideWithValue(
+              const _TestAuthSessionStore(authenticated: false),
+            ),
+          ],
+          child: MaterialApp.router(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -260));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('web-primary-create')),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(WebInlineLoginSurface), findsNothing);
+      expect(find.byType(LoginPage), findsNothing);
+      expect(find.text(UITextConstants.webPcCreateTabGallery), findsOneWidget);
+      expect(find.text(UITextConstants.webPcCreateTabText), findsOneWidget);
+      expect(find.text(UITextConstants.webPcCreateTabDrafts), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1200));
     });
   });
 }

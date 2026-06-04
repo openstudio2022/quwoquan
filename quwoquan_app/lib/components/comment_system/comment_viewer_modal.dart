@@ -159,36 +159,29 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
     }
     if (state.status == CommentListStatus.error && state.comments.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              CupertinoIcons.exclamationmark_circle,
-              size: AppSpacing.iconLarge,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundTertiary,
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.containerMd),
+          child: AppSectionErrorCard(
+            semantic: UiErrorSemantic(
+              category: UiErrorCategory.sectionLoad,
+              scope: UiErrorScope.section,
+              title: '评论暂时没加载出来',
+              message: UITextConstants.contentLoadSoftFailed,
+              primaryAction: const UiErrorAction(
+                type: UiErrorActionType.retry,
+                label: UITextConstants.tryAgain,
               ),
             ),
-            SizedBox(height: AppSpacing.sm),
-            Text(
-              UITextConstants.loadFailed,
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.foregroundSecondary,
-                ),
-              ),
-            ),
-            SizedBox(height: AppSpacing.md),
-            CupertinoButton(
-              onPressed: () => ref
-                  .read(commentProviderFamily(widget.postId).notifier)
-                  .loadComments(),
-              child: Text(UITextConstants.retry),
-            ),
-          ],
+            margin: EdgeInsets.zero,
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry ||
+                  action.type == UiErrorActionType.resubmit) {
+                await ref
+                    .read(commentProviderFamily(widget.postId).notifier)
+                    .loadComments();
+              }
+            },
+          ),
         ),
       );
     }

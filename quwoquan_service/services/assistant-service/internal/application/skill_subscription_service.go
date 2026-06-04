@@ -219,14 +219,18 @@ func (s *AssistantService) createProactiveTurnMessage(ctx context.Context, subsc
 		return assistant.AssistantTurn{}, assistant.AppMessage{}, err
 	}
 	message, err := s.CreateAppMessage(ctx, assistant.CreateAppMessageInput{
-		UserID:      subscription.Owner.OwnerID,
-		MessageType: "assistant",
-		Source:      "assistant_turn",
-		SourceID:    turn.TurnID,
-		Destination: assistant.AppMessageDestination{Type: "user", ID: subscription.Owner.OwnerID},
-		Title:       proactive.Title,
-		Summary:     proactive.Summary,
-		Target:      assistant.AppMessageTarget{TargetType: "assistant_turn", TargetID: turn.TurnID},
+		UserID:          subscription.Owner.OwnerID,
+		MessageType:     "assistant",
+		Source:          "assistant_turn",
+		SourceID:        turn.TurnID,
+		Destination:     assistant.AppMessageDestination{Type: "user", ID: subscription.Owner.OwnerID},
+		Title:           proactive.Title,
+		Summary:         proactive.Summary,
+		Target:          assistant.AppMessageTarget{TargetType: "assistant_turn", TargetID: turn.TurnID},
+		Personalized:    proactive.Personalized,
+		InterestTags:    proactive.InterestTags,
+		MatchedSegments: proactive.MatchedSegments,
+		LifecycleStage:  proactive.LifecycleStage,
 	})
 	if err != nil {
 		return assistant.AssistantTurn{}, assistant.AppMessage{}, err

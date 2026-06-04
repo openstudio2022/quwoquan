@@ -38,7 +38,12 @@ OVERRIDE_PUBLISHABLE = "publishable"
 OVERRIDE_DISCARD = "discard"
 
 DEFAULT_POLICY: dict[str, Any] = {
-    "autoApprove": {"agentMinScore": 3, "requireHumanWhenDoubtful": True},
+    # autoApprove: agent 可信且分≥agentMinScore 自动放行
+    # requireHumanWhenDoubtful: agent 存疑是否一律转人工（HITL 总开关）
+    # autoDiscardScoreAtMost: agent 存疑且分≤此阈值视为"明确违规"，自动 discard 不转人工
+    #   （image_safety unsafe=水印/平台标记 → 1 分；needs_review 人脸边界 → 2 分）
+    # 净效果：明确违规自动丢弃、明确合格自动采纳，只有真正模糊(needs_review)留给人。
+    "autoApprove": {"agentMinScore": 3, "requireHumanWhenDoubtful": True, "autoDiscardScoreAtMost": 1},
     "reprocess": {"maxAttempts": 3},
 }
 
@@ -81,8 +86,10 @@ class ReviewItem:
 def resolve_publish_state(item: ReviewItem, policy: dict[str, Any] | None = None) -> str:
     """推导发布态。人判定优先；其次 agent 默认放行；低质量进入可再加工/锁定。"""
     pol = policy or DEFAULT_POLICY
-    min_score = int(pol.get("autoApprove", {}).get("agentMinScore", 3))
-    require_human_when_doubtful = bool(pol.get("autoApprove", {}).get("requireHumanWhenDoubtful", True))
+    auto = pol.get("autoApprove", {})
+    min_score = int(auto.get("agentMinScore", 3))
+    require_human_when_doubtful = bool(auto.get("requireHumanWhenDoubtful", True))
+    auto_discard_at_most = auto.get("autoDiscardScoreAtMost", None)
 
     # 1) 人直接置发布态（最高优先）
     if item.humanOverride == OVERRIDE_DISCARD:
@@ -98,7 +105,10 @@ def resolve_publish_state(item: ReviewItem, policy: dict[str, Any] | None = None
 
     # 3) 人未判定 → 看 agent
     if item.agentJudgment == JUDGE_DOUBTFUL:
-        # agent 存疑必须人工确认（可配置）；否则按打分默认
+        # 3a) 明确违规（agent 存疑且分≤阈值，如水印/平台标记）→ 自动丢弃，不占用人工
+        if auto_discard_at_most is not None and item.agentScore <= int(auto_discard_at_most):
+            return STATE_DISCARD
+        # 3b) 模糊存疑（needs_review）→ 按总开关决定是否转人工
         if require_human_when_doubtful:
             return STATE_FIX
         return STATE_PUBLISHABLE if item.agentScore >= min_score else STATE_FIX

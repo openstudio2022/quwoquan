@@ -17,3 +17,19 @@ documented_keys:
   - clientStateSync
   - home_channels
   - homeChannels
+  - comment
+  - comment.max_length
+  - comment.reply_preview_count
+  - comment.reply_expand_page_size
+  - comment.fold_line_count
+  - comment.sort.default
+  - comment.attachment.max_images
+comment_defaults:
+  max_length: 500
+  reply_preview_count: 1
+  reply_expand_page_size: 10
+  fold_line_count: 3
+  sort:
+    default: recommended
+  attachment:
+    max_images: 1

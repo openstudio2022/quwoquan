@@ -97,6 +97,23 @@ type AssistantPolicyView struct {
 	UpdatedAt *time.Time     `json:"updatedAt,omitempty"`
 }
 
+type AssistantEntryPersonalizationChipView struct {
+	ChipID     string `json:"chipId"`
+	Label      string `json:"label"`
+	ActionType string `json:"actionType"`
+	Value      string `json:"value,omitempty"`
+}
+
+type AssistantEntryPersonalizationView struct {
+	WelcomeMessage     string                                 `json:"welcomeMessage"`
+	SuggestionLines    []string                               `json:"suggestionLines"`
+	Chips              []AssistantEntryPersonalizationChipView `json:"chips"`
+	Personalized       bool                                   `json:"personalized"`
+	MatchedInterestTags []string                              `json:"matchedInterestTags,omitempty"`
+	MatchedSegments    []string                               `json:"matchedSegments,omitempty"`
+	LifecycleStage     string                                 `json:"lifecycleStage,omitempty"`
+}
+
 type SuggestedAction struct {
 	ActionID string         `json:"actionId"`
 	Type     string         `json:"type"`

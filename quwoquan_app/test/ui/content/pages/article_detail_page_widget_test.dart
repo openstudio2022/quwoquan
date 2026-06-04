@@ -22,6 +22,13 @@ class _ArticleGetPostRepo extends MockContentRepository {
       ContentPostDetailPayload.fromWire(_item);
 }
 
+class _FailingArticleGetPostRepo extends MockContentRepository {
+  @override
+  Future<ContentPostDetailPayload> getPost({required String postId}) async {
+    throw StateError('article unavailable');
+  }
+}
+
 void main() {
   testWidgets('ArticleDetailPage 渲染连续图文阅读布局', (tester) async {
     final article = <String, dynamic>{
@@ -77,6 +84,29 @@ void main() {
     expect(find.textContaining('1. 第二条清单'), findsWidgets);
     expect(find.byType(CachedNetworkImage), findsNWidgets(3));
     expect(find.text('分享'), findsOneWidget);
+  });
+
+  testWidgets('ArticleDetailPage 加载失败时展示统一页态', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          contentRepositoryProvider.overrideWithValue(_FailingArticleGetPostRepo()),
+          behaviorRepositoryProvider.overrideWithValue(
+            MockBehaviorRepository(),
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const ArticleDetailPage(articleId: 'art_missing'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppPageErrorState), findsOneWidget);
+    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
   });
 
   testWidgets('ArticleReadOnlyBookDeck 会锁定 pageflip stage 宽度', (tester) async {

@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/core/platform/file_storage_gateway_io.dart'
-    if (dart.library.html) 'package:quwoquan_app/core/platform/file_storage_gateway_web.dart';
+    if (dart.library.js_interop) 'package:quwoquan_app/core/platform/file_storage_gateway_web.dart';
 
 /// Anti-corruption boundary for local file / path / directory access.
 ///

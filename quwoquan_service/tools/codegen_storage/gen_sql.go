@@ -86,7 +86,9 @@ func generateMigrationSQL(ctx *genContext, tableName string, table TableDef) err
 			b.WriteString(fmt.Sprintf("\nCREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (%s) WHERE %s;\n",
 				uq.Name, tableName, cols, uq.Condition))
 		} else {
-			b.WriteString(fmt.Sprintf("\nALTER TABLE %s ADD CONSTRAINT %s UNIQUE (%s);\n",
+			// ADD CONSTRAINT 没有 IF NOT EXISTS 形式；migrator 无版本表、每次启动重跑全部
+			// .up.sql，故用 DO 块吞掉重复创建错误以保证幂等，同时保留可被外键引用的约束语义。
+			b.WriteString(fmt.Sprintf("\nDO $do$ BEGIN\n    ALTER TABLE %s ADD CONSTRAINT %s UNIQUE (%s);\nEXCEPTION WHEN duplicate_table THEN NULL; WHEN duplicate_object THEN NULL;\nEND $do$;\n",
 				tableName, uq.Name, cols))
 		}
 	}

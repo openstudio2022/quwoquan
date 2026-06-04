@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadat
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
@@ -128,9 +129,13 @@ class MockIntersectionRepository implements IntersectionRepository {
   }) async {
     final wanted = (channel ?? '').trim();
     final pool = _channelReasons[wanted] ?? _channelReasons['recommend']!;
-    final items = pool
-        .where((r) => !_exposed.contains(r.actionTargetId))
-        .toList(growable: false);
+    final items = pool.map(_withExposureState).toList(growable: false);
+    items.sort((a, b) {
+      final aSeen = a.rankState == 'seen' ? 1 : 0;
+      final bSeen = b.rankState == 'seen' ? 1 : 0;
+      if (aSeen != bSeen) return aSeen.compareTo(bSeen);
+      return b.strength.compareTo(a.strength);
+    });
     if (items.length <= limit) return items;
     return items.sublist(0, limit);
   }
@@ -150,17 +155,112 @@ class MockIntersectionRepository implements IntersectionRepository {
     return fresh.isAfter(watermark);
   }
 
+  IntersectionReason _withExposureState(IntersectionReason reason) {
+    if (!_exposed.contains(reason.actionTargetId)) {
+      return reason.copyWith(rankState: 'fresh');
+    }
+    return reason.copyWith(
+      rankState: 'seen',
+      seenAt: DateTime.now().toUtc().toIso8601String(),
+    );
+  }
+
   static String _isoMinusHours(int hours) =>
       DateTime.now().toUtc().subtract(Duration(hours: hours)).toIso8601String();
 
+  static IntersectionPoint _point({
+    required String id,
+    required String pointClass,
+    required String dimension,
+    required String label,
+    required String displayText,
+    String sourceRef = '',
+  }) {
+    return IntersectionPoint(
+      pointId: id,
+      pointClass: pointClass,
+      dimension: dimension,
+      label: label,
+      displayText: displayText,
+      sourceRef: sourceRef,
+      visibility: 'public',
+    );
+  }
+
+  static IntersectionReason _withPoints(
+    IntersectionReason reason,
+    List<IntersectionPoint> points,
+  ) {
+    final visible = points
+        .where((point) => point.visibility != 'hidden')
+        .toList(growable: false);
+    final factCount = visible
+        .where((point) => point.pointClass != 'recommended')
+        .length;
+    final recommendedCount = visible.length - factCount;
+    final byDimension = <String, int>{};
+    for (final point in visible) {
+      byDimension[point.dimension] = (byDimension[point.dimension] ?? 0) + 1;
+    }
+    final summary = byDimension.entries
+        .map(
+          (entry) => IntersectionDimensionTally(
+            dimension: entry.key,
+            label: _dimensionLabels[entry.key] ?? entry.key,
+            count: entry.value,
+          ),
+        )
+        .toList(growable: false);
+    return reason.copyWith(
+      intersectionPoints: visible,
+      pointSummarySnapshotId: reason.intersectionId,
+      factPointCount: factCount,
+      recommendedPointCount: recommendedCount,
+      totalPointCount: visible.length,
+      dimensionPointSummary: summary,
+      pointClassLabel: recommendedCount > 0 && factCount == 0 ? '推荐交集' : '事实交集',
+      recommendationTraceId: reason.intersectionId,
+      rankState: 'fresh',
+    );
+  }
+
+  static IntersectionReason _withDefaultPointSummary(
+    IntersectionReason reason,
+  ) {
+    final pointClass = reason.intersectionClass == 'affinity'
+        ? 'recommended'
+        : 'fact';
+    final displayText = reason.displayText.trim().isNotEmpty
+        ? reason.displayText
+        : reason.label;
+    return _withPoints(reason, <IntersectionPoint>[
+      _point(
+        id: '${reason.intersectionId}_point',
+        pointClass: pointClass,
+        dimension: reason.dimension,
+        label: reason.label,
+        displayText: displayText,
+        sourceRef: reason.source,
+      ),
+    ]);
+  }
+
+  static List<IntersectionReason> _withDefaultPointSummaries(
+    List<IntersectionReason> reasons,
+  ) {
+    return reasons.map(_withDefaultPointSummary).toList(growable: false);
+  }
+
   /// canonical 我的交集 inbox（覆盖 5 维度，含事实/概率混样、头像/名字/新鲜度）。
-  static List<IntersectionReason> get _inboxReasons => <IntersectionReason>[
+  static List<IntersectionReason>
+  get _inboxReasons => _withDefaultPointSummaries(<IntersectionReason>[
     IntersectionReason(
       dimension: 'relationship',
       intersectionId: 'ix_rel_1',
       intersectionClass: 'fact',
       label: '共同好友',
       displayName: '林清越',
+      displayText: '4 位共同好友',
       avatarUrl:
           'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
       sharedCount: 4,
@@ -177,6 +277,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionClass: 'fact',
       label: '互相关注',
       displayName: '周屿',
+      displayText: '你们互相关注',
       avatarUrl:
           'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
       sharedCount: 2,
@@ -193,6 +294,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionClass: 'fact',
       label: '同校',
       displayName: '新东方校友',
+      displayText: '同校校友',
       avatarUrl:
           'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=100',
       sharedCount: 3,
@@ -209,6 +311,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionClass: 'fact',
       label: '共看内容',
       displayName: '黄金投资圈',
+      displayText: '共看黄金内容',
       avatarUrl:
           'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=100',
       sharedCount: 8,
@@ -225,6 +328,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionClass: 'fact',
       label: '同游',
       displayName: '西湖',
+      displayText: '有相同旅行足迹',
       avatarUrl:
           'https://images.unsplash.com/photo-1606767341197-3d8e6f0a2a9b?w=100',
       sharedCount: 5,
@@ -241,6 +345,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionClass: 'affinity',
       label: '可能合得来',
       displayName: '陆衡',
+      displayText: '可能合得来',
       avatarUrl:
           'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
       sharedCount: 0,
@@ -253,89 +358,93 @@ class MockIntersectionRepository implements IntersectionRepository {
       source: 'interest',
       freshAt: _isoMinusHours(20),
     ),
-  ];
+  ]);
 
   /// 各频道交集推荐（事实优先 + 概率补充），补齐 campus/travel。
-  static Map<String, List<IntersectionReason>> get _channelReasons =>
-      <String, List<IntersectionReason>>{
-        'recommend': <IntersectionReason>[
-          _inboxReasons[0],
-          _inboxReasons[3],
-          _inboxReasons[5],
-        ],
-        'campus': <IntersectionReason>[
-          IntersectionReason(
-            dimension: 'identity',
-            intersectionId: 'ix_campus_1',
-            intersectionClass: 'fact',
-            label: '同专业',
-            displayName: '苏黎',
-            avatarUrl:
-                'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
-            sharedCount: 6,
-            strength: 0.84,
-            relationKind: 'person',
-            actionType: 'view',
-            actionTargetId: 'u_su',
-            source: 'identity',
-            freshAt: _isoMinusHours(5),
-          ),
-          IntersectionReason(
-            dimension: 'interest',
-            intersectionId: 'ix_campus_2',
-            intersectionClass: 'affinity',
-            label: '同社团可能',
-            displayName: '吉他社',
-            avatarUrl:
-                'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100',
-            sharedCount: 0,
-            strength: 0.58,
-            confidenceLabel: '推荐',
-            modelReasonBucket: 'circle_discovery',
-            relationKind: 'circle',
-            actionType: 'join',
-            actionTargetId: 'circle_guitar',
-            source: 'interest',
-            freshAt: _isoMinusHours(40),
-          ),
-        ],
-        'travel': <IntersectionReason>[
-          IntersectionReason(
-            dimension: 'location',
-            intersectionId: 'ix_travel_1',
-            intersectionClass: 'fact',
-            label: '同目的地',
-            displayName: '大理',
-            avatarUrl:
-                'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=100',
-            sharedCount: 7,
-            strength: 0.81,
-            relationKind: 'place',
-            actionType: 'view',
-            actionTargetId: 'hp_dali',
-            source: 'location',
-            freshAt: _isoMinusHours(8),
-          ),
-          IntersectionReason(
-            dimension: 'interest',
-            intersectionId: 'ix_travel_2',
-            intersectionClass: 'affinity',
-            label: '可能同好',
-            displayName: '徒步旅人',
-            avatarUrl:
-                'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=100',
-            sharedCount: 0,
-            strength: 0.55,
-            confidenceLabel: '推荐',
-            modelReasonBucket: 'travel_affinity',
-            relationKind: 'person',
-            actionType: 'view',
-            actionTargetId: 'u_hiker',
-            source: 'interest',
-            freshAt: _isoMinusHours(60),
-          ),
-        ],
-      };
+  static Map<String, List<IntersectionReason>>
+  get _channelReasons => <String, List<IntersectionReason>>{
+    'recommend': <IntersectionReason>[
+      _inboxReasons[0],
+      _inboxReasons[3],
+      _inboxReasons[5],
+    ],
+    'campus': _withDefaultPointSummaries(<IntersectionReason>[
+      IntersectionReason(
+        dimension: 'identity',
+        intersectionId: 'ix_campus_1',
+        intersectionClass: 'fact',
+        label: '同专业',
+        displayName: '苏黎',
+        displayText: '同专业同校',
+        avatarUrl:
+            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
+        sharedCount: 6,
+        strength: 0.84,
+        relationKind: 'person',
+        actionType: 'view',
+        actionTargetId: 'u_su',
+        source: 'identity',
+        freshAt: _isoMinusHours(5),
+      ),
+      IntersectionReason(
+        dimension: 'interest',
+        intersectionId: 'ix_campus_2',
+        intersectionClass: 'affinity',
+        label: '同社团可能',
+        displayName: '吉他社',
+        displayText: '推荐加入社团',
+        avatarUrl:
+            'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100',
+        sharedCount: 0,
+        strength: 0.58,
+        confidenceLabel: '推荐',
+        modelReasonBucket: 'circle_discovery',
+        relationKind: 'circle',
+        actionType: 'join',
+        actionTargetId: 'circle_guitar',
+        source: 'interest',
+        freshAt: _isoMinusHours(40),
+      ),
+    ]),
+    'travel': _withDefaultPointSummaries(<IntersectionReason>[
+      IntersectionReason(
+        dimension: 'location',
+        intersectionId: 'ix_travel_1',
+        intersectionClass: 'fact',
+        label: '同目的地',
+        displayName: '大理',
+        displayText: '有相同目的地',
+        avatarUrl:
+            'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=100',
+        sharedCount: 7,
+        strength: 0.81,
+        relationKind: 'place',
+        actionType: 'view',
+        actionTargetId: 'hp_dali',
+        source: 'location',
+        freshAt: _isoMinusHours(8),
+      ),
+      IntersectionReason(
+        dimension: 'interest',
+        intersectionId: 'ix_travel_2',
+        intersectionClass: 'affinity',
+        label: '可能同好',
+        displayName: '徒步旅人',
+        displayText: '可能喜欢相同路线',
+        avatarUrl:
+            'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=100',
+        sharedCount: 0,
+        strength: 0.55,
+        confidenceLabel: '推荐',
+        modelReasonBucket: 'travel_affinity',
+        relationKind: 'person',
+        actionType: 'view',
+        actionTargetId: 'u_hiker',
+        source: 'interest',
+        freshAt: _isoMinusHours(60),
+      ),
+    ]),
+  };
 }
 
 /// Remote 实现：调用 content-service 交集 API。
@@ -385,16 +494,15 @@ class RemoteIntersectionRepository implements IntersectionRepository {
       decoded,
       context: ContentRequestPageIds.listMyIntersections,
     );
-    return CloudResponseDecoder.mapList(obj, 'items')
-        .map(IntersectionReason.fromMap)
-        .toList(growable: false);
+    return CloudResponseDecoder.mapList(
+      obj,
+      'items',
+    ).map(IntersectionReason.fromMap).toList(growable: false);
   }
 
   @override
   Future<void> markIntersectionsVisited({String? dimension}) async {
-    final body = <String, dynamic>{
-      'dimension': (dimension ?? '').trim(),
-    };
+    final body = <String, dynamic>{'dimension': (dimension ?? '').trim()};
     await _httpClient.postJson(
       _uri(ContentApiMetadata.markIntersectionsVisitedPath),
       headers: CloudRequestHeaders.forPage(
@@ -423,9 +531,10 @@ class RemoteIntersectionRepository implements IntersectionRepository {
       decoded,
       context: ContentRequestPageIds.getFeedIntersections,
     );
-    return CloudResponseDecoder.mapList(obj, 'items')
-        .map(IntersectionReason.fromMap)
-        .toList(growable: false);
+    return CloudResponseDecoder.mapList(
+      obj,
+      'items',
+    ).map(IntersectionReason.fromMap).toList(growable: false);
   }
 
   @override

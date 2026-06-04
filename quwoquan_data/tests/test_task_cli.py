@@ -157,6 +157,21 @@ def test_trace_by_source_task_id(capsys=None):
     assert len(hits) == 1, hits
 
 
+def test_latest_post_outputs_points_to_runtime_article():
+    spec = _mk(name="景区产物发现")
+    tid = spec["taskId"]
+    post_dir = store.runtime_task_root(tid) / "batches" / "b1" / "produce" / "posts" / "article" / "九寨沟纪行" / "1"
+    write_json(post_dir / "manifest.json", {
+        "contentType": "article",
+        "publishTitle": "九寨沟纪行",
+        "sourceBatchId": "b1",
+    })
+    (post_dir / "article.md").write_text("# 九寨沟纪行\n", encoding="utf-8")
+    outputs = ops.latest_post_outputs(tid)
+    assert outputs and outputs[0]["title"] == "九寨沟纪行"
+    assert outputs[0]["articlePath"].endswith("produce/posts/article/九寨沟纪行/1/article.md")
+
+
 def _write_defaults(rel_dir: str, content: dict) -> None:
     """在 committed tasks 路径前缀写 _defaults.yaml（rel_dir 如 '旅行' 或 '旅行/地域/四川省'）。"""
     path = COMMITTED_TASKS_ROOT

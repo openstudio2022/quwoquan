@@ -143,6 +143,24 @@ class AppColors {
   static const Color welcomePetalRose = Color(0xFFFB7185);
   static const Color welcomeTitleGradientMid = Color(0xFF67E8F9); // cyan-300
   static const Color welcomeTitleGradientEnd = Color(0xFFC084FC); // purple-400
+  static const Color webPcWelcomeCopySecondary = Color(0xB8FFFFFF);
+  static const Color webPcWelcomeCopyTertiary = Color(0x7AFFFFFF);
+  static const Color webPcWelcomeDownloadPanelBackground = Color(0x14FFFFFF);
+  static const Color webPcWelcomeDownloadPanelBorder = Color(0x29FFFFFF);
+  static const Color webPcWelcomeDownloadPanelCaption = Color(0xA3FFFFFF);
+  static const Color webPcWelcomeVisualGlowPrimary = Color(0x700A84FF);
+  static const Color webPcWelcomeVisualGlowSecondary = Color(0x2467E8F9);
+  static const Color webPcWelcomePetalStart = Color(0xEBC084FC);
+  static const Color webPcWelcomePetalEnd = Color(0xB867E8F9);
+  static const Color webPcGhostButtonForeground = Color(0xD1FFFFFF);
+  static const Color webPcSelectedSurface = Color(0x1A0A84FF);
+  static const Color webPcCreateSelectedSurface = Color(0x140A84FF);
+  static const Color webPcLoginScrim = Color(0x66000000);
+  static const Color webPcLoginSurfaceShadow = Color(0x26000000);
+  static const Color webPcToolbarShadow = Color(0x14000000);
+
+  static Color webPcToolbarSurface(BuildContext context) =>
+      iosGroupedSurface(context).withValues(alpha: 0.96);
 
   /// 欢迎页 — 系统深色外观（与浅色同源色相，压低亮度，S6 对称深色）
   static const Color welcomeBackgroundDark = Color(0xFF0F172A);
@@ -182,6 +200,8 @@ class AppColors {
   /// 创作页媒体错误占位渐变
   static const Color createMediaFallbackGradientTop = Color(0xFF343434);
   static const Color createMediaFallbackGradientBottom = Color(0xFF141414);
+  static const Color webPcMediaFallbackGradientTop = brandBlue50;
+  static const Color webPcMediaFallbackGradientBottom = white;
 
   // ==================== Feed 卡片语义色 ====================
 

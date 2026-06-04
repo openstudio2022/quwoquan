@@ -1,0 +1,31 @@
+version: 1
+aggregate: PushDelivery
+
+service:
+  name: integration-service
+  domain: integration
+  owner: backend-team
+  description: 外部手机推送 provider 适配契约，notification-service 保持内部通知语义中心。
+
+api_routes:
+  - method: POST
+    path: /v1/integrations/push-deliveries
+    operation: SubmitPushDelivery
+    description: 内部接口，提交 APNs/FCM/厂商推送异步发送请求。
+    request_entity: PushDeliveryRequest
+    response_entity: PushDeliveryAccepted
+    success_status: 202
+
+  - method: POST
+    path: /v1/integrations/push-deliveries:callback
+    operation: PushDeliveryProviderCallback
+    description: 推送供应商回执回调。
+    request_entity: PushDeliveryCallback
+    response_entity: PushDeliveryCallbackAccepted
+    success_status: 202
+
+consumers:
+  - name: notification-service
+    capabilities: [push_delivery_send, push_delivery_callback]
+  - name: platform-ops
+    capabilities: [push_provider_policy, push_delivery_audit]

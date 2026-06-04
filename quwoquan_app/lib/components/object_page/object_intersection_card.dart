@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 对象页统一交集卡（V3，合规共享层）。
@@ -13,8 +12,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 /// 文案口径约束（全局验收 G2 / 军规 R27）：
 /// - 标题 [title]、更多入口文案 [moreLabel] 由调用方按对象类型传入（UITextConstants / l10n），
 ///   组件本身不硬编码业务中文；
-/// - 每条交集点通过共享原子 [IntersectionEntity] 渲染（真实头像 + 名字 + 维度 chip +
-///   共同点安静 chip；概率交集标「推荐」），端不本地拼装交集句；
+/// - 每条交集点通过证据胶囊渲染（维度 + 云侧证据短句），端不本地拼装事实；
 /// - 无来源（reasons 为空或无可渲染身份）→ [fromReasons] 返回 null，调用方据此不展示。
 class ObjectIntersectionCard extends StatelessWidget {
   const ObjectIntersectionCard({
@@ -90,9 +88,16 @@ class ObjectIntersectionCard extends StatelessWidget {
       isDark,
       ColorType.foregroundPrimary,
     );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final visible = reasons.take(maxVisible).toList();
     final hasMore =
         moreLabel != null && onMoreTap != null && reasons.length > maxVisible;
+    final effectiveSharedCount =
+        sharedCount ??
+        reasons.fold<int>(0, (sum, reason) => sum + reason.totalPointCount);
 
     return Container(
       decoration: BoxDecoration(
@@ -122,9 +127,9 @@ class ObjectIntersectionCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (sharedCount != null && sharedCount! > 0)
+              if (effectiveSharedCount > 0)
                 Text(
-                  '$sharedCount',
+                  '$effectiveSharedCount',
                   style: TextStyle(
                     fontSize: AppTypography.lg,
                     fontWeight: AppTypography.bold,
@@ -133,13 +138,29 @@ class ObjectIntersectionCard extends StatelessWidget {
                 ),
             ],
           ),
-          SizedBox(height: AppSpacing.intraGroupSm),
-          ...visible.map(
-            (r) => IntersectionEntity(
-              reason: r,
-              isDark: isDark,
-              onTap: onReasonTap == null ? null : () => onReasonTap!(r),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          Text(
+            _summaryLine(visible),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
             ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          Wrap(
+            spacing: AppSpacing.intraGroupSm,
+            runSpacing: AppSpacing.intraGroupSm,
+            children: visible
+                .map(
+                  (r) => _EvidencePill(
+                    reason: r,
+                    isDark: isDark,
+                    onTap: onReasonTap == null ? null : () => onReasonTap!(r),
+                  ),
+                )
+                .toList(growable: false),
           ),
           if (hasMore) ...[
             SizedBox(height: AppSpacing.intraGroupSm),
@@ -159,5 +180,124 @@ class ObjectIntersectionCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _summaryLine(List<IntersectionReason> visible) {
+    final labels = visible
+        .map(_evidenceLabel)
+        .where((label) => label.trim().isNotEmpty)
+        .take(3)
+        .toList(growable: false);
+    if (labels.isEmpty) return title;
+    return labels.join(' · ');
+  }
+}
+
+class _EvidencePill extends StatelessWidget {
+  const _EvidencePill({required this.reason, required this.isDark, this.onTap});
+
+  final IntersectionReason reason;
+  final bool isDark;
+  final VoidCallback? onTap;
+
+  bool get _isAffinity => reason.intersectionClass == 'affinity';
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.iosAccent(context);
+    final bg = AppColors.iosSystemBackground(
+      context,
+    ).withValues(alpha: isDark ? 0.32 : 0.76);
+    final border = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.24 : 0.1);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: AppSpacing.twoHundredTwenty),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.containerSm,
+          vertical: AppSpacing.intraGroupSm,
+        ),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusEighteen),
+          border: Border.all(color: border, width: AppSpacing.hairline),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              _dimensionIcon(reason.dimension),
+              size: AppSpacing.iconSmall,
+              color: _isAffinity
+                  ? AppColors.iosSecondaryLabel(context)
+                  : accent,
+            ),
+            SizedBox(width: AppSpacing.intraGroupXs),
+            Flexible(
+              child: Text(
+                '${_dimensionLabel(reason)} ${_pointCountLabel(reason)} ${_evidenceLabel(reason)}'
+                    .trim(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.iosCaption1,
+                  fontWeight: AppTypography.medium,
+                  color: AppColors.iosLabel(context),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _dimensionLabel(IntersectionReason reason) {
+  if (reason.intersectionClass == 'affinity') {
+    final pointLabel = reason.pointClassLabel.trim();
+    if (pointLabel.isNotEmpty) return pointLabel;
+    final confidence = reason.confidenceLabel.trim();
+    return confidence.isNotEmpty
+        ? confidence
+        : UITextConstants.intersectionAffinityLabel;
+  }
+  return UITextConstants.intersectionDimensionShortLabel(reason.dimension);
+}
+
+String _evidenceLabel(IntersectionReason reason) {
+  final text = reason.displayText.trim();
+  if (text.isNotEmpty) return text;
+  final label = reason.label.trim();
+  if (label.isNotEmpty) return label;
+  return reason.displayName.trim();
+}
+
+String _pointCountLabel(IntersectionReason reason) {
+  final total = reason.totalPointCount;
+  if (total <= 0) return '';
+  if (reason.recommendedPointCount > 0 && reason.factPointCount == 0) {
+    return '$total 个推荐交集点';
+  }
+  return '$total 个交集点';
+}
+
+IconData _dimensionIcon(String dimension) {
+  switch (dimension) {
+    case 'identity':
+      return CupertinoIcons.person_crop_rectangle;
+    case 'location':
+      return CupertinoIcons.location_solid;
+    case 'content':
+      return CupertinoIcons.doc_text_fill;
+    case 'relationship':
+      return CupertinoIcons.person_2_fill;
+    case 'interest':
+      return CupertinoIcons.sparkles;
+    default:
+      return CupertinoIcons.circle_grid_hex;
   }
 }

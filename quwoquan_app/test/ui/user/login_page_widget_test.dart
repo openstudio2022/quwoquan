@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/core/auth/one_tap_login_channel.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -97,9 +98,7 @@ void main() {
     );
     await tester.pump();
 
-    final laterDy = tester
-        .getTopLeft(find.text(UITextConstants.loginLater))
-        .dy;
+    final laterDy = tester.getTopLeft(find.text(UITextConstants.loginLater)).dy;
     final agreementDy = tester
         .getTopLeft(find.textContaining(UITextConstants.userAgreement))
         .dy;
@@ -107,16 +106,46 @@ void main() {
         .getTopLeft(find.text(UITextConstants.loginOtherMethods))
         .dy;
 
-    expect(
-      laterDy < agreementDy,
-      isTrue,
-      reason: '协议区应在「稍后登录」之后',
+    expect(laterDy < agreementDy, isTrue, reason: '协议区应在「稍后登录」之后');
+    expect(agreementDy < otherMethodsDy, isTrue, reason: '协议区应在其他登录方式之前');
+  });
+
+  testWidgets('非生产 debugCode 明确提示但不自动填入验证码输入框', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          oneTapLoginClientProvider.overrideWithValue(
+            const _FakeOneTapLoginClient(available: false),
+          ),
+          authRepositoryProvider.overrideWithValue(MockAuthRepository()),
+        ],
+        child: const CupertinoApp(home: LoginPage()),
+      ),
     );
-    expect(
-      agreementDy < otherMethodsDy,
-      isTrue,
-      reason: '协议区应在其他登录方式之前',
+    await tester.pump();
+
+    await tester.enterText(
+      find.widgetWithText(
+        CupertinoTextField,
+        UITextConstants.loginPhoneNumberPlaceholder,
+      ),
+      '+8618013813909',
     );
+    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(
+      find.textContaining(UITextConstants.loginOtpDebugCodePrefix),
+      findsOneWidget,
+    );
+    final otpField = tester.widget<CupertinoTextField>(
+      find.widgetWithText(
+        CupertinoTextField,
+        UITextConstants.loginOtpPlaceholder,
+      ),
+    );
+    expect(otpField.controller?.text ?? '', isEmpty);
+    await tester.pump(const Duration(seconds: 3));
   });
 }
 
@@ -146,5 +175,6 @@ class _HangingOneTapLoginClient implements OneTapLoginClient {
   Future<bool> isAvailable() => Completer<bool>().future;
 
   @override
-  Future<OneTapLoginResult> requestLoginToken() => Completer<OneTapLoginResult>().future;
+  Future<OneTapLoginResult> requestLoginToken() =>
+      Completer<OneTapLoginResult>().future;
 }

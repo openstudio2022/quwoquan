@@ -1,0 +1,26 @@
+version: 1
+domain: integration
+aggregate_root: ExternalInteraction
+
+description: |
+  外部可靠交互请求聚合。统一承载短信、推送、一键登录与 webhook 的异步提交、
+  provider attempt ledger、回调结果和死信状态。
+
+storage_backend: mongodb
+cache_layer: redis
+cache_ttl_seconds: 60
+
+capabilities:
+  - reliable_async
+  - auditable
+  - callback_enabled
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: services/integration-service/internal/domain/external_interaction/model
+  repository: services/integration-service/internal/domain/external_interaction/repository
+  application: services/integration-service/internal/application/external_interaction
+  adapter_rest: services/integration-service/internal/adapters/http/external_interaction
+  adapter_event: services/integration-service/internal/adapters/mq/external_interaction

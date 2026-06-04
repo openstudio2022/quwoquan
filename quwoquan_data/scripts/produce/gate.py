@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from _common.paths import batch_command_root
 from _common.io import read_json
+from _common.post_verify import verify_posts_root
 
 
 def gate_produce(task_id: str, batch_id: str, content_type: str) -> list[str]:
@@ -27,7 +28,13 @@ def gate_produce(task_id: str, batch_id: str, content_type: str) -> list[str]:
         return issues
 
     for pd in post_dirs:
+        # materialize 把成品落在 <post>/<version>/manifest.json（版本子目录）。
+        # 兼容两种布局：优先 post 目录顶层，否则取最新版本子目录。
         manifest_path = pd / "manifest.json"
+        if not manifest_path.exists():
+            version_manifests = sorted(pd.glob("*/manifest.json"))
+            if version_manifests:
+                manifest_path = version_manifests[-1]
         if not manifest_path.exists():
             issues.append(f"{pd.name}: missing manifest.json")
             continue
@@ -42,5 +49,6 @@ def gate_produce(task_id: str, batch_id: str, content_type: str) -> list[str]:
             issues.append(f"{pd.name}: missing storySpine")
         if not manifest.get("sourceUrls"):
             issues.append(f"{pd.name}: missing sourceUrls")
+    issues.extend(verify_posts_root(posts_dir, task_id=task_id, batch_id=batch_id))
 
     return issues

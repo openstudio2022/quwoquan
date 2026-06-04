@@ -60,7 +60,7 @@ def test_build_pack_aggregates_and_protocol():
     assert pack["refCount"] == 2
     for item in pack["items"]:
         assert item["hasPack"] is True
-        assert item["articleOut"].endswith(".article.md")
+        assert item["articleOut"].endswith("/article.md")
         assert item["styleFamily"] == "实用攻略风"
 
 
@@ -75,7 +75,7 @@ def test_render_prompt_has_diversity_and_writeback_paths():
     _prepare(refs)
     prompt = render_batch_prompt(build_batch_pack(TASK, BATCH, 1, refs))
     assert "跨篇" in prompt
-    assert "九寨沟.article.md" in prompt and "都江堰.article.md" in prompt
+    assert "九寨沟/article.md" in prompt and "都江堰/article.md" in prompt
     assert "annotate-entities" in prompt
 
 

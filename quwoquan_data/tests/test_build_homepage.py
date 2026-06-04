@@ -57,6 +57,23 @@ def _materialize_entity(regions: list[str], seasons: list[str], *, page_chars: i
     write_json(data.entity_manifest(_DOMAIN, _ETYPE, _NAME), {"tagRefs": [], "assets": []})
 
 
+def _materialize_entity_with_asset() -> None:
+    _materialize_entity(["高原"], ["秋"])
+    data = task_data(_TASK)
+    entity_dir = data.entity_dir(_DOMAIN, _ETYPE, _NAME)
+    (entity_dir / "page.md").write_text(
+        "# 稻城亚丁\n\n" + ("稻" * 900) + "\n\n{asset://cover|wrapRight|雪山|width=45%}\n",
+        encoding="utf-8",
+    )
+    assets_dir = entity_dir / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    (assets_dir / "cover.jpg").write_bytes(b"fake-cover")
+    write_json(data.entity_manifest(_DOMAIN, _ETYPE, _NAME), {
+        "tagRefs": [],
+        "assets": [{"assetId": "cover", "fileName": "cover.jpg", "caption": "雪山"}],
+    })
+
+
 def test_prepare_writes_entity_page_contract():
     _seed_spec()
     handle_build(argparse.Namespace(task=_TASK, batch=_BATCH, stage="prepare"))
@@ -94,6 +111,36 @@ def test_validate_blocks_condition_profile_out_of_catalog():
     issues = validate_entity_pages(_TASK, load_spec(_TASK))
     assert any("regions 越界" in i for i in issues), issues
     assert any("seasons 越界" in i for i in issues), issues
+
+
+def test_validate_passes_page_asset_closure():
+    _seed_spec()
+    _materialize_entity_with_asset()
+    issues = validate_entity_pages(_TASK, load_spec(_TASK))
+    assert issues == [], issues
+
+
+def test_validate_blocks_dangling_page_asset():
+    _seed_spec()
+    _materialize_entity_with_asset()
+    data = task_data(_TASK)
+    (data.entity_dir(_DOMAIN, _ETYPE, _NAME) / "assets" / "cover.jpg").unlink()
+    issues = validate_entity_pages(_TASK, load_spec(_TASK))
+    assert any("asset file missing on disk" in i for i in issues), issues
+
+
+def test_validate_blocks_engineering_template_pollution():
+    _seed_spec()
+    _materialize_entity(["高原"], ["秋"], page_chars=900)
+    data = task_data(_TASK)
+    data.entity_page(_DOMAIN, _ETYPE, _NAME).write_text(
+        "# 稻城亚丁\n\n" + ("稻" * 900) + "\n\n## 为什么值得关注\n\n"
+        "稻城亚丁 属于「地点/景区」实体，是内容冷启动、搜索承接、推荐召回和小艺主动服务都需要识别的基础节点。"
+        "本页图片均来自同级 assets 目录，并在 manifest.json 中登记。\n",
+        encoding="utf-8",
+    )
+    issues = validate_entity_pages(_TASK, load_spec(_TASK))
+    assert any("engineering/template phrase" in i for i in issues), issues
 
 
 def _run_all() -> None:

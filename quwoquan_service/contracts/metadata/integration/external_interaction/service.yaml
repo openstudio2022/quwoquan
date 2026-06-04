@@ -1,0 +1,48 @@
+version: 1
+aggregate: ExternalInteraction
+
+response_list_key: items
+
+service:
+  name: integration-service
+  domain: integration
+  owner: backend-team
+  description: 外部可靠交互请求收口，统一短信、推送、一键登录与 webhook 的异步提交、回调和死信查询。
+
+api_routes:
+  - method: POST
+    path: /v1/integrations/external-requests
+    operation: SubmitExternalInteractionRequest
+    description: 提交外部交互异步请求；只表示可靠受理，不表示供应商已成功。
+    request_entity: ExternalInteractionRequest
+    response_entity: ExternalInteractionAccepted
+    success_status: 202
+
+  - method: GET
+    path: /v1/integrations/external-requests/{requestId}
+    operation: GetExternalInteractionRequest
+    description: 查询外部交互请求当前状态与归一化结果。
+    path_params: [requestId]
+    response_entity: ExternalInteractionRequest
+
+  - method: GET
+    path: /v1/integrations/external-requests/{requestId}/attempts
+    operation: ListExternalInteractionAttempts
+    description: 查询 provider attempt ledger，用于审计、SLO 与人工补偿定位。
+    path_params: [requestId]
+    response_entity: ExternalInteractionAttempt
+
+  - method: GET
+    path: /v1/integrations/external-requests/dead-letters
+    operation: ListExternalInteractionDeadLetters
+    description: 查询超过重试上限或不可恢复失败的外部交互死信。
+    query_params: [operation, status, limit]
+    response_entity: ExternalInteractionDeadLetter
+
+consumers:
+  - name: user-service
+    capabilities: [sms_otp_send, one_tap_phone_resolve]
+  - name: notification-service
+    capabilities: [push_delivery_send, webhook_deliver]
+  - name: platform-ops
+    capabilities: [provider_attempt_audit, dead_letter_compensation, pass_through_debt_audit]

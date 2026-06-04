@@ -148,7 +148,7 @@ retained: true
 
     # 会话模型创作正文写回草稿（generator=agent）。
     byline = public_byline_label(str(brief.get("templateId")), brief.get("creator") or {})
-    node_names = [str(n) for n in (pack.get("routeEntities") or []) if n] or ["九寨沟", "稻城亚丁", "色达", "新都桥"]
+    node_names = ["九寨沟", "稻城亚丁", "色达", "新都桥"]
     article = route_article(brief["titleHint"], byline, node_names, pack.get("mustIncludeFacts") or [])
     write_agent_draft(
         task_id,

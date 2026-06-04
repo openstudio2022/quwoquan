@@ -77,6 +77,201 @@ def work_item_wire(post: dict) -> dict:
     }
 
 
+def app_message_unread_count(notification: dict) -> int:
+    unread = notification.get("unreadCount")
+    if isinstance(unread, int):
+        return unread
+    messages = notification.get("appMessages", [])
+    if isinstance(messages, list):
+        return sum(1 for item in messages if isinstance(item, dict) and not bool(item.get("read")))
+    return 0
+
+
+def _iso_timestamp(hour_offset: int) -> str:
+    return f"2026-06-04T{hour_offset:02d}:00:00Z"
+
+
+def intersection_feed_payloads() -> dict[str, object]:
+    recommend = [
+        {
+            "dimension": "relationship",
+            "tagRefs": ["friend"],
+            "relationKind": "person",
+            "relationObjectId": "u_lin",
+            "label": "共同好友",
+            "sharedCount": 4,
+            "strength": 0.9,
+            "displayText": "林清越",
+            "actionType": "view",
+            "actionTargetId": "u_lin",
+            "source": "relationship",
+            "intersectionId": "ix_rel_1",
+            "intersectionClass": "fact",
+            "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "displayName": "林清越",
+            "freshAt": _iso_timestamp(8),
+            "expiresAt": "",
+        },
+        {
+            "dimension": "content",
+            "tagRefs": ["gold-invest"],
+            "relationKind": "circle",
+            "relationObjectId": "circle_gold_invest",
+            "label": "共看内容",
+            "sharedCount": 8,
+            "strength": 0.88,
+            "displayText": "黄金投资圈",
+            "actionType": "join",
+            "actionTargetId": "circle_gold_invest",
+            "source": "content",
+            "intersectionId": "ix_ct_1",
+            "intersectionClass": "fact",
+            "avatarUrl": "media/avatar/group/fixture_conv_group/v1/composite.png",
+            "displayName": "黄金投资圈",
+            "freshAt": _iso_timestamp(7),
+            "expiresAt": "",
+        },
+        {
+            "dimension": "interest",
+            "tagRefs": ["travel"],
+            "relationKind": "person",
+            "relationObjectId": "u_hiker",
+            "label": "可能同好",
+            "sharedCount": 0,
+            "strength": 0.61,
+            "displayText": "徒步旅人",
+            "actionType": "view",
+            "actionTargetId": "u_hiker",
+            "source": "interest",
+            "intersectionId": "ix_int_1",
+            "intersectionClass": "affinity",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "displayName": "徒步旅人",
+            "confidenceLabel": "推荐",
+            "modelReasonBucket": "travel_affinity",
+            "freshAt": _iso_timestamp(6),
+            "expiresAt": "",
+        },
+    ]
+    campus = [
+        {
+            "dimension": "identity",
+            "tagRefs": ["campus"],
+            "relationKind": "person",
+            "relationObjectId": "u_su",
+            "label": "同专业",
+            "sharedCount": 6,
+            "strength": 0.84,
+            "displayText": "苏黎",
+            "actionType": "view",
+            "actionTargetId": "u_su",
+            "source": "identity",
+            "intersectionId": "ix_campus_1",
+            "intersectionClass": "fact",
+            "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "displayName": "苏黎",
+            "freshAt": _iso_timestamp(5),
+            "expiresAt": "",
+        },
+        {
+            "dimension": "interest",
+            "tagRefs": ["music"],
+            "relationKind": "circle",
+            "relationObjectId": "circle_guitar",
+            "label": "同社团可能",
+            "sharedCount": 0,
+            "strength": 0.58,
+            "displayText": "吉他社",
+            "actionType": "join",
+            "actionTargetId": "circle_guitar",
+            "source": "interest",
+            "intersectionId": "ix_campus_2",
+            "intersectionClass": "affinity",
+            "avatarUrl": "media/avatar/group/fixture_conv_group/v1/composite.png",
+            "displayName": "吉他社",
+            "confidenceLabel": "推荐",
+            "modelReasonBucket": "circle_discovery",
+            "freshAt": _iso_timestamp(4),
+            "expiresAt": "",
+        },
+    ]
+    travel = [
+        {
+            "dimension": "location",
+            "tagRefs": ["travel"],
+            "relationKind": "place",
+            "relationObjectId": "hp_dali",
+            "label": "同目的地",
+            "sharedCount": 7,
+            "strength": 0.81,
+            "displayText": "大理",
+            "actionType": "view",
+            "actionTargetId": "hp_dali",
+            "source": "location",
+            "intersectionId": "ix_travel_1",
+            "intersectionClass": "fact",
+            "avatarUrl": "media/image/post/fixture_photo_001/v1/cover.png",
+            "displayName": "大理",
+            "freshAt": _iso_timestamp(3),
+            "expiresAt": "",
+        },
+        {
+            "dimension": "interest",
+            "tagRefs": ["hiking"],
+            "relationKind": "person",
+            "relationObjectId": "u_hiker",
+            "label": "可能同好",
+            "sharedCount": 0,
+            "strength": 0.55,
+            "displayText": "徒步旅人",
+            "actionType": "view",
+            "actionTargetId": "u_hiker",
+            "source": "interest",
+            "intersectionId": "ix_travel_2",
+            "intersectionClass": "affinity",
+            "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "displayName": "徒步旅人",
+            "confidenceLabel": "推荐",
+            "modelReasonBucket": "travel_affinity",
+            "freshAt": _iso_timestamp(2),
+            "expiresAt": "",
+        },
+    ]
+    inbox = recommend + campus + travel
+    dimension_labels = {
+        "identity": "身份",
+        "location": "足迹",
+        "content": "内容",
+        "relationship": "关系",
+        "interest": "兴趣",
+    }
+    counts: dict[str, int] = {}
+    for item in inbox:
+        dimension = str(item.get("dimension") or "")
+        counts[dimension] = counts.get(dimension, 0) + 1
+    return {
+        "recommend": recommend,
+        "campus": campus,
+        "travel": travel,
+        "inbox": inbox,
+        "summary": {
+            "totalCount": len(inbox),
+            "totalNewCount": len(inbox),
+            "dimensions": [
+                {
+                    "dimension": key,
+                    "label": label,
+                    "count": counts.get(key, 0),
+                    "newCount": counts.get(key, 0),
+                }
+                for key, label in dimension_labels.items()
+                if counts.get(key, 0) > 0
+            ],
+            "generatedAt": "2026-06-04T10:00:00Z",
+        },
+    }
+
+
 class AssistantBetaGateway(BaseHTTPRequestHandler):
     assistant_upstream_host: str = "127.0.0.1"
     assistant_upstream_port: int = 18087
@@ -242,9 +437,10 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         integration = seed_set("integration/test_fixtures/scenarios/integration_scenarios.json", "location_poi_core")
         notification = seed_set("notification/test_fixtures/scenarios/notification_scenarios.json", "notification_core")
         rtc = seed_set("rtc/test_fixtures/scenarios/rtc_scenarios.json", "rtc_core")
+        intersections = intersection_feed_payloads()
+        params = parse_qs(query)
 
         if path == "/v1/content/feed":
-            params = parse_qs(query)
             items = list(content.get("posts", []))
             identity = (params.get("identity") or [""])[0]
             content_type = (params.get("type") or [""])[0]
@@ -253,6 +449,24 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 items = [p for p in items if (p.get("identity") or p.get("contentIdentity")) == identity]
             if content_type:
                 items = [p for p in items if (p.get("type") or p.get("contentType")) == content_type]
+            if limit_raw.isdigit():
+                items = items[: int(limit_raw)]
+            return {"items": items}
+        if path == "/v1/content/feed/intersections":
+            channel = ((params.get("channel") or ["recommend"])[0] or "recommend").strip()
+            limit_raw = (params.get("limit") or ["4"])[0]
+            items = list(intersections.get(channel, intersections["recommend"]))
+            if limit_raw.isdigit():
+                items = items[: int(limit_raw)]
+            return {"items": items}
+        if path == "/v1/content/intersections/summary":
+            return intersections["summary"]
+        if path == "/v1/content/intersections":
+            dimension = ((params.get("dimension") or [""])[0] or "").strip()
+            limit_raw = (params.get("limit") or ["50"])[0]
+            items = list(intersections["inbox"])
+            if dimension:
+                items = [item for item in items if item.get("dimension") == dimension]
             if limit_raw.isdigit():
                 items = items[: int(limit_raw)]
             return {"items": items}
@@ -265,6 +479,10 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 }
             }
         if path == "/v1/content/behaviors":
+            return {"accepted": True}
+        if path == "/v1/content/intersections/visit":
+            return {"accepted": True}
+        if path == "/v1/content/intersections/exposure":
             return {"accepted": True}
         if path.startswith("/v1/content/profile-subjects/") and path.endswith("/posts"):
             profile_subject_id = path.split("/")[-2]
@@ -376,7 +594,21 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         if path == "/v1/integration/locations/pois":
             return {"items": integration.get("pois", [])}
         if path == "/v1/app-messages":
-            return {"items": notification.get("appMessages", []), "unreadCount": notification.get("unreadCount", 0)}
+            return {
+                "items": notification.get("appMessages", []),
+                "unreadCount": app_message_unread_count(notification),
+            }
+        if path == "/v1/app-messages/unread-count" or path == "/v1/notifications/unread-count":
+            return {"unreadCount": app_message_unread_count(notification)}
+        if path.startswith("/v1/app-messages/") and path.endswith("/ack"):
+            message_id = path.split("/")[-2]
+            return self._app_message_action_wire(notification, message_id, read=None)
+        if path.startswith("/v1/app-messages/") and path.endswith("/read"):
+            message_id = path.split("/")[-2]
+            return self._app_message_action_wire(notification, message_id, read=True)
+        if path.startswith("/v1/app-messages/") and path.count("/") == 3:
+            message_id = path.split("/")[-1]
+            return self._app_message_action_wire(notification, message_id, read=None)
         if path == "/v1/rtc/calls":
             return {"items": rtc.get("sessions", []), "participants": rtc.get("participants", [])}
         if path == "/v1/ops/events":
@@ -384,6 +616,27 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         if path == "/v1/ops/visits":
             return {"accepted": True}
         return None
+
+    @staticmethod
+    def _app_message_action_wire(
+        notification: dict,
+        message_id: str,
+        *,
+        read: bool | None,
+    ) -> dict:
+        messages = notification.get("appMessages", [])
+        if not isinstance(messages, list):
+            return {}
+        for item in messages:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("messageId") or "") != message_id:
+                continue
+            payload = copy.deepcopy(item)
+            if read is not None:
+                payload["read"] = read
+            return payload
+        return {}
 
     def _send_json(self, payload: object) -> None:
         raw = json.dumps(self._rewrite_media_urls(payload), ensure_ascii=False).encode("utf-8")

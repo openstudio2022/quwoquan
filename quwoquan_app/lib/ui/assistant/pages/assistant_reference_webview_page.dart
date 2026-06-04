@@ -186,49 +186,29 @@ class _ReferenceLoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final fg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final muted = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
     return Center(
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              CupertinoIcons.exclamationmark_triangle,
-              size: AppSpacing.iconLarge + AppSpacing.sm,
-              color: muted.withValues(alpha: 0.85),
+        child: AppSectionErrorCard(
+          semantic: UiErrorSemantic(
+            category: UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+            title: '参考网页暂时没打开',
+            message: host.trim().isNotEmpty
+                ? host.trim()
+                : UITextConstants.contentLoadSoftFailed,
+            primaryAction: const UiErrorAction(
+              type: UiErrorActionType.retry,
+              label: UITextConstants.tryAgain,
             ),
-            SizedBox(height: AppSpacing.sm),
-            Text(
-              UITextConstants.loadFailed,
-              style: TextStyle(
-                fontSize: AppTypography.lg,
-                fontWeight: FontWeight.w600,
-                color: fg,
-              ),
-            ),
-            SizedBox(height: AppSpacing.xs),
-            Text(
-              host.trim().isNotEmpty
-                  ? host.trim()
-                  : UITextConstants.assistantReferenceSectionTitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: AppTypography.sm, color: muted),
-            ),
-            SizedBox(height: AppSpacing.md),
-            CupertinoButton.filled(
-              onPressed: onRetry,
-              child: Text(UITextConstants.retry),
-            ),
-          ],
+          ),
+          margin: EdgeInsets.zero,
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              onRetry();
+            }
+          },
         ),
       ),
     );

@@ -113,22 +113,29 @@ api_routes:
   - method: GET
     path: /v1/content/posts/{postId}/comments
     operation: ListComments
-    description: 评论列表（支持 hot/latest 排序）
+    description: 评论列表（支持 recommended/latest/most_liked 排序；一级评论可携带 replyPreview 与 replyNextCursor）
     query_params: [sort, cursor, limit]
     response_entity: Comment
 
   - method: POST
     path: /v1/content/posts/{postId}/comments
     operation: CreateComment
-    description: 发表评论
+    description: 发表评论或回复；replyToCommentId 可选，服务端规范化 parentCommentId
     request_entity: Comment
-    writable_fields: [content, replyToCommentId, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    writable_fields: [content, replyToCommentId, attachmentMediaIds, mentions, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
     security:
       auth_mode: required
       principal: owner
       token_transport: bearer
       anonymous_policy: deny
       visibility: private
+
+  - method: GET
+    path: /v1/content/posts/{postId}/comments/{commentId}/replies
+    operation: ListCommentReplies
+    description: 二级回复独立分页；默认 limit 取 sys.content.comment.reply_expand_page_size
+    query_params: [cursor, limit]
+    response_entity: Comment
 
   - method: DELETE
     path: /v1/content/posts/{postId}/comments/{commentId}
@@ -142,15 +149,23 @@ api_routes:
       visibility: private
 
   - method: POST
+    path: /v1/content/comments/{commentId}/reaction
+    operation: ReactToComment
+    description: 评论赞踩三态反应；body.reaction 为 like/dislike/none，like 与 dislike 互斥
+    request_entity: Comment
+    writable_fields: [viewerReaction]
+    auth: required
+
+  - method: POST
     path: /v1/content/comments/{commentId}/like
     operation: LikeComment
-    description: 评论点赞（幂等，Redis SISMEMBER 去重 + INCR 计数 → 异步刷盘）
+    description: 评论点赞兼容薄包装；等价 ReactToComment(reaction=like)
     auth: required
 
   - method: DELETE
     path: /v1/content/comments/{commentId}/like
     operation: UnlikeComment
-    description: 取消评论点赞（幂等）
+    description: 取消评论点赞兼容薄包装；等价 ReactToComment(reaction=none)
     auth: required
 
   - method: GET
@@ -314,6 +329,12 @@ api_routes:
     path: /v1/content/posts/{postId}/media:bind
     operation: BindMediaAssetsToPost
     description: 将 draft/cold_start 素材绑定到帖子，供 Markdown 长文发布和回读使用
+    auth: required
+
+  - method: POST
+    path: /v1/content/comments/{commentId}/media:bind
+    operation: BindMediaAssetsToComment
+    description: 将 comment_attachment 素材绑定到评论，供图片评论回显与审核追踪
     auth: required
 
   - method: POST

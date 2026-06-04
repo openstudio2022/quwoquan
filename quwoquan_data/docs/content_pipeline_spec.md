@@ -23,8 +23,23 @@
 
 ### post 最小发布契约（manifest.json）
 
-只保留发布/渲染/出处必需字段：`topicId/contentType/entityRefs/tagRefs/conditionContext/sourceUrls/assets/template/carrier/generator/generatorModel/citedSourceRefs/reviewDecision/articleMarkdown*/articleAssetManifest/articleRenderProfile/publish*`。
-中间态（`storySpine/sourceQuality/relatedSearchPlan/evidenceBundle/sourcePaths`）落 `produce_trace.json`，不进发布契约。
+只保留发布/渲染/出处必需字段：`topicId/contentType/entityRefs/tagRefs/conditionContext/sourceUrls/assets/template/carrier/generator/generatorModel/citedSourceRefs/reviewDecision/articleMarkdown*/articleAssetManifest/articleRenderProfile/publish*/storySpine/sourceTaskId/sourceBatchId`。
+中间态（`sourceQuality/relatedSearchPlan/evidenceBundle/sourcePaths`）不进发布契约；最终 post 只保留最小 `provenance.json`，用于追责闭环。
+
+### 阶段产物最小契约
+
+`runtime/tasks/{task}/batches/{batch}/...` 是工程过程目录，默认可重建；进入模型上下文或高频报告的文件必须瘦身：
+
+- `download/inputs/source_plan/*.json`：人工或工具给定 source 列表，保留；这是离线复跑入口。
+- `download/sources/**`：原文、图片与 `source.quality.json`，保留；review 事实回溯和图片门会读取。
+- `produce/drafts/{ref}/writing_pack.json`：只保留 `ref/kind/title/byline/carrier/templateId/wordCount/forbiddenPhrases/mustIncludeFacts/conditionContext/sectionIntents/narrativeContract/styleFamily/evidencePoints/assets/sopExampleRef`；SOP 全文、opening guidance、source 明细从真相源即时读取，不落包。
+- `produce/drafts/{ref}/prompt.md`、`article.md`、`draft_meta.json`：保留；分别是模型输入、人写正文和生成出处。
+- `produce/results/{quality_analysis,compose,review,review_gate,repair_report}/*.json`：保留最小 envelope；`review` 落盘只存 decision/issues/check pass 状态，完整诊断留在 `review_gate/repair_report`。
+- `produce/review/{ledger,entities}/*.json`：保留；这是 human-in-loop 裁决和关联实体 sidecar 真相源。
+- `produce/posts/{type}/{angle}/{ref}/{version}/`：保留；这是 materialize 成品包，必须包含 `article.md/manifest.json/provenance.json/assets/` 与可选 `review/` sidecar。
+- `publish/{posts,entities,tags,index,sample_bundles,env_releases}`：保留；这是发布主线和环境同步输入。
+
+可清理原则：`assistant_tasks/`、过期 `results/*_gate`、失败批次草稿、可从 source/brief 重建的中间分析明细均不进入 post 包；需要审计时从 task/batch 源目录重算。
 
 ## 3. Human-in-loop 标注账本（唯一发布态真相源）
 
@@ -51,6 +66,8 @@ review 写 `produce/review/ledger/{ref}.json` 与 `entities/{ref}.json`；materi
 ## 5. 一键发布 + 按环境采样 + 服务侧灌库
 
 `qwq-data ship`：promote（task/release→publish）→ 重建 lookup 索引 → 按环境采样写 sample bundle → 更新 `publish_meta.lastShip` →（可选 `--import`）调用服务侧 importer 灌库。
+
+环境发布必须同时生成 `publish/env_releases/{releaseId}/{env}.json` 与 `consistency-preflight-{env}.json`。上线级 apply、事务边界、回滚和四层验证见 [`environment_data_release_runbook.md`](environment_data_release_runbook.md)。
 
 ### 按环境采样（确定性）
 
@@ -85,6 +102,7 @@ bash quwoquan_service/scripts/content/run_content_import_mongo_test.sh
 | manifest 最小化 + 账本/实体 sidecar + 关联实体主页 | `tests/test_hitl_pipeline.py` |
 | annotate CLI + 发布门 | `tests/test_annotate_publish_filter.py` |
 | 确定性采样 + ship e2e | `tests/test_ship_sampling.py` |
+| 环境 release contract + 引用闭包 + 生产硬删除审批门 | `tests/test_data_release_consistency.py` |
 | 图文混合编排门 | `tests/test_mixed_layout_gate.py` |
 | 端到端 pilot 全绿 | `tests/test_verify_pilot_gwt.py` |
 | 服务侧 importer 加载 | `quwoquan_service/services/content-service/cmd/import/loader_test.go` |

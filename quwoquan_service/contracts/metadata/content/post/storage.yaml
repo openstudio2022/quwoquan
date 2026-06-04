@@ -44,7 +44,9 @@ collections:
       - { name: idx_comments_post_created, keys: { postId: 1, createdAt: -1 } }
       - { name: idx_comments_author, keys: { authorId: 1, createdAt: -1 } }
       - { name: idx_comments_reply, keys: { replyToCommentId: 1 }, sparse: true }
+      - { name: idx_comments_parent_created, keys: { postId: 1, parentCommentId: 1, createdAt: 1 }, sparse: true, description: "二级回复展开分页索引" }
       - { name: idx_comments_hot, keys: { postId: 1, likeCount: -1, createdAt: -1 }, description: "热评排序索引" }
+      - { name: idx_comments_recommended, keys: { postId: 1, recommendedScore: -1, createdAt: -1 }, sparse: true, description: "默认 recommended 排序索引" }
       - { name: idx_comments_homepage_created, keys: { primaryHomepageId: 1, createdAt: -1 }, sparse: true }
       - { name: idx_comments_canonical_entity, keys: { canonicalEntityId: 1, createdAt: -1 }, sparse: true }
     search_indexes:
@@ -57,6 +59,8 @@ collections:
     indexes:
       - { name: idx_media_post, keys: { postId: 1 } }
       - { name: idx_media_status, keys: { status: 1, createdAt: -1 } }
+      - { name: idx_media_sha256, keys: { sha256: 1 }, sparse: true }
+      - { name: idx_media_object_key, keys: { objectKey: 1 }, unique: true, sparse: true }
 
   content_reactions:
     entity: ContentReaction
@@ -120,14 +124,30 @@ redis_cache:
     ttl_seconds: 300
     type: sorted_set
     description: 热帖热评 Top-N 缓存（score = hotScore，member = commentId）
-    invalidate_on: [CommentCreated, CommentLiked]
+    invalidate_on: [CommentCreated, CommentReacted, CommentDeleted]
+
+  - key: "comment_recommended:{postId}"
+    ttl_seconds: 300
+    type: sorted_set
+    description: 默认推荐评论缓存（score = recommendedScore，member = commentId）
+    invalidate_on: [CommentCreated, CommentReacted, CommentDeleted]
 
   - key: "comment_like:{commentId}"
     ttl_seconds: null
     type: set
     description: 评论点赞用户集（SISMEMBER 去重）
 
+  - key: "comment_dislike:{commentId}"
+    ttl_seconds: null
+    type: set
+    description: 评论点踩用户集（与点赞互斥）
+
   - key: "counter:comment:{commentId}:like"
     ttl_seconds: null
     type: string
     description: 评论赞数计数器（INCR + 异步刷盘）
+
+  - key: "counter:comment:{commentId}:dislike"
+    ttl_seconds: null
+    type: string
+    description: 评论踩数计数器（INCR + 异步刷盘）

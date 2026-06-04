@@ -1,7 +1,7 @@
 """单会话多实体批处理编排 ——「日产 10 万级」的吞吐路径（不引入外部模型，仍是会话 agent）。
 
 评审痛点：逐实体 prepare→创作→review 往返太慢。批处理把 N 个实体的写作契约聚合成一份
-batch prompt，让同一个会话 agent 在一次会话内产出 N 篇，分别写回各 drafts/{ref}.article.md，
+batch prompt，让同一个会话 agent 在一次会话内产出 N 篇，分别写回各 drafts/{ref}/article.md，
 再统一过 annotate-entities / review 门 + 结构化记录。
 
 CLI 仍不拼接任何正文：只聚合 per-ref writing_pack 摘要 + 回写协议 + 跨篇多样性约束。
@@ -38,9 +38,9 @@ def build_batch_pack(task_id: str, batch_id: str, seq: int, group_refs: Sequence
                 "title": pack.get("title"),
                 "styleFamily": pack.get("styleFamily"),
                 "mustIncludeFacts": list(pack.get("mustIncludeFacts") or [])[:6],
-                "writingPack": f"{ref}.writing_pack.json",
-                "prompt": f"{ref}.prompt.md",
-                "articleOut": f"{ref}.article.md",
+                "writingPack": f"{ref}/writing_pack.json",
+                "prompt": f"{ref}/prompt.md",
+                "articleOut": f"{ref}/article.md",
                 "hasPack": bool(pack),
             }
         )

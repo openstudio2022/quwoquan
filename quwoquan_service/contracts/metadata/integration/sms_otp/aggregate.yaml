@@ -1,0 +1,26 @@
+version: 1
+domain: integration
+aggregate_root: SmsOtp
+
+description: |
+  手机验证码短信外部交互聚合。user-service 拥有 OTP challenge 生命周期，
+  integration-service 只负责短信 provider 适配、回执归一与审计。
+
+storage_backend: mongodb
+cache_layer: redis
+cache_ttl_seconds: 60
+
+capabilities:
+  - reliable_async
+  - provider_fallback
+  - callback_enabled
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: services/integration-service/internal/domain/sms_otp/model
+  repository: services/integration-service/internal/domain/sms_otp/repository
+  application: services/integration-service/internal/application/sms_otp
+  adapter_rest: services/integration-service/internal/adapters/http/sms_otp
+  adapter_event: services/integration-service/internal/adapters/mq/sms_otp

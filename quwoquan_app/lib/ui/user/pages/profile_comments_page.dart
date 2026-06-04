@@ -125,6 +125,38 @@ class _CommentsListView extends ConsumerWidget {
   final _ProfileCommentsTabKind tab;
   final bool isDark;
 
+  UiErrorSemantic _resolvePageErrorSemantic(
+    BuildContext context,
+    Object error,
+  ) {
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+    return UiErrorSemantic(
+      category: resolved.category,
+      scope: resolved.scope,
+      title: UITextConstants.contentNotLoadedYet,
+      message: resolved.message,
+      secondaryMessage: resolved.secondaryMessage,
+      primaryAction:
+          resolved.primaryAction ??
+          const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
+          ),
+      secondaryAction: resolved.secondaryAction,
+      dismissible: resolved.dismissible,
+      sourceCode: resolved.sourceCode,
+      failureKind: resolved.failureKind,
+      recoveryAction: resolved.recoveryAction,
+      presentation: resolved.presentation,
+      tone: resolved.tone,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = tab == _ProfileCommentsTabKind.sent
@@ -134,23 +166,15 @@ class _CommentsListView extends ConsumerWidget {
     if (state.isLoading && state.comments.isEmpty) {
       return const Center(child: CupertinoActivityIndicator());
     }
-    if (state.error != null && state.comments.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(UITextConstants.loadFailed,
-                style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: AppColorsFunctional.getColor(
-                        isDark, ColorType.foregroundSecondary))),
-            SizedBox(height: AppSpacing.md),
-            CupertinoButton(
-              onPressed: () => _load(ref),
-              child: Text(UITextConstants.retry),
-            ),
-          ],
-        ),
+    if (state.rawError != null && state.comments.isEmpty) {
+      return AppPageErrorState(
+        semantic: _resolvePageErrorSemantic(context, state.rawError!),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            _load(ref);
+          }
+        },
       );
     }
     if (state.comments.isEmpty) {

@@ -67,3 +67,23 @@ func TestRedisReadyIndexStandaloneStreamsClaimAck(t *testing.T) {
 		t.Fatalf("expected no messages after ack, got %#v", messages)
 	}
 }
+
+func TestRedisReadyIndexReclaimPendingNoopWhenUnsupported(t *testing.T) {
+	client := rtredis.NewMemoryClient()
+	index, err := NewRedisReadyIndex(RedisReadyIndexConfig{
+		Client: client,
+		Stream: "reliabletask:test:ready:reclaim",
+		Group:  "test-worker",
+		Queue:  "test",
+	})
+	if err != nil {
+		t.Fatalf("new ready index: %v", err)
+	}
+	messages, err := index.ReclaimPending(context.Background(), "worker-2", time.Second, 10)
+	if err != nil {
+		t.Fatalf("reclaim pending should no-op for unsupported client: %v", err)
+	}
+	if len(messages) != 0 {
+		t.Fatalf("messages = %#v, want empty", messages)
+	}
+}

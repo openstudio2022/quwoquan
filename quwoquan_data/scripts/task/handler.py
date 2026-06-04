@@ -2,6 +2,7 @@
 
 子命令：
   new        从层级参数脚手架 committed task.yaml + progress.json + notes.md
+  run        无人值守产线编排：按 DAG 跑 download→build→produce→ship（Agent checkpoint 暂停/resume）
   list       扫描全部 committed 任务总览（--tree 树状，--vertical 过滤）
   show       打印单任务 spec+progress+lock
   lint       校验任务规格（路径↔id、archetype scope、实体类型真相源、重复）
@@ -20,7 +21,9 @@ import sys
 
 from task import lint as lint_mod
 from task import ops
+from task import queue
 from task import store
+from task.run import register_run_parser
 
 
 def _split(arg: str | None) -> list[str]:
@@ -312,6 +315,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pp.add_argument("--orphans", action="store_true", help="清除 sourceTaskId 为空的孤儿内容（必填确认）")
     pp.add_argument("--reindex", action="store_true", help="清除后重建 publish lookup 索引")
     pp.set_defaults(handler=handle_prune_publish)
+
+    register_run_parser(sub)
+    queue.register_queue_parser(sub)
 
     def _dispatch(args: argparse.Namespace) -> None:
         if not getattr(args, "task_command", None):

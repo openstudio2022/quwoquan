@@ -14,3 +14,12 @@ redis:
     mode: standalone
     addr: "127.0.0.1:6379"
     db: 0
+
+integration:
+  external_interaction_base_url: "https://integration-service.local"
+  sms_otp:
+    pass_through_enabled: true
+    pass_through_debt_id: TECHDEBT-SMS-OTP-PASSTHROUGH-001
+    pass_through_owner: backend-team
+    pass_through_expires_at: "2026-08-31"
+    debug_reveal_enabled: true

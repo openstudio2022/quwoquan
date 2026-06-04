@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: "${LOCAL_GAMMA_POSTGRES_IMAGE:-docker.io/library/postgres:16-alpine}"
@@ -8,7 +6,7 @@ services:
       POSTGRES_PASSWORD: quwoquan
       POSTGRES_DB: quwoquan
     ports:
-      - "${LOCAL_GAMMA_POSTGRES_PORT:-55432}:5432"
+      - "${LOCAL_GAMMA_POSTGRES_PORT:-19400}:5432"
     volumes:
       - local-gamma-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +19,7 @@ services:
     image: "${LOCAL_GAMMA_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
     command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
-      - "${LOCAL_GAMMA_MONGO_PORT:-37017}:27017"
+      - "${LOCAL_GAMMA_MONGO_PORT:-19410}:27017"
     volumes:
       - local-gamma-mongo:/data/db
     healthcheck:
@@ -52,7 +50,7 @@ services:
     image: "${LOCAL_GAMMA_REDIS_IMAGE:-docker.io/library/redis:7.2-alpine}"
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${LOCAL_GAMMA_REDIS_PORT:-36379}:6379"
+      - "${LOCAL_GAMMA_REDIS_PORT:-19420}:6379"
     volumes:
       - local-gamma-redis:/data
     healthcheck:
@@ -80,9 +78,9 @@ services:
       PYTHONUNBUFFERED: "1"
       MODEL_CACHE_DIR: /app/cache
     ports:
-      - "${LOCAL_GAMMA_REC_MODEL_PORT:-18090}:8000"
+      - "${LOCAL_GAMMA_REC_MODEL_PORT:-19240}:8000"
     volumes:
-      - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
+      - ../state/local/gamma/config-root:/etc/qwq-config:ro
       - local-gamma-model-cache:/app/cache
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
@@ -120,9 +118,9 @@ services:
       rec-model-service:
         condition: service_healthy
     ports:
-      - "${LOCAL_GAMMA_CONTENT_PORT:-18083}:18080"
+      - "${LOCAL_GAMMA_CONTENT_PORT:-19220}:18080"
     volumes:
-      - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
+      - ../state/local/gamma/config-root:/etc/qwq-config:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -166,10 +164,10 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "${LOCAL_GAMMA_CHAT_PORT:-18081}:18081"
+      - "${LOCAL_GAMMA_CHAT_PORT:-19200}:18081"
     volumes:
-      - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
-      - ../artifacts/local-gamma/media:/var/lib/quwoquan/chat-media
+      - ../state/local/gamma/config-root:/etc/qwq-config:ro
+      - ../state/local/gamma/media:/var/lib/quwoquan/chat-media
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -205,10 +203,10 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "${LOCAL_GAMMA_USER_PORT:-18082}:18082"
+      - "${LOCAL_GAMMA_USER_PORT:-19210}:18082"
     volumes:
       - .:/workspace
-      - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
+      - ../state/local/gamma/config-root:/etc/qwq-config:ro
       - local-gamma-go-cache:/go
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1"]
@@ -247,9 +245,9 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
+      - ../state/local/gamma/config-root:/etc/qwq-config:ro
     ports:
-      - "${LOCAL_GAMMA_ASSISTANT_PORT:-18087}:18087"
+      - "${LOCAL_GAMMA_ASSISTANT_PORT:-19230}:18087"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -282,11 +280,11 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-18086}:18086"
-      - "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19010}:18086"
+      - "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:18086"
+      - "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}:18086"
     volumes:
       - .:/workspace
-      - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
+      - ../state/local/gamma/config-root:/etc/qwq-config:ro
       - local-gamma-go-cache:/go
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1"]
@@ -318,10 +316,10 @@ services:
         condition: service_completed_successfully
     volumes:
       - .:/workspace
-      - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
+      - ../state/local/gamma/config-root:/etc/qwq-config:ro
       - local-gamma-go-cache:/go
     ports:
-      - "${LOCAL_GAMMA_TAG_PORT:-18092}:18092"
+      - "${LOCAL_GAMMA_TAG_PORT:-19270}:18092"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18092/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -352,8 +350,8 @@ services:
       - "${LOCAL_GAMMA_HTTPS_PORT:-443}:443"
       - "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019"
     volumes:
-      - ../artifacts/local-gamma/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../artifacts/local-gamma/media:/srv/media:ro
+      - ../state/local/gamma/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../state/local/gamma/media:/srv/media:ro
       - local-gamma-caddy-data:/data
       - local-gamma-caddy-config:/config
     healthcheck:

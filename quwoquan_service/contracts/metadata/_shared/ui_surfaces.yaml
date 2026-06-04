@@ -107,6 +107,7 @@ surfaces:
     description: 私助半弹层入口
     operation_ids:
       - ReportPageContext
+      - GetEntryPersonalization
       - GetSuggestedActions
 
   - id: personalAssistantDialog
@@ -125,6 +126,7 @@ surfaces:
       - ReportInteractionEvent
       - ReportScorecard
       - ReportPageContext
+      - GetEntryPersonalization
       - GetSuggestedActions
       - GetPolicy
       - ListSkills

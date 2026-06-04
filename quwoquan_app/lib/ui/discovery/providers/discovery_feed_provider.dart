@@ -16,23 +16,45 @@ class DiscoveryFeedState {
     this.seenItemIds = const [],
     this.nextCursor,
     this.isLoading = false,
-    this.error,
+    this.blockingError,
+    this.staleDataError,
+    this.appendError,
   });
 
   final List<PostBaseDto> items;
   final List<String> seenItemIds;
   final String? nextCursor;
   final bool isLoading;
-  final String? error;
+  final Object? blockingError;
+  final Object? staleDataError;
+  final Object? appendError;
 
   bool get hasMore => nextCursor != null && nextCursor!.isNotEmpty;
+  Object? get rawError => blockingError ?? staleDataError ?? appendError;
+  String? get error => errorMessage;
+  String? get errorMessage {
+    final currentError = rawError;
+    if (currentError == null) {
+      return null;
+    }
+    if (currentError is String && currentError.trim().isNotEmpty) {
+      return currentError.trim();
+    }
+    final message = runtimeErrorDisplayMessage(currentError).trim();
+    if (message.isNotEmpty) {
+      return message;
+    }
+    return null;
+  }
 
   DiscoveryFeedState copyWith({
     List<PostBaseDto>? items,
     List<String>? seenItemIds,
     Object? nextCursor = _unset,
     bool? isLoading,
-    Object? error = _unset,
+    Object? blockingError = _unset,
+    Object? staleDataError = _unset,
+    Object? appendError = _unset,
   }) {
     return DiscoveryFeedState(
       items: items ?? this.items,
@@ -41,7 +63,13 @@ class DiscoveryFeedState {
           ? this.nextCursor
           : nextCursor as String?,
       isLoading: isLoading ?? this.isLoading,
-      error: identical(error, _unset) ? this.error : error as String?,
+      blockingError: identical(blockingError, _unset)
+          ? this.blockingError
+          : blockingError,
+      staleDataError: identical(staleDataError, _unset)
+          ? this.staleDataError
+          : staleDataError,
+      appendError: identical(appendError, _unset) ? this.appendError : appendError,
     );
   }
 }
@@ -137,10 +165,23 @@ class DiscoveryFeedMapNotifier
       };
     } catch (e, st) {
       developer.log('load error: $e', name: 'DiscoveryFeed', error: e, stackTrace: st);
+      if (currentValue != null && currentValue.items.isNotEmpty) {
+        state = {
+          ...state,
+          channelId: AsyncData(
+            currentValue.copyWith(
+              isLoading: false,
+              staleDataError: e,
+              blockingError: null,
+            ),
+          ),
+        };
+        return;
+      }
       state = {
         ...state,
         channelId: AsyncData(
-          DiscoveryFeedState(error: runtimeErrorDisplayMessage(e)),
+          DiscoveryFeedState(blockingError: e),
         ),
       };
     }
@@ -157,7 +198,13 @@ class DiscoveryFeedMapNotifier
     }
     state = {
       ...state,
-      channelId: AsyncData(value.copyWith(isLoading: true, error: null)),
+      channelId: AsyncData(
+        value.copyWith(
+          isLoading: true,
+          appendError: null,
+          staleDataError: null,
+        ),
+      ),
     };
     try {
       final repo = ref.read(contentRepositoryProvider);
@@ -195,7 +242,8 @@ class DiscoveryFeedMapNotifier
             seenItemIds: mergedSeen,
             nextCursor: page.nextCursor,
             isLoading: false,
-            error: null,
+            appendError: null,
+            staleDataError: null,
           ),
         ),
       };
@@ -206,7 +254,7 @@ class DiscoveryFeedMapNotifier
         channelId: AsyncData(
           value.copyWith(
             isLoading: false,
-            error: runtimeErrorDisplayMessage(e),
+            appendError: e,
           ),
         ),
       };

@@ -1,8 +1,8 @@
 """结构化出处 provenance.json 红绿测试 ——「精简中间产物 + 统一回查入口 + 完整性门」。
 
 覆盖：
-- materialize 端到端产出 provenance.json，且 completeness 门全绿（agent/原始源/门结果齐全）。
-- provenance 分区齐全：final / agentInput / originalSources / evidenceSources / gateResults / intermediate。
+- materialize 端到端产出最小 provenance.json，且 completeness 门全绿。
+- provenance 只保留 final / agentInput / originalSources / gateResults / citedSourcePaths。
 - completeness 门：缺文件→missing；generator≠agent→报；originalSources 空→报；decision≠approved→报。
 - issues 强制门：无文件→报；digest 不一致→报；cited 源越出 originalSources→报。
 
@@ -105,18 +105,18 @@ def test_materialize_writes_complete_provenance():
     assert provenance_issues(post_dir, manifest) == []
 
 
-def test_provenance_partitions_present():
+def test_provenance_minimal_partitions_present():
     post_dir = _materialize_one()
     data = read_json(post_dir / "provenance.json")
     assert data["schemaVersion"] == PROVENANCE_SCHEMA
-    for section in ("final", "agentInput", "originalSources", "evidenceSources", "gateResults", "intermediate"):
+    for section in ("final", "agentInput", "originalSources", "gateResults", "citedSourcePaths"):
         assert section in data, section
+    for dropped in ("evidenceSources", "intermediate"):
+        assert dropped not in data
     assert data["final"]["generator"] == "agent"
     assert data["originalSources"], "原始数据源必须一一记录"
     assert data["gateResults"]["decision"] == "approved"
     assert "routeCoverage" in data["gateResults"]["checks"]
-    # 中间过程标注清楚、与最终结果分区。
-    assert "storySpine" in data["intermediate"]
 
 
 def test_missing_file_flagged():
@@ -132,10 +132,8 @@ def _write_provenance(post_dir: Path, *, digest: str, generator: str, originals,
         "final": {"generator": generator, "articleDigest": digest},
         "agentInput": {"title": "t"},
         "originalSources": originals,
-        "evidenceSources": {},
         "gateResults": {"decision": decision, "checks": {}},
         "citedSourcePaths": cited,
-        "intermediate": {},
     }
     write_json(post_dir / "provenance.json", payload)
 
@@ -183,7 +181,7 @@ def test_build_provenance_uses_meta_over_compose():
     # draft_meta 的 styleFamily 优先于 writing_pack。
     assert data["final"]["styleFamily"] == "旅途随笔风"
     assert data["final"]["openingStrategy"] == "scene_immersion"
-    assert data["agentInput"]["mustIncludeFacts"] == ["门票"]
+    assert "mustIncludeFacts" not in data["agentInput"]
 
 
 def _run_all() -> None:

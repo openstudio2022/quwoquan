@@ -4,11 +4,11 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
-/// 内容卡交集理由位（一行只读 displayText）。
+/// 内容卡交集理由位（一行只读交集点摘要）。
 ///
 /// 单列 / 多列 / 沉浸 viewer / 转发卡 / 内容详情页**同一口径**：
-/// - 只读消费 [IntersectionReason.displayText]，端不本地拼装交集句（G2）；
-/// - 取首条理由的 `displayText`（[primaryText] 为唯一口径真相源）；
+/// - 只读消费云侧 [IntersectionReason] 的交集点摘要，端不本地拼装事实（G2）；
+/// - 取首条理由的点数 + 证据短句（[primaryText] 为唯一口径真相源）；
 /// - 无来源 / 文案为空 → 不展示（[fromReasons] 返回 null，调用方据此不插入）。
 class IntersectionReasonChip extends StatelessWidget {
   const IntersectionReasonChip({
@@ -22,12 +22,21 @@ class IntersectionReasonChip extends StatelessWidget {
   final String text;
   final bool isDark;
 
-  /// 交集理由位口径真相源：取首条 `displayText`（trim）；
+  /// 交集理由位口径真相源：取首条交集点摘要；
   /// 空 / 无来源 → null（不展示）。所有承载交集理由位的 surface 必须经此函数解析。
   static String? primaryText(List<IntersectionReason>? reasons) {
     if (reasons == null || reasons.isEmpty) return null;
-    final text = reasons.first.displayText.trim();
-    return text.isEmpty ? null : text;
+    final reason = reasons.first;
+    final evidence = reason.displayText.trim();
+    final total = reason.totalPointCount;
+    if (total > 0) {
+      final countText =
+          reason.recommendedPointCount > 0 && reason.factPointCount == 0
+          ? '$total 个推荐交集点'
+          : '$total 个交集点';
+      return evidence.isEmpty ? countText : '$countText · $evidence';
+    }
+    return evidence.isEmpty ? null : evidence;
   }
 
   /// 便捷构造：无来源返回 null，调用方据此「不展示」，保证四口径一致。

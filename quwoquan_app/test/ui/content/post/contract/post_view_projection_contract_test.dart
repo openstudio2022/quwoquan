@@ -542,7 +542,7 @@ void main() {
             .where((node) => node.isFigure)
             .map((node) => node.imageUrl),
         contains(
-          'http://127.0.0.1:17100/media/image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+          'https://127.0.0.1:17100/media/image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
         ),
       );
       expect(r.pages, isNotEmpty);

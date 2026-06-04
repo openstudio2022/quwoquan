@@ -46,7 +46,7 @@ void main() {
 
     expect(find.text('西湖景区'), findsWidgets);
     expect(find.text('你和这里的交集'), findsOneWidget);
-    expect(find.text('问小趣'), findsOneWidget);
+    expect(find.text('从主页发内容'), findsOneWidget);
     expect(find.text('与你相关'), findsOneWidget);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -520));
     await tester.pumpAndSettle();
@@ -100,7 +100,7 @@ void main() {
     expect(repository.lastRecommendationTraceId, 'trace-1');
     expect(repository.lastExperimentBucket, 'A');
     expect(repository.lastRolloutCohort, 'city-hz');
-    expect(find.text('问小趣'), findsOneWidget);
+    expect(find.text('从主页发内容'), findsOneWidget);
   });
 }
 

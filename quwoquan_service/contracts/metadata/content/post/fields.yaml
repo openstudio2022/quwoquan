@@ -607,7 +607,7 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: 楼中楼
+        description: 被回复评论 id；回复二级评论时仍指向实际被回复项
 
       - name: replyToUserId
         type: string
@@ -616,6 +616,42 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: parentCommentId
+        type: ObjectId
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 二级回复归属的一级评论 id；一级评论为空，禁止形成三级楼中楼
+
+      - name: attachmentMediaIds
+        type: "[]ObjectId"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 评论图片附件媒体 ID 列表，assetScope=comment_attachment
+
+      - name: attachments
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 评论附件回显快照 [{mediaId,type,url,thumbnailUrl,width,height,moderationStatus}]
+
+      - name: mentions
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 结构化 @ 提及列表 [{subjectType,subjectId,displayName,rangeStart,rangeEnd}]
 
       - name: entityRefs
         type: "[]string"
@@ -682,6 +718,24 @@ entities:
         ops_exposure: read
         description: 回复数（用于回复折叠预览计数）
 
+      - name: replyPreview
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 一级评论随列表返回的二级回复预览，数量由 sys.content.comment.reply_preview_count 控制
+
+      - name: replyNextCursor
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 展开更多二级回复的不透明游标
+
       - name: likeCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
@@ -689,6 +743,34 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: dislikeCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: viewerReaction
+        type: enum
+        enum_ref: CommentReactionType
+        constraints: [NOT_NULL, DEFAULT_NONE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前 viewer 对评论的反应状态：none/like/dislike
+
+      - name: recommendedScore
+        type: float64
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: drop
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: recommended 排序的可解释分数快照，仅用于排序诊断
 
       - name: status
         type: enum
@@ -698,6 +780,33 @@ entities:
         api_exposure: read
         ops_exposure: read_write
         description: visible/deleted/hidden
+
+      - name: canDelete
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前 viewer 是否可删除该评论
+
+      - name: canReply
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前 viewer 是否可回复该评论
+
+      - name: canReport
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前 viewer 是否可举报该评论
 
       - name: createdAt
         type: timestamp

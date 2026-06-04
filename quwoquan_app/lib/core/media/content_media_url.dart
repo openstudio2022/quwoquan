@@ -14,10 +14,8 @@ String resolveContentMediaUrl(
   final candidates = resolveContentMediaUrlCandidates(
     raw,
     gatewayBaseUrl: gatewayBaseUrl ?? CloudRuntimeConfig.gatewayBaseUrl,
-    imageCdnBaseUrl:
-        imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
-    videoCdnBaseUrl:
-        videoCdnBaseUrl ?? CloudRuntimeConfig.mediaVideoCdnBaseUrl,
+    imageCdnBaseUrl: imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
+    videoCdnBaseUrl: videoCdnBaseUrl ?? CloudRuntimeConfig.mediaVideoCdnBaseUrl,
   );
   return candidates.isEmpty ? '' : candidates.first;
 }
@@ -79,8 +77,10 @@ String _normalizeBase(String raw) {
   if (value.isEmpty) {
     return '';
   }
-  final lower = value.toLowerCase();
-  if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      uri.host.isEmpty ||
+      (uri.scheme != 'https' && uri.scheme != 'http')) {
     return '';
   }
   return value.replaceFirst(RegExp(r'/+$'), '');
@@ -113,8 +113,13 @@ List<String> _resolveAbsoluteContentMediaUrlCandidates(
     imageCdnBaseUrl: imageCdnBaseUrl,
     videoCdnBaseUrl: videoCdnBaseUrl,
   );
-  if (_isPrivateDevHost(uri.host) || _shouldRewriteHttpToHttps(uri, path,
-      imageCdnBaseUrl: imageCdnBaseUrl, videoCdnBaseUrl: videoCdnBaseUrl)) {
+  if (_isPrivateDevHost(uri.host) ||
+      _shouldRewriteHttpToHttps(
+        uri,
+        path,
+        imageCdnBaseUrl: imageCdnBaseUrl,
+        videoCdnBaseUrl: videoCdnBaseUrl,
+      )) {
     return candidates.isEmpty ? <String>[source] : candidates;
   }
   return _uniqueNonEmpty(<String>[source, ...candidates]);

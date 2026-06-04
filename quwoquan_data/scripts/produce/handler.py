@@ -2,7 +2,7 @@
 
 正文由会话模型（Agent）创作，CLI 不再拼接任何句子：
   --stage compose-brief : 准备写作契约 writing_pack.json + prompt.md + 占位草稿（produce/drafts/）。
-  （人/Agent 据 prompt.md 创作正文写回 drafts/{ref}.article.md，generator=agent）
+  （人/Agent 据 prompt.md 创作正文写回 drafts/{ref}/article.md，generator=agent）
   --stage review        : 读 agent 草稿，过模板指纹/事实可回溯/出处三道门 + 质量门；--materialize 落地 approved。
 """
 from __future__ import annotations
@@ -81,9 +81,9 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
             f"[produce] single-session batches: {len(prepared_refs)} ref(s) → {len(groups)} batch prompt(s) "
             f"(size={batch_size}); see {batch_dir(task_id, batch_id)}"
         )
-        print("[produce] Next: 会话模型阅读 _batch/{seq}.batch_prompt.md，一会话产 N 篇分别写回各 {ref}.article.md。")
+        print("[produce] Next: 会话模型阅读 _batch/{seq}.batch_prompt.md，一会话产 N 篇分别写回各 {ref}/article.md。")
     else:
-        print("[produce] Next: 会话模型阅读 {ref}.prompt.md 与 {ref}.writing_pack.json 创作正文，写回 {ref}.article.md (generator=agent)。")
+        print("[produce] Next: 会话模型阅读 {ref}/prompt.md 与 {ref}/writing_pack.json 创作正文，写回 {ref}/article.md (generator=agent)。")
     print("[produce] 然后运行: qwq-data produce --task <T> --batch <B> --type article --stage review --materialize")
     return len(prepared_refs)
 

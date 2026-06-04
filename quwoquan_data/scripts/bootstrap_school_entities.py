@@ -1,3 +1,20 @@
+"""兼容薄壳：校园批量实体生成已迁入 quwoquan_data/verticals/campus/scripts。"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+DATA_ROOT = Path(__file__).resolve().parents[1]
+if str(DATA_ROOT) not in sys.path:
+    sys.path.insert(0, str(DATA_ROOT))
+if str(DATA_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(DATA_ROOT / "scripts"))
+
+from verticals.campus.scripts.bootstrap_school_entities import main  # noqa: E402
+
+
+if __name__ == "__main__":
+    main()
 """学校实体批量生成
 
 从 runtime/seed/school_catalog/ 的 ndjson 读取学校数据，

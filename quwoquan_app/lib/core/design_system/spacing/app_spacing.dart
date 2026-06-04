@@ -50,6 +50,33 @@ class AppSpacing {
   static const double webPcReadingMaxWidth = 820.0;
   static const double webPcRightRailWidth = 280.0;
   static const double webPcInstallCtaCardWidth = 260.0;
+  static const double webPcShellMaxWidth = 1320.0;
+  static const double webPcSearchMinWidth = 320.0;
+  static const double webPcSearchMaxWidth = 460.0;
+  static const double webPcWelcomeHeroHeight = 144.0;
+  static const double webPcWelcomeVisualDiameter = 88.0;
+  static const double webPcDownloadQrSize = 64.0;
+  static const double webPcCreateCardWidth = 260.0;
+  static const double webPcFeedCardWidth = 252.0;
+  static const double webPcHeroCardHeight = 320.0;
+  static const double webPcFeedCardImageHeight = 156.0;
+  static const double webPcContextTabSelectedIndicatorWidth = 20.0;
+  static const double webPcContextTabIndicatorHeight = 2.0;
+  static const double webPcHeroPinnedProgressDistance = 360.0;
+  static const double webPcHeroParallaxDistance = 32.0;
+  static const double webPcToolbarElevationBlurRadius = 18.0;
+  static const double webPcLoginSurfaceWidth = 440.0;
+  static const double webPcLoginSurfaceMaxHeight = 720.0;
+  static const double webPcLoginSurfaceBackdropBlur = 18.0;
+  static const double webPcLoginSurfaceInset = 40.0;
+  static const int webPcFeedPreviewItemLimit = 12;
+  static const Duration webPcContextTabSwitchDuration = Duration(
+    milliseconds: 180,
+  );
+  static const Duration webPcScrollToContentDuration = Duration(
+    milliseconds: 360,
+  );
+  static const Duration webPcLoginSurfaceDuration = Duration(milliseconds: 220);
 
   // ==================== 基础间距 ====================
   /// 极小间距: 4.0
@@ -132,6 +159,12 @@ class AppSpacing {
 
   /// 长文正文行高，适用于文章分页阅读场景
   static const double textLineHeightArticleBody = 1.82;
+
+  /// 辅助文案行高，适用于 footnote 级别的说明文本
+  static const double textLineHeightFootnote = 1.3;
+
+  /// 角标说明行高，适用于 caption 级别的短说明文本
+  static const double textLineHeightCaption = 1.25;
 
   /// 获取文案按钮内边距（按断点适配，不受容器约束）
   static EdgeInsets buttonPadding(BuildContext context, String size) {

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +10,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 final followingSubjectsProvider = FutureProvider<List<FollowingSubjectItem>>((
   ref,
@@ -323,10 +323,10 @@ class _FollowingSubjectAvatar extends StatelessWidget {
                   ),
                   size: AppSpacing.lg,
                 )
-              : CachedNetworkImage(
+              : AppCachedNetworkImage(
                   imageUrl: url,
                   fit: BoxFit.cover,
-                  errorWidget: (_, _, _) => Icon(
+                  errorWidget: Icon(
                     _fallbackIcon(item.subjectType),
                     color: AppColorsFunctional.getColor(
                       isDark,

@@ -47,6 +47,7 @@ run_service() {
   # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)
   bash quwoquan_service/scripts/runtime/verify_service_config_layout.sh
   bash quwoquan_service/scripts/runtime/verify_service_env_contract.sh
+  python3 quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
   python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
   bash quwoquan_service/scripts/deploy/verify_config_release_version_mapping.sh
   bash quwoquan_service/scripts/deploy/verify_config_image_compat.sh
@@ -73,6 +74,7 @@ run_app() {
   if command -v python3 >/dev/null 2>&1; then
     python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_unified_error_semantics_ratchet.py || exit 1
     python3 quwoquan_app/scripts/settings/verify_settings_canonical.py || exit 1
     python3 quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_error_code_semantic.py || exit 1
@@ -130,6 +132,7 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py || exit 1
     python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py || exit 1
+    python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_metadata_service_entities_vs_fields.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py || exit 1
     python3 quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py || exit 1

@@ -30,6 +30,10 @@ class AppPublicContentLinks {
   static String postWebUrl(String postId) =>
       publicWebUrlForPath(AppLinkTemplates.postWebPath(postId));
 
+  /// 实体主页站外分享/PC Web 用 HTTPS 链接。
+  static String entityHomepageWebUrl(String homepageId) =>
+      publicWebUrlForPath(AppLinkTemplates.entityHomepageWebPath(homepageId));
+
   /// HTTP `Referer` / 品牌来源等场景使用的站点根（无路径）。
   static String siteOriginForHttpHeaders() => _normalizedBase();
 }

@@ -832,6 +832,46 @@
           "favorited": true
         }
       ],
+      "appConfig": {
+        "comment": {
+          "max_length": 500,
+          "reply_preview_count": 1,
+          "reply_expand_page_size": 10,
+          "fold_line_count": 3,
+          "sort": {
+            "default": "recommended"
+          },
+          "attachment": {
+            "max_images": 1
+          }
+        }
+      },
+      "mediaAssets": [
+        {
+          "mediaId": "fixture_comment_asset_photo_001",
+          "_id": "fixture_comment_asset_photo_001",
+          "assetScope": "comment_attachment",
+          "type": "image",
+          "status": "ready",
+          "moderationStatus": "approved",
+          "cdnUrl": "media/comment/fixture_comment_asset_photo_001/v1/comment.png",
+          "thumbnailUrl": "media/comment/fixture_comment_asset_photo_001/v1/thumb.png",
+          "width": 960,
+          "height": 720
+        }
+      ],
+      "mentionCandidates": [
+        {
+          "subjectType": "assistant",
+          "subjectId": "assistant_xiaoqu",
+          "displayName": "小趣"
+        },
+        {
+          "subjectType": "user",
+          "subjectId": "fixture_user_friend",
+          "displayName": "契约旅行圈主"
+        }
+      ],
       "comments": [
         {
           "commentId": "fixture_comment_photo_001",
@@ -909,7 +949,79 @@
           "authorAvatarUrlSnapshot": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
           "content": "共享池评论样本 #43",
           "createdAt": "2026-06-07T14:00:00Z"
-        }
+        },
+        {
+          "commentId": "fixture_comment_v2_parent_001",
+          "_id": "fixture_comment_v2_parent_001",
+          "postId": "fixture_photo_001",
+          "authorId": "fixture_user_commenter",
+          "authorDisplayNameSnapshot": "契约评论者",
+          "content": "gamma 评论 V2：图片附件、@小趣、默认 1 条预览、每次展开 10 条",
+          "replyCount": 21,
+          "likeCount": 18,
+          "dislikeCount": 2,
+          "viewerReaction": "like",
+          "recommendedScore": 98.4,
+          "attachmentMediaIds": ["fixture_comment_asset_photo_001"],
+          "attachments": [{"mediaId": "fixture_comment_asset_photo_001", "type": "image", "url": "media/comment/fixture_comment_asset_photo_001/v1/comment.png", "thumbnailUrl": "media/comment/fixture_comment_asset_photo_001/v1/thumb.png", "width": 960, "height": 720, "moderationStatus": "approved"}],
+          "mentions": [{"subjectType": "assistant", "subjectId": "assistant_xiaoqu", "displayName": "小趣"}, {"subjectType": "user", "subjectId": "fixture_user_friend", "displayName": "契约旅行圈主"}],
+          "replyPreview": [{"commentId": "fixture_comment_v2_reply_001", "content": "第一条预览回复", "authorDisplayNameSnapshot": "契约旅行圈主"}],
+          "replyNextCursor": "reply_cursor_fixture_comment_v2_parent_001_001",
+          "canDelete": false,
+          "canReply": true,
+          "canReport": true,
+          "createdAt": "2026-06-08T10:00:00Z"
+        },
+        {
+          "commentId": "fixture_comment_v2_parent_002",
+          "_id": "fixture_comment_v2_parent_002",
+          "postId": "fixture_photo_001",
+          "authorId": "fixture_user_friend",
+          "authorDisplayNameSnapshot": "契约旅行圈主",
+          "content": "gamma 最多赞排序与已点踩状态样本",
+          "replyCount": 0,
+          "likeCount": 42,
+          "dislikeCount": 1,
+          "viewerReaction": "dislike",
+          "recommendedScore": 76.2,
+          "createdAt": "2026-06-08T11:00:00Z"
+        },
+        {
+          "commentId": "fixture_comment_v2_parent_003",
+          "_id": "fixture_comment_v2_parent_003",
+          "postId": "fixture_photo_001",
+          "authorId": "fixture_user_current",
+          "authorDisplayNameSnapshot": "契约当前用户",
+          "content": "gamma 最新排序与 none 状态样本",
+          "replyCount": 0,
+          "likeCount": 3,
+          "dislikeCount": 0,
+          "viewerReaction": "none",
+          "recommendedScore": 64.1,
+          "canDelete": true,
+          "createdAt": "2026-06-08T12:00:00Z"
+        },
+        {"commentId": "fixture_comment_v2_reply_001", "_id": "fixture_comment_v2_reply_001", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_friend", "authorDisplayNameSnapshot": "契约旅行圈主", "content": "第一条预览回复", "createdAt": "2026-06-08T10:01:00Z"},
+        {"commentId": "fixture_comment_v2_reply_002", "_id": "fixture_comment_v2_reply_002", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_reply_001", "replyToUserId": "fixture_user_friend", "authorId": "fixture_user_current", "authorDisplayNameSnapshot": "契约当前用户", "content": "gamma 回复分页样本 #2", "createdAt": "2026-06-08T10:02:00Z"},
+        {"commentId": "fixture_comment_v2_reply_003", "_id": "fixture_comment_v2_reply_003", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_commenter", "authorDisplayNameSnapshot": "契约评论者", "content": "gamma 回复分页样本 #3", "createdAt": "2026-06-08T10:03:00Z"},
+        {"commentId": "fixture_comment_v2_reply_004", "_id": "fixture_comment_v2_reply_004", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_friend", "authorDisplayNameSnapshot": "契约旅行圈主", "content": "gamma 回复分页样本 #4", "createdAt": "2026-06-08T10:04:00Z"},
+        {"commentId": "fixture_comment_v2_reply_005", "_id": "fixture_comment_v2_reply_005", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_current", "authorDisplayNameSnapshot": "契约当前用户", "content": "gamma 回复分页样本 #5", "createdAt": "2026-06-08T10:05:00Z"},
+        {"commentId": "fixture_comment_v2_reply_006", "_id": "fixture_comment_v2_reply_006", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_commenter", "authorDisplayNameSnapshot": "契约评论者", "content": "gamma 回复分页样本 #6", "createdAt": "2026-06-08T10:06:00Z"},
+        {"commentId": "fixture_comment_v2_reply_007", "_id": "fixture_comment_v2_reply_007", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_friend", "authorDisplayNameSnapshot": "契约旅行圈主", "content": "gamma 回复分页样本 #7", "createdAt": "2026-06-08T10:07:00Z"},
+        {"commentId": "fixture_comment_v2_reply_008", "_id": "fixture_comment_v2_reply_008", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_current", "authorDisplayNameSnapshot": "契约当前用户", "content": "gamma 回复分页样本 #8", "createdAt": "2026-06-08T10:08:00Z"},
+        {"commentId": "fixture_comment_v2_reply_009", "_id": "fixture_comment_v2_reply_009", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_commenter", "authorDisplayNameSnapshot": "契约评论者", "content": "gamma 回复分页样本 #9", "createdAt": "2026-06-08T10:09:00Z"},
+        {"commentId": "fixture_comment_v2_reply_010", "_id": "fixture_comment_v2_reply_010", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_friend", "authorDisplayNameSnapshot": "契约旅行圈主", "content": "gamma 回复分页样本 #10", "createdAt": "2026-06-08T10:10:00Z"},
+        {"commentId": "fixture_comment_v2_reply_011", "_id": "fixture_comment_v2_reply_011", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_current", "authorDisplayNameSnapshot": "契约当前用户", "content": "gamma 回复分页样本 #11", "createdAt": "2026-06-08T10:11:00Z"},
+        {"commentId": "fixture_comment_v2_reply_012", "_id": "fixture_comment_v2_reply_012", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_commenter", "authorDisplayNameSnapshot": "契约评论者", "content": "gamma 回复分页样本 #12", "createdAt": "2026-06-08T10:12:00Z"},
+        {"commentId": "fixture_comment_v2_reply_013", "_id": "fixture_comment_v2_reply_013", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_friend", "authorDisplayNameSnapshot": "契约旅行圈主", "content": "gamma 回复分页样本 #13", "createdAt": "2026-06-08T10:13:00Z"},
+        {"commentId": "fixture_comment_v2_reply_014", "_id": "fixture_comment_v2_reply_014", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_current", "authorDisplayNameSnapshot": "契约当前用户", "content": "gamma 回复分页样本 #14", "createdAt": "2026-06-08T10:14:00Z"},
+        {"commentId": "fixture_comment_v2_reply_015", "_id": "fixture_comment_v2_reply_015", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_commenter", "authorDisplayNameSnapshot": "契约评论者", "content": "gamma 回复分页样本 #15", "createdAt": "2026-06-08T10:15:00Z"},
+        {"commentId": "fixture_comment_v2_reply_016", "_id": "fixture_comment_v2_reply_016", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_friend", "authorDisplayNameSnapshot": "契约旅行圈主", "content": "gamma 回复分页样本 #16", "createdAt": "2026-06-08T10:16:00Z"},
+        {"commentId": "fixture_comment_v2_reply_017", "_id": "fixture_comment_v2_reply_017", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_current", "authorDisplayNameSnapshot": "契约当前用户", "content": "gamma 回复分页样本 #17", "createdAt": "2026-06-08T10:17:00Z"},
+        {"commentId": "fixture_comment_v2_reply_018", "_id": "fixture_comment_v2_reply_018", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_commenter", "authorDisplayNameSnapshot": "契约评论者", "content": "gamma 回复分页样本 #18", "createdAt": "2026-06-08T10:18:00Z"},
+        {"commentId": "fixture_comment_v2_reply_019", "_id": "fixture_comment_v2_reply_019", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_friend", "authorDisplayNameSnapshot": "契约旅行圈主", "content": "gamma 回复分页样本 #19", "createdAt": "2026-06-08T10:19:00Z"},
+        {"commentId": "fixture_comment_v2_reply_020", "_id": "fixture_comment_v2_reply_020", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_current", "authorDisplayNameSnapshot": "契约当前用户", "content": "gamma 回复分页样本 #20", "createdAt": "2026-06-08T10:20:00Z"},
+        {"commentId": "fixture_comment_v2_reply_021", "_id": "fixture_comment_v2_reply_021", "postId": "fixture_photo_001", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_commenter", "authorId": "fixture_user_commenter", "authorDisplayNameSnapshot": "契约评论者", "content": "gamma 回复分页样本 #21", "createdAt": "2026-06-08T10:21:00Z"}
       ]
     }
   },
@@ -943,7 +1055,10 @@
         ],
         "detailPostId": "fixture_photo_001",
         "commentIds": [
-          "fixture_comment_photo_001"
+          "fixture_comment_photo_001",
+          "fixture_comment_v2_parent_001",
+          "fixture_comment_v2_parent_002",
+          "fixture_comment_v2_parent_003"
         ]
       },
       "environments": {

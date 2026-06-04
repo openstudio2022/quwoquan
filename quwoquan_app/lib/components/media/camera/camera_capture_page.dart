@@ -35,7 +35,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
   int _cameraIndex = 0;
   bool _isRecording = false;
   bool _isBusy = true;
-  String? _error;
+  UiErrorSemantic? _pageErrorSemantic;
   late MediaPickerEntryMode _mode;
 
   @override
@@ -56,7 +56,16 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       _cameras = await availableCameras();
       if (_cameras.isEmpty) {
         setState(() {
-          _error = UITextConstants.cameraUnavailable;
+          _pageErrorSemantic = UiErrorSemantic(
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            title: '相机暂时打不开',
+            message: UITextConstants.cameraUnavailable,
+            primaryAction: const UiErrorAction(
+              type: UiErrorActionType.retry,
+              label: UITextConstants.tryAgain,
+            ),
+          );
           _isBusy = false;
         });
         return;
@@ -65,7 +74,16 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = UITextConstants.cameraUnavailable;
+        _pageErrorSemantic = UiErrorSemantic(
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+          title: '相机暂时打不开',
+          message: UITextConstants.cameraUnavailable,
+          primaryAction: const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
+          ),
+        );
         _isBusy = false;
       });
     }
@@ -83,9 +101,29 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
     if (!mounted) return;
     setState(() {
       _cameraIndex = index;
-      _error = null;
+      _pageErrorSemantic = null;
       _isBusy = false;
     });
+  }
+
+  Future<void> _showCaptureActionError() async {
+    if (!mounted) {
+      return;
+    }
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: const UiErrorSemantic(
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+        title: '拍摄未完成',
+        message: UITextConstants.cameraCaptureFailed,
+        primaryAction: UiErrorAction(
+          type: UiErrorActionType.dismiss,
+          label: UITextConstants.confirm,
+        ),
+        dismissible: true,
+      ),
+    );
   }
 
   Future<void> _toggleCamera() async {
@@ -107,10 +145,8 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       );
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _error = UITextConstants.cameraCaptureFailed;
-        _isBusy = false;
-      });
+      setState(() => _isBusy = false);
+      await _showCaptureActionError();
     }
   }
 
@@ -128,10 +164,10 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       } catch (_) {
         if (!mounted) return;
         setState(() {
-          _error = UITextConstants.cameraCaptureFailed;
           _isBusy = false;
           _isRecording = false;
         });
+        await _showCaptureActionError();
       }
       return;
     }
@@ -146,9 +182,9 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = UITextConstants.cameraCaptureFailed;
         _isBusy = false;
       });
+      await _showCaptureActionError();
     }
   }
 
@@ -199,13 +235,19 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
                 clipBehavior: Clip.antiAlias,
                 child: canPreview
                     ? CameraPreview(controller)
+                    : _pageErrorSemantic != null
+                    ? AppPageErrorState(
+                        semantic: _pageErrorSemantic!,
+                        padding: EdgeInsets.all(AppSpacing.containerSm),
+                        onAction: (action) async {
+                          if (action.type == UiErrorActionType.retry ||
+                              action.type == UiErrorActionType.resubmit) {
+                            await _initCamera();
+                          }
+                        },
+                      )
                     : Center(
-                        child: _error == null
-                            ? CupertinoActivityIndicator()
-                            : Text(
-                                _error!,
-                                style: TextStyle(color: subtle, fontSize: AppTypography.base),
-                              ),
+                        child: CupertinoActivityIndicator(),
                       ),
               ),
             ),

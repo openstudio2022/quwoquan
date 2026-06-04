@@ -21,7 +21,7 @@ func fixturePublish(t *testing.T) string {
 	root := t.TempDir()
 	// 两篇文章
 	writeFile(t, filepath.Join(root, "posts/article/体验/甲居藏寨体验/1/manifest.json"),
-		`{"contentType":"article","entityRefs":["地点/景区/甲居藏寨"],"tagRefs":["Topic/旅行"],"template":"journal","generatorModel":"agent/x","articleMarkdownDigest":"d1","publishTitle":"甲居藏寨体验","publishAngle":"体验","publishSeq":1,"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾"}`)
+		`{"contentType":"article","entityRefs":["地点/景区/甲居藏寨"],"tagRefs":["Topic/旅行"],"template":"journal","generatorModel":"agent/x","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","publishTitle":"甲居藏寨体验","publishAngle":"体验","publishSeq":1,"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾","articleAssetManifest":{"schemaVersion":1,"articleMarkdownVersion":"qwq-rich-md/1","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","documentSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111","assetManifestSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222","documentVersionSha256":"sha256:3333333333333333333333333333333333333333333333333333333333333333","assets":[{"assetId":"cover","objectKey":"media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","cdnUrl":"https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}}`)
 	writeFile(t, filepath.Join(root, "posts/article/体验/甲居藏寨体验/1/article.md"), "# 甲居藏寨体验\n正文\n")
 	writeFile(t, filepath.Join(root, "posts/article/攻略/色达攻略/1/manifest.json"),
 		`{"contentType":"article","entityRefs":["地点/景区/色达"],"tagRefs":[],"publishTitle":"色达攻略","publishAngle":"攻略","publishSeq":1}`)
@@ -30,6 +30,8 @@ func fixturePublish(t *testing.T) string {
 	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/_entity.json"),
 		`{"label":"甲居藏寨","domain":"地点","type":"景区","tagRefs":["Entity/地点/景区"],"conditionProfile":{"regions":["高原","山地"],"seasons":["夏","秋"],"altitudeMeters":3500},"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾"}`)
 	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/page.md"), "# 甲居藏寨\n")
+	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/manifest.json"),
+		`{"assets":[{"assetId":"甲居藏寨_homepage_detail","objectKey":"media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png","cdnUrl":"https://img.example.com/media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png","sha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}`)
 	writeFile(t, filepath.Join(root, "entities/地点/景区/色达/_entity.json"),
 		`{"label":"色达","domain":"地点","type":"景区","tagRefs":[]}`)
 	return root
@@ -57,6 +59,15 @@ func TestLoadPostsFull(t *testing.T) {
 	}
 	if p.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
 		t.Fatalf("sourceTaskId not loaded: %q", p.SourceTaskId)
+	}
+	if p.ArticleAssetManifest == nil {
+		t.Fatalf("articleAssetManifest not loaded: %+v", p)
+	}
+	if len(p.ArticleAssetManifest.Assets) != 1 {
+		t.Fatalf("articleAssetManifest assets wrong: %+v", p.ArticleAssetManifest)
+	}
+	if p.ArticleAssetManifest.DocumentVersionSha256 == "" {
+		t.Fatalf("documentVersionSha256 not loaded: %+v", p.ArticleAssetManifest)
 	}
 }
 
@@ -97,6 +108,9 @@ func TestLoadEntitiesAndPageFlag(t *testing.T) {
 	}
 	if jiaju.ConditionProfile == nil {
 		t.Fatalf("conditionProfile not loaded: %+v", jiaju)
+	}
+	if jiaju.AssetManifest == nil {
+		t.Fatalf("entity asset manifest not loaded: %+v", jiaju)
 	}
 	if alt, _ := jiaju.ConditionProfile["altitudeMeters"].(float64); alt != 3500 {
 		t.Fatalf("conditionProfile.altitudeMeters wrong: %v", jiaju.ConditionProfile["altitudeMeters"])

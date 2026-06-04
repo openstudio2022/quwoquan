@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
@@ -142,6 +143,32 @@ class _PickerChatRepository extends MockChatRepository {
   }
 }
 
+class _FailingPickerChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    throw StateError('inbox unavailable');
+  }
+
+  @override
+  Future<List<ChatContactRowDto>> listContacts({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    throw StateError('contacts unavailable');
+  }
+
+  @override
+  Future<List<ChatConversationMemberDto>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+    String? sort,
+  }) async {
+    throw StateError('members unavailable');
+  }
+}
+
 void _suppressImageErrors() {
   final original = FlutterError.onError;
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -250,6 +277,27 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('邀请参与者'), findsOneWidget);
+    });
+
+    testWidgets('主数据加载失败时展示统一页态', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appDataSourceModeProvider.overrideWith(
+              _MockAppDataSourceModeNotifier.new,
+            ),
+            chatRepositoryProvider.overrideWithValue(_FailingPickerChatRepository()),
+          ],
+          child: const CupertinoApp(
+            home: CallParticipantPickerPage(conversationId: 'conv_002'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppPageErrorState), findsOneWidget);
+      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
     });
   });
 }

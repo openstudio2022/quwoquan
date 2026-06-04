@@ -10,6 +10,7 @@ import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/web_app_install_banner.dart';
+import 'package:quwoquan_app/app/shell/web_main_app_shell.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
@@ -133,7 +134,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       AuthSessionState next,
     ) {
       final justLoggedIn =
-          next.isAuthenticated && (previous == null || !previous.isAuthenticated);
+          next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated);
       if (!justLoggedIn) {
         return;
       }
@@ -165,7 +167,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         widget.currentLocation == AppRoutePaths.createEntry ||
         widget.currentLocation.startsWith(AppRoutePaths.createPathTemplate);
     final capabilities = ref.watch(platformCapabilitiesProvider);
-    final showInstallBanner = capabilities.promotesAppInstall;
+    final useWebWideShell =
+        capabilities.wideScreenLayout && AppSpacing.isWideLayout(context);
+    final showInstallBanner =
+        capabilities.promotesAppInstall && !useWebWideShell;
 
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -185,36 +190,51 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
           children: [
             if (showInstallBanner) const WebAppInstallBanner(),
             Expanded(
-              child: _ShellContentFrame(
-                constrained: capabilities.wideScreenLayout,
-                child: Stack(
-                  children: [
-                    IndexedStack(
-                      index: _currentIndex,
+              child: useWebWideShell
+                  ? Stack(
                       children: [
-                        HomePage(routeLocation: _currentLocation),
-                        HomeFeaturedImmersivePage(
-                          onExitToHome: () =>
-                              _selectMainTab(MainTabDestination.home),
+                        WebMainAppShell(
+                          currentDestination: mainTabFromBottomNavIndex(
+                            _currentIndex,
+                          ),
+                          currentLocation: _currentLocation,
+                          backgroundColor: shellBackground,
+                          onPrimarySelected: _handleWebPrimaryTap,
+                          onOpenCreateSheet: () =>
+                              unawaited(GlobalQuickActionSheet.show(context)),
                         ),
-                        const SizedBox.shrink(),
-                        const ChatPage(),
-                        const MyProfilePage(),
                       ],
-                    ),
-                    if (!bottomNavHidden)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: BottomNavigationWidget(
-                          currentIndex: _currentIndex,
-                          onTap: _handleBottomNavTap,
-                        ),
+                    )
+                  : _ShellContentFrame(
+                      constrained: capabilities.wideScreenLayout,
+                      child: Stack(
+                        children: [
+                          IndexedStack(
+                            index: _currentIndex,
+                            children: [
+                              HomePage(routeLocation: _currentLocation),
+                              HomeFeaturedImmersivePage(
+                                onExitToHome: () =>
+                                    _selectMainTab(MainTabDestination.home),
+                              ),
+                              const SizedBox.shrink(),
+                              const ChatPage(),
+                              const MyProfilePage(),
+                            ],
+                          ),
+                          if (!bottomNavHidden)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: BottomNavigationWidget(
+                                currentIndex: _currentIndex,
+                                onTap: _handleBottomNavTap,
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
-              ),
+                    ),
             ),
           ],
         ),
@@ -259,6 +279,50 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     }
 
     _selectMainTab(nextTab);
+  }
+
+  void _handleWebPrimaryTap(MainTabDestination nextTab) {
+    final previousIndex = _currentIndex;
+    _logBrowseEvent(
+      action: 'web_primary_tap',
+      bottomNavTap: AppLogBottomNavTapMeta(
+        fromIndex: previousIndex,
+        toIndex: nextTab.bottomNavIndex,
+      ),
+    );
+
+    if (nextTab == MainTabDestination.create) {
+      // Web/宽屏 create 主入口与移动端加号一致：先进入创建工作台/动作面板，
+      // 登录拦截下沉到具体写作、发图、发视频或草稿等账号态动作。
+      _selectWebCreateTab();
+      return;
+    }
+
+    if (nextTab == MainTabDestination.chat &&
+        !ref.read(authSessionControllerProvider).isAuthenticated) {
+      setState(() {
+        _currentIndex = nextTab.bottomNavIndex;
+      });
+      return;
+    }
+
+    if (nextTab == MainTabDestination.profile &&
+        !ref.read(authSessionControllerProvider).isAuthenticated) {
+      setState(() {
+        _currentIndex = nextTab.bottomNavIndex;
+      });
+      return;
+    }
+
+    _selectMainTab(nextTab);
+  }
+
+  void _selectWebCreateTab() {
+    setState(() {
+      _currentIndex = MainTabDestination.create.bottomNavIndex;
+    });
+    ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+    ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
   }
 
   void _selectMainTab(MainTabDestination nextTab) {
@@ -357,7 +421,9 @@ class _ShellContentFrame extends StatelessWidget {
     }
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: AppSpacing.webContentMaxWidth),
+        constraints: const BoxConstraints(
+          maxWidth: AppSpacing.webContentMaxWidth,
+        ),
         child: child,
       ),
     );

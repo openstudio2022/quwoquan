@@ -9,6 +9,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -257,10 +258,10 @@ def _tail_file_for_startup(
     idle_timeout_seconds: float = 2.5,
     max_follow_seconds: float = 20.0,
     ready_patterns: tuple[str, ...] = (),
+    failure_patterns: tuple[str, ...] = (),
     ready_idle_timeout_seconds: float = 2.0,
 ) -> dict[str, Any]:
-    if not _is_interactive_terminal():
-        return {"followed": False, "lines": 0, "reason": "non-interactive"}
+    emit_output = _is_interactive_terminal()
     deadline = time.monotonic() + max_follow_seconds
     while time.monotonic() < deadline:
         if log_path.exists():
@@ -271,27 +272,35 @@ def _tail_file_for_startup(
     if not log_path.exists():
         return {"followed": False, "lines": 0, "reason": "log-not-created"}
 
-    print(f"{prefix}tailing startup log: {relpath(log_path)}", flush=True)
+    if emit_output:
+        print(f"{prefix}tailing startup log: {relpath(log_path)}", flush=True)
     line_count = 0
     last_activity = time.monotonic()
     ready_seen = False
+    failure_seen = False
+    failure_line = ""
     with log_path.open("r", encoding="utf-8", errors="replace") as handle:
         while True:
             line = handle.readline()
             if line:
                 line_count += 1
                 last_activity = time.monotonic()
-                print(f"{prefix}{line}", end="", flush=True)
+                if emit_output:
+                    print(f"{prefix}{line}", end="", flush=True)
                 if ready_patterns and any(pattern in line for pattern in ready_patterns):
                     ready_seen = True
+                if failure_patterns and any(pattern in line for pattern in failure_patterns):
+                    failure_seen = True
+                    if not failure_line:
+                        failure_line = line.strip()
                 continue
             if process is not None and process.poll() is not None:
                 break
             now = time.monotonic()
             if now >= deadline:
                 break
-            effective_idle_timeout = ready_idle_timeout_seconds if ready_seen else idle_timeout_seconds
-            if line_count > 0 and now - last_activity >= effective_idle_timeout:
+            effective_idle_timeout = ready_idle_timeout_seconds if ready_seen else None
+            if effective_idle_timeout is not None and line_count > 0 and now - last_activity >= effective_idle_timeout:
                 break
             time.sleep(0.15)
     reason = "idle"
@@ -299,14 +308,36 @@ def _tail_file_for_startup(
         reason = "process-exited"
     elif time.monotonic() >= deadline:
         reason = "timeout"
-    print(f"{prefix}startup log tail finished ({reason})", flush=True)
+    if emit_output:
+        print(f"{prefix}startup log tail finished ({reason})", flush=True)
     return {
         "followed": True,
         "lines": line_count,
         "reason": reason,
         "readySeen": ready_seen,
         "readyPatterns": list(ready_patterns),
+        "failureSeen": failure_seen,
+        "failureLine": failure_line,
+        "failurePatterns": list(failure_patterns),
+        "processExitCode": process.poll() if process is not None else None,
     }
+
+
+def _app_launch_failure_detail(
+    tail_result: dict[str, Any],
+    *,
+    default_message: str,
+    require_ready: bool = True,
+    process_exit_code: int | None = None,
+) -> str | None:
+    if bool(tail_result.get("failureSeen")):
+        return str(tail_result.get("failureLine") or default_message)
+    if process_exit_code not in (None, 0):
+        return f"{default_message}: process exited with code {process_exit_code}"
+    if require_ready and not bool(tail_result.get("readySeen")):
+        reason = str(tail_result.get("reason") or "idle")
+        return f"{default_message}: app did not reach Flutter ready state before {reason}"
+    return None
 
 
 def _tail_multiple_logs_for_startup(
@@ -877,7 +908,7 @@ def _script_probes_for_target(
 
 
 def _load_release_state(service: str = "seed-box") -> dict[str, str]:
-    state_path = ROOT / ".release-state" / f"{service}.state"
+    state_path = ROOT / "state" / "release" / f"{service}.state"
     payload: dict[str, str] = {}
     if not state_path.exists():
         return payload
@@ -898,7 +929,7 @@ def _update_release_state(
     to_config: str,
     step: str,
 ) -> dict[str, str]:
-    state_dir = ROOT / ".release-state"
+    state_dir = ROOT / "state" / "release"
     state_dir.mkdir(parents=True, exist_ok=True)
     state_path = state_dir / f"{service}.state"
     payload = {
@@ -1268,7 +1299,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         }
 
     def tail_beta_background_logs() -> dict[str, Any]:
-        beta_log_dir = ROOT / "tmp" / "beta_stack"
+        beta_log_dir = ROOT / "state" / "local" / "beta_stack"
         return _tail_multiple_logs_for_startup(
             [
                 ("beta-app", beta_log_dir / "app-beta.log"),
@@ -1281,7 +1312,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     def tail_alpha_background_logs() -> dict[str, Any]:
-        alpha_log_dir = ROOT / "tmp" / "alpha_stack"
+        alpha_log_dir = ROOT / "state" / "local" / "alpha_stack"
         return _tail_multiple_logs_for_startup(
             [
                 ("alpha-api-edge", alpha_log_dir / "api-edge.log"),
@@ -1294,14 +1325,12 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     if requested_target == "beta-local":
+        app_launch = None
         if not args.skip_app:
             args.device_id = maybe_resolve_device_id(include_web=True)
         cmd = ["bash", "agent_ops/deploy/beta/start_beta_stack.sh", "up"]
         env = _beta_env_from_port_manifest()
-        if args.device_id:
-            env["DEVICE_ID"] = args.device_id
-        if args.skip_app:
-            env["START_APP"] = "0"
+        env["START_APP"] = "0"
         result = run_stage("beta-local", cmd, env=env, live_prefix="[beta] ")
         background_tail = tail_beta_background_logs()
         steps.append(
@@ -1313,6 +1342,60 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                 "tail": background_tail,
             }
         )
+        if result.returncode == 0 and not args.skip_app:
+            try:
+                app_launch = start_app_process("beta", args.device_id)
+            except RuntimeError as exc:
+                result = subprocess.CompletedProcess(cmd, 1, stdout="", stderr=str(exc))
+            else:
+                tail_result = _tail_file_for_startup(
+                    app_launch["log_path"],
+                    process=app_launch["process"],
+                    prefix=f"[{app_launch['stageHeader']} app] ",
+                    idle_timeout_seconds=6.0,
+                    max_follow_seconds=90.0,
+                    ready_patterns=(
+                        "Syncing files to device",
+                        "Flutter run key commands",
+                        "A Dart VM Service",
+                        "The Flutter DevTools debugger",
+                    ),
+                    failure_patterns=(
+                        "Failed to build",
+                        "BUILD FAILED",
+                        "Error launching application on",
+                        "Lost connection to device.",
+                        "Target kernel_snapshot_program failed",
+                        "app launch exited before reaching steady state",
+                    ),
+                    ready_idle_timeout_seconds=3.0,
+                )
+                app_exit_code = app_launch["process"].poll()
+                failure_detail = _app_launch_failure_detail(
+                    tail_result,
+                    default_message="beta app launch failed",
+                    process_exit_code=app_exit_code,
+                )
+                app_failed = failure_detail is not None
+                steps.append(
+                    {
+                        "argv": app_launch["command"],
+                        "exitCode": app_exit_code or 0,
+                        "stdout": f"pid={app_launch['process'].pid}",
+                        "stderr": f"log={relpath(app_launch['log_path'])}",
+                        "tail": tail_result,
+                    }
+                )
+                if app_failed:
+                    result = subprocess.CompletedProcess(cmd, 1, stdout="", stderr=str(failure_detail))
+                else:
+                    cmd = app_launch["command"]
+                    result = subprocess.CompletedProcess(
+                        cmd,
+                        0,
+                        stdout=f"pid={app_launch['process'].pid}",
+                        stderr=f"log={relpath(app_launch['log_path'])}",
+                    )
     elif requested_target == "gamma-local":
         cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"]
         env = _gamma_env_from_port_manifest(topology, requested_target)
@@ -1347,24 +1430,42 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                         "A Dart VM Service",
                         "The Flutter DevTools debugger",
                     ),
+                    failure_patterns=(
+                        "Failed to build",
+                        "BUILD FAILED",
+                        "Error launching application on",
+                        "Lost connection to device.",
+                        "Target kernel_snapshot_program failed",
+                        "app launch exited before reaching steady state",
+                    ),
                     ready_idle_timeout_seconds=3.0,
                 )
+                app_exit_code = app_launch["process"].poll()
+                failure_detail = _app_launch_failure_detail(
+                    tail_result,
+                    default_message="gamma app launch failed",
+                    process_exit_code=app_exit_code,
+                )
+                app_failed = failure_detail is not None
                 steps.append(
                     {
                         "argv": app_launch["command"],
-                        "exitCode": 0,
+                        "exitCode": app_exit_code or 0,
                         "stdout": f"pid={app_launch['process'].pid}",
                         "stderr": f"log={relpath(app_launch['log_path'])}",
                         "tail": tail_result,
                     }
                 )
-                cmd = app_launch["command"]
-                result = subprocess.CompletedProcess(
-                    cmd,
-                    0,
-                    stdout=f"pid={app_launch['process'].pid}",
-                    stderr=f"log={relpath(app_launch['log_path'])}",
-                )
+                if app_failed:
+                    result = subprocess.CompletedProcess(cmd, 1, stdout="", stderr=str(failure_detail))
+                else:
+                    cmd = app_launch["command"]
+                    result = subprocess.CompletedProcess(
+                        cmd,
+                        0,
+                        stdout=f"pid={app_launch['process'].pid}",
+                        stderr=f"log={relpath(app_launch['log_path'])}",
+                    )
     elif requested_target == "alpha-local":
         cmd = ["bash", "agent_ops/deploy/alpha/start_alpha_mock_stack.sh", "up"]
         result = run_stage("alpha-local", cmd, live_prefix="[alpha] ")
@@ -1398,24 +1499,46 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                         "A Dart VM Service",
                         "The Flutter DevTools debugger",
                     ),
+                    failure_patterns=(
+                        "Failed to build",
+                        "BUILD FAILED",
+                        "Error launching application on",
+                        "Lost connection to device.",
+                        "Target kernel_snapshot_program failed",
+                        "app launch exited before reaching steady state",
+                    ),
                     ready_idle_timeout_seconds=3.0,
+                )
+                app_exit_code = app_launch["process"].poll()
+                failure_detail = _app_launch_failure_detail(
+                    tail_result,
+                    default_message="alpha app launch failed",
+                    process_exit_code=app_exit_code,
                 )
                 steps.append(
                     {
                         "argv": app_launch["command"],
-                        "exitCode": 0,
+                        "exitCode": app_exit_code or 0,
                         "stdout": f"pid={app_launch['process'].pid}",
                         "stderr": f"log={relpath(app_launch['log_path'])}",
                         "tail": tail_result,
                     }
                 )
-                cmd = app_launch["command"]
-                result = subprocess.CompletedProcess(
-                    cmd,
-                    0,
-                    stdout=f"pid={app_launch['process'].pid}",
-                    stderr=f"log={relpath(app_launch['log_path'])}",
-                )
+                if failure_detail is not None:
+                    result = subprocess.CompletedProcess(
+                        cmd,
+                        1,
+                        stdout="",
+                        stderr=str(failure_detail),
+                    )
+                else:
+                    cmd = app_launch["command"]
+                    result = subprocess.CompletedProcess(
+                        cmd,
+                        0,
+                        stdout=f"pid={app_launch['process'].pid}",
+                        stderr=f"log={relpath(app_launch['log_path'])}",
+                    )
     elif requested_target == "prod-sim":
         if args.skip_app:
             timing = _finish_timing(started_monotonic, started_at)
@@ -1449,20 +1572,42 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                 "A Dart VM Service",
                 "The Flutter DevTools debugger",
             ),
+            failure_patterns=(
+                "Failed to build",
+                "Error launching application on",
+                "Lost connection to device.",
+                "Target kernel_snapshot_program failed",
+                "app launch exited before reaching steady state",
+            ),
             ready_idle_timeout_seconds=3.0,
         )
-        announce("prod-sim", "app launch reached steady state")
-        cmd = app_launch["command"]
-        result = subprocess.CompletedProcess(
-            cmd,
-            0,
-            stdout=f"pid={app_launch['process'].pid}",
-            stderr=f"log={relpath(app_launch['log_path'])}",
+        app_exit_code = app_launch["process"].poll()
+        failure_detail = _app_launch_failure_detail(
+            tail_result,
+            default_message="prod-sim app launch failed",
+            process_exit_code=app_exit_code,
         )
+        app_failed = failure_detail is not None
+        if not app_failed:
+            announce("prod-sim", "app launch reached steady state")
+            cmd = app_launch["command"]
+            result = subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout=f"pid={app_launch['process'].pid}",
+                stderr=f"log={relpath(app_launch['log_path'])}",
+            )
+        else:
+            result = subprocess.CompletedProcess(
+                app_launch["command"],
+                1,
+                stdout="",
+                stderr=str(failure_detail),
+            )
         steps.append(
             {
                 "argv": app_launch["command"],
-                "exitCode": 0,
+                "exitCode": app_exit_code or 0,
                 "stdout": f"pid={app_launch['process'].pid}",
                 "stderr": f"log={relpath(app_launch['log_path'])}",
                 "tail": tail_result,
@@ -1528,20 +1673,42 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                 "A Dart VM Service",
                 "The Flutter DevTools debugger",
             ),
+            failure_patterns=(
+                "Failed to build",
+                "Error launching application on",
+                "Lost connection to device.",
+                "Target kernel_snapshot_program failed",
+                "app launch exited before reaching steady state",
+            ),
             ready_idle_timeout_seconds=3.0,
         )
-        announce("prod-hosted", "app launch reached steady state")
-        cmd = app_launch["command"]
-        result = subprocess.CompletedProcess(
-            cmd,
-            0,
-            stdout=f"pid={app_launch['process'].pid}",
-            stderr=f"log={relpath(app_launch['log_path'])}",
+        app_exit_code = app_launch["process"].poll()
+        failure_detail = _app_launch_failure_detail(
+            tail_result,
+            default_message="prod app launch failed",
+            process_exit_code=app_exit_code,
         )
+        app_failed = failure_detail is not None
+        if not app_failed:
+            announce("prod-hosted", "app launch reached steady state")
+            cmd = app_launch["command"]
+            result = subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout=f"pid={app_launch['process'].pid}",
+                stderr=f"log={relpath(app_launch['log_path'])}",
+            )
+        else:
+            result = subprocess.CompletedProcess(
+                app_launch["command"],
+                1,
+                stdout="",
+                stderr=str(failure_detail),
+            )
         steps.append(
             {
                 "argv": app_launch["command"],
-                "exitCode": 0,
+                "exitCode": app_exit_code or 0,
                 "stdout": f"pid={app_launch['process'].pid}",
                 "stderr": f"log={relpath(app_launch['log_path'])}",
                 "tail": tail_result,
@@ -1749,7 +1916,15 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "exitCode": 0 if not findings else 1,
         "summary": f"stackctl health {args.target}: {ok_count}/{len(statuses)} healthy",
-        "details": findings or [f"{item['name']} -> {item['statusCode'] or 'OK'} {item['url']}" for item in statuses],
+        "details": findings
+        or [
+            "{name} -> {status} {target}".format(
+                name=item["name"],
+                status=item.get("statusCode") or "OK",
+                target=item.get("url") or item.get("reportPath") or item.get("bodyPreview", ""),
+            ).strip()
+            for item in statuses
+        ],
         "reportDir": relpath(report_dir),
         **timing,
     }
@@ -2475,6 +2650,19 @@ def _full_scope_health_checks(
                     "scope": "full",
                     "url": f"{str(public_bases['api']).rstrip('/')}/v1/chat/contacts",
                 },
+                {
+                    "name": "app-messages-unread-count",
+                    "scope": "full",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/app-messages/unread-count",
+                },
+                {
+                    "name": "feed-intersections",
+                    "scope": "full",
+                    "url": (
+                        f"{str(public_bases['api']).rstrip('/')}"
+                        "/v1/content/feed/intersections?limit=4&channel=recommend"
+                    ),
+                },
             ]
         )
     elif target_name == "gamma-local":
@@ -2595,11 +2783,12 @@ def _replicas_for_step(step: str) -> int:
 
 def _local_log_report(target_name: str) -> dict[str, Any]:
     candidates: dict[str, Path] = {
-        "beta-state": ROOT / "tmp" / "beta_stack",
-        "beta-manual": ROOT / "tmp" / "app_beta_manual",
-        "app-instances": ROOT / "tmp" / "app-instances",
+        "alpha-state": ROOT / "state" / "local" / "alpha_stack",
+        "beta-state": ROOT / "state" / "local" / "beta_stack",
+        "beta-manual": ROOT / "state" / "local" / "app_beta_manual",
+        "app-instances": ROOT / "state" / "app-instances",
         "local-gamma": ROOT / "artifacts" / "local-gamma",
-        "release-state": ROOT / ".release-state",
+        "release-state": ROOT / "state" / "release",
     }
     hits = []
     for name, path in candidates.items():

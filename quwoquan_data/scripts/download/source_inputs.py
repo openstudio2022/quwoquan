@@ -61,17 +61,29 @@ def _normalize_image_specs(raw: Any) -> list[dict[str, Any]]:
         return out
     for item in raw:
         if isinstance(item, str):
-            url, license_, credit = item, "", ""
+            spec = {"url": item, "license": "", "credit": ""}
         elif isinstance(item, dict):
             url = item.get("url") or item.get("link") or ""
-            license_ = item.get("license", "")
-            credit = item.get("credit") or item.get("author") or ""
+            spec = {
+                "url": url,
+                "license": item.get("license", ""),
+                "credit": item.get("credit") or item.get("author") or "",
+                "sourceUrl": item.get("sourceUrl") or url,
+                "termsUrl": item.get("termsUrl", ""),
+                "licenseSnapshot": item.get("licenseSnapshot", ""),
+                "usageScope": item.get("usageScope", ""),
+                "platform": item.get("platform") or item.get("sourcePlatform") or "",
+                "modelReleaseRequired": item.get("modelReleaseRequired", ""),
+                "modelReleaseStatus": item.get("modelReleaseStatus", ""),
+                "authorizationProof": item.get("authorizationProof", ""),
+            }
         else:
             continue
+        url = spec["url"]
         if not url or url in seen:
             continue
         seen.add(url)
-        out.append({"url": url, "license": license_, "credit": credit})
+        out.append(spec)
     return out
 
 

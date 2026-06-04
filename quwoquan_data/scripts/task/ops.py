@@ -110,7 +110,13 @@ def show(task_id: str) -> None:
     prog = load_progress(task_id)
     lock = read_lock(task_id)
     print(json.dumps(
-        {"rawSpec": raw, "effectiveSpec": effective, "progress": prog, "lock": lock},
+        {
+            "rawSpec": raw,
+            "effectiveSpec": effective,
+            "progress": prog,
+            "lock": lock,
+            "postOutputs": latest_post_outputs(task_id),
+        },
         ensure_ascii=False, indent=2,
     ))
 
@@ -148,6 +154,38 @@ def compute_gaps(task_id: str) -> dict[str, Any]:
         "missingConditionCells": missing_cells,
         "openGaps": prog.get("openGaps", []),
     }
+
+
+def latest_post_outputs(task_id: str, limit: int = 10) -> list[dict[str, Any]]:
+    """Return materialized post package locations under runtime batches."""
+    root = runtime_task_root(task_id)
+    posts_root = root / "batches"
+    if not posts_root.is_dir():
+        return []
+    rows: list[dict[str, Any]] = []
+    for manifest in sorted(posts_root.rglob("produce/posts/*/*/*/manifest.json")):
+        try:
+            data = read_json(manifest)
+        except Exception:  # noqa: BLE001
+            continue
+        try:
+            rel = manifest.parent.relative_to(root)
+        except ValueError:
+            rel = manifest.parent
+        parts = rel.parts
+        batch_id = parts[1] if len(parts) > 1 and parts[0] == "batches" else ""
+        rows.append(
+            {
+                "batchId": batch_id,
+                "title": data.get("publishTitle") or data.get("title") or manifest.parent.parent.name,
+                "contentType": data.get("contentType") or "",
+                "path": str(rel).replace("\\", "/"),
+                "articlePath": str((rel / "article.md")).replace("\\", "/"),
+                "sourceBatchId": data.get("sourceBatchId") or batch_id,
+            }
+        )
+    rows.sort(key=lambda r: (r["batchId"], r["path"]), reverse=True)
+    return rows[:limit]
 
 
 def resume(task_id: str) -> None:
@@ -191,6 +229,11 @@ def status(task_id: str) -> None:
     print(f"  深度: anglesByEntity={len(prog.get('anglesByEntity', {}))} 实体有角度记录; conditionCells={len(prog.get('conditionCells', []))}")
     print(f"  计数: entities={prog.get('counts', {}).get('entities', 0)} posts={prog.get('counts', {}).get('posts', 0)}")
     print(f"  lastRunId: {prog.get('lastRunId')}")
+    outputs = latest_post_outputs(task_id, limit=5)
+    if outputs:
+        print("  最新文章产物:")
+        for item in outputs:
+            print(f"    - [{item['batchId']}] {item['title']} -> {item['articlePath']}")
 
 
 # ─── record-run + 反思账本 ──────────────────────────────────────────

@@ -11,6 +11,7 @@ import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.d
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -879,46 +880,19 @@ class _ChatPageState extends ConsumerState<ChatPage>
         );
       },
       loading: () => const Center(child: CupertinoActivityIndicator()),
-      error: (error, _) => Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                CupertinoIcons.exclamationmark_circle,
-                size: AppSpacing.iconButtonMinSizeMd,
-                color: fgSecondary,
-              ),
-              SizedBox(height: AppSpacing.md),
-              Text(
-                runtimeErrorDisplayMessage(error),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: AppTypography.iosTitle3,
-                  color: fgSecondary,
-                ),
-              ),
-              SizedBox(height: AppSpacing.sm),
-              CupertinoButton(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.xs,
-                ),
-                onPressed: () {
-                  ref.invalidate(chatContactsRowsForSubTabProvider(sub));
-                },
-                child: Text(
-                  UITextConstants.retry,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosBody,
-                    color: fgPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
+      error: (error, _) => AppPageErrorState(
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
         ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            ref.invalidate(chatContactsRowsForSubTabProvider(sub));
+          }
+        },
       ),
     );
   }

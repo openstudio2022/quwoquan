@@ -1,0 +1,11 @@
+schemaVersion: quwoquan.vertical_quality_samples.v1
+vertical: travel
+samples:
+  - id: travel.sample.scenic_spot
+    entityRef: /entity/地点/景区/九寨沟
+    requiredEvidenceCategories: [encyclopedia, official, travelogue, map_geo]
+    requiredChecks: [fact_traceability, season_window, route_safety, lodging_transport]
+  - id: travel.sample.outbound_city
+    entityRef: /entity/地点/城市/曼谷
+    requiredEvidenceCategories: [official, guidebook, transport, lodging, review]
+    requiredChecks: [visa_entry, payment_connectivity, safety_medical, route_plan]

@@ -185,6 +185,11 @@ class _LoggedOutProfileSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final semantic = authGateSemantic(
+      context,
+      reason: AuthGateReason.profileTab,
+      scope: UiErrorScope.section,
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.iosGroupedSurfaceElevated(context),
@@ -232,6 +237,21 @@ class _LoggedOutProfileSummaryCard extends StatelessWidget {
                 height: AppSpacing.textLineHeightBody,
                 color: AppColors.iosSecondaryLabel(context),
               ),
+            ),
+            SizedBox(height: AppSpacing.containerMd),
+            AppInlineGateState(
+              semantic: semantic,
+              onAction: (action) async {
+                if (action.type == UiErrorActionType.login) {
+                  openLoginPage(
+                    context,
+                    reasonName: AuthPromptReason.actionRequired.name,
+                    redirect: AppRoutePaths.profile,
+                    dismissFallback: AppRoutePaths.profile,
+                  );
+                }
+              },
+              margin: EdgeInsets.zero,
             ),
             SizedBox(height: AppSpacing.interGroupLg),
             CupertinoButton(

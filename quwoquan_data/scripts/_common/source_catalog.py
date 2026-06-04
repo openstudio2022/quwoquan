@@ -84,6 +84,8 @@ def vertical_from_task_id(task_id: str) -> str:
     head = (task_id or "").strip().strip("/").split("/")[0]
     if head in ("校园", "campus"):
         return "campus"
+    if head in ("摄影", "photography"):
+        return "photography"
     return "travel"
 
 

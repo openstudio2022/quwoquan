@@ -46,8 +46,7 @@ def _compose_entity_agent_draft(task: str, batch: str, ref: str, brief: dict):
     quality = analyze_route_ref(task, batch, ref, brief)
     pack = build_entity_writing_pack(task, batch, ref, brief, quality)
     byline = public_byline_label(str(brief.get("templateId")), brief.get("creator") or {})
-    name = pack.get("primaryEntity") or ENTITY
-    article = entity_article(brief["titleHint"], byline, name, pack.get("mustIncludeFacts") or [])
+    article = entity_article(brief["titleHint"], byline, ENTITY, pack.get("mustIncludeFacts") or [])
     write_agent_draft(
         task,
         batch,

@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -384,6 +385,7 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
     setState(() {
       _isSubmitting = true;
     });
+    UiErrorSemantic? submitErrorSemantic;
     try {
       await ref
           .read(homepageRepositoryProvider)
@@ -406,17 +408,51 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
       }
       AppToast.show(context, UITextConstants.addHomepageSubmitted);
       Navigator.of(context).pop(true);
-    } catch (_) {
-      if (!mounted) {
-        return;
+    } catch (error) {
+      if (mounted) {
+        final resolved = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        );
+        submitErrorSemantic = UiErrorSemantic(
+          category: resolved.category,
+          scope: resolved.scope,
+          title: '建议主页未完成',
+          message: resolved.message,
+          secondaryMessage: resolved.secondaryMessage,
+          primaryAction: const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
+          ),
+          secondaryAction: resolved.secondaryAction,
+          dismissible: resolved.dismissible,
+          sourceCode: resolved.sourceCode,
+          failureKind: resolved.failureKind,
+          recoveryAction: resolved.recoveryAction,
+          presentation: resolved.presentation,
+          tone: resolved.tone,
+        );
       }
-      AppToast.show(context, UITextConstants.addHomepageSubmitFailed);
     } finally {
       if (mounted) {
         setState(() {
           _isSubmitting = false;
         });
       }
+    }
+    if (submitErrorSemantic != null && mounted) {
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: submitErrorSemantic!,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _submit();
+          }
+        },
+      );
     }
   }
 

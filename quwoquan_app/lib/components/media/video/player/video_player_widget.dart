@@ -179,22 +179,25 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: (AppSpacing.avatarSize * 1.5).sp,
-            color: AppColors.error,
+          Container(
+            width: AppSpacing.sm.w,
+            height: AppSpacing.sm.w,
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.42),
+              shape: BoxShape.circle,
+            ),
           ),
           SizedBox(height: AppSpacing.sm.h),
           Text(
-            '视频加载失败',
+            '视频暂时没加载出来',
             style: TextStyle(
-              color: AppColors.error,
+              color: AppColors.white.withValues(alpha: 0.88),
               fontSize: AppTypography.sm.sp,
             ),
           ),
           SizedBox(height: AppSpacing.xs.h),
           Text(
-            '请检查网络连接',
+            UITextConstants.checkNetworkAndTryAgain,
             style: TextStyle(
               color: AppColors.white.withOpacity(0.7),
               fontSize: AppTypography.xs.sp,

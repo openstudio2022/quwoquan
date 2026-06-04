@@ -123,33 +123,72 @@ List<IntersectionReason> _mockIntersectionReasons(
   };
   final firstEdge = relationEdges.isNotEmpty ? relationEdges.first : null;
   return <IntersectionReason>[
-    IntersectionReason(
-      dimension: 'interest',
-      tagRefs: homepage.categoryTags,
-      relationKind: 'mutual',
-      relationObjectId: homepage.id,
-      label: interestLabel,
-      sharedCount: homepage.categoryTags.length,
-      strength: 0.86,
-      displayText: interestLabel,
-      actionType: 'view_object',
-      actionTargetId: homepage.id,
-      source: 'tagRef',
+    _mockReasonWithPoint(
+      IntersectionReason(
+        dimension: 'interest',
+        tagRefs: homepage.categoryTags,
+        relationKind: 'mutual',
+        relationObjectId: homepage.id,
+        label: interestLabel,
+        sharedCount: homepage.categoryTags.length,
+        strength: 0.86,
+        displayText: interestLabel,
+        actionType: 'view_object',
+        actionTargetId: homepage.id,
+        source: 'tagRef',
+      ),
+      pointClass: 'recommended',
     ),
-    IntersectionReason(
-      dimension: 'relationship',
-      tagRefs: homepage.categoryTags,
-      relationKind: 'mutual',
-      relationObjectId: firstEdge?.sourceObjectId ?? '',
-      label: '这里有你可能想加入的相关圈子',
-      sharedCount: relationEdges.length,
-      strength: 0.78,
-      displayText: '这里有你可能想加入的相关圈子',
-      actionType: 'join',
-      actionTargetId: firstEdge?.sourceObjectId ?? '',
-      source: 'followEdge',
+    _mockReasonWithPoint(
+      IntersectionReason(
+        dimension: 'relationship',
+        tagRefs: homepage.categoryTags,
+        relationKind: 'mutual',
+        relationObjectId: firstEdge?.sourceObjectId ?? '',
+        label: '这里有你可能想加入的相关圈子',
+        sharedCount: relationEdges.length,
+        strength: 0.78,
+        displayText: '这里有你可能想加入的相关圈子',
+        actionType: 'join',
+        actionTargetId: firstEdge?.sourceObjectId ?? '',
+        source: 'followEdge',
+      ),
+      pointClass: 'fact',
     ),
   ];
+}
+
+IntersectionReason _mockReasonWithPoint(
+  IntersectionReason reason, {
+  required String pointClass,
+}) {
+  final point = IntersectionPoint(
+    pointId: '${reason.actionTargetId}_${reason.dimension}',
+    pointClass: pointClass,
+    dimension: reason.dimension,
+    label: reason.label,
+    displayText: reason.displayText,
+    sourceRef: reason.source,
+  );
+  final isRecommended = pointClass == 'recommended';
+  return reason.copyWith(
+    intersectionClass: isRecommended ? 'affinity' : 'fact',
+    intersectionPoints: <IntersectionPoint>[point],
+    pointSummarySnapshotId: reason.actionTargetId,
+    factPointCount: isRecommended ? 0 : 1,
+    recommendedPointCount: isRecommended ? 1 : 0,
+    totalPointCount: 1,
+    dimensionPointSummary: <IntersectionDimensionTally>[
+      IntersectionDimensionTally(
+        dimension: reason.dimension,
+        label: reason.label,
+        count: 1,
+      ),
+    ],
+    pointClassLabel: isRecommended ? '推荐交集' : '事实交集',
+    recommendationTraceId: reason.actionTargetId,
+    rankState: 'fresh',
+  );
 }
 
 List<ObjectIntersection> _mockObjectIntersections(

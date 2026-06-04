@@ -3,14 +3,10 @@ import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 
 void main() {
   group('resolveAvatarImageUrl', () {
-    test('keeps absolute http/https avatar URLs', () {
+    test('keeps absolute https avatar URLs', () {
       expect(
         resolveAvatarImageUrl('https://cdn.example.com/u.png'),
         'https://cdn.example.com/u.png',
-      );
-      expect(
-        resolveAvatarImageUrl('http://media.example.com/u.png'),
-        'http://media.example.com/u.png',
       );
     });
 
@@ -29,10 +25,10 @@ void main() {
       expect(
         resolveAvatarImageUrl(
           'media/avatar/default/group/v1/default.png',
-          gatewayBaseUrl: 'http://127.0.0.1:18080/',
-          avatarCdnBaseUrl: 'http://127.0.0.1:18088/',
+          gatewayBaseUrl: 'https://127.0.0.1:18080/',
+          avatarCdnBaseUrl: 'https://127.0.0.1:18088/',
         ),
-        'http://127.0.0.1:18088/media/avatar/default/group/v1/default.png',
+        'https://127.0.0.1:18088/media/avatar/default/group/v1/default.png',
       );
     });
 
@@ -40,20 +36,20 @@ void main() {
       expect(
         resolveAvatarImageUrl(
           '/media/avatar/beta-avatar.png',
-          gatewayBaseUrl: 'http://127.0.0.1:18080/',
-          avatarCdnBaseUrl: 'http://127.0.0.1:18088/',
+          gatewayBaseUrl: 'https://127.0.0.1:18080/',
+          avatarCdnBaseUrl: 'https://127.0.0.1:18088/',
         ),
-        'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
+        'https://127.0.0.1:18088/media/avatar/beta-avatar.png',
       );
       expect(
         resolveAvatarImageUrlCandidates(
           '/media/avatar/beta-avatar.png',
-          gatewayBaseUrl: 'http://127.0.0.1:18080/',
-          avatarCdnBaseUrl: 'http://127.0.0.1:18088/',
+          gatewayBaseUrl: 'https://127.0.0.1:18080/',
+          avatarCdnBaseUrl: 'https://127.0.0.1:18088/',
         ),
         <String>[
-          'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
-          'http://127.0.0.1:18080/media/avatar/beta-avatar.png',
+          'https://127.0.0.1:18088/media/avatar/beta-avatar.png',
+          'https://127.0.0.1:18080/media/avatar/beta-avatar.png',
         ],
       );
     });
@@ -72,10 +68,10 @@ void main() {
       },
     );
 
-    test('rewrites loopback absolute media URLs for iPad beta', () {
+    test('keeps loopback absolute media URLs on https for iPad beta', () {
       expect(
         resolveAvatarImageUrl(
-          'http://127.0.0.1:18088/media/avatar/conversation/conv_1/v3/hash.png?v=3',
+          'https://127.0.0.1:18088/media/avatar/conversation/conv_1/v3/hash.png?v=3',
           gatewayBaseUrl: 'https://beta-gateway.example.com',
           avatarCdnBaseUrl: 'https://beta-gateway.example.com',
         ),
@@ -84,49 +80,49 @@ void main() {
     });
 
     test(
-      'keeps beta simulator media port when avatar CDN matches loopback',
+      'keeps beta simulator media port when avatar CDN matches https loopback',
       () {
         expect(
           resolveAvatarImageUrl(
-            'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
-            gatewayBaseUrl: 'http://127.0.0.1:18080',
-            avatarCdnBaseUrl: 'http://127.0.0.1:18088',
+            'https://127.0.0.1:18088/media/avatar/beta-avatar.png',
+            gatewayBaseUrl: 'https://127.0.0.1:18080',
+            avatarCdnBaseUrl: 'https://127.0.0.1:18088',
           ),
-          'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
+          'https://127.0.0.1:18088/media/avatar/beta-avatar.png',
         );
         expect(
           resolveAvatarImageUrlCandidates(
-            'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
-            gatewayBaseUrl: 'http://127.0.0.1:18080',
-            avatarCdnBaseUrl: 'http://127.0.0.1:18088',
+            'https://127.0.0.1:18088/media/avatar/beta-avatar.png',
+            gatewayBaseUrl: 'https://127.0.0.1:18080',
+            avatarCdnBaseUrl: 'https://127.0.0.1:18088',
           ),
           <String>[
-            'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
-            'http://127.0.0.1:18080/media/avatar/beta-avatar.png',
+            'https://127.0.0.1:18088/media/avatar/beta-avatar.png',
+            'https://127.0.0.1:18080/media/avatar/beta-avatar.png',
           ],
         );
       },
     );
 
-    test('rewrites http media URLs when configured avatar base is https', () {
+    test('keeps https media URLs when configured avatar base is https', () {
       expect(
         resolveAvatarImageUrl(
-          'http://media.example.com/media/avatar/user/u1/v1/profile.png',
+          'https://media.example.com/media/avatar/user/u1/v1/profile.png',
           gatewayBaseUrl: 'https://beta-gateway.example.com',
           avatarCdnBaseUrl: 'https://cdn.example.com',
         ),
-        'https://cdn.example.com/media/avatar/user/u1/v1/profile.png',
+        'https://media.example.com/media/avatar/user/u1/v1/profile.png',
       );
     });
 
     test('keeps non-media absolute URLs unchanged', () {
       expect(
         resolveAvatarImageUrl(
-          'http://example.com/profile-avatar.png',
+          'https://example.com/profile-avatar.png',
           gatewayBaseUrl: 'https://beta-gateway.example.com',
           avatarCdnBaseUrl: 'https://cdn.example.com',
         ),
-        'http://example.com/profile-avatar.png',
+        'https://example.com/profile-avatar.png',
       );
     });
   });

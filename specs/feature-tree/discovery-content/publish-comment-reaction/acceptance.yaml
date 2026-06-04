@@ -7,24 +7,42 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: publish-comment-reaction
 scope:
-  summary: publish comment reaction 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: publish-comment-reaction 能力级 SIT，验证发布内容后的评论、回复、反应计数、行为上报和端云状态协同。
+  in_scope:
+  - 内容详情、沉浸式内容和个人主页评论入口组合验证。
+  - 评论提交、回复、展开、赞踩与 post interaction 计数最终一致。
+  - Comment metadata、App Config、Mock/Remote、content-service contract 和 seed manifest 对齐。
+  out_of_scope:
+  - 推荐排序模型训练。
+  - 评论搜索、置顶、翻译。
 sit_acceptance:
   SIT1:
-    title: publish comment reaction 能力 SIT
-    story_refs: []
+    title: 评论 V2 与内容互动能力端云组合 SIT
+    story_refs:
+    - comment-thread
+    - reaction-state-counter
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
-    performance_points: []
+    - 平铺文章入口完成内联定位，沉浸式入口完成上压分屏，个人主页评论可跳回原内容评论区。
+    - 评论创建、回复创建、回复分页、赞踩切换、删除/举报权限态都由云端契约驱动。
+    - postInteractionStateProvider 与 Comment state 在乐观更新和云端确认后保持最终一致。
+    - alpha/beta/gamma seed 与 verifiedEndpoints 覆盖 comments、replies、reaction、attachment、mentions。
+    performance_points:
+    - 评论首屏 P95 小于 800ms。
+    - 评论提交云端确认 P95 小于 500ms。
+    - 回复展开 P95 小于 500ms。
     evidence:
       primary:
       - T2_module_interaction
       - T3_app_api_integration
       supporting:
       - T1_static_contract
+      - T4_device_journey
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/test/ui/content/providers/comment_provider_test.dart
+      - quwoquan_app/test/components/comment_system/immersive_comment_split_sheet_test.dart
+      - quwoquan_service/services/content-service/tests/comment_thread_contract_test.go
+      - quwoquan_app/integration_test/comment_thread_journey_test.dart
       recorded: []
     status: pending
 execution:

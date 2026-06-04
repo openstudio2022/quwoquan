@@ -134,6 +134,49 @@ scenarios:
       - second page using cursor: len(comments) == 5
       - no overlap between pages
 
+  - name: comment_list_recommended_latest_most_liked
+    operation: ListComments
+    go_func: TestCommentListRecommendedLatestMostLiked
+    command: ListComments(sort=recommended/latest/most_liked)
+    seed: [fixture.NewPost(), fixture.NewComments(withMixedScore=true)]
+    assertions:
+      - recommended order uses recommendedScore/freshness stable tie-breaker
+      - latest order uses createdAt DESC
+      - most_liked order uses likeCount DESC then createdAt DESC
+      - hidden/deleted comments are excluded
+
+  - name: comment_reply_preview_and_expand_contract
+    operation: ListCommentReplies
+    go_func: TestCommentReplyPreviewAndExpandContract
+    command: ListComments then ListCommentReplies
+    seed: [fixture.NewPost(), fixture.NewCommentWithReplies(count=21)]
+    assertions:
+      - ListComments first parent includes replyPreview length == reply_preview_count
+      - replyNextCursor is present when replyCount exceeds preview count
+      - ListCommentReplies returns at most reply_expand_page_size replies
+      - second replies page has no overlap
+
+  - name: create_comment_with_attachment_and_mentions
+    operation: CreateComment
+    go_func: TestCreateCommentWithAttachmentAndMentions
+    command: CreateComment(attachmentMediaIds, mentions)
+    seed: [fixture.NewPost(), fixture.NewReadyCommentAttachment(), fixture.NewMentionTargets()]
+    assertions:
+      - db.comments.FindOne stores attachmentMediaIds and mentions
+      - response.attachments contains ready media snapshot
+      - assistantMentioned == true when mentions contains assistant subject
+
+  - name: react_to_comment_three_state_contract
+    operation: ReactToComment
+    go_func: TestReactToCommentThreeStateContract
+    command: ReactToComment(like -> dislike -> none)
+    seed: [fixture.NewPost(), fixture.NewComment()]
+    assertions:
+      - like sets viewerReaction=like and increments likeCount only once
+      - dislike clears like, sets viewerReaction=dislike, increments dislikeCount
+      - none clears both counters for the viewer
+      - eventSpy.AssertPublished("CommentReacted")
+
   # ── Feed 场景 ─────────────────────────────────────────────────────
   - name: get_feed_by_type
     operation: GetFeed
@@ -372,6 +415,19 @@ scenarios:
     operation: LikeComment
     go_func: TestLikeComment
     command: LikeComment
+  - name: list_comment_replies_contract
+    operation: ListCommentReplies
+    go_func: TestListCommentReplies
+    command: ListCommentReplies
+  - name: react_to_comment_contract
+    operation: ReactToComment
+    go_func: TestReactToComment
+    command: ReactToComment
+  - name: bind_media_assets_to_comment_contract
+    operation: BindMediaAssetsToComment
+    go_func: TestBindMediaAssetsToCommentContract
+    status: pending
+    command: BindMediaAssetsToComment
   - name: unlike_comment_contract
     operation: UnlikeComment
     go_func: TestUnlikeCommentContract

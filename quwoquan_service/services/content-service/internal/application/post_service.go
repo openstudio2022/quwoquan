@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	rterr "quwoquan_service/runtime/errors"
+	runtimemedia "quwoquan_service/runtime/media"
 	rtobs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/runtime/repository"
@@ -75,38 +77,44 @@ type articleDocumentSnapshot struct {
 }
 
 type PostService struct {
-	store         persistence.PostRepository
-	signaler      rtrec.SignalProcessor
-	publisher     repository.EventPublisher
-	projector     Projector
-	logger        *slog.Logger
-	mu            sync.Mutex
-	reactions     map[string]map[string]contentReactionState // postID -> userID -> state
-	distributions map[string]map[string]bool                 // postID -> circleID -> active
-	reshares      map[string]map[string]bool                 // postID -> (circleID:userID) -> active
-	tombstones    map[string]time.Time                       // postID -> deletedAt
-	mediaAssets   map[string]postmodel.MediaAsset            // mediaID -> asset
-	uploadSession map[string]string                          // sessionID -> mediaID
-	comments      map[string][]map[string]any                // postID -> comments list
-	commentLikes  map[string]map[string]bool                 // commentID -> userID -> liked
-	commentMaxLen int                                        // configurable, default 500
-	storyRuntime  StoryRuntimeConfig
+	store           persistence.PostRepository
+	signaler        rtrec.SignalProcessor
+	publisher       repository.EventPublisher
+	projector       Projector
+	logger          *slog.Logger
+	mu              sync.Mutex
+	reactions       map[string]map[string]contentReactionState // postID -> userID -> state
+	distributions   map[string]map[string]bool                 // postID -> circleID -> active
+	reshares        map[string]map[string]bool                 // postID -> (circleID:userID) -> active
+	tombstones      map[string]time.Time                       // postID -> deletedAt
+	mediaAssets     map[string]postmodel.MediaAsset            // mediaID -> asset
+	uploadSession   map[string]string                          // sessionID -> mediaID
+	comments        map[string][]map[string]any                // postID -> comments list
+	commentLikes    map[string]map[string]bool                 // commentID -> userID -> liked
+	commentMaxLen   int                                        // configurable, default 500
+	storyRuntime    StoryRuntimeConfig
+	mediaCDNBase    string
+	mediaUploadBase string
+	mediaStore      runtimemedia.MediaStore
 }
 
 func NewPostService(store persistence.PostRepository, opts ...PostServiceOption) *PostService {
 	s := &PostService{
-		store:         store,
-		logger:        slog.Default(),
-		reactions:     map[string]map[string]contentReactionState{},
-		distributions: map[string]map[string]bool{},
-		reshares:      map[string]map[string]bool{},
-		tombstones:    map[string]time.Time{},
-		mediaAssets:   map[string]postmodel.MediaAsset{},
-		uploadSession: map[string]string{},
-		comments:      map[string][]map[string]any{},
-		commentLikes:  map[string]map[string]bool{},
-		commentMaxLen: 500,
-		storyRuntime:  defaultStoryRuntimeConfig(),
+		store:           store,
+		logger:          slog.Default(),
+		reactions:       map[string]map[string]contentReactionState{},
+		distributions:   map[string]map[string]bool{},
+		reshares:        map[string]map[string]bool{},
+		tombstones:      map[string]time.Time{},
+		mediaAssets:     map[string]postmodel.MediaAsset{},
+		uploadSession:   map[string]string{},
+		comments:        map[string][]map[string]any{},
+		commentLikes:    map[string]map[string]bool{},
+		commentMaxLen:   500,
+		storyRuntime:    defaultStoryRuntimeConfig(),
+		mediaCDNBase:    "https://media.quwoquan.invalid",
+		mediaUploadBase: "https://media-origin.quwoquan.invalid",
+		mediaStore:      runtimemedia.NewMockMediaStore(),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -165,6 +173,74 @@ func WithStoryRuntimeConfig(cfg StoryRuntimeConfig) PostServiceOption {
 	return func(s *PostService) {
 		s.storyRuntime = normalizeStoryRuntimeConfig(cfg)
 	}
+}
+
+func WithMediaURLConfig(cdnBaseURL, uploadBaseURL string) PostServiceOption {
+	return func(s *PostService) {
+		if normalized := normalizeHTTPSBaseURL(cdnBaseURL); normalized != "" {
+			s.mediaCDNBase = normalized
+		}
+		if normalized := normalizeHTTPSBaseURL(uploadBaseURL); normalized != "" {
+			s.mediaUploadBase = normalized
+		}
+	}
+}
+
+func WithMediaStore(store runtimemedia.MediaStore) PostServiceOption {
+	return func(s *PostService) {
+		s.mediaStore = store
+	}
+}
+
+func normalizeHTTPSBaseURL(raw string) string {
+	value := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return ""
+	}
+	return value
+}
+
+func mediaFileExt(mediaType string) string {
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "video":
+		return "mp4"
+	case "audio":
+		return "m4a"
+	default:
+		return "jpg"
+	}
+}
+
+func mediaMimeType(mediaType string) string {
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "video":
+		return "video/mp4"
+	case "audio":
+		return "audio/mp4"
+	default:
+		return "image/jpeg"
+	}
+}
+
+func mediaObjectKey(scope, ownerID, sessionID, mediaID, mediaType string) string {
+	normalizedScope := defaultString(strings.TrimSpace(scope), "draft")
+	normalizedOwner := defaultString(strings.TrimSpace(ownerID), AnonymousFallbackSubAccountID)
+	return fmt.Sprintf(
+		"uploads/post/%s/%s/%s/%s/original.%s",
+		normalizedScope,
+		normalizedOwner,
+		sessionID,
+		mediaID,
+		mediaFileExt(mediaType),
+	)
+}
+
+func mediaURL(base, objectKey string) string {
+	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(objectKey, "/")
 }
 
 func defaultStoryRuntimeConfig() StoryRuntimeConfig {
@@ -1100,24 +1176,41 @@ func (s *PostService) RepostToCircle(ctx context.Context, postID, userID, circle
 	}, nil
 }
 
-func (s *PostService) InitMediaUpload(_ context.Context, userID, mediaType, assetScope, sourceKind string) map[string]any {
+func (s *PostService) InitMediaUpload(ctx context.Context, userID, mediaType, assetScope, sourceKind string) map[string]any {
 	now := time.Now().UTC()
 	if userID == "" {
 		userID = AnonymousFallbackSubAccountID
 	}
 	mediaID := fmt.Sprintf("media_%d", now.UnixNano())
 	sessionID := fmt.Sprintf("upload_%d", now.UnixNano())
+	assetScope = defaultString(strings.TrimSpace(assetScope), "draft")
+	mediaType = defaultString(strings.TrimSpace(mediaType), "image")
+	objectKey := mediaObjectKey(assetScope, userID, sessionID, mediaID, mediaType)
+	uploadURL := mediaURL(s.mediaUploadBase, "upload/"+objectKey)
+	if s.mediaStore != nil {
+		if session, err := s.mediaStore.InitUpload(ctx, runtimemedia.InitUploadOpts{
+			Category:    runtimemedia.CategoryPost,
+			OwnerID:     userID,
+			FileName:    "original." + mediaFileExt(mediaType),
+			ContentType: mediaMimeType(mediaType),
+			FileSize:    1,
+		}); err == nil && session != nil {
+			sessionID = session.SessionID
+			objectKey = session.OSSKey
+			uploadURL = session.PresignURL
+		}
+	}
 	asset := postmodel.MediaAsset{
 		ID:               mediaID,
 		OwnerId:          userID,
-		AssetScope:       defaultString(strings.TrimSpace(assetScope), "draft"),
-		Type:             defaultString(strings.TrimSpace(mediaType), "image"),
-		OriginUrl:        "https://origin.example/media/" + mediaID + "/original.jpg",
-		ObjectKey:        "media/draft/" + mediaID + "/original",
-		Sha256:           "dev-sha256-" + mediaID,
+		AssetScope:       assetScope,
+		Type:             mediaType,
+		OriginUrl:        mediaURL(s.mediaUploadBase, objectKey),
+		ObjectKey:        objectKey,
+		Sha256:           "",
 		SourceKind:       defaultString(strings.TrimSpace(sourceKind), "user_upload"),
-		MimeType:         "image/jpeg",
-		Status:           "uploaded",
+		MimeType:         mediaMimeType(mediaType),
+		Status:           "pending",
 		CoverStrategy:    "first_frame",
 		ModerationStatus: "pending",
 		CreatedAt:        now,
@@ -1128,15 +1221,18 @@ func (s *PostService) InitMediaUpload(_ context.Context, userID, mediaType, asse
 	s.uploadSession[sessionID] = mediaID
 	s.mu.Unlock()
 	return map[string]any{
-		"sessionId":  sessionID,
-		"mediaId":    mediaID,
-		"uploadUrl":  "https://origin.example/upload/" + mediaID,
-		"uploaderId": userID,
-		"assetScope": asset.AssetScope,
+		"sessionId":          sessionID,
+		"mediaId":            mediaID,
+		"uploadUrl":          uploadURL,
+		"presignUrl":         uploadURL,
+		"objectKey":          objectKey,
+		"temporaryObjectKey": objectKey,
+		"uploaderId":         userID,
+		"assetScope":         asset.AssetScope,
 	}
 }
 
-func (s *PostService) CompleteMediaUpload(_ context.Context, sessionID string) (*postmodel.MediaAsset, error) {
+func (s *PostService) CompleteMediaUpload(ctx context.Context, sessionID string) (*postmodel.MediaAsset, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	mediaID := s.uploadSession[strings.TrimSpace(sessionID)]
@@ -1156,13 +1252,30 @@ func (s *PostService) CompleteMediaUpload(_ context.Context, sessionID string) (
 		)
 	}
 	asset.Status = "ready"
-	asset.CdnUrl = "https://cdn.example/media/" + mediaID
-	asset.ThumbnailUrl = "https://cdn.example/media/" + mediaID + "/thumb.jpg"
 	if asset.ObjectKey == "" {
-		asset.ObjectKey = "media/" + defaultString(asset.AssetScope, "draft") + "/" + mediaID + "/original"
+		asset.ObjectKey = mediaObjectKey(asset.AssetScope, asset.OwnerId, sessionID, mediaID, asset.Type)
 	}
-	if asset.Sha256 == "" {
-		asset.Sha256 = "dev-sha256-" + mediaID
+	asset.CdnUrl = mediaURL(s.mediaCDNBase, asset.ObjectKey)
+	asset.ThumbnailUrl = asset.CdnUrl + "?variant=thumb"
+	if s.mediaStore != nil {
+		if mediaAsset, err := s.mediaStore.CompleteUpload(ctx, strings.TrimSpace(sessionID), runtimemedia.CompleteUploadOpts{
+			DurationMs: asset.DurationMs,
+			Width:      int(asset.Width),
+			Height:     int(asset.Height),
+			Metadata:   map[string]any{"contentMediaId": mediaID},
+			DeclaredSha256: asset.Sha256,
+		}); err == nil && mediaAsset != nil {
+			asset.ObjectKey = mediaAsset.OSSKey
+			asset.CdnUrl = mediaAsset.CDNURL
+			asset.OriginUrl = mediaAsset.CDNURL
+			asset.Sha256 = strings.TrimSpace(mediaAsset.Sha256)
+			if strings.TrimSpace(mediaAsset.AssetID) != "" {
+				asset.SourceUrl = mediaAsset.AssetID
+			}
+			if mediaAsset.FileSize > 0 {
+				asset.FileSizeBytes = mediaAsset.FileSize
+			}
+		}
 	}
 	if asset.Type == "video" {
 		asset.DurationMs = 15000
@@ -1178,7 +1291,7 @@ func (s *PostService) CompleteMediaUpload(_ context.Context, sessionID string) (
 		asset.ContentProfile = map[string]any{"hasAlpha": false, "contentClass": "photo", "edgeDensityScore": 0.24, "flatColorScore": 0.18, "textLikeScore": 0.03}
 		asset.DerivativePolicyVersion = fmt.Sprintf("%d", time.Now().UTC().Unix())
 		asset.Derivatives = map[string]any{"job": map[string]any{"jobId": "img_derivative_" + mediaID, "status": "ready", "retryable": true}, "variants": []map[string]any{{"displayUse": "feedCard", "qualityTier": "standard", "format": "webp", "url": asset.CdnUrl + "?use=feedCard&tier=standard&fmt=webp"}}}
-		asset.AccessPolicy = map[string]any{"originalAllowed": true, "allowOriginalView": true, "allowOriginalSave": true, "originalTtlSeconds": 300, "originalSizeBytes": asset.FileSizeBytes, "originalSha256": "dev-sha256-" + mediaID}
+		asset.AccessPolicy = map[string]any{"originalAllowed": true, "allowOriginalView": true, "allowOriginalSave": true, "originalTtlSeconds": 300, "originalSizeBytes": asset.FileSizeBytes, "originalSha256": asset.Sha256}
 		asset.OriginalAccess = map[string]any{"available": true, "requiresExplicitAction": true, "sizeBytes": asset.FileSizeBytes, "format": asset.MimeType, "ttlSeconds": 300}
 	}
 	asset.UpdatedAt = time.Now().UTC()
@@ -3160,7 +3273,7 @@ func (s *PostService) RequestOriginalImageAccess(ctx context.Context, in Request
 		base = strings.TrimSpace(asset.CdnUrl)
 	}
 	if base == "" {
-		base = "https://cdn.example/media/" + mediaID
+		base = mediaURL(s.mediaCDNBase, mediaObjectKey(asset.AssetScope, asset.OwnerId, "legacy", mediaID, asset.Type))
 	}
 	sep := "?"
 	if strings.Contains(base, "?") {

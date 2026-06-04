@@ -114,18 +114,47 @@ class _HomePageState extends ConsumerState<HomePage>
     // 保持当前频道不变（不切到空白的关注流）。
     if (id == HomePrimaryTabStrip.followingChannelId &&
         !AuthGate.isAuthenticated(ref)) {
+      ref
+          .read(authContinuationProvider.notifier)
+          .set(
+            const OpenHomeChannelContinuation(
+              channelId: HomePrimaryTabStrip.followingChannelId,
+            ),
+          );
       unawaited(
         requireLogin(
           ref,
           context,
           AuthGateReason.followingFeed,
+          redirect: AppRoutePaths.home,
           dismissFallback: AppRoutePaths.home,
+          allowGuestDismissPop: false,
         ),
       );
       return;
     }
     setState(() => _activeChannelId = id);
     _syncShellRouteForTab(id);
+  }
+
+  void _resumeHomeChannelContinuation() {
+    final pending = ref
+        .read(authContinuationProvider.notifier)
+        .take<OpenHomeChannelContinuation>();
+    if (pending == null ||
+        pending.channelId != HomePrimaryTabStrip.followingChannelId ||
+        !mounted) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      if (_activeChannelId != pending.channelId) {
+        setState(() => _activeChannelId = pending.channelId);
+      }
+      _syncShellRouteForTab(pending.channelId);
+    });
   }
 
   void _handleTabSwipeDragEnd(DragEndDetails details) {
@@ -152,6 +181,24 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      final justLoggedIn =
+          next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated);
+      if (justLoggedIn) {
+        _resumeHomeChannelContinuation();
+      }
+    });
+    if (ref.watch(authSessionControllerProvider).isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _resumeHomeChannelContinuation();
+        }
+      });
+    }
     final safeTop = MediaQuery.viewPaddingOf(context).top;
     final effectiveTopInset = safeTop + AppSpacing.intraGroupXs;
 
@@ -277,7 +324,9 @@ class _HomePageState extends ConsumerState<HomePage>
     if (targetId.isEmpty) return;
     // 交集漏斗归因（点击）：携带 intersectionId/dimension/class，闭合曝光→点击→转化。
     if (reason.intersectionId.isNotEmpty) {
-      ref.read(contentBehaviorTrackerProvider).trackClick(
+      ref
+          .read(contentBehaviorTrackerProvider)
+          .trackClick(
             targetId,
             referralSource: ReferralSource.organicFeed,
             intersectionId: reason.intersectionId,

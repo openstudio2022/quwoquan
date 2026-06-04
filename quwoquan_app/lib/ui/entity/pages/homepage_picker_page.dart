@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -34,7 +35,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
   int _requestToken = 0;
   String _query = '';
   bool _isLoading = false;
-  String? _errorText;
+  UiErrorSemantic? _errorSemantic;
   List<HomepageSummary> _results = const <HomepageSummary>[];
   HomepageCanonicalReference? _selected;
 
@@ -119,22 +120,33 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
         loading: true,
       );
     }
-    if (_errorText != null && _results.isEmpty) {
+    if (_errorSemantic != null && _results.isEmpty) {
       if (selected != null) {
         return _buildSelectedAndMessageSection(
           selected: selected,
-          text: _errorText!,
-          fgSecondary: fgSecondary,
+          semantic: _errorSemantic!,
         );
       }
-      return _buildStatusSection(text: _errorText!, fgSecondary: fgSecondary);
+      return AppPageErrorState(
+        semantic: _errorSemantic!,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _loadResults();
+          }
+        },
+      );
     }
     if (_results.isEmpty) {
       if (selected != null) {
         return _buildSelectedAndMessageSection(
           selected: selected,
-          text: UITextConstants.attachHomepageEmpty,
-          fgSecondary: fgSecondary,
+          semantic: UiErrorSemantic(
+            category: UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+            title: UITextConstants.attachHomepageTitle,
+            message: UITextConstants.attachHomepageEmpty,
+          ),
           showSuggestAction: true,
         );
       }
@@ -208,7 +220,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
     final token = ++_requestToken;
     setState(() {
       _isLoading = true;
-      _errorText = null;
+      _errorSemantic = null;
     });
     try {
       final items = await ref
@@ -223,12 +235,17 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
             .toList(growable: false);
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || token != _requestToken) {
         return;
       }
       setState(() {
-        _errorText = UITextConstants.attachHomepageUnavailable;
+        _errorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
         _isLoading = false;
       });
     }
@@ -236,8 +253,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
 
   Widget _buildSelectedAndMessageSection({
     required HomepageCanonicalReference selected,
-    required String text,
-    required Color fgSecondary,
+    required UiErrorSemantic semantic,
     bool showSuggestAction = false,
   }) {
     return ListView(
@@ -256,35 +272,28 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
         SizedBox(height: AppSpacing.interGroupMd),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-          child: IosSelectionSection(
-            addShadow: false,
-            child: Padding(
-              padding: EdgeInsets.all(AppSpacing.containerLg),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    text,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosBody,
-                      color: fgSecondary,
-                      height: AppTypography.bodyLineHeight,
-                    ),
-                  ),
-                  if (showSuggestAction) ...<Widget>[
-                    SizedBox(height: AppSpacing.interGroupMd),
-                    CupertinoButton(
-                      key: TestKeys.homepagePickerSuggestButton,
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      onPressed: _openSuggestPage,
-                      child: Text(UITextConstants.attachHomepageSuggest),
-                    ),
-                  ],
-                ],
+          child: Column(
+            children: <Widget>[
+              AppSectionErrorCard(
+                semantic: semantic,
+                onAction: (action) async {
+                  if (action.type == UiErrorActionType.retry ||
+                      action.type == UiErrorActionType.resubmit) {
+                    await _loadResults();
+                  }
+                },
               ),
-            ),
+              if (showSuggestAction) ...<Widget>[
+                SizedBox(height: AppSpacing.interGroupMd),
+                CupertinoButton(
+                  key: TestKeys.homepagePickerSuggestButton,
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: _openSuggestPage,
+                  child: Text(UITextConstants.attachHomepageSuggest),
+                ),
+              ],
+            ],
           ),
         ),
       ],

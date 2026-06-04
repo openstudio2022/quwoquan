@@ -47,7 +47,7 @@ func main() {
 	repoRoot := resolveRepoRoot()
 	service := &platformService{
 		repoRoot: repoRoot,
-		store:    controlplane.NewFileStore(filepath.Join(repoRoot, ".control-plane-state", "platform-ops-service.json")),
+		store:    controlplane.NewFileStore(filepath.Join(repoRoot, "state", "control-plane", "platform-ops-service.json")),
 	}
 	if err := service.seed(); err != nil {
 		log.Fatalf("seed platform ops service: %v", err)
@@ -350,7 +350,7 @@ func newServerMux(service *platformService) *http.ServeMux {
 }
 
 func (s *platformService) seed() error {
-	schemaPath := filepath.Join(s.repoRoot, "contracts", "metadata", "_control_plane", "platform", "config_schema.yaml")
+	schemaPath := resolveConfigSchemaPath(s.repoRoot)
 	schemaKeys, schemaErr := controlplane.LoadConfigKeysFromSchema(schemaPath)
 	if schemaErr != nil {
 		log.Printf("WARN: platform-ops-service: load config_schema.yaml failed, using empty keys: %v", schemaErr)
@@ -1139,7 +1139,7 @@ func runScript(repoRoot string, script string, args ...string) (string, error) {
 }
 
 func readReleaseState(repoRoot, service string) string {
-	stateFile := filepath.Join(repoRoot, ".release-state", service+".state")
+	stateFile := filepath.Join(repoRoot, "state", "release", service+".state")
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		return ""
@@ -1166,6 +1166,19 @@ func resolveRepoRoot() string {
 		}
 		current = parent
 	}
+}
+
+func resolveConfigSchemaPath(repoRoot string) string {
+	candidates := []string{
+		filepath.Join(repoRoot, "quwoquan_service", "contracts", "metadata", "_control_plane", "platform", "config_schema.yaml"),
+		filepath.Join(repoRoot, "contracts", "metadata", "_control_plane", "platform", "config_schema.yaml"),
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return candidates[0]
 }
 
 func healthFromBlockers(blockers []string) string {

@@ -70,6 +70,7 @@ type routeDef struct {
 	WritableFields []string      `yaml:"writable_fields"`
 	RequestFields  []string      `yaml:"request_fields"`
 	ResponseFields []string      `yaml:"response_fields"`
+	RequestEntity  string        `yaml:"request_entity"`
 	ResponseEntity string        `yaml:"response_entity"`
 	Security       routeSecurity `yaml:"security"`
 	// Back-compat: 旧写法 auth: required / auth_required: bool。统一收敛到 security.auth_mode。
@@ -221,17 +222,17 @@ type discoveryTabDef struct {
 
 // homeChannelDef：首页频道运营可配置项（端 meta 默认 + /v1/config/app 远程覆盖）。
 type homeChannelDef struct {
-	ID                      string            `yaml:"id"`
-	LabelKey                string            `yaml:"label_key"`
-	Template                string            `yaml:"template"`
-	LayoutTemplate          string            `yaml:"layout_template"`
-	PhoneColumns            int               `yaml:"phone_columns"`
-	SupportsFullSpanModules bool              `yaml:"supports_full_span_modules"`
-	IntersectionModulePolicy string           `yaml:"intersection_module_policy"`
-	ContentCardPolicy       string            `yaml:"content_card_policy"`
-	FeedQuery               map[string]string `yaml:"feed_query"`
-	MoodCopyKey             string            `yaml:"mood_copy_key"`
-	Order                   int               `yaml:"order"`
+	ID                       string            `yaml:"id"`
+	LabelKey                 string            `yaml:"label_key"`
+	Template                 string            `yaml:"template"`
+	LayoutTemplate           string            `yaml:"layout_template"`
+	PhoneColumns             int               `yaml:"phone_columns"`
+	SupportsFullSpanModules  bool              `yaml:"supports_full_span_modules"`
+	IntersectionModulePolicy string            `yaml:"intersection_module_policy"`
+	ContentCardPolicy        string            `yaml:"content_card_policy"`
+	FeedQuery                map[string]string `yaml:"feed_query"`
+	MoodCopyKey              string            `yaml:"mood_copy_key"`
+	Order                    int               `yaml:"order"`
 }
 
 type discoveryRailDef struct {

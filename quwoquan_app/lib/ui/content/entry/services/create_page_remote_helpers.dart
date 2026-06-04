@@ -120,6 +120,11 @@ Map<String, Object?> _assetManifestRow(
     'kind': 'image',
     'role': role,
     'scope': 'draft',
+    'variantGeneration': <String, Object?>{
+      'required': true,
+      'profiles': <String>['thumbnail', 'display', 'cover', 'full', 'original'],
+      'source': 'server',
+    },
     'localPath': path,
     'objectKey': path.startsWith('asset://')
         ? path.substring('asset://'.length)

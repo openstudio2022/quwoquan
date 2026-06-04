@@ -20,7 +20,9 @@ func isAnonymousFallbackSubAccountID(subAccountID string) bool {
 }
 
 // deviceActorKeyPrefix 命名空间化派生设备标识，避免与账号 subAccountID 维度冲突。
-const deviceActorKeyPrefix = "device:"
+// 注意：不得含 ':'，否则会破坏 shareActorID 的 ':' 分段解析（分享 key 形如
+// "direct:<actorKey>"）。真实账号 ID 不会以此前缀开头，故键空间天然不相交。
+const deviceActorKeyPrefix = "devactor_"
 
 // reactionActorKey 解析互动（点赞/分享）去重与计数维度键：
 //   - 真实账号优先用 userID（账号维度）；

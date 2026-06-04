@@ -11,6 +11,9 @@ coveragePolicy:
   campus:
     minCategoriesPerEntity: 2
     coreCategories: [school_official, forum]
+  photography:
+    minCategoriesPerEntity: 2
+    coreCategories: [open_license, photographer_site_authorized]
 categories:
   - id: encyclopedia
     label: 百科词条
@@ -96,6 +99,36 @@ categories:
     description: 校园论坛/贴吧/超话/树洞，真实学生口碑与避坑。
     evidenceFocus: [emotion, decision]
     examplePlatforms: [贴吧, 超话, 校园论坛, 树洞, 知乎, 微博]
+  - id: open_license
+    label: 开放许可图库
+    verticals: [photography]
+    description: 明确 CC/PD/开放商用许可的图片来源，必须记录 license 与 termsUrl。
+    evidenceFocus: [license, visual]
+    examplePlatforms: [Wikimedia Commons, Unsplash, Pexels, Pixabay, CC Search, Openverse]
+  - id: photographer_site_authorized
+    label: 摄影师网站授权
+    verticals: [photography]
+    description: 摄影师个人站或作品集，只有取得授权或页面明确许可后可下载入库。
+    evidenceFocus: [license, credit, provenance]
+    examplePlatforms: [摄影师官网, photographer site, portfolio, 个人作品站]
+  - id: stock_authorized
+    label: 授权图库
+    verticals: [photography]
+    description: 购买或平台授权图库，必须记录授权凭证与 usageScope。
+    evidenceFocus: [license, proof]
+    examplePlatforms: [Getty Images, Adobe Stock, Shutterstock, 视觉中国授权, 图虫授权]
+  - id: museum_archive
+    label: 博物馆/档案开放图像
+    verticals: [photography]
+    description: 博物馆、档案馆开放图像；须记录开放条款和机构署名。
+    evidenceFocus: [license, archive]
+    examplePlatforms: [The Met, Rijksmuseum, Library of Congress, Europeana, 博物馆开放影像]
+  - id: editorial_reference_only
+    label: 仅编辑参考
+    verticals: [photography]
+    description: 可作为选题/事实参考，不得直接下载入库作为可发布图片。
+    evidenceFocus: [reference]
+    examplePlatforms: [Pinterest, 小红书摄影灵感, Behance参考, editorial reference]
 # 平台别名 → categoryId（examplePlatforms 之外的常见英文/拼写，值为 null 表示通用兜底不计覆盖）。
 platformAliases:
   web: null
@@ -107,3 +140,8 @@ platformAliases:
   douyin: video
   amap: map_geo
   2bulu: outdoor_route
+  pinterest: editorial_reference_only
+  unsplash: open_license
+  pexels: open_license
+  pixabay: open_license
+  openverse: open_license

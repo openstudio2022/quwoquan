@@ -7,30 +7,47 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: publish-comment-reaction
 scope:
-  summary: comment thread  comment reply pagination contract 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 评论回复预览与独立展开分页契约，确保端云对 replyPreview、replyNextCursor、ListCommentReplies 与配置默认值一致。
+  in_scope:
+  - ListComments 返回一级评论、replyPreview、replyNextCursor。
+  - ListCommentReplies 按 cursor 和 limit 独立展开二级回复。
+  - reply_preview_count 默认 1、reply_expand_page_size 默认 10，支持 App Config 覆盖。
+  - CreateComment 支持 replyToCommentId 并规范化 parentCommentId。
+  out_of_scope:
+  - 三级及以上嵌套回复。
+  - 回复全文搜索。
 gwt_acceptance:
   GWT1:
-    title: comment thread  comment reply pagination contract GWT
+    title: 回复预览和展开分页端云契约一致
     given:
-    - 前置条件明确。
+    - 某帖子存在一个一级评论和超过 reply_preview_count 的二级回复。
     when:
-    - 用户或系统动作发生。
+    - 客户端调用 ListComments 后继续调用 ListCommentReplies。
     then:
-    - 可观察结果符合预期。
+    - ListComments 只返回配置数量的 replyPreview，并返回 replyNextCursor。
+    - ListCommentReplies 每次返回 reply_expand_page_size 条以内的回复和下一页 cursor。
+    - CreateComment 回复请求写入 replyToCommentId、replyToUserId 和 parentCommentId，列表回显归属一级评论。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - Mock、Remote、Go contract test 使用同一组 seed 断言通过。
+    edge_cases:
+    - replyNextCursor 为空时端侧隐藏继续展开入口。
+    - 回复创建目标本身是二级回复时，parentCommentId 仍指向一级评论。
+    contract_refs:
+    - content/post service.yaml ListComments
+    - content/post service.yaml ListCommentReplies
+    - content/post service.yaml CreateComment
+    performance_points:
+    - 回复展开 P95 小于 500ms。
     evidence:
       primary:
-      - T1_contract
+      - T1_static_contract
       - T2_module_interaction
+      - T3_app_api_integration
       supporting: []
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/test/ui/content/providers/comment_reply_pagination_test.dart
+      - quwoquan_service/services/content-service/tests/comment_thread_contract_test.go
       recorded: []
     status: pending
 execution:

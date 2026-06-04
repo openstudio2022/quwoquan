@@ -26,6 +26,35 @@ class MyIntersectionInboxPage extends ConsumerStatefulWidget {
 
 class _MyIntersectionInboxPageState
     extends ConsumerState<MyIntersectionInboxPage> {
+  UiErrorSemantic _resolvePageErrorSemantic(Object error) {
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+    return UiErrorSemantic(
+      category: resolved.category,
+      scope: resolved.scope,
+      title: '我的交集暂不可用',
+      message: resolved.message,
+      secondaryMessage: resolved.secondaryMessage,
+      primaryAction:
+          resolved.primaryAction ??
+          const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
+          ),
+      secondaryAction: resolved.secondaryAction,
+      dismissible: resolved.dismissible,
+      sourceCode: resolved.sourceCode,
+      failureKind: resolved.failureKind,
+      recoveryAction: resolved.recoveryAction,
+      presentation: resolved.presentation,
+      tone: resolved.tone,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -88,19 +117,17 @@ class _MyIntersectionInboxPageState
     if (state.isLoading && state.items.isEmpty) {
       return const Center(child: CupertinoActivityIndicator());
     }
-    if (state.error != null) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.lg),
-          child: Text(
-            state.error!,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: AppTypography.iosSubheadline,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-          ),
-        ),
+    if (state.rawError != null) {
+      return AppPageErrorState(
+        semantic: _resolvePageErrorSemantic(state.rawError!),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await ref
+                .read(myIntersectionListProvider.notifier)
+                .loadAndMarkVisited(dimension: widget.dimension);
+          }
+        },
       );
     }
     if (state.items.isEmpty) {
@@ -129,6 +156,7 @@ class _MyIntersectionInboxPageState
         itemBuilder: (_, index) => IntersectionEntity(
           reason: state.items[index],
           isDark: isDark,
+          density: IntersectionEntityDensity.inboxList,
           onTap: () => _openObject(state.items[index]),
         ),
       );
@@ -176,6 +204,7 @@ class _MyIntersectionInboxPageState
               IntersectionEntity(
                 reason: reason,
                 isDark: isDark,
+                density: IntersectionEntityDensity.inboxList,
                 onTap: () => _openObject(reason),
               ),
               _divider(context),

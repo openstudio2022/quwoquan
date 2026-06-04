@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:quwoquan_app/core/platform/platform_os_io.dart'
-    if (dart.library.html) 'package:quwoquan_app/core/platform/platform_os_web.dart';
+    if (dart.library.js_interop) 'package:quwoquan_app/core/platform/platform_os_web.dart';
 
 /// The set of runtime platforms the app targets (current + planned).
 ///

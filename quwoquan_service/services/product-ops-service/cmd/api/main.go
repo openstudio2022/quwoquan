@@ -146,7 +146,7 @@ func main() {
 
 	ctx := context.Background()
 	repoRoot := resolveRepoRoot()
-	store := controlplane.NewFileStore(filepath.Join(repoRoot, ".control-plane-state", "product-ops-service.json"))
+	store := controlplane.NewFileStore(filepath.Join(repoRoot, "state", "control-plane", "product-ops-service.json"))
 	router := buildRedisRouter(cfg)
 	defer router.Close()
 	if err := router.PingAll(ctx); err != nil {

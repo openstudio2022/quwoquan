@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
 import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_action_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_package_toggle_payload.g.dart';
@@ -157,12 +158,20 @@ class _AssistantSkillCenterPageState
                       padding: EdgeInsets.symmetric(
                         vertical: AppSpacing.interGroupMd,
                       ),
-                      child: Text(
-                        '${l10n.loadFailed}: $error',
-                        style: TextStyle(
-                          fontSize: AppTypography.sm,
-                          color: fgSecondary,
+                      child: AppSectionErrorCard(
+                        semantic: runtimeErrorSemantic(
+                          context,
+                          error: error,
+                          category: UiErrorCategory.sectionLoad,
+                          scope: UiErrorScope.section,
                         ),
+                        onAction: (action) async {
+                          if (action.type == UiErrorActionType.retry ||
+                              action.type == UiErrorActionType.resubmit) {
+                            ref.invalidate(assistantSkillCenterProvider);
+                            await _loadRecentSessions();
+                          }
+                        },
                       ),
                     ),
                     data: (skills) => Column(

@@ -77,6 +77,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   double _heroCollapseProgress = 0;
   String? _draggingMediaPath;
   String? _pressedMediaPath;
+  UiErrorSemantic? _publishErrorSemantic;
 
   /// 图片拖动过程中最后一次指针全局坐标（用于松手时按重叠面积落点）。
   Offset? _imageDragLastGlobal;
@@ -1168,6 +1169,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     if (_isPublishing) {
       return;
     }
+    _publishErrorSemantic = null;
     if (!_canPublish(state)) {
       AppToast.show(context, '先写点内容');
       return;
@@ -1224,11 +1226,34 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     } catch (error) {
       await reportCreateEditorSurfaceEvent(ref, 'create_publish_failure');
       if (mounted) {
-        AppToast.show(
+        final semantic = '$error'.contains('active persona context')
+            ? UiErrorSemantic(
+                category: UiErrorCategory.submit,
+                scope: UiErrorScope.global,
+                title: '发布未完成',
+                message: '当前分身上下文还没准备好，稍后可以再试一次。',
+                primaryAction: const UiErrorAction(
+                  type: UiErrorActionType.retry,
+                  label: UITextConstants.tryAgain,
+                ),
+                dismissible: true,
+              )
+            : runtimeErrorSemantic(
+                context,
+                error: error,
+                category: UiErrorCategory.submit,
+                scope: UiErrorScope.global,
+              );
+        _publishErrorSemantic = semantic;
+        await AppActionErrorFeedback.show(
           context,
-          '$error'.contains('active persona context')
-              ? '当前分身上下文未就绪，请稍后重试'
-              : context.l10n.loadFailed,
+          semantic: semantic,
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _publish();
+            }
+          },
         );
       }
     } finally {

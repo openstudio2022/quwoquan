@@ -1,0 +1,79 @@
+version: 1
+aggregate: SmsOtp
+domain: INTEGRATION
+
+errors:
+  - code: INTEGRATION.USER.sms_otp_invalid_phone
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: smsOtpInvalidPhone
+    l10n_key: smsOtpInvalidPhone
+    go_const: ErrSmsOtpInvalidPhone
+    user_message:
+      zh: "请输入有效手机号"
+      en: "Please enter a valid phone number"
+
+  - code: INTEGRATION.USER.sms_otp_rate_limited
+    kind: USER
+    reason: rate_limited
+    http_status: 429
+    recovery_action: retry
+    recovery_after_seconds: 60
+    dart_const: smsOtpRateLimited
+    l10n_key: smsOtpRateLimited
+    go_const: ErrSmsOtpRateLimited
+    user_message:
+      zh: "验证码发送太频繁，请稍后再试"
+      en: "Verification code requests are too frequent"
+
+  - code: INTEGRATION.MIDDLEWARE.sms_provider_timeout
+    kind: MIDDLEWARE
+    reason: timeout
+    http_status: 504
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: smsProviderTimeout
+    l10n_key: smsProviderTimeout
+    go_const: ErrSmsProviderTimeout
+    user_message:
+      zh: "短信供应商响应超时，请稍后重试"
+      en: "SMS provider timed out"
+
+  - code: INTEGRATION.MIDDLEWARE.sms_provider_rejected
+    kind: MIDDLEWARE
+    reason: upstream_rejected
+    http_status: 502
+    recovery_action: retry
+    recovery_after_seconds: 5
+    dart_const: smsProviderRejected
+    l10n_key: smsProviderRejected
+    go_const: ErrSmsProviderRejected
+    user_message:
+      zh: "短信供应商暂时不可用，请稍后重试"
+      en: "SMS provider is temporarily unavailable"
+
+  - code: INTEGRATION.SYSTEM.sms_callback_signature_invalid
+    kind: SYSTEM
+    reason: signature_invalid
+    http_status: 401
+    recovery_action: surface
+    dart_const: smsCallbackSignatureInvalid
+    l10n_key: smsCallbackSignatureInvalid
+    go_const: ErrSmsCallbackSignatureInvalid
+    user_message:
+      zh: "短信回执签名校验失败"
+      en: "SMS callback signature is invalid"
+
+  - code: INTEGRATION.SYSTEM.sms_pass_through_debt_expired
+    kind: SYSTEM
+    reason: pass_through_debt_expired
+    http_status: 500
+    recovery_action: escalate
+    dart_const: smsPassThroughDebtExpired
+    l10n_key: smsPassThroughDebtExpired
+    go_const: ErrSmsPassThroughDebtExpired
+    user_message:
+      zh: "验证码跳过正确性校验债务已过期"
+      en: "SMS pass-through debt has expired"

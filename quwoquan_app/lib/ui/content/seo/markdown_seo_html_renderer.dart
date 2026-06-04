@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
+import 'package:quwoquan_app/core/media/asset_url_resolver.dart';
 import 'package:quwoquan_app/ui/content/markdown/qwq_markdown_ast.dart';
 import 'package:quwoquan_app/ui/content/markdown/qwq_markdown_parser.dart';
 
@@ -51,10 +52,19 @@ class MarkdownSeoRenderInput {
 }
 
 class MarkdownSeoHtmlRenderer {
-  const MarkdownSeoHtmlRenderer({QwqMarkdownParser? parser})
-    : _parser = parser ?? const QwqMarkdownParser();
+  const MarkdownSeoHtmlRenderer({
+    QwqMarkdownParser? parser,
+    AssetUrlResolver? assetUrlResolver,
+  }) : _parser = parser ?? const QwqMarkdownParser(),
+       _assetUrlResolver =
+           assetUrlResolver ??
+           const AssetUrlResolver(
+             imageCdnBaseUrl: 'https://media.quwoquan.invalid',
+             videoCdnBaseUrl: 'https://media.quwoquan.invalid',
+           );
 
   final QwqMarkdownParser _parser;
+  final AssetUrlResolver _assetUrlResolver;
 
   SeoHtmlDocument render(MarkdownSeoRenderInput input) {
     final canonicalUrl = AppPublicContentLinks.postWebUrl(input.postId);
@@ -72,7 +82,9 @@ class MarkdownSeoHtmlRenderer {
     }
 
     final parsed = _parser.parse(input.articleMarkdown).document;
-    final assetsById = _resolveAssetUrls(input.articleAssetManifest);
+    final assetsById = _assetUrlResolver.resolveManifestVariants(
+      input.articleAssetManifest,
+    );
     final title = _firstNonEmpty([
       input.title,
       parsed.frontMatter.title,
@@ -166,7 +178,7 @@ class MarkdownSeoHtmlRenderer {
 
   String _renderBlock(
     QwqMarkdownBlock block,
-    Map<String, String> assetsById,
+    Map<String, MediaAssetVariants> assetsById,
     Set<String> referenced,
   ) {
     switch (block.kind) {
@@ -207,7 +219,7 @@ class MarkdownSeoHtmlRenderer {
 
   String _renderAssetFigure(
     QwqMarkdownAssetRef? ref,
-    Map<String, String> assetsById,
+    Map<String, MediaAssetVariants> assetsById,
     Set<String> referenced,
   ) {
     if (ref == null) return '';
@@ -220,14 +232,14 @@ class MarkdownSeoHtmlRenderer {
 
   String _renderAssetImage(
     QwqMarkdownAssetRef ref,
-    Map<String, String> assetsById,
+    Map<String, MediaAssetVariants> assetsById,
     Set<String> referenced,
   ) {
     final url = _resolveAssetUrl(ref.assetId, assetsById);
     if (!_isSafeUrl(url)) return '';
     referenced.add(url);
     final alt = ref.alt.trim().isNotEmpty ? ref.alt : ref.caption;
-    return '<img src="${_escapeAttribute(url)}" alt="${_escapeAttribute(alt)}">';
+    return '<img src="${_escapeAttribute(url)}" alt="${_escapeAttribute(alt)}" data-asset-id="${_escapeAttribute(ref.assetId.trim())}">';
   }
 
   String _renderInlines(QwqMarkdownBlock block) {
@@ -251,28 +263,6 @@ class MarkdownSeoHtmlRenderer {
         if (!_isSafeUrl(href)) return text;
         return '<a href="${_escapeAttribute(href)}" rel="nofollow ugc">$text</a>';
     }
-  }
-
-  Map<String, String> _resolveAssetUrls(Map<String, Object?>? manifest) {
-    final rawAssets = manifest?['assets'];
-    if (rawAssets is! Iterable) return const <String, String>{};
-    final out = <String, String>{};
-    for (final raw in rawAssets) {
-      if (raw is! Map) continue;
-      final assetId = (raw['assetId'] ?? raw['id'] ?? '').toString().trim();
-      if (assetId.isEmpty) continue;
-      final url =
-          <Object?>[
-                raw['cdnUrl'],
-                raw['url'],
-                raw['objectUrl'],
-                raw['sourceUrl'],
-              ]
-              .map((value) => value?.toString().trim() ?? '')
-              .firstWhere((value) => value.isNotEmpty, orElse: () => '');
-      if (_isSafeUrl(url)) out[assetId] = url;
-    }
-    return out;
   }
 
   String _firstHeading(QwqMarkdownDocument doc) {
@@ -301,10 +291,14 @@ class MarkdownSeoHtmlRenderer {
         .firstWhere((value) => value.isNotEmpty, orElse: () => '');
   }
 
-  String _resolveAssetUrl(String assetId, Map<String, String> assetsById) {
+  String _resolveAssetUrl(
+    String assetId,
+    Map<String, MediaAssetVariants> assetsById,
+  ) {
     final id = assetId.trim();
     if (id.isEmpty) return '';
-    return assetsById[id] ?? (id.startsWith('https://') ? id : '');
+    return assetsById[id]?.urlFor(MediaAssetVariantProfile.display) ??
+        (id.startsWith('https://') ? id : '');
   }
 
   bool _isSafeUrl(String value) {

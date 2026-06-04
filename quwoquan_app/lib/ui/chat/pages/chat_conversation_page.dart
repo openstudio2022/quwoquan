@@ -30,8 +30,10 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_player_manager.dart';
@@ -125,6 +127,39 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
 
   void _onInputChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _showVoiceSendFailure(Object error) async {
+    if (!mounted) {
+      return;
+    }
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.submit,
+      scope: UiErrorScope.global,
+    );
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: UiErrorSemantic(
+        category: resolved.category,
+        scope: resolved.scope,
+        title: '语音发送失败',
+        message: resolved.message,
+        secondaryMessage: resolved.secondaryMessage,
+        primaryAction:
+            resolved.primaryAction ??
+            const UiErrorAction(
+              type: UiErrorActionType.dismiss,
+              label: UITextConstants.confirm,
+            ),
+        secondaryAction: resolved.secondaryAction,
+        dismissible: true,
+        sourceCode: resolved.sourceCode,
+        failureKind: resolved.failureKind,
+        recoveryAction: resolved.recoveryAction,
+      ),
+    );
   }
 
   Future<void> _loadConversationTitle() async {
@@ -291,7 +326,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     final sendState = ref.read(voiceSendProvider(widget.conversationId));
     if (sendState.status == VoiceSendStatus.failed &&
         (sendState.error ?? '').isNotEmpty) {
-      AppToast.show(context, sendState.error!);
+      await _showVoiceSendFailure(sendState.error!);
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -456,9 +491,42 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
           );
       if (!mounted) return;
       AppToast.show(context, '已发送同好邀请');
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      AppToast.show(context, '发送失败，请稍后再试');
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      final semantic = UiErrorSemantic(
+        category: resolved.category,
+        scope: resolved.scope,
+        title: '发送同好邀请未完成',
+        message: resolved.message,
+        secondaryMessage: resolved.secondaryMessage,
+        primaryAction: const UiErrorAction(
+          type: UiErrorActionType.retry,
+          label: UITextConstants.tryAgain,
+        ),
+        secondaryAction: resolved.secondaryAction,
+        dismissible: resolved.dismissible,
+        sourceCode: resolved.sourceCode,
+        failureKind: resolved.failureKind,
+        recoveryAction: resolved.recoveryAction,
+        presentation: resolved.presentation,
+        tone: resolved.tone,
+      );
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: semantic,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _sendSameInterestRequest();
+          }
+        },
+      );
     }
   }
 

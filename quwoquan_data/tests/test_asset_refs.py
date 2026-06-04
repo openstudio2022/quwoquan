@@ -19,10 +19,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from _common.article_package import (  # noqa: E402
     asset_id_from_object_key,
     build_gallery_markdown,
+    copy_asset_files,
     semantic_asset_caption,
     sha256_file,
 )
 from _common.io import write_json  # noqa: E402
+from _common.draft_io import draft_asset_reference_issues  # noqa: E402
 from verify_content_quality import asset_closure_issues  # noqa: E402
 
 
@@ -35,8 +37,8 @@ def _make_post(post_dir: Path, *, cover_file: str = "九寨沟_cover.jpg") -> di
     detail_path = assets_dir / "九寨沟_detail_1.jpg"
     detail_path.write_bytes(b"\xff\xd8\xff\xe0fake-jpeg-bytes-detail")
 
-    cover_id = asset_id_from_object_key("media/image/post/九寨沟/cover.jpg")
-    detail_id = asset_id_from_object_key("media/image/post/九寨沟/detail_1.jpg")
+    cover_id = asset_id_from_object_key("asset-seed/post/九寨沟/cover.jpg")
+    detail_id = asset_id_from_object_key("asset-seed/post/九寨沟/detail_1.jpg")
 
     article = (
         f"---\ntitle: 九寨沟\ncoverImage: asset://{cover_id}\n---\n\n"
@@ -67,11 +69,11 @@ def _make_post(post_dir: Path, *, cover_file: str = "九寨沟_cover.jpg") -> di
 
 
 def test_asset_id_is_readable_with_chinese():
-    aid = asset_id_from_object_key("media/image/post/九寨沟/cover.jpg")
+    aid = asset_id_from_object_key("asset-seed/post/九寨沟/cover.jpg")
     assert "九寨沟" in aid, f"assetId should keep readable entity name: {aid}"
     assert aid.startswith("data_asset_")
     # 唯一性：不同 objectKey 仍有不同尾缀。
-    other = asset_id_from_object_key("media/image/post/九寨沟/detail_1.jpg")
+    other = asset_id_from_object_key("asset-seed/post/九寨沟/detail_1.jpg")
     assert aid != other
 
 
@@ -124,6 +126,26 @@ def test_gallery_reference_also_checked():
     )
     issues = asset_closure_issues(post_dir, manifest)
     assert any("asset ref not in manifest" in i for i in issues), issues
+
+
+def test_copy_asset_files_fails_closed_when_source_missing():
+    out = _TMP / "copy_missing" / "assets"
+    try:
+        copy_asset_files(
+            [{"assetId": "missing_cover", "fileName": "cover.jpg", "sourcePath": str(_TMP / "nope.jpg")}],
+            out,
+        )
+    except FileNotFoundError as exc:
+        assert "asset sourcePath missing" in str(exc)
+    else:
+        raise AssertionError("copy_asset_files must fail when sourcePath is missing")
+
+
+def test_draft_unknown_asset_ref_is_flagged_before_materialize():
+    article = "正文\n\n:::figure\nasset://data_asset_media_image_post_cover_jpg_e5d92a05\n:::\n"
+    pack = {"assets": [{"assetId": "data_asset_九寨沟_cover_deadbeef", "fileName": "cover.jpg"}]}
+    issues = draft_asset_reference_issues(article, pack)
+    assert any("data_asset_media_image_post_cover_jpg_e5d92a05" in issue for issue in issues), issues
 
 
 def _run_all() -> None:

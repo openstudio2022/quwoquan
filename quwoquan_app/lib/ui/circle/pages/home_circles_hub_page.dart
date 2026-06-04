@@ -118,6 +118,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   Map<String, CircleCategoryTabConfigDto> _categoryConfig =
       CircleCategoryTabDefaults.remoteStyleFallback;
   List<CircleDto> _hubCircleDtos = [];
+  bool _isBootstrapping = true;
+  UiErrorSemantic? _pageErrorSemantic;
 
   @override
   void initState() {
@@ -129,60 +131,75 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
 
   Future<void> _bootstrapHubData() async {
     final repo = ref.read(circleRepositoryProvider);
-    try {
-      final feed = await repo.listHomeCircleDiscoveryFeed(limit: 200);
-      if (!mounted) {
-        return;
-      }
+    if (mounted) {
       setState(() {
-        _circleFeedItems = feed
-            .map(CircleHubFeedPostEntry.fromPostDto)
-            .toList(growable: true);
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _circleFeedItems = [];
+        _isBootstrapping = true;
+        _pageErrorSemantic = null;
       });
     }
+    Object? bootstrapError;
+    var nextFeedItems = <CircleHubFeedPostEntry>[];
+    var nextCategoryConfig = Map<String, CircleCategoryTabConfigDto>.from(
+      CircleCategoryTabDefaults.remoteStyleFallback,
+    );
+    var nextCircleDtos = <CircleDto>[];
+    await Future.wait<void>([
+      () async {
+        try {
+          final feed = await repo.listHomeCircleDiscoveryFeed(limit: 200);
+          nextFeedItems = feed
+              .map(CircleHubFeedPostEntry.fromPostDto)
+              .toList(growable: true);
+        } catch (error) {
+          bootstrapError ??= error;
+          nextFeedItems = <CircleHubFeedPostEntry>[];
+        }
+      }(),
+      () async {
+        try {
+          final cfg = await repo
+              .getCircleCategoryConfig()
+              .timeout(
+                const Duration(seconds: 2),
+                onTimeout: () => Map<String, CircleCategoryTabConfigDto>.from(
+                  CircleCategoryTabDefaults.remoteStyleFallback,
+                ),
+              );
+          nextCategoryConfig = Map<String, CircleCategoryTabConfigDto>.from(cfg);
+        } catch (_) {
+          nextCategoryConfig = Map<String, CircleCategoryTabConfigDto>.from(
+            CircleCategoryTabDefaults.remoteStyleFallback,
+          );
+        }
+      }(),
+      () async {
+        try {
+          final circlesMaps = await repo.listCircles(limit: 500);
+          nextCircleDtos = List<CircleDto>.from(circlesMaps);
+        } catch (error) {
+          bootstrapError ??= error;
+          nextCircleDtos = <CircleDto>[];
+        }
+      }(),
+    ]);
 
-    try {
-      final cfg = await repo.getCircleCategoryConfig();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _categoryConfig = Map<String, CircleCategoryTabConfigDto>.from(cfg);
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _categoryConfig = Map<String, CircleCategoryTabConfigDto>.from(
-          CircleCategoryTabDefaults.remoteStyleFallback,
-        );
-      });
+    if (!mounted) {
+      return;
     }
-
-    try {
-      final circlesMaps = await repo.listCircles(limit: 500);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _hubCircleDtos = List<CircleDto>.from(circlesMaps);
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _hubCircleDtos = [];
-      });
-    }
+    setState(() {
+      _circleFeedItems = nextFeedItems;
+      _categoryConfig = nextCategoryConfig;
+      _hubCircleDtos = nextCircleDtos;
+      _isBootstrapping = false;
+      _pageErrorSemantic = bootstrapError == null
+          ? null
+          : runtimeErrorSemantic(
+              context,
+              error: bootstrapError!,
+              category: UiErrorCategory.pageLoad,
+              scope: UiErrorScope.page,
+            );
+    });
   }
 
   List<Map<String, String>> get _allCategories {
@@ -636,6 +653,34 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(effectiveIsDarkProvider);
+    if (_isBootstrapping) {
+      return const Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: Center(child: CupertinoActivityIndicator()),
+        ),
+      );
+    }
+    if (_pageErrorSemantic != null) {
+      return Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: AppPageErrorState(
+            semantic: _pageErrorSemantic!,
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry ||
+                  action.type == UiErrorActionType.resubmit) {
+                await _bootstrapHubData();
+              }
+            },
+          ),
+        ),
+      );
+    }
     final categories = _visibleCategories;
     final effectiveActiveCategoryId = _effectiveActiveCategoryId;
     final activeSubCategories = _visibleSubCategoriesFor(

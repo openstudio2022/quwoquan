@@ -119,6 +119,8 @@ def gen_topic():
           ])
 
     _gen_topic_verticals()
+    _gen_topic_事件()
+    _gen_topic_话题()
     _gen_topic_场景()
     _gen_topic_时间()
     # 地理/行政区 由 bootstrap_admin_regions.py 生成，此处只生成地理骨架
@@ -1296,6 +1298,30 @@ def _gen_topic_场景():
         ("同事聚餐", "Colleague Dinner", "职场同事聚餐场景"),
         ("家庭聚会", "Family Gathering", "家庭聚会活动场景"),
         ("网友见面", "Online Friend Meetup", "网络认识后线下见面"),
+    ])
+
+
+def _gen_topic_事件():
+    tag("Topic/事件", "事件", "Event",
+        "具有发生性、进程性和时间节点的现实或线上事件主题")
+    tags_list("Topic/事件", [
+        ("节庆活动", "Festival Event", "节日庆典、线下活动与主题事件"),
+        ("演出赛事", "Performance & Competition", "演唱会、展演、比赛等事件"),
+        ("新闻现场", "News Event", "正在发生或已发生的新闻现场事件"),
+        ("社会事件", "Social Event", "公共议题、社会关注与公共性事件"),
+        ("平台活动", "Platform Campaign", "平台发起的征集、运营与社区活动"),
+    ])
+
+
+def _gen_topic_话题():
+    tag("Topic/话题", "话题", "Topic Thread",
+        "围绕某个议题持续讨论、参与互动和表达观点的话题主题")
+    tags_list("Topic/话题", [
+        ("热点讨论", "Trending Discussion", "围绕热点内容展开的讨论"),
+        ("经验交流", "Experience Sharing", "围绕经验、攻略与方法的交流话题"),
+        ("观点争鸣", "Debate", "观点表达、立场对比与讨论"),
+        ("社区接龙", "Community Relay", "接力、挑战、参与式扩散话题"),
+        ("问答求助", "Q&A Help", "提问、答疑与求助型话题"),
     ])
 
 

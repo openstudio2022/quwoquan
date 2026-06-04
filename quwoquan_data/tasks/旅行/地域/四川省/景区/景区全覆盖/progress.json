@@ -30,10 +30,12 @@
   },
   "anglesByEntity": {},
   "conditionCells": [],
-  "openGaps": [],
+  "openGaps": [
+    "甲根坝图片为塔公草原邻近同类景观(已 credit 标注);康定木格措/海螺沟仅 1 张图"
+  ],
   "counts": {
     "entities": 5,
-    "posts": 8
+    "posts": 23
   },
-  "lastRunId": "run_20260601_215839"
+  "lastRunId": "run_20260603_150021"
 }

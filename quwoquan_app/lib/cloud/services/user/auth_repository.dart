@@ -13,6 +13,9 @@ class OtpSendResultData {
   const OtpSendResultData({
     required this.maskedPhone,
     required this.expiresInSeconds,
+    required this.deliveryStatus,
+    this.requestId,
+    this.challengeId,
     this.debugCode,
   });
 
@@ -20,13 +23,24 @@ class OtpSendResultData {
     return OtpSendResultData(
       maskedPhone: (map['maskedPhone'] as String?) ?? '',
       expiresInSeconds: (map['expiresInSeconds'] as num?)?.toInt() ?? 0,
+      deliveryStatus: (map['deliveryStatus'] as String?) ?? 'queued',
+      requestId: map['requestId'] as String?,
+      challengeId: map['challengeId'] as String?,
       debugCode: map['debugCode'] as String?,
     );
   }
 
   final String maskedPhone;
   final int expiresInSeconds;
+  final String deliveryStatus;
+  final String? requestId;
+  final String? challengeId;
   final String? debugCode;
+
+  bool get isDebugCodeVisible =>
+      debugCode != null &&
+      debugCode!.isNotEmpty &&
+      (deliveryStatus == 'debug' || deliveryStatus == 'pass_through');
 }
 
 /// AuthRepository: 登录、凭证管理、分身管理。
@@ -101,6 +115,9 @@ class MockAuthRepository implements AuthRepository {
     return OtpSendResultData(
       maskedPhone: _maskPhone(phone),
       expiresInSeconds: 300,
+      deliveryStatus: 'debug',
+      requestId: 'mock_otp_request',
+      challengeId: 'mock_otp_challenge',
       debugCode: '000000',
     );
   }

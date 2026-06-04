@@ -13,25 +13,47 @@ import (
 // IntersectionReasonView 是交集理由的服务端视图，与 recommendation/rec_model
 // projections/intersection_reason.yaml 字段对齐（端只读、不本地拼装）。
 type IntersectionReasonView struct {
-	IntersectionID    string   `json:"intersectionId"`
-	IntersectionClass string   `json:"intersectionClass"` // fact | affinity
-	Dimension         string   `json:"dimension"`
-	DisplayName       string   `json:"displayName"`
-	AvatarURL         string   `json:"avatarUrl"`
-	Label             string   `json:"label"`
-	DisplayText       string   `json:"displayText"`
-	SharedCount       int      `json:"sharedCount"`
-	Strength          float64  `json:"strength"`
-	ConfidenceLabel   string   `json:"confidenceLabel"`
-	ModelReasonBucket string   `json:"modelReasonBucket"`
-	RelationKind      string   `json:"relationKind"`
-	RelationObjectID  string   `json:"relationObjectId"`
-	ActionType        string   `json:"actionType"`
-	ActionTargetID    string   `json:"actionTargetId"`
-	Source            string   `json:"source"`
-	TagRefs           []string `json:"tagRefs"`
-	FreshAt           string   `json:"freshAt"`
-	ExpiresAt         string   `json:"expiresAt"`
+	IntersectionID         string                           `json:"intersectionId"`
+	IntersectionClass      string                           `json:"intersectionClass"` // fact | affinity
+	Dimension              string                           `json:"dimension"`
+	DisplayName            string                           `json:"displayName"`
+	AvatarURL              string                           `json:"avatarUrl"`
+	Label                  string                           `json:"label"`
+	DisplayText            string                           `json:"displayText"`
+	SharedCount            int                              `json:"sharedCount"`
+	Strength               float64                          `json:"strength"`
+	ConfidenceLabel        string                           `json:"confidenceLabel"`
+	ModelReasonBucket      string                           `json:"modelReasonBucket"`
+	RelationKind           string                           `json:"relationKind"`
+	RelationObjectID       string                           `json:"relationObjectId"`
+	ActionType             string                           `json:"actionType"`
+	ActionTargetID         string                           `json:"actionTargetId"`
+	Source                 string                           `json:"source"`
+	TagRefs                []string                         `json:"tagRefs"`
+	FreshAt                string                           `json:"freshAt"`
+	ExpiresAt              string                           `json:"expiresAt"`
+	IntersectionPoints     []IntersectionPointView          `json:"intersectionPoints"`
+	PointSummarySnapshotID string                           `json:"pointSummarySnapshotId"`
+	FactPointCount         int                              `json:"factPointCount"`
+	RecommendedPointCount  int                              `json:"recommendedPointCount"`
+	TotalPointCount        int                              `json:"totalPointCount"`
+	DimensionPointSummary  []IntersectionDimensionTallyView `json:"dimensionPointSummary"`
+	PointClassLabel        string                           `json:"pointClassLabel"`
+	RecommendationTraceID  string                           `json:"recommendationTraceId"`
+	LastRecommendedAt      string                           `json:"lastRecommendedAt"`
+	SeenAt                 string                           `json:"seenAt"`
+	RankState              string                           `json:"rankState"`
+}
+
+// IntersectionPointView 是用户可见交集点列表；摘要数字只能由同一批点派生。
+type IntersectionPointView struct {
+	PointID     string `json:"pointId"`
+	PointClass  string `json:"pointClass"` // fact | recommended
+	Dimension   string `json:"dimension"`
+	Label       string `json:"label"`
+	DisplayText string `json:"displayText"`
+	SourceRef   string `json:"sourceRef"`
+	Visibility  string `json:"visibility"`
 }
 
 func (v IntersectionReasonView) coolKey() string {
@@ -83,9 +105,10 @@ type intersectionRedis interface {
 const (
 	// defaultIntersectionCooldownDays 跨会话推荐冷却窗口默认天数。
 	// 唯一 TTL 真相源同时登记在 contracts/metadata/_shared/redis_keyspace.yaml: rec:icool。
-	defaultIntersectionCooldownDays = 14
-	intersectionCooldownTTL         = 30 * 24 * time.Hour
-	watermarkCacheTTL               = 90 * 24 * time.Hour
+	defaultIntersectionCooldownDays       = 14
+	defaultIntersectionMaxCandidateWindow = 20
+	intersectionCooldownTTL               = 30 * 24 * time.Hour
+	watermarkCacheTTL                     = 90 * 24 * time.Hour
 )
 
 var intersectionDimensionLabels = map[string]string{
@@ -99,10 +122,11 @@ var intersectionDimensionLabels = map[string]string{
 // IntersectionService 承载交集统一体验的服务端核心机制：
 // 事实/概率合并排序、跨会话冷却窗口、保鲜过滤、per-dimension 已读水位。
 type IntersectionService struct {
-	source       IntersectionSource
-	redis        intersectionRedis
-	cooldownDays int
-	now          func() time.Time
+	source             IntersectionSource
+	redis              intersectionRedis
+	cooldownDays       int
+	maxCandidateWindow int
+	now                func() time.Time
 }
 
 // IntersectionServiceOption 配置项。
@@ -126,13 +150,23 @@ func WithIntersectionCooldownDays(days int) IntersectionServiceOption {
 	}
 }
 
+// WithIntersectionMaxCandidateWindow 控制请求期稳定排序窗口，默认 20。
+func WithIntersectionMaxCandidateWindow(limit int) IntersectionServiceOption {
+	return func(svc *IntersectionService) {
+		if limit > 0 {
+			svc.maxCandidateWindow = limit
+		}
+	}
+}
+
 // NewIntersectionService 构造交集服务。router 为 nil 时退化为无冷却/无水位（仅排序）。
 func NewIntersectionService(router intersectionRedis, opts ...IntersectionServiceOption) *IntersectionService {
 	svc := &IntersectionService{
-		source:       emptyIntersectionSource{},
-		redis:        router,
-		cooldownDays: defaultIntersectionCooldownDays,
-		now:          time.Now,
+		source:             emptyIntersectionSource{},
+		redis:              router,
+		cooldownDays:       defaultIntersectionCooldownDays,
+		maxCandidateWindow: defaultIntersectionMaxCandidateWindow,
+		now:                time.Now,
 	}
 	for _, opt := range opts {
 		opt(svc)
@@ -143,7 +177,7 @@ func NewIntersectionService(router intersectionRedis, opts ...IntersectionServic
 func cooldownKey(userID string) string  { return "rec:icool:{" + userID + "}" }
 func watermarkKey(userID string) string { return "cache:viewer_intersections:" + userID }
 
-// ReportExposure 将曝光未转化的交集对象写入冷却集（跨会话）。
+// ReportExposure 记录已曝光对象；Feed 后续保留对象但施加 seen penalty。
 func (s *IntersectionService) ReportExposure(ctx context.Context, userID string, objectIDs []string) error {
 	if s.redis == nil || strings.TrimSpace(userID) == "" || len(objectIDs) == 0 {
 		return nil
@@ -163,8 +197,8 @@ func (s *IntersectionService) ReportExposure(ctx context.Context, userID string,
 	return client.Expire(ctx, key, intersectionCooldownTTL)
 }
 
-// coolingDown 返回当前仍在冷却窗口内的对象 id 集合（score = 过期时刻 > now）。
-func (s *IntersectionService) coolingDown(ctx context.Context, userID string) map[string]struct{} {
+// seenKeys 返回仍在记忆窗口内的已曝光对象集合（score = 过期时刻 > now）。
+func (s *IntersectionService) seenKeys(ctx context.Context, userID string) map[string]struct{} {
 	out := map[string]struct{}{}
 	if s.redis == nil || strings.TrimSpace(userID) == "" {
 		return out
@@ -245,6 +279,116 @@ func freshUnix(r IntersectionReasonView) int64 {
 	return t.Unix()
 }
 
+func pointClassForReason(r IntersectionReasonView) string {
+	if r.IntersectionClass == "affinity" {
+		return "recommended"
+	}
+	return "fact"
+}
+
+func pointLabelForReason(r IntersectionReasonView) string {
+	if strings.TrimSpace(r.DisplayText) != "" {
+		return r.DisplayText
+	}
+	if strings.TrimSpace(r.Label) != "" {
+		return r.Label
+	}
+	if strings.TrimSpace(r.DisplayName) != "" {
+		return r.DisplayName
+	}
+	if strings.TrimSpace(r.IntersectionID) != "" {
+		return r.IntersectionID
+	}
+	return r.coolKey()
+}
+
+func visibleIntersectionPoints(r IntersectionReasonView) []IntersectionPointView {
+	points := make([]IntersectionPointView, 0, len(r.IntersectionPoints))
+	for _, p := range r.IntersectionPoints {
+		if p.Visibility == "hidden" {
+			continue
+		}
+		points = append(points, p)
+	}
+	if len(points) > 0 {
+		return points
+	}
+	label := pointLabelForReason(r)
+	if strings.TrimSpace(label) == "" {
+		return nil
+	}
+	pointID := r.IntersectionID
+	if pointID == "" {
+		pointID = r.coolKey()
+	}
+	return []IntersectionPointView{{
+		PointID:     pointID,
+		PointClass:  pointClassForReason(r),
+		Dimension:   r.Dimension,
+		Label:       r.Label,
+		DisplayText: label,
+		SourceRef:   r.Source,
+		Visibility:  "public",
+	}}
+}
+
+func hydratePointSummary(r IntersectionReasonView) IntersectionReasonView {
+	points := visibleIntersectionPoints(r)
+	r.IntersectionPoints = points
+	byDimension := map[string]*IntersectionDimensionTallyView{}
+	order := []string{}
+	fact := 0
+	recommended := 0
+	for _, p := range points {
+		switch p.PointClass {
+		case "recommended":
+			recommended++
+		default:
+			fact++
+		}
+		dim := p.Dimension
+		if dim == "" {
+			dim = r.Dimension
+		}
+		tally, ok := byDimension[dim]
+		if !ok {
+			tally = &IntersectionDimensionTallyView{
+				Dimension: dim,
+				Label:     intersectionDimensionLabels[dim],
+			}
+			byDimension[dim] = tally
+			order = append(order, dim)
+		}
+		tally.Count++
+	}
+	summary := make([]IntersectionDimensionTallyView, 0, len(order))
+	for _, dim := range order {
+		summary = append(summary, *byDimension[dim])
+	}
+	r.FactPointCount = fact
+	r.RecommendedPointCount = recommended
+	r.TotalPointCount = fact + recommended
+	r.DimensionPointSummary = summary
+	if r.PointSummarySnapshotID == "" {
+		if r.RecommendationTraceID != "" {
+			r.PointSummarySnapshotID = r.RecommendationTraceID
+		} else {
+			r.PointSummarySnapshotID = r.IntersectionID
+		}
+	}
+	if r.PointClassLabel == "" {
+		if recommended > 0 && fact == 0 {
+			r.PointClassLabel = "推荐交集"
+		} else {
+			r.PointClassLabel = "事实交集"
+		}
+	}
+	if r.RankState == "" {
+		r.RankState = "fresh"
+	}
+	return r
+}
+
 // Summary 我的主页聚合摘要：各维度计数 + 自上次查看未读数。
 func (s *IntersectionService) Summary(ctx context.Context, userID string) (IntersectionInboxSummaryView, error) {
 	reasons, err := s.source.FactReasons(ctx, userID, "")
@@ -260,21 +404,28 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 	order := []string{}
 	total := 0
 	totalNew := 0
-	for _, r := range reasons {
+	for _, raw := range reasons {
+		r := hydratePointSummary(raw)
 		if !s.isFresh(r) {
 			continue
 		}
-		a, ok := byDim[r.Dimension]
-		if !ok {
-			a = &agg{}
-			byDim[r.Dimension] = a
-			order = append(order, r.Dimension)
-		}
-		a.count++
-		total++
-		if freshUnix(r) > wm[r.Dimension] {
-			a.newCount++
-			totalNew++
+		for _, point := range r.IntersectionPoints {
+			dim := point.Dimension
+			if dim == "" {
+				dim = r.Dimension
+			}
+			a, ok := byDim[dim]
+			if !ok {
+				a = &agg{}
+				byDim[dim] = a
+				order = append(order, dim)
+			}
+			a.count++
+			total++
+			if freshUnix(r) > wm[dim] {
+				a.newCount++
+				totalNew++
+			}
 		}
 	}
 	dims := make([]IntersectionDimensionTallyView, 0, len(order))
@@ -309,7 +460,8 @@ func (s *IntersectionService) List(ctx context.Context, userID, dimension string
 	}
 	wm := s.watermarks(ctx, userID)
 	filtered := make([]IntersectionReasonView, 0, len(reasons))
-	for _, r := range reasons {
+	for _, raw := range reasons {
+		r := hydratePointSummary(raw)
 		if dimension != "" && r.Dimension != dimension {
 			continue
 		}
@@ -332,8 +484,7 @@ func (s *IntersectionService) List(ctx context.Context, userID, dimension string
 	return filtered, nil
 }
 
-// Feed 首页/频道交集推荐：事实优先（strength + 新鲜度），概率其次（strength/score），
-// 统一过保鲜期与跨会话冷却窗口。
+// Feed 首页/频道交集推荐：事实/推荐交集点同源合并；已曝光对象保留但降权。
 func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, limit int) ([]IntersectionReasonView, error) {
 	facts, err := s.source.FactReasons(ctx, userID, channel)
 	if err != nil {
@@ -343,29 +494,45 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 	if err != nil {
 		return nil, err
 	}
-	cooled := s.coolingDown(ctx, userID)
-	pick := func(in []IntersectionReasonView) []IntersectionReasonView {
-		out := make([]IntersectionReasonView, 0, len(in))
-		for _, r := range in {
-			if !s.isFresh(r) {
-				continue
-			}
-			if _, cooling := cooled[r.coolKey()]; cooling {
-				continue
-			}
-			out = append(out, r)
+	seen := s.seenKeys(ctx, userID)
+	now := s.now().UTC().Format(time.RFC3339)
+	merged := make([]IntersectionReasonView, 0, len(facts)+len(affinities))
+	for _, r := range append(facts, affinities...) {
+		if !s.isFresh(r) {
+			continue
 		}
-		sort.SliceStable(out, func(i, j int) bool {
-			if out[i].Strength != out[j].Strength {
-				return out[i].Strength > out[j].Strength
-			}
-			return freshUnix(out[i]) > freshUnix(out[j])
-		})
-		return out
+		r = hydratePointSummary(r)
+		r.LastRecommendedAt = now
+		if _, ok := seen[r.coolKey()]; ok {
+			r.RankState = "seen"
+			r.SeenAt = now
+		}
+		merged = append(merged, r)
 	}
-	merged := append(pick(facts), pick(affinities)...)
+	sort.SliceStable(merged, func(i, j int) bool {
+		iSeen := merged[i].RankState == "seen"
+		jSeen := merged[j].RankState == "seen"
+		if iSeen != jSeen {
+			return !iSeen
+		}
+		iFact := merged[i].IntersectionClass != "affinity"
+		jFact := merged[j].IntersectionClass != "affinity"
+		if iFact != jFact {
+			return iFact
+		}
+		if merged[i].Strength != merged[j].Strength {
+			return merged[i].Strength > merged[j].Strength
+		}
+		if merged[i].TotalPointCount != merged[j].TotalPointCount {
+			return merged[i].TotalPointCount > merged[j].TotalPointCount
+		}
+		return freshUnix(merged[i]) > freshUnix(merged[j])
+	})
+	if s.maxCandidateWindow > 0 && len(merged) > s.maxCandidateWindow {
+		merged = merged[:s.maxCandidateWindow]
+	}
 	if limit > 0 && len(merged) > limit {
-		merged = merged[:limit]
+		return merged[:limit], nil
 	}
 	return merged, nil
 }

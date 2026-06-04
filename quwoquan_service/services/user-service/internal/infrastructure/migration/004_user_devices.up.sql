@@ -12,4 +12,7 @@ CREATE TABLE IF NOT EXISTS user_devices (
     ,CONSTRAINT fk_user_devices_user_id FOREIGN KEY (user_id) REFERENCES user_profiles(user_id) ON DELETE CASCADE
 );
 
-ALTER TABLE user_devices ADD CONSTRAINT uq_user_devices_user_device UNIQUE (user_id, device_id);
+DO $do$ BEGIN
+    ALTER TABLE user_devices ADD CONSTRAINT uq_user_devices_user_device UNIQUE (user_id, device_id);
+EXCEPTION WHEN duplicate_table THEN NULL; WHEN duplicate_object THEN NULL;
+END $do$;

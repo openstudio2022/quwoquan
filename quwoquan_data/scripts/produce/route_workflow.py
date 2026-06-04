@@ -2,7 +2,7 @@
 
 正文不再由脚本拼接：
   - prepare 阶段（build_route_writing_pack）只准备证据/选图/写作契约 + prompt.md，并写占位草稿。
-  - 会话模型据 prompt.md 创作正文写回 drafts/{ref}.article.md（generator=agent）。
+  - 会话模型据 prompt.md 创作正文写回 drafts/{ref}/article.md（generator=agent）。
   - review 阶段（review_route_draft）读取 agent 草稿，过模板指纹/事实可回溯/出处三道门 + 既有质量门。
 """
 from __future__ import annotations
@@ -30,6 +30,7 @@ from _common.content_review import (
 from _common.draft_io import (
     GENERATOR_AGENT,
     PLACEHOLDER_MARKER,
+    draft_asset_reference_issues,
     drafts_dir,
     is_placeholder,
     read_draft_article,
@@ -303,17 +304,13 @@ def _compose_payload_from_pack(
         "sourcePaths": list(quality_payload.get("sourcePaths") or []),
         "template": template,
         "assets": list(pack.get("assets") or []),
-        "publishLayout": pack.get("publishLayout") or ("gallery" if carrier == "gallery" else "travel"),
+        "publishLayout": "gallery" if carrier == "gallery" else "travel",
         "publishAngle": _publish_angle(brief),
         "publishTitle": brief.get("titleHint") or ref,
         "publishSeq": 1,
         "conditionContext": brief.get("conditionContext"),
-        "recommendation": brief.get("recommendation"),
         "composeBriefRef": ref,
-        "sourceQuality": story_spine.get("sourceQuality", []),
         "storySpine": story_spine,
-        "relatedSearchPlan": quality_payload.get("relatedSearchPlan"),
-        "evidenceBundle": evidence_bundle,
         "generator": str(meta.get("generator") or "pending"),
         "generatorModel": meta.get("model"),
         "citedSourceRefs": list(meta.get("citedSourcePaths") or []),
@@ -358,6 +355,7 @@ def review_route_draft(
     authenticity_issues.extend(generator_provenance_issues(draft_meta))
     body = "" if is_placeholder(article) else str(article)
     authenticity_issues.extend(template_fingerprint_issues(body))
+    authenticity_issues.extend(draft_asset_reference_issues(body, pack))
     source_texts = _load_source_texts(quality_payload.get("sourcePaths") or [])
     traceability = fact_traceability_issues(body, dict(brief), source_texts)
 
@@ -378,7 +376,7 @@ def review_route_draft(
     route_checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
-        "suggestions": ["按 prompt.md 由会话模型创作正文并写回 drafts/{ref}.article.md（generator=agent）。"] if authenticity_issues else [],
+        "suggestions": ["按 prompt.md 由会话模型创作正文并写回 drafts/{ref}/article.md（generator=agent）。"] if authenticity_issues else [],
     }
     route_checks["factTraceability"] = {
         "passed": not traceability,
@@ -405,7 +403,7 @@ def review_route_draft(
         "humanReviewRequired": human_review_required,
         "generator": compose_payload.get("generator"),
     }
-    write_stage_result(task_id, batch_id, "produce", "review", ref, payload)
+    write_stage_result(task_id, batch_id, "produce", "review", ref, _persisted_review_payload(payload))
     _persist_review_ledger(
         task_id, batch_id, ref, brief, compose_payload, route_checks, traceability, draft_meta, quality_score
     )
@@ -443,6 +441,18 @@ def review_route_draft(
             rerun_chain=rerun_chain,
         )
     return payload
+
+
+def _persisted_review_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    checks = payload.get("checks") or {}
+    return {
+        "topicId": payload.get("topicId"),
+        "decision": payload.get("decision"),
+        "issues": list(payload.get("issues") or []),
+        "humanReviewRequired": bool(payload.get("humanReviewRequired")),
+        "generator": payload.get("generator"),
+        "checks": {name: {"passed": bool(result.get("passed"))} for name, result in checks.items()},
+    }
 
 
 def _score_from_quality(quality_score: float) -> int:
@@ -770,10 +780,9 @@ def _check_cross_article_similarity(
         return {"passed": True, "issues": [], "suggestions": []}
     issues: list[str] = []
     directory = drafts_dir(task_id, batch_id)
-    suffix = ".article.md"
     if directory.is_dir():
-        for other in sorted(directory.glob(f"*{suffix}")):
-            other_ref = other.name[: -len(suffix)]
+        packaged = [(other.parent.name, other) for other in directory.glob("*/article.md")]
+        for other_ref, other in sorted(packaged, key=lambda item: item[0]):
             if other_ref == ref:
                 continue
             try:
@@ -991,16 +1000,16 @@ def _node_layout(layouts: Sequence[str], position: int) -> str:
 
 def _make_asset(ref: str, *, role: str, position: int, path: Path, layout: str, caption: str, entity_name: str, verdict=None) -> dict[str, Any]:
     suffix = "cover" if role == "cover" else (f"detail_{position}" if role == "node" else "closing")
-    object_key = f"media/image/post/{ref}/{suffix}.jpg"
+    logical_seed = f"asset-seed/post/{ref}/{suffix}.jpg"
     asset = {
-        "assetId": asset_id_from_object_key(object_key),
+        "assetId": asset_id_from_object_key(logical_seed),
         "fileName": path.name,
         "caption": caption,
         "kind": "image",
         "scope": "cold_start",
         "role": role,
         "entityName": entity_name,
-        "objectKey": object_key,
+        "objectKey": "",
         "sourcePath": str(path),
         "imageLayout": layout,
     }

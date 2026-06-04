@@ -54,6 +54,9 @@ def main() -> None:
     from annotate.handler import register_parser as reg_annotate
     from ship.handler import register_parser as reg_ship
     from task.handler import register_parser as reg_task
+    from homepage_assets.handler import register_parser as reg_homepage_assets
+    from vertical.handler import register_parser as reg_vertical
+    from quality.handler import register_parser as reg_quality
 
     reg_explore(subparsers)
     reg_build(subparsers)
@@ -68,6 +71,9 @@ def main() -> None:
     reg_annotate(subparsers)
     reg_ship(subparsers)
     reg_task(subparsers)
+    reg_homepage_assets(subparsers)
+    reg_vertical(subparsers)
+    reg_quality(subparsers)
 
     p_reset = subparsers.add_parser("reset", help="Clear runtime data")
     p_reset.add_argument("--include-release", action="store_true", help="Also clear release/")

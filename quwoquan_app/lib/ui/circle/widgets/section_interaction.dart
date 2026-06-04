@@ -51,7 +51,7 @@ class _InteractionRow {
 class _SectionInteractionState extends ConsumerState<SectionInteraction> {
   String _activeSubTab = 'likes';
   bool _isLoading = true;
-  String? _error;
+  UiErrorSemantic? _errorSemantic;
   List<_InteractionRow> _interactions = const [];
 
   @override
@@ -63,7 +63,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
   Future<void> _loadInteractions() async {
     setState(() {
       _isLoading = true;
-      _error = null;
+      _errorSemantic = null;
     });
     try {
       final repo = ref.read(circleRepositoryProvider);
@@ -80,7 +80,12 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = runtimeErrorDisplayMessage(e);
+          _errorSemantic = runtimeErrorSemantic(
+            context,
+            error: e,
+            category: UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+          );
         });
       }
     }
@@ -124,7 +129,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
     if (_isLoading) {
       return const Center(child: CupertinoActivityIndicator());
     }
-    if (_error != null) {
+    if (_errorSemantic != null) {
       return _buildErrorCard();
     }
 
@@ -226,38 +231,15 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
   }
 
   Widget _buildErrorCard() {
-    final fgSecondary = AppColorsFunctional.getColor(
-      widget.isDark,
-      ColorType.foregroundSecondary,
-    );
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.error_outline,
-            color: AppColors.error,
-            size: AppSpacing.iconLarge,
-          ),
-          SizedBox(height: AppSpacing.sm),
-          Text(
-            UITextConstants.loadFailed,
-            style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
-          ),
-          SizedBox(height: AppSpacing.sm),
-          CupertinoButton(
-            onPressed: _loadInteractions,
-            child: Text(
-              UITextConstants.retry,
-              style: TextStyle(
-                color: AppColors.primaryColor,
-                fontSize: AppTypography.base,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return AppSectionErrorCard(
+      semantic: _errorSemantic!,
+      margin: EdgeInsets.zero,
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry ||
+            action.type == UiErrorActionType.resubmit) {
+          await _loadInteractions();
+        }
+      },
     );
   }
 }

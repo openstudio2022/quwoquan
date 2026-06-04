@@ -24,6 +24,10 @@ dist/
 *.o
 *.a
 
+# quwoquan_data command package named "build" is source code, not a build artifact.
+!quwoquan_data/scripts/build/
+!quwoquan_data/scripts/build/*.py
+
 # Environment files
 .env
 .env.local
@@ -79,9 +83,7 @@ artifacts/stackctl-contract/
 # quwoquan_data release artifacts are generated outputs, not source truth.
 quwoquan_data/release/
 
-# Local control-plane and runtime caches
-.control-plane-state/
-quwoquan_service/.control-plane-state/
+# Local runtime state
+state/
 quwoquan_service/.local_models/
-quwoquan_service/services/*/.runtime-cache/
 

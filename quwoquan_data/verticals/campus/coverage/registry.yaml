@@ -1,0 +1,36 @@
+schemaVersion: quwoquan.vertical_coverage.v1
+vertical: campus
+description: 校园垂类覆盖边界。高校已有全国 seed；K12/幼儿园仍需全国扩展。
+units:
+  - id: campus.university.national
+    label: 全国普通高校
+    entityType: 机构/学校
+    expectedCount: 2922
+    source: runtime/seed/school_catalog/universities_national.ndjson
+    requiredSourceCategories: [school_official, forum]
+    requiredAngles: [索引, 新生攻略, 校园评测]
+    maturity: partial
+  - id: campus.k12.beijing
+    label: 北京中小学幼儿园
+    entityType: 机构/学校
+    expectedCount: 177
+    source: runtime/seed/school_catalog/schools_beijing.ndjson
+    requiredSourceCategories: [school_official, forum]
+    requiredAngles: [索引, 校园评测]
+    maturity: pilot
+  - id: campus.k12.shanghai
+    label: 上海中小学幼儿园
+    entityType: 机构/学校
+    expectedCount: 169
+    source: runtime/seed/school_catalog/schools_shanghai.ndjson
+    requiredSourceCategories: [school_official, forum]
+    requiredAngles: [索引, 校园评测]
+    maturity: pilot
+  - id: campus.k12.national
+    label: 全国中小学幼儿园
+    entityType: 机构/学校
+    expectedCount: 0
+    source: pending-national-k12-catalog
+    requiredSourceCategories: [school_official, forum, map_geo]
+    requiredAngles: [索引, 校园评测, 升学经验, 校园日记]
+    maturity: gap

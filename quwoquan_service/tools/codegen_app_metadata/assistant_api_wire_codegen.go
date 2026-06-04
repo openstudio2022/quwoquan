@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -16,27 +17,11 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 	if err != nil {
 		return err
 	}
-	names := []string{
-		"AssistantSearchCitationView",
-		"AssistantSearchResultView",
-		"AssistantSearchXiaoquRequestWire",
-		"AssistantReportPageContextRequestWire",
-		"AssistantUserTaskView",
-		"AssistantUserMemoryView",
-		"AssistantUserTaskListView",
-		"AssistantUserMemoryListView",
-		"AssistantSkillCatalogItemView",
-		"AssistantSkillCatalogListView",
-		"SuggestedAction",
-		"SuggestedActionListView",
-		"PageContextAck",
-		"InteractionEvent",
-		"Scorecard",
-		"AssistantPolicyView",
-		"AssistantInteractionReportBatchAck",
-		"AssistantScorecardReportBatchAck",
-		"AssistantLearningOpsSummaryView",
+	svc, err := readService(filepath.Join(metadataDir, "assistant", "assistant_run", "service.yaml"))
+	if err != nil {
+		return err
 	}
+	names := collectAssistantWireEntities(ff, svc)
 	out := renderAssistantCloudApiWireDart(ff, names)
 	outPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "assistant", "assistant_cloud_api_wire.g.dart")
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
@@ -44,6 +29,65 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 	}
 	writeFile(outPath, out)
 	return nil
+}
+
+func collectAssistantWireEntities(ff *fieldsFile, svc *serviceFile) []string {
+	seen := map[string]bool{}
+	var names []string
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return
+		}
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	for _, route := range svc.APIRoutes {
+		add(route.RequestEntity)
+		add(route.ResponseEntity)
+	}
+	// Request/response bodies used by repository batch helpers but not yet declared
+	// as request_entity in metadata still need stable wire output.
+	add("InteractionEvent")
+	add("Scorecard")
+	add("AssistantInteractionReportBatchAck")
+	add("AssistantScorecardReportBatchAck")
+
+	expanded := map[string]bool{}
+	var visit func(string)
+	visit = func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" || expanded[name] {
+			return
+		}
+		ent, ok := ff.Entities[name]
+		if !ok {
+			return
+		}
+		expanded[name] = true
+		for _, field := range ent.Fields {
+			inner, ok := assistantWireListElementType(field.Type)
+			if ok {
+				if _, exists := ff.Entities[inner]; exists {
+					add(inner)
+					visit(inner)
+				}
+				continue
+			}
+			fieldType := strings.TrimSpace(field.Type)
+			if _, exists := ff.Entities[fieldType]; exists {
+				add(fieldType)
+				visit(fieldType)
+			}
+		}
+	}
+	for _, name := range append([]string(nil), names...) {
+		visit(name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func renderAssistantCloudApiWireDart(ff *fieldsFile, entityNames []string) string {

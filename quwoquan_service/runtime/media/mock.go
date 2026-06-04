@@ -2,6 +2,8 @@ package runtimemedia
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
@@ -34,20 +36,21 @@ func (m *MockMediaStore) InitUpload(_ context.Context, opts InitUploadOpts) (*Up
 	m.counter++
 	now := time.Now()
 	sessionID := fmt.Sprintf("mock_us_%d", m.counter)
-	ossKey := buildOSSKey(opts.Category, opts.OwnerID, sessionID, opts.FileName)
+	ossKey := buildTemporaryOSSKey(opts.Category, opts.OwnerID, sessionID, opts.FileName)
 
 	session := &UploadSession{
-		SessionID:   sessionID,
-		Category:    opts.Category,
-		OwnerID:     opts.OwnerID,
-		FileName:    opts.FileName,
-		ContentType: opts.ContentType,
-		FileSize:    opts.FileSize,
-		PresignURL:  fmt.Sprintf("https://mock-oss.example.com/%s?upload=true", ossKey),
-		OSSKey:      ossKey,
-		Status:      "pending",
-		CreatedAt:   now,
-		ExpiresAt:   now.Add(15 * time.Minute),
+		SessionID:      sessionID,
+		Category:       opts.Category,
+		OwnerID:        opts.OwnerID,
+		FileName:       opts.FileName,
+		ContentType:    opts.ContentType,
+		FileSize:       opts.FileSize,
+		PresignURL:     fmt.Sprintf("https://mock-oss.example.com/%s?upload=true", ossKey),
+		OSSKey:         ossKey,
+		TemporaryOSSKey: ossKey,
+		Status:         "pending",
+		CreatedAt:      now,
+		ExpiresAt:      now.Add(15 * time.Minute),
 	}
 
 	m.sessions[sessionID] = session
@@ -68,22 +71,30 @@ func (m *MockMediaStore) CompleteUpload(_ context.Context, sessionID string, opt
 
 	session.Status = "completed"
 	m.counter++
+	sum := sha256.Sum256([]byte(session.OwnerID + "|" + session.FileName + "|" + session.SessionID))
+	sha256Digest := opts.DeclaredSha256
+	if sha256Digest == "" {
+		sha256Digest = "sha256:" + hex.EncodeToString(sum[:])
+	}
+	finalKey := buildCASObjectKey(sha256Digest, session.FileName)
 
 	asset := &MediaAsset{
-		AssetID:     fmt.Sprintf("mock_ma_%d", m.counter),
-		SessionID:   sessionID,
-		Category:    session.Category,
-		OwnerID:     session.OwnerID,
-		FileName:    session.FileName,
-		ContentType: session.ContentType,
-		FileSize:    session.FileSize,
-		OSSKey:      session.OSSKey,
-		CDNURL:      fmt.Sprintf("https://mock-cdn.example.com/%s", session.OSSKey),
-		DurationMs:  opts.DurationMs,
-		Width:       opts.Width,
-		Height:      opts.Height,
-		Metadata:    opts.Metadata,
-		CreatedAt:   time.Now(),
+		AssetID:        fmt.Sprintf("mock_ma_%d", m.counter),
+		SessionID:      sessionID,
+		Category:       session.Category,
+		OwnerID:        session.OwnerID,
+		FileName:       session.FileName,
+		ContentType:    session.ContentType,
+		FileSize:       session.FileSize,
+		OSSKey:         finalKey,
+		TemporaryOSSKey: session.OSSKey,
+		CDNURL:         fmt.Sprintf("https://mock-cdn.example.com/%s", finalKey),
+		Sha256:         sha256Digest,
+		DurationMs:     opts.DurationMs,
+		Width:          opts.Width,
+		Height:         opts.Height,
+		Metadata:       opts.Metadata,
+		CreatedAt:      time.Now(),
 	}
 
 	m.assets[asset.AssetID] = asset

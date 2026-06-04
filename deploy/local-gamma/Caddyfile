@@ -7,6 +7,15 @@
 	tls internal
 }
 
+(media_cors) {
+	header {
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+		Access-Control-Allow-Headers "*"
+		Cross-Origin-Resource-Policy "cross-origin"
+	}
+}
+
 gamma-api.quwoquan-env.test {
 	import local_gamma_tls
 	handle /healthz {
@@ -44,6 +53,7 @@ gamma-api.quwoquan-env.test {
 		reverse_proxy product-ops-service:18086
 	}
 	handle /media/* {
+		import media_cors
 		root * /srv/media
 		file_server
 	}
@@ -83,6 +93,7 @@ gamma-image.quwoquan-env.test,
 gamma-video.quwoquan-env.test,
 gamma-upload.quwoquan-env.test {
 	import local_gamma_tls
+	import media_cors
 	root * /srv/media
 	file_server
 }
@@ -117,6 +128,7 @@ gamma-upload.quwoquan-env.test {
 		reverse_proxy product-ops-service:18086
 	}
 	handle /media/* {
+		import media_cors
 		root * /srv/media
 		file_server
 	}

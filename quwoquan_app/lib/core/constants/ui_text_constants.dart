@@ -106,6 +106,83 @@ class UITextConstants {
 
   static const String globalXiaoquSearchHint = '搜内容、圈子、聊天';
   static const String globalXiaoquSearchAsk = '找小趣';
+
+  // ==================== PC Web 宽屏壳 ====================
+  static const String webPcBrandName = '趣我圈';
+  static const String webPcPrimaryHome = home;
+  static const String webPcPrimaryFeatured = homeTabFeatured;
+  static const String webPcPrimaryCreate = '添加';
+  static const String webPcPrimaryMessages = '消息';
+  static const String webPcPrimaryProfile = '我的';
+  static const String webPcCreateTabVideo = discoveryTabVideo;
+  static const String webPcCreateTabGallery = '相册';
+  static const String webPcCreateTabText = '文字';
+  static const String webPcCreateTabDrafts = '草稿';
+  static const String webPcMessagesTabMessages = '消息';
+  static const String webPcMessagesTabContacts = '联系人';
+  static const String webPcMessagesTabGroups = '群聊';
+  static const String webPcMessagesTabXiaoqu = '小趣';
+  static const String webPcProfileContextTitle = '我的主页';
+  static const String webPcSearchHintHome = '搜索兴趣、圈子、作品、用户';
+  static const String webPcSearchHintFeatured = '搜索精品作品、视频、图文';
+  static const String webPcSearchHintCreate = '搜索素材、草稿、发布模板';
+  static const String webPcSearchHintMessages = '搜索联系人、群聊、消息';
+  static const String webPcSearchHintProfile = '搜索我的内容、收藏、互动';
+  static const String webPcWelcomeLogin = '登录';
+  static const String webPcWelcomePublish = '发布作品';
+  static const String webPcWelcomeHeadline = '以兴趣为半径，画出我们的交集。';
+  static const String webPcWelcomeSubtitle =
+      '在 Web 上浏览精品内容、发现同好，也可以下载 App 获得完整创作和消息体验。';
+  static const String webPcWelcomeContinue = '继续浏览 Web';
+  static const String webPcWelcomeDownload = webInstallBannerDownloadApp;
+  static const String webPcWelcomeScrollHint = '滚动鼠标也可以进入首页，工具栏会自动吸顶。';
+  static const String webPcWelcomeDownloadPanelTitle = '扫码或选择安装包';
+  static const String webPcWelcomeDownloadPanelBody =
+      'iOS、Android 与鸿蒙入口都在安装页中。';
+  static const String webPcMessagesRailTitle = '消息助手';
+  static const String webPcMessagesRailBody = '小趣可以帮你总结会话、定位联系人、整理群聊里的重点内容。';
+  static const String webPcProfileRailTitle = '多端同步';
+  static const String webPcProfileRailBody =
+      '在 App 里继续管理身份、互动和创作数据，Web 端保留完整个人主页视图。';
+  static const String webPcHomeRailTitle = homeTodayIntersection;
+  static const String webPcHomeRailBody = '关注同校、旅行、摄影与科技等兴趣频道，新的交集会在这里持续浮现。';
+  static const String webPcHomeFeedTitle = '首页推荐';
+  static const String webPcFeaturedRailTitle = '精品队列';
+  static const String webPcFeaturedRailBody =
+      '精选作品以大封面、右侧队列和下方网格组织，适合桌面浏览与键盘切换。';
+  static const String webPcFeaturedFeedTitle = '精品内容';
+  static const String webPcCreateRailTitle = '小趣创作助手';
+  static const String webPcCreateRailBody = '小趣可以帮你生成标题、选题、标签与发布建议。';
+  static const String webPcCreateWorkspaceTitle = '添加内容';
+  static const String webPcCreateWorkspaceSubtitle =
+      '选择一种创作方式，Web 端先进入工作台，再复用现有发布链路。';
+  static const String webPcCreateVideoTitle = '发布视频';
+  static const String webPcCreateVideoSubtitle = '上传视频素材，补充标题、标签与封面。';
+  static const String webPcCreateGalleryTitle = '从相册选择';
+  static const String webPcCreateGallerySubtitle = '挑选图片或素材，发布成点滴或作品。';
+  static const String webPcCreateTextTitle = '写文字';
+  static const String webPcCreateTextSubtitle = '快速记录想法，也可以继续打磨成长文。';
+  static const String webPcCreateDraftsTitle = '继续草稿';
+  static const String webPcCreateDraftsSubtitle = '打开移动端同源草稿入口，继续未完成内容。';
+  static const String webPcFeedEmpty = '暂无内容';
+
+  static String webPcPrimaryLabel(String routeName) {
+    switch (routeName) {
+      case 'home':
+        return webPcPrimaryHome;
+      case 'featured':
+        return webPcPrimaryFeatured;
+      case 'create':
+        return webPcPrimaryCreate;
+      case 'chat':
+        return webPcPrimaryMessages;
+      case 'profile':
+        return webPcPrimaryProfile;
+      default:
+        return webPcPrimaryHome;
+    }
+  }
+
   static const String homeCirclesMy = '我的';
   static const String homeCirclesRecommendTab = '圈子推荐';
   static const String homeCirclesManage = '管理';
@@ -246,6 +323,9 @@ class UITextConstants {
   static const String loginPhoneRequired = '请输入手机号';
   static const String loginOtpRequired = '请输入验证码';
   static const String loginOtpSent = '验证码已发送';
+  static const String loginOtpQueued = '验证码请求已受理，请留意短信';
+  static const String loginOtpDebugCodePrefix = '联调验证码：';
+  static const String loginOtpPassThroughDebugHint = '当前为非生产联调放通，验证码正确性校验已跳过';
   static const String loginHelp = '遇到问题';
   static const String loginFailed = '登录失败，请稍后重试';
 
@@ -376,6 +456,20 @@ class UITextConstants {
   /// 分享目标：朋友圈
   static const String shareTargetMoments = '朋友圈';
   static const String loadFailed = '加载失败';
+  static const String temporarilyUnavailable = '暂时连不上';
+  static const String contentTemporarilyUnavailable = '内容暂时打不开';
+  static const String contentNotLoadedYet = '这里还没加载出来';
+  static const String checkNetworkAndTryAgain = '检查网络后再试一次，或稍后回来看看。';
+  static const String contentLoadSoftFailed = '服务暂时不可用，稍后自动恢复后再试';
+  static const String refreshSoftFailed = '网络不太稳定，刚刚没有刷新成功。';
+  static const String refreshTimeoutSoftFailed = '这次刷新有点慢，稍后再试。';
+  static const String appendSoftFailed = '后面的内容暂时没拉到，上拉再试。';
+  static const String appendTapToRetry = '加载更多没成功，轻点重试';
+  static const String tryAgain = '再试一次';
+  static const String gotIt = '我知道了';
+  static const String loginToContinue = '登录后继续';
+  static const String contentUnavailable = '内容不可用了';
+  static const String contentUnavailableReason = '可能已被删除或暂时无法查看。';
   static const String report = '举报';
   static const String notInterested = '不感兴趣';
   static const String shareTo = '分享到';
@@ -441,7 +535,10 @@ class UITextConstants {
   static String intersectionSharedChip(int count) => '$count 共同点';
 
   /// 首页/频道交集模块头：「N 位与你有交集」（N 为红色数字，文案不含数字）。
-  static const String intersectionSpotlightHeaderPrefix = '位与你有交集';
+  static const String intersectionSpotlightHeaderPrefix = '个对象与你有关';
+  static const String intersectionRecommendSpotlightTitle = '与你有关的新对象';
+  static const String intersectionCampusSpotlightTitle = '校园里与你有关的人和圈子';
+  static const String intersectionTravelSpotlightTitle = '和你有相同足迹的人与地点';
 
   // ==================== 我的主页 ====================
   static const String editProfile = '编辑资料';

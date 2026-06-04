@@ -17,6 +17,7 @@ from _common.stage_reports import write_gate_report, write_stage_result  # noqa:
 from download.source_inputs import curated_sources_for_entity, curated_images_for_entity, source_frontmatter  # noqa: E402
 from download.fetch import fetch_source, fetch_image  # noqa: E402
 from download.prepare import prepare_source_plan, prepare_source_screen  # noqa: E402
+from vertical.license import normalize_rights_payload, validate_image_rights  # noqa: E402
 
 
 def handle_download(args: argparse.Namespace) -> None:
@@ -100,14 +101,23 @@ def handle_download(args: argparse.Namespace) -> None:
         for source in curated_sources_for_entity(task_id, batch_id, entity_id):
             src_dir = entity_dir / source["source_id"]
             src_dir.mkdir(parents=True, exist_ok=True)
+            # 优先用 source_plan 人工 body 作为 source.md 可读正文（HTML 仅存档 page.html）。
+            # 原因：fetch_source 落地的是 50k 原始 HTML，evidence 抽取面对 HTML 噪声抽不到
+            # 干净事实/情感句，使 evidenceQuality / factTraceability 误阻断。body 是经核证的
+            # 真实事实文本，与正文数字/情感对齐，是更高质量的 evidence 真相源。
+            curated_body = str(source.get("body") or "").strip()
             try:
                 meta = fetch_source(source["url"], src_dir)
-                source_md = Path(meta["sourceMdPath"]).read_text(encoding="utf-8")
+                fetched_md = Path(meta["sourceMdPath"]).read_text(encoding="utf-8")
             except Exception as exc:
                 source_md = source_frontmatter(source, entity_id)
                 (src_dir / "source.md").write_text(source_md, encoding="utf-8")
                 meta = {"url": source["url"], "statusCode": 0, "error": str(exc), "sourceMdPath": str(src_dir / "source.md")}
             else:
+                if curated_body:
+                    source_md = source_frontmatter(source, entity_id)
+                else:
+                    source_md = fetched_md
                 (src_dir / "source.md").write_text(source_md, encoding="utf-8")
             clean_md = anonymize_source_markdown(source_md)
             (src_dir / "source.clean.md").write_text(clean_md, encoding="utf-8")
@@ -146,14 +156,18 @@ def handle_download(args: argparse.Namespace) -> None:
 
         image_specs = curated_images_for_entity(task_id, batch_id, entity_id)
         image_manifest: list[dict] = []
+        image_rights_issues: list[str] = []
         if image_specs:
             images_dir = entity_dir / "images"
             for idx, spec in enumerate(image_specs, start=1):
+                issues = validate_image_rights(spec, vertical=vertical)
+                if issues:
+                    image_rights_issues.extend([f"{idx}: {issue}" for issue in issues])
+                    continue
                 meta = fetch_image(spec["url"], images_dir, index=idx)
                 if meta is None:
                     continue
-                meta["license"] = spec.get("license", "")
-                meta["credit"] = spec.get("credit", "")
+                meta.update(normalize_rights_payload(spec))
                 image_manifest.append(meta)
             if image_manifest:
                 write_json(
@@ -164,11 +178,25 @@ def handle_download(args: argparse.Namespace) -> None:
             task_id=task_id,
             batch_id=batch_id,
             command="download",
+            step="image_rights",
+            ref=entity_id,
+            passed=not image_rights_issues,
+            issues=image_rights_issues,
+            evidence_summary={"plannedImages": len(image_specs), "blockedImages": len(image_rights_issues)},
+            next_step="image_fetch",
+            fallback_stage="source_plan" if image_rights_issues else None,
+        )
+        write_gate_report(
+            task_id=task_id,
+            batch_id=batch_id,
+            command="download",
             step="image_fetch",
             ref=entity_id,
-            passed=len(image_manifest) >= 1,
+            passed=not image_rights_issues and len(image_manifest) >= 1,
             issues=[]
-            if image_manifest
+            if image_manifest and not image_rights_issues
+            else image_rights_issues
+            if image_rights_issues
             else ["imageFetch: 未下到真实图片，请在 source_plan 提供可用 imageUrls(CC/PD/授权)"],
             evidence_summary={"plannedImages": len(image_specs), "downloadedImages": len(image_manifest)},
             next_step="quality_analysis",

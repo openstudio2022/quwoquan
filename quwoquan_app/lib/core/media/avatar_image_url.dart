@@ -101,7 +101,7 @@ String _normalizeBase(String raw) {
     return '';
   }
   final lower = value.toLowerCase();
-  if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+  if (!lower.startsWith('https://')) {
     return '';
   }
   return value.replaceFirst(RegExp(r'/+$'), '');

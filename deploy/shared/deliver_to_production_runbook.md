@@ -86,17 +86,17 @@ python3 agent_ops/deploy/stackctl.py up --target gamma-local
 
 **要区分两个东西**：
 
-- **`.release-state/seed-box.state`** 是**状态文件**，记录「上一次灰度完成后 prod 正在跑的版本」：里面的 `to_image`、`to_config` 就是**当前 prod** 的镜像/配置版本。表单里的 **Current prod** 应从**这个 state 文件**取，不是从 `releases/config/` 取。
+- **`state/release/seed-box.state`** 是**状态文件**，记录「上一次灰度完成后 prod 正在跑的版本」：里面的 `to_image`、`to_config` 就是**当前 prod** 的镜像/配置版本。表单里的 **Current prod** 应从**这个 state 文件**取，不是从 `releases/config/` 取。
 - **`releases/config/seed-box/v*.yaml`** 是**某次发布用的配置内容**（该版本的配置快照），用于校验「目标配置版本」是否存在；不表示“当前 prod 版本号”。
 
 | 字段 | 含义 | 获取方式 |
 |------|------|----------|
-| **Current prod image version** | 当前生产正在使用的镜像版本 | 从 **`.release-state/seed-box.state`** 的 **`to_image`** 读取（上次灰度完成后写入）；若无则从集群查：`kubectl get deployment seed-box -n seed-box-prod -o jsonpath='{.spec.template.spec.containers[0].image}'` 取 tag |
+| **Current prod image version** | 当前生产正在使用的镜像版本 | 从 **`state/release/seed-box.state`** 的 **`to_image`** 读取（上次灰度完成后写入）；若无则从集群查：`kubectl get deployment seed-box -n seed-box-prod -o jsonpath='{.spec.template.spec.containers[0].image}'` 取 tag |
 | **Target image version (match pre-release)** | 本次要上的镜像版本，须与预发布一致 | 来自 **main PR required checks 中 `04. Pre-Release Gate` 的 ECS gamma pre** 部署版本：tag 触发用该 tag 或解析值；必要时参考 ECS deploy report / workflow artifact |
-| **Current prod config version** | 当前生产正在使用的配置版本 | 从 **`.release-state/seed-box.state`** 的 **`to_config`** 读取；若无则从 deployment 环境变量 `CONFIG_VERSION` 读取 |
+| **Current prod config version** | 当前生产正在使用的配置版本 | 从 **`state/release/seed-box.state`** 的 **`to_config`** 读取；若无则从 deployment 环境变量 `CONFIG_VERSION` 读取 |
 | **Target config version** | 本次要上的配置版本 | 与 target image 对应，来自 pre-release 的 `CONFIG_VERSION`（同上） |
 
-**约定**：Target 必须与 `04. Pre-Release Gate` 在 ECS gamma pre 验证通过的版本一致。Workflow 支持**留空 Current prod 两栏**时自动从 `.release-state/seed-box.state` 读取（见下文）。
+**约定**：Target 必须与 `04. Pre-Release Gate` 在 ECS gamma pre 验证通过的版本一致。Workflow 支持**留空 Current prod 两栏**时自动从 `state/release/seed-box.state` 读取（见下文）。
 
 ---
 
@@ -176,7 +176,7 @@ scripts/start_app_instance.sh --env gamma --device-id <gamma-device>
 
 ### 6.0 灰度对象：整颗 seed-box（不按服务区分）
 
-在 **integration / prod** 只有一个 K8s Deployment：**seed-box**，内有两个容器（Go seed-box + Python recommendation-service），**一起发布、同一镜像/配置版本**。灰度就是整颗 seed-box 一起滚，不按“服务”拆开。配置与状态统一用 seed-box：`releases/config/seed-box/`、`.release-state/seed-box.state`。见 `deploy/shared/process_domain_mapping.yaml` 与 `deploy/service/seed-box/kustomize/base/deployment.yaml`。
+在 **integration / prod** 只有一个 K8s Deployment：**seed-box**，内有两个容器（Go seed-box + Python recommendation-service），**一起发布、同一镜像/配置版本**。灰度就是整颗 seed-box 一起滚，不按“服务”拆开。配置与状态统一用 seed-box：`releases/config/seed-box/`、`state/release/seed-box.state`。见 `deploy/shared/process_domain_mapping.yaml` 与 `deploy/service/seed-box/kustomize/base/deployment.yaml`。
 
 ### 6.1 灰度步进
 

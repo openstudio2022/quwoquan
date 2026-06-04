@@ -17,6 +17,9 @@ enum ContentErrorCode {
   commentTooLong,
   commentRateLimited,
   commentLikeDuplicate,
+  commentReactionForbidden,
+  commentAttachmentLimitExceeded,
+  commentAttachmentNotReady,
   commentForbiddenDelete,
   contentTooLong,
   mediaNotReady,
@@ -65,6 +68,12 @@ enum ContentErrorCode {
         return ContentErrorCode.commentRateLimited;
       case 'CONTENT.USER.comment_like_duplicate':
         return ContentErrorCode.commentLikeDuplicate;
+      case 'CONTENT.USER.comment_reaction_forbidden':
+        return ContentErrorCode.commentReactionForbidden;
+      case 'CONTENT.USER.comment_attachment_limit_exceeded':
+        return ContentErrorCode.commentAttachmentLimitExceeded;
+      case 'CONTENT.USER.comment_attachment_not_ready':
+        return ContentErrorCode.commentAttachmentNotReady;
       case 'CONTENT.USER.comment_forbidden_delete':
         return ContentErrorCode.commentForbiddenDelete;
       case 'CONTENT.USER.content_too_long':
@@ -119,6 +128,9 @@ class ContentErrorMessages {
     ContentErrorCode.commentTooLong: '评论超出字数限制',
     ContentErrorCode.commentRateLimited: '评论太频繁，请稍后重试',
     ContentErrorCode.commentLikeDuplicate: '已经点过赞了',
+    ContentErrorCode.commentReactionForbidden: '当前无法评价这条评论',
+    ContentErrorCode.commentAttachmentLimitExceeded: '评论图片数量超出限制',
+    ContentErrorCode.commentAttachmentNotReady: '评论图片正在处理中，请稍后重试',
     ContentErrorCode.commentForbiddenDelete: '无权删除此评论',
     ContentErrorCode.contentTooLong: '内容超出长度限制',
     ContentErrorCode.mediaNotReady: '媒体文件正在处理中，请稍后发布',
@@ -151,6 +163,9 @@ class ContentErrorMessages {
     ContentErrorCode.commentTooLong: 'Comment exceeds length limit',
     ContentErrorCode.commentRateLimited: 'Too many comments, please retry later',
     ContentErrorCode.commentLikeDuplicate: 'Already liked',
+    ContentErrorCode.commentReactionForbidden: 'Not allowed to react to this comment',
+    ContentErrorCode.commentAttachmentLimitExceeded: 'Too many comment images',
+    ContentErrorCode.commentAttachmentNotReady: 'Comment image is still processing, please retry shortly',
     ContentErrorCode.commentForbiddenDelete: 'Not allowed to delete this comment',
     ContentErrorCode.contentTooLong: 'Content exceeds length limit',
     ContentErrorCode.mediaNotReady: 'Media is still processing, please retry shortly',

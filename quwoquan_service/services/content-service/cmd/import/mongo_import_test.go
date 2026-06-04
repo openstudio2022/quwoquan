@@ -40,10 +40,21 @@ func samplePosts() []PostDoc {
 	return []PostDoc{
 		{PostRef: "posts/article/体验/甲居藏寨体验/1", ContentType: "article", Title: "甲居藏寨体验", Angle: "体验", Seq: 1,
 			EntityRefs: []string{"地点/景区/甲居藏寨"}, TagRefs: []string{"Topic/旅行"}, Template: "journal",
-			GeneratorModel: "agent/x", ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "d1",
-			SourceTaskId: "旅行/环线/川西环线/川西大环线自驾"},
+			GeneratorModel: "agent/x", ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+			ArticleAssetManifest: &ArticleAssetManifestDoc{
+				SchemaVersion:          1,
+				ArticleMarkdownVersion: "qwq-rich-md/1",
+				ArticleMarkdownDigest:  "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+				DocumentSha256:         "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+				AssetManifestSha256:    "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+				DocumentVersionSha256:  "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+				Assets: []AssetManifestItem{
+					{AssetID: "cover", ObjectKey: "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", CDNURL: "https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", Sha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+				},
+			},
+			SourceTaskId:         "旅行/环线/川西环线/川西大环线自驾"},
 		{PostRef: "posts/article/攻略/色达攻略/1", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
-			EntityRefs: []string{"地点/景区/色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "d2"},
+			EntityRefs: []string{"地点/景区/色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444"},
 	}
 }
 
@@ -51,6 +62,9 @@ func sampleEntities() []EntityDoc {
 	return []EntityDoc{
 		{EntityRef: "地点/景区/甲居藏寨", Domain: "地点", Etype: "景区", Name: "甲居藏寨", Label: "甲居藏寨",
 			TagRefs: []string{"Entity/地点/景区"}, Page: "# 甲居藏寨\n", HasPage: true,
+			AssetManifest: &EntityAssetManifestDoc{Assets: []AssetManifestItem{
+				{AssetID: "甲居藏寨_homepage_detail", ObjectKey: "media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png", CDNURL: "https://img.example.com/media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png", Sha256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+			}},
 			ConditionProfile: map[string]any{"regions": []any{"高原", "山地"}, "seasons": []any{"夏", "秋"}, "altitudeMeters": 3500},
 			SourceTaskId:     "旅行/环线/川西环线/川西大环线自驾"},
 		{EntityRef: "地点/景区/色达", Domain: "地点", Etype: "景区", Name: "色达", Label: "色达", HasPage: false},
@@ -76,19 +90,20 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 		t.Fatalf("want 2 docs, got %d", count)
 	}
 	var got struct {
-		ID              string    `bson:"_id"`
-		Title           string    `bson:"title"`
-		Angle           string    `bson:"angle"`
-		EntityRefs      []string  `bson:"entityRefs"`
-		TagRefs         []string  `bson:"tagRefs"`
-		Body            string    `bson:"body"`
-		Summary         string    `bson:"summary"`
-		ArticleMarkdown string    `bson:"articleMarkdown"`
-		ArticleTemplate string    `bson:"articleTemplate"`
-		MarkdownDigest  string    `bson:"articleMarkdownDigest"`
-		SourceTaskId    string    `bson:"sourceTaskId"`
-		CreatedAt       time.Time `bson:"createdAt"`
-		UpdatedAt       time.Time `bson:"updatedAt"`
+		ID                   string         `bson:"_id"`
+		Title                string         `bson:"title"`
+		Angle                string         `bson:"angle"`
+		EntityRefs           []string       `bson:"entityRefs"`
+		TagRefs              []string       `bson:"tagRefs"`
+		Body                 string         `bson:"body"`
+		Summary              string         `bson:"summary"`
+		ArticleMarkdown      string         `bson:"articleMarkdown"`
+		ArticleTemplate      string         `bson:"articleTemplate"`
+		MarkdownDigest       string                   `bson:"articleMarkdownDigest"`
+		ArticleAssetManifest *ArticleAssetManifestDoc `bson:"articleAssetManifest"`
+		SourceTaskId         string         `bson:"sourceTaskId"`
+		CreatedAt            time.Time      `bson:"createdAt"`
+		UpdatedAt            time.Time      `bson:"updatedAt"`
 	}
 	if err := coll.FindOne(ctx, bson.M{"postRef": "posts/article/体验/甲居藏寨体验/1"}).Decode(&got); err != nil {
 		t.Fatal(err)
@@ -108,7 +123,7 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	if got.Body != got.ArticleMarkdown || got.Body == "" {
 		t.Fatalf("body must mirror articleMarkdown for online read/search: %+v", got)
 	}
-	if got.Summary != "d1" || got.MarkdownDigest != "d1" {
+	if got.Summary != "sha256:1111111111111111111111111111111111111111111111111111111111111111" || got.MarkdownDigest != "sha256:1111111111111111111111111111111111111111111111111111111111111111" {
 		t.Fatalf("summary/digest must mirror articleDigest: %+v", got)
 	}
 	if got.ArticleTemplate != "journal" {
@@ -116,6 +131,12 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	}
 	if got.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
 		t.Fatalf("sourceTaskId not persisted: %q", got.SourceTaskId)
+	}
+	if got.ArticleAssetManifest == nil {
+		t.Fatalf("articleAssetManifest not persisted: %+v", got)
+	}
+	if got.ArticleAssetManifest.DocumentSha256 == "" {
+		t.Fatalf("documentSha256 not persisted: %+v", got.ArticleAssetManifest)
 	}
 	if got.CreatedAt.IsZero() || got.UpdatedAt.IsZero() {
 		t.Fatalf("createdAt/updatedAt must be set: %+v", got)
@@ -166,6 +187,76 @@ func TestMongoUpsertIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestMongoReleaseAwareSyncTombstonesMissingSourceOwnedDocs(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	postsColl := db.Collection("posts")
+	entitiesColl := db.Collection("entities")
+	feedColl := db.Collection("rm_discovery_feed")
+
+	opts1 := ImportOptions{ReleaseID: "rel_001", Mode: "upsert", DeletePolicy: "none", SourceOwner: "qwq_data"}
+	now := time.Now().UTC()
+	if _, err := UpsertPostsWithOptions(ctx, postsColl, samplePosts(), now, opts1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpsertEntitiesWithOptions(ctx, entitiesColl, sampleEntities(), now, opts1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpsertDiscoveryFeedWithOptions(ctx, feedColl, samplePosts(), conditionProfileIndex(sampleEntities()), now, opts1); err != nil {
+		t.Fatal(err)
+	}
+
+	keptPost := []PostDoc{samplePosts()[0]}
+	keptEntity := []EntityDoc{sampleEntities()[0]}
+	opts2 := ImportOptions{ReleaseID: "rel_002", Mode: "sync", DeletePolicy: "tombstone", SourceOwner: "qwq_data"}
+	if _, err := UpsertPostsWithOptions(ctx, postsColl, keptPost, now.Add(time.Second), opts2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpsertEntitiesWithOptions(ctx, entitiesColl, keptEntity, now.Add(time.Second), opts2); err != nil {
+		t.Fatal(err)
+	}
+	tp, err := ApplyMissingPostPolicy(ctx, postsColl, keptPost, now.Add(time.Second), opts2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	te, err := ApplyMissingEntityPolicy(ctx, entitiesColl, keptEntity, now.Add(time.Second), opts2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf, err := ApplyMissingFeedPolicy(ctx, feedColl, keptPost, now.Add(time.Second), opts2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tp != 1 || te != 1 || tf != 1 {
+		t.Fatalf("want one tombstone in each collection, got posts=%d entities=%d feed=%d", tp, te, tf)
+	}
+	var tombstonedPost struct {
+		Status             string `bson:"status"`
+		Visibility         string `bson:"visibility"`
+		LifecycleStatus    string `bson:"lifecycleStatus"`
+		DeletedByReleaseId string `bson:"deletedByReleaseId"`
+	}
+	if err := postsColl.FindOne(ctx, bson.M{"postRef": "posts/article/攻略/色达攻略/1"}).Decode(&tombstonedPost); err != nil {
+		t.Fatal(err)
+	}
+	if tombstonedPost.Status != "deleted" || tombstonedPost.Visibility != "hidden" || tombstonedPost.LifecycleStatus != "tombstone" || tombstonedPost.DeletedByReleaseId != "rel_002" {
+		t.Fatalf("post tombstone fields wrong: %+v", tombstonedPost)
+	}
+	var kept struct {
+		ReleaseID       string `bson:"releaseId"`
+		SourceOwner     string `bson:"sourceOwner"`
+		LifecycleStatus string `bson:"lifecycleStatus"`
+		SourceHash      string `bson:"sourceHash"`
+	}
+	if err := postsColl.FindOne(ctx, bson.M{"postRef": "posts/article/体验/甲居藏寨体验/1"}).Decode(&kept); err != nil {
+		t.Fatal(err)
+	}
+	if kept.ReleaseID != "rel_002" || kept.SourceOwner != "qwq_data" || kept.LifecycleStatus != "active" || kept.SourceHash == "" {
+		t.Fatalf("kept release fields wrong: %+v", kept)
+	}
+}
+
 func TestMongoUpsertEntitiesPageFlag(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
@@ -184,6 +275,7 @@ func TestMongoUpsertEntitiesPageFlag(t *testing.T) {
 		HasPage          bool           `bson:"hasPage"`
 		Page             string         `bson:"page"`
 		SourceTaskId     string         `bson:"sourceTaskId"`
+		AssetManifest    map[string]any `bson:"assetManifest"`
 		ConditionProfile map[string]any `bson:"conditionProfile"`
 	}
 	if err := coll.FindOne(ctx, bson.M{"entityRef": "地点/景区/甲居藏寨"}).Decode(&withPage); err != nil {
@@ -194,6 +286,9 @@ func TestMongoUpsertEntitiesPageFlag(t *testing.T) {
 	}
 	if withPage.SourceTaskId == "" || withPage.ConditionProfile == nil {
 		t.Fatalf("entity sourceTaskId/conditionProfile not persisted: %+v", withPage)
+	}
+	if withPage.AssetManifest == nil {
+		t.Fatalf("entity assetManifest not persisted: %+v", withPage)
 	}
 	var noPage struct {
 		HasPage bool `bson:"hasPage"`
@@ -206,12 +301,12 @@ func TestMongoUpsertEntitiesPageFlag(t *testing.T) {
 	}
 }
 
-func TestMongoUniqueIndexEnforced(t *testing.T) {
+func TestMongoSparseUniqueIndexEnforced(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 	ctx := context.Background()
 	coll := db.Collection("posts")
-	EnsureUnique(ctx, coll, "postRef", "idx_post_ref")
+	EnsureSparseUnique(ctx, coll, "postRef", "idx_post_ref")
 
 	cur, err := coll.Indexes().List(ctx)
 	if err != nil {
@@ -228,10 +323,19 @@ func TestMongoUniqueIndexEnforced(t *testing.T) {
 			if unique, _ := ix["unique"].(bool); !unique {
 				t.Fatalf("idx_post_ref must be unique: %+v", ix)
 			}
+			if sparse, _ := ix["sparse"].(bool); !sparse {
+				t.Fatalf("idx_post_ref must be sparse so online drafts without postRef can coexist: %+v", ix)
+			}
 		}
 	}
 	if !found {
 		t.Fatalf("idx_post_ref index not created: %+v", idxs)
+	}
+	if _, err := coll.InsertOne(ctx, bson.M{"_id": "online_draft_1"}); err != nil {
+		t.Fatalf("insert draft without postRef: %v", err)
+	}
+	if _, err := coll.InsertOne(ctx, bson.M{"_id": "online_draft_2"}); err != nil {
+		t.Fatalf("insert second draft without postRef: %v", err)
 	}
 }
 

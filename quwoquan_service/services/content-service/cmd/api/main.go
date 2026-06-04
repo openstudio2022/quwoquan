@@ -352,7 +352,19 @@ func main() {
 	} else {
 		log.Printf("content-service oss presigner=stub (no access_key_id or endpoint)")
 	}
-	_ = ossPresigner // consumed by OSSMediaStore when media upload feature is wired
+	if ossCfg.CDNDomain != "" || ossCfg.Endpoint != "" {
+		postServiceOpts = append(postServiceOpts, application.WithMediaURLConfig(ossCfg.CDNDomain, ossCfg.Endpoint))
+	}
+	if ossCfg.CDNDomain != "" && ossCfg.Bucket != "" {
+		mediaStore := runtimemedia.NewOSSMediaStore(
+			ossCfg,
+			runtimemedia.NewInMemorySessionStore(),
+			runtimemedia.NewInMemoryAssetStore(),
+			nil,
+			ossPresigner,
+		)
+		postServiceOpts = append(postServiceOpts, application.WithMediaStore(mediaStore))
+	}
 
 	source := recinfra.NewPostRepositorySource(store)
 	candidateSources := append(mongoCandidateSources, source)

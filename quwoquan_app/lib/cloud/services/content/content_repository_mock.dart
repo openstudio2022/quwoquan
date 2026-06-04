@@ -582,8 +582,10 @@ class MockContentRepository implements ContentRepository {
     return ContentMediaInitUploadResponseDto(
       sessionId: 'mock_upload_$ts',
       mediaId: 'mock_media_$ts',
-      uploadUrl: 'https://origin.example/upload/mock_media_$ts',
-      presignUrl: 'https://origin.example/upload/mock_media_$ts',
+      uploadUrl:
+          'https://media-origin.quwoquan.invalid/upload/media/user/mock/draft/post/mock_user/mock_upload_$ts/mock_media_$ts/original.jpg',
+      presignUrl:
+          'https://media-origin.quwoquan.invalid/upload/media/user/mock/draft/post/mock_user/mock_upload_$ts/mock_media_$ts/original.jpg',
     );
   }
 
@@ -594,7 +596,8 @@ class MockContentRepository implements ContentRepository {
     return ContentMediaCompleteUploadResponseDto(
       sessionId: sessionId,
       status: 'ready',
-      cdnUrl: 'https://cdn.example/media/mock',
+      cdnUrl:
+          'https://media.quwoquan.invalid/media/user/mock/draft/post/mock_user/$sessionId/mock_media_$sessionId/original.jpg',
       assetId: 'mock_media_$sessionId',
     );
   }
@@ -610,7 +613,8 @@ class MockContentRepository implements ContentRepository {
       id: mediaId,
       status: 'ready',
       type: 'image',
-      cdnUrl: 'https://cdn.example/media/$mediaId',
+      cdnUrl:
+          'https://media.quwoquan.invalid/media/user/mock/draft/post/mock_user/mock_session/$mediaId/original.jpg',
     );
   }
 

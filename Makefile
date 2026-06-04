@@ -6,6 +6,7 @@
 .PHONY: run-chat-avatar-commercial-matrix-local
 .PHONY: verify-app-mock-isolation
 .PHONY: verify-app-auth-policy
+.PHONY: verify-app-login-entry-loop-contract
 .PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
 .PHONY: verify-app-native-edge-navigation
@@ -34,6 +35,7 @@
 .PHONY: verify-env-topology
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
+.PHONY: verify-sms-otp-fail-open-gate
 .PHONY: verify-env-packaging
 .PHONY: verify-env-instance-isolation
 .PHONY: observability-es-up
@@ -80,6 +82,9 @@ verify-app-mock-isolation:
 verify-app-auth-policy:
 	@python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py
 
+verify-app-login-entry-loop-contract:
+	@python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py
+
 verify-app-lib-test-only-symbols:
 	@python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py
 
@@ -108,6 +113,22 @@ verify-business-env-data-inventory:
 
 verify-quwoquan-data:
 	@bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh
+
+verify-data-release-consistency:
+	@if [ -z "$(RELEASE_FILE)" ]; then \
+		echo "FAIL: RELEASE_FILE is required. Example: make verify-data-release-consistency RELEASE_FILE=quwoquan_data/publish/env_releases/<releaseId>/gamma.json"; \
+		exit 2; \
+	fi
+	@python3 quwoquan_data/scripts/cli.py verify \
+		--data-release-file "$(RELEASE_FILE)" \
+		$(if $(PUBLISH_ROOT),--publish-root "$(PUBLISH_ROOT)",) \
+		$(if $(PHASE),--phase "$(PHASE)",)
+
+verify-media-release-contract:
+	@python3 quwoquan_data/scripts/verify/verify_media_release_contract.py
+
+verify-sms-otp-fail-open-gate:
+	@python3 quwoquan_service/scripts/verify/verify_sms_otp_fail_open_gate.py
 
 verify-markdown-article-no-article-document:
 	@python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py

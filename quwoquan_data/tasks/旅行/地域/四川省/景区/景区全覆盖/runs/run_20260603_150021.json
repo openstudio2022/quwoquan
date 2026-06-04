@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "quwoquan.task.run",
+  "runId": "run_20260603_150021",
+  "taskId": "旅行/地域/四川省/景区/景区全覆盖",
+  "startedAt": "2026-06-03T15:00:21+08:00",
+  "finishedAt": "2026-06-03T15:00:21+08:00",
+  "owner": "agent",
+  "batches": [
+    "fanout_real_1"
+  ],
+  "delta": {
+    "entitiesAdded": 0,
+    "postsAdded": 15,
+    "entitiesUpdated": 0,
+    "postsUpdated": 0
+  },
+  "sessionSummary": "fanout_real_1：四川 15 景区全量真实产出，15 篇行前指南正文(均 900-1800 字游记体)全部 review approved + materialize + ship promote，posts=15 skipped=0，实体关联完整。",
+  "decisions": [],
+  "reflections": [
+    {
+      "query": "为 15 实体补真实多源 source_plan + Wikimedia CC 图片直链(39 张) + 体验/讲解/海拔证据 body",
+      "attribution": "三处工程缺口被修复：①编排器缺 produce_plan(compose brief 无人生成) ②download 用原始 HTML 当 evidence 致情感/数字抽不到 ③gate_produce manifest 路径未下钻版本目录且 materialize 漏写 storySpine",
+      "decision": "download 优先 source_plan 人工 body 作 evidence 源；gate_produce 兼容 <post>/<version>/manifest.json 并补 storySpine；ship 必须带 --copy-entities 先 promote 主页再关联 posts"
+    }
+  ],
+  "nextSuggested": [
+    "全角度扩产(每实体 5 angle 独立 batch 串跑);把 _fill_images/_fill_experience 一次性脚本沉淀为 qwq-data 子命令"
+  ]
+}

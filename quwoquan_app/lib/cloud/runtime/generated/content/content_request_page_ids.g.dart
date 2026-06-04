@@ -6,6 +6,7 @@ class ContentRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AbortMediaUpload': 'content.media.abort',
+    'BindMediaAssetsToComment': 'content.bind.media.assets.to.comment',
     'BindMediaAssetsToPost': 'content.bind.media.assets.to.post',
     'CompleteMediaUpload': 'content.media.complete',
     'CreateComment': 'content.comment.create',
@@ -29,6 +30,7 @@ class ContentRequestPageIds {
     'InitMediaUpload': 'content.media.init',
     'LikeComment': 'content.like.comment',
     'LikePost': 'content.post.like',
+    'ListCommentReplies': 'content.list.comment.replies',
     'ListComments': 'content.comment.list',
     'ListCommentsByAuthor': 'content.list.comments.by.author',
     'ListCommentsForPostAuthor': 'content.list.comments.for.post.author',
@@ -40,6 +42,7 @@ class ContentRequestPageIds {
     'PromotePostToWork': 'content.post.promote',
     'PublishPost': 'content.post.publish',
     'QuoteToCircle': 'content.post.quote',
+    'ReactToComment': 'content.react.to.comment',
     'ReportBehaviors': 'content.behaviors.report',
     'ReportIntersectionExposure': 'content.report.intersection.exposure',
     'RepostToCircle': 'content.post.repost',
@@ -59,6 +62,7 @@ class ContentRequestPageIds {
   };
 
   static const String abortMediaUpload = 'content.media.abort';
+  static const String bindMediaAssetsToComment = 'content.bind.media.assets.to.comment';
   static const String bindMediaAssetsToPost = 'content.bind.media.assets.to.post';
   static const String completeMediaUpload = 'content.media.complete';
   static const String createComment = 'content.comment.create';
@@ -82,6 +86,7 @@ class ContentRequestPageIds {
   static const String initMediaUpload = 'content.media.init';
   static const String likeComment = 'content.like.comment';
   static const String likePost = 'content.post.like';
+  static const String listCommentReplies = 'content.list.comment.replies';
   static const String listComments = 'content.comment.list';
   static const String listCommentsByAuthor = 'content.list.comments.by.author';
   static const String listCommentsForPostAuthor = 'content.list.comments.for.post.author';
@@ -93,6 +98,7 @@ class ContentRequestPageIds {
   static const String promotePostToWork = 'content.post.promote';
   static const String publishPost = 'content.post.publish';
   static const String quoteToCircle = 'content.post.quote';
+  static const String reactToComment = 'content.react.to.comment';
   static const String reportBehaviors = 'content.behaviors.report';
   static const String reportIntersectionExposure = 'content.report.intersection.exposure';
   static const String repostToCircle = 'content.post.repost';

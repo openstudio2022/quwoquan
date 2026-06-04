@@ -1,0 +1,155 @@
+version: 1
+aggregate: PushDelivery
+
+enums:
+  PushProvider:
+    values: [apns, fcm, vendor_push, mock_push]
+  PushDeliveryStatus:
+    values: [queued, sent_unconfirmed, delivered, failed, dead_letter]
+
+entities:
+  PushDeliveryRequest:
+    description: notification-service 提交的外部推送请求。
+    fields:
+      - name: requestId
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: notificationId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: recipientId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: deviceTokenRef
+        type: string
+        constraints: [NOT_NULL]
+        classification: SECRET
+        log_policy: redact
+        api_exposure: none
+        ops_exposure: none
+      - name: providerHint
+        type: enum
+        enum_ref: PushProvider
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: title
+        type: string
+        constraints: [NOT_NULL]
+        classification: PRIVATE
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+      - name: body
+        type: string
+        constraints: [NOT_NULL]
+        classification: PRIVATE
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+      - name: deeplink
+        type: string
+        constraints: [NULLABLE]
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: expiresAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  PushDeliveryAccepted:
+    description: 推送请求已进入可靠队列。
+    fields:
+      - name: requestId
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: status
+        type: enum
+        enum_ref: PushDeliveryStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  PushDeliveryCallback:
+    description: 外部推送供应商回执。
+    fields:
+      - name: requestId
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: provider
+        type: enum
+        enum_ref: PushProvider
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: providerMessageId
+        type: string
+        constraints: [NULLABLE]
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: status
+        type: enum
+        enum_ref: PushDeliveryStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: signature
+        type: string
+        constraints: [NOT_NULL]
+        classification: SECRET
+        log_policy: redact
+        api_exposure: none
+        ops_exposure: none
+
+  PushDeliveryCallbackAccepted:
+    description: 推送回执已验签并幂等接收。
+    fields:
+      - name: requestId
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: accepted
+        type: bool
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read

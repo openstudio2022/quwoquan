@@ -61,6 +61,8 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
         device_info.setdefault("imageHeight", height)
     doc = {
         "_id": post_id,
+        "postId": post_id,
+        "postRef": post_id,
         "authorId": post.get("authorId", ""),
         "subAccountId": post.get("subAccountId") or post.get("authorId", ""),
         "authorDisplayNameSnapshot": post.get("displayName", ""),
@@ -127,7 +129,7 @@ def seed_content() -> Dict[str, Any]:
             doc = fixture_post_to_doc(post)
             docs_by_id[str(doc["_id"])] = doc
     docs = list(docs_by_id.values())
-    js_path = ROOT / "artifacts/local-gamma/seed-content.js"
+    js_path = ROOT / "state/local/gamma/seed-content.js"
     js_path.parent.mkdir(parents=True, exist_ok=True)
     js_path.write_text(
         """
@@ -139,7 +141,14 @@ for (const doc of docs) {
   }
 }
 const dbh = db.getSiblingDB("quwoquan_content");
-dbh.posts.deleteMany({$or: [{_id: /^fixture_/}, {postId: /^fixture_/}]});
+dbh.posts.deleteMany({
+  $or: [
+    {_id: /^fixture_/},
+    {postId: /^fixture_/},
+    {postRef: /^fixture_/},
+    {body: "automated test fixture - safe to delete"},
+  ],
+});
 if (docs.length > 0) dbh.posts.insertMany(docs);
 printjson({insertedCount: docs.length});
 """
@@ -265,6 +274,11 @@ def main() -> int:
     parser.add_argument("--report", default="artifacts/local-gamma/t3_report.json")
     parser.add_argument("--enabled-domain", action="append", default=["content", "chat"])
     parser.add_argument("--skip-seed", action="store_true")
+    parser.add_argument(
+        "--seed-only",
+        action="store_true",
+        help="Only run Mongo content seed (no health wait or flutter contracts).",
+    )
     parser.add_argument("--skip-flutter-contracts", action="store_true")
     parser.add_argument("--test-auth-token", default="local-gamma-token")
     parser.add_argument("--strict-all", action="store_true")
@@ -284,30 +298,38 @@ def main() -> int:
         "apiContracts": [],
     }
 
-    report["health"] = wait_url(args.base_url.rstrip("/") + "/healthz", args.wait_seconds)
-    report["productOpsHealth"] = wait_url(
-        args.product_ops_base_url.rstrip("/") + "/healthz",
-        args.wait_seconds,
-    )
-    if report["health"].get("status") != "passed" or report["productOpsHealth"].get("status") != "passed":
-        report["status"] = "gate_block"
+    if args.seed_only:
+        report["seed"] = seed_content()
+        report["status"] = "passed" if report["seed"].get("status") == "passed" else "failed"
     else:
-        report["seed"] = {"status": "skipped"} if args.skip_seed else seed_content()
-        report["endpoints"] = endpoint_checks(args.base_url, enabled_domains)
-        report["apiContracts"] = (
-            [{"name": "flutter_contracts", "status": "skipped"}]
-            if args.skip_flutter_contracts
-            else run_flutter_contracts(args.base_url, args.product_ops_base_url, args.test_auth_token)
+        report["health"] = wait_url(args.base_url.rstrip("/") + "/healthz", args.wait_seconds)
+        report["productOpsHealth"] = wait_url(
+            args.product_ops_base_url.rstrip("/") + "/healthz",
+            args.wait_seconds,
         )
-        failed = any(item.get("status") == "failed" for item in report["endpoints"])
-        contract_failed = any(item.get("status") == "failed" for item in report["apiContracts"])
-        not_ready = any(item.get("status") == "not_ready" for item in report["endpoints"])
-        if report["seed"].get("status") == "failed" or failed or contract_failed:
-            report["status"] = "failed"
-        elif args.strict_all and not_ready:
+        if report["health"].get("status") != "passed" or report["productOpsHealth"].get("status") != "passed":
             report["status"] = "gate_block"
         else:
-            report["status"] = "passed"
+            report["seed"] = {"status": "skipped"} if args.skip_seed else seed_content()
+            report["endpoints"] = endpoint_checks(args.base_url, enabled_domains)
+            report["apiContracts"] = (
+                [{"name": "flutter_contracts", "status": "skipped"}]
+                if args.skip_flutter_contracts
+                else run_flutter_contracts(
+                    args.base_url,
+                    args.product_ops_base_url,
+                    args.test_auth_token,
+                )
+            )
+            failed = any(item.get("status") == "failed" for item in report["endpoints"])
+            contract_failed = any(item.get("status") == "failed" for item in report["apiContracts"])
+            not_ready = any(item.get("status") == "not_ready" for item in report["endpoints"])
+            if report["seed"].get("status") == "failed" or failed or contract_failed:
+                report["status"] = "failed"
+            elif args.strict_all and not_ready:
+                report["status"] = "gate_block"
+            else:
+                report["status"] = "passed"
 
     report_path = ROOT / args.report
     report_path.parent.mkdir(parents=True, exist_ok=True)

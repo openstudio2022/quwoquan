@@ -78,3 +78,8 @@ brief 结果（节选）：
 - query: fan-out 5 景区从真实素材到 ship 当前环境集合的端到端闭环
   - 归因: 执行/契约问题：composer 把主实体 entityRef 拼成 /entity/{name} 短格式，publish_filter._parse_entity_ref 需 domain/type/name 三段，导致主实体被误判无主页过滤；图片 needs_review 多为景观误判人脸/缺CV后端，非真不安全
   - 决策: 修复 composer：用 compose input 的 subject.type 补全为全路径 /entity/{domain}/{type}/{name}，提取共享 normalize_entity_refs(单一真相源)并加回归测试；needs_review 不硬拦 produce、延到 publish 人工门；补 fetch 合规UA+429/503退避重试解限流
+
+### 反思账本 · run_20260603_150021
+- query: 为 15 实体补真实多源 source_plan + Wikimedia CC 图片直链(39 张) + 体验/讲解/海拔证据 body
+  - 归因: 三处工程缺口被修复：①编排器缺 produce_plan(compose brief 无人生成) ②download 用原始 HTML 当 evidence 致情感/数字抽不到 ③gate_produce manifest 路径未下钻版本目录且 materialize 漏写 storySpine
+  - 决策: download 优先 source_plan 人工 body 作 evidence 源；gate_produce 兼容 <post>/<version>/manifest.json 并补 storySpine；ship 必须带 --copy-entities 先 promote 主页再关联 posts

@@ -12,7 +12,11 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart'
+    as runtime_error_display;
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
@@ -222,10 +226,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     );
   }
 
-  String? _trackedFeedsError() {
+  Object? _trackedFeedsError() {
     for (final tabId in _trackedFeedTabIds) {
-      final error = _readFeedState(tabId)?.error;
-      if (error != null && error.trim().isNotEmpty) {
+      final error = _readFeedState(tabId)?.appendError;
+      if (error != null) {
         return error;
       }
     }
@@ -1407,7 +1411,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final currentPost = posts.isEmpty || isOnLoadMoreSentinel
         ? null
         : posts[_currentPage.clamp(0, posts.length - 1)];
-    final loadMoreErrorText = !_usesExternalFeed ? _trackedFeedsError() : null;
+    final loadMoreError = !_usesExternalFeed ? _trackedFeedsError() : null;
     final isLoadingMore = !_usesExternalFeed && _trackedFeedsLoading();
     if (posts.isNotEmpty) {
       _schedulePrefetch(
@@ -1549,7 +1553,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                     if (showLoadMoreSentinel && index >= posts.length) {
                       return _buildLoadMoreSentinel(
                         isLoading: isLoadingMore,
-                        errorText: loadMoreErrorText,
+                        error: loadMoreError,
                         onRetry: () => _schedulePrefetch(
                           visibleIndex: index,
                           postsLength: posts.length,
@@ -1712,10 +1716,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   Widget _buildLoadMoreSentinel({
     required bool isLoading,
-    required String? errorText,
+    required Object? error,
     required VoidCallback onRetry,
   }) {
-    final hasError = errorText != null && errorText.trim().isNotEmpty;
+    final hasError = error != null;
     return ColoredBox(
       key: const ValueKey<String>('works-load-more-sentinel'),
       color: AppColors.black,
@@ -1726,46 +1730,44 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             mainAxisSize: MainAxisSize.min,
             children: [
               if (hasError)
-                Icon(
-                  CupertinoIcons.exclamationmark_circle,
-                  color: AppColors.white.withValues(alpha: 0.9),
-                  size: AppSpacing.iconLarge,
-                )
-              else
-                const CupertinoActivityIndicator(radius: 16),
-              SizedBox(height: AppSpacing.containerSm),
-              Text(
-                hasError ? '加载下一批精品内容失败' : '正在加载更多精品内容',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.white,
-                  fontSize: AppTypography.body,
-                  fontWeight: AppTypography.semiBold,
-                ),
-              ),
-              SizedBox(height: AppSpacing.intraGroupSm),
-              Text(
-                hasError ? errorText!.trim() : '继续停留即可自动预取新一批内容',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.white.withValues(alpha: 0.72),
-                  fontSize: AppTypography.iosSubheadline,
-                ),
-              ),
-              if (hasError) ...[
-                SizedBox(height: AppSpacing.containerSm),
-                CupertinoButton(
+                AppListAppendErrorFooter(
                   key: const ValueKey<String>('works-load-more-retry'),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.containerMd,
-                    vertical: AppSpacing.intraGroupSm,
+                  semantic: runtime_error_display.runtimeErrorSemantic(
+                    context,
+                    error: error,
+                    category: UiErrorCategory.listAppend,
+                    scope: UiErrorScope.section,
+                    presentation: UiErrorPresentation.appendFooter,
                   ),
-                  color: AppColors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.smallBorderRadius,
+                  onAction: isLoading
+                      ? null
+                      : (action) async {
+                          if (action.type == UiErrorActionType.retry ||
+                              action.type == UiErrorActionType.resubmit) {
+                            onRetry();
+                          }
+                        },
+                )
+              else ...[
+                const CupertinoActivityIndicator(radius: 16),
+                SizedBox(height: AppSpacing.containerSm),
+                Text(
+                  '正在加载更多精品内容',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: AppTypography.body,
+                    fontWeight: AppTypography.semiBold,
                   ),
-                  onPressed: isLoading ? null : onRetry,
-                  child: const Text('重试'),
+                ),
+                SizedBox(height: AppSpacing.intraGroupSm),
+                Text(
+                  '继续停留即可自动预取新一批内容',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.white.withValues(alpha: 0.72),
+                    fontSize: AppTypography.iosSubheadline,
+                  ),
                 ),
               ],
             ],

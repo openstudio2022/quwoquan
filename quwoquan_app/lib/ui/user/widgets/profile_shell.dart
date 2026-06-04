@@ -17,6 +17,7 @@ import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
@@ -300,7 +301,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       AuthSessionState next,
     ) {
       final justLoggedIn =
-          next.isAuthenticated && (previous == null || !previous.isAuthenticated);
+          next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated);
       if (justLoggedIn) {
         maybeResumeFollowContinuation(notifier);
       }

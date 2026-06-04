@@ -43,9 +43,9 @@ class IntersectionSpotlightModule extends StatelessWidget {
       key: moduleKey,
       padding: EdgeInsets.fromLTRB(
         AppSpacing.feedContentHorizontal(context),
-        AppSpacing.interGroupSm,
+        AppSpacing.intraGroupSm,
         AppSpacing.feedContentHorizontal(context),
-        AppSpacing.interGroupSm,
+        AppSpacing.intraGroupSm,
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -57,13 +57,13 @@ class IntersectionSpotlightModule extends StatelessWidget {
           ),
         ),
         child: Padding(
-          padding: EdgeInsets.all(AppSpacing.containerMd),
+          padding: EdgeInsets.all(AppSpacing.containerSm),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               _buildHeader(context, accent, objectReasons.length),
-              SizedBox(height: AppSpacing.interGroupSm),
+              SizedBox(height: AppSpacing.intraGroupSm),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
@@ -74,7 +74,7 @@ class IntersectionSpotlightModule extends StatelessWidget {
                         key: ValueKey<String>('spotlight-object-$i'),
                         reason: objectReasons[i],
                         isDark: isDark,
-                        density: IntersectionEntityDensity.rail,
+                        density: IntersectionEntityDensity.spotlight,
                         onTap: onReasonTap == null
                             ? null
                             : () => onReasonTap!(objectReasons[i]),
@@ -93,33 +93,59 @@ class IntersectionSpotlightModule extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context, Color accent, int count) {
+    final heading = title ?? UITextConstants.homeTodayIntersection;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Icon(
-          CupertinoIcons.circle_grid_hex,
-          size: AppSpacing.iconMedium,
-          color: accent,
+        Container(
+          width: AppSpacing.buttonHeightMd,
+          height: AppSpacing.buttonHeightMd,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusEighteen),
+          ),
+          child: Icon(
+            CupertinoIcons.circle_grid_hex,
+            size: AppSpacing.iconSmall,
+            color: accent,
+          ),
         ),
         SizedBox(width: AppSpacing.intraGroupSm),
-        if (title != null) ...<Widget>[
-          Text(
-            title!,
-            style: TextStyle(
-              fontSize: AppTypography.iosSubheadline,
-              fontWeight: AppTypography.bold,
-              color: AppColors.iosLabel(context),
-            ),
-          ),
-          SizedBox(width: AppSpacing.intraGroupSm),
-        ],
-        _CountBadge(count: count),
-        SizedBox(width: AppSpacing.intraGroupXs),
-        Text(
-          UITextConstants.intersectionSpotlightHeaderPrefix,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            fontWeight: AppTypography.semiBold,
-            color: AppColors.iosLabel(context),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Flexible(
+                    child: Text(
+                      heading,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosSubheadline,
+                        fontWeight: AppTypography.bold,
+                        color: AppColors.iosLabel(context),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupXs),
+                  _CountBadge(count: count),
+                ],
+              ),
+              SizedBox(height: AppSpacing.two),
+              Text(
+                UITextConstants.intersectionSpotlightHeaderPrefix,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.iosCaption1,
+                  color: AppColors.iosSecondaryLabel(context),
+                ),
+              ),
+            ],
           ),
         ),
       ],

@@ -110,8 +110,7 @@ def _run_pipeline() -> Path:
     quality = analyze_route_ref(TASK, BATCH, REF, brief)
     pack = build_route_writing_pack(TASK, BATCH, REF, brief, quality)
     byline = public_byline_label(str(brief.get("templateId")), brief.get("creator") or {})
-    node_names = [str(n) for n in (pack.get("routeEntities") or []) if n] or ENTITIES
-    article = route_article(brief["titleHint"], byline, node_names, pack.get("mustIncludeFacts") or [])
+    article = route_article(brief["titleHint"], byline, ENTITIES, pack.get("mustIncludeFacts") or [])
     write_agent_draft(
         TASK,
         BATCH,
@@ -132,12 +131,13 @@ def _run_pipeline() -> Path:
 def test_manifest_is_minimal_and_trace_offloaded():
     post_dir = _run_pipeline()
     manifest = read_json(post_dir / "manifest.json")
-    for dropped in ("storySpine", "sourceQuality", "relatedSearchPlan", "evidenceBundle", "sourcePaths"):
+    for dropped in ("sourceQuality", "relatedSearchPlan", "evidenceBundle", "sourcePaths"):
         assert dropped not in manifest, f"manifest 不应再含中间态 {dropped}"
     assert manifest["topicId"] == REF
     assert manifest["generator"] == "agent"
-    trace = read_json(post_dir / "produce_trace.json")
-    assert "evidenceBundle" in trace and "sourcePaths" in trace
+    provenance = read_json(post_dir / "provenance.json")
+    assert provenance["agentInput"]["writingPack"].endswith(f"{REF}/writing_pack.json")
+    assert provenance["originalSources"]
 
 
 def test_ledger_written_and_copied():

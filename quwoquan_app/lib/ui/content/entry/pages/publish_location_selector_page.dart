@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -25,8 +25,7 @@ class PublishLocationSelectorPage extends StatefulWidget {
 class _PublishLocationSelectorPageState
     extends State<PublishLocationSelectorPage> {
   bool _loading = true;
-  String? _error;
-  bool _showOpenSettings = false;
+  UiErrorSemantic? _errorSemantic;
   List<CreateLocationOption> _items = const <CreateLocationOption>[];
   double? _lastLat;
   double? _lastLng;
@@ -40,8 +39,7 @@ class _PublishLocationSelectorPageState
   Future<void> _loadNearby() async {
     setState(() {
       _loading = true;
-      _error = null;
-      _showOpenSettings = false;
+      _errorSemantic = null;
     });
     try {
       final perm = await widget.locationService.ensureLocationPermission();
@@ -50,8 +48,17 @@ class _PublishLocationSelectorPageState
       if (perm.result == LocationPermissionResult.permanentlyDenied) {
         setState(() {
           _loading = false;
-          _error = context.l10n.locationAppPermissionRequired;
-          _showOpenSettings = true;
+          _errorSemantic = UiErrorSemanticResolver.resolve(
+            context,
+            error: CloudException(
+              type: CloudErrorType.forbidden,
+              message: context.l10n.locationAppPermissionRequired,
+            ),
+            category: UiErrorCategory.permissionRequired,
+            scope: UiErrorScope.page,
+            allowRetry: false,
+            allowOpenSettings: true,
+          );
         });
         return;
       }
@@ -59,7 +66,16 @@ class _PublishLocationSelectorPageState
           perm.position == null) {
         setState(() {
           _loading = false;
-          _error = context.l10n.locationPermissionRequired;
+          _errorSemantic = UiErrorSemanticResolver.resolve(
+            context,
+            error: CloudException(
+              type: CloudErrorType.forbidden,
+              message: context.l10n.locationPermissionRequired,
+            ),
+            category: UiErrorCategory.permissionRequired,
+            scope: UiErrorScope.page,
+            allowOpenSettings: false,
+          );
         });
         return;
       }
@@ -80,15 +96,26 @@ class _PublishLocationSelectorPageState
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = IntegrationLocationErrorCode.fromCode(
-          e.code,
-        ).toDisplayMessage(context.l10n);
+        _errorSemantic = runtimeErrorSemantic(
+          context,
+          error: e,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = context.l10n.locationLoadFailed;
+        _errorSemantic = UiErrorSemanticResolver.resolve(
+          context,
+          error: CloudException(
+            type: CloudErrorType.unknown,
+            message: context.l10n.locationLoadFailed,
+          ),
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
       });
     }
   }
@@ -149,8 +176,11 @@ class _PublishLocationSelectorPageState
                     ],
                   ),
                 )
-              : _error != null
-              ? Center(child: _buildErrorCard(l10n, isDark))
+              : _errorSemantic != null
+              ? AppPageErrorState(
+                  semantic: _errorSemantic!,
+                  onAction: _handleErrorAction,
+                )
               : ListView(
                   children: [
                     CupertinoListTile(
@@ -166,54 +196,26 @@ class _PublishLocationSelectorPageState
     );
   }
 
-  /// 内联错误卡片（error-and-permission §1.4.1）：文案与主操作同区
-  Widget _buildErrorCard(AppLocalizations l10n, bool isDark) {
-    final errorColor = AppColors.error;
-    final bg = isDark
-        ? CupertinoColors.systemGrey6
-        : CupertinoColors.systemBackground;
-    return Container(
-      margin: EdgeInsets.all(SettingsSemanticConstants.blockHorizontalPadding),
-      padding: EdgeInsets.all(AppSpacing.interGroupLg),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(
-          SettingsSemanticConstants.blockBorderRadius,
-        ),
-        border: Border.all(
-          color: SettingsSemanticConstants.blockBorderColor(isDark),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            CupertinoIcons.exclamationmark_triangle,
-            size: AppSpacing.avatarUserMd,
-            color: errorColor,
-          ),
-          SizedBox(height: AppSpacing.interGroupMd),
-          Text(
-            _error!,
-            style: TextStyle(fontSize: AppTypography.lg, color: errorColor),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: AppSpacing.interGroupLg),
-          _showOpenSettings
-              ? CupertinoButton.filled(
-                  onPressed: () async {
-                    await widget.locationService.openAppSettings();
-                    if (mounted) _loadNearby();
-                  },
-                  child: Text(l10n.locationOpenSettings),
-                )
-              : CupertinoButton.filled(
-                  onPressed: _loadNearby,
-                  child: Text(l10n.retry),
-                ),
-        ],
-      ),
-    );
+  Future<void> _handleErrorAction(UiErrorAction action) async {
+    switch (action.type) {
+      case UiErrorActionType.openSettings:
+        await widget.locationService.openAppSettings();
+        if (mounted) {
+          await _loadNearby();
+        }
+        return;
+      case UiErrorActionType.retry:
+      case UiErrorActionType.resubmit:
+        await _loadNearby();
+        return;
+      case UiErrorActionType.login:
+      case UiErrorActionType.back:
+      case UiErrorActionType.dismiss:
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+        return;
+    }
   }
 
   Widget _buildLocationTile(CreateLocationOption item) {
@@ -253,7 +255,7 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
   bool _loading = false;
-  String? _error;
+  UiErrorSemantic? _errorSemantic;
   List<CreateLocationOption> _items = const <CreateLocationOption>[];
 
   @override
@@ -275,7 +277,7 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
       if (!mounted) return;
       setState(() {
         _items = const <CreateLocationOption>[];
-        _error = null;
+        _errorSemantic = null;
         _loading = false;
       });
       return;
@@ -283,7 +285,7 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
     if (!mounted) return;
     setState(() {
       _loading = true;
-      _error = null;
+      _errorSemantic = null;
     });
     try {
       final result = await widget.locationService.search(
@@ -300,15 +302,26 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = IntegrationLocationErrorCode.fromCode(
-          e.code,
-        ).toDisplayMessage(context.l10n);
+        _errorSemantic = runtimeErrorSemantic(
+          context,
+          error: e,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = context.l10n.locationLoadFailed;
+        _errorSemantic = UiErrorSemanticResolver.resolve(
+          context,
+          error: CloudException(
+            type: CloudErrorType.unknown,
+            message: context.l10n.locationLoadFailed,
+          ),
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
       });
     }
   }
@@ -343,8 +356,11 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
               Expanded(
                 child: _loading
                     ? const Center(child: CupertinoActivityIndicator())
-                    : _error != null
-                    ? Center(child: _buildErrorCard(l10n, isDark))
+              : _errorSemantic != null
+                    ? AppPageErrorState(
+                        semantic: _errorSemantic!,
+                        onAction: _handleSearchErrorAction,
+                      )
                     : _items.isEmpty
                     ? Center(
                         child: Text(
@@ -375,44 +391,17 @@ class _PublishLocationSearchPageState extends State<PublishLocationSearchPage> {
     );
   }
 
-  Widget _buildErrorCard(AppLocalizations l10n, bool isDark) {
-    final errorColor = AppColors.error;
-    final bg = isDark
-        ? CupertinoColors.systemGrey6
-        : CupertinoColors.systemBackground;
-    return Container(
-      margin: EdgeInsets.all(SettingsSemanticConstants.blockHorizontalPadding),
-      padding: EdgeInsets.all(AppSpacing.interGroupLg),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(
-          SettingsSemanticConstants.blockBorderRadius,
-        ),
-        border: Border.all(
-          color: SettingsSemanticConstants.blockBorderColor(isDark),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            CupertinoIcons.exclamationmark_triangle,
-            size: AppSpacing.avatarUserMd,
-            color: errorColor,
-          ),
-          SizedBox(height: AppSpacing.interGroupMd),
-          Text(
-            _error!,
-            style: TextStyle(fontSize: AppTypography.lg, color: errorColor),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: AppSpacing.interGroupLg),
-          CupertinoButton.filled(
-            onPressed: () => _performSearch(_controller.text.trim()),
-            child: Text(l10n.retry),
-          ),
-        ],
-      ),
-    );
+  Future<void> _handleSearchErrorAction(UiErrorAction action) async {
+    switch (action.type) {
+      case UiErrorActionType.retry:
+      case UiErrorActionType.resubmit:
+        await _performSearch(_controller.text.trim());
+        return;
+      case UiErrorActionType.dismiss:
+      case UiErrorActionType.back:
+      case UiErrorActionType.login:
+      case UiErrorActionType.openSettings:
+        return;
+    }
   }
 }
