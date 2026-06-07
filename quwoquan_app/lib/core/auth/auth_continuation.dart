@@ -17,11 +17,17 @@ sealed class AuthContinuation {
 class SubmitCommentContinuation extends AuthContinuation {
   const SubmitCommentContinuation({
     required this.content,
+    this.postId,
     this.replyToCommentId,
+    this.attachmentMediaIds = const <String>[],
+    this.mentions = const <Map<String, dynamic>>[],
   });
 
   final String content;
+  final String? postId;
   final String? replyToCommentId;
+  final List<String> attachmentMediaIds;
+  final List<Map<String, dynamic>> mentions;
 }
 
 /// 续接「关注用户主页」。
@@ -38,7 +44,7 @@ class JoinCircleContinuation extends AuthContinuation {
   final String circleId;
 }
 
-/// 续接「打开某个动作面板/流程」（加好友、发起群聊、建圈子等非路由动作）。
+/// 续接「打开某个动作面板/流程」（添加联系人、发起群聊、建圈子等非路由动作）。
 enum AuthContinuationSheet { addContact, startGroupChat, createCircle }
 
 class OpenSheetContinuation extends AuthContinuation {

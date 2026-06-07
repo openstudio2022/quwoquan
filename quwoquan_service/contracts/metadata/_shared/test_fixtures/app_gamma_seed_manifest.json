@@ -27,7 +27,12 @@
       "targetStore": "content-service:gamma_test_namespace",
       "verifiedEndpoints": [
         "/v1/content/feed",
-        "/v1/content/posts/fixture_photo_001"
+        "/v1/content/posts/fixture_photo_001",
+        "/v1/content/posts/fixture_photo_001/comments",
+        "/v1/content/posts/fixture_photo_001/comments?sort=recommended",
+        "/v1/content/posts/fixture_photo_001/comments/fixture_comment_v2_parent_001/replies",
+        "/v1/content/comments/fixture_comment_v2_parent_001/reaction",
+        "/v1/content/comments/fixture_comment_v2_parent_001/media:bind"
       ]
     },
     {

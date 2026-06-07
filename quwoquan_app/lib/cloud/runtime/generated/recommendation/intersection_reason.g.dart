@@ -31,6 +31,7 @@ class IntersectionReason {
   final int totalPointCount;
   final List<IntersectionDimensionTally> dimensionPointSummary;
   final String pointClassLabel;
+  final String connectionSummary;
   final String recommendationTraceId;
   final String lastRecommendedAt;
   final String seenAt;
@@ -63,6 +64,7 @@ class IntersectionReason {
     this.totalPointCount = 0,
     this.dimensionPointSummary = const <IntersectionDimensionTally>[],
     this.pointClassLabel = '',
+    this.connectionSummary = '',
     this.recommendationTraceId = '',
     this.lastRecommendedAt = '',
     this.seenAt = '',
@@ -97,6 +99,7 @@ class IntersectionReason {
       totalPointCount: (m['totalPointCount'] as num?)?.toInt() ?? 0,
       dimensionPointSummary: _parseProjectionDtoList(m['dimensionPointSummary'], IntersectionDimensionTally.fromMap),
       pointClassLabel: m['pointClassLabel']?.toString() ?? '',
+      connectionSummary: m['connectionSummary']?.toString() ?? '',
       recommendationTraceId: m['recommendationTraceId']?.toString() ?? '',
       lastRecommendedAt: m['lastRecommendedAt']?.toString() ?? '',
       seenAt: m['seenAt']?.toString() ?? '',
@@ -132,6 +135,7 @@ class IntersectionReason {
       'totalPointCount': totalPointCount,
       'dimensionPointSummary': dimensionPointSummary,
       'pointClassLabel': pointClassLabel,
+      'connectionSummary': connectionSummary,
       'recommendationTraceId': recommendationTraceId,
       'lastRecommendedAt': lastRecommendedAt,
       'seenAt': seenAt,
@@ -166,6 +170,7 @@ class IntersectionReason {
     int? totalPointCount,
     List<IntersectionDimensionTally>? dimensionPointSummary,
     String? pointClassLabel,
+    String? connectionSummary,
     String? recommendationTraceId,
     String? lastRecommendedAt,
     String? seenAt,
@@ -198,6 +203,7 @@ class IntersectionReason {
       totalPointCount: totalPointCount ?? this.totalPointCount,
       dimensionPointSummary: dimensionPointSummary ?? this.dimensionPointSummary,
       pointClassLabel: pointClassLabel ?? this.pointClassLabel,
+      connectionSummary: connectionSummary ?? this.connectionSummary,
       recommendationTraceId: recommendationTraceId ?? this.recommendationTraceId,
       lastRecommendedAt: lastRecommendedAt ?? this.lastRecommendedAt,
       seenAt: seenAt ?? this.seenAt,

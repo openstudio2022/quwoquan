@@ -1,10 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_comments_provider.dart';
 
@@ -61,26 +64,26 @@ class _ProfileCommentsPageState extends ConsumerState<ProfileCommentsPage>
         ),
       ),
       child: SafeArea(
-          child: Column(
-            children: [
-              _buildTabBar(isDark),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _CommentsListView(
-                      tab: _ProfileCommentsTabKind.sent,
-                      isDark: isDark,
-                    ),
-                    _CommentsListView(
-                      tab: _ProfileCommentsTabKind.received,
-                      isDark: isDark,
-                    ),
-                  ],
-                ),
+        child: Column(
+          children: [
+            _buildTabBar(isDark),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _CommentsListView(
+                    tab: _ProfileCommentsTabKind.sent,
+                    isDark: isDark,
+                  ),
+                  _CommentsListView(
+                    tab: _ProfileCommentsTabKind.received,
+                    isDark: isDark,
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -179,11 +182,16 @@ class _CommentsListView extends ConsumerWidget {
     }
     if (state.comments.isEmpty) {
       return Center(
-        child: Text(UITextConstants.noComment,
-            style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: AppColorsFunctional.getColor(
-                    isDark, ColorType.foregroundSecondary))),
+        child: Text(
+          UITextConstants.noComment,
+          style: TextStyle(
+            fontSize: AppTypography.sm,
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.foregroundSecondary,
+            ),
+          ),
+        ),
       );
     }
 
@@ -198,8 +206,7 @@ class _CommentsListView extends ConsumerWidget {
       },
       child: ListView.builder(
         padding: EdgeInsets.all(AppSpacing.md),
-        itemCount: state.comments.length +
-            (state.isLoadingMore ? 1 : 0),
+        itemCount: state.comments.length + (state.isLoadingMore ? 1 : 0),
         itemBuilder: (ctx, index) {
           if (index >= state.comments.length) {
             return Padding(
@@ -210,6 +217,7 @@ class _CommentsListView extends ConsumerWidget {
           return _ProfileCommentItem(
             comment: state.comments[index],
             isDark: isDark,
+            canReplyInContext: tab == _ProfileCommentsTabKind.received,
           );
         },
       ),
@@ -236,8 +244,13 @@ class _CommentsListView extends ConsumerWidget {
 class _ProfileCommentItem extends StatelessWidget {
   final CommentDto comment;
   final bool isDark;
+  final bool canReplyInContext;
 
-  const _ProfileCommentItem({required this.comment, required this.isDark});
+  const _ProfileCommentItem({
+    required this.comment,
+    required this.isDark,
+    required this.canReplyInContext,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -247,7 +260,9 @@ class _ProfileCommentItem extends StatelessWidget {
         border: Border(
           bottom: BorderSide(
             color: AppColorsFunctional.getColor(
-                isDark, ColorType.borderPrimary),
+              isDark,
+              ColorType.borderPrimary,
+            ),
             width: AppSpacing.hairline,
           ),
         ),
@@ -260,11 +275,17 @@ class _ProfileCommentItem extends StatelessWidget {
               CircleAvatar(
                 radius: AppSpacing.iconSmall,
                 backgroundColor: AppColorsFunctional.getColor(
-                    isDark, ColorType.backgroundSecondary),
-                child: Icon(CupertinoIcons.person_fill,
-                    size: AppSpacing.iconSmall,
-                    color: AppColorsFunctional.getColor(
-                        isDark, ColorType.foregroundTertiary)),
+                  isDark,
+                  ColorType.backgroundSecondary,
+                ),
+                child: Icon(
+                  CupertinoIcons.person_fill,
+                  size: AppSpacing.iconSmall,
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.foregroundTertiary,
+                  ),
+                ),
               ),
               SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -274,7 +295,9 @@ class _ProfileCommentItem extends StatelessWidget {
                     fontSize: AppTypography.xs,
                     fontWeight: FontWeight.w500,
                     color: AppColorsFunctional.getColor(
-                        isDark, ColorType.foregroundSecondary),
+                      isDark,
+                      ColorType.foregroundSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -283,7 +306,9 @@ class _ProfileCommentItem extends StatelessWidget {
                 style: TextStyle(
                   fontSize: AppTypography.xs,
                   color: AppColorsFunctional.getColor(
-                      isDark, ColorType.foregroundTertiary),
+                    isDark,
+                    ColorType.foregroundTertiary,
+                  ),
                 ),
               ),
             ],
@@ -291,13 +316,89 @@ class _ProfileCommentItem extends StatelessWidget {
           SizedBox(height: AppSpacing.xs),
           Padding(
             padding: EdgeInsets.only(
-                left: AppSpacing.iconSmall * 2 + AppSpacing.sm),
-            child: Text(comment.content,
-                style: TextStyle(fontSize: AppTypography.sm)),
+              left: AppSpacing.iconSmall * 2 + AppSpacing.sm,
+            ),
+            child: Text(
+              comment.content,
+              style: TextStyle(fontSize: AppTypography.sm),
+            ),
+          ),
+          SizedBox(height: AppSpacing.xs),
+          Padding(
+            padding: EdgeInsets.only(
+              left: AppSpacing.iconSmall * 2 + AppSpacing.sm,
+            ),
+            child: _PostSummaryCard(comment: comment, isDark: isDark),
+          ),
+          Padding(
+            padding: EdgeInsets.only(
+              left: AppSpacing.iconSmall * 2 + AppSpacing.sm,
+              top: AppSpacing.xs,
+            ),
+            child: Wrap(
+              spacing: AppSpacing.sm,
+              children: [
+                CupertinoButton(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                  minimumSize: const Size.square(AppSpacing.buttonSize),
+                  onPressed: () => _openOriginal(context),
+                  child: const Text(UITextConstants.profileCommentViewOriginal),
+                ),
+                if (canReplyInContext)
+                  CupertinoButton(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    minimumSize: const Size.square(AppSpacing.buttonSize),
+                    onPressed: () => _replyInContext(context),
+                    child: const Text(
+                      UITextConstants.profileCommentReplyInContext,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+
+  void _openOriginal(BuildContext context) {
+    final route = _routeToOriginal(reply: false);
+    if (route == null) {
+      AppToast.show(context, UITextConstants.profileCommentOriginalUnavailable);
+      return;
+    }
+    context.push(route);
+  }
+
+  void _replyInContext(BuildContext context) {
+    final route = _routeToOriginal(reply: true);
+    if (route == null) {
+      AppToast.show(context, UITextConstants.profileCommentOriginalUnavailable);
+      return;
+    }
+    context.push(route);
+  }
+
+  String? _routeToOriginal({required bool reply}) {
+    final postId = _postId;
+    if (postId.isEmpty) return null;
+    final query = <String, String>{
+      'openComments': 'true',
+      'commentId': comment.id,
+      if (comment.parentCommentId?.isNotEmpty == true)
+        'parentCommentId': comment.parentCommentId!,
+      if (reply) 'replyToCommentId': comment.id,
+    };
+    return Uri(
+      path: AppRoutePaths.articleDetail(id: postId),
+      queryParameters: query,
+    ).toString();
+  }
+
+  String get _postId {
+    final summaryPostId = comment.postSummary['postId']?.toString() ?? '';
+    if (summaryPostId.isNotEmpty) return summaryPostId;
+    return comment.postId;
   }
 
   String _formatTime(BuildContext context, DateTime time) {
@@ -308,5 +409,45 @@ class _ProfileCommentItem extends StatelessWidget {
     if (diff.inDays < 1) return l10n.hoursAgoTemplate(diff.inHours);
     if (diff.inDays < 30) return l10n.daysAgoTemplate(diff.inDays);
     return l10n.monthDayTemplate(time.month, time.day);
+  }
+}
+
+class _PostSummaryCard extends StatelessWidget {
+  const _PostSummaryCard({required this.comment, required this.isDark});
+
+  final CommentDto comment;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = comment.postSummary;
+    final title = (summary['title'] ?? comment.postId).toString();
+    final status = (summary['status'] ?? 'published').toString();
+    final unavailable = status == 'deleted' || status == 'hidden';
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundSecondary,
+        ),
+        borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
+      ),
+      child: Text(
+        unavailable ? UITextConstants.profileCommentOriginalUnavailable : title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: AppTypography.xs,
+          color: AppColorsFunctional.getColor(
+            isDark,
+            unavailable
+                ? ColorType.foregroundTertiary
+                : ColorType.foregroundSecondary,
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -35,6 +35,7 @@ export 'widgets/app_modal_surface.dart';
 export 'widgets/app_search_field.dart';
 export 'widgets/error_states/app_error_states.dart';
 export 'widgets/ios_selection_page_components.dart';
+export 'widgets/web_page_max_width_frame.dart';
 
 // Providers
 export 'design_system/providers/theme_provider.dart';

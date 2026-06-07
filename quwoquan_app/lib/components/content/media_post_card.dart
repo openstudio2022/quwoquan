@@ -275,7 +275,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   }
 
   /// 显示更多选项弹窗 - 使用通用组件
-  void _showMoreOptions() {
+  void _showMoreOptions({double? panelMaxWidth}) {
     final config = MediaPostMoreActionConfig(
       onReward: _handleReward,
       onSave: _handleSave,
@@ -290,7 +290,14 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
       onReport: _handleReport,
     );
 
-    MoreActionPopup.show(context: context, config: config);
+    MoreActionPopup.show(
+      context: context,
+      config: config,
+      panelMaxWidth:
+          panelMaxWidth ??
+          MediaQuery.sizeOf(context).width -
+              AppSpacing.contentSpacingMd.w * 2,
+    );
   }
 
   /// 显示评论查看器
@@ -408,7 +415,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
 
           // 更多选项按钮
           GestureDetector(
-            onTap: _showMoreOptions,
+            onTap: () => _showMoreOptions(),
             child: Padding(
               padding: EdgeInsets.all(
                 context.safeGetIntraGroupSpacing(SpacingSize.sm).w,
@@ -743,15 +750,15 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
     // TODO: 实现实际的评论添加逻辑
   }
 
-  /// 处理评论点赞
-  void _handleCommentLiked(comment_models.CommentModel comment) {
+  /// 处理评论反应
+  void _handleCommentReacted(comment_models.CommentModel comment) {
     _showToast(AppStrings.likeSuccess);
-    // TODO: 实现实际的评论点赞逻辑
+    // TODO: 接入评论三态反应逻辑
   }
 
-  void _handleCommentLikedById(String commentId) {
+  void _handleCommentReactedById(String commentId) {
     _showToast(AppStrings.likeSuccess);
-    // TODO: 实现实际的评论点赞逻辑
+    // TODO: 接入评论三态反应逻辑
   }
 
   /// 处理回复添加

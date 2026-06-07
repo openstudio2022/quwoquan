@@ -223,7 +223,7 @@ class ContentBehaviorTracker {
     ));
   }
 
-  /// 记录添加联系人/加好友（add_contact）。交集行动，回流带 dimension + tagRefs（S6 归因）。
+  /// 记录添加联系人（add_contact）。交集行动，回流带 dimension + tagRefs（S6 归因）。
   void trackAddContact(String authorId, {
     String? feedRequestId,
     ReferralSource? referralSource,

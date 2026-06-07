@@ -16,7 +16,7 @@ const (
 // NormalizeConversationType 收口会话类型语义：
 // - 对外产品语义只区分 direct/group/encrypted
 // - 绑定 circleId 的会话仍是 group，只是圈子发起/绑定的默认群
-// - legacy circle 数据继续按 group 兼容读取
+// - 既有 circle 数据继续按 group 读取
 func NormalizeConversationType(rawType string, circleID string) string {
 	if strings.TrimSpace(circleID) != "" {
 		return conversationTypeGroup

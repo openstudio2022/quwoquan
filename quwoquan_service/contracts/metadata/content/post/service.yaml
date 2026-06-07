@@ -156,18 +156,6 @@ api_routes:
     writable_fields: [viewerReaction]
     auth: required
 
-  - method: POST
-    path: /v1/content/comments/{commentId}/like
-    operation: LikeComment
-    description: 评论点赞兼容薄包装；等价 ReactToComment(reaction=like)
-    auth: required
-
-  - method: DELETE
-    path: /v1/content/comments/{commentId}/like
-    operation: UnlikeComment
-    description: 取消评论点赞兼容薄包装；等价 ReactToComment(reaction=none)
-    auth: required
-
   - method: GET
     path: /v1/content/users/me/comments
     operation: ListCommentsByAuthor
@@ -415,6 +403,18 @@ api_routes:
     path: /v1/content/intersections/exposure
     operation: ReportIntersectionExposure
     description: 交集曝光上报（写跨会话冷却集，曝光未转化在窗口内不再重复推荐）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /v1/content/intersections/object
+    operation: GetObjectIntersections
+    description: 对象页「我与该对象」的关系类交集（共同好友/联系人来过/好友加入等证据组，与标签交集在端合并）
+    query_params: [objectId, objectType, limit]
     security:
       auth_mode: required
       principal: owner

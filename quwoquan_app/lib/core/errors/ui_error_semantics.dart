@@ -491,7 +491,7 @@ class UiErrorSemanticResolver {
     }
     if (continuation is OpenSheetContinuation) {
       return switch (continuation.sheet) {
-        AuthContinuationSheet.addContact => '登录后将继续打开加好友流程',
+        AuthContinuationSheet.addContact => '登录后将继续打开添加联系人流程',
         AuthContinuationSheet.startGroupChat => '登录后将继续打开发起群聊流程',
         AuthContinuationSheet.createCircle => '登录后将继续打开建圈流程',
       };

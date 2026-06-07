@@ -354,6 +354,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetFeedIntersections(w, r)
 		{{- else if eq . "ReportIntersectionExposure" }}
 		h.handleReportIntersectionExposure(w, r)
+		{{- else if eq . "GetObjectIntersections" }}
+		h.handleGetObjectIntersections(w, r)
 		{{- else }}
 		h.handleNotImplemented(w, r, operation)
 		{{- end }}

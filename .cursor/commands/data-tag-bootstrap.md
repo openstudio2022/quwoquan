@@ -6,27 +6,27 @@
 
 ```bash
 # 1. 生成非地理维度标签（幂等，可重复执行）
-python3 quwoquan_data/scripts/bootstrap_tags.py
+python3 quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_tags.py
 
 # 2. 补全行政区标签（可指定省份/城市）
-python3 quwoquan_data/scripts/bootstrap_admin_regions.py                      # 全部省份
-python3 quwoquan_data/scripts/bootstrap_admin_regions.py --province 四川省     # 指定省
-python3 quwoquan_data/scripts/bootstrap_admin_regions.py --province 四川省 --city 成都市  # 指定市
+python3 quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_admin_regions.py                      # 全部省份
+python3 quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_admin_regions.py --province 四川省     # 指定省
+python3 quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_admin_regions.py --province 四川省 --city 成都市  # 指定市
 
 # 3. 生成自然地标标签（山脉/名山/江河/湖泊/海洋/沙漠）
-python3 quwoquan_data/scripts/bootstrap_geo_landmarks.py
+python3 quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_geo_landmarks.py
 
 # 4. 验证标签体系完整性
-python3 quwoquan_data/scripts/verify_tag_tree.py
+python3 quwoquan_data/scripts/verify/verify_tag_tree.py
 
 # 5. 输出统计报告
-python3 quwoquan_data/scripts/tag_stats.py
+python3 quwoquan_data/scripts/tags/tag_stats.py
 ```
 
 ## dry-run 模式
 
 ```bash
-python3 quwoquan_data/scripts/bootstrap_tags.py --dry-run
+python3 quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_tags.py --dry-run
 ```
 
 仅统计标签数量，不写入磁盘。

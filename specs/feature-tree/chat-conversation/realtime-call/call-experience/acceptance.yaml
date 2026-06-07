@@ -7,30 +7,69 @@ node:
   parent_domain_service: chat-conversation
   parent_business_capability: realtime-call
 scope:
-  summary: call experience 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 通话中 UI/UX：动态网格、演讲者视图、控制栏、过程态、PiP/顶部通话条、来电页。
+  in_scope:
+    - 1/2/3-4/5-9/10-16/17-25/26-32 动态网格与演讲者视图
+    - 控制栏六按钮真实生效、过程态/空态/弱网态
+    - PiP/顶部通话条回流、三端来电页
+  out_of_scope:
+    - SFU/录制基础设施（见 media-infrastructure）
 gwt_acceptance:
-  GWT1:
-    title: call experience GWT
+  GWT1_grid_and_states:
+    title: 动态网格、过程态与真实视频渲染
     given:
-    - 前置条件明确。
+    - 多人视频通话进行中，参与者数量动态变化。
     when:
-    - 用户或系统动作发生。
+    - 参与者加入/离开、发言人切换、网络质量下降。
     then:
-    - 可观察结果符合预期。
+    - 网格按人数自适应切换，发言人高亮，视频格渲染真实 VideoTrack，过程态/弱网态正确呈现。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 通话页达到 FaceTime/微信级可用水准，无占位级空壳。
+    edge_cases:
+    - 无摄像头/弱网降级到音频时显示对应占位与质量指示。
+    contract_refs:
+    - rtc/call_session events.yaml ParticipantJoined
+    - rtc/call_session events.yaml ParticipantLeft
+    performance_points:
+    - 通话页 FPS ≥60；视频渲染帧率 ≥15fps(32 人)。
     evidence:
       primary:
-      - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T1_static_contract
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/test/ui/rtc/widgets/video_grid_layout_test.dart
+      - quwoquan_app/test/ui/rtc/pages/video_call_page_states_test.dart
+      recorded: []
+    status: pending
+  GWT2_controls_pip_incoming:
+    title: 控制栏生效、PiP 回流与三端来电页
+    given:
+    - 通话进行中，用户操作控制栏或返回其他页面，或收到来电。
+    when:
+    - 翻转摄像头/切换音频输出/返回触发 PiP/收到来电。
+    then:
+    - 翻转调用 SFU switchCamera、音频输出调用 setSpeakerOn；返回出现顶部通话条/PiP 可回流；三端来电页正确呈现并可接听/拒绝。
+    done_when:
+    - 控制栏、PiP、来电页在真实导航栈可靠工作。
+    edge_cases:
+    - 后台返回恢复通话；忙线来电提示而非吞掉。
+    contract_refs:
+    - rtc/call_session events.yaml CallRinging
+    - rtc/call_session service.yaml ToggleCamera
+    performance_points:
+    - 来电在线推送到达 ≤1s。
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T4_e2e_journey
+      supporting:
+      - T1_static_contract
+    tests:
+      planned:
+      - quwoquan_app/test/ui/rtc/widgets/call_controls_bar_device_test.dart
+      - quwoquan_app/test/app/shell/active_call_shell_mount_test.dart
       recorded: []
     status: pending
 execution:

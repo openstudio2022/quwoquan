@@ -76,7 +76,7 @@ void main() {
       expect(channels, isNull);
     });
 
-    test('camelCase 字段兼容', () {
+    test('camelCase 字段不再兼容，返回 null', () {
       final channels = HomeChannelsRemoteOverride.fromAppConfigRoot(
         <String, Object?>{
           'content': <String, Object?>{
@@ -93,10 +93,7 @@ void main() {
           },
         },
       );
-      expect(channels, isNotNull);
-      expect(channels!.single.id, 'campus');
-      expect(channels.single.labelKey, 'home_tab_campus');
-      expect(channels.single.feedQuery['category'], 'campus');
+      expect(channels, isNull);
     });
   });
 }

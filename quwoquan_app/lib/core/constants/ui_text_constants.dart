@@ -17,9 +17,9 @@ class UITextConstants {
   static const String homeMoodRecommend = '为你挑选新的交集';
   static const String homeMoodCampus = '看看同校与校园动态';
   static const String homeMoodTravel = '看看地点与旅途动态';
-  static const String homeMoodPhotography = '看看影像与同好动态';
+  static const String homeMoodPhotography = '看看影像与摄影动态';
   static const String homeMoodTech = '看看科技与同行动态';
-  static const String homeMoodCar = '看看车友与同好动态';
+  static const String homeMoodCar = '看看汽车与车圈动态';
 
   /// 频道气质文案解析：moodCopyKey（运营配置/codegen 真相源）→ 展示文案。
   /// 无匹配时返回空串，调用方据此「不展示」。
@@ -72,7 +72,7 @@ class UITextConstants {
   // 此处仅做动词映射，不拼装交集文案——交集句以 displayText 为准）。
   static const String homeObjectActionFollow = '关注';
   static const String homeObjectActionJoin = '加入';
-  static const String homeObjectActionAddContact = '加好友';
+  static const String homeObjectActionAddContact = '添加联系人';
   static const String homeObjectActionView = '查看';
   // 共同点计数后缀（仅数字格式化，非交集句拼装）。
   static const String homeObjectSharedCountSuffix = ' 个共同点';
@@ -121,7 +121,6 @@ class UITextConstants {
   static const String webPcMessagesTabMessages = '消息';
   static const String webPcMessagesTabContacts = '联系人';
   static const String webPcMessagesTabGroups = '群聊';
-  static const String webPcMessagesTabXiaoqu = '小趣';
   static const String webPcProfileContextTitle = '我的主页';
   static const String webPcSearchHintHome = '搜索兴趣、圈子、作品、用户';
   static const String webPcSearchHintFeatured = '搜索精品作品、视频、图文';
@@ -132,30 +131,32 @@ class UITextConstants {
   static const String webPcWelcomePublish = '发布作品';
   static const String webPcWelcomeHeadline = '以兴趣为半径，画出我们的交集。';
   static const String webPcWelcomeSubtitle =
-      '在 Web 上浏览精品内容、发现同好，也可以下载 App 获得完整创作和消息体验。';
+      '在 Web 上浏览精品内容、发现兴趣相近的人，也可以下载 App 获得完整创作和消息体验。';
   static const String webPcWelcomeContinue = '继续浏览 Web';
   static const String webPcWelcomeDownload = webInstallBannerDownloadApp;
   static const String webPcWelcomeScrollHint = '滚动鼠标也可以进入首页，工具栏会自动吸顶。';
   static const String webPcWelcomeDownloadPanelTitle = '扫码或选择安装包';
   static const String webPcWelcomeDownloadPanelBody =
       'iOS、Android 与鸿蒙入口都在安装页中。';
-  static const String webPcMessagesRailTitle = '消息助手';
-  static const String webPcMessagesRailBody = '小趣可以帮你总结会话、定位联系人、整理群聊里的重点内容。';
-  static const String webPcProfileRailTitle = '多端同步';
-  static const String webPcProfileRailBody =
-      '在 App 里继续管理身份、互动和创作数据，Web 端保留完整个人主页视图。';
+  static const String webPcMessagesRailTitle = '消息中心';
+  static const String webPcMessagesRailBody = '在这里查看会话、联系人与群聊，点击任意会话进入对话详情。';
+  static const String webPcProfileRailTitle = '我的主页';
+  static const String webPcProfileRailBody = '在 Web 端浏览个人主页、作品与互动数据，保持与移动端一致的展示。';
   static const String webPcHomeRailTitle = homeTodayIntersection;
   static const String webPcHomeRailBody = '关注同校、旅行、摄影与科技等兴趣频道，新的交集会在这里持续浮现。';
   static const String webPcHomeFeedTitle = '首页推荐';
-  static const String webPcFeaturedRailTitle = '精品队列';
+  static const String webPcFeaturedRailTitle = '精选发现';
   static const String webPcFeaturedRailBody =
-      '精选作品以大封面、右侧队列和下方网格组织，适合桌面浏览与键盘切换。';
+      '以多列瀑布墙展示图片、视频与文章封面，点击任意内容进入沉浸浏览。';
   static const String webPcFeaturedFeedTitle = '精品内容';
-  static const String webPcCreateRailTitle = '小趣创作助手';
-  static const String webPcCreateRailBody = '小趣可以帮你生成标题、选题、标签与发布建议。';
-  static const String webPcCreateWorkspaceTitle = '添加内容';
+  static const String webPcCreateRailTitle = '创作与社交';
+  static const String webPcCreateRailBody =
+      '左侧可发布内容，也可以发起群聊、添加联系人或创建圈子，全部复用移动端能力。';
+  static const String webPcCreateWorkspaceTitle = '添加';
   static const String webPcCreateWorkspaceSubtitle =
-      '选择一种创作方式，Web 端先进入工作台，再复用现有发布链路。';
+      '选择一种方式开始：发布内容，或建立社交关系，Web 端复用现有发布与社交链路。';
+  static const String webPcCreateContentGroupTitle = '内容创作';
+  static const String webPcCreateSocialGroupTitle = '社交关系';
   static const String webPcCreateVideoTitle = '发布视频';
   static const String webPcCreateVideoSubtitle = '上传视频素材，补充标题、标签与封面。';
   static const String webPcCreateGalleryTitle = '从相册选择';
@@ -164,6 +165,12 @@ class UITextConstants {
   static const String webPcCreateTextSubtitle = '快速记录想法，也可以继续打磨成长文。';
   static const String webPcCreateDraftsTitle = '继续草稿';
   static const String webPcCreateDraftsSubtitle = '打开移动端同源草稿入口，继续未完成内容。';
+  static const String webPcCreateGroupChatTitle = '发起群聊';
+  static const String webPcCreateGroupChatSubtitle = '拉联系人进群，开始多人会话。';
+  static const String webPcCreateAddContactTitle = '添加联系人';
+  static const String webPcCreateAddContactSubtitle = '通过账号或二维码添加联系人。';
+  static const String webPcCreateCircleTitle = '创建圈子';
+  static const String webPcCreateCircleSubtitle = '创建兴趣圈子并邀请成员加入。';
   static const String webPcFeedEmpty = '暂无内容';
 
   static String webPcPrimaryLabel(String routeName) {
@@ -346,7 +353,7 @@ class UITextConstants {
   static const String authGateTitleMediaUpload = '登录后上传素材';
   static const String authGateTitleReport = '登录后提交举报';
   static const String authGateTitleJoinCircle = '登录后加入圈子';
-  static const String authGateTitleAddContact = '登录后添加好友';
+  static const String authGateTitleAddContact = '登录后添加联系人';
   static const String authGateTitleStartGroupChat = '登录后发起群聊';
   static const String authGateTitleCreateCircle = '登录后创建圈子';
   static const String authGateTitleGeneric = '登录后继续使用';
@@ -367,7 +374,7 @@ class UITextConstants {
   static const String authGatePromptMediaUpload = '登录后即可上传素材';
   static const String authGatePromptReport = '登录后即可提交举报';
   static const String authGatePromptJoinCircle = '登录后即可加入圈子';
-  static const String authGatePromptAddContact = '登录后即可添加好友';
+  static const String authGatePromptAddContact = '登录后即可添加联系人';
   static const String authGatePromptStartGroupChat = '登录后即可发起群聊';
   static const String authGatePromptCreateCircle = '登录后即可创建圈子';
   static const String authGatePromptGeneric = '登录后即可继续';
@@ -428,6 +435,7 @@ class UITextConstants {
   static const String loading = '加载中...';
   static const String retry = '重试';
   static const String cancel = '取消';
+  static const String openSettings = '去设置';
 
   /// 表单/弹层主提交（与「确认」区分，偏对话框「确定」）
   static const String ok = '确定';
@@ -501,8 +509,29 @@ class UITextConstants {
   static const String noComment = '暂无评论';
   static const String replyAction = '回复';
   static const String commentAuthorBadge = '作者';
+  static const String commentSortRecommended = '默认';
+  static const String commentSortMostLiked = '最多赞';
+  static const String commentDislike = '点踩';
+  static const String commentExpandMoreReplies = '展开更多回复';
+  static const String commentAttachImage = '图片';
+  static const String commentAttachmentLimitReachedTemplate = '最多添加 %s 张图片';
+  static const String commentMention = '@';
+  static const String commentNewCommentsNotice = '有新评论，点击刷新';
   static const String profileCommentsTabSent = '我发出的';
   static const String profileCommentsTabReceived = '我收到的';
+  static const String profileCommentViewOriginal = '查看原内容';
+  static const String profileCommentReplyInContext = '继续回复';
+  static const String profileCommentOriginalUnavailable = '原内容暂不可见';
+  static const String commentReportSubmitted = '举报已提交';
+
+  /// 评论区标题：共 N 条评论。
+  static const String commentCountTitleTemplate = '共 %s 条评论';
+
+  /// 评论输入浮层：发送按钮。
+  static const String commentSend = '发送';
+
+  /// 评论平铺区：回复某人占位。
+  static const String commentReplyToTemplate = '回复 %s';
 
   // 对象页统一交集卡标题（你和对象的交集，由各壳按对象类型传入）
   static const String profileMutualIntersectionTitle = '你们的交集';
@@ -536,6 +565,12 @@ class UITextConstants {
 
   /// 首页/频道交集模块头：「N 位与你有交集」（N 为红色数字，文案不含数字）。
   static const String intersectionSpotlightHeaderPrefix = '个对象与你有关';
+
+  /// 首页/频道交集模块安静轻提示（不含数量，等高封面卡上方一行）。
+  static const String intersectionSpotlightSubtitle = '这些人和地方与你有交集';
+
+  /// 首页/频道交集推荐「换一批」入口（候选窗内轮转，强调保鲜）。
+  static const String intersectionShuffle = '换一批';
   static const String intersectionRecommendSpotlightTitle = '与你有关的新对象';
   static const String intersectionCampusSpotlightTitle = '校园里与你有关的人和圈子';
   static const String intersectionTravelSpotlightTitle = '和你有相同足迹的人与地点';
@@ -674,7 +709,7 @@ class UITextConstants {
   static const String unread = '未读';
   static const String reminders = '提醒';
   static const String secretMessage = '密信';
-  static const String friends = '好友';
+  static const String friends = '联系人';
   static const String groupChat = '群聊';
   static const String secretLockedTitle = '密信已锁定';
   static const String secretUnlockButton = '解锁密信';
@@ -700,6 +735,7 @@ class UITextConstants {
   static const String untitledConversation = '未命名对话';
   static const String chatPreviewImage = '[图片]';
   static const String chatPreviewVideo = '[视频]';
+  static const String chatPreviewFile = '[文件]';
   static const String chatPreviewVoice = '[语音]';
   static const String chatPreviewCall = '[通话]';
   static const String chatPreviewCard = '[卡片]';
@@ -707,12 +743,12 @@ class UITextConstants {
   static const String contactsTabAll = '全部';
   static const String contactsTabCircles = '圈子';
 
-  /// 同好一级 Tab 下的二级：同好（原好友）
-  static const String contactsTabSameInterest = '同好';
+  /// 联系人一级 Tab 下的二级：互相关注
+  static const String contactsTabMutualFollow = '互相关注';
 
-  /// 同好一级 Tab 下的二级：趣群（原群聊）
+  /// 联系人一级 Tab 下的二级：趣群（原群聊）
   static const String contactsTabFunGroup = '趣群';
-  static const String contactsTabFriends = '好友';
+  static const String contactsTabFriends = '联系人';
   static const String contactsTabGroups = '群聊';
   static const String starredFriends = '星标朋友';
   static const String encryptedMessagePreview = '[加密消息] 查看需要验证身份';
@@ -760,7 +796,7 @@ class UITextConstants {
   static const String callIncomingVoice = '语音来电';
   static const String callIncomingVideo = '视频来电';
   static const String callSourceCurrentConversation = '当前会话';
-  static const String callSourceSameInterest = '同好';
+  static const String callSourceMutualFollow = '互相关注';
   static const String callSourceOtherGroups = '其他群';
   static const String callParticipantList = '成员列表';
   static const String callRestoreDefaultSelection = '恢复默认';
@@ -773,6 +809,41 @@ class UITextConstants {
   static const String callDebugTimeout = '超时';
   static const String callDebugOnlyHint = '仅开发态显示';
   static const String callOutgoingCalling = '正在呼叫...';
+  static const String callRecordingBadge = 'REC';
+  static const String callConnectFailed = '连接通话失败，请重试';
+  static const String callAnswerFailed = '接听失败，请重试';
+  static const String callSwitchInviteSourceFailed = '切换邀请来源失败';
+  static const String callSwitchGroupMembersFailed = '切换群聊成员失败';
+  static const String callTrustUnknownBadge = '可能不认识';
+  static const String callOngoing = '通话中';
+  static const String callBarTapToReturn = '点击返回';
+  static const String callHangupConfirmTitle = '结束通话';
+  static const String callHangupConfirmBody = '确定要挂断当前通话吗？';
+
+  // 通话结束摘要（FaceTime 级）：时长 + 结束原因的统一文案前缀。
+  static const String callSummaryDurationPrefix = '通话时长 ';
+  static const String callSummaryCancelled = '已取消';
+  static const String callSummaryRejected = '对方已拒绝';
+  static const String callSummaryMissed = '未接听';
+  static const String callSummaryNoAnswer = '无人接听';
+
+  // 通话权限（S6）：麦克风/摄像头权限卡片与降级文案。
+  static const String callPermissionMicTitle = '需要麦克风权限';
+  static const String callPermissionMicDenied = '开启麦克风后才能进行通话';
+  static const String callPermissionCameraTitle = '需要摄像头权限';
+  static const String callPermissionCameraDenied = '开启摄像头后才能进行视频通话';
+  static const String callPermissionOpenSettings = '请在系统设置中开启权限';
+  static const String callPermissionFallbackVoiceOnly = '仅语音通话';
+
+  // 通话过程态（S5）：由 [resolveCallStage] 统一派生，页面只读对应文案。
+  static const String callStageConnecting = '正在接通...';
+  static const String callStageRinging = '等待对方接听...';
+  static const String callStageWaitingPeer = '等待对方加入...';
+  static const String callStageReconnecting = '连接不稳定，正在重连...';
+  static const String callStageWeakNetwork = '当前网络较弱';
+  static const String callStagePeerNoAnswer = '对方未接听';
+  static const String callStagePeerLeft = '对方已离开通话';
+  static const String callStageEnded = '通话已结束';
 
   /// 统一 emoji 选择器「最近」Tab
   static const String emojiRecent = '最近';
@@ -827,8 +898,9 @@ class UITextConstants {
   /// 发起群聊页（图一）
   static const String startGroupChat = '发起群聊';
   static const String addContact = '添加';
-  static const String addSameInterest = '添加同好';
-  static const String noAddableSameInterest = '暂无可添加同好';
+  static const String chatMutualFollowRtcHint = '互相关注后可发起语音和视频通话';
+  static const String addContactSheetTitle = '添加联系人';
+  static const String noAddableContacts = '暂无可添加联系人';
   static const String globalActionSheetTitle = '发起';
   static const String globalSearchTitle = '搜索';
   static const String createActionCamera = '从摄像';
@@ -836,9 +908,9 @@ class UITextConstants {
   static const String createActionGroupChatHint = '拉人进群，立即开聊';
   static const String createActionContactHint = '找到新联系，发起对话';
   static const String createNewGroupChat = '创建新群聊';
-  static const String selectFriendsFromGroupChat = '选择群聊中的同好';
-  static const String selectFriendsFromCircle = '选择圈子中的同好';
-  static const String relatedSameInterest = '相关同好';
+  static const String selectFriendsFromGroupChat = '选择群聊成员';
+  static const String selectFriendsFromCircle = '选择圈子成员';
+  static const String relatedMutualFollow = '互相关注';
   static const String selectGroupChat = '选择群聊';
   static const String searchGroupChatHint = '搜索群聊';
   static const String selectCircle = '选择圈子';
@@ -857,21 +929,34 @@ class UITextConstants {
   static const String chatMorePhoto = '照片';
   static const String chatMoreShoot = '拍摄';
   static const String chatMoreFile = '文件';
+  static const String chatMoreVideo = '视频';
   static const String chatMoreBurnAfterRead = '阅后即焚';
   static const String chatMoreLocation = '位置';
   static const String chatMoreAudioVideo = '音视频';
   static const String chatMoreRedPacket = '红包';
   static const String chatAttachmentTypeConflict = '图片与文件不能同时添加';
   static const String chatAttachmentMaxCount = '最多添加 %s 个';
+  static const String chatAttachmentUploadFailed = '附件上传失败';
+  static const String chatAttachmentSendFailed = '附件发送失败';
   static const String chatVoiceHoldToTalk = '按住说话';
   static const String chatVoiceHoldTip = '按住开始录音';
   static const String chatVoiceReleaseToSend = '松开发送';
   static const String chatVoiceSlideCancel = '上滑取消';
   static const String chatVoiceReleaseCancel = '松开取消';
+  static const String chatVoiceRecording = '正在录音';
+  static const String chatVoiceMaxDurationSoon = '即将到达最长录音时长';
+  static const String chatVoiceUploading = '语音上传中';
+  static const String chatVoiceQueued = '语音已加入待发送队列';
   static const String chatVoiceTooShort = '说话时间太短';
   static const String chatVoiceCanceled = '已取消';
   static const String chatVoiceSending = '发送中';
   static const String chatVoicePermissionDenied = '未获得录音权限';
+  static const String chatVoicePermissionOpenSettings = '请在系统设置中打开麦克风权限后再发送语音';
+  static const String chatVoiceRecordUnavailable = '暂时无法录音，请稍后重试';
+  static const String chatVoiceUploadFailed = '语音上传失败，请重试';
+  static const String chatVoiceSendFailedTitle = '语音发送失败';
+  static const String chatVoiceSendFailed = '语音发送失败，请重试';
+  static const String chatVoicePlayUnavailable = '语音暂不可播放';
   static const String timeFormatAM = '上午';
   static const String timeFormatPM = '下午';
   static const String assistantHome = '助理主页';
@@ -1054,9 +1139,6 @@ class UITextConstants {
   static const String interactionSubComments = '评论';
   static const String interactionSubShares = '转发';
   static const String profileGreet = '打招呼';
-  static const String profileSameInterest = '同好';
-  static const String profileCloseFriend = '密友';
-  static const String profileAddSameInterest = '加同好';
   static const String profileSubAccountManagement = '子账号管理';
   static const String profileSubAccountDeleteTitle = '删除子账号';
   static const String profileSubAccountDeleteConfirmTemplate =
@@ -1072,7 +1154,7 @@ class UITextConstants {
   static const String profileSubAccountMaxReachedTemplate = '最多创建 %s 个子账号';
   static const String profileSubAccountEmpty = '暂无子账号';
   static const String profileSubAccountStrictDescription = '严格隔离 · 不出现在通讯录发现';
-  static const String profileSubAccountSemiDescription = '半隐私 · 仅好友可发现';
+  static const String profileSubAccountSemiDescription = '半隐私 · 仅联系人可发现';
   static const String profileSubAccountOpenDescription = '公开 · 可被通讯录发现';
   static const String operationFailed = '操作失败';
 
@@ -1192,7 +1274,13 @@ class UITextConstants {
   static const String circlePublishModeLabel = '圈子内形式';
   static const String circlePublishModeMoment = '点滴';
   static const String circlePublishModeWork = '作品';
-  static const String noCirclesAvailable = '加入圈子，发现同好';
+  static const String noCirclesAvailable = '加入圈子，发现兴趣相近的人';
+  static String startGroupChatMembersAddedCount(int count) =>
+      '已添加 $count 位联系人';
+  static const String startGroupChatNoMutualContactsInGroup =
+      '该群暂无可添加的互关联系人';
+  static const String startGroupChatNoMutualContactsInCircle =
+      '该圈暂无可添加的互关联系人';
   static const String locationSearchHint = '搜索地点';
   static const String locationNearbyTitle = '附近位置';
   static const String locationSearchingNearby = '正在搜索附近位置';

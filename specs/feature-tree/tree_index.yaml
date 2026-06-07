@@ -1403,6 +1403,14 @@ features:
       domain: ""
       status: specified
       tags: []
+      children:
+        - id: intersection-unified-experience
+          name: intersection-unified-experience
+          level: L2_business_capability
+          path: object-homepage-network/intersection-unified-experience
+          domain: ""
+          status: specified
+          tags: []
     - id: platform-ops-governance
       name: platform-ops-governance
       level: L1_domain_service
@@ -1527,6 +1535,35 @@ features:
       status: specified
       tags: []
       children:
+        - id: outbound-share-distribution
+          name: outbound-share-distribution
+          level: L2_business_capability
+          path: product-ops-growth/outbound-share-distribution
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: object-share-cards
+              name: object-share-cards
+              level: L3_story
+              path: product-ops-growth/outbound-share-distribution/object-share-cards
+              domain: ""
+              status: specified
+              tags: []
+            - id: share-channel-panel
+              name: share-channel-panel
+              level: L3_story
+              path: product-ops-growth/outbound-share-distribution/share-channel-panel
+              domain: ""
+              status: specified
+              tags: []
+            - id: share-attribution-and-token
+              name: share-attribution-and-token
+              level: L3_story
+              path: product-ops-growth/outbound-share-distribution/share-attribution-and-token
+              domain: ""
+              status: specified
+              tags: []
         - id: event-ingestion-and-analytics
           name: event-ingestion-and-analytics
           level: L2_business_capability
@@ -1908,6 +1945,13 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: external-inbound-deeplink-routing
+              name: external-inbound-deeplink-routing
+              level: L3_story
+              path: runtime/runtime-client-foundation/external-inbound-deeplink-routing
+              domain: ""
+              status: specified
+              tags: []
             - id: error-permission-display-semantics
               name: error-permission-display-semantics
               level: L3_story
@@ -1940,6 +1984,13 @@ features:
               name: local-cache-architecture
               level: L3_story
               path: runtime/runtime-client-foundation/local-cache-architecture
+              domain: ""
+              status: specified
+              tags: []
+            - id: app-remote-config
+              name: app-remote-config
+              level: L3_story
+              path: runtime/runtime-client-foundation/app-remote-config
               domain: ""
               status: specified
               tags: []

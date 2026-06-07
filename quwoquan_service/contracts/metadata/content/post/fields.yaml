@@ -736,6 +736,15 @@ entities:
         ops_exposure: read
         description: 展开更多二级回复的不透明游标
 
+      - name: postSummary
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 个人评论列表回跳原内容使用的原帖摘要 {postId,contentType,title,coverUrl,status,visibility,authorId}
+
       - name: likeCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]

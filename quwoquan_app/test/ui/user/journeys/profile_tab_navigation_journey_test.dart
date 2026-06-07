@@ -177,7 +177,7 @@ void main() {
       expect(find.textContaining('@'), findsNothing);
     });
 
-    testWidgets('旅程 D2：other 模式渲染等宽「关注」与主消息入口', (tester) async {
+    testWidgets('旅程 D2：other 模式渲染等宽「关注」与打招呼入口', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -186,7 +186,7 @@ void main() {
       await _pumpFrames(tester);
       expect(_profileActionLabel('关注'), findsOneWidget);
       expect(
-        _profileActionLabel(UITextConstants.profileDirectMessage),
+        _profileActionLabel(UITextConstants.profileGreet),
         findsOneWidget,
       );
     });

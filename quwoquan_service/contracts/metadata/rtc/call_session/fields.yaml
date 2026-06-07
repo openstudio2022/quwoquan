@@ -22,6 +22,20 @@ enums:
     values: [invited, ringing, connecting, connected, left, timeout]
     description: 参与者状态
 
+  TrustRelation:
+    values: [known, possibly_unknown]
+    description: >-
+      信任关系两态：known=联系人/同好/当前会话或群成员（可信）；
+      possibly_unknown=其他群成员/链接加入者/无共同关系者（提示注意隐私）。富信息（共同好友数等）后续增强。
+
+  CallInviteStatus:
+    values: [pending, ringing, accepted, declined, expired, cancelled]
+    description: 通话邀请生命周期状态（用于通话中加人/链接入会的结果反馈）
+
+  ConnectionQuality:
+    values: [excellent, good, poor, unavailable]
+    description: 参与者媒体连接质量（端侧弱网指示来源之一）
+
 entities:
   CallSession:
     description: 通话会话（聚合根）
@@ -293,3 +307,99 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: displayName
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 参与者展示名（来电页/通话格展示，避免端侧再查 user-service）
+
+      - name: avatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 参与者头像 URL（无视频时占位展示）
+
+      - name: trustRelation
+        type: enum
+        enum_ref: TrustRelation
+        constraints: [NOT_NULL]
+        client_default: possibly_unknown
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 信任两态，驱动来源标签与隐私风险提示
+
+      - name: sourceLabel
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 来源标签（如“来自当前群聊”“链接加入”），用于信任态展示
+
+      - name: isKnownContact
+        type: bool
+        constraints: [NOT_NULL]
+        client_default: "false"
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 是否为当前用户的联系人/同好（trustRelation 派生快照，便于端侧直接判断）
+
+      - name: mutualContext
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 富信息预留（共同好友数量、共同群列表序列化），本轮 UI 不强制展示
+
+      - name: inviteStatus
+        type: enum
+        enum_ref: CallInviteStatus
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 邀请生命周期状态（加人/链接入会结果反馈）
+
+      - name: invitedBy
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 邀请发起者 userId（区分原始发起人与会中加人邀请方）
+
+      - name: connectionQuality
+        type: enum
+        enum_ref: ConnectionQuality
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 媒体连接质量，端侧弱网指示来源之一
+
+      - name: isSpeaking
+        type: bool
+        constraints: [NOT_NULL]
+        client_default: "false"
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前是否正在发言（演讲者视图/发言人高亮）

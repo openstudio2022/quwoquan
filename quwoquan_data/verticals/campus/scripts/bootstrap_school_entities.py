@@ -1,6 +1,16 @@
 """校园垂类学校实体批量生成能力。"""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
 import argparse
 import json
 from pathlib import Path
@@ -9,7 +19,7 @@ from _common.paths import NOW_ISO, PUBLISH_ROOT, RUNTIME_ROOT
 
 CATALOG_DIR = RUNTIME_ROOT / "seed" / "school_catalog"
 ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "机构" / "学校"
-ADMIN_REGIONS_PCA_FILE = Path(__file__).resolve().parents[3] / "data" / "admin_regions" / "pca.json"
+ADMIN_REGIONS_PCA_FILE = DATA_ROOT / "data" / "admin_regions" / "pca.json"
 MUNICIPALITIES = {"北京市", "天津市", "上海市", "重庆市"}
 
 UNIVERSITY_LEVEL_MAP = {"985": "985高校", "211": "211高校", "双一流": "双一流", "本科": "大学", "专科": "高职院校"}

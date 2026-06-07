@@ -13,26 +13,26 @@ import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 /// - 空 capability 时他人主页不渲染操作条（不崩溃）
 
 RelationshipCapabilityDto _cap(
-  String tier, {
-  bool canGreet = false,
-  bool canOpenConversation = false,
-  bool canAddSameInterest = false,
-  bool canSetCloseFriend = false,
+  String relationState, {
+  bool? canGreet,
+  bool? canSendMessage,
+  bool? canCreateDirectConversation,
   bool canStartVoiceCall = false,
   bool canStartVideoCall = false,
-}) => RelationshipCapabilityDto(
-  viewerSubAccountId: 'viewer',
-  targetSubAccountId: 'target',
-  relationTier: tier,
-  canGreet: canGreet,
-  canOpenConversation: canOpenConversation,
-  canAddSameInterest: canAddSameInterest,
-  canSetCloseFriend: canSetCloseFriend,
-  canStartVoiceCall: canStartVoiceCall,
-  canStartVideoCall: canStartVideoCall,
-  isBlocked: false,
-  isBlockedBy: false,
-);
+}) {
+  return RelationshipCapabilityDto(
+    viewerSubAccountId: 'viewer',
+    targetSubAccountId: 'target',
+    relationState: relationState,
+    canGreet: canGreet,
+    canSendMessage: canSendMessage,
+    canCreateDirectConversation: canCreateDirectConversation,
+    canStartVoiceCall: canStartVoiceCall,
+    canStartVideoCall: canStartVideoCall,
+    isBlocked: false,
+    isBlockedBy: false,
+  );
+}
 
 Widget _wrap(Widget child) => MaterialApp(
   home: Scaffold(
@@ -91,7 +91,8 @@ void main() {
             isDark: false,
             capability: _cap(
               'mutual',
-              canOpenConversation: true,
+              canSendMessage: true,
+              canCreateDirectConversation: true,
               canStartVoiceCall: true,
               canStartVideoCall: true,
             ),
@@ -105,54 +106,54 @@ void main() {
       expect(find.text(UITextConstants.callVoice), findsOneWidget);
     });
 
-    testWidgets('followed_by 渲染回关和私信', (tester) async {
+    testWidgets('followed_by 渲染回关和打招呼', (tester) async {
       await tester.pumpWidget(
         _wrap(
           ProfileActionBar(
             mode: ProfileMode.other,
             isDark: false,
-            capability: _cap('followed_by', canOpenConversation: true),
+            capability: _cap('followed_by', canGreet: true),
           ),
         ),
       );
       await tester.pump();
 
       expect(find.text(UITextConstants.followBack), findsOneWidget);
-      expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+      expect(find.text(UITextConstants.profileGreet), findsOneWidget);
       expect(find.text(UITextConstants.callVideo), findsNothing);
       expect(find.text(UITextConstants.callVoice), findsNothing);
     });
 
-    testWidgets('following 渲染已关注和私信', (tester) async {
+    testWidgets('following 渲染已关注和打招呼', (tester) async {
       await tester.pumpWidget(
         _wrap(
           ProfileActionBar(
             mode: ProfileMode.other,
             isDark: false,
-            capability: _cap('following', canOpenConversation: true),
+            capability: _cap('following', canGreet: true),
           ),
         ),
       );
       await tester.pump();
 
       expect(find.text(UITextConstants.following), findsOneWidget);
-      expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+      expect(find.text(UITextConstants.profileGreet), findsOneWidget);
     });
 
-    testWidgets('not_following 渲染关注和私信', (tester) async {
+    testWidgets('not_following 渲染关注和打招呼', (tester) async {
       await tester.pumpWidget(
         _wrap(
           ProfileActionBar(
             mode: ProfileMode.other,
             isDark: false,
-            capability: _cap('not_following', canOpenConversation: true),
+            capability: _cap('not_following', canGreet: true),
           ),
         ),
       );
       await tester.pump();
 
       expect(find.text(UITextConstants.follow), findsOneWidget);
-      expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+      expect(find.text(UITextConstants.profileGreet), findsOneWidget);
     });
 
     testWidgets('capability 为 null 时他人主页不渲染操作按钮', (tester) async {
@@ -194,7 +195,7 @@ void main() {
           ProfileActionBar(
             mode: ProfileMode.other,
             isDark: false,
-            capability: _cap('following', canOpenConversation: true),
+            capability: _cap('following', canGreet: true),
             onFollow: () => followed = true,
           ),
         ),
@@ -217,7 +218,8 @@ void main() {
             isDark: false,
             capability: _cap(
               'mutual',
-              canOpenConversation: true,
+              canSendMessage: true,
+              canCreateDirectConversation: true,
               canStartVoiceCall: true,
               canStartVideoCall: true,
             ),
@@ -243,7 +245,8 @@ void main() {
             isDark: false,
             capability: _cap(
               'mutual',
-              canOpenConversation: true,
+              canSendMessage: true,
+              canCreateDirectConversation: true,
               canStartVoiceCall: true,
               canStartVideoCall: true,
             ),
@@ -265,7 +268,7 @@ void main() {
           ProfileActionBar(
             mode: ProfileMode.other,
             isDark: false,
-            capability: _cap('not_following', canOpenConversation: true),
+            capability: _cap('not_following', canGreet: true),
             onFollow: () => followed = true,
           ),
         ),
@@ -293,13 +296,13 @@ void main() {
       );
     });
 
-    testWidgets('未知 relationTier 不崩溃（按 not_following 展示）', (tester) async {
+    testWidgets('未知 relationState 不崩溃（按 not_following 展示）', (tester) async {
       await tester.pumpWidget(
         _wrap(
           ProfileActionBar(
             mode: ProfileMode.other,
             isDark: false,
-            capability: _cap('future_unknown_tier'),
+            capability: _cap('future_unknown_state'),
           ),
         ),
       );
@@ -315,7 +318,8 @@ void main() {
             isDark: true,
             capability: _cap(
               'mutual',
-              canOpenConversation: true,
+              canSendMessage: true,
+              canCreateDirectConversation: true,
               canStartVoiceCall: true,
               canStartVideoCall: true,
             ),

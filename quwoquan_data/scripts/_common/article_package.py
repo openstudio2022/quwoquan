@@ -10,6 +10,11 @@ from typing import Any
 
 import yaml
 
+from _common.asset_identity import (
+    compute_post_asset_id as _compute_post_asset_id,
+    parse_post_asset_id as _parse_post_asset_id,
+)
+
 MARKDOWN_VERSION = "qwq-rich-md/1"
 
 
@@ -106,6 +111,45 @@ def asset_id_from_object_key(object_key: str) -> str:
     readable = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff]+", "_", object_key).strip("_")
     digest = hashlib.sha1(object_key.encode("utf-8")).hexdigest()[:8]
     return f"data_asset_{readable}_{digest}" if readable else f"data_asset_{digest}"
+
+
+def compute_post_asset_id(
+    *,
+    entity_name: str,
+    role: str,
+    global_batch_seq: int | str,
+    ref: str = "",
+    nonce: int = 0,
+) -> str:
+    """成品图统一命名：实体_角色_全局批次号_hash。"""
+    return _compute_post_asset_id(
+        entity_name=entity_name,
+        role=role,
+        global_batch_seq=global_batch_seq,
+        ref=ref,
+        nonce=nonce,
+    )
+
+
+def post_asset_id(
+    *,
+    entity_name: str,
+    role: str,
+    global_batch_seq: int | str,
+    ref: str = "",
+    nonce: int = 0,
+) -> str:
+    return compute_post_asset_id(
+        entity_name=entity_name,
+        role=role,
+        global_batch_seq=global_batch_seq,
+        ref=ref,
+        nonce=nonce,
+    )
+
+
+def parse_post_asset_id(asset_id: str) -> dict[str, Any]:
+    return _parse_post_asset_id(asset_id)
 
 
 # 图片角色 → 语义说明词（gallery caption 兜底用，避免直接堆实体名/文件名）。

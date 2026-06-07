@@ -1,8 +1,8 @@
-"""qwq-data task — 任务工程子命令（薄编排壳，复用现有 explore/build/produce/promote/ship）。
+"""qwq-data task — 任务工程子命令（薄编排壳，复用现有 explore/build/produce/promote/publish）。
 
 子命令：
   new        从层级参数脚手架 committed task.yaml + progress.json + notes.md
-  run        无人值守产线编排：按 DAG 跑 download→build→produce→ship（Agent checkpoint 暂停/resume）
+  run        无人值守 workflow 编排：按 DAG 跑 download→build→produce→publish（Agent checkpoint 暂停/resume）
   list       扫描全部 committed 任务总览（--tree 树状，--vertical 过滤）
   show       打印单任务 spec+progress+lock
   lint       校验任务规格（路径↔id、archetype scope、实体类型真相源、重复）
@@ -14,6 +14,17 @@
   hydrate    按 sourceTaskId 把 publish 产物拉回 runtime 工作区
 """
 from __future__ import annotations
+
+
+import sys
+from pathlib import Path
+
+DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 import argparse
 import json
@@ -200,7 +211,7 @@ def handle_adopt(args: argparse.Namespace) -> None:
         store.save_progress(prog)
         print(f"[task adopt] progress synced: entities={len(adopted)} posts+={result['posts']}")
     if args.reindex:
-        from build_publish_lookup_indexes import build_publish_lookup_indexes
+        from publish_ops.build_publish_lookup_indexes import build_publish_lookup_indexes
         counts = build_publish_lookup_indexes()
         print(f"[task adopt] reindex: entities={counts['entities']} posts={counts['posts']}")
 
@@ -211,7 +222,7 @@ def handle_prune_publish(args: argparse.Namespace) -> None:
         raise SystemExit(2)
     result = ops.prune_publish(orphans_only=True)
     if args.reindex:
-        from build_publish_lookup_indexes import build_publish_lookup_indexes
+        from publish_ops.build_publish_lookup_indexes import build_publish_lookup_indexes
         counts = build_publish_lookup_indexes()
         print(f"[task prune-publish] reindex: entities={counts['entities']} posts={counts['posts']}")
 

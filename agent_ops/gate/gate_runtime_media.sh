@@ -58,7 +58,7 @@ python3 "${ROOT_DIR}/quwoquan_service/scripts/media/verify_media_variant_registr
 echo "[runtime-media] flutter test realtime/cache coverage"
 (
   cd "${ROOT_DIR}/quwoquan_app"
-  flutter test \
+  python3 scripts/env/run_flutter_test_guarded.py \
     test/core/services/content_cache_services_test.dart \
     test/core/services/conversation_avatar_sync_contract_test.dart \
     test/components/avatar/conversation_avatar_test.dart \

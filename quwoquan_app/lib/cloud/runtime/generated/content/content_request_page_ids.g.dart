@@ -23,12 +23,12 @@ class ContentRequestPageIds {
     'GetHelperRead': 'content.get.helper.read',
     'GetMediaAsset': 'content.media.get',
     'GetMyIntersectionSummary': 'content.get.my.intersection.summary',
+    'GetObjectIntersections': 'content.get.object.intersections',
     'GetPost': 'content.post.get',
     'GetReactionState': 'content.post.reactions',
     'GetRecommendation': 'content.recommend',
     'GetReport': 'content.get.report',
     'InitMediaUpload': 'content.media.init',
-    'LikeComment': 'content.like.comment',
     'LikePost': 'content.post.like',
     'ListCommentReplies': 'content.list.comment.replies',
     'ListComments': 'content.comment.list',
@@ -53,7 +53,6 @@ class ContentRequestPageIds {
     'SelectManualVideoCover': 'content.media.cover.manual',
     'SharePost': 'content.share.post',
     'UnfavoritePost': 'content.post.unfavorite',
-    'UnlikeComment': 'content.unlike.comment',
     'UnlikePost': 'content.post.unlike',
     'UnsharePost': 'content.unshare.post',
     'UpdatePost': 'content.post.update',
@@ -79,12 +78,12 @@ class ContentRequestPageIds {
   static const String getHelperRead = 'content.get.helper.read';
   static const String getMediaAsset = 'content.media.get';
   static const String getMyIntersectionSummary = 'content.get.my.intersection.summary';
+  static const String getObjectIntersections = 'content.get.object.intersections';
   static const String getPost = 'content.post.get';
   static const String getReactionState = 'content.post.reactions';
   static const String getRecommendation = 'content.recommend';
   static const String getReport = 'content.get.report';
   static const String initMediaUpload = 'content.media.init';
-  static const String likeComment = 'content.like.comment';
   static const String likePost = 'content.post.like';
   static const String listCommentReplies = 'content.list.comment.replies';
   static const String listComments = 'content.comment.list';
@@ -109,7 +108,6 @@ class ContentRequestPageIds {
   static const String selectManualVideoCover = 'content.media.cover.manual';
   static const String sharePost = 'content.share.post';
   static const String unfavoritePost = 'content.post.unfavorite';
-  static const String unlikeComment = 'content.unlike.comment';
   static const String unlikePost = 'content.post.unlike';
   static const String unsharePost = 'content.unshare.post';
   static const String updatePost = 'content.post.update';

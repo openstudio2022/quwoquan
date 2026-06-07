@@ -68,6 +68,22 @@ journeys:
       - UAT_EDGE_SWIPE
     status: specified
 
+  - id: external-acquisition-and-deeplink
+    title: 对外引流与深链回流
+    user_goal: 用户在站外（微信朋友圈/聊天群、小红书/今日头条等 UGC 平台、浏览器、搜索引擎）看到内容或主页的卡片/海报/口令/链接，点击后可靠回流到 App 对应页面；未安装时被引导下载并在安装后还原原始目标。
+    scenario_refs:
+      - outbound-object-share-distribution
+      - external-inbound-deeplink-return
+      - public-web-seo-install-conversion
+    domain_services:
+      - product-ops-growth
+      - runtime
+      - discovery-content
+      - user-identity-profile-relationship
+    uat_refs:
+      - UAT_EXTERNAL_ACQUISITION
+    status: draft
+
 scenarios:
   - id: global-route-edge-pop-contract
     title: 全局无底栏页面边缘返回
@@ -172,3 +188,56 @@ scenarios:
     boundary_notes:
       - 根页退出保护归 runtime/app shell；具体业务 tab 不拥有退出决策。
     status: specified
+
+  - id: outbound-object-share-distribution
+    title: 对象对外分享分发
+    parent_journey: external-acquisition-and-deeplink
+    domain_services:
+      - product-ops-growth
+      - discovery-content
+      - user-identity-profile-relationship
+      - circle-community
+      - shared-homepage-network
+    business_capabilities:
+      - product-ops-growth/outbound-share-distribution
+    stories:
+      - product-ops-growth/outbound-share-distribution/object-share-cards
+      - product-ops-growth/outbound-share-distribution/share-channel-panel
+      - product-ops-growth/outbound-share-distribution/share-attribution-and-token
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_EXTERNAL_ACQUISITION
+    boundary_notes:
+      - 分享面板、渠道编排、卡片视觉与归因口令归 product-ops-growth；各对象的可分享字段与分享落库计数归各自领域（content/circle/user/entity）。
+    status: draft
+
+  - id: external-inbound-deeplink-return
+    title: 外链深链回流到 App 目标页
+    parent_journey: external-acquisition-and-deeplink
+    domain_services:
+      - runtime
+    business_capabilities:
+      - runtime/runtime-client-foundation
+    stories:
+      - runtime/runtime-client-foundation/external-inbound-deeplink-routing
+      - runtime/runtime-client-foundation/entity-link-templates-metadata
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_EXTERNAL_ACQUISITION
+    boundary_notes:
+      - 链接结构与导航锚点真相源归 entity-link-templates-metadata；入站解析、原生注册、微信唤起与延迟深链归 external-inbound-deeplink-routing。
+    status: draft
+
+  - id: public-web-seo-install-conversion
+    title: 公开 Web SEO 与安装转化
+    parent_journey: external-acquisition-and-deeplink
+    domain_services:
+      - runtime
+      - discovery-content
+    business_capabilities:
+      - runtime/runtime-client-foundation
+    stories:
+      - runtime/runtime-client-foundation/public-content-web-entry
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_EXTERNAL_ACQUISITION
+    boundary_notes:
+      - 公开 HTML/SEO/中转页/安装转化归 public-content-web-entry；内容正文真相源仍归 discovery-content。
+    status: draft

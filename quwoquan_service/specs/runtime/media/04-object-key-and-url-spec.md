@@ -25,9 +25,9 @@
 - `ext`：统一使用处理后文件的最终格式
 - `sliceId`：例如 `avatar-seed-0001`、`image-hot-0042`
 
-## 3.1 兼容阶段
+## 3.1 归档切片
 
-- 历史 fixture 仍存在 `media/avatar/...`、`media/image/...` 等 legacy 路径时，路由层允许按 prefix 回落到固定 legacy slice。
+- `archived-avatar`、`archived-image`、`archived-video` 用于既有 fixture 与归档资产，均通过显式 `sliceId` 解析。
 - 新增写入链路、`quwoquan_data` 冷启动与未来对象存储导入必须直接产出显式 `sliceId` 版本 objectKey。
 
 ## 4. URL 规则

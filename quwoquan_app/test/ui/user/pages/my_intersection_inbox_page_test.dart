@@ -41,7 +41,7 @@ void main() {
 
     expect(find.byType(IntersectionEntity), findsOneWidget);
     expect(find.text('林清越'), findsOneWidget);
-    expect(find.text('4 位共同好友'), findsOneWidget);
+    expect(find.text('4 位共同关注'), findsOneWidget);
     expect(repo.visitedDimension, '');
 
     await tester.tap(find.text('林清越'));
@@ -88,7 +88,7 @@ class _RecordingIntersectionRepository implements IntersectionRepository {
         intersectionId: 'ix_test_rel',
         relationKind: 'person',
         displayName: '林清越',
-        displayText: '4 位共同好友',
+        displayText: '4 位共同关注',
         actionTargetId: 'u_lin',
         freshAt: DateTime.now().toUtc().toIso8601String(),
       ),
@@ -110,6 +110,13 @@ class _RecordingIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<void> reportExposure({required List<String> objectIds}) async {}
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 8,
+  }) async => const <IntersectionReason>[];
 }
 
 class _FailingIntersectionRepository implements IntersectionRepository {
@@ -139,4 +146,11 @@ class _FailingIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<void> reportExposure({required List<String> objectIds}) async {}
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 8,
+  }) async => const <IntersectionReason>[];
 }

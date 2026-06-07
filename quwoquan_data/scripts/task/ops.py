@@ -163,16 +163,22 @@ def latest_post_outputs(task_id: str, limit: int = 10) -> list[dict[str, Any]]:
     if not posts_root.is_dir():
         return []
     rows: list[dict[str, Any]] = []
-    for manifest in sorted(posts_root.rglob("produce/posts/*/*/*/manifest.json")):
+    # 对象优先：成品落 batch/posts/{type}/{angle}/{title}/{seq}/。
+    for manifest in sorted(posts_root.rglob("manifest.json")):
+        leaf = manifest.parent
+        try:
+            rel = leaf.relative_to(root)
+        except ValueError:
+            continue
+        parts = rel.parts
+        if len(parts) < 5 or parts[0] != "batches" or parts[2] != "posts":
+            continue
+        if not ((leaf / "article.md").exists() or (leaf / "gallery.md").exists()):
+            continue
         try:
             data = read_json(manifest)
         except Exception:  # noqa: BLE001
             continue
-        try:
-            rel = manifest.parent.relative_to(root)
-        except ValueError:
-            rel = manifest.parent
-        parts = rel.parts
         batch_id = parts[1] if len(parts) > 1 and parts[0] == "batches" else ""
         rows.append(
             {

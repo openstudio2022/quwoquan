@@ -1,0 +1,72 @@
+schemaVersion: bundled-fonts-manifest
+manifestVersion: 1
+fonts:
+- family: Roboto
+  assetPath: assets/fonts/roboto/Roboto-Regular.ttf
+  weight: 400
+  license: OFL-1.1
+  upstream:
+    repo: google/fonts
+    path: gstatic/roboto/v32/KFOmCnqEu92Fr1Me5WZLCzYlKw.ttf
+    url: https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me5WZLCzYlKw.ttf
+    pinnedCommit: v32
+  sha256: 92a62766331140ca5bc8bba52028422d276061ad5717c1ac508a118b619c6aec
+- family: Roboto
+  assetPath: assets/fonts/roboto/Roboto-Medium.ttf
+  weight: 500
+  license: OFL-1.1
+  upstream:
+    repo: google/fonts
+    path: gstatic/roboto/v32/KFOlCnqEu92Fr1MmEU9vAx05IsDqlA.ttf
+    url: https://fonts.gstatic.com/s/roboto/v32/KFOlCnqEu92Fr1MmEU9vAx05IsDqlA.ttf
+    pinnedCommit: v32
+  sha256: 0de679de4d3d236c4a60e13bd2cd16d0f93368e9f6ba848385a8023c2e53c202
+- family: Roboto
+  assetPath: assets/fonts/roboto/Roboto-Bold.ttf
+  weight: 700
+  license: OFL-1.1
+  upstream:
+    repo: google/fonts
+    path: gstatic/roboto/v32/KFOlCnqEu92Fr1MmWUlvAx05IsDqlA.ttf
+    url: https://fonts.gstatic.com/s/roboto/v32/KFOlCnqEu92Fr1MmWUlvAx05IsDqlA.ttf
+    pinnedCommit: v32
+  sha256: 8e8cb127554bdd9c8685788dce557e2725a9b62e183d9151fb506b3007ca6a07
+- family: Noto Sans SC
+  assetPath: assets/fonts/noto_sans_sc/NotoSansSC[wght].ttf
+  weight: 400
+  license: OFL-1.1
+  variable: true
+  upstream:
+    repo: google/fonts
+    path: ofl/notosanssc/NotoSansSC[wght].ttf
+    pinnedCommit: 2894aab31764f10f29c421bdfd2340d3b382d384
+  sha256: a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da
+- family: Noto Serif SC
+  assetPath: assets/fonts/noto_serif_sc/NotoSerifSC[wght].ttf
+  weight: 400
+  license: OFL-1.1
+  variable: true
+  upstream:
+    repo: google/fonts
+    path: ofl/notoserifsc/NotoSerifSC[wght].ttf
+    pinnedCommit: 2e61f4355afd22b801791b0df176065082423b87
+  sha256: 050080d9255a86808f2945bffac582b31ef32bc36411ce29563b4961670c66f9
+- family: Noto Sans Mono
+  assetPath: assets/fonts/noto_sans_mono/NotoSansMono[wdth,wght].ttf
+  weight: 400
+  license: OFL-1.1
+  variable: true
+  upstream:
+    repo: google/fonts
+    path: ofl/notosansmono/NotoSansMono[wdth,wght].ttf
+    pinnedCommit: a23c2cd328ea51097b6e32d8f9e0241261e2495e
+  sha256: 2cb2adb378a8f574213e23df697050b83c54c27df465a2015552740b2769a081
+- family: Noto Color Emoji
+  assetPath: assets/fonts/noto_color_emoji/NotoColorEmoji-Regular.ttf
+  weight: 400
+  license: OFL-1.1
+  upstream:
+    repo: google/fonts
+    path: ofl/notocoloremoji/NotoColorEmoji-Regular.ttf
+    pinnedCommit: be7a91f7db2db749ebfc36f598eb85501127e7db
+  sha256: be73479ba4fa277c89b85cd6c71717df30d9d0eff6da8c1e1a201e5b95459299

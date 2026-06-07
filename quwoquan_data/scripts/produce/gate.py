@@ -1,54 +1,59 @@
-"""Exit gate for produce command."""
+"""Exit gate for produce command（对象优先：成品落 batch/posts/{type}/{angle}/{title}/{seq}）。"""
 from __future__ import annotations
 
-from _common.paths import batch_command_root
+from pathlib import Path
+
 from _common.io import read_json
+from _common.paths import batch_post_roots
 from _common.post_verify import verify_posts_root
+from _common.stage_reports import iter_stage_envelopes
+from media.gate import gate_media_check
+
+
+def _content_post_leaves(task_id: str, batch_id: str, content_type: str) -> list[Path]:
+    """该 content_type 的成品 post 叶子目录（manifest.json + 正文存在），对象优先。"""
+    leaves: list[Path] = []
+    for posts_root in batch_post_roots(task_id, batch_id):
+        type_root = posts_root / content_type
+        if not type_root.is_dir():
+            continue
+        for manifest_path in sorted(type_root.rglob("manifest.json")):
+            pd = manifest_path.parent
+            if (pd / "article.md").exists() or (pd / "gallery.md").exists():
+                leaves.append(pd)
+    return leaves
 
 
 def gate_produce(task_id: str, batch_id: str, content_type: str) -> list[str]:
     """Check produce exit criteria."""
-    issues = []
-    produce_root = batch_command_root(task_id, batch_id, "produce")
-    qa_dir = produce_root / "results" / "quality_analysis"
-    review_dir = produce_root / "results" / "review"
-    if not qa_dir.exists() or not any(qa_dir.glob("*.json")):
+    issues: list[str] = []
+    if not iter_stage_envelopes(task_id, batch_id, "produce", "quality_analysis"):
         issues.append("No quality_analysis results produced")
-    if not review_dir.exists() or not any(review_dir.glob("*.json")):
+    if not iter_stage_envelopes(task_id, batch_id, "produce", "review"):
         issues.append("No review results produced")
-    posts_dir = batch_command_root(task_id, batch_id, "produce") / "posts" / content_type
+    issues.extend(gate_media_check(task_id, batch_id))
 
-    if not posts_dir.exists():
-        issues.append(f"No posts directory for type '{content_type}'")
-        return issues
-
-    post_dirs = [d for d in posts_dir.iterdir() if d.is_dir()]
+    post_dirs = _content_post_leaves(task_id, batch_id, content_type)
     if not post_dirs:
-        issues.append("No approved posts produced")
+        issues.append(f"No approved posts produced for type '{content_type}'")
         return issues
 
     for pd in post_dirs:
-        # materialize 把成品落在 <post>/<version>/manifest.json（版本子目录）。
-        # 兼容两种布局：优先 post 目录顶层，否则取最新版本子目录。
         manifest_path = pd / "manifest.json"
-        if not manifest_path.exists():
-            version_manifests = sorted(pd.glob("*/manifest.json"))
-            if version_manifests:
-                manifest_path = version_manifests[-1]
-        if not manifest_path.exists():
-            issues.append(f"{pd.name}: missing manifest.json")
-            continue
         manifest = read_json(manifest_path)
+        label = pd.relative_to(pd.parents[3]).as_posix() if len(pd.parents) >= 4 else pd.name
         if not manifest.get("entityRefs"):
-            issues.append(f"{pd.name}: no entityRefs")
+            issues.append(f"{label}: no entityRefs")
         if not manifest.get("tagRefs") or len(manifest["tagRefs"]) < 2:
-            issues.append(f"{pd.name}: tagRefs < 2")
+            issues.append(f"{label}: tagRefs < 2")
         if manifest.get("reviewDecision") != "approved":
-            issues.append(f"{pd.name}: reviewDecision is not approved")
+            issues.append(f"{label}: reviewDecision is not approved")
         if not manifest.get("storySpine"):
-            issues.append(f"{pd.name}: missing storySpine")
+            issues.append(f"{label}: missing storySpine")
         if not manifest.get("sourceUrls"):
-            issues.append(f"{pd.name}: missing sourceUrls")
-    issues.extend(verify_posts_root(posts_dir, task_id=task_id, batch_id=batch_id))
+            issues.append(f"{label}: missing sourceUrls")
 
+    # 发布面质量门统一在对象 posts 根上跑（verify_posts + 语义 + manifest 契约）。
+    for posts_root in batch_post_roots(task_id, batch_id):
+        issues.extend(verify_posts_root(posts_root, task_id=task_id, batch_id=batch_id))
     return issues

@@ -73,7 +73,7 @@ class CreateActionSheet extends StatelessWidget {
         onPressed: onStartGroupChat,
       ),
       _SheetActionSpec(
-        label: UITextConstants.addSameInterest,
+        label: UITextConstants.addContactSheetTitle,
         onPressed: onAddContact,
       ),
       if (onCreateCircle != null)

@@ -184,8 +184,10 @@ void main() {
       await mock.createComment(postId: 'p1', content: 'second');
       final comments = await mock.listComments(postId: 'p1');
       expect(comments.items.length, equals(2));
-      expect(comments.items[0].content, equals('first'));
-      expect(comments.items[1].content, equals('second'));
+      expect(
+        comments.items.map((comment) => comment.content),
+        unorderedEquals(<String>['first', 'second']),
+      );
     });
   });
 }

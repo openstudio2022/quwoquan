@@ -1,6 +1,6 @@
 """qwq-data annotate — Human-in-loop 标注：在发布前对账本图片/事实/文章下人判定。
 
-队列与裁决都作用于 produce 阶段账本 produce/review/ledger/{ref}.json（materialize 会随 post 拷贝）。
+队列与裁决都作用于内容对象的 `5.review/review_ledger.json`（materialize 会随 post 拷贝）。
 
 用法：
   # 列出待人工处理队列（fix 态或需人确认项）

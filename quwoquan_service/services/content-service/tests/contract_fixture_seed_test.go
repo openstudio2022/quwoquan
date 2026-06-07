@@ -113,6 +113,8 @@ func seedContentContractFixture(t *testing.T, seedRef string) contractSeedEviden
 			"",
 			comment.AuthorID,
 			"",
+			nil,
+			nil,
 		); err != nil {
 			t.Fatalf("seed content comment %s: %v", comment.PostID, err)
 		}

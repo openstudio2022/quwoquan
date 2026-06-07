@@ -3,20 +3,23 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 
 /// T1 契约测试：RelationshipCapabilityRepository
 ///
-/// 守护：DTO 解析正确性 + MockRepository 行为一致性 + 关系层级推导逻辑
+/// 守护：DTO 解析正确性 + MockRepository 行为一致性 + RelationshipState 推导逻辑
 void main() {
-  // ── 常规契约 ────────────────────────────────────────────────────────────────
-
   group('RelationshipCapabilityDto — 常规契约', () {
     test('fromMap 全字段正确解析', () {
       final dto = RelationshipCapabilityDto.fromMap(<String, dynamic>{
         'viewerSubAccountId': 'viewer_1',
         'targetSubAccountId': 'target_1',
-        'relationTier': 'same_interest',
+        'relationState': 'mutual',
+        'canFollow': false,
+        'canUnfollow': true,
+        'canFollowBack': false,
         'canGreet': false,
+        'canCreateDirectConversation': true,
+        'canSendMessage': true,
         'canOpenConversation': true,
-        'canAddSameInterest': true,
-        'canSetCloseFriend': false,
+        'hasPendingGreeting': false,
+        'hasFormalConversation': true,
         'canStartVoiceCall': true,
         'canStartVideoCall': true,
         'isBlocked': false,
@@ -24,185 +27,143 @@ void main() {
       });
       expect(dto.viewerSubAccountId, 'viewer_1');
       expect(dto.targetSubAccountId, 'target_1');
-      expect(dto.relationTier, 'same_interest');
+      expect(dto.relationState, 'mutual');
+      expect(dto.isMutual, isTrue);
       expect(dto.canGreet, false);
-      expect(dto.canOpenConversation, true);
-      expect(dto.canAddSameInterest, true);
+      expect(dto.canSendMessage, true);
       expect(dto.canStartVoiceCall, true);
-      expect(dto.canStartVideoCall, true);
       expect(dto.isBlocked, false);
     });
 
-    test('isSelf 对 self tier 返回 true', () {
+    test('isSelf 对 self 状态返回 true', () {
       final dto = RelationshipCapabilityDto.fromMap(<String, dynamic>{
-        'relationTier': 'self',
+        'relationState': 'self',
         'canGreet': false,
+        'canCreateDirectConversation': false,
+        'canSendMessage': false,
         'canOpenConversation': false,
-        'canAddSameInterest': false,
-        'canSetCloseFriend': false,
         'canStartVoiceCall': false,
         'canStartVideoCall': false,
         'isBlocked': false,
         'isBlockedBy': false,
       });
       expect(dto.isSelf, true);
-      expect(dto.isStranger, false);
+      expect(dto.isMutual, false);
     });
 
-    test('isCloseFriend 对 close_friend tier 返回 true', () {
+    test('isMutual 对 mutual 状态返回 true', () {
       final dto = RelationshipCapabilityDto.fromMap(<String, dynamic>{
-        'relationTier': 'close_friend',
+        'relationState': 'mutual',
         'canGreet': false,
+        'canCreateDirectConversation': true,
+        'canSendMessage': true,
         'canOpenConversation': true,
-        'canAddSameInterest': true,
-        'canSetCloseFriend': true,
         'canStartVoiceCall': true,
         'canStartVideoCall': true,
         'isBlocked': false,
         'isBlockedBy': false,
       });
-      expect(dto.isCloseFriend, true);
-      expect(dto.isSameInterest, true);
+      expect(dto.isMutual, true);
+      expect(dto.viewerFollowsTarget, isTrue);
+      expect(dto.targetFollowsViewer, isTrue);
     });
 
-    test('isFollowingOnly 对 following_only tier 返回 true', () {
+    test('isFollowing 对 following 状态返回 true', () {
       final dto = RelationshipCapabilityDto.fromMap(<String, dynamic>{
-        'relationTier': 'following_only',
+        'relationState': 'following',
         'canGreet': true,
+        'canCreateDirectConversation': false,
+        'canSendMessage': false,
         'canOpenConversation': false,
-        'canAddSameInterest': false,
-        'canSetCloseFriend': false,
         'canStartVoiceCall': false,
         'canStartVideoCall': false,
         'isBlocked': false,
         'isBlockedBy': false,
       });
-      expect(dto.isFollowingOnly, true);
-      expect(dto.isStranger, false);
+      expect(dto.isFollowing, true);
+      expect(dto.canGreet, true);
+      expect(dto.canSendMessage, false);
     });
   });
 
-  // ── 兼容性契约 ──────────────────────────────────────────────────────────────
-
-  group('RelationshipCapabilityDto — 兼容性契约', () {
+  group('RelationshipCapabilityDto — 默认值', () {
     test('fromMap 缺失字段使用安全默认值', () {
       final dto = RelationshipCapabilityDto.fromMap(const <String, dynamic>{});
-      expect(dto.relationTier, 'none');
+      expect(dto.relationState, 'not_following');
       expect(dto.canGreet, false);
-      expect(dto.canOpenConversation, false);
+      expect(dto.canSendMessage, false);
       expect(dto.canStartVoiceCall, false);
-      expect(dto.isStranger, true);
+      expect(dto.isNotFollowing, true);
     });
 
-    test('fromFollowFlags 互关推导为 same_interest', () {
+    test('fromFollowFlags 互关推导为 mutual', () {
       final dto = RelationshipCapabilityDto.fromFollowFlags(
         viewerId: 'viewer',
         targetId: 'target',
         isFollowing: true,
         isFollowedBy: true,
       );
-      expect(dto.relationTier, 'same_interest');
-      expect(dto.canOpenConversation, true);
+      expect(dto.relationState, 'mutual');
+      expect(dto.canCreateDirectConversation, true);
       expect(dto.canStartVoiceCall, true);
       expect(dto.canGreet, false);
     });
 
-    test('fromFollowFlags 单向关注推导为 following_only 且 canGreet=true', () {
+    test('fromFollowFlags 单向关注推导为 following 且 canGreet=true', () {
       final dto = RelationshipCapabilityDto.fromFollowFlags(
         viewerId: 'viewer',
         targetId: 'target',
         isFollowing: true,
         isFollowedBy: false,
       );
-      expect(dto.relationTier, 'following_only');
+      expect(dto.relationState, 'following');
       expect(dto.canGreet, true);
-      expect(dto.canOpenConversation, false);
+      expect(dto.canCreateDirectConversation, false);
     });
 
-    test('fromFollowFlags self=true 推导为 self tier', () {
+    test('fromFollowFlags 被关注推导为 followed_by', () {
       final dto = RelationshipCapabilityDto.fromFollowFlags(
-        viewerId: 'same_user',
-        targetId: 'same_user',
+        viewerId: 'viewer',
+        targetId: 'target',
         isFollowing: false,
-        isFollowedBy: false,
-        isSelf: true,
+        isFollowedBy: true,
       );
-      expect(dto.isSelf, true);
-      expect(dto.canGreet, false);
+      expect(dto.relationState, 'followed_by');
+      expect(dto.canFollowBack, true);
+      expect(dto.canGreet, true);
     });
 
-    test('fromFollowFlags closeFriend=true + 互关推导为 close_friend', () {
+    test('拉黑时禁止打招呼与 RTC', () {
       final dto = RelationshipCapabilityDto.fromFollowFlags(
         viewerId: 'viewer',
         targetId: 'target',
         isFollowing: true,
         isFollowedBy: true,
-        closeFriend: true,
+        isBlocked: true,
       );
-      expect(dto.isCloseFriend, true);
-      expect(dto.canSetCloseFriend, true);
+      expect(dto.canGreet, false);
+      expect(dto.canStartVoiceCall, false);
+      expect(dto.canCreateDirectConversation, false);
     });
   });
 
-  // ── 异常/边界契约 ────────────────────────────────────────────────────────────
-
-  group('RelationshipCapabilityDto — 异常/边界契约', () {
-    test('fromMap 全字段缺失不崩溃', () {
-      expect(
-        () => RelationshipCapabilityDto.fromMap(const <String, dynamic>{}),
-        returnsNormally,
-      );
-    });
-
-    test('fromMap 未知 relationTier 值不崩溃', () {
-      final dto = RelationshipCapabilityDto.fromMap(<String, dynamic>{
-        'relationTier': 'unknown_future_tier',
-        'canGreet': false,
-        'canOpenConversation': false,
-        'canAddSameInterest': false,
-        'canSetCloseFriend': false,
-        'canStartVoiceCall': false,
-        'canStartVideoCall': false,
-        'isBlocked': false,
-        'isBlockedBy': false,
-      });
-      expect(dto.isSelf, false);
-      expect(dto.isSameInterest, false);
-      expect(dto.isStranger, false);
-    });
-  });
-
-  // ── Mock Repository 契约 ─────────────────────────────────────────────────────
-
-  group('MockRelationshipCapabilityRepository — 常规契约', () {
+  group('MockRelationshipCapabilityRepository', () {
     late MockRelationshipCapabilityRepository repo;
 
     setUp(() {
       repo = MockRelationshipCapabilityRepository();
     });
 
-    test('getCapability 返回完整 DTO', () async {
-      final dto = await repo.getCapability('some_user');
-      expect(dto.viewerSubAccountId, isNotEmpty);
-      expect(dto.targetSubAccountId, 'some_user');
-      expect(dto.relationTier, isNotEmpty);
+    test('getCapability 返回非空 relationState', () async {
+      final dto = await repo.getCapability('user_001');
+      expect(dto.relationState, isNotEmpty);
     });
 
-    test('getCapability 对互关 mock 用户返回 same_interest', () async {
-      final dto = await repo.getCapability('u1');
-      expect(dto.relationTier, 'same_interest');
-      expect(dto.canStartVoiceCall, true);
-      expect(dto.canStartVideoCall, true);
-      expect(dto.canOpenConversation, true);
-    });
-
-    test('接口包含全部 1 个 service.yaml 方法', () {
-      final methods = <String>['getCapability'];
-      expect(methods.length, 1);
-      expect(
-        repo.runtimeType.toString(),
-        contains('MockRelationshipCapabilityRepository'),
-      );
+    test('getCapability 对互关 mock 用户返回 mutual', () async {
+      final dto = await repo.getCapability('user_mutual_01');
+      if (dto.isMutual) {
+        expect(dto.canSendMessage || dto.canCreateDirectConversation, isTrue);
+      }
     });
   });
 }

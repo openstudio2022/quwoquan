@@ -29,13 +29,9 @@ import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_page_visit_recorder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 
-/// 趣信页
-///
-/// 1:1 复制自 趣我圈2026/src MessagePage.tsx + MessagesList.tsx
-/// 一级 Tab 消息/联系人；二级 Tab subTabsMap（消息→全部/@我/未读/密信，联系人→全部/圈子/同好/趣群）；
-/// 滚动时二级 Tab 显隐；私人助理会话置顶，onAssistantClick→助理主页。
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
 
@@ -45,22 +41,26 @@ class ChatPage extends ConsumerStatefulWidget {
 
 class _ChatPageState extends ConsumerState<ChatPage>
     with AutomaticKeepAliveClientMixin {
-  int _mainTabIndex = 0; // 0=趣聊 1=同好
+  int _mainTabIndex = 0;
   int _subTabIndex = 0;
   bool _hideSecondaryTab = false;
   final ScrollController _scrollController = ScrollController();
   double _lastScrollY = 0;
-
   @override
   bool get wantKeepAlive => true;
-
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => mounted ? recordChatPageVisit(ref, _mainTabIndex, _subTabIndex) : null,
+    );
+  }
   @override
   void dispose() {
     _scrollController.dispose();
     _secretPasswordController.dispose();
     super.dispose();
   }
-
   void _secretUnlock() {
     final pwd = _secretPasswordController.text.trim();
     if (pwd == '123456' || pwd == 'password') {
@@ -69,12 +69,10 @@ class _ChatPageState extends ConsumerState<ChatPage>
         _secretAuthError = '';
         _secretPasswordController.clear();
       });
-    } else {
-      setState(() => _secretAuthError = UITextConstants.secretPasswordError);
+      return;
     }
+    setState(() => _secretAuthError = UITextConstants.secretPasswordError);
   }
-
-  /// 与 MessagePage subTabsMap 一致
   static const List<String> _messageSubTabs = [
     UITextConstants.contactsTabAll,
     UITextConstants.atMe,
@@ -86,28 +84,25 @@ class _ChatPageState extends ConsumerState<ChatPage>
   static const List<String> _contactsSubTabs = [
     UITextConstants.contactsTabAll,
     UITextConstants.contactsTabCircles,
-    UITextConstants.contactsTabSameInterest,
+    UITextConstants.contactsTabMutualFollow,
     UITextConstants.contactsTabFunGroup,
   ];
-
-  /// 密信解锁状态（仅密信 Tab 使用）
   bool _secretUnlocked = false;
   final TextEditingController _secretPasswordController =
       TextEditingController();
   String _secretAuthError = '';
   bool _secretShowPassword = false;
-
   void _onScroll() {
     final y = _scrollController.hasClients ? _scrollController.offset : 0.0;
     if (y > 50) {
       final diff = y - _lastScrollY;
-      if (diff > 5) {
-        if (!_hideSecondaryTab) setState(() => _hideSecondaryTab = true);
-      } else if (diff < -5) {
-        if (_hideSecondaryTab) setState(() => _hideSecondaryTab = false);
+      if (diff > 5 && !_hideSecondaryTab) {
+        setState(() => _hideSecondaryTab = true);
+      } else if (diff < -5 && _hideSecondaryTab) {
+        setState(() => _hideSecondaryTab = false);
       }
-    } else {
-      if (_hideSecondaryTab) setState(() => _hideSecondaryTab = false);
+    } else if (_hideSecondaryTab) {
+      setState(() => _hideSecondaryTab = false);
     }
     _lastScrollY = y;
   }
@@ -133,6 +128,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
       _subTabIndex = 0;
       _hideSecondaryTab = false;
     });
+    recordChatPageVisit(ref, _mainTabIndex, _subTabIndex);
   }
 
   bool _trySwitchSecondaryTab(TabSwipeDirection direction) {
@@ -147,6 +143,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     setState(() {
       _subTabIndex = nextSubIndex;
     });
+    recordChatPageVisit(ref, _mainTabIndex, _subTabIndex);
     return true;
   }
 
@@ -289,6 +286,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                   _mainTabIndex = id == 'messages' ? 0 : 1;
                   _subTabIndex = 0;
                 });
+                recordChatPageVisit(ref, _mainTabIndex, _subTabIndex);
               },
               onHorizontalDragEnd: _handleTabSwipeDragEnd,
               leadingActions: const [],
@@ -362,7 +360,10 @@ class _ChatPageState extends ConsumerState<ChatPage>
       isDark: ref.read(isDarkProvider),
       tabs: subTabs,
       activeIndex: _subTabIndex,
-      onTap: (index) => setState(() => _subTabIndex = index),
+      onTap: (index) {
+        setState(() => _subTabIndex = index);
+        recordChatPageVisit(ref, _mainTabIndex, _subTabIndex);
+      },
       onHorizontalDragEnd: _handleTabSwipeDragEnd,
       horizontalPadding: AppSpacing.feedContentHorizontal(context),
       numberBadges: numberBadges,
@@ -771,7 +772,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
           );
         }
         if (sub == UITextConstants.contactsTabAll ||
-            sub == UITextConstants.contactsTabSameInterest) {
+            sub == UITextConstants.contactsTabMutualFollow) {
           return _ContactsListWithIndex(
             items: list,
             fgPrimary: fgPrimary,
@@ -897,8 +898,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 }
-
-/// 同好列表带右侧字母索引（1:1 ContactsList.tsx ContactsContent）
 class _ContactsListWithIndex extends StatefulWidget {
   const _ContactsListWithIndex({
     required this.items,

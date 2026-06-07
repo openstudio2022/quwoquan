@@ -132,7 +132,7 @@ def write_baseline() -> int:
             "interface": name,
             "path": rel,
             "max_methods": n,
-            "reason": "oversized-interface-legacy (按 ContentRepository 模板拆窄接口，后续逐步降)",
+            "reason": "oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)",
         }
         for (name, rel, n) in over
     ]

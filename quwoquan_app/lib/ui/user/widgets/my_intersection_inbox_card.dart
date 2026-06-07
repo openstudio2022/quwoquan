@@ -9,10 +9,14 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
 
-/// 我的主页「我的交集」聚合入口卡。
+/// 我的主页「我的交集」聚合入口卡（V4 · 动态简报）。
 ///
-/// 展示总数 + 最多 3 个维度的未读红点/数字；超过 3 个收起「展开更多」。
-/// 点击卡或维度进入分维度列表页（打开列表即清零红点，由列表页推进已读水位）。
+/// 设计（专业设计师视角：精致 / 事实清晰 / 简洁）：
+/// - 头部总数 + 未读红点；
+/// - 维度胶囊改为「动态简报行」：每行一条云侧实例化简报句（briefText，
+///   如"3 位联系人新加入了你关注的圈子"），缺省回落 label + 新增数，端不编造事实；
+/// - 默认 3 行，超出收起「展开更多」；点击行/卡进入分维度列表页（打开即清零红点）。
+/// - 维度 dimension 为开放字符串，未知维度优雅降级（必读要求 1）。
 class MyIntersectionInboxCard extends ConsumerStatefulWidget {
   const MyIntersectionInboxCard({super.key, required this.isDark});
 
@@ -70,23 +74,41 @@ class _MyIntersectionInboxCardState
             totalNew: summary.totalNewCount,
           ),
           SizedBox(height: AppSpacing.intraGroupSm),
-          Wrap(
-            spacing: AppSpacing.intraGroupSm,
-            runSpacing: AppSpacing.intraGroupSm,
-            children: <Widget>[
-              for (final tally in visible)
-                _DimensionPill(
-                  tally: tally,
-                  isDark: widget.isDark,
-                  onTap: () => _openList(dimension: tally.dimension),
-                ),
-              if (hasMore)
-                _MorePill(
-                  expanded: _expanded,
-                  onTap: () => setState(() => _expanded = !_expanded),
-                ),
-            ],
+          AnimatedSize(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (var i = 0; i < visible.length; i++) ...<Widget>[
+                  if (i > 0)
+                    Container(
+                      height: AppSpacing.hairline,
+                      margin: EdgeInsets.symmetric(
+                        vertical: AppSpacing.intraGroupXs,
+                      ),
+                      color: AppColors.iosSeparator(
+                        context,
+                      ).withValues(alpha: widget.isDark ? 0.18 : 0.06),
+                    ),
+                  _BriefRow(
+                    tally: visible[i],
+                    onTap: () => _openList(dimension: visible[i].dimension),
+                  ),
+                ],
+              ],
+            ),
           ),
+          if (hasMore)
+            Padding(
+              padding: EdgeInsets.only(top: AppSpacing.intraGroupSm),
+              child: _MorePill(
+                expanded: _expanded,
+                onTap: () => setState(() => _expanded = !_expanded),
+              ),
+            ),
         ],
       ),
     );
@@ -154,10 +176,23 @@ class _MyIntersectionInboxCardState
                       height: AppSpacing.textLineHeightSingle,
                     ),
                   ),
-                  if (totalNew > 0) ...<Widget>[
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    _RedCountBadge(count: totalNew),
-                  ],
+                  SizedBox(width: AppSpacing.intraGroupXs),
+                  // §7.5 红点消除：清零后 fade+scale 收起，给「已读」确定感。
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 240),
+                    switchInCurve: Curves.easeOutBack,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: (child, anim) => ScaleTransition(
+                      scale: anim,
+                      child: FadeTransition(opacity: anim, child: child),
+                    ),
+                    child: totalNew > 0
+                        ? _RedCountBadge(
+                            key: ValueKey<int>(totalNew),
+                            count: totalNew,
+                          )
+                        : const SizedBox.shrink(key: ValueKey<String>('no-new')),
+                  ),
                 ],
               ),
               SizedBox(height: AppSpacing.intraGroupXs),
@@ -219,61 +254,59 @@ class _MyIntersectionInboxCardState
   }
 }
 
-class _DimensionPill extends StatelessWidget {
-  const _DimensionPill({
-    required this.tally,
-    required this.isDark,
-    required this.onTap,
-  });
+/// 动态简报行：云侧实例化一句话（briefText）优先；缺省回落 label + 新增数。
+class _BriefRow extends StatelessWidget {
+  const _BriefRow({required this.tally, required this.onTap});
 
   final IntersectionDimensionTally tally;
-  final bool isDark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final hasNew = tally.newCount > 0;
+    final brief = tally.briefText.trim();
+    final text = brief.isNotEmpty
+        ? brief
+        : (hasNew
+              ? '${tally.label} ${tally.newCount} ${UITextConstants.intersectionNewBadgeSuffix}'
+              : '${tally.label} ${tally.count}');
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.intraGroupSm,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.iosSystemBackground(context).withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
-          border: Border.all(
-            color: AppColors.iosSeparator(
-              context,
-            ).withValues(alpha: isDark ? 0.3 : 0.12),
-            width: AppSpacing.hairline,
-          ),
-        ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: AppSpacing.minInteractiveSize),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(
-              tally.label,
-              style: TextStyle(
-                fontSize: AppTypography.iosCaption1,
-                fontWeight: AppTypography.medium,
-                color: AppColors.iosLabel(context),
+            Container(
+              width: AppSpacing.sm,
+              height: AppSpacing.sm,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: hasNew
+                    ? AppColors.error
+                    : AppColors.iosTertiaryLabel(context),
+              ),
+            ),
+            SizedBox(width: AppSpacing.intraGroupSm),
+            Expanded(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: hasNew
+                      ? AppTypography.medium
+                      : AppTypography.regular,
+                  color: AppColors.iosLabel(context),
+                ),
               ),
             ),
             SizedBox(width: AppSpacing.intraGroupXs),
-            Text(
-              hasNew ? '+${tally.newCount}' : '${tally.count}',
-              style: TextStyle(
-                fontSize: AppTypography.iosCaption1,
-                fontWeight: hasNew
-                    ? AppTypography.semiBold
-                    : AppTypography.regular,
-                color: hasNew
-                    ? AppColors.error
-                    : AppColors.iosSecondaryLabel(context),
-              ),
+            Icon(
+              CupertinoIcons.chevron_forward,
+              size: AppSpacing.fourteen,
+              color: AppColors.iosTertiaryLabel(context),
             ),
           ],
         ),
@@ -318,7 +351,7 @@ class _MorePill extends StatelessWidget {
 
 /// 仅用于「未读/新增」数字的红色提醒徽标。
 class _RedCountBadge extends StatelessWidget {
-  const _RedCountBadge({required this.count});
+  const _RedCountBadge({super.key, required this.count});
 
   final int count;
 

@@ -32,129 +32,136 @@ class SettingsPage extends ConsumerWidget {
           context.go(AppRoutePaths.profile);
         }
       },
-      body: SafeArea(
-        bottom: false,
-        child: ListView(
-          padding: EdgeInsets.only(
-            left: SettingsSemanticConstants.insetFormListHorizontalPadding,
-            right: SettingsSemanticConstants.insetFormListHorizontalPadding,
-            top: AppSpacing.intraGroupSm,
-            bottom: AppSpacing.xl,
-          ),
-          children: <Widget>[
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              header: '偏好',
-              child: Column(
-                children: <Widget>[
-                  _SettingsRow(
-                    icon: CupertinoIcons.paintbrush,
-                    label: '外观与字号',
-                    trailingText: _appearanceSummary(snapshot, appearanceState),
-                    onTap: () => showCupertinoModalPopup<void>(
-                      context: context,
-                      barrierColor: AppColors.transparent,
-                      builder: (_) => const _AppearanceSettingsSheet(),
-                    ),
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  _SettingsRow(
-                    icon: CupertinoIcons.bell,
-                    label: '通知',
-                    onTap: () => _showPendingNotice(context, '通知'),
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  _SettingsRow(
-                    icon: CupertinoIcons.lock_shield,
-                    label: '${AppConceptConstants.assistantLabel}读取创作内容',
-                    trailingText: _personalContentAccessSummary(
-                      contentAccessState,
-                    ),
-                    onTap: () => _showPersonalContentAccessDialog(
-                      context,
-                      ref,
-                      contentAccessState,
-                    ),
-                  ),
-                ],
-              ),
+      body: WebPageMaxWidthFrame(
+        child: SafeArea(
+          bottom: false,
+          child: ListView(
+            padding: EdgeInsets.only(
+              left: SettingsSemanticConstants.insetFormListHorizontalPadding,
+              right: SettingsSemanticConstants.insetFormListHorizontalPadding,
+              top: AppSpacing.intraGroupSm,
+              bottom: AppSpacing.xl,
             ),
-            SizedBox(
-              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-            ),
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              header: '其他',
-              child: Column(
-                children: <Widget>[
-                  if (personaManagementEnabled) ...<Widget>[
+            children: <Widget>[
+              SettingsInsetGroupedSection(
+                isDark: isDark,
+                header: '偏好',
+                child: Column(
+                  children: <Widget>[
                     _SettingsRow(
-                      icon: CupertinoIcons.person_2,
-                      label: UITextConstants.personaSettingsEntry,
-                      onTap: () => context.push(AppRoutePaths.profilePersonas),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                  ],
-                  _SettingsRow(
-                    icon: CupertinoIcons.sparkles,
-                    label: AppConceptConstants.assistantLabel,
-                    onTap: () =>
-                        context.push(AppRoutePaths.assistantManagement),
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  _SettingsRow(
-                    icon: CupertinoIcons.archivebox,
-                    label: '存储与缓存',
-                    trailingText: _cacheUsageSummary(ref),
-                    onTap: () => showCupertinoModalPopup<void>(
-                      context: context,
-                      barrierColor: AppColors.transparent,
-                      builder: (_) => const _CacheManagementSheet(),
-                    ),
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  if (authSession.isAuthenticated) ...<Widget>[
-                    _SettingsRow(
-                      icon: CupertinoIcons.person_crop_circle_badge_plus,
-                      label: UITextConstants.switchAccount,
-                      onTap: () =>
-                          _handleLogout(context, ref, navigateToLogin: true),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                    _SettingsRow(
-                      icon: CupertinoIcons.square_arrow_right,
-                      label: UITextConstants.logout,
-                      onTap: () => _confirmLogout(context, ref),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                  ] else ...<Widget>[
-                    _SettingsRow(
-                      icon: CupertinoIcons.person_crop_circle_badge_checkmark,
-                      label: UITextConstants.profileLoginNow,
-                      onTap: () => openLoginPage(
-                        context,
-                        reasonName: AuthPromptReason.actionRequired.name,
-                        redirect: AppRoutePaths.settings,
-                        dismissFallback: AppRoutePaths.settings,
+                      icon: CupertinoIcons.paintbrush,
+                      label: '外观与字号',
+                      trailingText: _appearanceSummary(
+                        snapshot,
+                        appearanceState,
+                      ),
+                      onTap: () => showCupertinoModalPopup<void>(
+                        context: context,
+                        barrierColor: AppColors.transparent,
+                        builder: (_) => const _AppearanceSettingsSheet(),
                       ),
                     ),
                     SettingsInsetFormSectionDivider(isDark: isDark),
+                    _SettingsRow(
+                      icon: CupertinoIcons.bell,
+                      label: '通知',
+                      onTap: () => _showPendingNotice(context, '通知'),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    _SettingsRow(
+                      icon: CupertinoIcons.lock_shield,
+                      label: '${AppConceptConstants.assistantLabel}读取创作内容',
+                      trailingText: _personalContentAccessSummary(
+                        contentAccessState,
+                      ),
+                      onTap: () => _showPersonalContentAccessDialog(
+                        context,
+                        ref,
+                        contentAccessState,
+                      ),
+                    ),
                   ],
-                  _SettingsRow(
-                    icon: CupertinoIcons.lab_flask,
-                    label: '开发者',
-                    onTap: () => context.push(AppRoutePaths.settingsDeveloper),
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  _SettingsRow(
-                    icon: CupertinoIcons.info,
-                    label: '关于',
-                    onTap: () => _showPendingNotice(context, '关于'),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+              SizedBox(
+                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+              ),
+              SettingsInsetGroupedSection(
+                isDark: isDark,
+                header: '其他',
+                child: Column(
+                  children: <Widget>[
+                    if (personaManagementEnabled) ...<Widget>[
+                      _SettingsRow(
+                        icon: CupertinoIcons.person_2,
+                        label: UITextConstants.personaSettingsEntry,
+                        onTap: () =>
+                            context.push(AppRoutePaths.profilePersonas),
+                      ),
+                      SettingsInsetFormSectionDivider(isDark: isDark),
+                    ],
+                    _SettingsRow(
+                      icon: CupertinoIcons.sparkles,
+                      label: AppConceptConstants.assistantLabel,
+                      onTap: () =>
+                          context.push(AppRoutePaths.assistantManagement),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    _SettingsRow(
+                      icon: CupertinoIcons.archivebox,
+                      label: '存储与缓存',
+                      trailingText: _cacheUsageSummary(ref),
+                      onTap: () => showCupertinoModalPopup<void>(
+                        context: context,
+                        barrierColor: AppColors.transparent,
+                        builder: (_) => const _CacheManagementSheet(),
+                      ),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    if (authSession.isAuthenticated) ...<Widget>[
+                      _SettingsRow(
+                        icon: CupertinoIcons.person_crop_circle_badge_plus,
+                        label: UITextConstants.switchAccount,
+                        onTap: () =>
+                            _handleLogout(context, ref, navigateToLogin: true),
+                      ),
+                      SettingsInsetFormSectionDivider(isDark: isDark),
+                      _SettingsRow(
+                        icon: CupertinoIcons.square_arrow_right,
+                        label: UITextConstants.logout,
+                        onTap: () => _confirmLogout(context, ref),
+                      ),
+                      SettingsInsetFormSectionDivider(isDark: isDark),
+                    ] else ...<Widget>[
+                      _SettingsRow(
+                        icon: CupertinoIcons.person_crop_circle_badge_checkmark,
+                        label: UITextConstants.profileLoginNow,
+                        onTap: () => openLoginPage(
+                          context,
+                          reasonName: AuthPromptReason.actionRequired.name,
+                          redirect: AppRoutePaths.settings,
+                          dismissFallback: AppRoutePaths.settings,
+                        ),
+                      ),
+                      SettingsInsetFormSectionDivider(isDark: isDark),
+                    ],
+                    _SettingsRow(
+                      icon: CupertinoIcons.lab_flask,
+                      label: '开发者',
+                      onTap: () =>
+                          context.push(AppRoutePaths.settingsDeveloper),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    _SettingsRow(
+                      icon: CupertinoIcons.info,
+                      label: '关于',
+                      onTap: () => _showPendingNotice(context, '关于'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

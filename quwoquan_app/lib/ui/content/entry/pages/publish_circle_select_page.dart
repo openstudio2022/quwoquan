@@ -11,7 +11,7 @@ import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dar
 /// 发布圈子选择页（design §3.7）；选项 [CreateCircleOption]（加载链经 CircleDto.fromMap）。
 ///
 /// 已加入 / 推荐圈子分区，Cupertino 语义，底部取消+确认。
-/// 无已加入圈子时展示空态「加入圈子，发现同好」+ 发现页 CTA。
+/// 无已加入圈子时展示空态「加入圈子，发现兴趣相近的人」+ 发现页 CTA。
 class PublishCircleSelectPage extends StatefulWidget {
   const PublishCircleSelectPage({
     super.key,

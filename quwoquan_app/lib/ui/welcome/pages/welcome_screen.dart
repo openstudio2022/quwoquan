@@ -15,10 +15,16 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 /// 与 Figma 原型及趣我圈2026 WelcomeScreen 视觉、动效一致。
 /// 动效顺序：品牌内容首帧可见 -> 花瓣/文案微动效增强 -> 直接进入首页。
 class WelcomeScreen extends StatefulWidget {
-  const WelcomeScreen({super.key, required this.onFinish, this.loginPrompt});
+  const WelcomeScreen({
+    super.key,
+    required this.onFinish,
+    this.loginPrompt,
+    this.deferSequenceStart = false,
+  });
 
   final VoidCallback onFinish;
   final WelcomeLoginPromptConfig? loginPrompt;
+  final bool deferSequenceStart;
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -96,7 +102,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       }
     }
 
-    runSequence();
+    if (widget.deferSequenceStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        runSequence();
+      });
+    } else {
+      runSequence();
+    }
   }
 
   @override

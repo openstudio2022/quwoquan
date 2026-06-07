@@ -177,6 +177,7 @@ func main() {
 	var bulkImportService *application.BulkImportService
 	var behaviorEventStore persistence.BehaviorEventStore = persistence.NoopBehaviorEventStore{}
 	var dailyMetricsStore *persistence.DailyMetricsStore
+	var intersectionService *application.IntersectionService
 	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
 		rtrec.WithLogger(logger),
@@ -288,6 +289,16 @@ func main() {
 		socialRecall := rtrec.NewSocialRecallSource(socialProvider, socialCandidateDB, 7*24*time.Hour)
 		mongoCandidateSources = append(mongoCandidateSources, socialRecall)
 		recOpts = append(recOpts, rtrec.WithSocialMiner(rtrec.NewSocialInterestMiner(socialProvider)))
+		intersectionService = application.NewIntersectionService(
+			router,
+			application.WithIntersectionSource(
+				recinfra.NewMongoIntersectionSource(
+					socialProvider,
+					recinfra.NewMongoEntityTagIndex(db),
+					socialCandidateDB,
+				),
+			),
+		)
 		log.Printf("content-service social recall + social miner enabled")
 
 		bulkImportService = application.NewBulkImportService(recinfra.NewMongoBulkImportStore(db))
@@ -425,10 +436,10 @@ func main() {
 	}
 
 	// 交集统一体验服务：跨会话冷却窗口（rec:icool ZSET）+ per-dimension 已读水位
-	// （cache:viewer_intersections）+ 事实/概率合并排序。事实数据由环境 seed 驱动，
-	// 服务端不伪造（默认空源）；router 通过 ForKey 前缀路由到 rec/general 场景。
-	intersectionService := application.NewIntersectionService(router)
-	handlerOpts = append(handlerOpts, httpadapter.WithIntersectionService(intersectionService))
+	// （cache:viewer_intersections）+ 事实/概率合并排序。
+	if intersectionService != nil {
+		handlerOpts = append(handlerOpts, httpadapter.WithIntersectionService(intersectionService))
+	}
 
 	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService, handlerOpts...).Routes()
 

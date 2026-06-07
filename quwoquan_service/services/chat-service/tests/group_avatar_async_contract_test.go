@@ -251,6 +251,7 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 		convCache,
 		eventPublisher,
 		profiles,
+		application.AllowRelationshipGateForTest(),
 		media,
 		syncPublisher,
 		scheduler,
@@ -264,7 +265,12 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 		syncPublisher,
 		scheduler,
 	)
-	messageSvc := application.NewMessageService(chatStore, convCache, eventPublisher)
+	messageSvc := application.NewMessageService(
+		chatStore,
+		convCache,
+		eventPublisher,
+		application.AllowRelationshipGateForTest(),
+	)
 	inboxSvc := application.NewInboxService(chatStore)
 	return chathttp.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc, userSyncService).Routes(), userSyncService, scheduler
 }
@@ -873,6 +879,7 @@ func TestGroupAvatar_CreateConversationRollsBackWhenOutboxFails(t *testing.T) {
 		convCache,
 		nil,
 		testProfileResolver{},
+		application.AllowRelationshipGateForTest(),
 		nil,
 		nil,
 		failingGroupAvatarScheduler{},

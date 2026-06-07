@@ -151,7 +151,7 @@ func WithSmsOtpPassThroughConfig(config SmsOtpPassThroughConfig) AuthServiceOpti
 }
 
 // WithAccessTokenSigner 注入 access token 签发器；注入后 accessToken 为短期 JWT，
-// 可被各服务/网关本地验签。未注入时回退到不透明随机串（过渡期兼容）。
+// 可被各服务/网关本地验签。未注入时回退到不透明随机串（过渡期回退）。
 func WithAccessTokenSigner(signer *rtauth.Signer) AuthServiceOption {
 	return func(s *AuthService) {
 		s.accessSigner = signer

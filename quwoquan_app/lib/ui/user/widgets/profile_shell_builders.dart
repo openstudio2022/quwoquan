@@ -13,44 +13,13 @@ extension _ProfileShellBuilders on _ProfileShellState {
       objectBId: widget.userId,
       objectBType: 'user',
     );
-    if (!query.isResolvable) {
-      return const SizedBox.shrink();
-    }
-    final reasons = ref.watch(objectSharedReasonsProvider(query)).asData?.value;
-    final card = ObjectIntersectionCard.fromReasons(
+    // 统一 async 三态（loading 骨架 / data 卡 / error 收起）+ §7.3 旅程高亮。
+    // 证据组点击归因（B3）由 ObjectIntersectionSection 内部统一上报（三主页一致）。
+    return ObjectIntersectionSection(
+      query: query,
       title: UITextConstants.profileMutualIntersectionTitle,
-      reasons: reasons,
       isDark: isDark,
-      onReasonTap: (reason) => _reportIntersectionReasonTap(reason),
-    );
-    if (card == null) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.md),
-      child: card,
-    );
-  }
-
-  /// 交集点点击 → 交集行动归因（B3）：把触发维度 + 路径制 tagRef 锚点回流到推荐管线。
-  /// contentId 为被看对象（用户），来源标记为来自主页交集卡。仓库内部已做失败入队，无需本地 catch。
-  void _reportIntersectionReasonTap(IntersectionReason reason) {
-    final repo = ref.read(behaviorRepositoryProvider);
-    unawaited(
-      repo.reportEvents(
-        events: <BehaviorEvent>[
-          BehaviorEvent(
-            contentId: widget.userId,
-            action: BehaviorAction.tagClick,
-            contentType: 'user',
-            authorId: widget.userId,
-            referralSource: ReferralSource.authorProfile,
-            tags: reason.tagRefs,
-            intersectionDimension: reason.dimension,
-            intersectionTagRefs: reason.tagRefs,
-          ),
-        ],
-      ),
+      bottomPadding: AppSpacing.md,
     );
   }
 

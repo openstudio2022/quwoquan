@@ -9,10 +9,13 @@ import "errors"
 var (
 	ErrAssistantMentionContextMissing      = errors.New("CONTENT.USER.assistant_mention_context_missing")
 	ErrCircleDistributionForbidden         = errors.New("CONTENT.USER.circle_distribution_forbidden")
+	ErrCommentAttachmentLimitExceeded      = errors.New("CONTENT.USER.comment_attachment_limit_exceeded")
+	ErrCommentAttachmentNotReady           = errors.New("CONTENT.USER.comment_attachment_not_ready")
 	ErrCommentForbiddenDelete              = errors.New("CONTENT.USER.comment_forbidden_delete")
 	ErrCommentLikeDuplicate                = errors.New("CONTENT.USER.comment_like_duplicate")
 	ErrCommentNotFound                     = errors.New("CONTENT.USER.comment_not_found")
 	ErrCommentRateLimited                  = errors.New("CONTENT.USER.comment_rate_limited")
+	ErrCommentReactionForbidden            = errors.New("CONTENT.USER.comment_reaction_forbidden")
 	ErrCommentTooLong                      = errors.New("CONTENT.USER.comment_too_long")
 	ErrContentDeleted                      = errors.New("CONTENT.USER.content_deleted")
 	ErrContentTooLong                      = errors.New("CONTENT.USER.content_too_long")

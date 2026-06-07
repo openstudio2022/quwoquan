@@ -1,7 +1,7 @@
 """发布门：账本发布态 + 实体主页存在性，对单个 post 做过滤裁决。
 
 - 文章不可发布 / 仍有 fix 项 → 整 post 跳过（不静默 BLOCK 全量）。
-- discard 图片 → 从 manifest.assets / articleAssetManifest / article.md 引用一并剔除。
+- discard 图片 → 从 manifest.assets / article.md 引用一并剔除。
 - entityRefs 中"无主页"的实体 → 过滤掉（页面不存在即不可关联查看）。
 """
 from __future__ import annotations
@@ -28,13 +28,13 @@ def _parse_entity_ref(raw: str) -> tuple[str, str, str]:
     return "", "", raw
 
 
-def entity_homepage_exists(publish_root: Path, ref: str, sidecar_homepages: set[str]) -> bool:
+def entity_homepage_exists(homepage_root: Path, ref: str, sidecar_homepages: set[str]) -> bool:
     if ref in sidecar_homepages:
         return True
     domain, etype, name = _parse_entity_ref(ref)
     if not (domain and etype and name):
         return False
-    return (publish_root / "entities" / domain / etype / name / "page.md").is_file()
+    return (homepage_root / domain / etype / name / "page.md").is_file()
 
 
 @dataclass
@@ -73,14 +73,19 @@ def _strip_asset_from_markdown(article_md: str, asset_ids: set[str]) -> str:
     return text
 
 
-def apply_publish_filter(topic_dir: Path, publish_root: Path) -> PublishFilterVerdict:
+def apply_publish_filter(
+    topic_dir: Path,
+    publish_root: Path,
+    *,
+    entity_homepage_root: Path | None = None,
+) -> PublishFilterVerdict:
     manifest = read_json(topic_dir / "manifest.json")
     article_path = topic_dir / "article.md"
     article_md = article_path.read_text(encoding="utf-8") if article_path.is_file() else ""
 
-    # 账本快照（materialize 拷入 post review/ledger.json）；无账本则退化为按 reviewDecision 通过。
-    ledger_file = topic_dir / "review" / "ledger.json"
-    entities_file = topic_dir / "review" / "entities.json"
+    # 账本/实体边车在内容对象 5.review/（对象优先）。
+    ledger_file = topic_dir / "5.review" / "review_ledger.json"
+    entities_file = topic_dir / "5.review" / "review_entities.json"
 
     reasons: list[str] = []
     discard_targets: list[str] = []
@@ -90,23 +95,24 @@ def apply_publish_filter(topic_dir: Path, publish_root: Path) -> PublishFilterVe
         ledger = ReviewLedger.from_dict(read_json(ledger_file))
         publishable, reasons, discard_targets = post_publishability(ledger)
 
-    # 实体主页存在性：sidecar hasHomepage + publish 主线 page.md
+    # 实体主页存在性：sidecar hasHomepage + publish 主线 page.md / release entity_pages.
     sidecar_homepages: set[str] = set()
     if entities_file.is_file():
         for ent in read_json(entities_file).get("entities", []):
             if ent.get("hasHomepage") and ent.get("ref"):
                 sidecar_homepages.add(ent["ref"])
+    homepage_root = entity_homepage_root or (publish_root / "entities")
 
     filtered_entities: list[str] = []
     kept_refs: list[str] = []
     for ref in manifest.get("entityRefs", []):
-        if entity_homepage_exists(publish_root, ref, sidecar_homepages):
+        if entity_homepage_exists(homepage_root, ref, sidecar_homepages):
             kept_refs.append(ref)
         else:
             filtered_entities.append(ref)
     manifest["entityRefs"] = kept_refs
 
-    # discard 图片：从 assets / articleAssetManifest 剔除并记录文件名
+    # discard 图片：从顶层 assets 剔除并记录文件名
     discard_set = set(discard_targets)
     fnames_to_remove: list[str] = []
     if discard_set:
@@ -118,10 +124,6 @@ def apply_publish_filter(topic_dir: Path, publish_root: Path) -> PublishFilterVe
                 continue
             new_assets.append(a)
         manifest["assets"] = new_assets
-
-        aam = manifest.get("articleAssetManifest")
-        if isinstance(aam, dict):
-            aam["assets"] = [x for x in aam.get("assets", []) if x.get("assetId") not in discard_set]
 
         article_md = _strip_asset_from_markdown(article_md, discard_set)
 

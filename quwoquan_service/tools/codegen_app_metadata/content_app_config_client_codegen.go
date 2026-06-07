@@ -33,7 +33,7 @@ class ContentCanaryStageWireDto {
   }
 }
 
-/// content.gray_release 客户端消费子集（snake_case / camelCase 别名）。
+/// content.gray_release 客户端消费子集（snake_case only）。
 class ContentGrayReleaseClientDto {
   const ContentGrayReleaseClientDto({
     required this.experimentBucket,
@@ -46,25 +46,22 @@ class ContentGrayReleaseClientDto {
   final List<ContentCanaryStageWireDto> canaryMatrix;
 
   factory ContentGrayReleaseClientDto.fromMap(Map<String, dynamic> m) {
-    final rawList =
-        (m['canary_matrix'] as List?) ?? (m['canaryMatrix'] as List?) ?? const [];
+    final rawList = (m['canary_matrix'] as List?) ?? const [];
     final stages = rawList
         .whereType<Map>()
         .map((e) => ContentCanaryStageWireDto.fromMap(Map<String, dynamic>.from(e)))
         .where((s) => s.stage.isNotEmpty)
         .toList(growable: false);
     return ContentGrayReleaseClientDto(
-      experimentBucket: (m['experiment_bucket'] ?? m['experimentBucket'] ?? '')
-          .toString()
-          .trim(),
-      currentStage:
-          (m['current_stage'] ?? m['currentStage'] ?? '').toString().trim(),
+      experimentBucket:
+          (m['experiment_bucket'] ?? '').toString().trim(),
+      currentStage: (m['current_stage'] ?? '').toString().trim(),
       canaryMatrix: stages,
     );
   }
 }
 
-/// 自根响应 Map 解析根键 content：feature_flags、gray_release、client_state_sync。
+/// 自根响应 Map 解析根键 content：feature_flags、gray_release、client_state_sync（snake_case only）。
 class ContentAppConfigClientParsed {
   ContentAppConfigClientParsed._({
     required this.featureFlagOverrides,
@@ -81,7 +78,6 @@ class ContentAppConfigClientParsed {
     final content = (root['content'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final rawFlags = (content['feature_flags'] as Map?)?.cast<String, dynamic>() ??
-        (content['featureFlags'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final overrides = <String, bool>{};
     for (final e in rawFlags.entries) {
@@ -90,13 +86,10 @@ class ContentAppConfigClientParsed {
       }
     }
     final grayRaw = (content['gray_release'] as Map?)?.cast<String, dynamic>() ??
-        (content['grayRelease'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final gray = ContentGrayReleaseClientDto.fromMap(grayRaw);
-    final syncRaw =
-        (content['client_state_sync'] as Map?)?.cast<String, dynamic>() ??
-            (content['clientStateSync'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+    final syncRaw = (content['client_state_sync'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
     return ContentAppConfigClientParsed._(
       featureFlagOverrides: overrides,
       grayRelease: gray,

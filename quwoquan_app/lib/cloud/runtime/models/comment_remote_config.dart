@@ -1,0 +1,88 @@
+import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
+import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+
+class CommentRemoteConfig {
+  const CommentRemoteConfig({
+    this.maxLength = 500,
+    this.replyPreviewCount = 1,
+    this.replyExpandPageSize = 10,
+    this.foldLineCount = 3,
+    this.maxImageAttachments = 1,
+    this.enabled = true,
+  });
+
+  final int maxLength;
+  final int replyPreviewCount;
+  final int replyExpandPageSize;
+  final int foldLineCount;
+  final int maxImageAttachments;
+  final bool enabled;
+
+  static const CommentRemoteConfig fallback = CommentRemoteConfig();
+
+  CommentConfig toComposerConfig({CommentConfig? fallbackConfig}) {
+    final base = fallbackConfig ?? const CommentConfig();
+    return CommentConfig(
+      maxLength: _positiveOrFallback(maxLength, base.maxLength),
+      maxImageAttachments: _positiveOrFallback(
+        maxImageAttachments,
+        base.maxImageAttachments,
+      ),
+      enabled: enabled && base.enabled,
+    );
+  }
+
+  factory CommentRemoteConfig.fromAppConfigRoot(
+    ContentAppConfigWireRoot root, {
+    CommentRemoteConfig fallback = CommentRemoteConfig.fallback,
+  }) {
+    final content = (root['content'] as Map?)?.cast<String, Object?>();
+    final comment = (content?['comment'] as Map?)?.cast<String, Object?>();
+    if (comment == null) return fallback;
+    final attachment = (comment['attachment'] as Map?)?.cast<String, Object?>();
+    return CommentRemoteConfig(
+      maxLength: _positiveOrFallback(
+        _asInt(comment['max_length']),
+        fallback.maxLength,
+      ),
+      replyPreviewCount: _positiveOrFallback(
+        _asInt(comment['reply_preview_count']),
+        fallback.replyPreviewCount,
+      ),
+      replyExpandPageSize: _positiveOrFallback(
+        _asInt(comment['reply_expand_page_size']),
+        fallback.replyExpandPageSize,
+      ),
+      foldLineCount: _positiveOrFallback(
+        _asInt(comment['fold_line_count']),
+        fallback.foldLineCount,
+      ),
+      maxImageAttachments: _positiveOrFallback(
+        _asInt(attachment?['max_images']),
+        fallback.maxImageAttachments,
+      ),
+      enabled: _asBool(comment['enabled'], fallback.enabled),
+    );
+  }
+
+  static int? _asInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  static bool _asBool(Object? value, bool fallback) {
+    if (value is bool) return value;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true') return true;
+      if (normalized == 'false') return false;
+    }
+    return fallback;
+  }
+
+  static int _positiveOrFallback(int? value, int fallback) {
+    if (value == null || value <= 0) return fallback;
+    return value;
+  }
+}

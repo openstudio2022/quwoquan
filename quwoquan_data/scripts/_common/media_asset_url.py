@@ -481,10 +481,6 @@ def _resolve_one_asset(
     )
     if variants:
         resolved["variants"] = variants
-        display = variants.get("display") or variants.get("adaptive")
-        if display and display.get("cdnUrl"):
-            # Back-compat: legacy renderers see the default display URL.
-            resolved["cdnUrl"] = display["cdnUrl"]
     for key in ("caption", "role", "imageLayout", "width", "height", "durationMs"):
         if asset.get(key) not in (None, ""):
             resolved[key] = asset[key]
@@ -493,11 +489,7 @@ def _resolve_one_asset(
 
 def _update_article_asset_manifest(manifest: dict[str, Any], resolved_assets: list[dict[str, Any]]) -> None:
     by_id = {str(asset.get("assetId")): asset for asset in resolved_assets if asset.get("assetId")}
-    article_manifest = manifest.get("articleAssetManifest")
-    if not isinstance(article_manifest, dict):
-        article_manifest = {"schemaVersion": 1, "assets": []}
-        manifest["articleAssetManifest"] = article_manifest
-    raw_assets = article_manifest.get("assets")
+    raw_assets = manifest.get("assets")
     existing = raw_assets if isinstance(raw_assets, list) else []
     seen: set[str] = set()
     merged: list[dict[str, Any]] = []
@@ -513,7 +505,7 @@ def _update_article_asset_manifest(manifest: dict[str, Any], resolved_assets: li
     for asset_id, asset in by_id.items():
         if asset_id not in seen:
             merged.append(dict(asset))
-    article_manifest["assets"] = merged
+    manifest["assets"] = merged
 
 
 def _materialize_post(

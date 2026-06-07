@@ -1,19 +1,19 @@
-# 历史产物系统清理盘点
+# 过往产物系统清理盘点
 
 更新时间：2026-06-04
 
-本文专门回答“仓库里的历史产物到底有哪些、哪些是当前状态、哪些只是历史证据、哪些必须迁移后才能删”的问题，并给出不做兼容层的清理任务列表。当前文档已同步到本轮结构性迁移完成后的状态。
+本文专门回答“仓库里的过往产物到底有哪些、哪些是当前状态、哪些只是过往证据、哪些必须迁移后才能删”的问题，并给出不做兼容层的清理任务列表。当前文档已同步到本轮结构性迁移完成后的状态。
 
 ## 清理原则
 
 - 不做旧路径兼容，不保留“双写 / 双读 / fallback 到旧目录”的过渡逻辑。
-- 先把仓库内文件分成 `状态`、`可重建快照`、`纯历史证据` 三层，再决定删法。
+- 先把仓库内文件分成 `状态`、`可重建快照`、`纯过往证据` 三层，再决定删法。
 - 当前活跃环境的运行态目录不直接清；要么等停栈后删，要么先迁出新的状态根目录再删。
 - 证据目录可以清，但要一次按批次清，不按单个日志挤牙膏。
 
 ## 一次性结论
 
-当前仓库里的“历史产物”不是一类东西，而是四类混在一起：
+当前仓库里的“过往产物”不是一类东西，而是四类混在一起：
 
 1. `仓库内状态`
    - `.release-state`
@@ -31,7 +31,7 @@
    - `artifacts/app-env-packages`
    - `artifacts/service-env-packages`
 
-4. `纯历史证据`
+4. `纯过往证据`
    - `artifacts/stackctl`
    - `artifacts/stackctl-audit`
    - `artifacts/device-matrix`
@@ -54,8 +54,8 @@
 
 当前判断：
 
-- 不是普通历史产物
-- 是“把运行状态塞进仓库”的历史设计包袱
+- 不是普通过往产物
+- 是“把运行状态塞进仓库”的过往设计包袱
 
 本轮已收口：
 
@@ -70,7 +70,7 @@
 
 当前判断：
 
-- 不是历史日志
+- 不是过往日志
 - 是服务状态存储
 
 本轮已收口：
@@ -152,7 +152,7 @@
 - `artifacts/local-gamma/colima-tunnels.pids`
 - `artifacts/local-gamma/stack_state.json`
 
-纯历史 / 证据子树：
+纯过往 / 证据子树：
 
 - `artifacts/local-gamma/runs`
 - `artifacts/local-gamma/report.json`
@@ -165,7 +165,7 @@
 
 当前判断：
 
-- 同一目录同时承载运行态和历史证据，是当前最需要拆分的遗留点
+- 同一目录同时承载运行态和过往证据，是当前最需要拆分的残留点
 
 本轮已收口：
 
@@ -197,7 +197,7 @@
 
 - 同上
 
-### D. 纯历史证据
+### D. 纯过往证据
 
 #### `artifacts/stackctl`
 
@@ -207,7 +207,7 @@
 
 当前判断：
 
-- 纯历史证据
+- 纯过往证据
 - 最适合按环境 / 目标 / 轮次做 retention
 
 #### `artifacts/stackctl-audit`
@@ -218,7 +218,7 @@
 
 当前判断：
 
-- 纯历史证据
+- 纯过往证据
 
 #### `artifacts/device-matrix`
 
@@ -228,7 +228,7 @@
 
 当前判断：
 
-- 纯历史证据
+- 纯过往证据
 
 #### `artifacts/homepage-assets`
 
@@ -238,9 +238,9 @@
 
 当前判断：
 
-- 纯历史证据
+- 纯过往证据
 
-#### `tmp/` 下纯历史一次性目录
+#### `tmp/` 下纯过往一次性目录
 
 当前已识别典型项：
 
@@ -261,7 +261,7 @@
 
 当前判断：
 
-- 纯历史证据
+- 纯过往证据
 - 不参与当前环境运行
 
 ## 代码与脚本依赖总览
@@ -320,7 +320,7 @@
 
 ## 清理任务列表
 
-### T1. 清空纯历史一次性 `tmp/` 产物
+### T1. 清空纯过往一次性 `tmp/` 产物
 
 范围：
 
@@ -343,7 +343,7 @@
 
 - 可立即执行
 
-### T2. 清空纯历史证据目录
+### T2. 清空纯过往证据目录
 
 范围：
 
@@ -366,7 +366,7 @@
 - 可立即执行
 - 但只删 `runs` 子树，不动 live runtime 子树
 
-### T4. 收缩 `artifacts/stackctl` 历史报告
+### T4. 收缩 `artifacts/stackctl` 过往报告
 
 范围：
 
@@ -420,9 +420,9 @@
 
 已执行并完成两层清理：
 
-1. 第一层：纯历史证据清仓
+1. 第一层：纯过往证据清仓
 
-   - `tmp/` 一次性历史目录 / 文件
+   - `tmp/` 一次性过往目录 / 文件
    - `tmp/runs/dry-run-ios`
    - `tmp/assistant_beta_manual`
    - `tmp/assistant_skill_comparison_logs`
@@ -438,12 +438,12 @@
    - `tmp/job-*.txt`
    - `tmp/pageflip_back_texture*.log`
 
-   - `artifacts/` 纯历史证据目录
+   - `artifacts/` 纯过往证据目录
    - `artifacts/homepage-assets`
    - `artifacts/stackctl-audit`
    - `artifacts/device-matrix`
 
-   - `local-gamma` 历史 run 证据
+   - `local-gamma` 过往 run 证据
    - `artifacts/local-gamma/runs`
 
 2. 第二层：结构性迁移收口
@@ -456,7 +456,7 @@
    - `.control-plane-state` → `state/control-plane`
    - `quwoquan_service/services/product-ops-service/.runtime-cache` → `state/runtime-cache`
    - `artifacts/local-gamma` 运行态子树 → `state/local/gamma`
-   - `artifacts/stackctl/**` 历史时间戳报告按分组收缩，仅保留最新一份
+   - `artifacts/stackctl/**` 过往时间戳报告按分组收缩，仅保留最新一份
 
 执行后验证：
 
@@ -467,5 +467,5 @@
 结论：
 
 - 当前活跃环境在迁移后保持可用
-- 本轮已完成“纯历史证据清仓 + 状态根迁移 + local-gamma 运行态拆分 + stackctl retention 收缩”
-- 后续若再清理，重点应转为历史文档/样例引用收口，而不是继续保留旧目录为默认入口
+- 本轮已完成“纯过往证据清仓 + 状态根迁移 + local-gamma 运行态拆分 + stackctl retention 收缩”
+- 后续若再清理，重点应转为过往文档/样例引用收口，而不是继续保留旧目录为默认入口

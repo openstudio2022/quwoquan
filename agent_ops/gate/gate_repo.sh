@@ -79,6 +79,7 @@ run_app() {
     python3 quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_error_code_semantic.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_cloud_services_semantic.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_route_and_context_semantic.py || exit 1
     python3 agent_ops/assistant/verify_no_personal_assistant_imports.py || exit 1
     python3 agent_ops/assistant/verify_assistant_old_stack_retired.py || exit 1
@@ -138,10 +139,13 @@ run_app() {
     python3 quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_app_no_integration_test_dir.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_remote_realtime_no_mock_import.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_platform_check_isolation.py || exit 1
+    python3 quwoquan_app/scripts/cli.py fonts verify || exit 1
+    python3 quwoquan_app/scripts/cli.py web verify-offline || exit 1
     python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py || exit 1
     python3 quwoquan_app/scripts/env/verify_business_env_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py || exit 1
@@ -162,7 +166,7 @@ run_app() {
   local flutter_status=0
   set +e
   set -o pipefail
-  (cd quwoquan_app && flutter test test/cloud/ test/components/ test/core/ test/ui/ test/smoke/ 2>&1 | tee "$flutter_log")
+  python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/cloud/ test/components/ test/core/ test/ui/ test/smoke/ 2>&1 | tee "$flutter_log"
   flutter_status=${PIPESTATUS[0]:-1}
   set +o pipefail
   set -e

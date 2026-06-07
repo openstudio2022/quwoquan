@@ -14,13 +14,13 @@ void main() {
           id: 'conv_1',
           type: 'group',
           title: '契约群',
-          avatarUrl: '/media/avatar/conversation/conv_1/v2/hash.png?v=2',
+          avatarUrl: '/media/avatar/s/archived-avatar/conversation/conv_1/v2/hash.png?v=2',
         ),
       );
 
       expect(
         item.avatarUrl,
-        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/conversation/conv_1/v2/hash.png?v=2',
+        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/archived-avatar/conversation/conv_1/v2/hash.png?v=2',
       );
     });
 
@@ -28,15 +28,15 @@ void main() {
       final row = ChatContactsRow.fromContactDto(
         ChatContactRowDto(
           userId: 'user_2',
-          displayName: '契约同好',
-          avatarUrl: 'media/avatar/user/user_2/v1/profile.png',
-          isFriend: true,
+          displayName: '契约联系人',
+          avatarUrl: 'media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
+          relationState: 'mutual',
         ),
       );
 
       expect(
         row.avatarUrl,
-        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/user/user_2/v1/profile.png',
+        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
       );
     });
 
@@ -45,15 +45,47 @@ void main() {
         id: 'msg_1',
         conversationId: 'conv_1',
         senderId: 'user_2',
-        senderName: '契约同好',
-        senderAvatar: '/media/avatar/user/user_2/v3/profile.png?v=3',
+        senderName: '契约联系人',
+        senderAvatar: '/media/avatar/s/archived-avatar/user/user_2/v3/profile.png?v=3',
         content: '你好',
       ).toDisplayItem(currentUserId: 'user_me');
 
       expect(
         item.senderAvatar,
-        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/user/user_2/v3/profile.png?v=3',
+        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/archived-avatar/user/user_2/v3/profile.png?v=3',
       );
+    });
+
+    test('image message display maps media url to preview image', () {
+      final item = ChatMessageDto(
+        id: 'msg_img',
+        conversationId: 'conv_1',
+        senderId: 'user_2',
+        type: 'image',
+        media: <String, dynamic>{
+          'url': 'https://cdn.example.com/photo.jpg',
+          'thumbnailUrl': 'https://cdn.example.com/thumb.jpg',
+        },
+      ).toDisplayItem(currentUserId: 'user_me');
+
+      expect(item.type, 'image');
+      expect(item.imageUrl, 'https://cdn.example.com/photo.jpg');
+      expect(item.thumbnailUrl, 'https://cdn.example.com/thumb.jpg');
+    });
+
+    test('image message display falls back to image url when thumbnail missing', () {
+      final item = ChatMessageDto(
+        id: 'msg_img_fallback',
+        conversationId: 'conv_1',
+        senderId: 'user_2',
+        type: 'image',
+        media: <String, dynamic>{
+          'url': 'https://cdn.example.com/photo2.jpg',
+        },
+      ).toDisplayItem(currentUserId: 'user_me');
+
+      expect(item.imageUrl, 'https://cdn.example.com/photo2.jpg');
+      expect(item.thumbnailUrl, 'https://cdn.example.com/photo2.jpg');
     });
   });
 }

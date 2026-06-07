@@ -45,19 +45,21 @@
 | F21 | 图片评论 | 评论可附带图片附件，复用媒体上传与审核链路 | 小红书 |
 | F22 | 评论输入面板 | 支持 emoji、图片、@，键盘态输入保留原内容上下文 | 小红书 |
 
-### 2.2 入口矩阵
+### 2.2 入口自检矩阵
 
-| 入口 | 位置 | 目标行为 |
-|------|------|----------|
-| E1 | 发现页·微趣 Feed（ActionRow 评论按钮） | 打开评论面板 → 加载评论 → 可提交/回复/展开/赞踩/删除 |
-| E2 | 发现页·作品沉浸（EngagementBar 评论按钮） | 上压分屏评论，关闭后恢复沉浸式浏览 |
-| E3 | 发现页·微趣评论数文字点击 | 同 E1 |
-| E4 | 图片沉浸查看器（Toolbar/底栏评论按钮） | 上压分屏评论，保留当前图片索引 |
-| E5 | 视频沉浸查看器（Toolbar/底栏评论按钮） | 上压分屏评论，保留播放上下文 |
-| E6 | MediaPostCard（评论按钮） | 打开评论面板或跳转详情评论锚点 |
-| E7 | 文章平铺详情页（BottomBar 评论按钮） | 滚动定位到正文后的内联评论区，不打开弹窗 |
-| E8 | 文章翻页阅读 | 上压分屏评论，不触碰 pageflip 几何链路 |
-| E9 | 个人主页 | "我的评论"/"收到的评论"两个入口，可跳回原内容并定位评论 |
+所有入口不得只验“能打开评论”，必须验同一套闭环：首屏加载、发起评论、发起回复、展开回复、评论赞踩互斥、关闭/返回后重入状态、评论计数最终一致。
+
+| 入口 | 代码入口 | 浏览形态 | 目标行为 | 自检项 |
+|------|----------|----------|----------|--------|
+| E1 发现页·微趣 Feed ActionRow | `home_multi_form_feed.dart` / `discovery_page.dart` | Feed 弹层 | 打开评论面板，保留 Feed 滚动位置 | 评论/回复/展开/赞踩/删除权限态；游客登录续接；关闭后 Feed 不跳位 |
+| E2 发现页·作品沉浸 EngagementBar | `works_immersive_viewer.dart` | 内容上压分屏 | 当前作品上压，评论区在下方，关闭后恢复沉浸浏览 | 图片/视频/文章内容上下文保留；评论/回复/展开/赞踩；计数同步 |
+| E3 发现页·微趣评论数文字 | `home_multi_form_feed.dart` / `media_post_card.dart` | Feed 弹层或详情锚点 | 与 E1 使用同一评论能力，不维护第二套入口逻辑 | 评论数、入口文案、打开目标一致；重复点击不产生多层弹窗 |
+| E4 图片沉浸查看器 | `immersive_image_viewer.dart` | 内容上压分屏 | 保留当前 post 与图片索引，上半区展示图片上下文 | 关闭后图片索引不丢；评论/回复/展开/赞踩；图片评论附件回显 |
+| E5 视频沉浸查看器 | `immersive_video_viewer.dart` | 内容上压分屏 | 保留当前 post 与视频上下文，上半区展示视频内容 | 关闭后视频页不丢；评论/回复/展开/赞踩；弱网提交保留草稿 |
+| E6 MediaPostCard 评论按钮 | `media_post_card.dart` | Feed 弹层或详情锚点 | 从卡片进入同一 CommentThread，不复制评论状态 | postId、commentCount、viewerReaction 与详情/沉浸一致 |
+| E7 平铺文章详情 BottomBar | `article_detail_page.dart` | 正文后内联 section | 点击评论入口滚动到正文后的 `InlineArticleCommentSection`，不打开弹窗 | 可滑回正文；内联首屏、排序、回复展开、赞踩、输入能力完整 |
+| E8 文章翻页阅读 | `works_immersive_viewer.dart` + article reader host | 内容上压分屏 | 评论层只作为宿主 chrome，不进入 pageflip geometry/paint 链路 | pageflip 当前页保持；关闭恢复；评论/回复/展开/赞踩；不得改动 BACK 几何真相源 |
+| E9 个人主页评论 | `profile_comments_page.dart` | 评论列表跳转原内容 | “我的评论”/“收到的评论”可回原内容并定位评论 | 原内容 postId、commentId、reply target 正确；收到评论可继续回复 |
 
 ### 2.3 扩展功能
 
@@ -294,10 +296,10 @@ TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
 |------|------|------|
 | fields.yaml | `Comment.replyCount`、`dislikeCount`、`viewerReaction`、`attachments`、`mentions`、`replyPreview`、`replyNextCursor` | 回复折叠、赞踩、附件与 @ 所需 |
 | service.yaml | `ListCommentReplies`、`ReactToComment` | 回复独立分页与赞踩统一入口 |
-| service.yaml | 保留 `LikeComment` / `UnlikeComment` 端点 | 兼容旧客户端，薄包装到 `ReactToComment` |
+| service.yaml | 仅保留 `ReactToComment` 端点 | 评论反应统一为 like/dislike/none 三态 |
 | service.yaml | `ListCommentsByAuthor` 端点 | 个人主页"我发出的评论" |
 | service.yaml | `ListCommentsForPostAuthor` 端点 | 个人主页"我收到的评论" |
-| events.yaml | `CommentLiked` 事件 | 评论点赞事件 |
+| events.yaml | `CommentReacted` 事件 | 评论赞踩三态事件 |
 | events.yaml | `CommentModerated` 事件 | 审核结果回调 |
 | storage.yaml | `idx_comments_hot` 索引 | (postId, likeCount DESC, createdAt DESC) |
 | storage.yaml | 评论域缓存 key 定义 | 热评/最新/回复/点赞缓存 |

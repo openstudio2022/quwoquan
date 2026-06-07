@@ -3,7 +3,7 @@
 用户诉求：中间过程文件太多、要精简；把每次「给 agent 的输入」与「最终结果」结构化记录，
 原始数据源与参考补全的证据源一一登记，并区分中间过程与最终结果。
 
-每个 post 落一份 provenance.json（取代分散的 produce_trace.json），只保留发布追责必需字段：
+每个 post 在 `5.review/provenance.json` 落一份追责快照（取代分散的 produce_trace.json），只保留发布追责必需字段：
 - final           ：最终交付结果摘要（generator/model/style/opening/digest/entities）。
 - agentInput      ：本次给会话 agent 的写作契约与 prompt 路径。
 - originalSources ：原始数据源（source 路径 + url）。
@@ -17,10 +17,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
+from _common.article_package import compute_document_sha256
 from _common.io import read_json
 
 PROVENANCE_SCHEMA = "quwoquan_data.provenance"
-PROVENANCE_FILE = "provenance.json"
+PROVENANCE_FILE = "5.review/provenance.json"
 
 
 def _original_sources(compose_payload: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -58,12 +59,12 @@ def build_provenance(
             "model": meta.get("model") or cp.get("generatorModel"),
             "styleFamily": meta.get("styleFamily") or wp.get("styleFamily"),
             "openingStrategy": meta.get("openingStrategy"),
-            "articleDigest": manifest.get("articleMarkdownDigest"),
+            "articleDigest": cp.get("articleMarkdownDigest") or manifest.get("articleMarkdownDigest"),
             "entityRefs": list(manifest.get("entityRefs") or []),
         },
         "agentInput": {
-            "writingPack": f"drafts/{ref}/writing_pack.json",
-            "prompt": f"drafts/{ref}/prompt.md",
+            "writingPack": f"3.compose/writing_pack.json",
+            "prompt": f"4.draft/prompt.md",
             "title": wp.get("title"),
             "styleFamily": wp.get("styleFamily"),
         },
@@ -89,8 +90,13 @@ def provenance_issues(post_dir: Path, manifest: Mapping[str, Any]) -> list[str]:
     if data.get("schemaVersion") != PROVENANCE_SCHEMA:
         issues.append(f"{post_dir}: provenance.schemaVersion invalid")
     final = data.get("final") or {}
-    if final.get("articleDigest") != manifest.get("articleMarkdownDigest"):
-        issues.append(f"{post_dir}: provenance.final.articleDigest != manifest articleMarkdownDigest")
+    expected_digest = manifest.get("articleMarkdownDigest")
+    if not expected_digest:
+        article_path = post_dir / "article.md"
+        if article_path.is_file():
+            expected_digest = compute_document_sha256(article_path.read_text(encoding="utf-8"))
+    if final.get("articleDigest") != expected_digest:
+        issues.append(f"{post_dir}: provenance.final.articleDigest != article.md digest")
     if final.get("generator") != "agent":
         issues.append(f"{post_dir}: provenance.final.generator must be 'agent'")
     if not data.get("agentInput"):
@@ -106,15 +112,9 @@ def provenance_issues(post_dir: Path, manifest: Mapping[str, Any]) -> list[str]:
     return issues
 
 
-def provenance_completeness_issues(post_dir: Path, manifest: Mapping[str, Any]) -> list[str]:
-    """兼容旧测试入口；完整性门与发布 provenance 强制门同源。"""
-    return provenance_issues(post_dir, manifest)
-
-
 __all__ = [
     "PROVENANCE_SCHEMA",
     "PROVENANCE_FILE",
     "build_provenance",
-    "provenance_completeness_issues",
     "provenance_issues",
 ]

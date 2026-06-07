@@ -35,7 +35,7 @@ def load_source_catalog() -> dict[str, Any]:
 def _category_index() -> tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str | None], ...]]:
     """返回 (examplePlatform_token_lower → categoryId, alias_lower → categoryId|None)。
 
-    用 tuple 形态以兼容 lru_cache（dict 不可哈希）。
+    用 tuple 形态配合 lru_cache（dict 不可哈希）。
     """
     catalog = load_source_catalog()
     token_to_cat: dict[str, str] = {}
@@ -135,6 +135,30 @@ def coverage_issues(
     return issues
 
 
+# 受控类目：默认禁止 weather_* 作为独立普通来源；天气作为百科/官方/攻略来源中的事实片段。
+_WEATHER_PREFIXES = ("weather", "天气", "气候")
+_WEATHER_ALLOWED_CATEGORY = "weather_official"
+
+
+def source_unit_category_issues(source_id: str, source_category: str = "") -> list[str]:
+    """来源类目门：阻断无类别的 weather_* 这类散来源目录。
+
+    天气、海拔、温差、紫外线应作为百科/官方/攻略来源中的事实片段出现，不单独立目录；
+    仅当 sourceKind=weather_official（明确的气候专题）才允许独立天气来源。
+    """
+    sid = str(source_id or "").strip().lower()
+    cat = str(source_category or "").strip().lower()
+    issues: list[str] = []
+    if any(sid.startswith(p) for p in _WEATHER_PREFIXES):
+        if cat != _WEATHER_ALLOWED_CATEGORY:
+            issues.append(
+                f"source '{source_id}' 天气类来源禁止作为独立普通来源；"
+                f"天气应作为百科/官方/攻略来源内的事实片段，"
+                f"如确需气候专题须 sourceKind={_WEATHER_ALLOWED_CATEGORY}"
+            )
+    return issues
+
+
 def source_plan_guidance(vertical: str = "travel") -> dict[str, Any]:
     """给 agent 的 source_plan 引导：按类别全面采源（「全」），platform 取自类别 examplePlatforms 便于归类。"""
     catalog = load_source_catalog()
@@ -171,5 +195,6 @@ __all__ = [
     "vertical_from_task_id",
     "source_category_coverage",
     "coverage_issues",
+    "source_unit_category_issues",
     "source_plan_guidance",
 ]

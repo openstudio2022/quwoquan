@@ -34,11 +34,12 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 > **Human-in-loop + 发布门**：review 产出每图/事实/文章的 agent 判定+打分写账本（`produce/review/ledger/{ref}.json`）；
 > `annotate` 下人判定；`promote`/`ship` 据账本过滤（discard 图剔除、无主页实体过滤、fix 项跳过）。详见
 > [`docs/content_pipeline_spec.md`](docs/content_pipeline_spec.md)。
+> 目录与资产证据链唯一真相源见 [`docs/pipeline_directory_layout_spec.md`](docs/pipeline_directory_layout_spec.md)。
 > **一键发布到运行库**：`publish/` 单一主线（prod 全量），`ship` 按 `deploy/shared/content_sampling_manifest.yaml`
 > 确定性采样出 `publish/sample_bundles/{env}.json`；服务侧
 > `quwoquan_service/services/content-service/cmd/import` 消费它把 posts/entities 幂等灌入 mongo。
 
-> **正文只能由会话模型创作**：`compose` 已删除全部脚本拼正文。compose-brief 产出写作契约后，由 Agent 按 `prompt.md` 创作正文写回 `produce/<task>/<batch>/drafts/<ref>.article.md`（`generator=agent`），再 review。
+> **正文只能由会话模型创作**：`compose` 已删除全部脚本拼正文。compose-brief 产出写作契约后，由 Agent 按 `prompt.md` 创作正文写回 `batches/<batch>/posts/{contentType}/{angle}/{title}/{seq}/4.draft/draft.article.md`（`generator=agent`），再 review。
 > **三道真实性门**（review + verify 强制）：generator 出处门、模板指纹门、事实可回溯门。
 
 **硬约束**：新能力 = `<command>/handler.py`（`register_parser` + `handle_*`）+ 可选 `gate.py`，复用逻辑沉到 `_common/`；`SKILL.md` 只暴露 CLI；禁止在 `scripts/**` 新增可直跑（`__main__`）业务入口（旧脚本只能薄壳委托）。门禁：`python3 quwoquan_data/scripts/verify/verify_cli_first.py`（基线 `cli_first_allowlist.txt`）+ `bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh`。
@@ -343,7 +344,7 @@ Topic/旅行/住宿/               → 话题角度（旅行中怎么讲住宿�
 | `schema/tag/tag_ref.schema.json`     | tagRef 字符串格式                      |
 
 
-### 语义验证规则（verify_tag_tree.py R1-R12）
+### 语义验证规则（scripts/verify/verify_tag_tree.py R1-R12）
 
 
 | 规则  | 检查内容                                                     | 级别 |
@@ -396,10 +397,10 @@ Topic/旅行/住宿/               → 话题角度（旅行中怎么讲住宿�
 更完整的步骤和语义边界说明见 `docs/backfill_and_index_rebuild.md`。
 
 ```bash
-python3 scripts/build_publish_lookup_indexes.py
+python3 scripts/publish_ops/build_publish_lookup_indexes.py
 # gate_e2e.py 已按 CLI-first 重构拆分到各命令 gate.py + 统一入口：
 bash scripts/verify/verify_quwoquan_data.sh
-python3 scripts/verify_campus_taxonomy.py
+python3 verticals/campus/verify/verify_campus_taxonomy.py
 ```
 
 
@@ -410,20 +411,20 @@ python3 scripts/verify_campus_taxonomy.py
 
 | 脚本                           | 功能                       |
 | ---------------------------- | ------------------------ |
-| `bootstrap_tags.py`          | 生成四分组完整标签树（31 垂类 + 4 结构维度） |
-| `bootstrap_admin_regions.py` | 生成行政区标签（数据源：pca.json，中国 34 省 337 市 3056 区县 + 泰国 + 欧洲） |
-| `bootstrap_geo_landmarks.py` | 生成地形地貌科学分类标签             |
-| `bootstrap_event_topics.py`  | 生成事件 / 话题标签             |
-| `bootstrap_school_entities.py` | 从 seed catalog 批量生成学校实体三件套（全国高校 + 北京上海中学/幼儿园） |
-| `bootstrap_school_posts.py`  | 分层生成学校 Posts（全量索引帖 + 重点深内容） |
-| `verify_tag_tree.py`         | R1-R12 正交性/完整性/命名/容量验证   |
-| `verify_campus_taxonomy.py`  | C1-C10 校园标签专项正交门禁        |
-| `verify_school_catalog_coverage.py` | S1-S6 学校数据源覆盖率验证    |
-| `verify_school_entities.py`  | E1-E7 学校实体完整性验证          |
-| `verify_school_posts.py`     | P1-P4 学校 Posts 完整性验证     |
-| `build_publish_lookup_indexes.py` | 基于 publish/v1 实体与 posts 生成 lookup 索引 |
-| `tag_stats.py`               | 按四分组统计标签数量、深度、叶枝比        |
-| `tag_graph.py`               | 基于 tagRef 共现度生成关系图谱      |
+| `scripts/bootstrap/taxonomy/bootstrap_tags.py`          | 生成四分组完整标签树（31 垂类 + 4 结构维度） |
+| `scripts/bootstrap/taxonomy/bootstrap_admin_regions.py` | 生成行政区标签（数据源：pca.json，中国 34 省 337 市 3056 区县 + 泰国 + 欧洲） |
+| `scripts/bootstrap/taxonomy/bootstrap_geo_landmarks.py` | 生成地形地貌科学分类标签             |
+| `scripts/bootstrap/taxonomy/bootstrap_event_topics.py`  | 生成事件 / 话题标签             |
+| `verticals/campus/scripts/bootstrap_school_entities.py` | 从 seed catalog 批量生成学校实体三件套（全国高校 + 北京上海中学/幼儿园） |
+| `verticals/campus/scripts/bootstrap_school_posts.py`  | 分层生成学校 Posts（全量索引帖 + 重点深内容） |
+| `scripts/verify/verify_tag_tree.py`         | R1-R12 正交性/完整性/命名/容量验证   |
+| `verticals/campus/verify/verify_campus_taxonomy.py`  | C1-C10 校园标签专项正交门禁        |
+| `verticals/campus/verify/verify_school_catalog_coverage.py` | S1-S6 学校数据源覆盖率验证    |
+| `verticals/campus/verify/verify_school_entities.py`  | E1-E7 学校实体完整性验证          |
+| `verticals/campus/verify/verify_school_posts.py`     | P1-P4 学校 Posts 完整性验证     |
+| `scripts/publish_ops/build_publish_lookup_indexes.py` | 基于 publish/v1 实体与 posts 生成 lookup 索引 |
+| `scripts/tags/tag_stats.py`               | 按四分组统计标签数量、深度、叶枝比        |
+| `scripts/tags/tag_graph.py`               | 基于 tagRef 共现度生成关系图谱      |
 | `verify/verify_quwoquan_data.sh` | G1-G29 端到端门禁统一入口（原 `gate_e2e.py` CLI-first 拆分） |
 
 
@@ -437,16 +438,16 @@ python3 scripts/verify_campus_taxonomy.py
 cd quwoquan_data
 
 # 生成标签树
-python3 scripts/bootstrap_tags.py
-python3 scripts/bootstrap_admin_regions.py
-python3 scripts/bootstrap_geo_landmarks.py
-python3 scripts/bootstrap_event_topics.py
+python3 scripts/bootstrap/taxonomy/bootstrap_tags.py
+python3 scripts/bootstrap/taxonomy/bootstrap_admin_regions.py
+python3 scripts/bootstrap/taxonomy/bootstrap_geo_landmarks.py
+python3 scripts/bootstrap/taxonomy/bootstrap_event_topics.py
 
 # 验证标签体系（R1-R12, 目标: 0 错误）
-python3 scripts/verify_tag_tree.py
+python3 scripts/verify/verify_tag_tree.py
 
 # 统计报告
-python3 scripts/tag_stats.py
+python3 scripts/tags/tag_stats.py
 ```
 
 ## 设计基准

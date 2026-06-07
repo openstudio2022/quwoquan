@@ -17,6 +17,17 @@ sample bundle 是端云桥契约：服务侧 content/entity importer 消费它�
 """
 from __future__ import annotations
 
+
+import sys
+from pathlib import Path
+
+DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
 import argparse
 import json
 import os
@@ -45,7 +56,7 @@ from ship.release_contract import (
 
 
 def _promote(args: argparse.Namespace) -> int:
-    from promote_to_publish import (
+    from publish_ops.promote_to_publish import (
         promote_release,
         promote_task_batch,
         promote_task_entities,
@@ -62,7 +73,7 @@ def _promote(args: argparse.Namespace) -> int:
 
 
 def _rebuild_index() -> None:
-    from build_publish_lookup_indexes import build_publish_lookup_indexes
+    from publish_ops.build_publish_lookup_indexes import build_publish_lookup_indexes
 
     counts = build_publish_lookup_indexes()
     print(f"[ship] indexes: entities={counts['entities']} posts={counts['posts']}")

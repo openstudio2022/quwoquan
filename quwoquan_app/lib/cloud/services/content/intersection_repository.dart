@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_api_query_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
@@ -22,17 +23,26 @@ abstract class IntersectionRepository {
 
   Future<List<IntersectionReason>> listMyIntersections({
     String? dimension,
-    int limit = 50,
+    int limit = CloudApiQueryDefaults.intersectionListLimit,
   });
 
   Future<void> markIntersectionsVisited({String? dimension});
 
   Future<List<IntersectionReason>> getFeedIntersections({
     String? channel,
-    int limit = 4,
+    int limit = CloudApiQueryDefaults.intersectionFeedLimit,
   });
 
   Future<void> reportExposure({required List<String> objectIds});
+
+  /// 对象页「我与该对象」的关系类交集（共同关注/联系人来过/关注的人加入等，§2 闭集）。
+  /// 与 tag-service 标签交集在 provider 层合并；维度/证据组 kind 为开放字符串。
+  /// objectType: user | circle | entity（开放字符串，未知类型返回空）。
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = CloudApiQueryDefaults.objectIntersectionsLimit,
+  });
 }
 
 /// Mock 实现：本地 canonical 交集数据，不发 HTTP。
@@ -73,6 +83,7 @@ class MockIntersectionRepository implements IntersectionRepository {
           label: _dimensionLabels[dimension] ?? dimension,
           count: items.length,
           newCount: newCount,
+          briefText: _briefTextFor(dimension, items, newCount),
         ),
       );
     });
@@ -92,7 +103,7 @@ class MockIntersectionRepository implements IntersectionRepository {
   @override
   Future<List<IntersectionReason>> listMyIntersections({
     String? dimension,
-    int limit = 50,
+    int limit = CloudApiQueryDefaults.intersectionListLimit,
   }) async {
     final wanted = (dimension ?? '').trim();
     final items = _inboxReasons
@@ -125,7 +136,7 @@ class MockIntersectionRepository implements IntersectionRepository {
   @override
   Future<List<IntersectionReason>> getFeedIntersections({
     String? channel,
-    int limit = 4,
+    int limit = CloudApiQueryDefaults.intersectionFeedLimit,
   }) async {
     final wanted = (channel ?? '').trim();
     final pool = _channelReasons[wanted] ?? _channelReasons['recommend']!;
@@ -145,6 +156,239 @@ class MockIntersectionRepository implements IntersectionRepository {
     for (final id in objectIds) {
       if (id.trim().isEmpty || _exposed.contains(id)) continue;
       _exposed.add(id);
+    }
+  }
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = CloudApiQueryDefaults.objectIntersectionsLimit,
+  }) async {
+    final groups = _objectEvidenceGroups(objectType);
+    if (groups.isEmpty) return const <IntersectionReason>[];
+    final isRecommended = groups.every((g) => g.pointClass == 'recommended');
+    final reason = _withPoints(
+      IntersectionReason(
+        dimension: groups.first.dimension,
+        intersectionId: 'objix_${objectType}_$objectId',
+        intersectionClass: isRecommended ? 'affinity' : 'fact',
+        relationKind: _relationKindForObjectType(objectType),
+        relationObjectId: objectId,
+        actionType: 'view_object',
+        actionTargetId: objectId,
+        source: 'relationship',
+        connectionSummary: _connectionSummaryFor(objectType, groups),
+      ),
+      groups
+          .take(limit)
+          .map(
+            (g) => _point(
+              id: 'objix_${objectId}_${g.kind}',
+              pointClass: g.pointClass,
+              dimension: g.dimension,
+              label: g.label,
+              displayText: g.label,
+              sourceRef: g.kind,
+              count: g.count,
+              sampleText: g.sampleText,
+              sampleAvatarUrls: g.avatars,
+            ),
+          )
+          .toList(growable: false),
+    );
+    return <IntersectionReason>[reason];
+  }
+
+  String _relationKindForObjectType(String objectType) {
+    switch (objectType) {
+      case 'circle':
+        return 'circle';
+      case 'entity':
+      case 'homepage':
+        return 'place';
+      default:
+        return 'person';
+    }
+  }
+
+  /// 云侧实例化连接说明（mock 模拟云端下发，端不在 UI 拼装）。
+  String _connectionSummaryFor(
+    String objectType,
+    List<_EvidenceSeed> groups,
+  ) {
+    final samples = groups
+        .where((g) => g.sampleText.trim().isNotEmpty)
+        .take(2)
+        .map((g) => g.sampleText.trim())
+        .toList(growable: false);
+    if (samples.isEmpty) return '';
+    final joined = samples.join('、');
+    return '$joined 把你们连在一起';
+  }
+
+  /// §2 证据组闭集 + contact/mutual/following 三层关系分层（按对象类型）。
+  /// 维度为开放字符串，kind 同 §9.7 映射总表；展示真相源为证据组。
+  List<_EvidenceSeed> _objectEvidenceGroups(String objectType) {
+    switch (objectType) {
+      case 'circle':
+        return const <_EvidenceSeed>[
+          _EvidenceSeed(
+            kind: 'friendInCircle',
+            dimension: 'relationship',
+            label: '关注的人在这',
+            count: 6,
+            sampleText: '周屿',
+            avatars: <String>[
+              'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
+              'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
+            ],
+          ),
+          _EvidenceSeed(
+            kind: 'contactInCircle',
+            dimension: 'relationship',
+            label: '联系人在这',
+            count: 3,
+            sampleText: '老同学 李航',
+            avatars: <String>[
+              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+            ],
+          ),
+          _EvidenceSeed(
+            kind: 'friendActiveHere',
+            dimension: 'relationship',
+            label: '关注的人常来',
+            count: 3,
+            sampleText: '林清越',
+            avatars: <String>[
+              'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+            ],
+          ),
+          _EvidenceSeed(
+            kind: 'sharedTagSample',
+            dimension: 'interest',
+            label: '都聊摄影',
+            count: 0,
+            sampleText: '',
+          ),
+          _EvidenceSeed(
+            kind: 'affinity',
+            dimension: 'interest',
+            label: '你可能感兴趣',
+            count: 0,
+            sampleText: '',
+            pointClass: 'recommended',
+          ),
+        ];
+      case 'entity':
+      case 'homepage':
+        return const <_EvidenceSeed>[
+          _EvidenceSeed(
+            kind: 'friendVisited',
+            dimension: 'location',
+            label: '关注的人来过',
+            count: 9,
+            sampleText: '周屿',
+            avatars: <String>[
+              'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
+              'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
+              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+            ],
+          ),
+          _EvidenceSeed(
+            kind: 'contactVisited',
+            dimension: 'location',
+            label: '联系人来过',
+            count: 4,
+            sampleText: '同事 苏黎',
+            avatars: <String>[
+              'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+            ],
+          ),
+          _EvidenceSeed(
+            kind: 'friendJoinedRelatedCircle',
+            dimension: 'relationship',
+            label: '关注的人加入',
+            count: 6,
+            sampleText: '校友摄影圈',
+            avatars: <String>[
+              'https://images.unsplash.com/photo-1499952127939-9bbf5af6c51c?w=100',
+            ],
+          ),
+          _EvidenceSeed(
+            kind: 'youInteracted',
+            dimension: 'location',
+            label: '你来过',
+            count: 3,
+            sampleText: '',
+          ),
+          _EvidenceSeed(
+            kind: 'affinity',
+            dimension: 'interest',
+            label: '可能想去',
+            count: 0,
+            sampleText: '',
+            pointClass: 'recommended',
+          ),
+        ];
+      case 'user':
+        return const <_EvidenceSeed>[
+          _EvidenceSeed(
+            kind: 'mutualFriend',
+            dimension: 'relationship',
+            label: '共同关注',
+            count: 4,
+            sampleText: '林清越',
+            avatars: <String>[
+              'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+              'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
+            ],
+          ),
+          _EvidenceSeed(
+            kind: 'commonContact',
+            dimension: 'relationship',
+            label: '共同联系人',
+            count: 2,
+            sampleText: '老同学 李航',
+            avatars: <String>[
+              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+            ],
+          ),
+          _EvidenceSeed(
+            kind: 'commonFollow',
+            dimension: 'relationship',
+            label: '共同关注',
+            count: 6,
+            sampleText: '摄影师 陈漫',
+            avatars: <String>[
+              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
+            ],
+          ),
+          _EvidenceSeed(
+            kind: 'coLiked',
+            dimension: 'content',
+            label: '都赞过',
+            count: 3,
+            sampleText: '故宫夜景',
+          ),
+          _EvidenceSeed(
+            kind: 'sharedTagSample',
+            dimension: 'interest',
+            label: '都爱摄影',
+            count: 0,
+            sampleText: '',
+          ),
+          _EvidenceSeed(
+            kind: 'affinity',
+            dimension: 'interest',
+            label: '可能合得来',
+            count: 0,
+            sampleText: '',
+            pointClass: 'recommended',
+          ),
+        ];
+      default:
+        return const <_EvidenceSeed>[];
     }
   }
 
@@ -168,6 +412,33 @@ class MockIntersectionRepository implements IntersectionRepository {
   static String _isoMinusHours(int hours) =>
       DateTime.now().toUtc().subtract(Duration(hours: hours)).toIso8601String();
 
+  /// 模拟云侧实例化动态简报句（mock 内模拟云端下发，端不在 UI 拼装）。
+  static String _briefTextFor(
+    String dimension,
+    List<IntersectionReason> items,
+    int newCount,
+  ) {
+    if (items.isEmpty) return '';
+    final sample = items.first;
+    final name = sample.displayName.trim();
+    final n = newCount > 0 ? newCount : sample.sharedCount;
+    final who = name.isEmpty ? '有人' : name;
+    switch (dimension) {
+      case 'relationship':
+        return newCount > 0 ? '$who 等 $n 位与你新增了关系' : '你和 $who 等 $n 人相识';
+      case 'identity':
+        return '$who 等 $n 位同校同行的人';
+      case 'content':
+        return '你和 $n 人都在看「$who」';
+      case 'location':
+        return '$n 位与你去过「$who」';
+      case 'interest':
+        return '为你推荐 $n 个可能合得来的对象';
+      default:
+        return name.isEmpty ? '' : '$who 等 $n 项与你有关';
+    }
+  }
+
   static IntersectionPoint _point({
     required String id,
     required String pointClass,
@@ -175,6 +446,9 @@ class MockIntersectionRepository implements IntersectionRepository {
     required String label,
     required String displayText,
     String sourceRef = '',
+    int count = 0,
+    String sampleText = '',
+    List<String> sampleAvatarUrls = const <String>[],
   }) {
     return IntersectionPoint(
       pointId: id,
@@ -184,6 +458,9 @@ class MockIntersectionRepository implements IntersectionRepository {
       displayText: displayText,
       sourceRef: sourceRef,
       visibility: 'public',
+      count: count,
+      sampleText: sampleText,
+      sampleAvatarUrls: sampleAvatarUrls,
     );
   }
 
@@ -230,17 +507,24 @@ class MockIntersectionRepository implements IntersectionRepository {
     final pointClass = reason.intersectionClass == 'affinity'
         ? 'recommended'
         : 'fact';
-    final displayText = reason.displayText.trim().isNotEmpty
-        ? reason.displayText
-        : reason.label;
+    // 证据组短句名词优先 label（如「共同关注」），displayText 仅作回落；
+    // count=sharedCount、sampleText=displayName、头像簇=[avatarUrl] 让交集可感知。
+    final shortLabel = reason.label.trim().isNotEmpty
+        ? reason.label.trim()
+        : reason.displayText.trim();
     return _withPoints(reason, <IntersectionPoint>[
       _point(
         id: '${reason.intersectionId}_point',
         pointClass: pointClass,
         dimension: reason.dimension,
-        label: reason.label,
-        displayText: displayText,
+        label: shortLabel,
+        displayText: shortLabel,
         sourceRef: reason.source,
+        count: reason.sharedCount,
+        sampleText: reason.displayName,
+        sampleAvatarUrls: reason.avatarUrl.trim().isNotEmpty
+            ? <String>[reason.avatarUrl.trim()]
+            : const <String>[],
       ),
     ]);
   }
@@ -258,9 +542,9 @@ class MockIntersectionRepository implements IntersectionRepository {
       dimension: 'relationship',
       intersectionId: 'ix_rel_1',
       intersectionClass: 'fact',
-      label: '共同好友',
+      label: '共同关注',
       displayName: '林清越',
-      displayText: '4 位共同好友',
+      displayText: '4 位共同关注',
       avatarUrl:
           'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
       sharedCount: 4,
@@ -428,7 +712,7 @@ class MockIntersectionRepository implements IntersectionRepository {
         dimension: 'interest',
         intersectionId: 'ix_travel_2',
         intersectionClass: 'affinity',
-        label: '可能同好',
+        label: '兴趣相近',
         displayName: '徒步旅人',
         displayText: '可能喜欢相同路线',
         avatarUrl:
@@ -478,7 +762,7 @@ class RemoteIntersectionRepository implements IntersectionRepository {
   @override
   Future<List<IntersectionReason>> listMyIntersections({
     String? dimension,
-    int limit = 50,
+    int limit = CloudApiQueryDefaults.intersectionListLimit,
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if ((dimension ?? '').trim().isNotEmpty) {
@@ -515,7 +799,7 @@ class RemoteIntersectionRepository implements IntersectionRepository {
   @override
   Future<List<IntersectionReason>> getFeedIntersections({
     String? channel,
-    int limit = 4,
+    int limit = CloudApiQueryDefaults.intersectionFeedLimit,
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if ((channel ?? '').trim().isNotEmpty) {
@@ -548,4 +832,52 @@ class RemoteIntersectionRepository implements IntersectionRepository {
       body: body,
     );
   }
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = CloudApiQueryDefaults.objectIntersectionsLimit,
+  }) async {
+    final query = <String, String>{
+      'objectId': objectId,
+      'objectType': objectType,
+      'limit': '$limit',
+    };
+    final decoded = await _httpClient.getJson(
+      _uri(ContentApiMetadata.getObjectIntersectionsPath, query),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.getObjectIntersections,
+      ),
+    );
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.getObjectIntersections,
+    );
+    return CloudResponseDecoder.mapList(
+      obj,
+      'items',
+    ).map(IntersectionReason.fromMap).toList(growable: false);
+  }
+}
+
+/// 对象页关系证据组 mock 种子（§2 闭集 + 三层关系分层）。
+class _EvidenceSeed {
+  const _EvidenceSeed({
+    required this.kind,
+    required this.dimension,
+    required this.label,
+    required this.count,
+    required this.sampleText,
+    this.avatars = const <String>[],
+    this.pointClass = 'fact',
+  });
+
+  final String kind;
+  final String dimension;
+  final String label;
+  final int count;
+  final String sampleText;
+  final List<String> avatars;
+  final String pointClass;
 }

@@ -9,6 +9,9 @@ class IntersectionPoint {
   final String displayText;
   final String sourceRef;
   final String visibility;
+  final int count;
+  final String sampleText;
+  final List<String> sampleAvatarUrls;
 
   IntersectionPoint({
     this.pointId = '',
@@ -18,6 +21,9 @@ class IntersectionPoint {
     this.displayText = '',
     this.sourceRef = '',
     this.visibility = 'public',
+    this.count = 0,
+    this.sampleText = '',
+    this.sampleAvatarUrls = const <String>[],
   });
 
   factory IntersectionPoint.fromMap(Map<String, dynamic> m) {
@@ -29,6 +35,9 @@ class IntersectionPoint {
       displayText: m['displayText']?.toString() ?? '',
       sourceRef: m['sourceRef']?.toString() ?? '',
       visibility: m['visibility']?.toString() ?? 'public',
+      count: (m['count'] as num?)?.toInt() ?? 0,
+      sampleText: m['sampleText']?.toString() ?? '',
+      sampleAvatarUrls: _parseStringList(m['sampleAvatarUrls']) ?? <String>[],
     );
   }
 
@@ -41,6 +50,9 @@ class IntersectionPoint {
       'displayText': displayText,
       'sourceRef': sourceRef,
       'visibility': visibility,
+      'count': count,
+      'sampleText': sampleText,
+      'sampleAvatarUrls': sampleAvatarUrls,
     };
   }
 
@@ -52,6 +64,9 @@ class IntersectionPoint {
     String? displayText,
     String? sourceRef,
     String? visibility,
+    int? count,
+    String? sampleText,
+    List<String>? sampleAvatarUrls,
   }) {
     return IntersectionPoint(
       pointId: pointId ?? this.pointId,
@@ -61,7 +76,15 @@ class IntersectionPoint {
       displayText: displayText ?? this.displayText,
       sourceRef: sourceRef ?? this.sourceRef,
       visibility: visibility ?? this.visibility,
+      count: count ?? this.count,
+      sampleText: sampleText ?? this.sampleText,
+      sampleAvatarUrls: sampleAvatarUrls ?? this.sampleAvatarUrls,
     );
   }
 }
 
+List<String>? _parseStringList(dynamic v) {
+  if (v == null) return null;
+  if (v is List) return v.map((e) => e?.toString() ?? '').toList();
+  return null;
+}

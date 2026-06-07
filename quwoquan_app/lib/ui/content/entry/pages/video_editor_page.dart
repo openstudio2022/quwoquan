@@ -32,7 +32,6 @@ class VideoEditorResult {
   final int coverTimeMs;
   final bool muted;
 }
-
 /// 本地视频剪辑；持久草稿在父链 `CreateEditorState`（`ContentPublishDraftComposite`）。
 /// 剪辑结果回写草稿后，发布确认页的帖子元数据预览与 `publish_draft_projection_bridge`
 ///（`postReadPreviewBundleFromPublishConfirmSummary` / `PostReadSurfaceId.draftPreview`）同源。
@@ -1065,17 +1064,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     );
     final isDark =
         CupertinoTheme.of(context).brightness == Brightness.dark;
-    if (_pageErrorSemantic != null && !_loading) {
-      return AppPageErrorState(
-        semantic: _pageErrorSemantic!,
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry ||
-              action.type == UiErrorActionType.resubmit) {
-            await _bootstrap();
-          }
-        },
-      );
-    }
+    final showPageError = _pageErrorSemantic != null && !_loading;
     return AppScaffold(
       backgroundColor: background,
       navigationBar: AppNavigationBar(
@@ -1088,53 +1077,64 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
           icon: CupertinoIcons.xmark,
           onPressed: () => Navigator.of(context).pop(),
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: (_loading || _saving) ? null : _saveEditing,
-          child: _saving
-              ? const CupertinoActivityIndicator()
-              : const Text('完成'),
-        ),
+        trailing: showPageError
+            ? null
+            : CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: (_loading || _saving) ? null : _saveEditing,
+                child: _saving
+                    ? const CupertinoActivityIndicator()
+                    : const Text('完成'),
+              ),
       ),
       child: SafeArea(
-        child: _loading
-            ? const Center(child: CupertinoActivityIndicator())
-            : ListView(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  AppSpacing.containerMd,
-                  AppSpacing.containerMd,
-                  AppSpacing.containerLg,
-                ),
-                children: <Widget>[
-                  _buildPreview(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildActionBar(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildPreviewTimelineSection(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildTrimSection(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildCoverSection(),
-                  if (_sectionErrorSemantic != null) ...<Widget>[
-                    SizedBox(height: AppSpacing.interGroupSm),
-                    AppSectionErrorCard(
-                      semantic: _sectionErrorSemantic!,
-                      onAction: (action) async {
-                        if (action.type == UiErrorActionType.retry ||
-                            action.type == UiErrorActionType.resubmit) {
-                          await _loadFrames();
-                        }
-                      },
+        child: showPageError
+            ? AppPageErrorState(
+                semantic: _pageErrorSemantic!,
+                onAction: (action) async {
+                  if (action.type == UiErrorActionType.retry ||
+                      action.type == UiErrorActionType.resubmit) {
+                    await _bootstrap();
+                  }
+                },
+              )
+            : _loading
+                ? const Center(child: CupertinoActivityIndicator())
+                : ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.containerMd,
+                      AppSpacing.containerMd,
+                      AppSpacing.containerMd,
+                      AppSpacing.containerLg,
                     ),
-                  ],
-                ],
-              ),
+                    children: <Widget>[
+                      _buildPreview(),
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      _buildActionBar(),
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      _buildPreviewTimelineSection(),
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      _buildTrimSection(),
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      _buildCoverSection(),
+                      if (_sectionErrorSemantic != null) ...<Widget>[
+                        SizedBox(height: AppSpacing.interGroupSm),
+                        AppSectionErrorCard(
+                          semantic: _sectionErrorSemantic!,
+                          onAction: (action) async {
+                            if (action.type == UiErrorActionType.retry ||
+                                action.type == UiErrorActionType.resubmit) {
+                              await _loadFrames();
+                            }
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
       ),
     );
   }
 }
-
 class _EditorSection extends StatelessWidget {
   const _EditorSection({
     required this.title,

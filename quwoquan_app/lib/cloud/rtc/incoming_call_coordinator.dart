@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/app_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/rtc/callkit_service.dart';
 import 'package:quwoquan_app/cloud/rtc/models/rtc_signal_payloads.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signaling_client.dart';
+import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 final callKitServiceProvider = Provider<CallKitService>((ref) {
@@ -28,6 +31,11 @@ class IncomingCallCoordinator {
 
   StreamSubscription<RtcSignalEvent>? _signalSub;
   StreamSubscription<CallKitAction>? _callKitSub;
+  StreamSubscription<RtcSignalEvent>? _endedSub;
+
+  /// 启动时缓存信令客户端，避免在 [stop]/[dispose] 生命周期内再 `ref.read`
+  /// （Riverpod 禁止在 dispose 回调里读取其它 provider）。
+  RtcSignalingClient? _signaling;
 
   String? _pendingCallId;
   String? _pendingCallType;
@@ -35,6 +43,16 @@ class IncomingCallCoordinator {
   void start(String userId) {
     final signaling = ref.read(rtcSignalingProvider);
     final callKit = ref.read(callKitServiceProvider);
+    final channel = resolveIncomingCallChannel(
+      ref.read(platformCapabilitiesProvider),
+    );
+    _signaling = signaling;
+
+    // 实时通话能力不可用（如初始 ohos / desktop）：不建立来电监听，由入口
+    // 能力位隐藏发起按钮，二者一致降级（R-XP1/R-XP5）。
+    if (channel == IncomingCallChannel.unsupported) {
+      return;
+    }
 
     signaling.connect(userId);
 
@@ -45,22 +63,34 @@ class IncomingCallCoordinator {
       _pendingCallType = ringing.callType;
       final callerName =
           ringing.callerName ?? ringing.initiatorId ?? event.actorId ?? '';
-      () async {
-        final settings = await ref.read(callSettingsRepositoryProvider)
-            .getCallSettings();
-        final initiatorRingtoneId = ringing.initiatorRingtoneId;
-        final ringtoneId = settings.allowCallerRingtoneOverride &&
-                initiatorRingtoneId != null &&
-                initiatorRingtoneId.isNotEmpty
-            ? initiatorRingtoneId
-            : settings.defaultIncomingCallRingtoneId;
-        await callKit.showIncomingCall(
-          callId: event.callId,
-          callerName: callerName,
-          isVideo: _pendingCallType == 'video',
-          ringtoneId: ringtoneId,
-        );
-      }();
+      switch (channel) {
+        case IncomingCallChannel.nativeCallKit:
+          () async {
+            final settings = await ref
+                .read(callSettingsRepositoryProvider)
+                .getCallSettings();
+            final initiatorRingtoneId = ringing.initiatorRingtoneId;
+            final ringtoneId = settings.allowCallerRingtoneOverride &&
+                    initiatorRingtoneId != null &&
+                    initiatorRingtoneId.isNotEmpty
+                ? initiatorRingtoneId
+                : settings.defaultIncomingCallRingtoneId;
+            await callKit.showIncomingCall(
+              callId: event.callId,
+              callerName: callerName,
+              isVideo: _pendingCallType == 'video',
+              ringtoneId: ringtoneId,
+            );
+          }();
+          break;
+        case IncomingCallChannel.webPushInApp:
+        case IncomingCallChannel.inAppOnly:
+          // 无原生来电屏（web/前台或降级）：直接路由到站内来电页响铃。
+          router.push(AppRoutePaths.rtcIncoming(callId: event.callId));
+          break;
+        case IncomingCallChannel.unsupported:
+          break;
+      }
     });
 
     _callKitSub = callKit.actions.listen((action) {
@@ -69,7 +99,7 @@ class IncomingCallCoordinator {
 
       switch (action) {
         case CallKitAction.accept:
-          router.push('/rtc/incoming/$callId');
+          router.push(AppRoutePaths.rtcIncoming(callId: callId));
           break;
         case CallKitAction.decline:
           _pendingCallId = null;
@@ -86,7 +116,7 @@ class IncomingCallCoordinator {
       }
     });
 
-    signaling.callEnded.listen((event) {
+    _endedSub = signaling.callEnded.listen((event) {
       if (event.callId == _pendingCallId) {
         callKit.endCall();
         _pendingCallId = null;
@@ -96,9 +126,15 @@ class IncomingCallCoordinator {
 
   void stop() {
     _signalSub?.cancel();
+    _signalSub = null;
     _callKitSub?.cancel();
-    ref.read(rtcSignalingProvider).disconnect();
+    _callKitSub = null;
+    _endedSub?.cancel();
+    _endedSub = null;
+    _signaling?.disconnect();
+    _signaling = null;
     _pendingCallId = null;
+    _pendingCallType = null;
   }
 
   void dispose() {
@@ -106,17 +142,83 @@ class IncomingCallCoordinator {
   }
 }
 
+/// 登录态 -> 来电协调器目标动作。纯函数，便于在 widget 外做幂等性单测。
+///
+/// - [boundUserId] 当前已绑定用户（空串表示未启动）；
+/// - [nextUserId] 期望绑定用户（登出为空串）。
+///
+/// 返回新的绑定用户与是否需要 stop 旧、start 新，shell 据此唯一地驱动协调器，
+/// 杜绝重复 start（多次来电监听）与漏 stop（登出后仍响铃）。
+IncomingCallSyncDecision resolveIncomingCallSync({
+  required String boundUserId,
+  required String nextUserId,
+}) {
+  if (boundUserId == nextUserId) {
+    return IncomingCallSyncDecision(
+      boundUserId: boundUserId,
+      shouldStop: false,
+      shouldStart: false,
+    );
+  }
+  return IncomingCallSyncDecision(
+    boundUserId: nextUserId,
+    shouldStop: boundUserId.isNotEmpty,
+    shouldStart: nextUserId.isNotEmpty,
+  );
+}
+
+class IncomingCallSyncDecision {
+  const IncomingCallSyncDecision({
+    required this.boundUserId,
+    required this.shouldStop,
+    required this.shouldStart,
+  });
+
+  final String boundUserId;
+  final bool shouldStop;
+  final bool shouldStart;
+}
+
+/// 来电唤醒通道：由平台能力位单一派生，决定来电如何呈现。
+enum IncomingCallChannel {
+  /// 原生来电屏（iOS CallKit / Android 全屏意图）。
+  nativeCallKit,
+
+  /// Web Push + 站内弹窗（后台通知点击进会，前台站内响铃）。
+  webPushInApp,
+
+  /// 仅站内弹窗（有 RTC 但无原生来电屏，也无 Web Push 的降级）。
+  inAppOnly,
+
+  /// 不支持实时通话，无来电（入口同步隐藏）。
+  unsupported,
+}
+
+/// 依据平台能力位派生来电唤醒通道（纯函数，便于平台矩阵单测）。
+///
+/// 业务只读能力位（[PlatformCapabilities.realtimeCommunication] /
+/// [PlatformCapabilities.incomingCallUi] / [PlatformCapabilities.webPushIncomingCall]），
+/// 不做裸平台判断（R-XP1/R-XP2）。
+IncomingCallChannel resolveIncomingCallChannel(PlatformCapabilities caps) {
+  if (!caps.realtimeCommunication) {
+    return IncomingCallChannel.unsupported;
+  }
+  if (caps.incomingCallUi) {
+    return IncomingCallChannel.nativeCallKit;
+  }
+  if (caps.webPushIncomingCall) {
+    return IncomingCallChannel.webPushInApp;
+  }
+  return IncomingCallChannel.inAppOnly;
+}
+
 final incomingCallCoordinatorProvider = Provider<IncomingCallCoordinator>((
   ref,
 ) {
   final coordinator = IncomingCallCoordinator(
     ref: ref,
-    router: ref.read(goRouterProvider),
+    router: ref.read(appRouterProvider),
   );
   ref.onDispose(() => coordinator.dispose());
   return coordinator;
-});
-
-final goRouterProvider = Provider<GoRouter>((ref) {
-  throw UnimplementedError('goRouterProvider must be overridden');
 });

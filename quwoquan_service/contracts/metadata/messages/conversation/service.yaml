@@ -192,6 +192,7 @@ api_routes:
     path: /v1/chat/contacts
     operation: ListContacts
     description: 联系人列表
+    response_entity: ChatContactListRow
 
   - method: GET
     path: /v1/chat/contacts/search
@@ -343,7 +344,7 @@ contract_test:
             - "db.conversation_members.CountDocuments → 999 (unchanged)"
 
   coverage_requirements:
-    - all conversation types (direct/group/encrypted, with legacy circle compatibility) covered
+    - all conversation types (direct/group/encrypted, with circle input merged into group) covered
     - circleGroupId compatibility link covered
     - message seq monotonicity verified under concurrent sends
     - clientMsgId dedup verified

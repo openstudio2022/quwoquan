@@ -37,6 +37,7 @@ class ChatInputAttachment {
     required this.id,
     required this.type,
     required this.name,
+    this.localPath,
     this.subtitle,
     this.thumbnailProvider,
   });
@@ -44,6 +45,7 @@ class ChatInputAttachment {
   final String id;
   final ChatInputAttachmentType type;
   final String name;
+  final String? localPath;
   final String? subtitle;
   final ImageProvider? thumbnailProvider;
 }
@@ -52,14 +54,10 @@ class ChatInputSubmitPayload {
   const ChatInputSubmitPayload({
     required this.text,
     required this.attachments,
-    required this.isVoiceMessage,
-    this.voiceDuration = Duration.zero,
   });
 
   final String text;
   final List<ChatInputAttachment> attachments;
-  final bool isVoiceMessage;
-  final Duration voiceDuration;
 }
 
 enum ChatInputPanelMode { none, emoji, more }
@@ -129,12 +127,13 @@ class CustomizableChatInputBar extends StatefulWidget {
     this.onStartRecord,
     this.onStopRecord,
     this.onCancelRecord,
-    this.onVoiceAsrTransform,
+    this.voiceAmplitudeStream,
     this.onAttachmentChanged,
     this.onToast,
     this.showAddPanel = true,
     this.showEmojiButton = false,
     this.showXiaoquMentionButton = false,
+    this.enableVoiceInput = false,
     this.enableExpandedEditor = true,
     this.sendButtonKey,
     this.leftBuilder,
@@ -157,13 +156,14 @@ class CustomizableChatInputBar extends StatefulWidget {
   final Future<bool> Function()? onStartRecord;
   final Future<void> Function(Duration duration)? onStopRecord;
   final Future<void> Function()? onCancelRecord;
-  final Future<String?> Function(Duration duration)? onVoiceAsrTransform;
+  final Stream<List<double>>? voiceAmplitudeStream;
   final Future<void> Function(ChatInputSubmitPayload payload) onSend;
   final ValueChanged<List<ChatInputAttachment>>? onAttachmentChanged;
   final ValueChanged<String>? onToast;
   final bool showAddPanel;
   final bool showEmojiButton;
   final bool showXiaoquMentionButton;
+  final bool enableVoiceInput;
   final bool enableExpandedEditor;
   final Key? sendButtonKey;
   final ChatInputLeftBuilder? leftBuilder;
@@ -200,9 +200,11 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   DateTime? _recordStartAt;
 
   late final AnimationController _waveController;
-  final List<double> _waveBars = List<double>.filled(24, 0.2);
+  final List<double> _waveBars = List<double>.filled(24, 0.2, growable: true);
   Timer? _waveTicker;
   Timer? _voiceMaxTimer;
+  Timer? _voiceElapsedTimer;
+  StreamSubscription<List<double>>? _voiceAmplitudeSub;
 
   bool get _hasText => _controller.text.trim().isNotEmpty;
   bool get _hasAttachments => _attachments.isNotEmpty;
@@ -287,6 +289,8 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   void dispose() {
     _waveTicker?.cancel();
     _voiceMaxTimer?.cancel();
+    _voiceElapsedTimer?.cancel();
+    _voiceAmplitudeSub?.cancel();
     _waveController.dispose();
     _controller.removeListener(_onTextChanged);
     _focusNode.removeListener(_onFocusChanged);
@@ -441,8 +445,6 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     final payload = ChatInputSubmitPayload(
       text: _controller.text.trim(),
       attachments: List<ChatInputAttachment>.from(_attachments),
-      isVoiceMessage: false,
-      voiceDuration: Duration.zero,
     );
     final hadAttachments = _attachments.isNotEmpty;
     setState(() {
@@ -494,6 +496,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       _voicePointerStartGlobal = null;
       unawaited(_stopVoiceRecordAndSend());
     });
+    _startVoiceElapsedTicker();
     _startWave();
   }
 
@@ -510,21 +513,14 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     _voicePointerStartGlobal = null;
     _voiceMaxTimer?.cancel();
     _voiceMaxTimer = null;
+    _voiceElapsedTimer?.cancel();
+    _voiceElapsedTimer = null;
     _stopWave();
     setState(() {
       _isRecording = false;
       _isVoiceCancelling = false;
     });
     await widget.onStopRecord?.call(duration);
-    final asrText = await widget.onVoiceAsrTransform?.call(duration);
-    if (!mounted) return;
-    final payload = ChatInputSubmitPayload(
-      text: (asrText ?? '').trim(),
-      attachments: const <ChatInputAttachment>[],
-      isVoiceMessage: true,
-      voiceDuration: duration,
-    );
-    await widget.onSend(payload);
   }
 
   Future<void> _cancelVoiceRecord() async {
@@ -534,6 +530,8 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     _voicePointerStartGlobal = null;
     _voiceMaxTimer?.cancel();
     _voiceMaxTimer = null;
+    _voiceElapsedTimer?.cancel();
+    _voiceElapsedTimer = null;
     _stopWave();
     setState(() {
       _isRecording = false;
@@ -555,23 +553,35 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     if (!_waveController.isAnimating) {
       _waveController.repeat(reverse: true);
     }
-    _waveTicker?.cancel();
-    _waveTicker = Timer.periodic(const Duration(milliseconds: 56), (_) {
-      if (!mounted || !_isRecording) return;
-      setState(() {
-        for (var i = 0; i < _waveBars.length; i++) {
-          final seed =
-              (DateTime.now().millisecondsSinceEpoch / 1000) + i * 0.23;
-          final base = (math.sin(seed * 4.2) + 1) / 2;
-          _waveBars[i] = 0.15 + base * 0.85;
-        }
+    _voiceAmplitudeSub?.cancel();
+    final stream = widget.voiceAmplitudeStream;
+    if (stream != null) {
+      _voiceAmplitudeSub = stream.listen((samples) {
+        if (!mounted || !_isRecording || samples.isEmpty) return;
+        _pushVoiceAmplitude(_normalizeRawAmplitude(samples.last));
       });
+      return;
+    }
+    _waveTicker?.cancel();
+    _waveTicker = Timer.periodic(const Duration(milliseconds: 120), (_) {
+      if (!mounted || !_isRecording) return;
+      _pushVoiceAmplitude(0.15);
+    });
+  }
+
+  void _startVoiceElapsedTicker() {
+    _voiceElapsedTimer?.cancel();
+    _voiceElapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_isRecording) return;
+      setState(() {});
     });
   }
 
   void _stopWave() {
     _waveTicker?.cancel();
     _waveTicker = null;
+    _voiceAmplitudeSub?.cancel();
+    _voiceAmplitudeSub = null;
     _waveController.stop();
     _waveController.reset();
     setState(() {
@@ -580,6 +590,38 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       }
     });
   }
+
+  double _normalizeRawAmplitude(double db) {
+    const minDb = -60.0;
+    if (db <= minDb) return 0.05;
+    if (db >= 0) return 1.0;
+    return ((db - minDb) / -minDb).clamp(0.05, 1.0).toDouble();
+  }
+
+  void _pushVoiceAmplitude(double value) {
+    setState(() {
+      _waveBars
+        ..removeAt(0)
+        ..add(value.clamp(0.05, 1.0).toDouble());
+    });
+  }
+
+  Duration get _voiceElapsed {
+    final start = _recordStartAt;
+    if (!_isRecording || start == null) return Duration.zero;
+    return DateTime.now().difference(start);
+  }
+
+  String _voiceElapsedText() {
+    final elapsed = _voiceElapsed;
+    final totalSeconds = elapsed.inSeconds.clamp(0, 120);
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  bool get _isVoiceMaxDurationSoon =>
+      _isRecording && _voiceElapsed >= const Duration(seconds: 110);
 
   ChatInputVisualState _visualState() {
     return ChatInputVisualState(
@@ -1002,19 +1044,42 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
                       ),
                       SizedBox(width: AppSpacing.intraGroupXs),
                       Expanded(
-                        child: Text(
-                          _isVoiceCancelling
-                              ? UITextConstants.chatVoiceReleaseCancel
-                              : UITextConstants.chatVoiceSlideCancel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: AppTypography.sm,
-                            fontWeight: AppTypography.medium,
-                            color: _isVoiceCancelling
-                                ? AppColors.error
-                                : AppColors.primaryColor,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _isVoiceCancelling
+                                  ? UITextConstants.chatVoiceReleaseCancel
+                                  : (_isVoiceMaxDurationSoon
+                                        ? UITextConstants
+                                              .chatVoiceMaxDurationSoon
+                                        : UITextConstants.chatVoiceSlideCancel),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: AppTypography.sm,
+                                fontWeight: AppTypography.medium,
+                                color: _isVoiceCancelling
+                                    ? AppColors.error
+                                    : AppColors.primaryColor,
+                              ),
+                            ),
+                            SizedBox(height: AppSpacing.intraGroupXs),
+                            Text(
+                              '${UITextConstants.chatVoiceRecording} ${_voiceElapsedText()}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: AppTypography.xs,
+                                color:
+                                    (_isVoiceCancelling
+                                            ? AppColors.error
+                                            : AppColors.primaryColor)
+                                        .withValues(alpha: 0.72),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       SizedBox(width: AppSpacing.intraGroupXs),
@@ -1029,6 +1094,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   Widget _buildWaveBars() {
     return AnimatedBuilder(
+      key: TestKeys.chatInputVoiceWaveform,
       animation: _waveController,
       builder: (context, _) {
         return Row(
@@ -1187,17 +1253,19 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
             _buildTrailingButtons(context, compact: compact);
         final left =
             widget.leftBuilder?.call(context, state, actions) ??
-            _buildToolbarPlainIconButton(
-              context: context,
-              key: TestKeys.chatInputVoiceToggleButton,
-              icon: _isVoiceMode
-                  ? _kChatInputKeyboardCompactIcon
-                  : CupertinoIcons.mic,
-              onTap: _toggleVoiceMode,
-              semanticLabel: _isVoiceMode
-                  ? UITextConstants.keyboard
-                  : UITextConstants.voiceInput,
-            );
+            (widget.enableVoiceInput
+                ? _buildToolbarPlainIconButton(
+                    context: context,
+                    key: TestKeys.chatInputVoiceToggleButton,
+                    icon: _isVoiceMode
+                        ? _kChatInputKeyboardCompactIcon
+                        : CupertinoIcons.mic,
+                    onTap: _toggleVoiceMode,
+                    semanticLabel: _isVoiceMode
+                        ? UITextConstants.keyboard
+                        : UITextConstants.voiceInput,
+                  )
+                : const SizedBox.shrink());
         return Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [

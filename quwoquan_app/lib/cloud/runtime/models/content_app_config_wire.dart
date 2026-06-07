@@ -9,8 +9,14 @@ typedef ContentAppConfigWireRoot = Map<String, Object?>;
 class ContentAppConfigWire {
   const ContentAppConfigWire._(this.wireRoot);
 
+  factory ContentAppConfigWire.fromWireRoot(ContentAppConfigWireRoot root) {
+    return ContentAppConfigWire._(Map<String, Object?>.from(root));
+  }
+
   /// 自 HTTP JSON 对象解码结果构造（浅拷贝为 [ContentAppConfigWireRoot]）。
-  factory ContentAppConfigWire.fromResponseObject(Map<String, dynamic> decoded) {
+  factory ContentAppConfigWire.fromResponseObject(
+    Map<String, dynamic> decoded,
+  ) {
     return ContentAppConfigWire._(
       Map<String, Object?>.from(
         decoded.map((k, v) => MapEntry(k.toString(), v as Object?)),
@@ -21,7 +27,7 @@ class ContentAppConfigWire {
   /// 解码根（与 HTTP JSON 同形；值为 JSON 叶子或嵌套 Map/List）。
   final ContentAppConfigWireRoot wireRoot;
 
-  /// 解析 `content` 下 feature_flags / gray_release / client_state_sync（metadata SSOT）。
+  /// 解析 `content` 下 feature_flags / gray_release / client_state_sync（snake_case metadata SSOT）。
   ContentAppConfigClientParsed get clientParsed =>
       ContentAppConfigClientParsed.fromRootMap(
         Map<String, dynamic>.from(wireRoot),

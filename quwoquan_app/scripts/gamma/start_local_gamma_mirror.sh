@@ -171,7 +171,7 @@ last = None
 while time.time() < deadline:
     try:
         with urllib.request.urlopen(
-            f"http://127.0.0.1:{port}/media/image/post/fixture_photo_001/v1/cover.png",
+            f"http://127.0.0.1:{port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
             timeout=2,
         ) as resp:
             if 200 <= int(resp.status) < 300:
@@ -695,15 +695,15 @@ bootstrap_local_gamma_tag_taxonomy() {
   echo "[local-gamma] tag taxonomy missing; bootstrapping current source of truth into $LOCAL_GAMMA_TAGS_DIR" >&2
   mkdir -p "$publish_root"
   env QWQ_PUBLISH_ROOT="$publish_root" \
-    python3 "$ROOT/quwoquan_data/scripts/bootstrap_tags.py"
+    python3 "$ROOT/quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_tags.py"
   env QWQ_PUBLISH_ROOT="$publish_root" \
-    python3 "$ROOT/quwoquan_data/scripts/bootstrap_admin_regions.py"
+    python3 "$ROOT/quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_admin_regions.py"
   env QWQ_PUBLISH_ROOT="$publish_root" \
-    python3 "$ROOT/quwoquan_data/scripts/bootstrap_geo_landmarks.py"
+    python3 "$ROOT/quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_geo_landmarks.py"
   env QWQ_PUBLISH_ROOT="$publish_root" \
-    python3 "$ROOT/quwoquan_data/scripts/verify_tag_tree.py"
+    python3 "$ROOT/quwoquan_data/scripts/verify/verify_tag_tree.py"
   env QWQ_PUBLISH_ROOT="$publish_root" \
-    python3 "$ROOT/quwoquan_data/scripts/build_publish_lookup_indexes.py"
+    python3 "$ROOT/quwoquan_data/scripts/publish_ops/build_publish_lookup_indexes.py"
   if [[ ! -d "$LOCAL_GAMMA_TAGS_DIR" ]]; then
     echo "[local-gamma] FAIL: tag taxonomy bootstrap finished without creating $LOCAL_GAMMA_TAGS_DIR" >&2
     return 1

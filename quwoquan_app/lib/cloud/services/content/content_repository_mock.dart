@@ -64,10 +64,34 @@ class MockContentRepository implements ContentRepository {
     'favorited': false,
     'shared': false,
   };
-  List<CommentDto> commentsStub = [];
+  List<CommentDto> commentsStub = _contractSeedComments();
   int countersStubLikeCount = 0;
   int countersStubCommentCount = 0;
   int countersStubShareCount = 0;
+
+  static List<CommentDto> _contractSeedComments() {
+    final comments = <CommentDto>[];
+    for (final ref in const <String>[
+      'content_discovery_core',
+      'comment_thread_v2_core',
+    ]) {
+      final seed = ContractFixtureRuntimeLoader.contentSeedSet(ref);
+      final raw = seed?['comments'];
+      if (raw is! List) {
+        continue;
+      }
+      comments.addAll(
+        raw
+            .whereType<Map>()
+            .map((item) => CommentDto.fromMap(item.cast<String, dynamic>())),
+      );
+    }
+    final byId = <String, CommentDto>{};
+    for (final comment in comments) {
+      byId[comment.id] = comment;
+    }
+    return byId.values.toList(growable: false);
+  }
 
   PostBaseDto _mockPostDto(
     String postId, {
@@ -357,12 +381,51 @@ class MockContentRepository implements ContentRepository {
   Future<CommentPage> listComments({
     required String postId,
     String? cursor,
-    String sort = 'latest',
+    String sort = 'recommended',
     int limit = CloudApiDefaults.pageLimit,
   }) async {
+    final all = commentsStub
+        .where(
+          (comment) =>
+              comment.postId == postId &&
+              (comment.parentCommentId == null ||
+                  comment.parentCommentId!.isEmpty) &&
+              (comment.replyToCommentId == null ||
+                  comment.replyToCommentId!.isEmpty),
+        )
+        .toList(growable: false);
+    final sorted = _sortComments(all, sort);
+    final offset = int.tryParse((cursor ?? '').trim()) ?? 0;
+    final safeOffset = offset.clamp(0, sorted.length);
+    final safeLimit = limit <= 0 ? sorted.length : limit;
+    final end = (safeOffset + safeLimit).clamp(0, sorted.length);
     return CommentPage(
-      items: List<CommentDto>.from(commentsStub),
-      nextCursor: null,
+      items: sorted.sublist(safeOffset, end),
+      nextCursor: end < sorted.length ? '$end' : null,
+    );
+  }
+
+  @override
+  Future<CommentPage> listCommentReplies({
+    required String postId,
+    required String commentId,
+    String? cursor,
+    int limit = CloudApiQueryDefaults.commentRepliesLimit,
+  }) async {
+    final replies = commentsStub
+        .where(
+          (comment) =>
+              comment.postId == postId && comment.parentCommentId == commentId,
+        )
+        .toList(growable: false)
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final offset = int.tryParse((cursor ?? '').trim()) ?? 0;
+    final safeOffset = offset.clamp(0, replies.length);
+    final safeLimit = limit <= 0 ? replies.length : limit;
+    final end = (safeOffset + safeLimit).clamp(0, replies.length);
+    return CommentPage(
+      items: replies.sublist(safeOffset, end),
+      nextCursor: end < replies.length ? '$end' : null,
     );
   }
 
@@ -371,6 +434,8 @@ class MockContentRepository implements ContentRepository {
     required String postId,
     required String content,
     String? replyToCommentId,
+    List<String> attachmentMediaIds = const <String>[],
+    List<Map<String, dynamic>> mentions = const <Map<String, dynamic>>[],
     String? subAccountId,
     String? personaContextVersion,
   }) async {
@@ -386,13 +451,38 @@ class MockContentRepository implements ContentRepository {
       'subAccountId': subAccountId ?? 'mock_user',
       'personaContextVersion': personaContextVersion,
       'replyCount': 0,
+      'attachmentMediaIds': attachmentMediaIds,
+      'attachments': attachmentMediaIds
+          .map(
+            (id) => <String, dynamic>{
+              'mediaId': id,
+              'type': 'image',
+              'url': 'media/comment/$id/v1/comment.png',
+              'thumbnailUrl': 'media/comment/$id/v1/thumb.png',
+              'moderationStatus': 'approved',
+            },
+          )
+          .toList(growable: false),
+      'mentions': mentions,
       'likeCount': 0,
+      'dislikeCount': 0,
+      'viewerReaction': 'none',
       'status': 'visible',
       'isAuthor': false,
+      'canDelete': true,
+      'canReply': true,
+      'canReport': false,
       'createdAt': DateTime.now().toIso8601String(),
     };
     if (replyToCommentId != null) {
       comment['replyToCommentId'] = replyToCommentId;
+      final target = commentsStub.where((c) => c.id == replyToCommentId);
+      final parent = target.isEmpty
+          ? replyToCommentId
+          : (target.first.parentCommentId?.isNotEmpty == true
+                ? target.first.parentCommentId
+                : target.first.id);
+      comment['parentCommentId'] = parent;
     }
     final dto = CommentDto.fromMap(comment);
     commentsStub = [...commentsStub, dto];
@@ -409,10 +499,43 @@ class MockContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> likeComment({required String commentId}) async {}
-
-  @override
-  Future<void> unlikeComment({required String commentId}) async {}
+  Future<CommentDto> reactToComment({
+    required String commentId,
+    required String reaction,
+  }) async {
+    CommentDto? updated;
+    commentsStub = commentsStub.map((comment) {
+      if (comment.id != commentId) {
+        return comment;
+      }
+      final current = comment.viewerReaction;
+      var likeCount = comment.likeCount;
+      var dislikeCount = comment.dislikeCount;
+      if (current == 'like') {
+        likeCount = (likeCount - 1).clamp(0, 1 << 31).toInt();
+      }
+      if (current == 'dislike') {
+        dislikeCount = (dislikeCount - 1).clamp(0, 1 << 31).toInt();
+      }
+      if (reaction == 'like') likeCount++;
+      if (reaction == 'dislike') dislikeCount++;
+      updated = comment.copyWith(
+        likeCount: likeCount,
+        dislikeCount: dislikeCount,
+        viewerReaction: reaction,
+      );
+      return updated!;
+    }).toList(growable: false);
+    return updated ??
+        CommentDto(
+          id: commentId,
+          postId: '',
+          authorId: '',
+          content: '',
+          viewerReaction: reaction,
+          createdAt: DateTime.now(),
+        );
+  }
 
   @override
   Future<CommentPage> listCommentsByAuthor({
@@ -436,8 +559,11 @@ class MockContentRepository implements ContentRepository {
       'content': {
         'comment': {
           'max_length': 500,
-          'reply_preview_count': 3,
+          'reply_preview_count': 1,
+          'reply_expand_page_size': 10,
           'fold_line_count': 3,
+          'sort': {'default': 'recommended'},
+          'attachment': {'max_images': 1},
         },
         'feature_flags': {
           'enable_create_action_entry': true,
@@ -680,6 +806,31 @@ class MockContentRepository implements ContentRepository {
       return List<PostBaseDto>.from(seeded, growable: false);
     }
     return _discoverySeedPosts();
+  }
+
+  List<CommentDto> _sortComments(List<CommentDto> comments, String sort) {
+    final sorted = List<CommentDto>.from(comments);
+    switch (sort) {
+      case 'latest':
+        sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+      case 'most_liked':
+        sorted.sort((a, b) {
+          final byLike = b.likeCount.compareTo(a.likeCount);
+          return byLike != 0 ? byLike : b.createdAt.compareTo(a.createdAt);
+        });
+        break;
+      case 'recommended':
+      default:
+        sorted.sort((a, b) {
+          final byScore = (b.recommendedScore ?? 0).compareTo(
+            a.recommendedScore ?? 0,
+          );
+          return byScore != 0 ? byScore : b.createdAt.compareTo(a.createdAt);
+        });
+        break;
+    }
+    return sorted;
   }
 
   List<PostBaseDto> _resolveDiscoveryPosts({

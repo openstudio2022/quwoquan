@@ -13,8 +13,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
-import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+import 'package:quwoquan_app/components/comment_system/immersive_comment_split_sheet.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
@@ -143,6 +142,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
   bool _showFollowButton = false;
   Timer? _followButtonTimer;
   bool _isPureMode = false;
+  bool _isCommentSplitOpen = false;
   final Map<String, bool> _expandedCaptions = {};
   final Map<String, double> _imageAspectRatios = {};
 
@@ -353,39 +353,33 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
 
   void _handleCommentsClick() {
     if (widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length) {
-      final currentPost = widget.posts[_currentPostIndex];
-
-      // 显示评论弹窗
-      final commentConfig = CommentConfig();
-
-      CommentViewer.showModal(
-        context: context,
-        postId: currentPost.postId.isNotEmpty
-            ? currentPost.postId
-            : 'mock_post_id',
-        initialComments: [],
-        config: commentConfig,
-        modalHeight: CommentModalHeight.adaptive,
-        onCommentAdded: (commentId) {
-          debugPrint('Comment added: $commentId');
-        },
-        onCommentLiked: (comment) {
-          debugPrint('Comment liked: ${comment.id}');
-        },
-        onReplyAdded: (commentId, replyId) {
-          debugPrint('Reply added: $replyId to $commentId');
-        },
-        onUserTapped: (userId) {
-          debugPrint('User tapped: $userId');
-        },
-        onLoadMoreComments: (postId) {
-          debugPrint('Load more comments for post: $postId');
-        },
-        onClose: () {
-          debugPrint('Comment modal closed');
-        },
-      );
+      setState(() => _isCommentSplitOpen = true);
     }
+  }
+
+  Widget _buildCommentSplitContent(BuildContext context, bool isDark) {
+    if (widget.posts.isEmpty || _currentPostIndex >= widget.posts.length) {
+      return const SizedBox.shrink();
+    }
+    final post = widget.posts[_currentPostIndex];
+    final mediaItem = widget.mediaItems.isNotEmpty
+        ? widget.mediaItems[_currentPostIndex % widget.mediaItems.length]
+        : MediaItem(
+            type: ContentTypeConstants.video,
+            url: post.video?.url ?? post.video?.thumbnailUrl ?? '',
+            aspectRatio: post.video?.aspectRatio,
+          );
+    return ColoredBox(
+      color: AppColors.black,
+      child: _buildMediaPage(
+        context,
+        post,
+        mediaItem,
+        isDark,
+        true,
+        false,
+      ),
+    );
   }
 
   void _handleMoreClick() {
@@ -782,6 +776,16 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
         widget.posts.isNotEmpty && _currentPostIndex < widget.posts.length
         ? widget.posts[_currentPostIndex]
         : null;
+    if (_isCommentSplitOpen && currentPost != null) {
+      return ImmersiveCommentSplitSheet(
+        postId: currentPost.postId,
+        content: _buildCommentSplitContent(context, isDark),
+        likeCount: _likesCount,
+        isLiked: _isLiked,
+        onLikeTap: _handleLikeClick,
+        onClose: () => setState(() => _isCommentSplitOpen = false),
+      );
+    }
 
     // 阻断 MaterialApp DefaultTextStyle 合并导致的误装饰（黄下划线），与全屏作品流一致。
     return DefaultTextStyle.merge(

@@ -43,7 +43,10 @@ void main() {
       final gridGroup = inbox.firstWhere((item) => item.id == 'conv_grid_10');
 
       expect(gridGroup.type, 'group');
-      expect(gridGroup.avatarUrl, contains('/media/avatar/conversation/'));
+      expect(
+        gridGroup.avatarUrl,
+        contains('/media/avatar/s/archived-avatar/conversation/'),
+      );
       expect(gridGroup.avatarUrl, isNot(contains('grid_10_member_1')));
       expect(gridGroup.groupAvatarVersion, greaterThan(0));
     });
@@ -211,6 +214,12 @@ void main() {
       final contacts = await repo.listContacts();
       expect(contacts, isList);
       expect(contacts, isNotEmpty);
+      expect(contacts.first.relationState, isNotEmpty);
+      expect(contacts.first.source, isNotEmpty);
+      expect(
+        contacts.where((contact) => contact.relationState == 'mutual'),
+        isNotEmpty,
+      );
     });
 
     test('searchContacts 返回匹配结果', () async {

@@ -971,7 +971,7 @@ abstract class AppLocalizations {
   /// No description provided for @friends.
   ///
   /// In zh, this message translates to:
-  /// **'好友'**
+  /// **'联系人'**
   String get friends;
 
   /// No description provided for @groupChat.
@@ -1040,11 +1040,11 @@ abstract class AppLocalizations {
   /// **'圈子'**
   String get contactsTabCircles;
 
-  /// No description provided for @contactsTabSameInterest.
+  /// No description provided for @contactsTabMutualFollow.
   ///
   /// In zh, this message translates to:
-  /// **'同好'**
-  String get contactsTabSameInterest;
+  /// **'互相关注'**
+  String get contactsTabMutualFollow;
 
   /// No description provided for @contactsTabFunGroup.
   ///
@@ -1055,7 +1055,7 @@ abstract class AppLocalizations {
   /// No description provided for @contactsTabFriends.
   ///
   /// In zh, this message translates to:
-  /// **'好友'**
+  /// **'联系人'**
   String get contactsTabFriends;
 
   /// No description provided for @contactsTabGroups.
@@ -1265,19 +1265,19 @@ abstract class AppLocalizations {
   /// No description provided for @selectFriendsFromGroupChat.
   ///
   /// In zh, this message translates to:
-  /// **'选择群聊中的同好'**
+  /// **'选择群聊成员'**
   String get selectFriendsFromGroupChat;
 
   /// No description provided for @selectFriendsFromCircle.
   ///
   /// In zh, this message translates to:
-  /// **'选择圈子中的同好'**
+  /// **'选择圈子成员'**
   String get selectFriendsFromCircle;
 
   /// No description provided for @relatedSameInterest.
   ///
   /// In zh, this message translates to:
-  /// **'相关同好'**
+  /// **'兴趣相近'**
   String get relatedSameInterest;
 
   /// No description provided for @selectGroupChat.
@@ -1937,7 +1937,7 @@ abstract class AppLocalizations {
   /// No description provided for @noCirclesAvailable.
   ///
   /// In zh, this message translates to:
-  /// **'加入圈子，发现同好'**
+  /// **'加入圈子，发现兴趣相近的人'**
   String get noCirclesAvailable;
 
   /// No description provided for @circleJoinedSection.

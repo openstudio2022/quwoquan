@@ -12,7 +12,7 @@ spec.md 定义了 32 人实时音视频通话端到端闭环，且在本轮 PRD 
 - 来电推送（在线 WS + 离线 VoIP Push + 锁屏 CallKit）
 - 录制 (Egress) 与屏幕共享的生命周期管理
 - 灰度发布自动回滚门禁
-- 1v1 通话的关系门禁（仅同好/密友开放）
+- 1v1 通话的关系门禁（仅互相关注开放）
 - 聊天页 AppBar 去通话按钮后，输入区 `+` 面板如何承载语音/视频入口
 - 通话中添加人的双链路（直接邀请 / 链接入会）
 - 群邀请仅保留响铃邀请模式，前台/后台/锁屏如何统一唤醒语义
@@ -22,11 +22,13 @@ spec.md 定义了 32 人实时音视频通话端到端闭环，且在本轮 PRD 
 
 ## 上游输入评审
 
-- spec.md 已扩展到 F23，新增关系门禁、输入区入口、多人选择规则、群邀请响铃模式与发起方铃声
-- acceptance.yaml 已扩展到 A56，覆盖 AppBar 迁移、同好门禁、请求箱升级、群设置边界、响铃邀请与铃声归属
+- spec.md 已扩展到 F23 并新增 §12 商用上线 UX 基线、§13 来电平台能力矩阵、§14 信任与隐私提示
+- acceptance.yaml 由模板化 SIT 重写为可执行 SIT/GWT/contract + T1~T4 结构（不再以“A1~A56”固定编号描述，避免与磁盘条目漂移）
 - 前置依赖 realtime-gateway 已有完整 spec（L2），可并行或串行推进
-- 前置依赖 `contact-and-session-governance` 已明确请求箱、同好/密友、能力位真相源
+- 前置依赖 `contact-and-session-governance` 已明确请求箱、互相关注、能力位真相源
 - **无阻断项**
+
+> 诚信修订（商用上线基线）：此前本文档曾声称“acceptance.yaml 已扩展到 A56”，但实际 acceptance 仅为模板化 SIT，属规格漂移。本轮已将 acceptance 重写为可验收条目，并以 §9 验收重点 + acceptance.yaml 为唯一真相源；任何“N 条/A56”式计数描述均已废弃。
 
 ## 对标输入分析
 
@@ -133,11 +135,11 @@ Apache 2.0 开源 Go SFU，自部署到自有 K8s 集群。
 
 ### REV-3（2026-03-10）：入口与门禁重构
 
-**背景**：原设计默认把 1v1/群聊通话入口放在 ChatDetail AppBar，与本轮 PRD 冻结的“AppBar 保持简洁、通话入口下沉到输入区 `+` 面板、1v1 仅同好/密友开放”发生冲突。
+**背景**：原设计默认把 1v1/群聊通话入口放在 ChatDetail AppBar，与本轮 PRD 冻结的“AppBar 保持简洁、通话入口下沉到输入区 `+` 面板、1v1 仅互相关注开放”发生冲突。
 
 **决策变更**：
 - 1v1/群聊 ChatDetail AppBar 不再承载语音/视频直达按钮
-- 1v1 通话入口迁移到输入区 `+` 面板，且仅在 `同好` 关系下显示；`密友` 仅保留子态快捷语义
+- 1v1 通话入口迁移到输入区 `+` 面板，且仅在 `互相关注` 关系下显示；`互相关注` 仅保留子态快捷语义
 - 群聊通话入口迁移到输入区 `+` 面板
 - 通话中加人支持“直接邀请联系人/成员”和“生成呼叫链接入会”两条链路
 - 群聊选人规则固化为：`<= 8 人默认全选，> 8 人默认不选`
@@ -154,6 +156,49 @@ Apache 2.0 开源 Go SFU，自部署到自有 K8s 集群。
 - 顶部通话条从绿色语义切换为趣聊品牌蓝，并与来电通知、呼出页保持统一视觉系统
 - 开发态补充“模拟来电”“5 秒自动接通”“手动接通/拒接/超时”本地调试入口
 
+### REV-5（商用上线基线）：三端来电矩阵、信任两态、可靠性收口
+
+**背景**：商用上线评审发现来电入口未按平台拆分、通话页过程态缺失、LiveKit 参与者未绑定 UI、WS 事件 type 端云漂移、全局协调器未挂载、错误/权限文案硬编码。
+
+**决策变更**：
+
+- 来电分三端能力矩阵（见 spec §13）：iOS PushKit+CallKit（收到即上报来电）、Android FCM 高优先级+`USE_FULL_SCREEN_INTENT` 全屏意图（含 Android 14+ 特殊权限与降级）、Web Push+Service Worker+Notification（PWA 安装后，前台站内弹窗）。平台判断收口到 `PlatformCapabilities`（`incomingCallUi`/`webPushIncomingCall`/`realtimeCommunication`），业务层不裸用 `Platform.is*`/`kIsWeb`。
+- 信任两态（见 spec §14）：参与者标注 `认识/可信` 与 `可能不认识`，由 metadata 字段驱动；来电页与通话中加人提示消费该字段。
+- WS wire type：events.yaml 的 `client_ws_type` 必须经 codegen 生成 Go 端映射，orchestrator `publishEvent` 推送时使用 wire type（如 `call.ringing`），与 Dart `parseRtcWsPayload` 对齐；禁止把 domain 常量当 wire type。
+- 参与者绑定：`call_session_provider` 订阅 `LiveKitRoomService` 的 participant/track/speaker/quality 事件，实时写入 `callParticipantsProvider`；通话页渲染真实 `VideoTrack`。
+- 设备控制真实生效：翻转摄像头调用 `LiveKitRoomService.switchCamera()`，音频输出调用 `setSpeakerOn()`。
+- 生命周期收口：`IncomingCallCoordinator`/`ActiveCallBar`/`PipCallOverlay` 挂载到 app shell 唯一入口，覆盖来电、返回通话、PiP、后台恢复。
+- 错误/权限：错误码走 `errors.yaml`→codegen（补 `not_mutual`/`blocked` 端侧枚举），文案走 `UITextConstants`/l10n，权限走统一权限卡片与降级路径。
+
+**降级范围**：UX/可靠性/平台矩阵层变更，呼叫状态机（KD-1）、SFU 选型、媒体策略、布局算法不变。
+
+### REV-6（/plan-next 自检：对标微信/FaceTime 商用收口）
+
+**背景**：S0–S3、S7 端云根因（信令对齐、参与者/轨道绑定、设备控制、错误码端云贯通、信任两态字段）已落地。`/plan-next` 多角色自检发现两类商用阻断缺口必须先收口，才能继续 FaceTime 级体验增强。
+
+**GATE_BLOCK 处置项**：
+
+- **B1 全局挂载未接线（致命）→ 已收口**：删除 `incoming_call_coordinator.dart` 中 `throw UnimplementedError` 的 `goRouterProvider` 占位，`incomingCallCoordinatorProvider` 改为直接 `ref.read(appRouterProvider)`，CallKit 接听跳转改用 `AppRoutePaths.rtcIncoming(callId:)`（消除硬编码路径）。`MainAppShell` 作为路由就绪后的唯一常驻外壳：`initState` 与 auth 翻转监听里统一调 `_syncIncomingCallCoordinator()`，依据登录态唯一启停协调器（启停决策抽为纯函数 `resolveIncomingCallSync`，幂等、登录 start/登出 stop/切换先停后启）；并在外壳 `Stack` 顶部挂 `ActiveCallBar`（点击回流 `rtcVideo/rtcVoice`）、最上层挂 `PipCallOverlay`（回流/挂断）。同时修复协调器 `stop()/dispose()` 在 Riverpod 生命周期内 `ref.read` 的越界 bug（缓存信令客户端引用）与 `callEnded` 订阅泄漏。证据：`active_call_shell_mount_test.dart`（协调器装配不抛、启停幂等五态、来电条/PiP 唯一挂载与回流）。
+- **B2 acceptance↔实现脱节（诚信）→ 已收口**：`acceptance.yaml` 7 个 SIT 的 `recorded` 全部回填为磁盘真实存在的测试（picker widget、Go lifecycle/room contract、signaling wire/payload、`rtc_errors`、shell mount/bar/pip），`status` 由 `pending` 改为 `partial`（SIT4 三端来电平台矩阵尚无测试，保持 `pending`）；`planned` 仅保留确未落地项（chat 入口、provider 生命周期、trust badge、Go ws wire-type、permission card、controls device、平台能力位）。`verify_acceptance_standard.sh` 通过。
+
+**对标差距（FaceTime/微信级，纳入新规划而非阻断）**：
+
+- 来电全屏含视频自预览、接听前麦克风/摄像头预检；通话中下滑/返回缩为系统级浮窗（PiP）回流。
+- 网络中断优雅降级横幅与自动重连提示；通话记录消息回插会话。
+- 三端来电真实唤醒链路（S6）与权限统一卡片仍待端到端打通。
+
+**降级范围**：不改状态机/SFU/媒体策略；仅补接线、过程态、平台唤醒与测试证据。
+
+### REV-7（GATE_BLOCK 解除后的 S5/S6/FaceTime 收口）
+
+**S5 过程态闭环**：新增展示态 `CallStage`（connecting/ringing/waitingPeer/inCall/reconnecting/weakNetwork/peerNoAnswer/peerLeft/ended），由纯函数 `resolveCallStage(status, connectedPeerCount, isReconnecting, isWeakNetwork, endReason)` **单一派生**（不污染 `CallStatus` 状态机，遵 R24）。`CallSessionState` 增 `isReconnecting`，provider 在建连前置 `CallStatus.connecting`、媒体连通置 `inCall`、监听 `LiveKitRoomService.connectionState` 的 `reconnecting` 翻转标记（`_endCallState` 中移除监听防泄漏）。新增 `CallStageBanner` 统一渲染过程态文案（弱网/重连为 caution 黄底，其余暗底），video/voice 页各挂一处；文案全部入 `UITextConstants`。证据：`call_session_provider_lifecycle_test.dart`（过程态派生 9 例 + 分类语义 + 横幅显隐/文案映射，14 例全绿）。
+
+**S6 三端来电唤醒 + 能力位 + 权限卡片**：`PlatformCapabilities` 增 `webPushIncomingCall`（web=true，其余 false）；纯函数 `resolveIncomingCallChannel(caps)` 由能力位单一派生来电通道 `nativeCallKit | webPushInApp | inAppOnly | unsupported`（RTC 不可用最高优先级置 unsupported，原生来电屏优先于 Web Push，遵 R-XP1/R-XP2 无裸平台判断）。协调器 `start()` 按通道分支：native 走 CallKit，web/inApp 直接路由站内来电页，unsupported 不建监听（与入口能力位一致降级）。新增统一权限预检 `CallPermissionGuard`（麦克风硬门槛、视频缺摄像头降级仅语音），权限卡片复用 `UiErrorSemantic(permissionRequired)` + 去设置（不另起 RTC 专用提示，遵 R31/R18）；`IncomingCallPage` 接听前置预检并修正硬编码 `/rtc/video|voice` 为 `AppRoutePaths`。证据：`platform_capabilities_incoming_call_test.dart`、`incoming_call_coordinator_test.dart`、`call_permission_card_test.dart`（SIT4 解除 pending、SIT6 回填）。
+
+**FaceTime 级体验**：PiP 浮窗手势（拖拽 + 贴边吸附 + 点击回流 + 长按挂断）与弱网降级横幅（S5 weakNetwork 态）已具备，无需重复实现。新增纯函数 `CallSummary.describe(duration, endReason, connected)` 统一结束摘要（已接通显示时长，未接通按原因显示），为后续通话记录回插预备同一文案口径。证据：`call_summary_test.dart`。
+
+**仍待契约（诚实记录，不强行落地）**：**通话记录回插会话** 依赖 chat `call` 消息类型契约（`contracts/metadata/chat/.../fields.yaml` 的 message `type` 扩展 + 发送链路），属跨域 metadata-first 变更，未在本次范围内打通；当前仅落地端侧 `CallSummary` 文案基座，SIT2 该 done_when 保持未勾。三端来电的真实推送链路（PushKit/FCM full-screen/Web Push Service Worker）仍为 native/web 工程接入项，能力位与端侧分支已就绪。
+
 ## 选型决策
 
 | 决策 | 选定 | 理由 |
@@ -164,7 +209,7 @@ Apache 2.0 开源 Go SFU，自部署到自有 K8s 集群。
 | 网格布局 | **方案 A：FaceTime 式动态等分** | 对标一流体验、布局稳定可预期、32 人可扩展 |
 | 播放引擎（端侧） | **livekit_client (Flutter)** | LiveKit 官方 Flutter SDK，内置 WebRTC 管理 |
 | 来电组件（端侧） | **flutter_callkit_incoming** | iOS CallKit + Android FullScreen 统一 |
-| 1v1 通话门禁 | **同好能力位前置** | `同好 = 互关`；密友仅作为同好子态语义，不额外放宽门禁 |
+| 1v1 通话门禁 | **互相关注能力位前置** | `互相关注 = 互关`；互相关注仅作为互相关注子态语义，不额外放宽门禁 |
 | 聊天页通话入口 | **输入区 `+` 面板** | AppBar 保持简洁，会话动作集中在 composer |
 | 多人入会补充链路 | **直接邀请 + 呼叫链接** | 兼顾熟人拉人和会中扩散 |
 | 群邀请模式 | **仅响铃邀请** | 保持微信/FaceTime 式“有人在呼叫你”的强提醒语义 |
@@ -631,9 +676,9 @@ RTC 能力不再仅由“会话存在”决定，而由 `contact-and-session-gov
 |----------|-----------|-----------|-----------|
 | 陌生用户 | 否 | 否 | 否 |
 | 关注用户 | 打招呼后等待回复 | 否 | 否 |
-| 已回复未同好 | 是 | 否 | 否 |
-| 同好 | 是 | 是 | 是 |
-| 密友 | 是 | 是 | 是 |
+| 已回复未互相关注 | 是 | 否 | 否 |
+| 互相关注 | 是 | 是 | 是 |
+| 互相关注 | 是 | 是 | 是 |
 
 云侧规则：
 
@@ -644,7 +689,7 @@ RTC 能力不再仅由“会话存在”决定，而由 `contact-and-session-gov
 端侧规则：
 
 - 主页、会话 `+` 面板、会中邀请都消费同一份 `canStartVoiceCall/canStartVideoCall`
-- 正式会话但尚未互关时，显示“加同好”关系条，而不是显示通话按钮
+- 正式会话但尚未互关时，显示“加互相关注”关系条，而不是显示通话按钮
 
 ### KD-14: 聊天页入口迁移（已定）
 
@@ -726,7 +771,7 @@ Phase 6: prod 100% 全量放开
 | 主题 | 唯一真相源 | 消费位置 | 说明 |
 |------|-----------|---------|------|
 | 通话状态机 / 通话快照 | `rtc/call_session/fields.yaml` + `events.yaml` | rtc-service / app DTO / signaling payload | `initiatorRingtoneId` 在 CallSession 创建时快照，保证群通话后续加人仍沿用原始发起方铃声 |
-| 1v1 关系门禁 | `user/follow_edge/service.yaml` 的 capability API | 用户主页、ChatDetail 输入区、rtc-service 校验 | `同好 = 互关`；不允许业务代码自行维护第二份关系判断表 |
+| 1v1 关系门禁 | `user/follow_edge/service.yaml` 的 capability API | 用户主页、ChatDetail 输入区、rtc-service 校验 | `互相关注 = 互关`；不允许业务代码自行维护第二份关系判断表 |
 | 发起方铃声资料 | `user/user_profile/fields.yaml` 中 `Persona.callerRingtoneId` | 子账号设置页、rtc-service 发起通话时读取 | 发起通话主体是子账号，因此铃声归属到 Persona，而非 Owner 级 UserProfile |
 | 被叫来电偏好 | `user/user_profile/fields.yaml` 中 `UserSetting` 来电字段 + `service.yaml` 的 `Get/UpdateCallSettings` | 来电设置页、notification-service、CallKit/FullScreen 解析 | 包含默认铃声、是否允许发起方铃声覆盖、群邀请是否响铃、是否振动 |
 | 官方铃声库目录 | 端侧内置资产清单（后续 `assets/rtc/` 资产 manifest） | 设置页列表、来电播放解析、本地试听 | 不走用户上传，不走远端 URL，不在 UI 或业务代码中硬编码散落字符串 |
@@ -754,7 +799,7 @@ Phase 6: prod 100% 全量放开
 
 ## 角色职责与多重防护网
 
-- **产品**：冻结群邀请仅响铃、蓝色品牌主色、同好门禁、多来源选人和铃声归属规则
+- **产品**：冻结群邀请仅响铃、蓝色品牌主色、互相关注门禁、多来源选人和铃声归属规则
 - **架构**：决定 ringtoneId 的 metadata 承载位、CallSession 快照策略、CallKit/FullScreen 唤醒分层与灰度指标
 - **开发**：按 `metadata → codegen → Red → Green → Refactor` 实施，禁止绕过 metadata 手写接口常量
 - **测试**：覆盖 T1~T4，特别是锁屏唤醒、群邀请铃声归属、跨群拉人和开发态调试剧本隔离
@@ -824,7 +869,7 @@ Phase 6: prod 100% 全量放开
 
 | 特性 | 本设计消费 | 本设计输出 |
 |------|-----------|-----------|
-| contact-and-session-governance | `relationTier`、`canStartVoiceCall`、`canStartVideoCall`、请求箱/正式会话边界 | 1v1 通话门禁与错误码、会话内加同好后的入口解锁 |
+| contact-and-session-governance | `relationState`、`canStartVoiceCall`、`canStartVideoCall`、请求箱/正式会话边界 | 1v1 通话门禁与错误码、会话内加互相关注后的入口解锁 |
 | group-settings | 群设置不承载发起/治理动作 | 群聊通话入口固定为输入区 `+` 面板 |
 
 ## 未来演进
@@ -842,3 +887,47 @@ Phase 6: prod 100% 全量放开
 - P2P 优先模式：需端侧 ICE 全流程 + 媒体路径切换逻辑（重启条件：SFU 成本超预算）
 - Web 端通话：需 WebRTC 浏览器兼容层 + 独立 Web SDK（重启条件：Web 产品规划确定）
 - PSTN 电话互通：需运营商合作 + SIP 网关（重启条件：业务需求明确 + 合作方就绪）
+
+## 商用上线实现拆解（REV-5 落地顺序）
+
+本节是 `/dev` 阶段的实现真相源，按依赖顺序排列，每项可独立验证。已完成项标注 [done]。
+
+### S0 端云信令对齐（已落地）
+
+- [done] Go application 层新增 `signal_wire_type.go`：domain event 常量 → events.yaml `client_ws_type` 薄映射；`call_orchestrator.publishEvent` WS 推送使用 wire type（`call.ringing` 等），事件存储仍用 domain 名。
+- [done] `signal_wire_type_test.go` 契约测试断言映射与 events.yaml 完全一致，禁止漂移。
+- 后续可选：把该映射纳入 Go codegen（消费 events.yaml `client_ws_type`），届时删除手写表并保留契约测试。
+
+### S1 metadata → codegen（前置）
+
+- [done] fields.yaml 新增 `displayName/avatarUrl/trustRelation/sourceLabel/isKnownContact/mutualContext/inviteStatus/invitedBy/connectionQuality/isSpeaking`；`_shared/types.yaml` 注册 `TrustRelation/CallInviteStatus/ConnectionQuality`；events.yaml CallRinging 补三端推送负载契约。
+- 待执行：`make codegen` / `make codegen-app` 重生成 Go struct 与 Dart DTO；`make verify-metadata` 已通过。
+
+### S2 参与者与轨道绑定（端侧根因修复）
+
+- `LiveKitRoomService` 已提供 `remoteParticipants`/`localParticipant`/`onParticipantsChanged`/`activeSpeaker`/`connectionQuality`。
+- `CallParticipant` VM 增加可空 LiveKit `VideoTrack` 引用与 `connectionQuality`/`trustRelation` 字段（不进 `==`/`hashCode` 的内容比较，仅用于渲染）。
+- `call_session_provider._connectToLiveKit` 的 `onParticipantsChanged.listen` 把 LiveKit 远端+本地 participant 与已订阅 track 同步进 `callParticipantsProvider`（合并 DTO 元信息与实时媒体态），`activeSpeaker` 写入 `activeSpeakerId`。
+- `participant_tile` 渲染真实 `VideoTrackRenderer`；无 track/关摄像头时显示头像占位与弱网/静音角标。
+
+### S3 设备控制接真实 SFU
+
+- `CallControlsBar` 翻转摄像头改调 `LiveKitRoomService.switchCamera()`，音频输出改调 `setSpeakerOn()`，移除只改本地态的旁路；静音/摄像头沿用 provider→LiveKit 既有链路。
+
+### S4 全局挂载与生命周期
+
+- app shell 唯一入口（`web_main_app_shell` / 对应原生 shell）override `goRouterProvider` 并在登录态启动 `IncomingCallCoordinator`；挂载 `ActiveCallBar`（顶部通话条）与 `PipCallOverlay`（返回 PiP），覆盖来电、返回回流、后台恢复。
+
+### S5 通话页过程态与选人页重做
+
+- `video_call_page` 补连接中/振铃/单人等待/对方未接/已离开/重连中/弱网/已结束过程态与空态；顶部信息条含来源/时长/质量/信任摘要。
+- `call_participant_picker_page` 补来源切换说明、信任风险徽标、邀请预览、超员/重复/部分失败反馈；硬编码中文迁 `UITextConstants`/l10n。
+
+### S6 来电三端与权限
+
+- iOS PushKit+CallKit（收到即上报来电）、Android FCM 高优先级+全屏意图（含 14+ 权限降级）、Web Push+Service Worker+Notification 点击进会。
+- `PlatformCapabilities` 补 `incomingCallUi`/`webPushIncomingCall`/`realtimeCommunication`，UI 只读能力位；权限统一权限卡片与仅语音降级。
+
+### S7 错误码/文案治理
+
+- Dart `RtcErrorCode` 补 `not_mutual`/`blocked`（metadata→codegen）；`'answerCall: empty session'`/`REC`/教育文案改结构化错误与 `UITextConstants`/l10n。

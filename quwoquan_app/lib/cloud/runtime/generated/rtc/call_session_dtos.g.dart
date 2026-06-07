@@ -12,6 +12,16 @@ class CallParticipantDto {
     this.isCameraOn = true,
     this.joinedAt,
     this.leftAt,
+    this.displayName,
+    this.avatarUrl,
+    this.trustRelation = 'possibly_unknown',
+    this.sourceLabel,
+    this.isKnownContact = false,
+    this.mutualContext,
+    this.inviteStatus,
+    this.invitedBy,
+    this.connectionQuality,
+    this.isSpeaking = false,
   });
 
   final String userId;
@@ -21,6 +31,16 @@ class CallParticipantDto {
   final bool isCameraOn;
   final DateTime? joinedAt;
   final DateTime? leftAt;
+  final String? displayName;
+  final String? avatarUrl;
+  final String trustRelation;
+  final String? sourceLabel;
+  final bool isKnownContact;
+  final String? mutualContext;
+  final String? inviteStatus;
+  final String? invitedBy;
+  final String? connectionQuality;
+  final bool isSpeaking;
 
   factory CallParticipantDto.fromMap(Map<String, dynamic> map) {
     return CallParticipantDto(
@@ -35,6 +55,16 @@ class CallParticipantDto {
       leftAt: map['leftAt'] != null
           ? DateTime.tryParse(map['leftAt'] as String)
           : null,
+      displayName: map['displayName'] as String?,
+      avatarUrl: map['avatarUrl'] as String?,
+      trustRelation: map['trustRelation'] as String? ?? 'possibly_unknown',
+      sourceLabel: map['sourceLabel'] as String?,
+      isKnownContact: map['isKnownContact'] as bool? ?? false,
+      mutualContext: map['mutualContext'] as String?,
+      inviteStatus: map['inviteStatus'] as String?,
+      invitedBy: map['invitedBy'] as String?,
+      connectionQuality: map['connectionQuality'] as String?,
+      isSpeaking: map['isSpeaking'] as bool? ?? false,
     );
   }
 
@@ -47,6 +77,16 @@ class CallParticipantDto {
       'isCameraOn': isCameraOn,
       if (joinedAt != null) 'joinedAt': joinedAt!.toIso8601String(),
       if (leftAt != null) 'leftAt': leftAt!.toIso8601String(),
+      if (displayName != null) 'displayName': displayName,
+      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+      'trustRelation': trustRelation,
+      if (sourceLabel != null) 'sourceLabel': sourceLabel,
+      'isKnownContact': isKnownContact,
+      if (mutualContext != null) 'mutualContext': mutualContext,
+      if (inviteStatus != null) 'inviteStatus': inviteStatus,
+      if (invitedBy != null) 'invitedBy': invitedBy,
+      if (connectionQuality != null) 'connectionQuality': connectionQuality,
+      'isSpeaking': isSpeaking,
     };
   }
 
@@ -58,6 +98,16 @@ class CallParticipantDto {
     bool? isCameraOn,
     DateTime? joinedAt,
     DateTime? leftAt,
+    String? displayName,
+    String? avatarUrl,
+    String? trustRelation,
+    String? sourceLabel,
+    bool? isKnownContact,
+    String? mutualContext,
+    String? inviteStatus,
+    String? invitedBy,
+    String? connectionQuality,
+    bool? isSpeaking,
   }) {
     return CallParticipantDto(
       userId: userId ?? this.userId,
@@ -67,6 +117,16 @@ class CallParticipantDto {
       isCameraOn: isCameraOn ?? this.isCameraOn,
       joinedAt: joinedAt ?? this.joinedAt,
       leftAt: leftAt ?? this.leftAt,
+      displayName: displayName ?? this.displayName,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      trustRelation: trustRelation ?? this.trustRelation,
+      sourceLabel: sourceLabel ?? this.sourceLabel,
+      isKnownContact: isKnownContact ?? this.isKnownContact,
+      mutualContext: mutualContext ?? this.mutualContext,
+      inviteStatus: inviteStatus ?? this.inviteStatus,
+      invitedBy: invitedBy ?? this.invitedBy,
+      connectionQuality: connectionQuality ?? this.connectionQuality,
+      isSpeaking: isSpeaking ?? this.isSpeaking,
     );
   }
 
@@ -81,7 +141,17 @@ class CallParticipantDto {
           isMuted == other.isMuted &&
           isCameraOn == other.isCameraOn &&
           joinedAt == other.joinedAt &&
-          leftAt == other.leftAt;
+          leftAt == other.leftAt &&
+          displayName == other.displayName &&
+          avatarUrl == other.avatarUrl &&
+          trustRelation == other.trustRelation &&
+          sourceLabel == other.sourceLabel &&
+          isKnownContact == other.isKnownContact &&
+          mutualContext == other.mutualContext &&
+          inviteStatus == other.inviteStatus &&
+          invitedBy == other.invitedBy &&
+          connectionQuality == other.connectionQuality &&
+          isSpeaking == other.isSpeaking;
 
   @override
   int get hashCode => Object.hash(
@@ -92,6 +162,16 @@ class CallParticipantDto {
         isCameraOn,
         joinedAt,
         leftAt,
+        displayName,
+        avatarUrl,
+        trustRelation,
+        sourceLabel,
+        isKnownContact,
+        mutualContext,
+        inviteStatus,
+        invitedBy,
+        connectionQuality,
+        isSpeaking,
       );
 }
 

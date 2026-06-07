@@ -160,12 +160,14 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
     this.initialSearchScope = GlobalSearchScope.all,
     this.surface = AppChromeSurface.standard,
     this.showAssistantLabel = true,
+    this.hintFontSize,
   });
 
   final String hint;
   final GlobalSearchScope initialSearchScope;
   final AppChromeSurface surface;
   final bool showAssistantLabel;
+  final double? hintFontSize;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -187,6 +189,8 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
             ColorType.globalSearchFieldBorder,
           )
         : AppColorsFunctional.getColor(isDark, ColorType.separatorSubtle);
+    final effectiveHintFontSize =
+        hintFontSize ?? AppTypography.feedBodyResponsive(context);
 
     return Row(
       children: [
@@ -226,12 +230,12 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         strutStyle: StrutStyle(
-                          fontSize: AppTypography.feedBodyResponsive(context),
+                          fontSize: effectiveHintFontSize,
                           height: AppSpacing.textLineHeightDense,
                           forceStrutHeight: true,
                         ),
                         style: TextStyle(
-                          fontSize: AppTypography.feedBodyResponsive(context),
+                          fontSize: effectiveHintFontSize,
                           fontWeight: AppTypography.regular,
                           height: AppSpacing.textLineHeightDense,
                           color: secondary,
@@ -433,7 +437,7 @@ class GlobalQuickActionSheet {
     context.push(AppRoutePaths.startGroupChat);
   }
 
-  /// 打开「加好友」面板（账号态动作）。
+  /// 打开「添加联系人」面板（账号态动作）。
   static void openAddContact(BuildContext context) {
     showCupertinoModalPopup<void>(
       context: context,
@@ -632,7 +636,7 @@ class _AddContactSheetState extends ConsumerState<_AddContactSheet> {
             children: [
               ConversationSheetHeader(
                 isDark: isDark,
-                title: UITextConstants.addSameInterest,
+                title: UITextConstants.addContactSheetTitle,
               ),
               FutureBuilder<List<ChatContactRowDto>>(
                 future: _contactsFuture,
@@ -657,7 +661,7 @@ class _AddContactSheetState extends ConsumerState<_AddContactSheet> {
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                         child: Text(
-                          UITextConstants.noAddableSameInterest,
+                          UITextConstants.noAddableContacts,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: AppTypography.base,

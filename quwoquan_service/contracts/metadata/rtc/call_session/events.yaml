@@ -19,14 +19,21 @@ events:
     channel: event_store
     client_ws_type: call.ringing
     payload_fields: [callId, callType, initiatorId, initiatorRingtoneId, targetUserId, conversationId]
-    optional_client_string_fields: [callerName]
+    optional_client_string_fields: [callerName, sourceLabel, trustRelation, expiresAt]
     client_payload_defaults:
       callType: voice
     realtime_channel: "rt:rtc:user:{targetUserId}"
     push_policy:
       online: websocket
-      offline: voip_push
-      description: 在线走 WS 推送，离线走 VoIP Push（iOS CallKit / Android FullScreen Intent）
+      offline_ios: voip_push
+      offline_android: fcm_high_priority_full_screen_intent
+      offline_web: web_push_service_worker
+      description: >-
+        在线走 WS 推送；离线按平台分发：iOS VoIP Push（PushKit→收到即上报 CallKit），
+        Android FCM 高优先级+全屏意图（14+ 不可用降级 heads-up），Web Web Push+Service Worker（PWA 安装后）。
+      payload_contract: >-
+        推送负载统一含 callId、callType、initiatorId/callerName、sourceLabel（来源会话/群）、
+        trustRelation（known/possibly_unknown 信任标记）、expiresAt（过期时间，端侧幂等去重）。
 
   - name: CallAnswered
     description: 通话接听（参与者进入 connecting 状态）

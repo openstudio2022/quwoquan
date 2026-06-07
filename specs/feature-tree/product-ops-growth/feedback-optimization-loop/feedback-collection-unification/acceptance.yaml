@@ -53,7 +53,7 @@ gwt_acceptance:
       - services/content-service/internal/infrastructure/recommendation/interest_profile_test.go
       - services/content-service/internal/infrastructure/recommendation/segment_test.go
       - services/user-service/internal/infrastructure/projection/interest_profile_projector_test.go
-      - make verify-metadata
+      - quwoquan_service/tools/verify_metadata/main_test.go
     status: implemented
 execution:
   local_gate:

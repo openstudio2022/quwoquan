@@ -4,8 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 
-from _common.paths import release_root, task_root, task_entities, task_tags, task_entity_pages, task_graph, TASKS_ROOT
-from _common.io import read_ndjson, write_ndjson, write_json
+from _common.paths import release_root, task_root, task_entities, task_tags, task_entity_pages, task_graph
+from _common.io import write_json
 
 
 def assemble_release(task_id: str, release_id: str) -> Path:
@@ -42,25 +42,29 @@ def assemble_release(task_id: str, release_id: str) -> Path:
         graph_dir.mkdir(exist_ok=True)
         shutil.copy2(graph_src, graph_dir / "relations.ndjson")
 
-    # Posts from all batches
+    # Posts from all batches（对象优先：成品落 batch/posts 对象根）。
+    # release 包保留 5.review 侧车，供 publish_filter / ship 读取；其余过程阶段不进 release。
+    _process_dirs = {"1.download", "2.quality", "3.compose", "3.brief", "3.build", "4.draft"}
     posts_dst = root / "posts"
     posts_dst.mkdir(exist_ok=True)
-    task_dir = task_root(task_id)
-    batches_dir = task_dir / "batches"
+    batches_dir = task_root(task_id) / "batches"
     if batches_dir.exists():
         for batch_dir in sorted(batches_dir.iterdir()):
-            produce_posts = batch_dir / "produce" / "posts"
-            if produce_posts.exists():
-                for type_dir in produce_posts.iterdir():
-                    if type_dir.is_dir():
-                        dst_type = posts_dst / type_dir.name
-                        dst_type.mkdir(exist_ok=True)
-                        for topic_dir in type_dir.iterdir():
-                            if topic_dir.is_dir():
-                                dst_topic = dst_type / topic_dir.name
-                                if dst_topic.exists():
-                                    shutil.rmtree(dst_topic)
-                                shutil.copytree(topic_dir, dst_topic)
+            src = batch_dir / "posts"
+            if not src.is_dir():
+                continue
+            for manifest in sorted(src.rglob("manifest.json")):
+                leaf = manifest.parent
+                if not ((leaf / "article.md").exists() or (leaf / "gallery.md").exists()):
+                    continue
+                dst_leaf = posts_dst / leaf.relative_to(src)
+                if dst_leaf.exists():
+                    shutil.rmtree(dst_leaf)
+                dst_leaf.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(
+                    leaf, dst_leaf,
+                    ignore=lambda _d, names: [n for n in names if n in _process_dirs],
+                )
 
     # Release manifest
     write_json(root / "release_manifest.json", {

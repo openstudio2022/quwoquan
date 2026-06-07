@@ -87,7 +87,15 @@ func TestMain(m *testing.M) {
 	eventPublisher := mq.NewEventPublisher(redisRouter.Scene("realtime"))
 	domainSvc := callsession.NewCallSessionService()
 	tokenSvc := application.NewTokenService("testkey", "testsecret")
-	orchestrator := application.NewCallOrchestrator(callStore, callCache, domainSvc, nil, tokenSvc, eventPublisher)
+	orchestrator := application.NewCallOrchestrator(
+		callStore,
+		callCache,
+		domainSvc,
+		nil,
+		tokenSvc,
+		eventPublisher,
+		application.AllowRelationshipGateForTest(),
+	)
 
 	testHandler = rtchttp.NewCallHandler(orchestrator, nil).Routes()
 

@@ -31,12 +31,12 @@ class ContentApiMetadata {
     'GetHelperRead': '/v1/content/helper-read/{contentId}',
     'GetMediaAsset': '/v1/content/media/{mediaId}',
     'GetMyIntersectionSummary': '/v1/content/intersections/summary',
+    'GetObjectIntersections': '/v1/content/intersections/object',
     'GetPost': '/v1/content/posts/{postId}',
     'GetReactionState': '/v1/content/posts/{postId}/reactions',
     'GetRecommendation': '/v1/content/recommend',
     'GetReport': '/v1/content/reports/{reportId}',
     'InitMediaUpload': '/v1/content/media/uploads:init',
-    'LikeComment': '/v1/content/comments/{commentId}/like',
     'LikePost': '/v1/content/posts/{postId}/like',
     'ListCommentReplies': '/v1/content/posts/{postId}/comments/{commentId}/replies',
     'ListComments': '/v1/content/posts/{postId}/comments',
@@ -61,7 +61,6 @@ class ContentApiMetadata {
     'SelectManualVideoCover': '/v1/content/media/{mediaId}/cover:manual',
     'SharePost': '/v1/content/posts/{postId}/share',
     'UnfavoritePost': '/v1/content/posts/{postId}/favorite',
-    'UnlikeComment': '/v1/content/comments/{commentId}/like',
     'UnlikePost': '/v1/content/posts/{postId}/like',
     'UnsharePost': '/v1/content/posts/{postId}/share',
     'UpdatePost': '/v1/content/posts/{postId}',
@@ -88,12 +87,12 @@ class ContentApiMetadata {
     'GetHelperRead': 'GET',
     'GetMediaAsset': 'GET',
     'GetMyIntersectionSummary': 'GET',
+    'GetObjectIntersections': 'GET',
     'GetPost': 'GET',
     'GetReactionState': 'GET',
     'GetRecommendation': 'POST',
     'GetReport': 'GET',
     'InitMediaUpload': 'POST',
-    'LikeComment': 'POST',
     'LikePost': 'POST',
     'ListCommentReplies': 'GET',
     'ListComments': 'GET',
@@ -118,7 +117,6 @@ class ContentApiMetadata {
     'SelectManualVideoCover': 'POST',
     'SharePost': 'POST',
     'UnfavoritePost': 'DELETE',
-    'UnlikeComment': 'DELETE',
     'UnlikePost': 'DELETE',
     'UnsharePost': 'DELETE',
     'UpdatePost': 'PATCH',
@@ -146,12 +144,12 @@ class ContentApiMetadata {
     'GetHelperRead': 'public',
     'GetMediaAsset': 'public',
     'GetMyIntersectionSummary': 'required',
+    'GetObjectIntersections': 'required',
     'GetPost': 'public',
     'GetReactionState': 'optional',
     'GetRecommendation': 'public',
     'GetReport': 'public',
     'InitMediaUpload': 'required',
-    'LikeComment': 'required',
     'LikePost': 'optional',
     'ListCommentReplies': 'public',
     'ListComments': 'public',
@@ -176,7 +174,6 @@ class ContentApiMetadata {
     'SelectManualVideoCover': 'required',
     'SharePost': 'optional',
     'UnfavoritePost': 'required',
-    'UnlikeComment': 'required',
     'UnlikePost': 'optional',
     'UnsharePost': 'optional',
     'UpdatePost': 'required',
@@ -202,12 +199,12 @@ class ContentApiMetadata {
   static const String getHelperReadOperation = 'GetHelperRead';
   static const String getMediaAssetOperation = 'GetMediaAsset';
   static const String getMyIntersectionSummaryOperation = 'GetMyIntersectionSummary';
+  static const String getObjectIntersectionsOperation = 'GetObjectIntersections';
   static const String getPostOperation = 'GetPost';
   static const String getReactionStateOperation = 'GetReactionState';
   static const String getRecommendationOperation = 'GetRecommendation';
   static const String getReportOperation = 'GetReport';
   static const String initMediaUploadOperation = 'InitMediaUpload';
-  static const String likeCommentOperation = 'LikeComment';
   static const String likePostOperation = 'LikePost';
   static const String listCommentRepliesOperation = 'ListCommentReplies';
   static const String listCommentsOperation = 'ListComments';
@@ -232,7 +229,6 @@ class ContentApiMetadata {
   static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
   static const String sharePostOperation = 'SharePost';
   static const String unfavoritePostOperation = 'UnfavoritePost';
-  static const String unlikeCommentOperation = 'UnlikeComment';
   static const String unlikePostOperation = 'UnlikePost';
   static const String unsharePostOperation = 'UnsharePost';
   static const String updatePostOperation = 'UpdatePost';
@@ -313,6 +309,7 @@ class ContentApiMetadata {
     });
   }
   static const String getMyIntersectionSummaryPath = '/v1/content/intersections/summary';
+  static const String getObjectIntersectionsPath = '/v1/content/intersections/object';
   static const String getPostPathTemplate = '/v1/content/posts/{postId}';
   static String getPostPath({required String postId}) {
     return _fillPath(getPostPathTemplate, <String, String>{
@@ -333,12 +330,6 @@ class ContentApiMetadata {
     });
   }
   static const String initMediaUploadPath = '/v1/content/media/uploads:init';
-  static const String likeCommentPathTemplate = '/v1/content/comments/{commentId}/like';
-  static String likeCommentPath({required String commentId}) {
-    return _fillPath(likeCommentPathTemplate, <String, String>{
-      'commentId': commentId,
-    });
-  }
   static const String likePostPathTemplate = '/v1/content/posts/{postId}/like';
   static String likePostPath({required String postId}) {
     return _fillPath(likePostPathTemplate, <String, String>{
@@ -447,12 +438,6 @@ class ContentApiMetadata {
   static String unfavoritePostPath({required String postId}) {
     return _fillPath(unfavoritePostPathTemplate, <String, String>{
       'postId': postId,
-    });
-  }
-  static const String unlikeCommentPathTemplate = '/v1/content/comments/{commentId}/like';
-  static String unlikeCommentPath({required String commentId}) {
-    return _fillPath(unlikeCommentPathTemplate, <String, String>{
-      'commentId': commentId,
     });
   }
   static const String unlikePostPathTemplate = '/v1/content/posts/{postId}/like';

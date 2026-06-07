@@ -10,6 +10,7 @@ type ProfileSnapshot struct {
 	AvatarURL     string
 	AvatarAssetID string
 	AvatarVersion int
+	Bio           string
 }
 
 // ProfileSnapshotResolver loads display name / avatar for user IDs (batch).

@@ -139,7 +139,7 @@ func DefaultRegistry() Registry {
 	registry.Register(Metadata{
 		ToolName:           "search",
 		DisplayName:        "统一搜索",
-		Description:        "兼容端侧 search 工具的云端统一检索入口。",
+		Description:        "对应端侧 search 工具的云端统一检索入口。",
 		Placement:          PlacementCloud,
 		RequiredInputKeys:  []string{"query"},
 		RequiredOutputKeys: []string{"provider", "summary", "references", "coverage", "confidence", "freshnessHours"},

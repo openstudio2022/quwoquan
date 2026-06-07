@@ -5,9 +5,9 @@
   inputs/entity_page/<ref>.json（含 SOP 模板路径、字数下限、region/season 菜单、
   effective conditionAxes、产出目录），并写 assistant_tasks 清单，下发给 Agent。
 - Agent：按 SOP（sop/主页/<领域>/<类型>/{guide,template,example}.md，全局单一真相源、
-  不拷进任务）在产出目录物化 page.md(≥800字)+_entity.json(含 conditionProfile)+manifest.json。
-- validate：逐 coverage 实体校验三件套/字数/必填字段/conditionProfile 结构与取值是否
-  落在 region_catalog/season_catalog 内，作为 promote 发布门之前的采纳门。
+  不拷进任务）在产出目录物化 page.md(≥800字)+_entity.json(含 conditionProfile.evidenceRefs)+manifest.json。
+- validate：逐 coverage 实体校验三件套/字数/必填字段/conditionProfile 结构、取值和事实出处是否
+  落在 region_catalog/season_catalog 内并能回指 page/source，作为 promote 发布门之前的采纳门。
 """
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ from _common.io import read_json, write_assistant_task, write_json
 from _common.entity_page_quality import entity_page_quality_issues
 from _common.paths import (
     batch_assistant_task,
-    batch_command_root,
-    batch_inputs_dir,
+    batch_entity_page_input_path,
+    batch_root,
     task_data,
 )
 from _common.entity_extract import entity_ref, resolve_domain_etype
@@ -67,8 +67,8 @@ def season_keys() -> list[str]:
 
 def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> tuple[Path, list[str]]:
     """为 coverage 实体下发实体主页产出契约（inputs + assistant_tasks）。"""
-    inputs_dir = batch_inputs_dir(task_id, batch_id, "build", "entity_page")
-    inputs_dir.mkdir(parents=True, exist_ok=True)
+    inputs_root = batch_root(task_id, batch_id) / "entities"
+    inputs_root.mkdir(parents=True, exist_ok=True)
     axes = spec.get("conditionAxes") or {}
     data = task_data(task_id)
     refs: list[str] = []
@@ -76,7 +76,8 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
         domain, etype, name = target["domain"], target["etype"], target["name"]
         ref = _safe_ref(domain, etype, name)
         sop_dir = data.sop_dir(domain, etype)
-        write_json(inputs_dir / f"{ref}.json", {
+        input_path = batch_entity_page_input_path(task_id, batch_id, domain, etype, name)
+        write_json(input_path, {
             "schemaVersion": "quwoquan_data.stage_envelope",
             "taskId": task_id,
             "batchId": batch_id,
@@ -95,15 +96,25 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
                 "conditionAxes": axes,
                 "regionMenu": region_keys(),
                 "seasonMenu": season_keys(),
+                "conditionEvidenceContract": {
+                    "requiredWhen": "conditionProfile.regions 或 conditionProfile.seasons 非空",
+                    "field": "conditionProfile.evidenceRefs",
+                    "itemShape": {
+                        "field": "regions|seasons",
+                        "value": "与 conditionProfile 对应数组中的值一致",
+                        "source": "page.md|source.md|manual_source_plan",
+                        "pathOrNote": "path 或 note 至少一个非空",
+                    },
+                },
                 "outputDir": str(data.entity_dir(domain, etype, name)),
                 "sourceTaskId": task_id,
             },
         })
         refs.append(ref)
     manifest_path = batch_assistant_task(task_id, batch_id, "build", "entity_page")
-    results_dir = batch_command_root(task_id, batch_id, "build") / "results" / "entity_page"
-    write_assistant_task(manifest_path, step="entity_page", input_dir=inputs_dir, result_dir=results_dir, refs=refs)
-    return inputs_dir, refs
+    results_dir = data.entities_dir()
+    write_assistant_task(manifest_path, step="entity_page", input_dir=inputs_root, result_dir=results_dir, refs=refs)
+    return inputs_root, refs
 
 
 def _page_char_count(page: Path) -> int:
@@ -220,7 +231,46 @@ def validate_entity_page(
                 issues.append(f"{label}: conditionProfile.regions 越界 {bad_regions}（须 ∈ region_catalog）")
             if bad_seasons:
                 issues.append(f"{label}: conditionProfile.seasons 越界 {bad_seasons}（须 ∈ season_catalog）")
+            issues.extend(_condition_profile_evidence_issues(cprofile, label))
     issues.extend(_asset_closure_issues(data.entity_dir(domain, etype, name), manifest_payload, label))
+    return issues
+
+
+def _condition_profile_evidence_issues(cprofile: dict[str, Any], label: str) -> list[str]:
+    """regions/seasons 是可发布事实，必须逐项回指来源或主页正文。"""
+    issues: list[str] = []
+    evidence_refs = cprofile.get("evidenceRefs")
+    if not isinstance(evidence_refs, list) or not evidence_refs:
+        if cprofile.get("regions") or cprofile.get("seasons"):
+            issues.append(f"{label}: conditionProfile.regions/seasons 须含 evidenceRefs 事实出处")
+        return issues
+
+    covered: set[tuple[str, str]] = set()
+    for idx, ref in enumerate(evidence_refs):
+        if not isinstance(ref, dict):
+            issues.append(f"{label}: conditionProfile.evidenceRefs[{idx}] 须为对象")
+            continue
+        field = str(ref.get("field") or "")
+        value = str(ref.get("value") or "")
+        source = str(ref.get("source") or "")
+        path = str(ref.get("path") or "")
+        note = str(ref.get("note") or "")
+        if field not in {"regions", "seasons"}:
+            issues.append(f"{label}: conditionProfile.evidenceRefs[{idx}].field 须为 regions 或 seasons")
+            continue
+        if not value:
+            issues.append(f"{label}: conditionProfile.evidenceRefs[{idx}].value 缺失")
+            continue
+        if source not in {"page.md", "source.md", "manual_source_plan"}:
+            issues.append(f"{label}: conditionProfile.evidenceRefs[{idx}].source 须为 page.md/source.md/manual_source_plan")
+        if not path and not note:
+            issues.append(f"{label}: conditionProfile.evidenceRefs[{idx}] 须含 path 或 note")
+        covered.add((field, value))
+
+    for field in ("regions", "seasons"):
+        for value in [str(v) for v in (cprofile.get(field) or [])]:
+            if (field, value) not in covered:
+                issues.append(f"{label}: conditionProfile.{field}={value} 缺少对应 evidenceRefs")
     return issues
 
 

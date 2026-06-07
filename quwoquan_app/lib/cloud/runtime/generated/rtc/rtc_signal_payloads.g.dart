@@ -82,6 +82,9 @@ class RtcCallRingingPayload {
     this.targetUserId,
     this.conversationId,
     this.callerName,
+    this.sourceLabel,
+    this.trustRelation,
+    this.expiresAt,
   });
 
   final String? callId;
@@ -91,6 +94,9 @@ class RtcCallRingingPayload {
   final String? targetUserId;
   final String? conversationId;
   final String? callerName;
+  final String? sourceLabel;
+  final String? trustRelation;
+  final String? expiresAt;
 
   factory RtcCallRingingPayload.fromWire(Map<String, dynamic> payload) {
     return RtcCallRingingPayload(
@@ -101,6 +107,9 @@ class RtcCallRingingPayload {
       targetUserId: payload['targetUserId'] as String?,
       conversationId: payload['conversationId'] as String?,
       callerName: payload['callerName'] as String?,
+      sourceLabel: payload['sourceLabel'] as String?,
+      trustRelation: payload['trustRelation'] as String?,
+      expiresAt: payload['expiresAt'] as String?,
     );
   }
 }
@@ -451,6 +460,9 @@ const rtcCallRingingPayloadWireKeys = <String>[
 /// `CallRinging.optional_client_string_fields`
 const rtcCallRingingOptionalClientStringWireKeys = <String>[
   'callerName',
+  'sourceLabel',
+  'trustRelation',
+  'expiresAt',
 ];
 
 /// `CallAnswered.payload_fields`（codegen 与 events.yaml 同步）。

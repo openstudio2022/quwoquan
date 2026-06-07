@@ -99,7 +99,7 @@
     "commentsEveryNPosts": 4
   },
   "formats": {
-    "coreLegacy": "png",
+    "corePrimary": "png",
     "generatedPrimary": "jpg",
     "groupComposite": "png"
   },

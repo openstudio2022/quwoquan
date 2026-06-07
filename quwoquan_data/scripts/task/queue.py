@@ -72,8 +72,8 @@ def _run_one(path: Path) -> dict[str, Any]:
     payload["attempts"] = int(payload.get("attempts") or 0) + 1
     try:
         ns = argparse.Namespace(
-            task_id=payload["taskId"],
-            batch_id=payload["batchId"],
+            task=payload["taskId"],
+            batch=payload["batchId"],
             resume=True,
             until=payload.get("until") or None,
             dry_run=False,

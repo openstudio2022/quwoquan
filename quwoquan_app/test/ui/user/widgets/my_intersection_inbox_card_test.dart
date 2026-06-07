@@ -32,6 +32,13 @@ class _EmptyIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<void> reportExposure({required List<String> objectIds}) async {}
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 8,
+  }) async => const <IntersectionReason>[];
 }
 
 Widget _scope(ProviderContainer container) {

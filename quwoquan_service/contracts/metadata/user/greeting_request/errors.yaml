@@ -7,8 +7,8 @@ errors:
     dart_const: greetingTargetBlockedSender
     l10n_key: error_greeting_target_blocked_sender
     user_message:
-      zh: 发送失败，对方开启了消息保护
-      en: Failed to send, the recipient has message protection enabled
+      zh: 发送失败，对方不接收你的打招呼
+      en: Failed to send, the recipient does not accept greetings
     debug_hint: target has blocked sender or has allowStrangerGreeting=false
 
   - code: USER.GREETING.duplicate_pending
@@ -34,7 +34,7 @@ errors:
     dart_const: greetingAlreadyContact
     l10n_key: error_greeting_already_contact
     user_message:
-      zh: 已是同好，可直接发消息
+      zh: 已互相关注，可直接发消息
       en: Already a contact, you can send messages directly
     debug_hint: requester and target are already mutual followers
 

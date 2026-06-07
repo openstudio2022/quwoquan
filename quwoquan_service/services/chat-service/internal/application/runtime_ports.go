@@ -21,6 +21,19 @@ type GroupAvatarTaskScheduler interface {
 	EnqueueConversationAvatarPatch(ctx context.Context, task ConversationAvatarPatchTask) error
 }
 
+type RelationshipCapability struct {
+	CanCreateDirectConversation bool
+	CanSendMessage              bool
+	HasFormalConversation       bool
+	IsMutual                    bool
+	IsBlocked                   bool
+	IsBlockedBy                 bool
+}
+
+type RelationshipGate interface {
+	GetCapability(ctx context.Context, viewerID, targetID string) (RelationshipCapability, error)
+}
+
 type GroupAvatarRecomputeTask struct {
 	ConversationID string
 	ActorID        string
@@ -47,4 +60,29 @@ func (noopGroupAvatarTaskScheduler) EnqueueConversationAvatarPatch(context.Conte
 
 func NoopGroupAvatarTaskScheduler() GroupAvatarTaskScheduler {
 	return noopGroupAvatarTaskScheduler{}
+}
+
+type denyRelationshipGate struct{}
+
+func (denyRelationshipGate) GetCapability(context.Context, string, string) (RelationshipCapability, error) {
+	return RelationshipCapability{}, nil
+}
+
+func DenyRelationshipGate() RelationshipGate {
+	return denyRelationshipGate{}
+}
+
+type allowRelationshipGate struct{}
+
+func (allowRelationshipGate) GetCapability(context.Context, string, string) (RelationshipCapability, error) {
+	return RelationshipCapability{
+		CanCreateDirectConversation: true,
+		CanSendMessage:              true,
+		HasFormalConversation:       true,
+		IsMutual:                    true,
+	}, nil
+}
+
+func AllowRelationshipGateForTest() RelationshipGate {
+	return allowRelationshipGate{}
 }

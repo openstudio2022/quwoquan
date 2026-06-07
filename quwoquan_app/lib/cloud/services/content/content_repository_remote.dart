@@ -237,7 +237,7 @@ class RemoteContentRepository implements ContentRepository {
   Future<CommentPage> listComments({
     required String postId,
     String? cursor,
-    String sort = 'latest',
+    String sort = 'recommended',
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final query = <String, String>{'limit': '$limit', 'sort': sort};
@@ -262,16 +262,57 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
+  Future<CommentPage> listCommentReplies({
+    required String postId,
+    required String commentId,
+    String? cursor,
+    int limit = CloudApiQueryDefaults.commentRepliesLimit,
+  }) async {
+    final query = <String, String>{'limit': '$limit'};
+    if (cursor != null && cursor.isNotEmpty) query['cursor'] = cursor;
+    final uri = _uri(
+      ContentApiMetadata.listCommentRepliesPath(
+        postId: postId,
+        commentId: commentId,
+      ),
+      queryParameters: query,
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.listCommentReplies,
+      ),
+    );
+    final rawPage = CloudResponseDecoder.asCursorPage(
+      decoded,
+      context: ContentRequestPageIds.listCommentReplies,
+    );
+    final dtos = rawPage.items
+        .cast<Map<String, dynamic>>()
+        .map(CommentDto.fromMap)
+        .toList(growable: false);
+    return CommentPage(items: dtos, nextCursor: rawPage.nextCursor);
+  }
+
+  @override
   Future<CommentDto> createComment({
     required String postId,
     required String content,
     String? replyToCommentId,
+    List<String> attachmentMediaIds = const <String>[],
+    List<Map<String, dynamic>> mentions = const <Map<String, dynamic>>[],
     String? subAccountId,
     String? personaContextVersion,
   }) async {
     final uri = _uri(ContentApiMetadata.createCommentPath(postId: postId));
     final body = <String, dynamic>{'content': content};
     if (replyToCommentId != null) body['replyToCommentId'] = replyToCommentId;
+    if (attachmentMediaIds.isNotEmpty) {
+      body['attachmentMediaIds'] = attachmentMediaIds;
+    }
+    if (mentions.isNotEmpty) {
+      body['mentions'] = mentions;
+    }
     if (subAccountId != null) body['subAccountId'] = subAccountId;
     if (personaContextVersion != null) {
       body['personaContextVersion'] = personaContextVersion;
@@ -306,24 +347,25 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> likeComment({required String commentId}) async {
-    final uri = _uri(ContentApiMetadata.likeCommentPath(commentId: commentId));
-    await _httpClient.postJson(
-      uri,
-      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.likeComment),
-      body: {},
-    );
-  }
-
-  @override
-  Future<void> unlikeComment({required String commentId}) async {
+  Future<CommentDto> reactToComment({
+    required String commentId,
+    required String reaction,
+  }) async {
     final uri = _uri(
-      ContentApiMetadata.unlikeCommentPath(commentId: commentId),
+      ContentApiMetadata.reactToCommentPath(commentId: commentId),
     );
-    await _httpClient.deleteJson(
+    final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.unlikeComment),
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.reactToComment,
+      ),
+      body: <String, dynamic>{'viewerReaction': reaction, 'reaction': reaction},
     );
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.reactToComment,
+    );
+    return _commentDtoFromContentWire(obj);
   }
 
   @override

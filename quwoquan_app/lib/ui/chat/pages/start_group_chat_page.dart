@@ -37,7 +37,7 @@ import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dar
 
 // settings-canonical-exception: 多步发起群聊向导，完整 Inset 化见后续 slice owner:chat CR-20260329-003
 
-/// 发起群聊页（图一：创建新群聊 + 相关同好）
+/// 发起群聊页（图一：创建新群聊 + 相关联系人）
 class StartGroupChatPage extends ConsumerStatefulWidget {
   const StartGroupChatPage({
     super.key,
@@ -192,7 +192,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _handleAddMembersSuccess(int count) {
-    AppToast.show(context, '已添加 $count 位同好');
+    AppToast.show(
+      context,
+      UITextConstants.startGroupChatMembersAddedCount(count),
+    );
     context.pop();
   }
 
@@ -328,7 +331,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             return;
           }
           if (selectableMembers.isEmpty) {
-            _showEmptySelectableMembersToast('该群暂无可添加的互关同好');
+            _showEmptySelectableMembersToast(
+              UITextConstants.startGroupChatNoMutualContactsInGroup,
+            );
             return;
           }
           _openMemberSelectSheet(
@@ -365,7 +370,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             return;
           }
           if (selectableMembers.isEmpty) {
-            _showEmptySelectableMembersToast('该圈暂无可添加的互关同好');
+            _showEmptySelectableMembersToast(
+              UITextConstants.startGroupChatNoMutualContactsInCircle,
+            );
             return;
           }
           _openMemberSelectSheet(
@@ -549,7 +556,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       ],
       SizedBox(height: AppSpacing.md),
       _SelectionSectionLabel(
-        title: UITextConstants.relatedSameInterest,
+        title: UITextConstants.relatedMutualFollow,
         color: fgSecondary,
       ),
       SizedBox(height: AppSpacing.xs),

@@ -508,7 +508,7 @@ void main() {
                   'data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg',
               'kind': 'image',
               'scope': 'cold_start',
-              'objectKey': 'media/image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+              'objectKey': 'media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
               'caption': '封面',
             },
             {
@@ -517,7 +517,7 @@ void main() {
               'kind': 'image',
               'scope': 'cold_start',
               'objectKey':
-                  'media/image/post/chuanxi_v2_峨眉山周末_自驾/v1/detail_2.jpg',
+                  'media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/detail_2.jpg',
               'caption': '配图2',
             },
           ],
@@ -542,7 +542,7 @@ void main() {
             .where((node) => node.isFigure)
             .map((node) => node.imageUrl),
         contains(
-          'https://127.0.0.1:17100/media/image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+          'https://127.0.0.1:17100/media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
         ),
       );
       expect(r.pages, isNotEmpty);

@@ -169,6 +169,7 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		bundle, err := h.service.GetObjectPageBundle(
 			r.Context(),
+			resolveViewerID(r),
 			homepageID,
 			query.Get("referralSource"),
 			query.Get("feedRequestId"),
@@ -221,6 +222,13 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 		}
 		writeRuntimeNotFound(w, r)
 	}
+}
+
+func resolveViewerID(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
 }
 
 func (h *Handler) handleClaimRequests(

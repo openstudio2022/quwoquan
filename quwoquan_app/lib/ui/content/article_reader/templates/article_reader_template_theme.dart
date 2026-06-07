@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/platform/app_font_families.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 
@@ -473,20 +474,7 @@ ArticleTypographySpec resolveArticleTypography(
     double height = 1.7,
     Color? color,
   }) {
-    final fallback = switch (fontPreset) {
-      ArticleFontPreset.classic => const <String>[
-        'Times New Roman',
-        'STSong',
-        'Songti SC',
-      ],
-      ArticleFontPreset.handwritten => const <String>['Kaiti SC', 'STKaiti'],
-      ArticleFontPreset.rounded => const <String>[
-        'PingFang SC',
-        'SF Pro Rounded',
-      ],
-      ArticleFontPreset.mono => const <String>['Menlo', 'Monaco'],
-      ArticleFontPreset.clean => const <String>['PingFang SC'],
-    };
+    final stack = resolveArticleFontStack(fontPreset);
 
     return TextStyle(
       color: color ?? palette.textColor,
@@ -494,14 +482,8 @@ ArticleTypographySpec resolveArticleTypography(
       fontWeight: weight,
       height: height,
       letterSpacing: fontPreset == ArticleFontPreset.mono ? 0.15 : 0.05,
-      fontFamily: switch (fontPreset) {
-        ArticleFontPreset.classic => 'Times New Roman',
-        ArticleFontPreset.handwritten => 'Kaiti SC',
-        ArticleFontPreset.rounded => 'SF Pro Rounded',
-        ArticleFontPreset.mono => 'Menlo',
-        ArticleFontPreset.clean => null,
-      },
-      fontFamilyFallback: fallback,
+      fontFamily: stack.fontFamily,
+      fontFamilyFallback: stack.fontFamilyFallback,
     );
   }
 
@@ -546,20 +528,7 @@ ArticleTypographySpec resolveArticleTypographyForPaper(
     double height = 1.7,
     Color? color,
   }) {
-    final fallback = switch (fontPreset) {
-      ArticleFontPreset.classic => const <String>[
-        'STSong',
-        'Songti SC',
-        'Noto Serif CJK SC',
-      ],
-      ArticleFontPreset.handwritten => const <String>['STKaiti', 'Kaiti SC'],
-      ArticleFontPreset.rounded => const <String>[
-        'PingFang SC',
-        'SF Pro Rounded',
-      ],
-      ArticleFontPreset.mono => const <String>['Menlo', 'Monaco'],
-      ArticleFontPreset.clean => const <String>['PingFang SC'],
-    };
+    final stack = resolveArticleFontStack(fontPreset);
 
     return TextStyle(
       color: color ?? palette.textColor,
@@ -567,14 +536,8 @@ ArticleTypographySpec resolveArticleTypographyForPaper(
       fontWeight: weight,
       height: height,
       letterSpacing: fontPreset == ArticleFontPreset.mono ? 0.15 : 0.05,
-      fontFamily: switch (fontPreset) {
-        ArticleFontPreset.classic => 'Songti SC',
-        ArticleFontPreset.handwritten => 'Kaiti SC',
-        ArticleFontPreset.rounded => 'SF Pro Rounded',
-        ArticleFontPreset.mono => 'Menlo',
-        ArticleFontPreset.clean => null,
-      },
-      fontFamilyFallback: fallback,
+      fontFamily: stack.fontFamily,
+      fontFamilyFallback: stack.fontFamilyFallback,
     );
   }
 

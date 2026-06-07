@@ -72,13 +72,13 @@ class DevUpTest(unittest.TestCase):
         handler = AlphaMediaOriginHandler.__new__(AlphaMediaOriginHandler)
         self.assertEqual(
             handler._resolve_alias("/media/avatar/conversation/conv_002/v1/mock.png"),
-            "media/avatar/group/fixture_conv_group/v1/composite.png",
+            "media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png",
         )
         self.assertEqual(
             handler._resolve_alias("/media/avatar/conversation/conv_006/v1/mock.png"),
-            "media/avatar/group/fixture_conv_photo_group/v1/composite.png",
+            "media/avatar/s/archived-avatar/group/fixture_conv_photo_group/v1/composite.png",
         )
-        self.assertIsNone(handler._resolve_alias("/media/image/post/fixture_photo_001/v1/cover.png"))
+        self.assertIsNone(handler._resolve_alias("/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"))
 
     def test_alpha_mock_public_plane_ops_event_endpoints(self) -> None:
         handler = MockPublicPlaneHandler.__new__(MockPublicPlaneHandler)

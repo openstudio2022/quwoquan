@@ -1,4 +1,4 @@
-// L2 契约测试：Post 业务对象 — 评论 CRUD、分页、点赞、排序、个人主页、App Config
+// L2 契约测试：Post 业务对象 — 评论 CRUD、分页、三态反应、排序、个人主页、App Config
 package tests
 
 import (
@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"quwoquan_service/services/content-service/internal/application"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
@@ -412,13 +413,13 @@ func TestCommentTooLong(t *testing.T) {
 	}
 }
 
-func TestLikeComment(t *testing.T) {
+func TestReactToCommentThreeStateContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Like comment","mediaUrls":["https://example.com/img.jpg"]}`)
+	created := createPost(t, `{"contentType":"image","title":"React comment","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 
-	commentBody := `{"content":"点赞测试"}`
+	commentBody := `{"content":"三态反应测试"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/comments", strings.NewReader(commentBody))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -428,36 +429,67 @@ func TestLikeComment(t *testing.T) {
 	comment, _ := createResp["comment"].(map[string]any)
 	commentID, _ := comment["_id"].(string)
 
-	likeReq := httptest.NewRequest(http.MethodPost, "/v1/content/comments/"+commentID+"/like", nil)
+	likeReq := httptest.NewRequest(http.MethodPost, "/v1/content/comments/"+commentID+"/reaction", strings.NewReader(`{"reaction":"like"}`))
+	likeReq.Header.Set("Content-Type", "application/json")
 	likeReq.Header.Set("X-Client-User-Id", "user_liker")
 	likeRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(likeRec, likeReq)
 	if likeRec.Code != http.StatusOK {
-		t.Fatalf("like comment: expected 200, got %d: %s", likeRec.Code, likeRec.Body.String())
+		t.Fatalf("react like: expected 200, got %d: %s", likeRec.Code, likeRec.Body.String())
 	}
 	var likeResp map[string]any
 	json.Unmarshal(likeRec.Body.Bytes(), &likeResp)
-	if likeResp["liked"] != true {
-		t.Error("expected liked=true")
+	likedComment, _ := likeResp["comment"].(map[string]any)
+	if likedComment["viewerReaction"] != "like" {
+		t.Errorf("expected viewerReaction=like, got %v", likedComment["viewerReaction"])
 	}
-	likeCount, _ := likeResp["likeCount"].(float64)
+	likeCount, _ := likedComment["likeCount"].(float64)
 	if likeCount != 1 {
 		t.Errorf("expected likeCount=1, got %v", likeCount)
 	}
 
-	unlikeReq := httptest.NewRequest(http.MethodDelete, "/v1/content/comments/"+commentID+"/like", nil)
-	unlikeReq.Header.Set("X-Client-User-Id", "user_liker")
-	unlikeRec := httptest.NewRecorder()
-	testHandler.ServeHTTP(unlikeRec, unlikeReq)
-	if unlikeRec.Code != http.StatusOK {
-		t.Fatalf("unlike comment: expected 200, got %d", unlikeRec.Code)
+	dislikeReq := httptest.NewRequest(http.MethodPost, "/v1/content/comments/"+commentID+"/reaction", strings.NewReader(`{"reaction":"dislike"}`))
+	dislikeReq.Header.Set("Content-Type", "application/json")
+	dislikeReq.Header.Set("X-Client-User-Id", "user_liker")
+	dislikeRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(dislikeRec, dislikeReq)
+	if dislikeRec.Code != http.StatusOK {
+		t.Fatalf("react dislike: expected 200, got %d: %s", dislikeRec.Code, dislikeRec.Body.String())
+	}
+	var dislikeResp map[string]any
+	json.Unmarshal(dislikeRec.Body.Bytes(), &dislikeResp)
+	dislikedComment, _ := dislikeResp["comment"].(map[string]any)
+	if dislikedComment["viewerReaction"] != "dislike" {
+		t.Errorf("expected viewerReaction=dislike, got %v", dislikedComment["viewerReaction"])
+	}
+	if dislikedComment["likeCount"].(float64) != 0 || dislikedComment["dislikeCount"].(float64) != 1 {
+		t.Errorf("expected like/dislike counts 0/1, got %v/%v", dislikedComment["likeCount"], dislikedComment["dislikeCount"])
+	}
+
+	noneReq := httptest.NewRequest(http.MethodPost, "/v1/content/comments/"+commentID+"/reaction", strings.NewReader(`{"reaction":"none"}`))
+	noneReq.Header.Set("Content-Type", "application/json")
+	noneReq.Header.Set("X-Client-User-Id", "user_liker")
+	noneRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(noneRec, noneReq)
+	if noneRec.Code != http.StatusOK {
+		t.Fatalf("react none: expected 200, got %d: %s", noneRec.Code, noneRec.Body.String())
+	}
+	var noneResp map[string]any
+	json.Unmarshal(noneRec.Body.Bytes(), &noneResp)
+	noneComment, _ := noneResp["comment"].(map[string]any)
+	if noneComment["viewerReaction"] != "none" {
+		t.Errorf("expected viewerReaction=none, got %v", noneComment["viewerReaction"])
 	}
 }
 
-func TestCommentHotSort(t *testing.T) {
+func TestReactToCommentContract(t *testing.T) {
+	TestReactToCommentThreeStateContract(t)
+}
+
+func TestCommentMostLikedSort(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := createPost(t, `{"contentType":"image","title":"Hot sort","mediaUrls":["https://example.com/img.jpg"]}`)
+	created := createPost(t, `{"contentType":"image","title":"Most liked sort","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 
 	createComment := func(content string) string {
@@ -474,20 +506,21 @@ func TestCommentHotSort(t *testing.T) {
 	}
 
 	createComment("普通评论")
-	hotCommentID := createComment("热评")
+	mostLikedCommentID := createComment("高赞评论")
 
 	for i := 0; i < 3; i++ {
-		likeReq := httptest.NewRequest(http.MethodPost, "/v1/content/comments/"+hotCommentID+"/like", nil)
+		likeReq := httptest.NewRequest(http.MethodPost, "/v1/content/comments/"+mostLikedCommentID+"/reaction", strings.NewReader(`{"reaction":"like"}`))
+		likeReq.Header.Set("Content-Type", "application/json")
 		likeReq.Header.Set("X-Client-User-Id", "liker_"+strings.Repeat("x", i))
 		likeRec := httptest.NewRecorder()
 		testHandler.ServeHTTP(likeRec, likeReq)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/comments?sort=hot&limit=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/comments?sort=most_liked&limit=10", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("list hot comments: expected 200, got %d", rec.Code)
+		t.Fatalf("list most_liked comments: expected 200, got %d", rec.Code)
 	}
 	var resp map[string]any
 	json.Unmarshal(rec.Body.Bytes(), &resp)
@@ -496,8 +529,299 @@ func TestCommentHotSort(t *testing.T) {
 		t.Fatalf("expected >=2 comments, got %d", len(items))
 	}
 	firstItem, _ := items[0].(map[string]any)
-	if firstItem["_id"] != hotCommentID {
-		t.Errorf("hot sort: expected hot comment first, got %v", firstItem["_id"])
+	if firstItem["_id"] != mostLikedCommentID {
+		t.Errorf("most_liked sort: expected most liked comment first, got %v", firstItem["_id"])
+	}
+}
+
+func TestCommentListRecommendedLatestMostLiked(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPost(t, `{"contentType":"image","title":"Comment sort matrix","mediaUrls":["https://example.com/img.jpg"]}`)
+	postID, _ := created["_id"].(string)
+	if postID == "" {
+		t.Fatal("missing post id for comment sort matrix test")
+	}
+
+	createComment := func(authorID, content string) string {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/comments", strings.NewReader(`{"content":"`+content+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Client-User-Id", authorID)
+		rec := httptest.NewRecorder()
+		testHandler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create comment %s: expected 201, got %d: %s", content, rec.Code, rec.Body.String())
+		}
+		var resp map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode create comment response: %v", err)
+		}
+		comment, _ := resp["comment"].(map[string]any)
+		commentID, _ := comment["_id"].(string)
+		if commentID == "" {
+			t.Fatalf("missing comment id for %s", content)
+		}
+		return commentID
+	}
+
+	likeComment := func(commentID, userID string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/v1/content/comments/"+commentID+"/reaction", strings.NewReader(`{"reaction":"like"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Client-User-Id", userID)
+		rec := httptest.NewRecorder()
+		testHandler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("like comment %s: expected 200, got %d: %s", commentID, rec.Code, rec.Body.String())
+		}
+	}
+
+	listComments := func(sort string) []map[string]any {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/comments?sort="+sort+"&limit=10", nil)
+		rec := httptest.NewRecorder()
+		testHandler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("list comments sort=%s: expected 200, got %d: %s", sort, rec.Code, rec.Body.String())
+		}
+		var resp map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode list comments sort=%s: %v", sort, err)
+		}
+		items, _ := resp["items"].([]any)
+		out := make([]map[string]any, 0, len(items))
+		for _, item := range items {
+			if mapped, ok := item.(map[string]any); ok {
+				out = append(out, mapped)
+			}
+		}
+		return out
+	}
+
+	olderID := createComment("sort_author_old", "较早评论")
+	time.Sleep(1100 * time.Millisecond)
+	newerID := createComment("sort_author_new", "较新评论")
+	likeComment(olderID, "sort_liker_1")
+	likeComment(olderID, "sort_liker_2")
+
+	recommended := listComments("recommended")
+	if len(recommended) != 2 {
+		t.Fatalf("expected 2 recommended comments, got %d", len(recommended))
+	}
+	if recommended[0]["_id"] != olderID {
+		t.Fatalf("expected recommended sort to keep the high-score older comment first, got %v", recommended[0]["_id"])
+	}
+	if recommended[1]["_id"] != newerID {
+		t.Fatalf("expected recommended sort to keep the newer comment second, got %v", recommended[1]["_id"])
+	}
+
+	latest := listComments("latest")
+	if len(latest) != 2 {
+		t.Fatalf("expected 2 latest comments, got %d", len(latest))
+	}
+	if latest[0]["_id"] != newerID {
+		t.Fatalf("expected latest sort to return newer comment first, got %v", latest[0]["_id"])
+	}
+	if latest[1]["_id"] != olderID {
+		t.Fatalf("expected latest sort to return older comment second, got %v", latest[1]["_id"])
+	}
+
+	mostLiked := listComments("most_liked")
+	if len(mostLiked) != 2 {
+		t.Fatalf("expected 2 most_liked comments, got %d", len(mostLiked))
+	}
+	if mostLiked[0]["_id"] != olderID {
+		t.Fatalf("expected most_liked sort to return liked older comment first, got %v", mostLiked[0]["_id"])
+	}
+	if mostLiked[1]["_id"] != newerID {
+		t.Fatalf("expected most_liked sort to return newer comment second, got %v", mostLiked[1]["_id"])
+	}
+}
+
+func TestCreateCommentWithAttachmentAndMentions(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPost(t, `{"contentType":"image","title":"Comment attachment mention","mediaUrls":["https://example.com/img.jpg"]}`)
+	postID, _ := created["_id"].(string)
+	if postID == "" {
+		t.Fatal("missing post id for attachment mention test")
+	}
+
+	mediaInitReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads:init", strings.NewReader(`{"mediaType":"image","assetScope":"comment"}`))
+	mediaInitReq.Header.Set("Content-Type", "application/json")
+	mediaInitReq.Header.Set("X-Client-User-Id", "comment_media_author")
+	mediaInitRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(mediaInitRec, mediaInitReq)
+	if mediaInitRec.Code != http.StatusOK {
+		t.Fatalf("init media: expected 200, got %d: %s", mediaInitRec.Code, mediaInitRec.Body.String())
+	}
+	var mediaInitResp map[string]any
+	if err := json.Unmarshal(mediaInitRec.Body.Bytes(), &mediaInitResp); err != nil {
+		t.Fatalf("decode media init response: %v", err)
+	}
+	sessionID := asTestString(mediaInitResp["sessionId"])
+	mediaID := asTestString(mediaInitResp["mediaId"])
+	if sessionID == "" || mediaID == "" {
+		t.Fatalf("missing media session or id: sessionID=%q mediaID=%q", sessionID, mediaID)
+	}
+
+	completeReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads/"+sessionID+":complete", nil)
+	completeReq.Header.Set("X-Client-User-Id", "comment_media_author")
+	completeRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(completeRec, completeReq)
+	if completeRec.Code != http.StatusOK {
+		t.Fatalf("complete media: expected 200, got %d: %s", completeRec.Code, completeRec.Body.String())
+	}
+
+	commentBody := `{"content":"附件和提及评论","attachmentMediaIds":["` + mediaID + `"],"mentions":[{"type":"assistant","targetId":"assistant_xiaoqu","displayName":"小趣"}]}`
+	commentReq := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/comments", strings.NewReader(commentBody))
+	commentReq.Header.Set("Content-Type", "application/json")
+	commentReq.Header.Set("X-Client-User-Id", "comment_media_author")
+	commentRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(commentRec, commentReq)
+	if commentRec.Code != http.StatusCreated {
+		t.Fatalf("create comment: expected 201, got %d: %s", commentRec.Code, commentRec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(commentRec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode create comment response: %v", err)
+	}
+	comment, _ := resp["comment"].(map[string]any)
+	if comment == nil {
+		t.Fatal("create comment response missing comment object")
+	}
+	if comment["assistantMentioned"] != true {
+		t.Fatalf("expected assistantMentioned=true, got %v", comment["assistantMentioned"])
+	}
+	if comment["content"] != "附件和提及评论" {
+		t.Fatalf("expected comment content to round-trip, got %v", comment["content"])
+	}
+	attachmentIDs, _ := comment["attachmentMediaIds"].([]any)
+	if len(attachmentIDs) != 1 || attachmentIDs[0] != mediaID {
+		t.Fatalf("expected attachmentMediaIds to contain %q, got %v", mediaID, comment["attachmentMediaIds"])
+	}
+	attachments, _ := comment["attachments"].([]any)
+	if len(attachments) != 1 {
+		t.Fatalf("expected one attachment snapshot, got %d", len(attachments))
+	}
+	attachment, _ := attachments[0].(map[string]any)
+	if attachment["mediaId"] != mediaID {
+		t.Fatalf("expected attachment mediaId=%q, got %v", mediaID, attachment["mediaId"])
+	}
+	mentions, _ := comment["mentions"].([]any)
+	if len(mentions) != 1 {
+		t.Fatalf("expected one mention snapshot, got %d", len(mentions))
+	}
+	mention, _ := mentions[0].(map[string]any)
+	if mention["type"] != "assistant" || mention["targetId"] != "assistant_xiaoqu" || mention["displayName"] != "小趣" {
+		t.Fatalf("unexpected mention snapshot: %+v", mention)
+	}
+}
+
+func TestCommentReplyPreviewAndExpandContract(t *testing.T) {
+	TestCommentRepliesAttachmentsAndMentionsContract(t)
+}
+
+func TestCommentRepliesAttachmentsAndMentionsContract(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPost(t, `{"contentType":"image","title":"Reply contract","mediaUrls":["https://example.com/img.jpg"]}`)
+	postID, _ := created["_id"].(string)
+
+	parentReq := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/comments", strings.NewReader(`{"content":"父评论","mentions":[{"type":"assistant","targetId":"assistant_xiaoqu","displayName":"小趣"}]}`))
+	parentReq.Header.Set("Content-Type", "application/json")
+	parentReq.Header.Set("X-Client-User-Id", "author_parent")
+	parentRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(parentRec, parentReq)
+	if parentRec.Code != http.StatusCreated {
+		t.Fatalf("create parent comment: expected 201, got %d: %s", parentRec.Code, parentRec.Body.String())
+	}
+	var parentResp map[string]any
+	json.Unmarshal(parentRec.Body.Bytes(), &parentResp)
+	parent, _ := parentResp["comment"].(map[string]any)
+	parentID, _ := parent["_id"].(string)
+	if parent["assistantMentioned"] != true {
+		t.Fatalf("expected assistantMentioned=true on assistant mention parent, got %v", parent["assistantMentioned"])
+	}
+
+	mediaInitReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads:init", strings.NewReader(`{"mediaType":"image","assetScope":"comment"}`))
+	mediaInitReq.Header.Set("Content-Type", "application/json")
+	mediaInitReq.Header.Set("X-Client-User-Id", "author_reply")
+	mediaInitRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(mediaInitRec, mediaInitReq)
+	if mediaInitRec.Code != http.StatusOK {
+		t.Fatalf("init media: expected 200, got %d: %s", mediaInitRec.Code, mediaInitRec.Body.String())
+	}
+	var mediaInitResp map[string]any
+	json.Unmarshal(mediaInitRec.Body.Bytes(), &mediaInitResp)
+	sessionID, _ := mediaInitResp["sessionId"].(string)
+	mediaID, _ := mediaInitResp["mediaId"].(string)
+	completeReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads/"+sessionID+":complete", nil)
+	completeReq.Header.Set("X-Client-User-Id", "author_reply")
+	completeRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(completeRec, completeReq)
+	if completeRec.Code != http.StatusOK {
+		t.Fatalf("complete media: expected 200, got %d: %s", completeRec.Code, completeRec.Body.String())
+	}
+
+	replyBody := `{"content":"回复带图和提及","replyToCommentId":"` + parentID + `","attachmentMediaIds":["` + mediaID + `"],"mentions":[{"type":"user","targetId":"user_target","displayName":"目标用户"}]}`
+	replyReq := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/comments", strings.NewReader(replyBody))
+	replyReq.Header.Set("Content-Type", "application/json")
+	replyReq.Header.Set("X-Client-User-Id", "author_reply")
+	replyRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(replyRec, replyReq)
+	if replyRec.Code != http.StatusCreated {
+		t.Fatalf("create reply: expected 201, got %d: %s", replyRec.Code, replyRec.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/comments?sort=recommended&limit=10", nil)
+	listReq.Header.Set("X-Client-User-Id", "viewer_one")
+	listRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list root comments: expected 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+	var listResp map[string]any
+	json.Unmarshal(listRec.Body.Bytes(), &listResp)
+	items, _ := listResp["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected only root comments in ListComments, got %d", len(items))
+	}
+	root, _ := items[0].(map[string]any)
+	if root["replyCount"].(float64) != 1 {
+		t.Errorf("expected replyCount=1, got %v", root["replyCount"])
+	}
+	preview, _ := root["replyPreview"].([]any)
+	if len(preview) != 1 {
+		t.Fatalf("expected one reply preview, got %d", len(preview))
+	}
+
+	repliesReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID+"/comments/"+parentID+"/replies?limit=10", nil)
+	repliesReq.Header.Set("X-Client-User-Id", "viewer_one")
+	repliesRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(repliesRec, repliesReq)
+	if repliesRec.Code != http.StatusOK {
+		t.Fatalf("list replies: expected 200, got %d: %s", repliesRec.Code, repliesRec.Body.String())
+	}
+	var repliesResp map[string]any
+	json.Unmarshal(repliesRec.Body.Bytes(), &repliesResp)
+	replies, _ := repliesResp["items"].([]any)
+	if len(replies) != 1 {
+		t.Fatalf("expected one reply, got %d", len(replies))
+	}
+	reply, _ := replies[0].(map[string]any)
+	attachments, _ := reply["attachments"].([]any)
+	if len(attachments) != 1 {
+		t.Errorf("expected one attachment, got %d", len(attachments))
+	}
+	mentions, _ := reply["mentions"].([]any)
+	if len(mentions) != 1 {
+		t.Errorf("expected one mention, got %d", len(mentions))
+	}
+	if reply["viewerReaction"] != "none" {
+		t.Errorf("expected default viewerReaction=none, got %v", reply["viewerReaction"])
 	}
 }
 
@@ -512,6 +836,26 @@ func TestGetAppConfig(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	if resp["schemaVersion"] != "app_remote_config.v1" {
+		t.Fatalf("expected schemaVersion app_remote_config.v1, got %v", resp["schemaVersion"])
+	}
+	if resp["packageVersion"] == "" {
+		t.Fatal("missing packageVersion")
+	}
+	configHash, _ := resp["configHash"].(string)
+	if !strings.HasPrefix(configHash, "sha256:") {
+		t.Fatalf("expected sha256 configHash, got %v", resp["configHash"])
+	}
+	if rec.Header().Get("ETag") != configHash {
+		t.Fatalf("expected ETag to match configHash, got %q", rec.Header().Get("ETag"))
+	}
+	if resp["maxAgeSec"] != float64(21600) {
+		t.Fatalf("expected maxAgeSec=21600, got %v", resp["maxAgeSec"])
+	}
+	activationPolicy, _ := resp["activationPolicy"].(map[string]any)
+	if activationPolicy["default"] != "next_session" {
+		t.Fatalf("expected activation default next_session, got %v", activationPolicy["default"])
+	}
 	content, _ := resp["content"].(map[string]any)
 	if content == nil {
 		t.Fatal("missing 'content' in app config")
@@ -523,6 +867,13 @@ func TestGetAppConfig(t *testing.T) {
 	maxLen, _ := comment["max_length"].(float64)
 	if maxLen != 500 {
 		t.Errorf("expected max_length=500, got %v", maxLen)
+	}
+	attachment, _ := comment["attachment"].(map[string]any)
+	if attachment["max_images"] != float64(1) {
+		t.Fatalf("expected attachment.max_images=1, got %v", attachment["max_images"])
+	}
+	if _, ok := comment["attachment_max_count"]; ok {
+		t.Fatalf("did not expect comment.attachment_max_count in app config")
 	}
 	featureFlags, _ := content["feature_flags"].(map[string]any)
 	if featureFlags == nil {
@@ -545,6 +896,14 @@ func TestGetAppConfig(t *testing.T) {
 	}
 	if grayRelease["current_stage"] != "100%" {
 		t.Fatalf("expected current_stage=100%%, got %v", grayRelease["current_stage"])
+	}
+
+	notModifiedReq := httptest.NewRequest(http.MethodGet, "/v1/config/app", nil)
+	notModifiedReq.Header.Set("If-None-Match", configHash)
+	notModifiedRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(notModifiedRec, notModifiedReq)
+	if notModifiedRec.Code != http.StatusNotModified {
+		t.Fatalf("expected 304 for matching ETag, got %d", notModifiedRec.Code)
 	}
 }
 
@@ -600,7 +959,7 @@ func TestGetAppConfigRuntimeOverrides(t *testing.T) {
 	if grayRelease["current_stage"] != "20%" {
 		t.Fatalf("expected current_stage=20%%, got %v", grayRelease["current_stage"])
 	}
-	canaryMatrix, _ := grayRelease["canary_matrix"].([]map[string]any)
+	canaryMatrix, _ := grayRelease["canary_matrix"].([]any)
 	if len(canaryMatrix) != 2 {
 		t.Fatalf("expected 2 canary stages, got %d", len(canaryMatrix))
 	}

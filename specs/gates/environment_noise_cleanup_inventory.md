@@ -40,7 +40,7 @@
   - `/v1/notifications/unread-count`
   - `/v1/content/feed/intersections?limit=2&channel=recommend`
 
-### 2. 日志追加导致历史 404/501 污染当前排查
+### 2. 日志追加导致过往 404/501 污染当前排查
 
 - `alpha-local`
   - `agent_ops/deploy/alpha/start_alpha_mock_stack.sh` 已改为启动时覆盖写日志
@@ -117,26 +117,26 @@
   - `quwoquan_service/services/product-ops-service`
   均通过
 
-## 当前无阻断，但需识别为“历史产物”
+## 当前无阻断，但需识别为“过往产物”
 
-### 6. gamma 历史 app launch 日志中的旧编译失败 / Lost connection
+### 6. gamma 过往 app launch 日志中的旧编译失败 / Lost connection
 
 现状：
 
 - `gamma-local` 当前健康检查全绿
-- 历史 `artifacts/stackctl/gamma/*/app-launch-*.log` 中存在：
+- 过往 `artifacts/stackctl/gamma/*/app-launch-*.log` 中存在：
   - 旧代码编译失败
   - `Lost connection to device.`
 
 判断：
 
-- 这些记录属于历史运行产物，不代表当前 `gamma-local` 环境不可用
+- 这些记录属于过往运行产物，不代表当前 `gamma-local` 环境不可用
 - 当前轮次 `stackctl health --target gamma-local --scope full` 已验证通过
 
 处理口径：
 
 - 排查当前 gamma 问题时，优先看本轮 report 目录与最新 log
-- 历史 report 不作为当前环境故障证据，除非同一错误在最新轮次复现
+- 过往 report 不作为当前环境故障证据，除非同一错误在最新轮次复现
 
 ## 待继续收口
 
@@ -149,10 +149,10 @@
 
 - `gamma-local`
   - 当前 health 已覆盖主路径
-  - `artifacts/local-gamma/runs` 已在本轮历史产物清理中移除
+  - `artifacts/local-gamma/runs` 已在本轮过往产物清理中移除
   - 当前需关注的是本轮 `artifacts/local-gamma/*.json` 证据，而非旧 runtime 目录
 
-### 8. 历史 report / log 的保留策略
+### 8. 过往 report / log 的保留策略
 
 当前状态：
 
@@ -162,7 +162,7 @@
 后续建议：
 
 - 若后续新增固定命名报告目录，应继续与时间戳轮次目录分开管理
-- 不要把历史报告 retention 与运行态日志轮换混为一谈
+- 不要把过往报告 retention 与运行态日志轮换混为一谈
 
 ## 本轮修复涉及文件
 

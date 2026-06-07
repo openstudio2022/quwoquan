@@ -20,6 +20,8 @@ description: |
     modelReasonBucket 为 affinity 模型理由桶（埋点与灰度用，端不直接展示原文）。
     intersectionPoints 是交集点列表真相源；摘要数字必须由同一 snapshot 下可见点派生，
     不得成为第二套事实来源。
+    connectionSummary 是云侧实例化的「连接说明」一句话（由具体实例构成，如"北京大学、摄影把你们连在一起"），
+    对象页交集卡顶部展示；缺省时端不展示该行，禁止端本地用维度词空说。
 
 consumers:
   - app
@@ -186,6 +188,12 @@ client_projection:
       nullable: false
       source: pointClassLabel
       aliases: [pointClassLabel]
+      default: "''"
+    - name: connectionSummary
+      dart_type: String
+      nullable: false
+      source: connectionSummary
+      aliases: [connectionSummary]
       default: "''"
     - name: recommendationTraceId
       dart_type: String

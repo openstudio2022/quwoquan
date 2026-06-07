@@ -5,7 +5,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from _common.paths import release_root, RELEASE_ROOT
+from _common.paths import PUBLISH_ROOT
+from _common.publish_filter import apply_publish_filter
 from publish.assemble import assemble_release
 from publish.gate import gate_publish
 
@@ -42,6 +43,30 @@ def _push_to_service(release_dir: Path, service_url: str) -> bool:
             return False
 
 
+def _apply_release_publish_filter(release_dir: Path) -> list[str]:
+    """把 release/posts 先按发布门过滤一轮，阻断真正不可发布的 post。"""
+    issues: list[str] = []
+    posts_root = release_dir / "posts"
+    if not posts_root.is_dir():
+        return issues
+    homepage_root = release_dir / "entity_pages"
+    for manifest_path in sorted(posts_root.rglob("manifest.json")):
+        topic_dir = manifest_path.parent
+        if not ((topic_dir / "article.md").exists() or (topic_dir / "gallery.md").exists()):
+            continue
+        verdict = apply_publish_filter(topic_dir, release_dir, entity_homepage_root=homepage_root)
+        rel = topic_dir.relative_to(release_dir).as_posix()
+        if not verdict.publishable:
+            issues.append(f"{rel}: {verdict.reasons}")
+            continue
+        if verdict.filtered_entities:
+            print(f"[publish] filtered entityRefs @ {rel}: {verdict.filtered_entities}")
+        if verdict.discarded_assets:
+            print(f"[publish] discarded assets @ {rel}: {verdict.discarded_assets}")
+        verdict.write_into(topic_dir)
+    return issues
+
+
 def handle_publish(args: argparse.Namespace) -> None:
     """Orchestrate publish: assemble → gate → package → (optional) push."""
     task_id = args.task
@@ -52,6 +77,13 @@ def handle_publish(args: argparse.Namespace) -> None:
 
     root = assemble_release(task_id, release_id)
     print(f"[publish] Assembled to: {root}")
+
+    filter_issues = _apply_release_publish_filter(root)
+    if filter_issues:
+        print(f"[publish] Filter FAILED ({len(filter_issues)} issues):", file=sys.stderr)
+        for issue in filter_issues:
+            print(f"  - {issue}", file=sys.stderr)
+        sys.exit(1)
 
     issues = gate_publish(release_id)
     if issues:

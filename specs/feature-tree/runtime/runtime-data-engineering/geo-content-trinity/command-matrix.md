@@ -23,7 +23,7 @@
 | `python3 quwoquan_data/scripts/cli.py data normalize-run-escalate ...` | escalate 阶段门禁 | 检查 escalate result 是否已由编程助手写回；缺失时生成 assistant task manifest，存在时立即校验 schema |
 | `python3 quwoquan_data/scripts/cli.py data build-entities-tags --phase normalize-prepare\|validate\|compile\|materialize` | 归一化全阶段 | 分阶段：prepare→编程助手→validate→compile→materialize |
 | `python3 quwoquan_data/scripts/cli.py data process-content ...`     | 图文加工阶段    | `crawl content-review`、`crawl compose-post`、`crawl review-generated`                                                                                                                                                                     |
-| `python3 quwoquan_data/scripts/cli.py data publish ...`             | 发布与反馈阶段   | `crawl publish-approved`、`crawl feedback-extract`、`crawl feedback-verify`、`verify_quwoquan_data_source_authenticity.py`、`verify_quwoquan_data_post_packages.py`                                                                          |
+| `python3 quwoquan_data/scripts/cli.py data publish ...`             | 发布与反馈阶段   | `crawl publish-approved`、`crawl feedback-extract`、`crawl feedback-verify`、`verify_quwoquan_data_source_authenticity.py`、`python3 quwoquan_data/scripts/cli.py verify --scope current`                                                                          |
 | _(已合并到 `data build-entities-tags --phase compile\|materialize`)_ | 语义物化 | `compile_entity_resolution.compile_batch` / `materialize_entity_catalog` |
 
 
@@ -211,14 +211,9 @@
 **准出**
 
 - `quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py`
-- `quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py`
+- `python3 quwoquan_data/scripts/cli.py verify --scope current`
 
-## 4. 兼容命令
-
-- `data build-content` 保留为兼容别名，统一委托到 `data process-content`
-- 兼容命令不应再出现在新文档的主示例中
-
-## 5. 辅助脚本
+## 4. 辅助脚本
 
 | 脚本 | 作用 |
 |---|---|

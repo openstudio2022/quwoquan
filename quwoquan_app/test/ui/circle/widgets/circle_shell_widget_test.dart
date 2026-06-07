@@ -245,7 +245,8 @@ void main() {
       await _pumpShell(tester, mock: _ErrorCircleRepository());
 
       expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text(UITextConstants.loadFailed), findsAtLeastNWidgets(1));
+      expect(find.text('圈子信息暂不可用'), findsAtLeastNWidgets(1));
+      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
     });
   });
 }

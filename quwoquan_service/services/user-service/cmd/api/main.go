@@ -174,6 +174,7 @@ func main() {
 	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
 	settingStore := persistence.NewPgSettingStore(pgPool)
 	blockStore := persistence.NewPgBlockStore(pgPool)
+	greetingStore := persistence.NewPgGreetingStore(pgPool)
 	workStore := persistence.NewPgWorkStore(pgPool)
 	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
@@ -216,7 +217,19 @@ func main() {
 		blockStore,
 		userEventPublisher,
 	)
-	blockService := application.NewBlockService(blockStore, blockCache)
+	chatServiceBaseURL := getenvOrDefault("CHAT_SERVICE_BASE_URL", "")
+	var conversationGateway application.ConversationGateway = application.NoopConversationGateway()
+	if chatServiceBaseURL != "" {
+		conversationGateway = userintegration.NewChatServiceClient(chatServiceBaseURL, nil)
+	}
+	greetingService := application.NewGreetingService(
+		greetingStore,
+		followStore,
+		blockStore,
+		conversationGateway,
+		userEventPublisher,
+	)
+	blockService := application.NewBlockService(blockStore, followStore, blockCache, userEventPublisher, greetingStore)
 	personaService := application.NewPersonaService(personaStore, pgPool, profileCache)
 	workService := application.NewWorkService(workStore)
 	lifeItemService := application.NewLifeItemService(lifeItemStore)
@@ -274,7 +287,7 @@ func main() {
 	}
 	interestProfileService := application.NewInterestProfileService(interestReader)
 	handler := httpadapter.NewUserHandler(
-		profileService, searchService, followService, blockService,
+		profileService, searchService, followService, blockService, greetingService,
 		personaService, workService, lifeItemService, settingService,
 		authService, subAccountService, contactDiscoveryService, inviteService,
 		interestProfileService,

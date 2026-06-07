@@ -122,6 +122,7 @@ def build_writing_pack(
         "title": str(brief.get("titleHint") or ref),
         "byline": byline,
         "carrier": carrier,
+        "publishLayout": publish_layout,
         "templateId": brief.get("templateId"),
         "wordCount": brief.get("wordCount") or {"min": 700, "max": 1600},
         "forbiddenPhrases": [str(x) for x in (brief.get("forbiddenPhrases") or []) if x],

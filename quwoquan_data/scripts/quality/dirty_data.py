@@ -1,14 +1,24 @@
 """历史脏数据扫描与删除。"""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
 import shutil
+import os
 from pathlib import Path
 from typing import Any
 
 from _common.io import write_json
-from _common.paths import DATA_ROOT, PUBLISH_ROOT, RUNTIME_ROOT
 from homepage_assets.repair import scan_homepages
-from verify_content_quality import FORBIDDEN, asset_closure_issues
+from verify.verify_content_quality import FORBIDDEN, asset_closure_issues
 
 
 _DIRTY_ENTITY_TOKENS = (
@@ -20,9 +30,21 @@ _DIRTY_ENTITY_TOKENS = (
 )
 
 
+def _data_root() -> Path:
+    return Path(os.environ.get("QWQ_DATA_ROOT", Path(__file__).resolve().parents[2]))
+
+
+def _runtime_root() -> Path:
+    return Path(os.environ.get("QWQ_RUNTIME_ROOT", _data_root() / "runtime"))
+
+
+def _publish_root() -> Path:
+    return Path(os.environ.get("QWQ_PUBLISH_ROOT", _data_root() / "publish"))
+
+
 def _repo_rel(path: Path) -> str:
     try:
-        return path.resolve().relative_to(DATA_ROOT.resolve()).as_posix()
+        return path.resolve().relative_to(_data_root().resolve()).as_posix()
     except ValueError:
         return path.as_posix()
 
@@ -33,9 +55,15 @@ def entity_homepage_dirty_issues(issues: list[str]) -> list[str]:
 
 def _post_roots() -> list[Path]:
     roots: list[Path] = []
-    roots.extend(path for path in (RUNTIME_ROOT / "tasks").rglob("produce/posts") if path.is_dir())
-    if (PUBLISH_ROOT / "posts").is_dir():
-        roots.append(PUBLISH_ROOT / "posts")
+    # 对象优先：batch 根 posts（parent.parent == batches）。
+    for path in (_runtime_root() / "tasks").rglob("posts"):
+        if not path.is_dir():
+            continue
+        if path.parent.parent.name == "batches":
+            roots.append(path)
+    publish_posts = _publish_root() / "posts"
+    if publish_posts.is_dir():
+        roots.append(publish_posts)
     seen: set[str] = set()
     out: list[Path] = []
     for root in roots:
@@ -89,8 +117,9 @@ def scan_dirty_data() -> list[dict[str, Any]]:
 
 def delete_dirty_data(rows: list[dict[str, Any]]) -> list[str]:
     deleted: list[str] = []
+    data_root = _data_root()
     for row in rows:
-        path = DATA_ROOT / str(row.get("path") or "")
+        path = data_root / str(row.get("path") or "")
         if row.get("kind") == "entity_homepage":
             for name in ("page.md", "manifest.json"):
                 target = path / name

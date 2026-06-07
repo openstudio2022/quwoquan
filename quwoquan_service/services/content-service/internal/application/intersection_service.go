@@ -39,6 +39,7 @@ type IntersectionReasonView struct {
 	TotalPointCount        int                              `json:"totalPointCount"`
 	DimensionPointSummary  []IntersectionDimensionTallyView `json:"dimensionPointSummary"`
 	PointClassLabel        string                           `json:"pointClassLabel"`
+	ConnectionSummary      string                           `json:"connectionSummary"`
 	RecommendationTraceID  string                           `json:"recommendationTraceId"`
 	LastRecommendedAt      string                           `json:"lastRecommendedAt"`
 	SeenAt                 string                           `json:"seenAt"`
@@ -47,13 +48,16 @@ type IntersectionReasonView struct {
 
 // IntersectionPointView 是用户可见交集点列表；摘要数字只能由同一批点派生。
 type IntersectionPointView struct {
-	PointID     string `json:"pointId"`
-	PointClass  string `json:"pointClass"` // fact | recommended
-	Dimension   string `json:"dimension"`
-	Label       string `json:"label"`
-	DisplayText string `json:"displayText"`
-	SourceRef   string `json:"sourceRef"`
-	Visibility  string `json:"visibility"`
+	PointID          string   `json:"pointId"`
+	PointClass       string   `json:"pointClass"` // fact | recommended
+	Dimension        string   `json:"dimension"`
+	Label            string   `json:"label"`
+	DisplayText      string   `json:"displayText"`
+	SourceRef        string   `json:"sourceRef"`
+	Visibility       string   `json:"visibility"`
+	Count            int      `json:"count"`            // 证据组聚合条数（如「共同好友 4」中的 4）
+	SampleText       string   `json:"sampleText"`       // 实例化样本（某好友名/地点名/内容标题）
+	SampleAvatarURLs []string `json:"sampleAvatarUrls"` // 头像簇（≤3）
 }
 
 func (v IntersectionReasonView) coolKey() string {
@@ -69,6 +73,7 @@ type IntersectionDimensionTallyView struct {
 	Label     string `json:"label"`
 	Count     int    `json:"count"`
 	NewCount  int    `json:"newCount"`
+	BriefText string `json:"briefText"` // 云侧实例化动态简报句（缺省端回落 label+newCount）
 }
 
 // IntersectionInboxSummaryView 我的交集聚合摘要（与 intersection_inbox_summary.yaml 对齐）。
@@ -86,6 +91,10 @@ type IntersectionInboxSummaryView struct {
 type IntersectionSource interface {
 	FactReasons(ctx context.Context, userID, channel string) ([]IntersectionReasonView, error)
 	AffinityReasons(ctx context.Context, userID, channel string) ([]IntersectionReasonView, error)
+	// ObjectReasons 返回 viewer 与某一具体对象（user/circle/entity）的关系类交集理由，
+	// 用于对象页交集卡（共同好友/联系人来过/好友加入等证据组）。
+	// objectType 为开放字符串（与端侧一致），未知类型由源返回空，不在服务端伪造。
+	ObjectReasons(ctx context.Context, viewerID, objectID, objectType string) ([]IntersectionReasonView, error)
 }
 
 type emptyIntersectionSource struct{}
@@ -94,6 +103,9 @@ func (emptyIntersectionSource) FactReasons(context.Context, string, string) ([]I
 	return nil, nil
 }
 func (emptyIntersectionSource) AffinityReasons(context.Context, string, string) ([]IntersectionReasonView, error) {
+	return nil, nil
+}
+func (emptyIntersectionSource) ObjectReasons(context.Context, string, string, string) ([]IntersectionReasonView, error) {
 	return nil, nil
 }
 
@@ -535,4 +547,87 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 		return merged[:limit], nil
 	}
 	return merged, nil
+}
+
+// evidenceKindRank 证据组 kind 的挖掘强度（§9.8）：值越小越靠前；
+// 人物 > 事物 > 地点 > 内容 > 兴趣fact > recommended。未知 kind 落中段，
+// 保证未来新增维度优雅降级（不写死闭集，缺省排在已知 fact 之后、recommended 之前）。
+func evidenceKindRank(kind, pointClass string) int {
+	if pointClass == "recommended" {
+		return 900
+	}
+	switch kind {
+	case "mutualFriend", "commonContact", "commonFollow",
+		"friendInCircle", "contactInCircle", "friendActiveHere",
+		"friendVisited", "contactVisited", "friendJoinedRelatedCircle":
+		return 10
+	case "coMemberCircle", "sameOrg", "sameBrand", "coCollectedEntity":
+		return 20
+	case "coVisitedEntity", "coCity", "youInteracted":
+		return 30
+	case "coLiked", "coCommented", "coShared":
+		return 40
+	case "coCohort", "coEra":
+		return 50
+	case "sharedTagSample":
+		return 60
+	default:
+		return 500
+	}
+}
+
+// reasonObjectRank 取一条 reason 的最强可见点排序键（用于对象多 reason 时整体排序）。
+func reasonObjectRank(r IntersectionReasonView) int {
+	best := 1000
+	for _, p := range r.IntersectionPoints {
+		if p.Visibility == "hidden" {
+			continue
+		}
+		if rank := evidenceKindRank(p.SourceRef, p.PointClass); rank < best {
+			best = rank
+		}
+	}
+	return best
+}
+
+// ObjectIntersections 对象页「我与该对象」的关系类交集（§2 闭集 + 三层关系分层）。
+// 经 source.ObjectReasons 取请求期事实/推荐证据组，hydrate 后按锚强度排序（§9.8）。
+// 数字 single-source：摘要由 hydratePointSummary 从可见点派生，端不二次推导。
+func (s *IntersectionService) ObjectIntersections(ctx context.Context, viewerID, objectID, objectType string, limit int) ([]IntersectionReasonView, error) {
+	if strings.TrimSpace(objectID) == "" {
+		return nil, nil
+	}
+	reasons, err := s.source.ObjectReasons(ctx, viewerID, objectID, objectType)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]IntersectionReasonView, 0, len(reasons))
+	for _, raw := range reasons {
+		r := hydratePointSummary(raw)
+		if !s.isFresh(r) {
+			continue
+		}
+		// 同一 reason 内的证据点按锚强度排序（事实优先、recommended 殿后）。
+		sort.SliceStable(r.IntersectionPoints, func(i, j int) bool {
+			ri := evidenceKindRank(r.IntersectionPoints[i].SourceRef, r.IntersectionPoints[i].PointClass)
+			rj := evidenceKindRank(r.IntersectionPoints[j].SourceRef, r.IntersectionPoints[j].PointClass)
+			if ri != rj {
+				return ri < rj
+			}
+			return r.IntersectionPoints[i].Count > r.IntersectionPoints[j].Count
+		})
+		out = append(out, r)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		ri := reasonObjectRank(out[i])
+		rj := reasonObjectRank(out[j])
+		if ri != rj {
+			return ri < rj
+		}
+		return out[i].TotalPointCount > out[j].TotalPointCount
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }

@@ -1,7 +1,7 @@
 """单会话多实体批处理编排 ——「日产 10 万级」的吞吐路径（不引入外部模型，仍是会话 agent）。
 
 评审痛点：逐实体 prepare→创作→review 往返太慢。批处理把 N 个实体的写作契约聚合成一份
-batch prompt，让同一个会话 agent 在一次会话内产出 N 篇，分别写回各 drafts/{ref}/article.md，
+batch prompt，让同一个会话 agent 在一次会话内产出 N 篇，分别写回各对象 `4.draft/draft.article.md`，
 再统一过 annotate-entities / review 门 + 结构化记录。
 
 CLI 仍不拼接任何正文：只聚合 per-ref writing_pack 摘要 + 回写协议 + 跨篇多样性约束。
@@ -11,10 +11,27 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from _common.draft_io import drafts_dir, is_placeholder, read_draft_article, read_writing_pack
+from _common.draft_io import (
+    draft_article_path,
+    is_placeholder,
+    prompt_path,
+    read_draft_article,
+    read_writing_pack,
+    writing_pack_path,
+)
 from _common.io import write_json
+from _common.paths import batch_root
 
 BATCH_PACK_SCHEMA = "quwoquan_data.batch_pack"
+
+
+def _ref_rel(task_id: str, batch_id: str, ref: str, path: Path) -> str:
+    """会话写回路径：对象布局相对 batch 根。"""
+    base = batch_root(task_id, batch_id)
+    try:
+        return path.relative_to(base).as_posix()
+    except ValueError:
+        return path.name
 
 
 def plan_batches(refs: Sequence[str], batch_size: int) -> list[list[str]]:
@@ -25,7 +42,7 @@ def plan_batches(refs: Sequence[str], batch_size: int) -> list[list[str]]:
 
 
 def batch_dir(task_id: str, batch_id: str) -> Path:
-    return drafts_dir(task_id, batch_id) / "_batch"
+    return batch_root(task_id, batch_id) / "_batch"
 
 
 def build_batch_pack(task_id: str, batch_id: str, seq: int, group_refs: Sequence[str]) -> dict[str, Any]:
@@ -38,9 +55,9 @@ def build_batch_pack(task_id: str, batch_id: str, seq: int, group_refs: Sequence
                 "title": pack.get("title"),
                 "styleFamily": pack.get("styleFamily"),
                 "mustIncludeFacts": list(pack.get("mustIncludeFacts") or [])[:6],
-                "writingPack": f"{ref}/writing_pack.json",
-                "prompt": f"{ref}/prompt.md",
-                "articleOut": f"{ref}/article.md",
+                "writingPack": _ref_rel(task_id, batch_id, ref, writing_pack_path(task_id, batch_id, ref)),
+                "prompt": _ref_rel(task_id, batch_id, ref, prompt_path(task_id, batch_id, ref)),
+                "articleOut": _ref_rel(task_id, batch_id, ref, draft_article_path(task_id, batch_id, ref)),
                 "hasPack": bool(pack),
             }
         )
@@ -62,7 +79,7 @@ def render_batch_prompt(pack: Mapping[str, Any]) -> str:
         "- 按该篇 `styleFamily` 自选合适开篇策略，**跨篇之间开篇与章节结构必须显著不同**（避免千篇一律，会过跨篇相似度门）；",
         "- 创作完成后把正文**覆盖写回**该篇 `articleOut`（generator=agent），并在 `draft_meta` 记录 styleFamily / openingStrategy / extractedEntities。",
         "",
-        "完成全部后运行：`qwq-data produce --stage annotate-entities` 再 `--stage review --materialize`。",
+        "完成全部后运行：`qwq-data data produce --stage annotate-entities` 再 `--stage review --materialize`。",
         "",
         "## 篇目清单",
     ]

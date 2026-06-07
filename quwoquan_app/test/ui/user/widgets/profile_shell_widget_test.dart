@@ -41,12 +41,9 @@ class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
       relationState: 'not_following',
       canFollow: true,
       canUnfollow: false,
-      canMessage: true,
       canFollowBack: false,
-      canGreet: false,
-      canOpenConversation: true,
-      canAddSameInterest: false,
-      canSetCloseFriend: false,
+      canGreet: true,
+      canOpenConversation: false,
       canStartVoiceCall: false,
       canStartVideoCall: false,
       isBlocked: false,
@@ -295,12 +292,15 @@ void main() {
 
       final backgroundFinder = find.byKey(
         const ValueKey<String>('profile-shell-background-layer'),
+        skipOffstage: false,
       );
       final summaryFinder = find.byKey(
         const ValueKey<String>('profile-shell-summary-card'),
+        skipOffstage: false,
       );
       final tabsFinder = find.byKey(
         const ValueKey<String>('profile-shell-primary-tabs-inline'),
+        skipOffstage: false,
       );
 
       final beforeBackgroundTop = tester.getTopLeft(backgroundFinder).dy;

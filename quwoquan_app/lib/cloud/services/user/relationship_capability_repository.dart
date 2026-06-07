@@ -12,63 +12,47 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.
 
 /// 关系能力位投影 DTO
 /// 对应 GET /v1/user/{userId}/relationship/capability
-/// 端侧消费方：用户主页五态按钮矩阵、RTC 门禁
+/// 端侧消费方：用户主页动作矩阵、RTC 门禁、私信/打招呼入口
 class RelationshipCapabilityDto {
   RelationshipCapabilityDto({
     required this.viewerSubAccountId,
     required this.targetSubAccountId,
     String? relationState,
-    String? relationTier,
     bool? canFollow,
     bool? canUnfollow,
-    bool? canMessage,
     bool? canFollowBack,
-    required this.canGreet,
-    required this.canOpenConversation,
-    required this.canAddSameInterest,
-    required this.canSetCloseFriend,
-    required this.canStartVoiceCall,
-    required this.canStartVideoCall,
-    required this.isBlocked,
-    required this.isBlockedBy,
-  }) : relationState = _normalizeRelationState(
-         relationState ?? relationTier ?? 'not_following',
-       ),
-       canFollow =
-           canFollow ??
-           _defaultCanFollow(
-             _normalizeRelationState(
-               relationState ?? relationTier ?? 'not_following',
-             ),
-           ),
-       canUnfollow =
-           canUnfollow ??
-           _defaultCanUnfollow(
-             _normalizeRelationState(
-               relationState ?? relationTier ?? 'not_following',
-             ),
-           ),
-       canMessage =
-           canMessage ??
-           _defaultCanMessage(
-             _normalizeRelationState(
-               relationState ?? relationTier ?? 'not_following',
-             ),
-           ),
-       canFollowBack =
-           canFollowBack ??
-           _defaultCanFollowBack(
-             _normalizeRelationState(
-               relationState ?? relationTier ?? 'not_following',
-             ),
-           ),
-       relationTier =
-           relationTier ??
-           _relationTierFromNormalizedState(
-             _normalizeRelationState(
-               relationState ?? relationTier ?? 'not_following',
-             ),
-           );
+    bool? canGreet,
+    bool? canCreateDirectConversation,
+    bool? canSendMessage,
+    bool? canOpenConversation,
+    bool? hasPendingGreeting,
+    bool? hasFormalConversation,
+    bool? canStartVoiceCall,
+    bool? canStartVideoCall,
+    bool? isBlocked,
+    bool? isBlockedBy,
+  })  : relationState = _normalizeRelationState(relationState ?? 'not_following'),
+        canFollow = canFollow ??
+            _defaultCanFollow(_normalizeRelationState(relationState ?? 'not_following')),
+        canUnfollow = canUnfollow ??
+            _defaultCanUnfollow(_normalizeRelationState(relationState ?? 'not_following')),
+        canFollowBack = canFollowBack ??
+            _defaultCanFollowBack(_normalizeRelationState(relationState ?? 'not_following')),
+        canGreet = canGreet ??
+            _defaultCanGreet(
+              _normalizeRelationState(relationState ?? 'not_following'),
+              isBlocked: isBlocked ?? false,
+              isBlockedBy: isBlockedBy ?? false,
+            ),
+        canCreateDirectConversation = canCreateDirectConversation ?? false,
+        canSendMessage = canSendMessage ?? false,
+        canOpenConversation = canOpenConversation ?? canCreateDirectConversation ?? false,
+        hasPendingGreeting = hasPendingGreeting ?? false,
+        hasFormalConversation = hasFormalConversation ?? false,
+        canStartVoiceCall = canStartVoiceCall ?? false,
+        canStartVideoCall = canStartVideoCall ?? false,
+        isBlocked = isBlocked ?? false,
+        isBlockedBy = isBlockedBy ?? false;
 
   final String viewerSubAccountId;
   final String targetSubAccountId;
@@ -78,16 +62,13 @@ class RelationshipCapabilityDto {
 
   final bool canFollow;
   final bool canUnfollow;
-  final bool canMessage;
   final bool canFollowBack;
-
-  /// 兼容旧契约：self | none | following_only | same_interest | close_friend
-  final String relationTier;
-
   final bool canGreet;
+  final bool canCreateDirectConversation;
+  final bool canSendMessage;
   final bool canOpenConversation;
-  final bool canAddSameInterest;
-  final bool canSetCloseFriend;
+  final bool hasPendingGreeting;
+  final bool hasFormalConversation;
   final bool canStartVoiceCall;
   final bool canStartVideoCall;
   final bool isBlocked;
@@ -100,44 +81,20 @@ class RelationshipCapabilityDto {
   bool get isNotFollowing => relationState == 'not_following';
   bool get viewerFollowsTarget => isFollowing || isMutual;
   bool get targetFollowsViewer => isFollowedBy || isMutual;
-  bool get isSameInterest =>
-      relationTier == 'same_interest' || relationTier == 'close_friend';
-  bool get isCloseFriend => relationTier == 'close_friend';
-  bool get isFollowingOnly => relationTier == 'following_only';
-  bool get isStranger => relationTier == 'none';
 
   static String _normalizeRelationState(String raw) {
     switch (raw) {
       case 'self':
         return 'self';
       case 'mutual':
-      case 'same_interest':
-      case 'close_friend':
         return 'mutual';
       case 'following':
-      case 'following_only':
         return 'following';
       case 'followed_by':
         return 'followed_by';
-      case 'none':
       case 'not_following':
       default:
         return 'not_following';
-    }
-  }
-
-  static String _relationTierFromNormalizedState(String relationState) {
-    switch (relationState) {
-      case 'self':
-        return 'self';
-      case 'mutual':
-        return 'same_interest';
-      case 'following':
-        return 'following_only';
-      case 'followed_by':
-      case 'not_following':
-      default:
-        return 'none';
     }
   }
 
@@ -149,12 +106,19 @@ class RelationshipCapabilityDto {
     return relationState == 'following' || relationState == 'mutual';
   }
 
-  static bool _defaultCanMessage(String relationState) {
-    return relationState != 'self';
-  }
-
   static bool _defaultCanFollowBack(String relationState) {
     return relationState == 'followed_by';
+  }
+
+  static bool _defaultCanGreet(
+    String relationState, {
+    required bool isBlocked,
+    required bool isBlockedBy,
+  }) {
+    if (isBlocked || isBlockedBy || relationState == 'self' || relationState == 'mutual') {
+      return false;
+    }
+    return true;
   }
 
   factory RelationshipCapabilityDto.fromRelationshipCapabilityWire(
@@ -164,15 +128,15 @@ class RelationshipCapabilityDto {
       viewerSubAccountId: w.viewerSubAccountId,
       targetSubAccountId: w.targetSubAccountId,
       relationState: w.relationState,
-      relationTier: w.relationTier,
       canFollow: w.canFollow,
       canUnfollow: w.canUnfollow,
-      canMessage: w.canMessage,
       canFollowBack: w.canFollowBack,
       canGreet: w.canGreet,
-      canOpenConversation: w.canOpenConversation ?? w.canMessage ?? false,
-      canAddSameInterest: w.canAddSameInterest,
-      canSetCloseFriend: w.canSetCloseFriend,
+      canCreateDirectConversation: w.canCreateDirectConversation,
+      canSendMessage: w.canSendMessage,
+      canOpenConversation: w.canOpenConversation,
+      hasPendingGreeting: w.hasPendingGreeting,
+      hasFormalConversation: w.hasFormalConversation,
       canStartVoiceCall: w.canStartVoiceCall,
       canStartVideoCall: w.canStartVideoCall,
       isBlocked: w.isBlocked,
@@ -192,54 +156,57 @@ class RelationshipCapabilityDto {
     required String targetId,
     required bool isFollowing,
     required bool isFollowedBy,
-    bool closeFriend = false,
     bool isSelf = false,
+    bool isBlocked = false,
+    bool isBlockedBy = false,
+    bool hasFormalConversation = false,
+    bool hasPendingGreeting = false,
   }) {
     final isMutual = isFollowing && isFollowedBy;
     final relationState = isSelf
         ? 'self'
         : isMutual
-        ? 'mutual'
-        : isFollowing
-        ? 'following'
-        : isFollowedBy
-        ? 'followed_by'
-        : 'not_following';
+            ? 'mutual'
+            : isFollowing
+                ? 'following'
+                : isFollowedBy
+                    ? 'followed_by'
+                    : 'not_following';
+
+    final blocked = isBlocked || isBlockedBy;
+    final canCreateDirect = !blocked && isMutual;
+    final canSend = !blocked && (isMutual || hasFormalConversation);
+    final canGreet = !blocked &&
+        !isSelf &&
+        !isMutual &&
+        !hasPendingGreeting &&
+        !hasFormalConversation;
+
     return RelationshipCapabilityDto(
       viewerSubAccountId: viewerId,
       targetSubAccountId: targetId,
       relationState: relationState,
-      relationTier: isSelf
-          ? 'self'
-          : isMutual
-          ? (closeFriend ? 'close_friend' : 'same_interest')
-          : isFollowing
-          ? 'following_only'
-          : 'none',
-      canGreet: !isSelf && isFollowing && !isMutual,
-      canOpenConversation: isMutual,
-      canAddSameInterest: isMutual,
-      canSetCloseFriend: isMutual,
-      canStartVoiceCall: isMutual,
-      canStartVideoCall: isMutual,
-      isBlocked: false,
-      isBlockedBy: false,
+      canGreet: canGreet,
+      canCreateDirectConversation: canCreateDirect,
+      canSendMessage: canSend,
+      canOpenConversation: canCreateDirect || hasFormalConversation,
+      hasPendingGreeting: hasPendingGreeting,
+      hasFormalConversation: hasFormalConversation,
+      canStartVoiceCall: !blocked && isMutual,
+      canStartVideoCall: !blocked && isMutual,
+      isBlocked: isBlocked,
+      isBlockedBy: isBlockedBy,
     );
   }
 }
 
 /// 关系能力位 Repository（三层模式）
-///
-/// 对应云侧路由（contracts/metadata/user/follow_edge/service.yaml）：
-///   GET /v1/user/sub-accounts/{subAccountId}/relationship/capability
 abstract class RelationshipCapabilityRepository {
   Future<RelationshipCapabilityDto> getCapability(String targetUserId);
 
-  /// 是否与全局关系态对齐能力位（内嵌目录为 true；云侧以接口为准）。
   bool get reconcilesCapabilityWithSharedRelationshipState;
 }
 
-/// Mock 实现：返回本地推导的能力位（用于本地开发和测试）
 class MockRelationshipCapabilityRepository
     extends RelationshipCapabilityRepository {
   @override
@@ -258,14 +225,13 @@ class MockRelationshipCapabilityRepository
   }
 }
 
-/// Remote 实现：调用云侧 API
 class RemoteRelationshipCapabilityRepository
     extends RelationshipCapabilityRepository {
   RemoteRelationshipCapabilityRepository({
     CloudHttpClient? httpClient,
     String? baseUrl,
-  }) : _httpClient = httpClient ?? CloudHttpClient(),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  })  : _httpClient = httpClient ?? CloudHttpClient(),
+        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;

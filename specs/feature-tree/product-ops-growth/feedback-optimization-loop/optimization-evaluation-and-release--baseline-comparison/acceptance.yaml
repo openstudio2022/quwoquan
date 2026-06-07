@@ -46,8 +46,7 @@ gwt_acceptance:
       planned: []
       recorded:
       - scripts/recommendation/test_rec_policy_advisor.py
-      - runtime/recommendation/engine_test.go::TestModelVsRuleExperiment_PolicyResolvesValidBucket
-      - make verify-rec-policy-advisor
+      - runtime/recommendation/engine_test.go
     status: implemented
 execution:
   local_gate:

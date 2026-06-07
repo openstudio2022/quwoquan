@@ -18,6 +18,6 @@ CREATE INDEX IF NOT EXISTS idx_gr_inbox ON greeting_requests (target_sub_account
 
 CREATE INDEX IF NOT EXISTS idx_gr_outbox ON greeting_requests (requester_sub_account_id, status, created_at DESC);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_gr_unique_pending ON greeting_requests (requester_sub_account_id, target_sub_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gr_unique_pending ON greeting_requests (requester_sub_account_id, target_sub_account_id) WHERE status = 'pending';
 
 CREATE INDEX IF NOT EXISTS idx_gr_expire ON greeting_requests (expire_at);

@@ -643,9 +643,7 @@ class RemoteChatRepository implements ChatRepository {
     final items = CloudResponseDecoder.mapList(obj, 'items');
     return items
         .map((item) {
-          final normalized = Map<String, dynamic>.from(item);
-          normalized.putIfAbsent('isFriend', () => true);
-          return ChatContactRowDto.fromMap(normalized);
+          return ChatContactRowDto.fromMap(Map<String, dynamic>.from(item));
         })
         .toList(growable: false);
   }

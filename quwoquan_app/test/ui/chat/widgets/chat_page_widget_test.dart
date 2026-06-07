@@ -18,16 +18,25 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 
-Widget _scopedApp({ChatRepository? mock, bool isDark = false}) {
+Widget _scopedApp({
+  ChatRepository? mock,
+  bool isDark = false,
+  VisitRecorderService? visitRecorder,
+}) {
   final repo = mock ?? MockChatRepository();
   return ProviderScope(
     overrides: [
       chatRepositoryProvider.overrideWithValue(repo),
+      visitRecorderServiceProvider.overrideWithValue(
+        visitRecorder ?? _NoopVisitRecorderService(),
+      ),
       isDarkProvider.overrideWithValue(isDark),
     ],
     child: MaterialApp.router(
@@ -54,6 +63,24 @@ Widget _scopedApp({ChatRepository? mock, bool isDark = false}) {
       ),
     ),
   );
+}
+
+final class _NoopVisitRecorderService extends VisitRecorderService {
+  _NoopVisitRecorderService() : super();
+
+  @override
+  Future<void> recordVisit(VisitTarget target) async {}
+}
+
+final class _RecordingVisitRecorderService extends VisitRecorderService {
+  _RecordingVisitRecorderService() : super();
+
+  final List<VisitTarget> recordedTargets = <VisitTarget>[];
+
+  @override
+  Future<void> recordVisit(VisitTarget target) async {
+    recordedTargets.add(target);
+  }
 }
 
 void _suppressImageErrors() {
@@ -93,6 +120,26 @@ void main() {
       expect(find.byType(ChatPage), findsOneWidget);
       expect(find.text(UITextConstants.atXiaoqu), findsOneWidget);
       expect(find.text(UITextConstants.reminders), findsOneWidget);
+    });
+
+    testWidgets('进入和切换聊天页会记录页面访问', (tester) async {
+      final recorder = _RecordingVisitRecorderService();
+
+      await tester.pumpWidget(_scopedApp(visitRecorder: recorder));
+      await tester.pump();
+
+      expect(
+        recorder.recordedTargets,
+        contains(const VisitTarget.page('chat_messages_all')),
+      );
+
+      await tester.tap(find.text(AppConceptConstants.contacts));
+      await tester.pumpAndSettle();
+
+      expect(
+        recorder.recordedTargets,
+        contains(const VisitTarget.page('chat_contacts_all')),
+      );
     });
 
     testWidgets('包含 Scaffold 结构', (tester) async {
@@ -193,10 +240,15 @@ void main() {
         expect(contactTitle.style?.height, AppTypography.lineHeightTight);
         final contactSubtitleFinder = find.descendant(
           of: contactRowFinder.first,
-          matching: find.text('篮球爱好者'),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Text &&
+                widget.style?.fontSize == AppTypography.iosFootnote,
+          ),
         );
         expect(contactSubtitleFinder, findsOneWidget);
         final contactSubtitle = tester.widget<Text>(contactSubtitleFinder);
+        expect(contactSubtitle.data?.isNotEmpty ?? false, isTrue);
         expect(contactSubtitle.style?.fontSize, AppTypography.iosFootnote);
         expect(contactSubtitle.style?.height, AppTypography.lineHeightCompact);
         expect(tester.getTopLeft(contactRowFinder.first).dx, 0);
@@ -583,7 +635,7 @@ class _NavigationChatRepository extends MockChatRepository {
         displayName: '李明',
         avatarUrl: 'https://example.com/contact.jpg',
         bio: '篮球爱好者',
-        isFriend: true,
+        relationState: 'mutual',
       ),
     ];
   }

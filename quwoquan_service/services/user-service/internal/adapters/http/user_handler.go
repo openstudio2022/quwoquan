@@ -20,6 +20,7 @@ type UserHandler struct {
 	search           *application.SearchService
 	follow           *application.FollowService
 	block            *application.BlockService
+	greeting         *application.GreetingService
 	persona          *application.PersonaService
 	work             *application.WorkService
 	lifeItem         *application.LifeItemService
@@ -36,6 +37,7 @@ func NewUserHandler(
 	search *application.SearchService,
 	follow *application.FollowService,
 	block *application.BlockService,
+	greeting *application.GreetingService,
 	persona *application.PersonaService,
 	work *application.WorkService,
 	lifeItem *application.LifeItemService,
@@ -51,6 +53,7 @@ func NewUserHandler(
 		search:           search,
 		follow:           follow,
 		block:            block,
+		greeting:         greeting,
 		persona:          persona,
 		work:             work,
 		lifeItem:         lifeItem,
@@ -58,7 +61,7 @@ func NewUserHandler(
 		auth:             auth,
 		subAccount:       subAccount,
 		contactDiscovery: contactDiscovery,
-		invite:           invite,
+		invite:          invite,
 		interestProfile:  interestProfile,
 	}
 }
@@ -92,6 +95,8 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /v1/user/sub-accounts/{targetSubAccountId}/block", h.handleUnblock)
 	mux.HandleFunc("GET /v1/user/blocked", h.handleListBlocked)
 	mux.HandleFunc("GET /v1/user/sub-accounts/{targetSubAccountId}/block/check", h.handleCheckBlocked)
+
+	h.registerGreetingRoutes(mux)
 
 	mux.HandleFunc("GET /v1/user/personas", h.handleListPersonas)
 	mux.HandleFunc("GET /v1/user/personas/summary", h.handleGetPersonaManagementSummary)
@@ -271,7 +276,8 @@ func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http
 		rel, _ := h.follow.GetRelationship(r.Context(), viewerID, relationTargetID)
 		isBlocked, _ := h.block.CheckBlocked(r.Context(), viewerID, relationTargetID)
 		isBlockedBy, _ := h.block.CheckBlocked(r.Context(), relationTargetID, viewerID)
-		capability := buildRelationshipCapabilityView(
+		capability := h.buildRelationshipCapabilityView(
+			r.Context(),
 			viewerID,
 			relationTargetID,
 			rel,
@@ -555,7 +561,7 @@ func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, buildRelationshipCapabilityView(viewerID, targetID, rel, isBlocked, isBlockedBy))
+	writeJSON(w, http.StatusOK, h.buildRelationshipCapabilityView(r.Context(), viewerID, targetID, rel, isBlocked, isBlockedBy))
 }
 
 func (h *UserHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
@@ -1528,24 +1534,38 @@ func (h *UserHandler) handleGetSubAccountProfile(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, profile)
 }
 
-func buildRelationshipCapabilityView(viewerID, targetID string, rel *followrepo.Relationship, isBlocked, isBlockedBy bool) map[string]any {
+func (h *UserHandler) buildRelationshipCapabilityView(
+	ctx context.Context,
+	viewerID, targetID string,
+	rel *followrepo.Relationship,
+	isBlocked, isBlockedBy bool,
+) map[string]any {
 	relationState := "not_following"
 	canFollow := true
 	canUnfollow := false
-	canMessage := true
 	canFollowBack := false
+	canGreet := true
+	canCreateDirectConversation := false
+	canSendMessage := false
 	canStartVoiceCall := false
 	canStartVideoCall := false
+	isMutual := false
+	hasPendingGreeting := false
+	hasFormalConversation := false
 
 	switch {
 	case viewerID == targetID:
 		relationState = "self"
 		canFollow = false
-		canMessage = false
+		canGreet = false
 	case rel != nil && rel.IsMutual:
 		relationState = "mutual"
+		isMutual = true
 		canFollow = false
 		canUnfollow = true
+		canGreet = false
+		canCreateDirectConversation = true
+		canSendMessage = true
 		canStartVoiceCall = true
 		canStartVideoCall = true
 	case rel != nil && rel.IsFollowing:
@@ -1557,28 +1577,45 @@ func buildRelationshipCapabilityView(viewerID, targetID string, rel *followrepo.
 		canFollowBack = true
 	}
 
+	if h.greeting != nil && viewerID != targetID {
+		hasPendingGreeting, _ = h.greeting.HasPendingBetween(ctx, viewerID, targetID)
+		hasFormalConversation, _ = h.greeting.HasFormalConversation(ctx, viewerID, targetID)
+	}
+	if hasFormalConversation {
+		canSendMessage = true
+	}
+	if hasPendingGreeting {
+		canGreet = false
+	}
+
 	if isBlocked || isBlockedBy {
-		canMessage = false
+		canFollow = false
+		canFollowBack = false
+		canGreet = false
+		canCreateDirectConversation = false
+		canSendMessage = false
 		canStartVoiceCall = false
 		canStartVideoCall = false
 	}
 
 	return map[string]any{
-		"viewerSubAccountId":  viewerID,
-		"targetSubAccountId":  targetID,
-		"relationState":       relationState,
-		"canFollow":           canFollow,
-		"canUnfollow":         canUnfollow,
-		"canMessage":          canMessage,
-		"canFollowBack":       canFollowBack,
-		"canOpenConversation": canMessage,
-		"canGreet":            false,
-		"canAddSameInterest":  false,
-		"canSetCloseFriend":   false,
-		"canStartVoiceCall":   canStartVoiceCall,
-		"canStartVideoCall":   canStartVideoCall,
-		"isBlocked":           isBlocked,
-		"isBlockedBy":         isBlockedBy,
+		"viewerSubAccountId":          viewerID,
+		"targetSubAccountId":          targetID,
+		"relationState":               relationState,
+		"isMutual":                    isMutual,
+		"canFollow":                   canFollow,
+		"canUnfollow":                 canUnfollow,
+		"canFollowBack":               canFollowBack,
+		"canGreet":                    canGreet,
+		"canOpenConversation":         canCreateDirectConversation || hasFormalConversation,
+		"canCreateDirectConversation": canCreateDirectConversation,
+		"canSendMessage":              canSendMessage,
+		"hasPendingGreeting":          hasPendingGreeting,
+		"hasFormalConversation":       hasFormalConversation,
+		"canStartVoiceCall":           canStartVoiceCall,
+		"canStartVideoCall":           canStartVideoCall,
+		"isBlocked":                   isBlocked,
+		"isBlockedBy":                 isBlockedBy,
 	}
 }
 

@@ -759,7 +759,7 @@ class ContentMockData {
         {
           'dimension': 'interest',
           'tagRefs': ['interest/topic/gold-invest'],
-          'label': '同好',
+          'label': '兴趣相近',
           'sharedCount': 8,
           'strength': 0.91,
           'displayText': '你们都在关注 黄金投资',

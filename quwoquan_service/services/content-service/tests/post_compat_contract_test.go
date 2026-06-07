@@ -1,4 +1,4 @@
-// L2 契约测试：Post 业务对象 — 向后兼容性
+// L2 契约测试：Post 业务对象 — 收口后的响应契约
 //
 // 守护：响应字段不缩减；私有字段不泄露；可写字段约束稳定。
 package tests
@@ -71,8 +71,7 @@ func TestPost_WritableFields_UnknownFieldRejected(t *testing.T) {
 }
 
 // TestPost_NewFieldBackfill_OldRecordsStillReadable creates a post with minimal fields
-// and verifies it can still be retrieved. This simulates backward compatibility when
-// new required fields are added to the schema — older records should not break.
+// and verifies it can still be retrieved. 这覆盖既有记录在收口后的可读性。
 func TestPost_NewFieldBackfill_OldRecordsStillReadable(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := createPost(t, `{"contentType":"micro","body":"minimal post"}`)

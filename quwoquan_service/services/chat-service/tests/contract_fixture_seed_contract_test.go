@@ -27,7 +27,7 @@ func TestContractFixtureSeed_ChatAlphaReadsViaHandler(t *testing.T) {
 	if detail["_id"] != "fixture_conv_direct" && detail["id"] != "fixture_conv_direct" {
 		t.Fatalf("unexpected conversation detail: %+v", detail)
 	}
-	if avatarURL, _ := detail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/user/") {
+	if avatarURL, _ := detail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/s/archived-avatar/user/") {
 		t.Fatalf("expected direct conversation avatar to resolve to public media url, got %+v", detail)
 	}
 
@@ -38,7 +38,7 @@ func TestContractFixtureSeed_ChatAlphaReadsViaHandler(t *testing.T) {
 	if got := int(groupDetail["groupAvatarVersion"].(float64)); got <= 0 {
 		t.Fatalf("expected seeded group avatar backfill to populate version, got %+v", groupDetail)
 	}
-	if avatarURL, _ := groupDetail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/conversation/fixture_conv_group/") {
+	if avatarURL, _ := groupDetail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/s/archived-avatar/conversation/fixture_conv_group/") {
 		t.Fatalf("expected group conversation avatar to resolve via derived media url, got %+v", groupDetail)
 	}
 
@@ -52,7 +52,7 @@ func TestContractFixtureSeed_ChatAlphaReadsViaHandler(t *testing.T) {
 	if circleBoundDetail["circleId"] != "fixture_circle_photo" {
 		t.Fatalf("expected fixture circle id to survive seeding, got %+v", circleBoundDetail)
 	}
-	if avatarURL, _ := circleBoundDetail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/conversation/fixture_conv_photo_group/") {
+	if avatarURL, _ := circleBoundDetail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/s/archived-avatar/conversation/fixture_conv_photo_group/") {
 		t.Fatalf("expected circle-bound group avatar to resolve via derived media url, got %+v", circleBoundDetail)
 	}
 
@@ -62,6 +62,12 @@ func TestContractFixtureSeed_ChatAlphaReadsViaHandler(t *testing.T) {
 	}
 	assertItemsContainID(t, messages["items"], "fixture_msg_direct_1")
 	assertItemsContainText(t, messages["items"], "契约消息已送达")
+	assertItemsContainID(t, messages["items"], "fixture_msg_direct_image_1")
+	assertItemsContainID(t, messages["items"], "fixture_msg_direct_video_1")
+	assertItemsContainID(t, messages["items"], "fixture_msg_direct_file_1")
+	assertItemsContainType(t, messages["items"], "image")
+	assertItemsContainType(t, messages["items"], "video")
+	assertItemsContainType(t, messages["items"], "file")
 
 	code, members := doGet(t, "/v1/chat/conversations/fixture_conv_direct/members?limit=20", "fixture_user_current")
 	if code != http.StatusOK {
@@ -120,6 +126,24 @@ func assertItemsContainText(t *testing.T, raw any, fragment string) {
 		}
 	}
 	t.Fatalf("items did not contain text %q: %+v", fragment, items)
+}
+
+func assertItemsContainType(t *testing.T, raw any, msgType string) {
+	t.Helper()
+	items, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("items is not list: %#v", raw)
+	}
+	for _, item := range items {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if value, ok := obj["type"].(string); ok && value == msgType {
+			return
+		}
+	}
+	t.Fatalf("items did not contain message type %s: %+v", msgType, items)
 }
 
 func contains(value, fragment string) bool {

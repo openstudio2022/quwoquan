@@ -192,7 +192,7 @@ class _CallParticipantPickerPageState
       });
       await _showActionFailure(
         error,
-        title: '切换邀请来源失败',
+        title: UITextConstants.callSwitchInviteSourceFailed,
       );
     }
   }
@@ -223,7 +223,7 @@ class _CallParticipantPickerPageState
       });
       await _showActionFailure(
         error,
-        title: '切换群聊成员失败',
+        title: UITextConstants.callSwitchGroupMembersFailed,
       );
     }
   }
@@ -460,7 +460,7 @@ class _CallParticipantPickerPageState
           ),
           _ParticipantSource.sameInterest: Padding(
             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Text(UITextConstants.callSourceSameInterest),
+            child: Text(UITextConstants.callSourceMutualFollow),
           ),
           _ParticipantSource.otherGroups: Padding(
             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),

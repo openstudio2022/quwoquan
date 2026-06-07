@@ -27,7 +27,7 @@ api_routes:
   - method: POST
     path: /v1/user/greeting-request/{requestId}/reply
     operation: ReplyGreetingRequest
-    description: 回复打招呼（触发升级为正式会话，由 GreetingRequestReplied 事件创建 Conversation）
+    description: 回复打招呼（同步创建或复用正式 1v1 会话，写入 promotedConversationId 后发布 GreetingRequestReplied）
 
   - method: POST
     path: /v1/user/greeting-request/{requestId}/ignore
@@ -64,6 +64,11 @@ contract_test:
           seed: [existing_pending_greeting]
           assertions: [status_409, error_code_USER.GREETING.duplicate_pending]
 
+        - name: mutual_contact_greeting_rejected
+          route: POST /v1/user/greeting-request
+          seed: [mutual_follow_edge]
+          assertions: [status_409, error_code_USER.GREETING.already_contact]
+
         - name: reply_upgrades_conversation
           route: POST /v1/user/greeting-request/{requestId}/reply
           assertions: [status_200, greeting_status_replied, conversation_created]
@@ -92,12 +97,13 @@ contract_test:
             - "greeting.status == replied"
             - "eventSpy.AssertPublished('GreetingRequestReplied', {promotedConversationId})"
 
-        - name: blocked_user_gets_silent_rejection
+        - name: blocked_user_gets_rejected
           command: SendGreetingRequest to blocked user
           seed: [block_edge(target → requester)]
           assertions:
-            - "response same as success (no info leak)"
-            - "greeting.status == blocked (internal only)"
+            - "status_403"
+            - "error_code_USER.GREETING.target_blocked_sender"
+            - "no greeting row created"
 
   coverage_requirements:
     - status_machine_transitions_covered

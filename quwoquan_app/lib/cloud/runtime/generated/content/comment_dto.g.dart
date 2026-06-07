@@ -23,6 +23,7 @@ class CommentDto {
     this.replyCount = 0,
     this.replyPreview = const <CommentDto>[],
     this.replyNextCursor,
+    this.postSummary = const <String, dynamic>{},
     this.likeCount = 0,
     this.dislikeCount = 0,
     this.viewerReaction = 'none',
@@ -52,6 +53,7 @@ class CommentDto {
   final int replyCount;
   final List<CommentDto> replyPreview;
   final String? replyNextCursor;
+  final CloudJsonMap postSummary;
   final int likeCount;
   final int dislikeCount;
   final String viewerReaction;
@@ -85,6 +87,7 @@ class CommentDto {
           .map(CommentDto.fromMap)
           .toList(growable: false),
       replyNextCursor: m['replyNextCursor']?.toString(),
+      postSummary: _commentMap(m['postSummary']),
       likeCount: (m['likeCount'] as num?)?.toInt() ?? 0,
       dislikeCount: (m['dislikeCount'] as num?)?.toInt() ?? 0,
       viewerReaction: (m['viewerReaction'] ?? 'none').toString(),
@@ -119,6 +122,7 @@ class CommentDto {
         'replyCount': replyCount,
         'replyPreview': replyPreview.map((e) => e.toMap()).toList(growable: false),
         'replyNextCursor': replyNextCursor,
+        'postSummary': postSummary,
         'likeCount': likeCount,
         'dislikeCount': dislikeCount,
         'viewerReaction': viewerReaction,
@@ -137,6 +141,7 @@ class CommentDto {
     int? replyCount,
     List<CommentDto>? replyPreview,
     String? Function()? replyNextCursor,
+    CloudJsonMap? postSummary,
     int? likeCount,
     int? dislikeCount,
     String? viewerReaction,
@@ -160,6 +165,7 @@ class CommentDto {
       replyPreview: replyPreview ?? this.replyPreview,
       replyNextCursor:
           replyNextCursor != null ? replyNextCursor() : this.replyNextCursor,
+      postSummary: postSummary ?? this.postSummary,
       likeCount: likeCount ?? this.likeCount,
       dislikeCount: dislikeCount ?? this.dislikeCount,
       viewerReaction: viewerReaction ?? this.viewerReaction,
@@ -178,6 +184,13 @@ class CommentDto {
 List<String> _commentStringList(Object? raw) {
   final list = raw is List ? raw : const <Object?>[];
   return list.map((e) => e.toString()).toList(growable: false);
+}
+
+CloudJsonMap _commentMap(Object? raw) {
+  if (raw is Map) {
+    return Map<String, dynamic>.from(raw);
+  }
+  return const <String, dynamic>{};
 }
 
 List<CloudJsonMap> _commentMapList(Object? raw) {

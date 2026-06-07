@@ -73,10 +73,10 @@
 | F15 | 屏幕共享 | P4 | 发起者共享屏幕，其他参与者观看 |
 | F16 | E2EE | P4 | Insertable Streams 端到端加密 |
 | F17 | AI 降噪 | P4 | RNNoise 实时降噪 |
-| F18 | 关系门禁与主页入口 | P2 | 1v1 通话仅对同好开放；密友仅作为同好子态展示快捷语义，主页按五态关系展示不同动作 |
+| F18 | 关系门禁与主页入口 | P2 | 1v1 通话仅对 `mutual + !blocked` 开放；主页按关注状态与拉黑门禁展示不同动作 |
 | F19 | 会话更多功能入口重构 | P2 | 通话入口从 ChatDetail AppBar 下沉到输入区 `+` 面板 |
-| F20 | 多人选人规则 | P2 | 群聊发起多人通话时，默认来源为当前会话；`<=8 人默认全选，>8 人默认不选`，并可切换同好/其他群选人 |
-| F21 | 通话中加人与链接入会 | P2 | 通话中支持主动邀请当前会话成员、同好或其他群成员，并支持分享呼叫链接加入 |
+| F20 | 多人选人规则 | P2 | 群聊发起多人通话时，默认来源为当前会话；`<=8 人默认全选，>8 人默认不选`，并可切换互相关注/其他群选人 |
+| F21 | 通话中加人与链接入会 | P2 | 通话中支持主动邀请当前会话成员、互相关注或其他群成员，并支持分享呼叫链接加入 |
 | F22 | 群邀请响铃模式 | P2 | 群语音/视频邀请统一为响铃邀请，不提供静默邀请或仅消息通知模式 |
 | F23 | 发起方呼叫铃声 | P2 | 来电铃声支持趣聊官方铃声库；若发起方配置专属呼叫铃声，则优先替换默认铃声，群聊固定以原始发起方为铃声来源 |
 
@@ -174,10 +174,10 @@ LiveKit 是 Apache 2.0 开源的 Go 语言 SFU 引擎（基于 Pion WebRTC），
 
 | 入口 | 位置 | 行为 | Phase |
 |------|------|------|-------|
-| ① 用户主页（同好/密友） | 用户资料页操作栏 | `消息 / 视频 / 语音` 三按钮等宽展示 | P2 |
-| ② 1v1 会话输入区 `+` | ChatDetailPage 输入区更多功能 | 仅同好会话显示 `语音通话 / 视频通话` | P2 |
-| ③ 群聊会话输入区 `+` | ChatDetailPage(group) 输入区更多功能 | 发起语音/视频通话并进入成员选择页，默认从当前会话成员起选，可切换同好/其他群 | P2 |
-| ④ 通话中邀请 | Voice/VideoCallPage 顶部或控制栏固定入口 | 主动邀请当前会话成员、同好或其他群成员加入当前通话 | P2 |
+| ① 用户主页（互相关注且未拉黑） | 用户资料页操作栏 | `消息 / 视频 / 语音` 三按钮等宽展示 | P2 |
+| ② 1v1 会话输入区 `+` | ChatDetailPage 输入区更多功能 | 仅 `mutual + !blocked` 会话显示 `语音通话 / 视频通话` | P2 |
+| ③ 群聊会话输入区 `+` | ChatDetailPage(group) 输入区更多功能 | 发起语音/视频通话并进入成员选择页，默认从当前会话成员起选，可切换互相关注用户/其他群 | P2 |
+| ④ 通话中邀请 | Voice/VideoCallPage 顶部或控制栏固定入口 | 主动邀请当前会话成员、互相关注用户或其他群成员加入当前通话 | P2 |
 | ⑤ 通话中分享链接 | Voice/VideoCallPage 邀请二级面板 | 复制/分享呼叫链接，对方点击入会 | P2 |
 | ⑥ 圈子详情 | CircleDetailPage 操作栏 | 发起圈子通话，选择成员 | P2 |
 | ⑦ 来电推送（被叫） | 系统级 | iOS CallKit / Android FullScreen Intent；群邀请统一为响铃邀请 | P1 |
@@ -186,14 +186,14 @@ LiveKit 是 Apache 2.0 开源的 Go 语言 SFU 引擎（基于 Pion WebRTC），
 ### 5.1 入口门禁规则
 
 - ChatDetail AppBar 保持简洁，不承载语音/视频直达按钮。
-- 1v1 语音/视频入口仅在 `同好` 关系下显示；`密友` 仅作为 `同好` 的快捷语义子态，不额外放宽门禁。
+- 1v1 语音/视频入口仅在 `mutual + !blocked` 状态下显示；`mutual` 只是互相关注的派生状态，不命名为新的关系等级。
 - `关注用户` 只能先打招呼，不能直接发起语音/视频通话。
 - 打招呼未被回复前，不进入普通聊天列表，因此也不存在会话内通话入口。
-- 对方回复后建立正式会话，但若尚未升级为同好，仍不显示语音/视频入口。
+- 对方回复后建立正式会话，但若尚未互相关注，仍不显示语音/视频入口。
 - 群聊发起多人通话时：
   - `<= 8 人`：默认全选（除自己）
   - `> 8 人`：默认不选，由用户主动选择
-- 多人选人页固定提供三类来源：`当前会话`、`同好`、`其他群`。
+- 多人选人页固定提供三类来源：`当前会话`、`互相关注`、`其他群`。
 - 跨群拉人不要求先加入当前群，只要求被邀请人加入本次通话。
 - 群语音/视频邀请统一为响铃邀请，不提供静默邀请或仅消息通知模式。
 
@@ -219,12 +219,11 @@ LiveKit 是 Apache 2.0 开源的 Go 语言 SFU 引擎（基于 Pion WebRTC），
 - 同一用户同时只能参与 1 个通话
 - 录制需全体参与者知情（UI 提示 + 录制图标）
 - 屏幕共享同时只允许 1 人
-- 1v1 实时通话仅对 `同好` 开放；`关注用户` 不解锁实时通话
-- `同好 = 互关`，失去互关后应即时收回 1v1 通话入口
-- `密友 ⊂ 同好`，失去同好后自动失去密友带来的通话快捷语义
-- 正式会话建立并不等同于可实时通话；未升级为同好时仍仅允许异步消息
+- 1v1 实时通话仅对 `mutual + !blocked` 开放；单向关注不解锁实时通话
+- `mutual` 仅表示互相关注状态，失去互相关注或任一方向拉黑后应即时收回 1v1 通话入口
+- 正式会话建立并不等同于可实时通话；未互相关注时仍仅允许异步消息
 - 通话中添加人需同时支持两条链路：
-  - 主动邀请当前会话成员、同好或其他群成员
+  - 主动邀请当前会话成员、互相关注用户或其他群成员
   - 生成并分享呼叫链接入会
 - 被邀请人加入当前通话不要求先加入当前群；群成员关系与通话参与关系解耦
 - 群邀请只有响铃邀请一种模式，发起后前台/后台/锁屏均按来电处理
@@ -384,9 +383,10 @@ rtc-service / livekit-sfu / coturn 在所有环境独立部署。
 
 - 超过 32 人的大型会议
 - PSTN 电话互通
-- Web 端通话
 - 直播推流
 - 实时字幕/翻译
+
+> 修订（商用上线基线）：Web 端从“不适用”调整为“适用但能力降级”。Web 支持站内前台来电、Web Push 后台唤醒（PWA 安装到主屏后）、加入既有通话；不提供系统原生来电界面。详见 §12 商用上线 UX 基线与 §13 来电平台能力矩阵。鸿蒙按 `14-cross-platform-portability` 走能力位降级，不阻塞本轮主路径。
 
 ### 7.3 前置条件
 
@@ -446,7 +446,7 @@ realtime-gateway 是本特性的关键前置依赖。推荐路径：先实现 re
 - 灰度 prod 5%→20%→50%→100% 无回滚
 - 延迟/中断率/建连率灰度实测
 
-详细 43 条验收标准见 `acceptance.yaml`。
+详细可执行验收项见 `acceptance.yaml`（按 SIT/GWT/contract + T1~T4 结构组织，不再以“固定 N 条”计数描述，避免与实际条目漂移）。
 
 ## 10. 子特性结构
 
@@ -467,3 +467,122 @@ realtime-gateway 是本特性的关键前置依赖。推荐路径：先实现 re
 | circle-community | circle-community | specified | 集成：圈子通话入口 |
 | user-service | user-identity-profile-relationship | specified | 查询：在线状态+联系人 |
 | notification-service | — | 已有 | 集成：VoIP Push |
+
+## 12. 商用上线 UX 基线（对标微信/小红书/FaceTime）
+
+> 本章是“商用可上线”的强制 UX 验收基线，覆盖入口清晰度、过程态完整性、错误/权限提示语、可靠性。每条都映射到 `acceptance.yaml` 的 GWT/contract，并落到 T1~T4 证据。
+
+### 12.1 入口清晰度（可解释、不分叉）
+
+| 入口 | 展示规则 | 看不到入口时的解释 |
+|------|---------|-------------------|
+| 1v1 会话输入区 `+` | 仅 `mutual + !blocked` 显示语音/视频 | 非互相关注显示“互相关注后可发起语音和视频通话”教育卡（结构化文案，非硬编码） |
+| 群聊输入区 `+` | 进入成员选择页，`<=8` 默认全选，`>8` 默认空选 | 群已满/无可邀请成员时显示空态说明 |
+| 用户主页操作栏 | 互相关注显示 `消息/语音/视频` 三动作等宽 | 关注/陌生只显示打招呼或关注，不显示通话入口 |
+| 通话中邀请 | 控制栏固定“邀请”，二级面板选当前会话/互相关注/其他群 | 房间满显示“通话人数已达上限” |
+| 分享链接入会 | 链接含来源、过期、风险提示与加入确认页 | 链接过期/无效显示结构化错误 |
+
+入口门禁只读 `relationship-capability` 能力位（`canStartVoiceCall`/`canStartVideoCall`），UI 禁止自写关系判断。
+
+### 12.2 通话页过程态（FaceTime/微信级）
+
+通话页必须覆盖全部过程态，禁止只有“占位头像”：
+
+| 状态 | 触发 | UI 表现 |
+|------|------|---------|
+| 连接中 | 发起/接听后媒体未建连 | “正在连接…” + 骨架/呼吸态 |
+| 振铃中（呼出） | 对方未接 | 对方头像脉冲 + “等待接听” + 取消按钮 |
+| 单人等待 | 多人房仅自己 | “等待其他人加入” + 邀请入口前置 |
+| 通话中 | 媒体已建连 | 动态网格/演讲者视图 + 真实视频流 |
+| 对方未接 | 30s 超时 | “对方未接听” → 自动收尾 |
+| 已离开 | 某成员离开 | 该格淡出 + “xx 已离开”轻提示 |
+| 重连中 | 网络抖动 | 顶部“连接中断，正在重连…”，画面冻结而非黑屏 |
+| 弱网 | 质量下降 | 黄/橙/红质量指示 + 必要时降级到音频 |
+| 已结束 | 挂断/最后一人离开 | 收尾动画 → 退出或回到会话并插入通话记录 |
+
+布局：顶部显示来源（来自哪个会话/群）、时长、网络质量、录制/共享提示与信任摘要；中部 1/2/3-4/5-9/10-16/17-25/26-32 动态网格 + 演讲者视图；底部控制栏固定 静音/摄像头/翻转/邀请/音频输出/挂断，按钮必须真实生效（翻转调用 SFU `switchCamera`，音频输出调用 `setSpeakerOn`）。
+
+### 12.3 完整交互路径（无遗漏）
+
+发起→呼出（可取消）→对方振铃（可接听/拒绝/超时）→建连→通话→（加人/静音/翻转/共享/录制）→（返回 PiP/顶部通话条回流）→离开/挂断→收尾。多人“离开”只让自己退出，最后一人离开才结束房间；忙线（已在通话中又来电）必须提示“正在通话中”，不静默吞掉。
+
+### 12.4 错误/权限提示语（统一语义、不吓人）
+
+- 全部走 `error-permission-display-semantics`：阻塞性用内联卡片+重试，次要失败用轻量反馈；禁止裸异常字符串（如 `answerCall: empty session`）与硬编码中文/`REC`。
+- 错误码来自 `errors.yaml` → codegen；端侧用 `RtcErrorCode.fromCode(...).toDisplayMessage(l10n)`。
+- 权限（麦克风、摄像头、通知、全屏来电、Web 通知）统一权限卡片：图标+主文案+副文案+主操作（去设置/重试），永久拒绝显示“去设置”，并给降级路径（如“可先转为仅语音”）。
+
+### 12.5 可靠性
+
+- LiveKit 远端 participants/tracks 必须实时同步到 `callParticipantsProvider`，视频格渲染真实 `VideoTrack`。
+- WS 事件 type 端云统一使用 `client_ws_type`（如 `call.ringing`），由 codegen 生成映射，禁止把 Go domain 常量直接当 wire type。
+- `IncomingCallCoordinator`/`ActiveCallBar`/`PipCallOverlay` 必须挂载到 app shell 唯一入口。
+
+## 13. 来电平台能力矩阵（重点）
+
+“能把人叫起来”依赖系统能力，三端实现不同，分别定义并各自验收。业务层只读 `PlatformCapabilities`（`incomingCallUi`/`webPushIncomingCall`/`realtimeCommunication`），禁止裸 `Platform.is*`/`kIsWeb`（遵 `14-cross-platform-portability`）。
+
+| 平台 | 前台 | 后台/锁屏/退出 | 关键权限与限制 | 降级 |
+|------|------|----------------|----------------|------|
+| iOS | 应用内全屏来电页（实时信令） | APNs VoIP Push（PushKit）唤醒，回调内必须立即 `CallKit.reportNewIncomingCall`，否则系统终止 App/停投 VoIP Push | `UIBackgroundModes: voip,audio`、麦克风/摄像头用途描述；接听后再请求媒体权限 | 无 CallKit 能力时退化为普通通知（User Notifications） |
+| Android | 应用内全屏来电页 | FCM 高优先级消息 + 高优先级通知通道 + `USE_FULL_SCREEN_INTENT` 全屏意图来电页 | Android 14+ 全屏意图为特殊权限，需声明通话核心功能；`POST_NOTIFICATIONS` 通知权限 | 全屏意图不可用时降级 heads-up 通知，并提供设置引导 |
+| Web | 站内来电弹窗 + 标题闪烁 + 铃声，不弹原生来电界面 | Web Push + Service Worker + Notification，点击通知打开/聚焦通话页再建 WebRTC | 必须 HTTPS；iOS Safari 需 PWA 安装到主屏后才有 Web Push；权限请求必须用户手势触发 | 未安装 PWA 时提示“添加到主屏幕后可接收网页来电”或 App 下载引导 |
+
+权限提示口径：不在冷启动索权；首次进入聊天/通话设置时引导“开启通话提醒，锁屏/后台也能收到来电”；接听后再请求麦克风/摄像头，被拒走权限卡片并提供仅语音降级；OEM 后台限制导致漏接时弱提示，不强行引导关省电。
+
+## 14. 信任与隐私提示（基础两态）
+
+避免多人视频通话的隐私风险，本轮先做两态，字段进 metadata（富信息预留）：
+
+| 信任态 | 适用对象 | UI |
+|--------|---------|----|
+| 认识/可信 | 联系人、互相关注、当前会话/群成员 | 展示来源标签（如“来自当前群聊”），正常入会 |
+| 可能不认识 | 其他群成员、链接加入者、无共同关系者 | 进入前风险提示“你可能不认识 TA，注意保护隐私，避免展示敏感信息” |
+| 异常（不入会） | 被拉黑、房间已满、已结束、非授权链接 | 结构化错误（errors.yaml 驱动），拒绝入会 |
+
+- 通话中有“可能不认识”的新人加入时，在会成员收到可感知轻量横幅。
+- 被邀请人来电页必须展示：发起人、来源会话/群、当前在会人数、是否包含“可能不认识”的人、摄像头/麦克风默认状态。
+- 富信息（共同关注数量、共同群列表）字段在 metadata 预留，本轮 UI 不强制展示。
+
+## 15. 商用上线验证与交付（测试路径 + 门禁 + UAT 剧本）
+
+验收以 `acceptance.yaml`（L2 SIT + 四个 L3 Story GWT）为唯一计数真相源；本节给出测试路径与门禁命令落点。
+
+### 15.1 分层测试与计划文件
+
+- T1（契约/静态）：
+  - `quwoquan_service` `go run ./tools/verify_metadata/ contracts/metadata`（rtc fields/events/types 一致，已通过）。
+  - `ws_event_wire_type_contract_test.go`（已落地：domain event→`client_ws_type` 映射不漂移）。
+  - codegen hash 比对（`make gate`），DTO/error/WS+推送 payload 契约。
+- T2（模块/交互）：
+  - `chat_conversation_page_call_entry_test.dart`、`call_participant_picker_page_test.dart`（入口显隐与解释）。
+  - `call_session_provider_lifecycle_test.dart`（过程态机）、`video_call_page_states_test.dart`、`video_grid_layout_test.dart`（LiveKit fake track 渲染）。
+  - `participant_trust_badge_test.dart`（信任两态）、`call_controls_bar_device_test.dart`（翻转/音频输出真实调用 SFU）、`call_permission_card_test.dart`、`rtc_error_code_test.dart`、`rtc_signaling_wire_type_test.dart`、`platform_capabilities_incoming_call_test.dart`、`active_call_shell_mount_test.dart`。
+- T3（端云集成）：
+  - `call_lifecycle_contract_test.go`、`multi_party_room_contract_test.go`、`incoming_push_payload_contract_test.go`（与 Dart Mock 行为对齐）。
+- T4（端到端旅程，真机/Patrol 或手工 UAT）：
+  - 三端来电（iOS CallKit / Android 全屏意图 / Web Push）后台/锁屏唤醒；权限拒绝降级；1v1 视频；群聊 3 人；通话中加“可能不认识”的人提示；返回 PiP；成员离开；弱网降级。
+
+### 15.2 门禁命令
+
+```bash
+# 规格/验收结构
+bash agent_ops/scaffold/verify_acceptance_standard.sh
+bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+# 云侧 metadata + 契约
+cd quwoquan_service && go run ./tools/verify_metadata/ contracts/metadata
+cd quwoquan_service && go test ./services/rtc-service/...
+# 端侧分析 + 页面横向质量 + 全量门禁
+cd quwoquan_app && flutter analyze lib/ui/rtc lib/cloud/rtc
+make gate
+```
+
+### 15.3 发布前 UAT 剧本（手工，对标微信）
+
+1. iOS 真机退到后台/锁屏 → 对方发起视频 → CallKit 全屏来电 → 接听进入通话页看到双方真实画面。
+2. Android 真机锁屏 → FCM 高优先级 → 全屏意图来电页；在 14+ 关闭全屏意图权限 → 验证降级 heads-up + 设置引导。
+3. Web PWA 安装到主屏 → 关闭标签页 → 收到 Web Push 通知 → 点击进会；未安装时验证“添加到主屏幕”引导。
+4. 通话中邀请一名“可能不认识”的群外成员 → 在会成员看到轻量横幅 → 被邀请人来电页看到来源与风险提示。
+5. 通话中拒绝麦克风/摄像头权限 → 权限卡片 + 仅语音降级；翻转摄像头与切扬声器实测生效。
+6. 通话中返回其他页面 → 顶部通话条/PiP → 点击回流；多人“离开”仅自己退出，最后一人离开结束房间。
+7. 弱网（限速）→ 质量指示变化 + 自动降级到音频 + ICE 重连恢复。

@@ -7,11 +7,15 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
+import 'package:quwoquan_app/cloud/rtc/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/web_app_install_banner.dart';
 import 'package:quwoquan_app/app/shell/web_main_app_shell.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/active_call_bar.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/pip_call_overlay.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
@@ -50,6 +54,49 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   String _pageAccessCurrentUserId = '';
   String _pageAccessExperimentBucket = '';
 
+  /// 全局来电协调器当前绑定的登录用户；空串表示未启动。
+  /// 用作幂等守卫，避免重复 start / 漏 stop。
+  String _incomingCallBoundUserId = '';
+
+  /// 依据登录态唯一地启动/停止全局来电协调器。
+  /// 登录用户切换时先停旧再启新；登出时停止并解绑。
+  void _syncIncomingCallCoordinator() {
+    final auth = ref.read(authSessionControllerProvider);
+    final userId = auth.isAuthenticated ? ref.read(currentUserIdProvider) : '';
+    final decision = resolveIncomingCallSync(
+      boundUserId: _incomingCallBoundUserId,
+      nextUserId: userId,
+    );
+    if (!decision.shouldStop && !decision.shouldStart) {
+      return;
+    }
+    final coordinator = ref.read(incomingCallCoordinatorProvider);
+    if (decision.shouldStop) {
+      coordinator.stop();
+    }
+    if (decision.shouldStart) {
+      coordinator.start(userId);
+    }
+    _incomingCallBoundUserId = decision.boundUserId;
+  }
+
+  void _returnToActiveCall() {
+    final call = ref.read(activeCallProvider);
+    final callId = call.callId;
+    if (callId == null || callId.isEmpty) {
+      return;
+    }
+    ref.read(activeCallProvider.notifier).exitPipMode();
+    final path = call.callType == 'video'
+        ? AppRoutePaths.rtcVideo(callId: callId)
+        : AppRoutePaths.rtcVoice(callId: callId);
+    context.push(path);
+  }
+
+  void _hangupActiveCall() {
+    ref.read(activeCallProvider.notifier).endCall();
+  }
+
   void _cachePageAccessDependencies() {
     _pageAccessOpsRepository = ref.read(opsEventRepositoryProvider);
     _pageAccessCurrentUserId = ref.read(currentUserIdProvider);
@@ -66,6 +113,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     _currentPageVisitId = AppTraceContextStore.instance.newPageVisitId();
     _currentPageEnterAt = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
       writeAppPageAccessOpen(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
@@ -76,6 +126,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
             .read(contentRuntimeConfigProvider)
             .experimentBucket,
       );
+      _syncIncomingCallCoordinator();
     });
   }
 
@@ -126,13 +177,15 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   @override
   Widget build(BuildContext context) {
     _cachePageAccessDependencies();
-    // 登录后续接：底栏加号里「加好友/发起群聊/建圈子」被拦截时登记了
+    // 登录后续接：底栏加号里「添加联系人/发起群聊/建圈子」被拦截时登记了
     // OpenSheetContinuation；登录成功（auth 翻转为已认证）时由始终在场的外壳
     // 自动续接打开对应面板，避免「登录回来动作丢失」。
     ref.listen<AuthSessionState>(authSessionControllerProvider, (
       AuthSessionState? previous,
       AuthSessionState next,
     ) {
+      // 登录态翻转时同步全局来电协调器：登录启动来电监听，登出停止解绑。
+      _syncIncomingCallCoordinator();
       final justLoggedIn =
           next.isAuthenticated &&
           (previous == null || !previous.isAuthenticated);
@@ -184,11 +237,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: statusBarStyle,
-      child: ColoredBox(
+      child: Stack(
+        children: [
+          ColoredBox(
         color: shellBackground,
         child: Column(
           children: [
             if (showInstallBanner) const WebAppInstallBanner(),
+            ActiveCallBar(onTap: _returnToActiveCall),
             Expanded(
               child: useWebWideShell
                   ? Stack(
@@ -200,8 +256,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                           currentLocation: _currentLocation,
                           backgroundColor: shellBackground,
                           onPrimarySelected: _handleWebPrimaryTap,
-                          onOpenCreateSheet: () =>
-                              unawaited(GlobalQuickActionSheet.show(context)),
                         ),
                       ],
                     )
@@ -239,6 +293,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
           ],
         ),
       ),
+          PipCallOverlay(
+            onReturnToCall: _returnToActiveCall,
+            onHangup: _hangupActiveCall,
+          ),
+        ],
+      ),
     );
   }
 
@@ -254,7 +314,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     );
     if (nextTab == MainTabDestination.create) {
       // 加号入口后置登录：先无条件打开动作面板，登录拦截下沉到具体动作
-      // （写文章/发图片/发视频走 /create 路由门，加好友/群聊/建圈子在动作上拦截）。
+      // （写文章/发图片/发视频走 /create 路由门，添加联系人/群聊/建圈子在动作上拦截）。
       unawaited(GlobalQuickActionSheet.show(context));
       return;
     }

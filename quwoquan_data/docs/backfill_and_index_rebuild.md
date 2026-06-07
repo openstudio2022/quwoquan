@@ -35,13 +35,13 @@
 推荐顺序如下：
 
 ```bash
-python3 scripts/build_publish_lookup_indexes.py
+python3 scripts/publish_ops/build_publish_lookup_indexes.py
 bash scripts/verify/verify_quwoquan_data.sh   # 原 gate_e2e.py 已 CLI-first 拆分
-python3 scripts/verify_campus_taxonomy.py
+python3 verticals/campus/verify/verify_campus_taxonomy.py
 python3 scripts/ml/verify_feature_consistency.py
 ```
 
-如果是学校数据专项回填，先执行 `bootstrap_school_entities.py` 和 `bootstrap_school_posts.py`，再重建索引和门禁。
+如果是学校数据专项回填，先执行 `verticals/campus/scripts/bootstrap_school_entities.py` 和 `verticals/campus/scripts/bootstrap_school_posts.py`，再重建索引和门禁。
 
 ## posts 路径约定
 

@@ -1,0 +1,9 @@
+service:
+  name: notification-service
+  http:
+    addr: ":18087"
+
+notification:
+  delivery:
+    claim_per_second: 100
+    retry_per_second: 20

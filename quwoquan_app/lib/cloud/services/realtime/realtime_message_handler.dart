@@ -12,8 +12,8 @@ import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dar
 typedef ChatProviderRead = T Function<T>(ProviderListenable<T> listenable);
 
 /// Routes incoming realtime events to the appropriate domain handlers.
-/// Called by [RealtimeConnectionManager] when a WebSocket or long-poll
-/// event arrives.
+/// Called by realtime connection delegates when a WebSocket, long-poll,
+/// or mock catalog event arrives.
 class RealtimeMessageHandler {
   RealtimeMessageHandler(ChatProviderRead read) : _read = read;
 

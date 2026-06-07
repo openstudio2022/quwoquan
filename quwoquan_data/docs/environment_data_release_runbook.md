@@ -81,7 +81,7 @@ python3 quwoquan_data/scripts/cli.py ship \
 
 ## 四层验证
 
-- T1：`python3 quwoquan_data/tests/test_data_release_consistency.py`、`python3 quwoquan_data/tests/test_ship_sampling.py`、`make verify-data-release-consistency RELEASE_FILE=...`。
+- T1：`python3 quwoquan_data/tests/ship/test_data_release_consistency.py`、`python3 quwoquan_data/tests/ship/test_ship_sampling.py`、`make verify-data-release-consistency RELEASE_FILE=...`。
 - T2：`go test ./services/content-service/cmd/import`、`go test ./services/tag-service/...`；有 `QWQ_TEST_MONGO_URI` 时覆盖真实 Mongo tombstone/read-model 清理。
 - T3：`make gate-local-gamma` 或远端 `make test-api-contract API_CONTRACT_ENV=gamma`，确认 feed/search/detail/tag/profile 不返回 tombstone 或悬挂对象。
 - T4：Patrol 覆盖 discovery feed、详情、实体主页、tag 聚合、用户交集卡；删除异常路径需验证下线内容不可达。

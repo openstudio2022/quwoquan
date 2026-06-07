@@ -19,6 +19,7 @@ type ChatHandler struct {
 	messageService      *application.MessageService
 	memberService       *application.MemberService
 	inboxService        *application.InboxService
+	mediaUploadService  *application.ChatMediaUploadService
 	userSyncService     *runtimesync.Service
 }
 
@@ -34,6 +35,7 @@ func NewChatHandler(
 		messageService:      messageService,
 		memberService:       memberService,
 		inboxService:        inboxService,
+		mediaUploadService:  application.NewChatMediaUploadService(),
 		userSyncService:     userSyncService,
 	}
 }
@@ -47,7 +49,9 @@ func (h *ChatHandler) Routes() http.Handler {
 	mux.HandleFunc("PATCH /v1/chat/conversations/{conversationId}/owner", h.handleTransferOwnership)
 	mux.HandleFunc("PUT /v1/chat/conversations/{conversationId}/admins", h.handleUpdateGroupAdmins)
 	mux.HandleFunc("DELETE /v1/chat/conversations/{conversationId}", h.handleDissolveConversation)
+	h.registerMediaUploadRoutes(mux)
 	RegisterGeneratedRoutes(mux, h)
+	h.registerInternalRoutes(mux)
 	return mux
 }
 
@@ -510,6 +514,7 @@ func (h *ChatHandler) handleSearchContacts(w http.ResponseWriter, r *http.Reques
 			"avatarUrl":        contact.AvatarURL,
 			"conversationId":   contact.ConversationID,
 			"conversationType": contact.ConversationType,
+			"source":           contact.Source,
 			"subtitle":         contact.Subtitle,
 			"highlightText":    contact.HighlightText,
 			"matchedField":     contact.MatchedField,

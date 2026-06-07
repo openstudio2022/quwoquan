@@ -80,7 +80,7 @@ def c2_fields_use_tag_ref() -> None:
             errors.append(f"C2: {rel} 仍含已废弃属性 `tag_taxonomy_ref`")
 
 
-def c3_no_legacy_ids() -> None:
+def c3_no_flat_ids() -> None:
     """metadata 中不残留旧扁平 id（domain_taxonomy.user_tag_ref 等已切路径制 tagRef）。"""
     dt = META / "_shared" / "domain_taxonomy.yaml"
     if not dt.exists():
@@ -108,7 +108,7 @@ def c3_no_legacy_ids() -> None:
 def main() -> int:
     c1_zero_reference()
     c2_fields_use_tag_ref()
-    c3_no_legacy_ids()
+    c3_no_flat_ids()
 
     for w in warnings:
         print(f"[verify_tag_ref] WARN {w}")

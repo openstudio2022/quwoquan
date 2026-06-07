@@ -413,6 +413,10 @@ func HTTPStatusFromError(err *AppError) int {
 			return http.StatusForbidden
 		case "not_found", "route_not_found":
 			return http.StatusNotFound
+		case "target_blocked_sender":
+			return http.StatusForbidden
+		case "duplicate_pending", "already_contact", "invalid_status_transition":
+			return http.StatusConflict
 		case "media_not_ready":
 			return http.StatusUnprocessableEntity
 		case "conflict":

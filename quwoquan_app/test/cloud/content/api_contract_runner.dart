@@ -47,7 +47,7 @@ const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _localGammaT3Scope = String.fromEnvironment('LOCAL_GAMMA_T3_SCOPE');
 const _currentUserId = 'fixture_user_current';
 const _localGammaSeedImageUrl =
-    'media/image/post/fixture_photo_001/v1/cover.png';
+    'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png';
 
 // ─── Shared client & seeded data ───────────────────────────────────────────
 

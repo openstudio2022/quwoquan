@@ -57,7 +57,7 @@ class CloudRuntimeConfig {
     defaultValue: '/download/desktop',
   );
 
-  /// Web 顶部安装提示：分享给微信/好友的安装落地页。
+  /// Web 顶部安装提示：分享给微信/联系人的安装落地页。
   static const String webAppShareInstallUrl = String.fromEnvironment(
     'WEB_APP_SHARE_INSTALL_URL',
     defaultValue: '/download',

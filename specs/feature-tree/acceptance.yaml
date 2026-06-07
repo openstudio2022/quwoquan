@@ -64,6 +64,44 @@ uat_acceptance:
       - quwoquan_app/test/patrol/edge_swipe_navigation_e2e_test.dart
       recorded: []
     status: pending
+  UAT_EXTERNAL_ACQUISITION:
+    title: 对外引流与深链回流端到端价值闭环
+    journey: 用户在微信朋友圈/聊天群、小红书/今日头条等 UGC 平台、浏览器与搜索引擎看到内容（文章/图文/视频/动态）或主页（实体/用户/圈子/我）的分享卡、海报、口令或链接，点击后在已安装时可靠回流到 App 对应页面、未安装时被引导下载并在安装后还原原始目标，整条链路归因可统计。
+    scenario_refs:
+    - external-acquisition-and-deeplink
+    - outbound-object-share-distribution
+    - external-inbound-deeplink-return
+    - public-web-seo-install-conversion
+    done_when:
+    - 5 类对象都能从统一分享面板分享到微信会话/朋友圈，并生成站外可点击的 HTTPS 落地链接。
+    - 已安装用户在微信内（Android/鸿蒙用 wx-open-launch-app、iOS 用 Universal Link）、在浏览器内（Universal Link/App Links/scheme）点击后回流到 App 对应详情页。
+    - 未安装用户被引导到应用商店，安装后首启通过延迟深链还原原始目标对象。
+    - 公开 Web 内容/主页可被搜索引擎索引（canonical/OG/JSON-LD/robots/sitemap），并提供安装转化入口。
+    - 一键海报（含二维码与口令）可投放到不支持外链的 UGC 平台，扫码或口令识别后回流到目标对象。
+    - 全链路携带 referralSource/share_id/UTM/口令归因，可在指标大盘按渠道与对象类型统计转化。
+    experience_points:
+    - outbound share distribution across 5 object types
+    - reliable inbound deeplink return inside WeChat and browsers
+    - deferred deeplink restore after install
+    - public web SEO and install conversion
+    performance_points:
+    - 已安装设备点击到 App 目标页可见 P95 <= 2.5s
+    - 微信内唤起成功率（已安装）>= 95%
+    - 延迟深链安装后参数找回率 >= 90%
+    evidence:
+      primary:
+      - T4_user_journey
+      supporting:
+      - T1_static_contract
+      - T2_module_interaction
+      - T3_cross_service_integration
+    tests:
+      planned:
+      - quwoquan_app/test/runtime/deeplink/deep_link_resolver_test.dart
+      - quwoquan_app/test/ui/share/object_share_panel_test.dart
+      - quwoquan_app/integration_test/external_acquisition_deeplink_e2e_test.dart
+      recorded: []
+    status: pending
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

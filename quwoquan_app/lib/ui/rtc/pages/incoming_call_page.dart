@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/call_permission_guard.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_stage_chrome.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/caller_avatar_pulse.dart';
 
@@ -33,14 +34,26 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
     HapticFeedback.heavyImpact();
   }
 
+  /// 接听前权限预检：麦克风为硬门槛；视频缺摄像头降级为仅语音继续。
+  Future<void> _onAccept(CallType callType) async {
+    final outcome = await CallPermissionGuard.ensure(
+      context,
+      callType: callType,
+    );
+    if (!mounted || outcome == CallPermissionOutcome.blocked) {
+      return;
+    }
+    ref.read(callSessionProvider.notifier).answerCall(widget.callId);
+  }
+
   void _onCallStatusChanged(CallSessionState state) {
     if (!mounted) return;
     if (state.status == CallStatus.inCall) {
       ref.read(callTimerProvider.notifier).start();
       final isVideo = state.callType.isVideo;
       final route = isVideo
-          ? '/rtc/video/${widget.callId}'
-          : '/rtc/voice/${widget.callId}';
+          ? AppRoutePaths.rtcVideo(callId: widget.callId)
+          : AppRoutePaths.rtcVoice(callId: widget.callId);
       context.go(route);
     } else if (state.status == CallStatus.ended) {
       if (context.canPop()) {
@@ -133,9 +146,7 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
                 : CupertinoIcons.phone,
             label: UITextConstants.callAccept,
             color: AppColors.primaryColor,
-            onTap: () {
-              ref.read(callSessionProvider.notifier).answerCall(widget.callId);
-            },
+            onTap: () => _onAccept(session.callType),
           ),
         ],
       ),

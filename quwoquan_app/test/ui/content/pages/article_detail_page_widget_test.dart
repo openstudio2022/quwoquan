@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -310,6 +311,11 @@ void main() {
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
   });
 
+  testWidgets(
+    'testArticleInlineCommentJourney: 点击底部评论后滚动到内联评论区',
+    testArticleInlineCommentJourney,
+  );
+
   testWidgets('ArticleReadOnlyBookDeck 翻页完成时上报 page curl commit', (
     tester,
   ) async {
@@ -389,6 +395,106 @@ void main() {
       everyElement('page_curl'),
     );
   });
+}
+
+Future<void> testArticleInlineCommentJourney(WidgetTester tester) async {
+  final article = <String, dynamic>{
+    'postId': 'art_inline_journey',
+    'contentType': 'article',
+    'authorId': 'writer_inline',
+    'displayName': '内联作者',
+    'authorAvatarUrl': 'https://example.com/avatar.jpg',
+    'title': '平铺文章内联评论',
+    'body': List<String>.filled(
+      24,
+      '这是一段为了让评论区离开首屏的长正文。用户点击底部评论按钮后，应当滚动到正文之后的内联评论区，而不是弹出独立浮层。',
+    ).join('\n\n'),
+    'coverUrl': 'https://example.com/cover.jpg',
+    'likeCount': 12,
+    'commentCount': 18,
+    'favoriteCount': 6,
+    'shareCount': 3,
+    'publishedAt': '2026-03-21T08:00:00Z',
+    'articleBlocks': <Map<String, dynamic>>[
+      {
+        'id': 'p1',
+        'type': 'paragraph',
+        'text': '正文段落一',
+        'imagePath': '',
+      },
+      {
+        'id': 'p2',
+        'type': 'paragraph',
+        'text': '正文段落二',
+        'imagePath': '',
+      },
+      {
+        'id': 'p3',
+        'type': 'paragraph',
+        'text': '正文段落三',
+        'imagePath': '',
+      },
+    ],
+  };
+  final repo = _ArticleGetPostRepo(article);
+  repo.commentsStub = [
+    CommentDto(
+      id: 'inline_comment_1',
+      postId: 'art_inline_journey',
+      authorId: 'user_1',
+      displayName: '评论者一',
+      content: '第一条内联评论',
+      createdAt: DateTime.utc(2026, 6, 1),
+    ),
+    CommentDto(
+      id: 'inline_comment_2',
+      postId: 'art_inline_journey',
+      authorId: 'user_2',
+      displayName: '评论者二',
+      content: '第二条内联评论',
+      createdAt: DateTime.utc(2026, 6, 2),
+    ),
+  ];
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        contentRepositoryProvider.overrideWithValue(repo),
+        behaviorRepositoryProvider.overrideWithValue(
+          MockBehaviorRepository(),
+        ),
+      ],
+      child: MaterialApp(
+        locale: const Locale('zh'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const ArticleDetailPage(articleId: 'art_inline_journey'),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  final commentSectionFinder = find.byKey(
+    TestKeys.inlineArticleCommentSection,
+  );
+  final initialCommentSectionTop = tester.getTopLeft(
+    commentSectionFinder,
+  ).dy;
+  expect(initialCommentSectionTop, greaterThan(0));
+
+  await tester.tap(find.byIcon(CupertinoIcons.chat_bubble));
+  await tester.pumpAndSettle();
+
+  final scrolledCommentSectionTop = tester.getTopLeft(
+    commentSectionFinder,
+  ).dy;
+  expect(
+    scrolledCommentSectionTop,
+    lessThan(initialCommentSectionTop),
+    reason: '点击底部评论按钮后应滚动到内联评论区',
+  );
+  expect(find.byKey(TestKeys.commentInputOverlay), findsNothing);
+  expect(find.byType(CupertinoTextField), findsNothing);
 }
 
 List<ArticlePageData> _pagesFrom(Map<String, dynamic> article) {

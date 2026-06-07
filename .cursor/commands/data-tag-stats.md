@@ -5,8 +5,8 @@
 ## 执行
 
 ```bash
-python3 quwoquan_data/scripts/tag_stats.py          # 文本格式
-python3 quwoquan_data/scripts/tag_stats.py --json    # JSON 格式
+python3 quwoquan_data/scripts/tags/tag_stats.py          # 文本格式
+python3 quwoquan_data/scripts/tags/tag_stats.py --json    # JSON 格式
 ```
 
 ## 输出内容

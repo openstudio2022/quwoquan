@@ -11,6 +11,7 @@ import (
 type stubSource struct {
 	facts      []IntersectionReasonView
 	affinities []IntersectionReasonView
+	object     []IntersectionReasonView
 }
 
 func (s stubSource) FactReasons(context.Context, string, string) ([]IntersectionReasonView, error) {
@@ -18,6 +19,9 @@ func (s stubSource) FactReasons(context.Context, string, string) ([]Intersection
 }
 func (s stubSource) AffinityReasons(context.Context, string, string) ([]IntersectionReasonView, error) {
 	return s.affinities, nil
+}
+func (s stubSource) ObjectReasons(context.Context, string, string, string) ([]IntersectionReasonView, error) {
+	return s.object, nil
 }
 
 func newTestRouter(t *testing.T) *rtredis.Router {
@@ -195,5 +199,64 @@ func TestIntersectionService_MaxCandidateWindowCapsBeforeLimit(t *testing.T) {
 	}
 	if len(feed) != 2 {
 		t.Fatalf("want max candidate window 2, got %d", len(feed))
+	}
+}
+
+func TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	// 单对象多证据组：内容(coLiked) 先给、人物(mutualFriend) 后给，
+	// 期望 hydrate 后按锚强度（人物 > 内容）重排，事实在前、推荐殿后。
+	src := stubSource{object: []IntersectionReasonView{
+		{
+			IntersectionID:   "objix_user_u_lin",
+			Dimension:        "relationship",
+			ActionTargetID:   "u_lin",
+			RelationObjectID: "u_lin",
+			IntersectionPoints: []IntersectionPointView{
+				{PointID: "p_content", PointClass: "fact", Dimension: "content", SourceRef: "coLiked", Label: "都赞过", DisplayText: "都赞过", Count: 3},
+				{PointID: "p_aff", PointClass: "recommended", Dimension: "interest", SourceRef: "affinity", Label: "可能合得来", DisplayText: "可能合得来"},
+				{PointID: "p_friend", PointClass: "fact", Dimension: "relationship", SourceRef: "mutualFriend", Label: "共同好友", DisplayText: "共同好友", Count: 4},
+			},
+		},
+	}}
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
+	fixedNow(svc, now)
+
+	items, err := svc.ObjectIntersections(context.Background(), "viewer1", "u_lin", "user", 8)
+	if err != nil {
+		t.Fatalf("object intersections: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("want 1 reason, got %d", len(items))
+	}
+	pts := items[0].IntersectionPoints
+	if len(pts) != 3 {
+		t.Fatalf("want 3 points, got %d", len(pts))
+	}
+	// §9.8：人物(mutualFriend) 排第一，内容(coLiked) 次之，recommended 殿后。
+	if pts[0].SourceRef != "mutualFriend" {
+		t.Fatalf("want mutualFriend first, got %s", pts[0].SourceRef)
+	}
+	if pts[1].SourceRef != "coLiked" {
+		t.Fatalf("want coLiked second, got %s", pts[1].SourceRef)
+	}
+	if pts[2].PointClass != "recommended" {
+		t.Fatalf("want recommended last, got %s", pts[2].PointClass)
+	}
+	// single-source：fact=2、recommended=1、total=3。
+	if items[0].FactPointCount != 2 || items[0].RecommendedPointCount != 1 || items[0].TotalPointCount != 3 {
+		t.Fatalf("point summary mismatch: fact=%d rec=%d total=%d",
+			items[0].FactPointCount, items[0].RecommendedPointCount, items[0].TotalPointCount)
+	}
+}
+
+func TestIntersectionService_ObjectIntersectionsEmptyObjectID(t *testing.T) {
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(stubSource{}))
+	items, err := svc.ObjectIntersections(context.Background(), "viewer1", "", "user", 8)
+	if err != nil {
+		t.Fatalf("object intersections: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("want empty for blank objectId, got %d", len(items))
 	}
 }

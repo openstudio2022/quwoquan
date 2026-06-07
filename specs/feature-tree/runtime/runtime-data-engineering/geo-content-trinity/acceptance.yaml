@@ -31,24 +31,24 @@ gwt_acceptance:
       supporting: []
     tests:
       planned:
-      - file: quwoquan_data/tests/test_template_cli.py
-        command: python3 quwoquan_data/tests/test_template_cli.py
+      - file: quwoquan_data/tests/template/test_template_cli.py
+        command: python3 quwoquan_data/tests/template/test_template_cli.py
         evidence: T1_contract
       - file: quwoquan_data/scripts/template/condition.py
         command: python3 quwoquan_data/scripts/cli.py template region-season-lint
         evidence: T1_contract
-      - file: quwoquan_data/scripts/verify_content_quality.py
-        command: python3 quwoquan_data/scripts/verify_content_quality.py
+      - file: quwoquan_data/scripts/verify/verify_content_quality.py
+        command: python3 quwoquan_data/scripts/verify/verify_content_quality.py
         evidence: T1_contract
       recorded:
-      - file: quwoquan_data/tests/test_template_cli.py
-        command: python3 quwoquan_data/tests/test_template_cli.py
+      - file: quwoquan_data/tests/template/test_template_cli.py
+        command: python3 quwoquan_data/tests/template/test_template_cli.py
         evidence: T1_contract
       - file: quwoquan_data/scripts/template/condition.py
         command: python3 quwoquan_data/scripts/cli.py template region-season-lint
         evidence: T1_contract
-      - file: quwoquan_data/scripts/verify_content_quality.py
-        command: python3 quwoquan_data/scripts/verify_content_quality.py
+      - file: quwoquan_data/scripts/verify/verify_content_quality.py
+        command: python3 quwoquan_data/scripts/verify/verify_content_quality.py
         evidence: T1_contract
     status: pending
 execution:

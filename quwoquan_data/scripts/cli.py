@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
-"""qwq-data CLI — 6 commands for the data engineering pipeline.
+"""qwq-data CLI — data root + task/workflow/ops command families.
 
 Commands:
-  explore    — Discover POI candidates for a geographic region
-  build      — Construct entities, tags, entity pages, and graph
-  download   — Multi-platform source acquisition
-  produce    — Content production (article/image/video)
-  publish    — Assemble release package
-  reconcile  — Consistency check and patch loop
+  data       — Explore / baseline / download / build / produce / publish / workflow
   reset      — Clear runtime data
 """
 from __future__ import annotations
@@ -41,13 +36,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="qwq-data", description="Data engineering pipeline CLI")
     subparsers = parser.add_subparsers(dest="command")
 
-    from explore.handler import register_parser as reg_explore
-    from build.handler import register_parser as reg_build
-    from download.handler import register_parser as reg_download
-    from produce.handler import register_parser as reg_produce
     from media.handler import register_parser as reg_media
-    from publish.handler import register_parser as reg_publish
-    from reconcile.handler import register_parser as reg_reconcile
     from template.handler import register_parser as reg_template
     from plan.handler import register_parser as reg_plan
     from verify.handler import register_parser as reg_verify
@@ -57,14 +46,10 @@ def main() -> None:
     from homepage_assets.handler import register_parser as reg_homepage_assets
     from vertical.handler import register_parser as reg_vertical
     from quality.handler import register_parser as reg_quality
+    from data.handler import register_parser as reg_data
 
-    reg_explore(subparsers)
-    reg_build(subparsers)
-    reg_download(subparsers)
-    reg_produce(subparsers)
+    reg_data(subparsers)
     reg_media(subparsers)
-    reg_publish(subparsers)
-    reg_reconcile(subparsers)
     reg_template(subparsers)
     reg_plan(subparsers)
     reg_verify(subparsers)

@@ -81,6 +81,11 @@ extension ChatMessageDtoDisplay on ChatMessageDto {
     final imageFromMedia = mediaMap != null
         ? (mediaMap['url'] as String? ?? mediaMap['thumbnailUrl'] as String?)
         : null;
+    final thumbnailFromMedia = mediaMap != null
+        ? (mediaMap['thumbnailUrl'] as String? ??
+            mediaMap['thumbnail'] as String? ??
+            imageFromMedia)
+        : null;
     final audioUrl =
         (mediaMap?['url'] as String?)?.trim() ??
         (mediaUrl?.trim() ?? '');
@@ -111,7 +116,7 @@ extension ChatMessageDtoDisplay on ChatMessageDto {
       isRead: true,
       mediaUrl: audioUrl,
       imageUrl: (imageFromMedia ?? '').trim(),
-      thumbnailUrl: (imageFromMedia ?? '').trim(),
+      thumbnailUrl: (thumbnailFromMedia ?? '').trim(),
       audioDurationMs: durationMs,
       audioWaveform: waveform,
       tasks: taskEntries,

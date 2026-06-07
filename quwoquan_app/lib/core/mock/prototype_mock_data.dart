@@ -1089,7 +1089,7 @@ class PrototypeMockData {
     return chatMockConversations.where((c) => c['hasMention'] == true).toList();
   }
 
-  /// 同好 Tab - 联系人（含趣聊中的会话对象，至少两屏；1:1 MockMessageData MOCK_CONTACTS 扩展）
+  /// 联系人 Tab - 联系人（含趣聊中的会话对象，至少两屏；1:1 MockMessageData MOCK_CONTACTS 扩展）
   static List<Map<String, dynamic>> get chatMockContacts {
     return [
       // 星标 + 与趣聊会话对应
@@ -1099,7 +1099,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
         'bio': '风光摄影爱好者',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': true,
         'metFrom': '风光摄影圈、人像摄影圈',
         'lastInteraction': '发消息',
@@ -1111,7 +1111,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
         'bio': '商业摄影师',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': true,
         'metFrom': '人像摄影圈、摄影器材圈',
         'lastInteraction': '互相点赞',
@@ -1124,7 +1124,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
         'bio': '摄影交流圈',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '摄影交流圈',
         'lastInteraction': '发消息',
@@ -1136,7 +1136,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
         'bio': '风光摄影圈',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '风光摄影圈',
         'lastInteraction': '互相点赞',
@@ -1148,7 +1148,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
         'bio': '人像摄影圈',
-        'isFriend': false,
+        'relationState': 'following',
         'isStarred': false,
         'metFrom': '人像摄影圈',
         'lastInteraction': '点赞',
@@ -1160,7 +1160,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
         'bio': '摄影交流圈',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '摄影交流圈',
         'lastInteraction': '发链接',
@@ -1172,7 +1172,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
         'bio': '风光摄影圈',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '风光摄影圈',
         'lastInteraction': '互相点赞',
@@ -1184,7 +1184,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
         'bio': '人像摄影圈',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '人像摄影圈',
         'lastInteraction': '发图片',
@@ -1196,7 +1196,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
         'bio': '人像摄影师',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '人像摄影圈',
         'lastInteraction': '互相点赞',
@@ -1208,7 +1208,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
         'bio': '游戏爱好者',
-        'isFriend': false,
+        'relationState': 'following',
         'isStarred': false,
         'metFrom': '游戏交流圈',
         'lastInteraction': '关注了你',
@@ -1220,7 +1220,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
         'bio': '科幻文学爱好者',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '科幻文学圈',
         'lastInteraction': '发消息',
@@ -1232,7 +1232,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
         'bio': '技术交流圈',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '技术交流圈',
         'lastInteraction': '发条目',
@@ -1244,7 +1244,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
         'bio': '商务合作圈',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '商务合作圈',
         'lastInteraction': '发消息',
@@ -1257,7 +1257,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
         'bio': '生活记录',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '生活圈',
         'lastInteraction': '点赞',
@@ -1269,7 +1269,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400',
         'bio': '户外徒步',
-        'isFriend': false,
+        'relationState': 'following',
         'isStarred': false,
         'metFrom': '户外圈',
         'lastInteraction': '关注',
@@ -1281,7 +1281,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
         'bio': '读书会',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '读书圈',
         'lastInteraction': '发消息',
@@ -1293,7 +1293,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
         'bio': '插画师',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '艺术圈',
         'lastInteraction': '互相点赞',
@@ -1305,7 +1305,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
         'bio': '数码爱好者',
-        'isFriend': false,
+        'relationState': 'following',
         'isStarred': false,
         'metFrom': '数码圈',
         'lastInteraction': '评论',
@@ -1317,7 +1317,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
         'bio': '美食探店',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '美食圈',
         'lastInteraction': '发消息',
@@ -1329,7 +1329,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
         'bio': '骑行爱好者',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '运动圈',
         'lastInteraction': '点赞',
@@ -1341,7 +1341,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
         'bio': '电影爱好者',
-        'isFriend': false,
+        'relationState': 'following',
         'isStarred': false,
         'metFrom': '影评圈',
         'lastInteraction': '关注',
@@ -1353,7 +1353,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
         'bio': '旅行摄影',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '旅行圈',
         'lastInteraction': '发消息',
@@ -1365,7 +1365,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400',
         'bio': '篮球爱好者',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '运动圈',
         'lastInteraction': '互相点赞',
@@ -1377,7 +1377,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
         'bio': '手账达人',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '手账圈',
         'lastInteraction': '评论',
@@ -1389,7 +1389,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
         'bio': '理财分享',
-        'isFriend': false,
+        'relationState': 'following',
         'isStarred': false,
         'metFrom': '财经圈',
         'lastInteraction': '关注',
@@ -1401,7 +1401,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
         'bio': '写作爱好者',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '写作圈',
         'lastInteraction': '发消息',
@@ -1413,7 +1413,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
         'bio': '吉他手',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '音乐圈',
         'lastInteraction': '点赞',
@@ -1425,7 +1425,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
         'bio': '烘焙爱好者',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '美食圈',
         'lastInteraction': '互相点赞',
@@ -1437,7 +1437,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
         'bio': '游戏主播',
-        'isFriend': false,
+        'relationState': 'following',
         'isStarred': false,
         'metFrom': '游戏圈',
         'lastInteraction': '关注',
@@ -1449,7 +1449,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
         'bio': '瑜伽教练',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '健身圈',
         'lastInteraction': '发消息',
@@ -1461,7 +1461,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
         'bio': '航拍爱好者',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '摄影圈',
         'lastInteraction': '点赞',
@@ -1473,7 +1473,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
         'bio': '街舞老师',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '舞蹈圈',
         'lastInteraction': '评论',
@@ -1485,7 +1485,7 @@ class PrototypeMockData {
         'avatar':
             'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
         'bio': '宠物博主',
-        'isFriend': true,
+        'relationState': 'mutual',
         'isStarred': false,
         'metFrom': '宠物圈',
         'lastInteraction': '发消息',
@@ -1494,7 +1494,7 @@ class PrototypeMockData {
     ];
   }
 
-  /// 同好 - 圈子列表（简化）
+  /// 联系人 Tab - 圈子列表（简化）
   static List<Map<String, dynamic>> get chatMockContactCircles {
     return [
       {
@@ -1514,7 +1514,7 @@ class PrototypeMockData {
     ];
   }
 
-  /// 同好 - 群聊列表（与对话中的 group 对应）
+  /// 联系人 Tab - 群聊列表（与对话中的 group 对应）
   static List<Map<String, dynamic>> get chatMockContactGroups {
     return [
       {

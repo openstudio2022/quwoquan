@@ -673,7 +673,7 @@ void main() {
         findsOneWidget,
       );
 
-      // 让登录提示 toast 的计时器结束，避免遗留挂起的 Timer。
+      // 让登录提示 toast 的计时器结束，避免挂起的 Timer。
       await tester.pump(const Duration(seconds: 3));
     });
 
@@ -891,6 +891,31 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('功能反馈'), findsOneWidget);
+    });
+
+    testWidgets('关注流宽屏下更多面板与内容同宽', (tester) async {
+      _suppressExpectedErrors();
+      _setWideSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildAppWithStableFollowingFeed());
+      await tester.pumpAndSettle();
+
+      final cardFinder = find.byKey(const ValueKey<String>('home-feed-card-0'));
+      expect(cardFinder, findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey<String>('home-feed-more-0')));
+      await tester.pumpAndSettle();
+
+      final panel = find.byKey(TestKeys.modalBottomSheetPanel);
+      expect(panel, findsOneWidget);
+      expect(
+        tester.getSize(panel).width,
+        closeTo(tester.getSize(cardFinder).width, 1.0),
+      );
+
+      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('全局搜索以全屏面板呈现', (tester) async {

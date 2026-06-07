@@ -407,7 +407,7 @@ void main() {
     await _hubPumpSettled(tester);
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(find.text(UITextConstants.retry), findsOneWidget);
+    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
   });
 
   testWidgets('旧频道偏好不会恢复已下线垂类', (tester) async {

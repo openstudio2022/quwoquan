@@ -29,7 +29,29 @@ void main() {
       expect(map['clientMsgId'], 'test-uuid-1');
     });
 
-    test('openapi Message 与 SendMessageRequest enum 均声明 audio', () {
+    test('file 类型 toMap 包含 media 字段', () {
+      const req = SendMessageRequest(
+        type: 'file',
+        content: 'spec.pdf',
+        mediaUrl: 'https://cdn.example.com/spec.pdf',
+        media: {
+          'url': 'https://cdn.example.com/spec.pdf',
+          'mimeType': 'application/pdf',
+          'fileName': 'spec.pdf',
+          'fileSizeBytes': 2048,
+        },
+        clientMsgId: 'test-uuid-file-1',
+      );
+
+      final map = req.toMap();
+      expect(map['type'], 'file');
+      expect(map['media'], isNotNull);
+      expect(map['media']['mimeType'], 'application/pdf');
+      expect(map['media']['fileName'], 'spec.pdf');
+      expect(map['mediaUrl'], 'https://cdn.example.com/spec.pdf');
+    });
+
+    test('openapi Message 与 SendMessageRequest enum 均声明 file', () {
       final file = File(
         '${Directory.current.path}/../quwoquan_service/contracts/metadata/messages/openapi.yaml',
       );
@@ -54,8 +76,8 @@ void main() {
                   as YamlMap)['enum']
               as YamlList);
 
-      expect(messageType, contains('audio'));
-      expect(sendType, contains('audio'));
+      expect(messageType, contains('file'));
+      expect(sendType, contains('file'));
     });
 
     test('text 类型 toMap 不包含 media 和 mediaUrl', () {

@@ -16,7 +16,8 @@ class ChatContactsRow {
     required this.displayName,
     required this.avatarUrl,
     required this.subtitle,
-    this.isFriend = true,
+    this.relationState = 'not_following',
+    this.source = '',
     this.isStarred = false,
     this.circleId,
     this.conversationId,
@@ -27,10 +28,13 @@ class ChatContactsRow {
   final String displayName;
   final String avatarUrl;
   final String subtitle;
-  final bool isFriend;
+  final String relationState;
+  final String source;
   final bool isStarred;
   final String? circleId;
   final String? conversationId;
+
+  bool get isMutualFollow => relationState == 'mutual';
 
   factory ChatContactsRow.fromContactDto(ChatContactRowDto dto) {
     var sub = '';
@@ -41,13 +45,22 @@ class ChatContactsRow {
         break;
       }
     }
+    final source = dto.source.trim().isNotEmpty
+        ? dto.source.trim()
+        : switch (dto.relationState) {
+            'mutual' => 'mutual',
+            'following' => 'following',
+            'followed_by' => 'following',
+            _ => 'conversation',
+          };
     return ChatContactsRow(
       kind: ChatContactsRowKind.user,
       id: dto.userId,
       displayName: dto.displayName,
       avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
       subtitle: sub,
-      isFriend: dto.isFriend,
+      relationState: dto.relationState,
+      source: source,
       isStarred: dto.isStarred,
     );
   }
@@ -61,6 +74,7 @@ class ChatContactsRow {
       displayName: d.displayName,
       avatarUrl: resolveAvatarImageUrl(d.avatarUrl),
       subtitle: d.subtitle,
+      source: 'circle',
       circleId: d.circleId.isNotEmpty ? d.circleId : null,
     );
   }
@@ -74,6 +88,7 @@ class ChatContactsRow {
       displayName: d.displayName,
       avatarUrl: resolveAvatarImageUrl(d.avatarUrl),
       subtitle: d.subtitle,
+      source: 'group',
       conversationId: d.conversationId.isNotEmpty ? d.conversationId : null,
     );
   }

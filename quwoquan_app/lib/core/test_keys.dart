@@ -157,8 +157,23 @@ class TestKeys {
   static const commentAtXiaoquButton = ValueKey<String>(
     'comment_at_xiaoqu_button',
   );
-  static const commentXiaoquReplyCard = ValueKey<String>(
-    'comment_xiaoqu_reply_card',
+  static const commentThreadView = ValueKey<String>('comment_thread_view');
+  static const inlineArticleCommentSection = ValueKey<String>(
+    'inline_article_comment_section',
+  );
+  static const immersiveCommentSplitSheet = ValueKey<String>(
+    'immersive_comment_split_sheet',
+  );
+  static const commentToolbar = ValueKey<String>('comment_toolbar');
+  static const commentInputOverlay = ValueKey<String>('comment_input_overlay');
+  static const commentInputOverlayScrim = ValueKey<String>(
+    'comment_input_overlay_scrim',
+  );
+  static const commentRecentEmojiStrip = ValueKey<String>(
+    'comment_recent_emoji_strip',
+  );
+  static const commentToolbarFavoriteButton = ValueKey<String>(
+    'comment_toolbar_favorite_button',
   );
   static const assistantChatInputField = ValueKey<String>(
     'assistant_chat_input_field',
@@ -188,6 +203,9 @@ class TestKeys {
   );
   static const chatInputVoiceRecordHud = ValueKey<String>(
     'chat_input_voice_record_hud',
+  );
+  static const chatInputVoiceWaveform = ValueKey<String>(
+    'chat_input_voice_waveform',
   );
   static const assistantProcessHeader = ValueKey<String>(
     'assistant_process_header',

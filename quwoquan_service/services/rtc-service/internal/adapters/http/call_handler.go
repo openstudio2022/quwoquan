@@ -203,8 +203,12 @@ func (h *CallHandler) handleListCalls(w http.ResponseWriter, r *http.Request) {
 	userID := resolveUserID(r)
 	cursor := r.URL.Query().Get("cursor")
 	limit := queryInt(r, "limit", 20)
+	filter := application.ListCallsFilter{
+		Status:     r.URL.Query().Get("status"),
+		MissedOnly: r.URL.Query().Get("missed") == "true",
+	}
 
-	calls, err := h.orchestrator.ListCalls(r.Context(), userID, limit, cursor)
+	calls, err := h.orchestrator.ListCalls(r.Context(), userID, limit, cursor, filter)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return

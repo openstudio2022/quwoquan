@@ -28,4 +28,4 @@ events:
     producer: integration-service
     consumers: [notification-service, platform-ops]
     channel: callback_or_event
-    payload_fields: [requestId, notificationId, recipientId, normalizedError, retryable]
+    payload_fields: [requestId, notificationId, recipientId, normalizedError, recoveryAction]

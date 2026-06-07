@@ -11,12 +11,15 @@ import argparse
 import sys
 from pathlib import Path
 
-from _common.post_verify import legacy_posts_roots
 from verify.gate import gate_verify
+from verify.verify_batch_stability_compare import compare_batches, write_report, write_snapshot
 from ship.consistency import report_to_text, scan_release_file, write_consistency_report
 
 
 def handle_verify(args: argparse.Namespace) -> None:
+    if getattr(args, "verify_command", None) == "batch-stability":
+        handle_batch_stability(args)
+        return
     if getattr(args, "data_release_file", None):
         report = scan_release_file(
             Path(args.data_release_file),
@@ -38,18 +41,16 @@ def handle_verify(args: argparse.Namespace) -> None:
         release=getattr(args, "release", None),
         scope=args.scope,
     )
-    if args.scope == "current" and not explicit:
-        legacy = legacy_posts_roots("current")
-        if legacy:
-            print(f"[verify] NOTE: skipped {len(legacy)} pre-schema release root(s) (no current articleMarkdownVersion):")
-            for root in legacy:
-                print(f"[verify]   ~ {root}")
-    if not roots:
+    if not roots and not explicit:
         print(f"[verify] No in-scope post packages found (scope={args.scope}).")
         return
-    print(f"[verify] scope={args.scope} roots={len(roots)}")
-    for root in roots:
-        print(f"[verify]   - {root}")
+    if not roots and explicit:
+        # 显式 --task/--batch：即使没有 post 包，也要跑并上报目录与资产证据链门。
+        print(f"[verify] no post packages; running directory/asset evidence-chain gate only.")
+    if roots:
+        print(f"[verify] scope={args.scope} roots={len(roots)}")
+        for root in roots:
+            print(f"[verify]   - {root}")
     if issues:
         print(f"[verify] FAILED ({len(issues)} issue(s))", file=sys.stderr)
         for issue in issues[:200]:
@@ -58,8 +59,31 @@ def handle_verify(args: argparse.Namespace) -> None:
     print("[verify] PASSED")
 
 
+def handle_batch_stability(args: argparse.Namespace) -> None:
+    baseline, candidate, issues = compare_batches(args.task, args.baseline, args.candidate)
+    report = {
+        "schemaVersion": "quwoquan_data.batch_stability_compare/1",
+        "taskId": args.task,
+        "baseline": baseline,
+        "candidate": candidate,
+        "issues": issues,
+        "passed": not issues,
+    }
+    if getattr(args, "baseline_snapshot_out", None):
+        write_snapshot(Path(args.baseline_snapshot_out), baseline)
+    if getattr(args, "report_out", None):
+        write_report(Path(args.report_out), report)
+    if issues:
+        print(f"[verify] batch-stability FAILED ({len(issues)} issue(s))", file=sys.stderr)
+        for issue in issues[:200]:
+            print(f"  - {issue}", file=sys.stderr)
+        raise SystemExit(1)
+    print("[verify] batch-stability PASSED")
+
+
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("verify", help="Verify post packages (scoped)")
+    sub = p.add_subparsers(dest="verify_command")
     p.add_argument("--task", help="Task ID (verify a produced batch)")
     p.add_argument("--batch", help="Batch ID")
     p.add_argument("--release", help="Release ID under release/")
@@ -72,6 +96,12 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "--scope",
         choices=["current", "all"],
         default="current",
-        help="批量审计针对 release/ 交付面：current=仅当前 schema release(默认门禁); all=全部 release(含旧 schema)。runtime 中间批次用 --task/--batch 显式校验。",
+        help="批量审计针对 release/ 交付面：current=默认视图; all=全量视图。runtime 中间批次用 --task/--batch 显式校验。",
     )
+    bs = sub.add_parser("batch-stability", help="Compare two batches for structural and quality stability")
+    bs.add_argument("--task", required=True, help="Task ID")
+    bs.add_argument("--baseline", required=True, help="Baseline batch ID")
+    bs.add_argument("--candidate", required=True, help="Candidate batch ID")
+    bs.add_argument("--baseline-snapshot-out", help="Optional baseline snapshot path")
+    bs.add_argument("--report-out", help="Optional report path")
     p.set_defaults(handler=handle_verify)

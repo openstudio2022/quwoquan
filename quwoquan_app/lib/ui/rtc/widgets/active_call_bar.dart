@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -32,7 +33,8 @@ class ActiveCallBar extends ConsumerWidget {
         color: AppColors.primaryColor,
         child: Center(
           child: Text(
-            '通话中 $minutes:$seconds 点击返回',
+            '${UITextConstants.callOngoing} $minutes:$seconds '
+            '${UITextConstants.callBarTapToReturn}',
             style: TextStyle(
               color: AppColors.white,
               fontSize: AppTypography.sm,

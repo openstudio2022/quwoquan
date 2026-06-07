@@ -176,6 +176,41 @@ func TestContract_ListCalls(t *testing.T) {
 	}
 }
 
+// 对齐 service.yaml SIT scenario list_calls_with_missed_filter：
+// GET /v1/rtc/calls?missed=true 仅返回被叫方的未接来电。
+func TestContract_ListCalls_MissedFilter(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	// 发起人发起后立即取消 → 对被叫方 user_invitee_001 而言是未接来电。
+	resp := createTestCall(t, "user_caller_missed")
+	missedCallID := extractSessionID(t, resp)
+	doPost(t, "/v1/rtc/calls/"+missedCallID+"/cancel", `{}`, "user_caller_missed", http.StatusOK)
+
+	// 被叫方接通并挂断的通话 → 不应出现在 missed 列表。
+	resp2 := createTestCall(t, "user_caller_answered")
+	answeredCallID := extractSessionID(t, resp2)
+	doPost(t, "/v1/rtc/calls/"+answeredCallID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
+	doPost(t, "/v1/rtc/calls/"+answeredCallID+"/hangup", `{}`, "user_invitee_001", http.StatusOK)
+
+	code, listResp := doGet(t, "/v1/rtc/calls?missed=true", "user_invitee_001")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	items, ok := listResp["items"].([]any)
+	if !ok {
+		t.Fatal("response missing items array")
+	}
+	for _, it := range items {
+		m, _ := it.(map[string]any)
+		if m["_id"] == answeredCallID {
+			t.Error("answered call should not appear in missed list")
+		}
+		if m["endReason"] == "normal" {
+			t.Errorf("missed list should not include normal-ended call, got %v", m["_id"])
+		}
+	}
+}
+
 func TestContract_ToggleMute(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 

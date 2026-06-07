@@ -15,10 +15,11 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart'
     as runtime_error_display;
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/components/comment_system/immersive_comment_split_sheet.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
@@ -134,6 +135,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   final Map<String, int> _resolvedArticlePageCount = <String, int>{};
   final Map<String, int> _videoInnerIndex = <String, int>{};
   final Set<String> _expandedCaptionPostIds = <String>{};
+  String? _commentSplitPostId;
 
   // Dwell tracking：记录当前帖子进入时间
   DateTime? _pageEnterTime;
@@ -193,6 +195,13 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   bool get _usesExternalFeed =>
       widget.externalPosts != null && widget.externalPosts!.isNotEmpty;
+
+  bool get _enableArticlePageCurl {
+    final runtimeConfig = ref.read(contentRuntimeConfigProvider);
+    return runtimeConfig.featureFlags.containsKey('enable_article_page_curl')
+        ? runtimeConfig.isEnabled('enable_article_page_curl')
+        : true;
+  }
 
   List<String> get _trackedFeedTabIds {
     if (_usesExternalFeed) {
@@ -1399,6 +1408,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   Widget build(BuildContext context) {
     ref.watch(postInteractionStateProvider);
     ref.watch(userRelationshipStateProvider);
+    ref.watch(contentRuntimeConfigProvider);
+    final enableArticlePageCurl = _enableArticlePageCurl;
     final posts = _buildFeed();
     final showLoadMoreSentinel =
         !_usesExternalFeed &&
@@ -1432,6 +1443,38 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         _trackImpressionForPost(revealedPost);
         _pageEnterTime = DateTime.now();
       });
+    }
+    final commentSplitPost = _commentSplitPostId == null
+        ? null
+        : _postById(posts, _commentSplitPostId!);
+    if (commentSplitPost != null) {
+      final interaction = ref.watch(postInteractionStateProvider);
+      final splitPostId = commentSplitPost.id;
+      // 评论分屏复用沉浸式状态栏样式（透明 + 浅色图标），避免回落为白底。
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: AppColors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+        ),
+        child: DefaultTextStyle.merge(
+          style: const TextStyle(
+            decoration: TextDecoration.none,
+            decorationThickness: 0,
+          ),
+          child: ImmersiveCommentSplitSheet(
+            postId: splitPostId,
+            content: _buildCommentSplitContent(commentSplitPost),
+            likeCount: interaction.likeCountFor(splitPostId),
+            favoriteCount: interaction.bookmarkCountFor(splitPostId),
+            isLiked: interaction.isLiked(splitPostId),
+            isFavorited: interaction.isSaved(splitPostId),
+            onLikeTap: () => _onLike(commentSplitPost),
+            onFavoriteTap: () => _onFavorite(commentSplitPost),
+            onClose: () => setState(() => _commentSplitPostId = null),
+          ),
+        ),
+      );
     }
     _ensureFollowButtonVisibility(currentPost);
     final currentLayoutSpec = currentPost == null
@@ -1570,7 +1613,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                         key: ValueKey<String>(
                           'works-status-content-canvas-${post.id}',
                         ),
-                        child: _buildPostCanvas(post),
+                        child: _buildPostCanvas(
+                          post,
+                          enableArticlePageCurl: enableArticlePageCurl,
+                        ),
                       ),
                     );
                   },
@@ -1676,12 +1722,21 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                       currentPost.subAccountId,
                     ),
                     showFollowButton: _showFollowButton,
-                    onUserTap: () => widget.onUserTap(
-                      currentPost.subAccountId,
-                      avatarUrl: currentPost.avatarUrl,
-                      displayName: currentPost.displayName,
-                      backgroundUrl: currentPost.authorBackgroundUrl,
-                    ),
+                    onUserTap: () {
+                      // §7.3 旅程无断点：携该作品的最强证据组 kind 跳作者主页高亮。
+                      ref
+                          .read(intersectionHighlightIntentProvider.notifier)
+                          .primeFromReasons(
+                            currentPost.subAccountId,
+                            currentPost.intersectionReasons,
+                          );
+                      widget.onUserTap(
+                        currentPost.subAccountId,
+                        avatarUrl: currentPost.avatarUrl,
+                        displayName: currentPost.displayName,
+                        backgroundUrl: currentPost.authorBackgroundUrl,
+                      );
+                    },
                     onCircleTap: () {
                       final circleId = _primaryCircleIdForPost(currentPost);
                       if (circleId == null || circleId.isEmpty) return;
@@ -1689,8 +1744,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                     },
                     onFollowTap: () => _onFollow(currentPost),
                     onLikeTap: () => _onLike(currentPost),
-                    onCommentTap: () =>
-                        _openCommentFor(context, currentPost.id),
+                    onCommentTap: () => _openCommentFor(currentPost.id),
                     onShareTap: () => _sharePost(
                       context,
                       currentPost,
@@ -1710,8 +1764,14 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     );
   }
 
-  Widget _buildPostCanvas(PostBaseDto post) {
-    return _buildTypedCanvas(post);
+  Widget _buildPostCanvas(
+    PostBaseDto post, {
+    required bool enableArticlePageCurl,
+  }) {
+    return _buildTypedCanvas(
+      post,
+      enableArticlePageCurl: enableArticlePageCurl,
+    );
   }
 
   Widget _buildLoadMoreSentinel({
@@ -1777,10 +1837,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     );
   }
 
-  Widget _buildTypedCanvas(PostBaseDto post) {
-    final enableArticlePageCurl = ref.watch(
-      contentFeatureFlagProvider('enable_article_page_curl'),
-    );
+  Widget _buildTypedCanvas(
+    PostBaseDto post, {
+    required bool enableArticlePageCurl,
+  }) {
     if (_isImageLikePost(post)) {
       return _WorksPhotoCanvas(
         post: post,
@@ -1858,8 +1918,27 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     setState(() => _articleInnerIndex[post.id] = index);
   }
 
-  void _openCommentFor(BuildContext ctx, String postId) {
-    CommentViewer.showModal(context: ctx, postId: postId);
+  void _openCommentFor(String postId) {
+    setState(() => _commentSplitPostId = postId);
+  }
+
+  Widget _buildCommentSplitContent(PostBaseDto post) {
+    return ColoredBox(
+      color: AppColors.worksBackground,
+      child: _buildPostCanvas(
+        post,
+        enableArticlePageCurl: _enableArticlePageCurl,
+      ),
+    );
+  }
+
+  PostBaseDto? _postById(List<PostBaseDto> posts, String postId) {
+    for (final post in posts) {
+      if (post.id == postId) {
+        return post;
+      }
+    }
+    return null;
   }
 
   void _sharePost(
@@ -1893,7 +1972,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         post: post,
         enableIdentityTemplate: enableIdentityTemplate,
       ),
-      const ContentShareAction(
+      ContentShareAction(
         id: 'copy_link',
         label: UITextConstants.copyLink,
       ),

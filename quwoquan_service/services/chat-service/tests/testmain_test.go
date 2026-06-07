@@ -58,6 +58,7 @@ func (testProfileResolver) ResolveMany(ctx context.Context, userIDs []string) (m
 			AvatarURL:     "https://test.avatar/" + id,
 			AvatarAssetID: "ua_" + id,
 			AvatarVersion: 1,
+			Bio:           "Bio_" + id,
 		}
 	}
 	return out, nil
@@ -175,11 +176,17 @@ func TestMain(m *testing.M) {
 		convCache,
 		eventPublisher,
 		profiles,
+		application.AllowRelationshipGateForTest(),
 		groupAvatarMedia,
 		userSyncService,
 		groupAvatarScheduler,
 	)
-	messageSvc := application.NewMessageService(chatStore, convCache, eventPublisher)
+	messageSvc := application.NewMessageService(
+		chatStore,
+		convCache,
+		eventPublisher,
+		application.AllowRelationshipGateForTest(),
+	)
 	memberSvc := application.NewMemberService(
 		chatStore,
 		convCache,
@@ -188,6 +195,7 @@ func TestMain(m *testing.M) {
 		groupAvatarMedia,
 		userSyncService,
 		groupAvatarScheduler,
+		application.WithRelationshipGate(application.AllowRelationshipGateForTest()),
 	)
 	inboxSvc := application.NewInboxService(chatStore)
 	userAvatarConsumer := mq.NewUserAvatarUpdateConsumer(

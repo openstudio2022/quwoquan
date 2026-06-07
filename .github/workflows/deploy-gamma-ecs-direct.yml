@@ -149,7 +149,7 @@ jobs:
               "api_health": f"{base}/healthz",
               "product_ops_health": f"{product_ops}/healthz",
               "content_feed": f"{base}/v1/content/feed?limit=1",
-              "media_sample": f"{media}/media/image/post/fixture_photo_001/v1/cover.png",
+              "media_sample": f"{media}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           }
           results = {}
           for name, url in probes.items():

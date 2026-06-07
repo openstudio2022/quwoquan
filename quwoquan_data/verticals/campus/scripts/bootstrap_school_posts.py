@@ -1,6 +1,16 @@
 """校园垂类学校 posts 分层生成能力。"""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
 import argparse
 import json
 import sys
@@ -11,7 +21,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.paths import NOW_ISO, PUBLISH_ROOT  # noqa: E402
-from build_publish_lookup_indexes import build_publish_lookup_indexes  # noqa: E402
+from publish_ops.build_publish_lookup_indexes import build_publish_lookup_indexes  # noqa: E402
 
 ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "机构" / "学校"
 POSTS_ROOT = PUBLISH_ROOT / "posts" / "article"

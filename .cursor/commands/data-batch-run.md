@@ -56,7 +56,7 @@ python3 quwoquan_data/scripts/cli.py plan \
 
 ```bash
 python3 quwoquan_data/scripts/cli.py produce --task <task> --batch <batch> --type article --materialize
-python3 quwoquan_data/scripts/verify_content_quality.py --task <task> --batch <batch>
+python3 quwoquan_data/scripts/verify/verify_content_quality.py --task <task> --batch <batch>
 ```
 
 6. 门禁通过后再 publish/promote。

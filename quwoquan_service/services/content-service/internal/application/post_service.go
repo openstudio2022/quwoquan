@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -77,44 +78,44 @@ type articleDocumentSnapshot struct {
 }
 
 type PostService struct {
-	store           persistence.PostRepository
-	signaler        rtrec.SignalProcessor
-	publisher       repository.EventPublisher
-	projector       Projector
-	logger          *slog.Logger
-	mu              sync.Mutex
-	reactions       map[string]map[string]contentReactionState // postID -> userID -> state
-	distributions   map[string]map[string]bool                 // postID -> circleID -> active
-	reshares        map[string]map[string]bool                 // postID -> (circleID:userID) -> active
-	tombstones      map[string]time.Time                       // postID -> deletedAt
-	mediaAssets     map[string]postmodel.MediaAsset            // mediaID -> asset
-	uploadSession   map[string]string                          // sessionID -> mediaID
-	comments        map[string][]map[string]any                // postID -> comments list
-	commentLikes    map[string]map[string]bool                 // commentID -> userID -> liked
-	commentMaxLen   int                                        // configurable, default 500
-	storyRuntime    StoryRuntimeConfig
-	mediaCDNBase    string
-	mediaUploadBase string
-	mediaStore      runtimemedia.MediaStore
+	store            persistence.PostRepository
+	signaler         rtrec.SignalProcessor
+	publisher        repository.EventPublisher
+	projector        Projector
+	logger           *slog.Logger
+	mu               sync.Mutex
+	reactions        map[string]map[string]contentReactionState // postID -> userID -> state
+	distributions    map[string]map[string]bool                 // postID -> circleID -> active
+	reshares         map[string]map[string]bool                 // postID -> (circleID:userID) -> active
+	tombstones       map[string]time.Time                       // postID -> deletedAt
+	mediaAssets      map[string]postmodel.MediaAsset            // mediaID -> asset
+	uploadSession    map[string]string                          // sessionID -> mediaID
+	comments         map[string][]map[string]any                // postID -> comments list
+	commentReactions map[string]map[string]string               // commentID -> userID -> like|dislike|none
+	commentMaxLen    int                                        // configurable, default 500
+	storyRuntime     StoryRuntimeConfig
+	mediaCDNBase     string
+	mediaUploadBase  string
+	mediaStore       runtimemedia.MediaStore
 }
 
 func NewPostService(store persistence.PostRepository, opts ...PostServiceOption) *PostService {
 	s := &PostService{
-		store:           store,
-		logger:          slog.Default(),
-		reactions:       map[string]map[string]contentReactionState{},
-		distributions:   map[string]map[string]bool{},
-		reshares:        map[string]map[string]bool{},
-		tombstones:      map[string]time.Time{},
-		mediaAssets:     map[string]postmodel.MediaAsset{},
-		uploadSession:   map[string]string{},
-		comments:        map[string][]map[string]any{},
-		commentLikes:    map[string]map[string]bool{},
-		commentMaxLen:   500,
-		storyRuntime:    defaultStoryRuntimeConfig(),
-		mediaCDNBase:    "https://media.quwoquan.invalid",
-		mediaUploadBase: "https://media-origin.quwoquan.invalid",
-		mediaStore:      runtimemedia.NewMockMediaStore(),
+		store:            store,
+		logger:           slog.Default(),
+		reactions:        map[string]map[string]contentReactionState{},
+		distributions:    map[string]map[string]bool{},
+		reshares:         map[string]map[string]bool{},
+		tombstones:       map[string]time.Time{},
+		mediaAssets:      map[string]postmodel.MediaAsset{},
+		uploadSession:    map[string]string{},
+		comments:         map[string][]map[string]any{},
+		commentReactions: map[string]map[string]string{},
+		commentMaxLen:    500,
+		storyRuntime:     defaultStoryRuntimeConfig(),
+		mediaCDNBase:     "https://media.quwoquan.invalid",
+		mediaUploadBase:  "https://media-origin.quwoquan.invalid",
+		mediaStore:       runtimemedia.NewMockMediaStore(),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -1259,10 +1260,10 @@ func (s *PostService) CompleteMediaUpload(ctx context.Context, sessionID string)
 	asset.ThumbnailUrl = asset.CdnUrl + "?variant=thumb"
 	if s.mediaStore != nil {
 		if mediaAsset, err := s.mediaStore.CompleteUpload(ctx, strings.TrimSpace(sessionID), runtimemedia.CompleteUploadOpts{
-			DurationMs: asset.DurationMs,
-			Width:      int(asset.Width),
-			Height:     int(asset.Height),
-			Metadata:   map[string]any{"contentMediaId": mediaID},
+			DurationMs:     asset.DurationMs,
+			Width:          int(asset.Width),
+			Height:         int(asset.Height),
+			Metadata:       map[string]any{"contentMediaId": mediaID},
 			DeclaredSha256: asset.Sha256,
 		}); err == nil && mediaAsset != nil {
 			asset.ObjectKey = mediaAsset.OSSKey
@@ -1333,6 +1334,57 @@ func (s *PostService) BindMediaAssetsToPost(_ context.Context, postID string, as
 		"postId":        postID,
 		"boundAssetIds": bound,
 		"boundCount":    len(bound),
+	}, nil
+}
+
+func (s *PostService) BindMediaAssetsToComment(_ context.Context, commentID, userID string, assetIDs []string) (map[string]any, error) {
+	commentID = strings.TrimSpace(commentID)
+	if commentID == "" {
+		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "commentId 不能为空", "missing commentId")
+	}
+	userID = strings.TrimSpace(userID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var comment map[string]any
+	var postID string
+	for _, comments := range s.comments {
+		for _, c := range comments {
+			if cid, _ := c["_id"].(string); cid == commentID {
+				comment = c
+				postID = asString(c["postId"])
+				break
+			}
+		}
+		if comment != nil {
+			break
+		}
+	}
+	if comment == nil {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_not_found"),
+			"评论不存在",
+			"comment not found",
+		)
+	}
+	if authorID := strings.TrimSpace(asString(comment["authorId"])); userID != "" && authorID != "" && authorID != userID {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_forbidden_update"),
+			"无权更新此评论附件",
+			"comment author mismatch",
+		)
+	}
+	boundIDs, attachments, err := s.prepareCommentAttachmentsLocked(postID, asString(comment["authorId"]), assetIDs)
+	if err != nil {
+		return nil, err
+	}
+	comment["attachmentMediaIds"] = boundIDs
+	comment["attachments"] = attachments
+	return map[string]any{
+		"commentId":     commentID,
+		"boundAssetIds": boundIDs,
+		"boundCount":    len(boundIDs),
+		"attachments":   attachments,
 	}, nil
 }
 
@@ -1913,6 +1965,8 @@ func (s *PostService) AddComment(
 	replyToCommentID string,
 	authorID string,
 	personaContextVersion string,
+	attachmentMediaIDs []string,
+	mentions []map[string]any,
 ) (map[string]any, int64, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
@@ -1949,16 +2003,44 @@ func (s *PostService) AddComment(
 
 	replyToCommentID = strings.TrimSpace(replyToCommentID)
 	var replyToUserId string
+	var parentCommentID string
+	s.mu.Lock()
 	if replyToCommentID != "" {
+		foundReplyTarget := false
 		for _, c := range s.comments[post.ID] {
 			if cid, _ := c["_id"].(string); cid == replyToCommentID {
 				replyToUserId, _ = c["authorId"].(string)
-				rc, _ := c["replyCount"].(int64)
+				foundReplyTarget = true
+				parentCommentID, _ = c["parentCommentId"].(string)
+				if parentCommentID == "" {
+					parentCommentID = replyToCommentID
+				}
+				break
+			}
+		}
+		if !foundReplyTarget {
+			s.mu.Unlock()
+			return nil, 0, rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_not_found"),
+				"回复目标不存在",
+				"reply target comment not found",
+			)
+		}
+		for _, c := range s.comments[post.ID] {
+			if cid, _ := c["_id"].(string); cid == parentCommentID {
+				rc := asInt64Flexible(c["replyCount"])
 				c["replyCount"] = rc + 1
 				break
 			}
 		}
 	}
+	attachmentIDs, attachments, err := s.prepareCommentAttachmentsLocked(post.ID, authorID, attachmentMediaIDs)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, 0, err
+	}
+	normalizedMentions := normalizeCommentMentions(mentions)
+	assistantMentioned := commentHasAssistantMention(normalizedMentions)
 
 	now := time.Now().UTC()
 	post.CommentCount++
@@ -1973,38 +2055,66 @@ func (s *PostService) AddComment(
 		"personaContextVersion": asInt64Flexible(
 			personaContextVersion,
 		),
-		"content":          content,
-		"replyToCommentId": replyToCommentID,
-		"replyToUserId":    replyToUserId,
-		"replyCount":       int64(0),
-		"likeCount":        int64(0),
-		"status":           "visible",
-		"isAuthor":         isAuthor,
-		"createdAt":        now.Format(time.RFC3339),
-		"deletedAt":        "",
+		"content":            content,
+		"replyToCommentId":   replyToCommentID,
+		"replyToUserId":      replyToUserId,
+		"parentCommentId":    parentCommentID,
+		"attachmentMediaIds": attachmentIDs,
+		"attachments":        attachments,
+		"mentions":           normalizedMentions,
+		"assistantMentioned": assistantMentioned,
+		"replyCount":         int64(0),
+		"likeCount":          int64(0),
+		"dislikeCount":       int64(0),
+		"reportCount":        int64(0),
+		"viewerReaction":     "none",
+		"recommendedScore":   float64(0),
+		"status":             "visible",
+		"isAuthor":           isAuthor,
+		"canDelete":          true,
+		"canReply":           true,
+		"canReport":          false,
+		"createdAt":          now.Format(time.RFC3339),
+		"deletedAt":          "",
 	}
 	s.comments[post.ID] = append(s.comments[post.ID], comment)
+	projectedComment := s.projectCommentForViewerLocked(comment, authorID, true)
+	s.mu.Unlock()
 
 	if s.publisher != nil {
+		featurePayload := commentFeaturePayload(*post, content, parentCommentID, replyToUserId, attachments)
 		_ = s.publisher.Publish(ctx, repository.DomainEvent{
 			Type:          "CommentCreated",
 			AggregateType: "Post",
 			AggregateID:   post.ID,
 			Payload: map[string]any{
-				"commentId":     comment["_id"],
-				"postId":        post.ID,
-				"authorId":      authorID,
-				"content":       content,
-				"replyToUserId": replyToUserId,
+				"commentId":             comment["_id"],
+				"postId":                post.ID,
+				"authorId":              authorID,
+				"content":               content,
+				"commentLength":         len(contentRunes),
+				"replyDepth":            commentReplyDepth(parentCommentID),
+				"replyToUserId":         replyToUserId,
+				"parentCommentId":       parentCommentID,
+				"targetAuthorId":        featurePayload["targetAuthorId"],
+				"attachmentMediaIds":    attachmentIDs,
+				"attachmentTypes":       featurePayload["attachmentTypes"],
+				"mentions":              normalizedMentions,
+				"tagRefs":               featurePayload["tagRefs"],
+				"entityRefs":            featurePayload["entityRefs"],
+				"sentimentLabel":        featurePayload["sentimentLabel"],
+				"intentLabel":           featurePayload["intentLabel"],
+				"moderationLabels":      featurePayload["moderationLabels"],
+				"intersectionDimension": featurePayload["intersectionDimension"],
 			},
 			OccurredAt: now.Format(time.RFC3339),
 		})
 	}
 
-	return comment, post.CommentCount, nil
+	return projectedComment, post.CommentCount, nil
 }
 
-func (s *PostService) ListComments(_ context.Context, postID, cursor, sort string, limit int) ([]map[string]any, string, error) {
+func (s *PostService) ListComments(_ context.Context, postID, viewerID, cursor, sort string, limit int) ([]map[string]any, string, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -2017,16 +2127,13 @@ func (s *PostService) ListComments(_ context.Context, postID, cursor, sort strin
 		if del, _ := c["deletedAt"].(string); del != "" {
 			continue
 		}
+		if commentParentID(c) != "" {
+			continue
+		}
 		active = append(active, c)
 	}
 
-	if sort == "hot" {
-		sortCommentsByHot(active)
-	} else {
-		for i, j := 0, len(active)-1; i < j; i, j = i+1, j-1 {
-			active[i], active[j] = active[j], active[i]
-		}
-	}
+	sortCommentsByMode(active, sort)
 
 	startIdx := 0
 	if cursor != "" {
@@ -2052,17 +2159,99 @@ func (s *PostService) ListComments(_ context.Context, postID, cursor, sort strin
 			nextCursor = cid
 		}
 	}
-	return page, nextCursor, nil
+	projected := make([]map[string]any, 0, len(page))
+	for _, c := range page {
+		projected = append(projected, s.projectCommentForViewerLocked(c, viewerID, true))
+	}
+	return projected, nextCursor, nil
 }
 
-func sortCommentsByHot(comments []map[string]any) {
-	for i := 1; i < len(comments); i++ {
-		for j := i; j > 0; j-- {
-			if hotScore(comments[j]) > hotScore(comments[j-1]) {
-				comments[j], comments[j-1] = comments[j-1], comments[j]
+func (s *PostService) ListCommentReplies(_ context.Context, postID, commentID, viewerID, cursor string, limit int) ([]map[string]any, string, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	parentID := strings.TrimSpace(commentID)
+	all := s.comments[strings.TrimSpace(postID)]
+	active := make([]map[string]any, 0, len(all))
+	parentFound := false
+	for _, c := range all {
+		cid, _ := c["_id"].(string)
+		if cid == parentID {
+			parentFound = true
+		}
+		if del, _ := c["deletedAt"].(string); del != "" {
+			continue
+		}
+		if commentParentID(c) == parentID {
+			active = append(active, c)
+		}
+	}
+	if !parentFound {
+		return nil, "", rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_not_found"),
+			"评论不存在",
+			"parent comment not found",
+		)
+	}
+	sortCommentsByMode(active, "latest")
+	startIdx := 0
+	if cursor != "" {
+		for i, c := range active {
+			if cid, _ := c["_id"].(string); cid == cursor {
+				startIdx = i + 1
+				break
 			}
 		}
 	}
+	if startIdx >= len(active) {
+		return []map[string]any{}, "", nil
+	}
+	end := startIdx + limit
+	if end > len(active) {
+		end = len(active)
+	}
+	page := active[startIdx:end]
+	nextCursor := ""
+	if end < len(active) {
+		if cid, ok := page[len(page)-1]["_id"].(string); ok {
+			nextCursor = cid
+		}
+	}
+	projected := make([]map[string]any, 0, len(page))
+	for _, c := range page {
+		projected = append(projected, s.projectCommentForViewerLocked(c, viewerID, false))
+	}
+	return projected, nextCursor, nil
+}
+
+func sortCommentsByMode(comments []map[string]any, sortMode string) {
+	mode := strings.TrimSpace(sortMode)
+	if mode == "" {
+		mode = "recommended"
+	}
+	sort.SliceStable(comments, func(i, j int) bool {
+		left := comments[i]
+		right := comments[j]
+		switch mode {
+		case "latest":
+			return commentCreatedAt(left).After(commentCreatedAt(right))
+		case "most_liked":
+			if asInt64Flexible(left["likeCount"]) == asInt64Flexible(right["likeCount"]) {
+				return commentCreatedAt(left).After(commentCreatedAt(right))
+			}
+			return asInt64Flexible(left["likeCount"]) > asInt64Flexible(right["likeCount"])
+		default:
+			leftScore := commentRecommendedScore(left)
+			rightScore := commentRecommendedScore(right)
+			if leftScore == rightScore {
+				return commentCreatedAt(left).After(commentCreatedAt(right))
+			}
+			return leftScore > rightScore
+		}
+	})
 }
 
 func (s *PostService) syncArticleMarkdownSnapshot(post *postmodel.Post) {
@@ -2201,10 +2390,264 @@ func markdownAssetURIs(markdown string) []string {
 	return result
 }
 
-func hotScore(c map[string]any) float64 {
-	likes, _ := c["likeCount"].(int64)
-	replies, _ := c["replyCount"].(int64)
-	return float64(likes)*10 + float64(replies)*5
+func commentRecommendedScore(c map[string]any) float64 {
+	if score, ok := c["recommendedScore"].(float64); ok && score != 0 {
+		return score
+	}
+	likes := asInt64Flexible(c["likeCount"])
+	dislikes := asInt64Flexible(c["dislikeCount"])
+	reports := asInt64Flexible(c["reportCount"])
+	replies := asInt64Flexible(c["replyCount"])
+	ageHours := time.Since(commentCreatedAt(c)).Hours()
+	freshness := 24.0 - ageHours
+	if freshness < 0 {
+		freshness = 0
+	}
+	return float64(likes)*10 - float64(dislikes)*8 - float64(reports)*20 + float64(replies)*5 + freshness
+}
+
+func commentCreatedAt(c map[string]any) time.Time {
+	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(asString(c["createdAt"]))); err == nil {
+		return t
+	}
+	return time.Time{}
+}
+
+func commentParentID(c map[string]any) string {
+	parentID := strings.TrimSpace(asString(c["parentCommentId"]))
+	if parentID != "" {
+		return parentID
+	}
+	if replyToID := strings.TrimSpace(asString(c["replyToCommentId"])); replyToID != "" {
+		return replyToID
+	}
+	return ""
+}
+
+func commentReplyDepth(parentCommentID string) int {
+	if strings.TrimSpace(parentCommentID) == "" {
+		return 0
+	}
+	return 1
+}
+
+func normalizeCommentMentions(mentions []map[string]any) []map[string]any {
+	normalized := make([]map[string]any, 0, len(mentions))
+	for _, mention := range mentions {
+		targetID := strings.TrimSpace(asString(mention["targetId"]))
+		if targetID == "" {
+			targetID = strings.TrimSpace(asString(mention["userId"]))
+		}
+		displayName := strings.TrimSpace(asString(mention["displayName"]))
+		mentionType := strings.TrimSpace(asString(mention["type"]))
+		if mentionType == "" {
+			mentionType = "user"
+		}
+		if targetID == "" && displayName == "" {
+			continue
+		}
+		normalized = append(normalized, map[string]any{
+			"type":        mentionType,
+			"targetId":    targetID,
+			"displayName": displayName,
+		})
+	}
+	return normalized
+}
+
+func commentHasAssistantMention(mentions []map[string]any) bool {
+	for _, mention := range mentions {
+		mentionType := strings.TrimSpace(asString(mention["type"]))
+		targetID := strings.TrimSpace(asString(mention["targetId"]))
+		displayName := strings.TrimSpace(asString(mention["displayName"]))
+		if strings.EqualFold(mentionType, "assistant") || strings.EqualFold(targetID, "assistant_xiaoqu") || strings.Contains(displayName, "小趣") {
+			return true
+		}
+	}
+	return false
+}
+
+func commentFeaturePayload(post postmodel.Post, content, parentCommentID, replyToUserID string, attachments []map[string]any) map[string]any {
+	attachmentTypes := make([]string, 0, len(attachments))
+	for _, attachment := range attachments {
+		if mediaType := strings.TrimSpace(asString(attachment["type"])); mediaType != "" {
+			attachmentTypes = append(attachmentTypes, mediaType)
+		}
+	}
+	targetAuthorID := strings.TrimSpace(replyToUserID)
+	if targetAuthorID == "" {
+		targetAuthorID = post.AuthorId
+	}
+	return map[string]any{
+		"targetAuthorId":        targetAuthorID,
+		"attachmentTypes":       attachmentTypes,
+		"tagRefs":               append([]string{}, post.TagRefs...),
+		"entityRefs":            append([]string{}, post.EntityRefs...),
+		"sentimentLabel":        classifyCommentSentiment(content),
+		"intentLabel":           classifyCommentIntent(content),
+		"moderationLabels":      []string{"pending"},
+		"intersectionDimension": commentIntersectionDimension(post, parentCommentID),
+	}
+}
+
+func classifyCommentSentiment(content string) string {
+	text := strings.TrimSpace(content)
+	switch {
+	case strings.Contains(text, "喜欢") || strings.Contains(text, "漂亮") || strings.Contains(text, "赞"):
+		return "positive"
+	case strings.Contains(text, "不喜欢") || strings.Contains(text, "差") || strings.Contains(text, "踩"):
+		return "negative"
+	default:
+		return "neutral"
+	}
+}
+
+func classifyCommentIntent(content string) string {
+	text := strings.TrimSpace(content)
+	switch {
+	case strings.Contains(text, "?") || strings.Contains(text, "？"):
+		return "question"
+	case strings.Contains(text, "@"):
+		return "mention"
+	default:
+		return "discussion"
+	}
+}
+
+func commentIntersectionDimension(post postmodel.Post, parentCommentID string) string {
+	if strings.TrimSpace(parentCommentID) != "" {
+		return "reply_edge"
+	}
+	if len(post.EntityRefs) > 0 {
+		return "entity_interest"
+	}
+	if len(post.TagRefs) > 0 {
+		return "tag_interest"
+	}
+	return "content_interest"
+}
+
+func commentReactionStrength(reaction string) float64 {
+	switch strings.TrimSpace(reaction) {
+	case "like":
+		return 1
+	case "dislike":
+		return -1
+	default:
+		return 0
+	}
+}
+
+func (s *PostService) prepareCommentAttachmentsLocked(postID, authorID string, assetIDs []string) ([]string, []map[string]any, error) {
+	boundIDs := []string{}
+	attachments := []map[string]any{}
+	for _, rawID := range assetIDs {
+		assetID := strings.TrimSpace(rawID)
+		if assetID == "" {
+			continue
+		}
+		asset, ok := s.mediaAssets[assetID]
+		if !ok {
+			return nil, nil, rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_found"),
+				"素材不存在",
+				"comment media asset not found",
+			)
+		}
+		if asset.Status != "" && asset.Status != "ready" {
+			return nil, nil, rterr.NewInvalidArgument(rterr.ModuleContent, "素材尚未就绪", "comment media asset not ready")
+		}
+		asset.PostId = strings.TrimSpace(postID)
+		asset.OwnerId = defaultString(strings.TrimSpace(asset.OwnerId), strings.TrimSpace(authorID))
+		asset.AssetScope = "comment"
+		asset.UpdatedAt = time.Now().UTC()
+		s.mediaAssets[assetID] = asset
+		boundIDs = append(boundIDs, assetID)
+		attachments = append(attachments, commentAttachmentSnapshot(asset))
+	}
+	return boundIDs, attachments, nil
+}
+
+func commentAttachmentSnapshot(asset postmodel.MediaAsset) map[string]any {
+	url := strings.TrimSpace(asset.CdnUrl)
+	if url == "" {
+		url = strings.TrimSpace(asset.OriginUrl)
+	}
+	return map[string]any{
+		"mediaId":      asset.ID,
+		"type":         asset.Type,
+		"url":          url,
+		"thumbnailUrl": asset.ThumbnailUrl,
+		"width":        asset.Width,
+		"height":       asset.Height,
+		"status":       asset.Status,
+	}
+}
+
+func (s *PostService) projectCommentForViewerLocked(c map[string]any, viewerID string, includePreview bool) map[string]any {
+	projected := map[string]any{}
+	for k, v := range c {
+		projected[k] = v
+	}
+	commentID := strings.TrimSpace(asString(c["_id"]))
+	authorID := strings.TrimSpace(asString(c["authorId"]))
+	viewerID = strings.TrimSpace(viewerID)
+	reaction := "none"
+	if byUser := s.commentReactions[commentID]; byUser != nil {
+		if v := strings.TrimSpace(byUser[viewerID]); v == "like" || v == "dislike" {
+			reaction = v
+		}
+	}
+	projected["viewerReaction"] = reaction
+	projected["likeCount"] = asInt64Flexible(c["likeCount"])
+	projected["dislikeCount"] = asInt64Flexible(c["dislikeCount"])
+	projected["replyCount"] = asInt64Flexible(c["replyCount"])
+	projected["recommendedScore"] = commentRecommendedScore(c)
+	projected["isAuthor"] = viewerID != "" && viewerID == authorID
+	projected["canDelete"] = viewerID != "" && viewerID == authorID
+	projected["canReply"] = strings.TrimSpace(asString(c["status"])) != "deleted"
+	projected["canReport"] = viewerID != "" && viewerID != authorID
+	if post, ok := s.store.FindByID(context.Background(), strings.TrimSpace(asString(c["postId"]))); ok {
+		projected["postSummary"] = map[string]any{
+			"postId":      post.ID,
+			"contentType": post.ContentType,
+			"title":       defaultString(strings.TrimSpace(post.Title), strings.TrimSpace(post.Summary)),
+			"coverUrl":    post.CoverUrl,
+			"status":      post.Status,
+			"visibility":  post.Visibility,
+			"authorId":    post.AuthorId,
+		}
+	}
+	if !includePreview {
+		projected["replyPreview"] = []map[string]any{}
+		projected["replyNextCursor"] = ""
+		return projected
+	}
+	parentID := commentID
+	replies := make([]map[string]any, 0, 1)
+	for _, candidate := range s.comments[strings.TrimSpace(asString(c["postId"]))] {
+		if del, _ := candidate["deletedAt"].(string); del != "" {
+			continue
+		}
+		if commentParentID(candidate) == parentID {
+			replies = append(replies, candidate)
+		}
+	}
+	sortCommentsByMode(replies, "latest")
+	preview := []map[string]any{}
+	for i, reply := range replies {
+		if i >= 1 {
+			break
+		}
+		preview = append(preview, s.projectCommentForViewerLocked(reply, viewerID, false))
+	}
+	projected["replyPreview"] = preview
+	if len(replies) > len(preview) && len(preview) > 0 {
+		projected["replyNextCursor"] = asString(preview[len(preview)-1]["_id"])
+	} else {
+		projected["replyNextCursor"] = ""
+	}
+	return projected
 }
 
 func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, userID string) error {
@@ -2264,8 +2707,11 @@ func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, user
 			AggregateType: "Post",
 			AggregateID:   strings.TrimSpace(postID),
 			Payload: map[string]any{
-				"commentId": commentID,
-				"postId":    postID,
+				"commentId":   commentID,
+				"postId":      postID,
+				"operatorId":  strings.TrimSpace(userID),
+				"auditAction": "delete",
+				"auditedAt":   time.Now().UTC().Format(time.RFC3339),
 			},
 			OccurredAt: time.Now().UTC().Format(time.RFC3339),
 		})
@@ -2273,93 +2719,110 @@ func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, user
 	return nil
 }
 
-func (s *PostService) LikeComment(ctx context.Context, commentID, userID string) (int64, bool, error) {
+func (s *PostService) ReactToComment(ctx context.Context, commentID, userID, reaction string) (map[string]any, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
 		userID = AnonymousFallbackSubAccountID
 	}
 	commentID = strings.TrimSpace(commentID)
+	reaction = strings.TrimSpace(reaction)
+	if reaction == "" {
+		reaction = "none"
+	}
+	if reaction != "like" && reaction != "dislike" && reaction != "none" {
+		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "reaction 必须为 like/dislike/none", "invalid comment reaction")
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	byComment, ok := s.commentLikes[commentID]
-	if !ok {
-		byComment = map[string]bool{}
-		s.commentLikes[commentID] = byComment
-	}
-	if byComment[userID] {
-		return 0, false, nil
-	}
-	byComment[userID] = true
-
-	var likeCount int64
+	var updated map[string]any
+	var postID string
+	var authorID string
 	for _, comments := range s.comments {
 		for _, c := range comments {
 			if cid, _ := c["_id"].(string); cid == commentID {
-				lc, _ := c["likeCount"].(int64)
-				lc++
-				c["likeCount"] = lc
-				likeCount = lc
+				previous := "none"
+				if byUser := s.commentReactions[commentID]; byUser != nil {
+					if v := strings.TrimSpace(byUser[userID]); v == "like" || v == "dislike" {
+						previous = v
+					}
+				}
+				likeCount := asInt64Flexible(c["likeCount"])
+				dislikeCount := asInt64Flexible(c["dislikeCount"])
+				if previous == "like" && likeCount > 0 {
+					likeCount--
+				}
+				if previous == "dislike" && dislikeCount > 0 {
+					dislikeCount--
+				}
+				if reaction == "like" {
+					likeCount++
+				}
+				if reaction == "dislike" {
+					dislikeCount++
+				}
+				c["likeCount"] = likeCount
+				c["dislikeCount"] = dislikeCount
+				c["recommendedScore"] = commentRecommendedScore(c)
+				byUser := s.commentReactions[commentID]
+				if byUser == nil {
+					byUser = map[string]string{}
+					s.commentReactions[commentID] = byUser
+				}
+				if reaction == "none" {
+					delete(byUser, userID)
+				} else {
+					byUser[userID] = reaction
+				}
+				postID = asString(c["postId"])
+				authorID = asString(c["authorId"])
+				updated = s.projectCommentForViewerLocked(c, userID, false)
 				break
 			}
 		}
+		if updated != nil {
+			break
+		}
 	}
-
+	if updated == nil {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_not_found"),
+			"评论不存在",
+			"comment not found",
+		)
+	}
 	if s.publisher != nil {
+		var featurePayload map[string]any
+		if post, ok := s.store.FindByID(ctx, postID); ok {
+			featurePayload = commentFeaturePayload(*post, "", "", authorID, nil)
+		} else {
+			featurePayload = map[string]any{}
+		}
 		_ = s.publisher.Publish(ctx, repository.DomainEvent{
-			Type:          "CommentLiked",
+			Type:          "CommentReacted",
 			AggregateType: "Post",
+			AggregateID:   postID,
 			Payload: map[string]any{
-				"commentId": commentID,
-				"userId":    userID,
-				"likeCount": likeCount,
+				"commentId":             commentID,
+				"postId":                postID,
+				"authorId":              authorID,
+				"targetAuthorId":        featurePayload["targetAuthorId"],
+				"userId":                userID,
+				"viewerReaction":        reaction,
+				"reactionStrength":      commentReactionStrength(reaction),
+				"likeCount":             updated["likeCount"],
+				"dislikeCount":          updated["dislikeCount"],
+				"recommendedScore":      updated["recommendedScore"],
+				"tagRefs":               featurePayload["tagRefs"],
+				"entityRefs":            featurePayload["entityRefs"],
+				"moderationLabels":      featurePayload["moderationLabels"],
+				"intersectionDimension": featurePayload["intersectionDimension"],
 			},
 			OccurredAt: time.Now().UTC().Format(time.RFC3339),
 		})
 	}
-
-	return likeCount, true, nil
-}
-
-func (s *PostService) UnlikeComment(_ context.Context, commentID, userID string) (int64, bool, error) {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = AnonymousFallbackSubAccountID
-	}
-	commentID = strings.TrimSpace(commentID)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	byComment := s.commentLikes[commentID]
-	if !byComment[userID] {
-		return 0, false, nil
-	}
-	delete(byComment, userID)
-
-	var likeCount int64
-	for _, comments := range s.comments {
-		for _, c := range comments {
-			if cid, _ := c["_id"].(string); cid == commentID {
-				lc, _ := c["likeCount"].(int64)
-				if lc > 0 {
-					lc--
-				}
-				c["likeCount"] = lc
-				likeCount = lc
-				break
-			}
-		}
-	}
-
-	return likeCount, true, nil
-}
-
-func (s *PostService) IsCommentLiked(commentID, userID string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.commentLikes[strings.TrimSpace(commentID)][strings.TrimSpace(userID)]
+	return updated, nil
 }
 
 func (s *PostService) ListCommentsByAuthor(_ context.Context, userID, cursor string, limit int) ([]map[string]any, string, error) {
@@ -2409,7 +2872,11 @@ func (s *PostService) ListCommentsByAuthor(_ context.Context, userID, cursor str
 			nextCursor = cid
 		}
 	}
-	return page, nextCursor, nil
+	projected := make([]map[string]any, 0, len(page))
+	for _, c := range page {
+		projected = append(projected, s.projectCommentForViewerLocked(c, userID, false))
+	}
+	return projected, nextCursor, nil
 }
 
 func (s *PostService) ListCommentsForPostAuthor(ctx context.Context, userID, cursor string, limit int) ([]map[string]any, string, error) {
@@ -2467,7 +2934,11 @@ func (s *PostService) ListCommentsForPostAuthor(ctx context.Context, userID, cur
 			nextCursor = cid
 		}
 	}
-	return page, nextCursor, nil
+	projected := make([]map[string]any, 0, len(page))
+	for _, c := range page {
+		projected = append(projected, s.projectCommentForViewerLocked(c, userID, false))
+	}
+	return projected, nextCursor, nil
 }
 
 func (s *PostService) GetAppConfig() map[string]any {
@@ -2483,12 +2954,22 @@ func (s *PostService) GetAppConfig() map[string]any {
 	for key, value := range runtimeConfig.FeatureFlags {
 		featureFlags[key] = value
 	}
-	return map[string]any{
+	payload := map[string]any{
+		"schemaVersion":  "app_remote_config.v1",
+		"packageVersion": "embedded-content-service",
+		"fetchedAt":      time.Now().UTC().Format(time.RFC3339),
+		"maxAgeSec":      21600,
+		"activationPolicy": map[string]any{
+			"default":       "next_session",
+			"kill_switches": "immediate",
+		},
 		"content": map[string]any{
 			"comment": map[string]any{
-				"max_length":          s.commentMaxLen,
-				"reply_preview_count": 3,
-				"fold_line_count":     3,
+				"max_length":             s.commentMaxLen,
+				"reply_preview_count":    3,
+				"reply_expand_page_size": 10,
+				"fold_line_count":        3,
+				"attachment":             map[string]any{"max_images": 1},
 			},
 			"feature_flags": featureFlags,
 			"gray_release": map[string]any{
@@ -2498,6 +2979,21 @@ func (s *PostService) GetAppConfig() map[string]any {
 			},
 		},
 	}
+	payload["configHash"] = appConfigHash(payload)
+	return payload
+}
+
+func appConfigHash(payload map[string]any) string {
+	clone := map[string]any{}
+	for key, value := range payload {
+		if key == "configHash" || key == "fetchedAt" {
+			continue
+		}
+		clone[key] = value
+	}
+	data, _ := json.Marshal(clone)
+	sum := sha256.Sum256(data)
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func (s *PostService) GetCounters(ctx context.Context, postID string) (map[string]any, error) {
@@ -3273,7 +3769,7 @@ func (s *PostService) RequestOriginalImageAccess(ctx context.Context, in Request
 		base = strings.TrimSpace(asset.CdnUrl)
 	}
 	if base == "" {
-		base = mediaURL(s.mediaCDNBase, mediaObjectKey(asset.AssetScope, asset.OwnerId, "legacy", mediaID, asset.Type))
+		base = mediaURL(s.mediaCDNBase, mediaObjectKey(asset.AssetScope, asset.OwnerId, "archived", mediaID, asset.Type))
 	}
 	sep := "?"
 	if strings.Contains(base, "?") {

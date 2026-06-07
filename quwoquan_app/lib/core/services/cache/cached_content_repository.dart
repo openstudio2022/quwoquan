@@ -407,16 +407,6 @@ class CachedContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> likeComment({required String commentId}) {
-    return _delegate.likeComment(commentId: commentId);
-  }
-
-  @override
-  Future<void> unlikeComment({required String commentId}) {
-    return _delegate.unlikeComment(commentId: commentId);
-  }
-
-  @override
   Future<CommentDto> reactToComment({
     required String commentId,
     required String reaction,

@@ -36,7 +36,7 @@ sit_acceptance:
         - T2_module_interaction
     tests:
       planned:
-        - quwoquan_data/scripts/verify_content_quality.py
+        - quwoquan_data/scripts/verify/verify_content_quality.py
         - quwoquan_app/scripts/env/verify_app_seed_manifests.py
         - quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py
       recorded: []

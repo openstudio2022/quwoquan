@@ -411,28 +411,18 @@ scenarios:
     operation: UpdatePostSettings
     go_func: TestAssistantAccessRevokedAfterSettingsChange
     command: UpdatePostSettings(assistantUsePolicy=exclude or visibility=private)
-  - name: like_comment_contract
-    operation: LikeComment
-    go_func: TestLikeComment
-    command: LikeComment
-  - name: list_comment_replies_contract
-    operation: ListCommentReplies
-    go_func: TestListCommentReplies
-    command: ListCommentReplies
   - name: react_to_comment_contract
     operation: ReactToComment
-    go_func: TestReactToComment
-    command: ReactToComment
+    go_func: TestReactToCommentContract
+    command: ReactToComment(like/dislike/none)
+  - name: list_comment_replies_contract
+    operation: ListCommentReplies
+    go_func: TestCommentRepliesAttachmentsAndMentionsContract
+    command: ListCommentReplies(reply pagination)
   - name: bind_media_assets_to_comment_contract
     operation: BindMediaAssetsToComment
-    go_func: TestBindMediaAssetsToCommentContract
-    status: pending
-    command: BindMediaAssetsToComment
-  - name: unlike_comment_contract
-    operation: UnlikeComment
-    go_func: TestUnlikeCommentContract
-    status: pending
-    command: UnlikeComment
+    go_func: TestCommentRepliesAttachmentsAndMentionsContract
+    command: BindMediaAssetsToComment/CreateComment(attachmentMediaIds)
   - name: list_comments_by_author_contract
     operation: ListCommentsByAuthor
     go_func: TestListCommentsByAuthor

@@ -17,7 +17,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(find.text(UITextConstants.retry), findsOneWidget);
+    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
   });
 
   testWidgets('主页维护页提交失败时展示统一区块错误卡', (tester) async {

@@ -4,19 +4,15 @@ version: 1
 description: |
   feature_flags: Map<string, bool>，与本地 ContentUIConfig 合并。
   gray_release: experiment_bucket / current_stage / canary_matrix（行内 stage + rolloutPercent）。
-  client_state_sync: 透传至 ClientStateSyncConfig.fromMap（snake_case 为主）。
+  client_state_sync: 透传至 ClientStateSyncConfig.fromMap（snake_case only）。
   home_channels: 首页频道运营覆盖列表（与 ui_config.home_channels 同 schema：
     id/label_key/template/feed_query/mood_copy_key/order）；端按 order 排序、
     远程整体覆盖本地默认，缺失/解析失败回退 ContentUIConfig.homeChannels。
 documented_keys:
   - feature_flags
-  - featureFlags
   - gray_release
-  - grayRelease
   - client_state_sync
-  - clientStateSync
   - home_channels
-  - homeChannels
   - comment
   - comment.max_length
   - comment.reply_preview_count

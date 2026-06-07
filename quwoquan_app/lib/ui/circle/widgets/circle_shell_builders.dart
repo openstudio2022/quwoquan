@@ -115,7 +115,7 @@ extension _CircleShellBuilders on _CircleShellState {
               stats: state.circleStats.forDetailRow(circle),
             ),
             SizedBox(height: AppSpacing.sm),
-            _buildIntersectionCard(isDark, circle?.tags ?? const <String>[]),
+            _buildIntersectionCard(isDark),
             CircleActionBar(
               isDark: isDark,
               role: state.role,
@@ -172,28 +172,18 @@ extension _CircleShellBuilders on _CircleShellState {
 
   /// 圈子交集卡「你认识的人在这」：当前用户 × 圈子的事实交集（relationship/identity 优先）。
   /// 无可解析交集（空/异步未就绪）则不占位（G2 不造假）。
-  Widget _buildIntersectionCard(bool isDark, List<String> tags) {
+  Widget _buildIntersectionCard(bool isDark) {
     final query = ObjectIntersectionQuery(
       objectAId: ref.watch(currentUserIdProvider),
       objectAType: 'user',
       objectBId: widget.circleId,
       objectBType: 'circle',
     );
-    if (!query.isResolvable) {
-      return const SizedBox.shrink();
-    }
-    final reasons = ref.watch(objectSharedReasonsProvider(query)).asData?.value;
-    final card = ObjectIntersectionCard.fromReasons(
+    return ObjectIntersectionSection(
+      query: query,
       title: UITextConstants.circleIntersectionTitle,
-      reasons: reasons,
       isDark: isDark,
-    );
-    if (card == null) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.sm),
-      child: card,
+      bottomPadding: AppSpacing.sm,
     );
   }
 

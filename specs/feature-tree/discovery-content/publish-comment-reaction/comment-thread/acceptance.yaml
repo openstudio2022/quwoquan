@@ -47,8 +47,9 @@ gwt_acceptance:
     tests:
       planned:
       - quwoquan_app/test/ui/content/article_inline_comment_section_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+    status: implemented
   GWT2:
     title: 沉浸式内容打开上压评论分屏
     given:
@@ -75,8 +76,9 @@ gwt_acceptance:
     tests:
       planned:
       - quwoquan_app/test/components/comment_system/immersive_comment_split_sheet_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+    status: implemented
   GWT3:
     title: 评论与回复提交支持登录续接和失败保留草稿
     given:
@@ -106,8 +108,9 @@ gwt_acceptance:
       planned:
       - quwoquan_app/test/ui/content/providers/comment_provider_test.dart
       - quwoquan_app/test/auth/comment_login_continuation_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+    status: implemented
   GWT4:
     title: 回复预览和展开数量由云端配置控制
     given:
@@ -139,8 +142,10 @@ gwt_acceptance:
       planned:
       - quwoquan_app/test/ui/content/providers/comment_reply_pagination_test.dart
       - quwoquan_service/services/content-service/tests/comment_thread_contract_test.go
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+    status: implemented
   GWT5:
     title: 默认、最新、最多赞三档排序端云一致
     given:
@@ -169,8 +174,9 @@ gwt_acceptance:
       planned:
       - quwoquan_app/test/ui/content/providers/comment_sort_test.dart
       - quwoquan_service/services/content-service/tests/comment_thread_contract_test.go
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+    status: implemented
   GWT6:
     title: 评论赞踩互斥并能重入恢复
     given:
@@ -200,8 +206,10 @@ gwt_acceptance:
       planned:
       - quwoquan_app/test/ui/content/providers/comment_reaction_test.dart
       - quwoquan_service/services/content-service/tests/comment_reaction_contract_test.go
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+    status: implemented
   GWT7:
     title: 评论输入支持 emoji、图片和 @ 提及
     given:
@@ -215,7 +223,7 @@ gwt_acceptance:
     - alpha/beta/gamma seed 均覆盖图片评论、@小趣、@联系人。
     edge_cases:
     - 附件数量超过 App Config 限制时端侧阻止，云侧仍最终裁判。
-    - @ 候选为空时仍固定展示 @小趣。
+    - '@ 候选为空时仍固定展示 @小趣。'
     contract_refs:
     - content/post service.yaml CreateComment
     - sys.content.comment.attachment.max_images
@@ -231,8 +239,10 @@ gwt_acceptance:
       planned:
       - quwoquan_app/test/components/comment_system/comment_composer_panel_test.dart
       - quwoquan_app/integration_test/comment_composer_journey_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+    status: implemented
   GWT8:
     title: 非生产数据和四层证据完整
     given:
@@ -262,8 +272,13 @@ gwt_acceptance:
       planned:
       - quwoquan_service/services/content-service/tests/comment_seed_contract_test.go
       - quwoquan_app/integration_test/comment_thread_journey_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - quwoquan_service/services/content-service/tests/contract_fixture_seed_test.go
+      - quwoquan_service/contracts/metadata/_shared/test_fixtures/app_alpha_seed_manifest.json
+      - quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json
+      - quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json
+    status: implemented
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -21,7 +21,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: direct/group/encrypted（legacy circle 输入与存量记录兼容读取，但主语义统一归并为 group；assistant 不再是独立会话类型，小趣通过成员邀请参与任意会话）
+        description: direct/group/encrypted（既有 circle 输入与存量记录按 group 主语义解析；assistant 不再是独立会话类型，小趣通过成员邀请参与任意会话）
 
       - name: title
         type: string
@@ -282,7 +282,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 兼容消息快照/缓存模型时显式返回的发送者 subAccountId
+        description: 消息快照/缓存模型显式返回的发送者 subAccountId
 
       - name: senderDisplayNameSnapshot
         type: string
@@ -345,7 +345,7 @@ entities:
         api_exposure: read
         ops_exposure: read
         description: |
-          结构化媒体元数据（取代单一 mediaUrl，向后兼容保留 mediaUrl）。
+          结构化媒体元数据（取代单一 mediaUrl；既有读取仍可消费 mediaUrl）。
           Schema: { url, mediaId?, mimeType, fileSizeBytes?, durationMs?, waveform?, codec?,
                     thumbnailUrl?, width?, height?, fileName?, items[]? }
 
@@ -763,6 +763,15 @@ entities:
       - name: conversationType
         type: enum
         enum_ref: ConversationType
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: source
+        type: enum
+        enum_ref: ContactSource
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow

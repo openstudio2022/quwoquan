@@ -136,7 +136,11 @@ func (h *Handler) handleRecoverExternalDeadLetter(w http.ResponseWriter, r *http
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	taskID := strings.TrimSpace(anyString(body["taskId"]))
 	if taskID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "taskId required"})
+		rerrors.WriteHTTPError(
+			w,
+			rerrors.NewInvalidArgument(rerrors.ModuleIntegration, "taskId required", "missing taskId"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
 		return
 	}
 	if err := h.external.RecoverDeadTask(r.Context(), taskID); err != nil {

@@ -58,6 +58,7 @@ class VoiceMessageBubble extends ConsumerWidget {
     );
     final isPlaying = playback.isPlaying;
     final progress = playback.progress;
+    final hasPlaybackError = playback.error != null;
 
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final incomingSurface = AppColorsFunctional.getColor(
@@ -81,6 +82,7 @@ class VoiceMessageBubble extends ConsumerWidget {
         : AppColors.primaryColor;
 
     final canPlay =
+        !hasPlaybackError &&
         mediaUrl.trim().isNotEmpty &&
         (messageStatus == 'sent' || messageStatus == 'delivered');
     final disabledColor = textColor.withValues(alpha: 0.45);
@@ -139,9 +141,11 @@ class VoiceMessageBubble extends ConsumerWidget {
                         ),
                         SizedBox(height: AppSpacing.intraGroupXs),
                         Text(
-                          canPlay
-                              ? _durationText
-                              : UITextConstants.chatVoiceSending,
+                          hasPlaybackError
+                              ? playback.error!
+                              : (canPlay
+                                    ? _durationText
+                                    : UITextConstants.chatVoiceSending),
                           style: TextStyle(
                             fontSize: AppTypography.xs,
                             color: textColor.withValues(alpha: 0.7),
@@ -184,6 +188,7 @@ class _VoiceBubblePlaybackView {
   const _VoiceBubblePlaybackView({
     required this.isPlaying,
     required this.progress,
+    this.error,
   });
 
   factory _VoiceBubblePlaybackView.fromState(
@@ -191,22 +196,28 @@ class _VoiceBubblePlaybackView {
     String messageId,
   ) {
     final isActive = state.activeMessageId == messageId;
+    final hasError =
+        state.failedMessageId == messageId &&
+        (state.error ?? '').trim().isNotEmpty;
     return _VoiceBubblePlaybackView(
       isPlaying: isActive && state.isPlaying,
       progress: isActive ? state.progress : 0,
+      error: hasError ? state.error : null,
     );
   }
 
   final bool isPlaying;
   final double progress;
+  final String? error;
 
   @override
   bool operator ==(Object other) {
     return other is _VoiceBubblePlaybackView &&
         other.isPlaying == isPlaying &&
-        other.progress == progress;
+        other.progress == progress &&
+        other.error == error;
   }
 
   @override
-  int get hashCode => Object.hash(isPlaying, progress);
+  int get hashCode => Object.hash(isPlaying, progress, error);
 }

@@ -13,6 +13,7 @@ class AppBottomModalSurface extends StatelessWidget {
     this.backgroundColor,
     this.contentPadding = EdgeInsets.zero,
     this.maxHeightRatio,
+    this.panelMaxWidth,
     this.showHandle = true,
     this.panelKey,
   });
@@ -22,6 +23,7 @@ class AppBottomModalSurface extends StatelessWidget {
   final Color? backgroundColor;
   final EdgeInsetsGeometry contentPadding;
   final double? maxHeightRatio;
+  final double? panelMaxWidth;
   final bool showHandle;
   final Key? panelKey;
 
@@ -72,8 +74,9 @@ class AppBottomModalSurface extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   onTap: () {},
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: AppSpacing.feedMaxContentWidth,
+                    constraints: BoxConstraints(
+                      maxWidth:
+                          panelMaxWidth ?? AppSpacing.webPageContentMaxWidth,
                     ),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxHeight: maxHeight),

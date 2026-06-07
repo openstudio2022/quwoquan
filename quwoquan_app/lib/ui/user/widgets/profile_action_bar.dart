@@ -9,9 +9,9 @@ import 'package:quwoquan_app/components/object_page/profile_ios_components.dart'
 /// | 状态           | 按钮布局                                         |
 /// |---------------|------------------------------------------------|
 /// | self          | 编辑资料 / 管理分身                               |
-/// | not_following | 关注 / 私信                                      |
-/// | following     | 已关注 / 私信                                    |
-/// | followed_by   | 回关 / 私信                                      |
+/// | not_following | 关注 / 打招呼                                    |
+/// | following     | 已关注 / 打招呼                                  |
+/// | followed_by   | 回关 / 打招呼                                    |
 /// | mutual        | 消息 / 视频通话 / 语音通话 三等分                  |
 class ProfileActionBar extends StatelessWidget {
   const ProfileActionBar({
@@ -119,7 +119,7 @@ class ProfileActionBar extends StatelessWidget {
           child: neutralAction(
             label: UITextConstants.profileDirectMessage,
             icon: CupertinoIcons.chat_bubble,
-            onPressed: cap.canMessage ? onMessage : null,
+            onPressed: cap.canOpenConversation ? onMessage : null,
           ),
         ),
         Expanded(
@@ -150,9 +150,9 @@ class ProfileActionBar extends StatelessWidget {
         ),
         Expanded(
           child: neutralAction(
-            label: UITextConstants.profileDirectMessage,
-            icon: CupertinoIcons.chat_bubble,
-            onPressed: cap.canMessage ? onMessage : null,
+            label: UITextConstants.profileGreet,
+            icon: CupertinoIcons.hand_raised,
+            onPressed: cap.canGreet ? onGreet : null,
           ),
         ),
       ]);
@@ -176,9 +176,9 @@ class ProfileActionBar extends StatelessWidget {
         ),
         Expanded(
           child: neutralAction(
-            label: UITextConstants.profileDirectMessage,
-            icon: CupertinoIcons.chat_bubble,
-            onPressed: cap.canMessage ? onMessage : null,
+            label: UITextConstants.profileGreet,
+            icon: CupertinoIcons.hand_raised,
+            onPressed: cap.canGreet ? onGreet : null,
           ),
         ),
       ]);

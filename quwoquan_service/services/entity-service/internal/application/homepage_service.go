@@ -469,6 +469,7 @@ func (s *HomepageService) GetHomepageRelatedGroups(ctx context.Context, homepage
 
 func (s *HomepageService) GetObjectPageBundle(
 	ctx context.Context,
+	viewerID string,
 	homepageID string,
 	referralSource string,
 	feedRequestID string,
@@ -487,6 +488,8 @@ func (s *HomepageService) GetObjectPageBundle(
 		return nil, err
 	}
 	return buildObjectPageBundle(
+		ctx,
+		viewerID,
 		homepage,
 		referralSource,
 		feedRequestID,
@@ -950,6 +953,8 @@ func validateHomepageInput(input HomepageInput) error {
 }
 
 func buildObjectPageBundle(
+	ctx context.Context,
+	viewerID string,
 	homepage *Homepage,
 	referralSource string,
 	feedRequestID string,
@@ -979,6 +984,7 @@ func buildObjectPageBundle(
 		"assistantProactiveEnabled": true,
 		"relationEvidenceEnabled":   true,
 	}
+	intersectionReasons, intersections := resolveObjectPageIntersections(ctx, viewerID, homepage, relationEdges)
 	return &ObjectPageBundle{
 		ObjectType:         "homepage",
 		ObjectID:           homepage.ID,
@@ -993,8 +999,8 @@ func buildObjectPageBundle(
 			"relatedGroupCount": len(homepage.RelatedGroups),
 			"highlightCount":    len(homepage.ContentPreview),
 		},
-		IntersectionReasons: defaultIntersectionReasons(homepage, relationEdges),
-		Intersections:       defaultObjectIntersections(homepage, relationEdges),
+		IntersectionReasons: intersectionReasons,
+		Intersections:       intersections,
 		HighlightItems:      cloneObjectSlice(homepage.ContentPreview),
 		ContentSections: map[string]any{
 			"home":    cloneObjectSlice(homepage.ContentPreview),
@@ -1129,13 +1135,13 @@ func defaultObjectIntersections(homepage *Homepage, edges []map[string]any) []ma
 	}
 	evidence := []map[string]any{
 		{
-			"evidenceId":     homepage.ID + "_ev_tag",
-			"evidenceType":   "tag",
+			"evidenceId":       homepage.ID + "_ev_tag",
+			"evidenceType":     "tag",
 			"evidenceObjectId": homepage.ID,
-			"evidenceLabel":  evidenceLabel,
-			"source":         "tagRef",
-			"referralTarget": homepage.ID,
-			"visibility":     "public",
+			"evidenceLabel":    evidenceLabel,
+			"source":           "tagRef",
+			"referralTarget":   homepage.ID,
+			"visibility":       "public",
 		},
 	}
 	return []map[string]any{

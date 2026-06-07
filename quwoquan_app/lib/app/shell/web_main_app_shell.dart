@@ -7,14 +7,14 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/media/content_media_url.dart';
-import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
+import 'package:quwoquan_app/ui/discovery/services/home_feed_post_open_action.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
@@ -26,14 +26,12 @@ class WebMainAppShell extends ConsumerStatefulWidget {
     required this.currentLocation,
     required this.backgroundColor,
     required this.onPrimarySelected,
-    required this.onOpenCreateSheet,
   });
 
   final MainTabDestination currentDestination;
   final String currentLocation;
   final Color backgroundColor;
   final ValueChanged<MainTabDestination> onPrimarySelected;
-  final VoidCallback onOpenCreateSheet;
 
   @override
   ConsumerState<WebMainAppShell> createState() => _WebMainAppShellState();
@@ -92,6 +90,7 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
           builder: (context, constraints) {
             const heroHeight = AppSpacing.webPcWelcomeHeroHeight;
             return CustomScrollView(
+              key: const ValueKey<String>('web-shell-scroll'),
               controller: _scrollController,
               slivers: [
                 SliverToBoxAdapter(
@@ -220,10 +219,6 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
             id: 'groups',
             label: UITextConstants.webPcMessagesTabGroups,
           ),
-          _WebContextTabSpec(
-            id: 'xiaoqu',
-            label: UITextConstants.webPcMessagesTabXiaoqu,
-          ),
         ];
       case MainTabDestination.profile:
         return const <_WebContextTabSpec>[
@@ -293,26 +288,11 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
       case MainTabDestination.featured:
         return _WebFeaturedWorkspace(filterId: _featuredFilterId);
       case MainTabDestination.create:
-        return _WebCreateWorkspace(
-          activeTabId: _createTabId,
-          onOpenCreateSheet: widget.onOpenCreateSheet,
-        );
+        return _WebCreateWorkspace(activeTabId: _createTabId);
       case MainTabDestination.chat:
-        return _WebDesktopFrame(
-          rightRail: const _WebInfoRail(
-            title: UITextConstants.webPcMessagesRailTitle,
-            body: UITextConstants.webPcMessagesRailBody,
-          ),
-          child: const ChatPage(),
-        );
+        return const _WebDesktopFrame(child: ChatPage());
       case MainTabDestination.profile:
-        return _WebDesktopFrame(
-          rightRail: const _WebInfoRail(
-            title: UITextConstants.webPcProfileRailTitle,
-            body: UITextConstants.webPcProfileRailBody,
-          ),
-          child: const MyProfilePage(),
-        );
+        return const _WebDesktopFrame(child: MyProfilePage());
     }
   }
 }
@@ -569,18 +549,23 @@ class _WebTopToolbar extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: Row(
             children: [
-              AnimatedSwitcher(
-                duration: AppSpacing.webPcContextTabSwitchDuration,
-                child: showBrand
-                    ? _WebBrandMark(
-                        key: const ValueKey<String>('web-toolbar-brand'),
-                        onDark: isDark,
-                      )
-                    : const SizedBox.shrink(
-                        key: ValueKey<String>('web-toolbar-brand-hidden'),
-                      ),
+              SizedBox(
+                width: AppSpacing.webPcToolbarBrandSlotWidth,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: AnimatedSwitcher(
+                    duration: AppSpacing.webPcContextTabSwitchDuration,
+                    child: showBrand
+                        ? _WebBrandMark(
+                            key: const ValueKey<String>('web-toolbar-brand'),
+                            onDark: isDark,
+                          )
+                        : const SizedBox.shrink(
+                            key: ValueKey<String>('web-toolbar-brand-hidden'),
+                          ),
+                  ),
+                ),
               ),
-              if (showBrand) const SizedBox(width: AppSpacing.lg),
               Expanded(
                 child: _WebContextTabBar(
                   tabs: contextTabs,
@@ -598,6 +583,7 @@ class _WebTopToolbar extends ConsumerWidget {
                   hint: searchHint,
                   initialSearchScope: GlobalSearchScope.all,
                   showAssistantLabel: false,
+                  hintFontSize: AppTypography.webPcToolbarLabel,
                 ),
               ),
               const SizedBox(width: AppSpacing.lg),
@@ -624,17 +610,23 @@ class _WebBrandMark extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          CupertinoIcons.camera,
-          color: AppColors.primaryColor,
-          size: AppSpacing.twenty,
+        SizedBox.square(
+          dimension: AppSpacing.webPcToolbarBrandIconSize,
+          child: FittedBox(
+            child: SizedBox.square(
+              dimension: AppSpacing.welcomeGraphicDiameter,
+              child: WelcomeFlowerMark(
+                appearance: WelcomeAppearance.of(context),
+              ),
+            ),
+          ),
         ),
         const SizedBox(width: AppSpacing.xs),
         Text(
           UITextConstants.webPcBrandName,
           style: TextStyle(
             color: foreground,
-            fontSize: AppTypography.xl,
+            fontSize: AppTypography.webPcToolbarBrand,
             fontWeight: AppTypography.black,
             height: AppTypography.lineHeightTight,
           ),
@@ -690,6 +682,7 @@ class _WebContextTabChip extends StatelessWidget {
         ? AppColors.primaryColor
         : AppColors.iosSecondaryLabel(context);
     return CupertinoButton(
+      key: ValueKey<String>('web-context-tab-${tab.id}'),
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
       minimumSize: const Size(0, AppSpacing.minInteractiveSize),
       onPressed: onTap,
@@ -700,7 +693,8 @@ class _WebContextTabChip extends StatelessWidget {
             tab.label,
             style: TextStyle(
               color: color,
-              fontSize: AppTypography.iosSubheadline,
+              fontSize: AppTypography.webPcToolbarLabel,
+              height: AppSpacing.textLineHeightDense,
               fontWeight: selected
                   ? AppTypography.semiBold
                   : AppTypography.medium,
@@ -747,7 +741,7 @@ class _WebPrimaryActions extends StatelessWidget {
           label: UITextConstants.webPcPrimaryFeatured,
           selected: selected == MainTabDestination.featured,
           customIcon: (color, filled) => AppPremiumMarkIcon(
-            size: AppSpacing.twenty,
+            size: AppSpacing.webPcToolbarActionIconSize,
             color: color,
             filled: filled,
           ),
@@ -758,7 +752,6 @@ class _WebPrimaryActions extends StatelessWidget {
           label: UITextConstants.webPcPrimaryCreate,
           icon: CupertinoIcons.plus,
           selected: selected == MainTabDestination.create,
-          emphasized: true,
           onTap: onSelected,
         ),
         _WebPrimaryActionButton(
@@ -766,7 +759,7 @@ class _WebPrimaryActions extends StatelessWidget {
           label: UITextConstants.webPcPrimaryMessages,
           selected: selected == MainTabDestination.chat,
           customIcon: (color, filled) => AppMessagesIcon(
-            size: AppSpacing.twenty,
+            size: AppSpacing.webPcToolbarActionIconSize,
             color: color,
             backgroundColor: AppColors.iosGroupedSurface(context),
             filled: filled,
@@ -793,7 +786,6 @@ class _WebPrimaryActionButton extends StatelessWidget {
     required this.onTap,
     this.icon,
     this.customIcon,
-    this.emphasized = false,
   });
 
   final MainTabDestination destination;
@@ -801,19 +793,16 @@ class _WebPrimaryActionButton extends StatelessWidget {
   final IconData? icon;
   final Widget Function(Color color, bool filled)? customIcon;
   final bool selected;
-  final bool emphasized;
   final ValueChanged<MainTabDestination> onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = emphasized
-        ? AppColors.white
-        : (selected
-              ? AppColors.primaryColor
-              : AppColors.iosSecondaryLabel(context));
-    final background = emphasized
+    final color = selected
         ? AppColors.primaryColor
-        : (selected ? AppColors.webPcSelectedSurface : AppColors.transparent);
+        : AppColors.iosSecondaryLabel(context);
+    final background = selected
+        ? AppColors.webPcSelectedSurface
+        : AppColors.transparent;
     return Padding(
       padding: const EdgeInsets.only(left: AppSpacing.xs),
       child: Semantics(
@@ -823,16 +812,20 @@ class _WebPrimaryActionButton extends StatelessWidget {
         child: CupertinoButton(
           key: ValueKey<String>('web-primary-${destination.routeName}'),
           padding: EdgeInsets.zero,
-          minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+          minimumSize: const Size.square(AppSpacing.webPcToolbarActionSize),
           borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
           color: background,
           onPressed: () => onTap(destination),
           child: SizedBox.square(
-            dimension: AppSpacing.minInteractiveSize,
+            dimension: AppSpacing.webPcToolbarActionSize,
             child: Center(
               child: customIcon != null
                   ? customIcon!(color, selected)
-                  : Icon(icon, color: color, size: AppSpacing.twenty),
+                  : Icon(
+                      icon,
+                      color: color,
+                      size: AppSpacing.webPcToolbarActionIconSize,
+                    ),
             ),
           ),
         ),
@@ -848,16 +841,7 @@ class _WebHomeWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _WebDesktopFrame(
-      rightRail: const _WebInfoRail(
-        title: UITextConstants.webPcHomeRailTitle,
-        body: UITextConstants.webPcHomeRailBody,
-      ),
-      child: _WebFeedSection(
-        channelId: channelId,
-        title: UITextConstants.webPcHomeFeedTitle,
-      ),
-    );
+    return _WebDesktopFrame(child: _WebContentFeed(channelId: channelId));
   }
 }
 
@@ -868,39 +852,85 @@ class _WebFeaturedWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 精品 = 发现内容流（不再有「精品队列」hero）；format 筛选映射到发现频道。
     final channelId = switch (filterId) {
       'image' => 'photo',
       'video' => 'video',
       'note' => 'article',
       _ => 'work',
     };
-    return _WebDesktopFrame(
-      rightRail: const _WebInfoRail(
-        title: UITextConstants.webPcFeaturedRailTitle,
-        body: UITextConstants.webPcFeaturedRailBody,
-      ),
-      child: _WebFeedSection(
-        channelId: channelId,
-        title: UITextConstants.webPcFeaturedFeedTitle,
-      ),
+    return _WebDesktopFrame(child: _WebContentFeed(channelId: channelId));
+  }
+}
+
+/// Web 宽屏内容流：复用移动端 [HomeMultiFormFeed]（多列瀑布 + 同源埋点 +
+/// 四态），只在 Web 侧用主内容区宽度驱动列数，post 点击经统一动作进沉浸 viewer。
+class _WebContentFeed extends ConsumerWidget {
+  const _WebContentFeed({required this.channelId});
+
+  final String channelId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = ref.watch(isDarkProvider);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final mediaQuery = MediaQuery.of(context);
+        // 用主内容区宽度（而非整窗宽度）决定瀑布列数，避免卡片过窄。
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            size: Size(constraints.maxWidth, mediaQuery.size.height),
+          ),
+          child: HomeMultiFormFeed(
+            key: ValueKey<String>('web-content-feed-$channelId'),
+            isDark: isDark,
+            channelId: channelId,
+            onUserTap:
+                (
+                  userId, {
+                  String? avatarUrl,
+                  String? displayName,
+                  String? backgroundUrl,
+                }) {
+                  context.push(
+                    AppRoutePaths.userProfile(username: userId),
+                    extra: UserProfileRouteExtra(
+                      subAccountId: userId,
+                      avatar: avatarUrl,
+                      displayName: displayName,
+                      backgroundImage: backgroundUrl,
+                    ),
+                  );
+                },
+            onPostTap: (post, index, {feedPosts}) {
+              unawaited(
+                openHomeFeedPost(
+                  context,
+                  ref,
+                  post: post,
+                  mediaIndex: index,
+                  feedPosts: feedPosts,
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
 
-class _WebCreateWorkspace extends StatelessWidget {
-  const _WebCreateWorkspace({
-    required this.activeTabId,
-    required this.onOpenCreateSheet,
-  });
+class _WebCreateWorkspace extends ConsumerWidget {
+  const _WebCreateWorkspace({required this.activeTabId});
 
   final String activeTabId;
-  final VoidCallback onOpenCreateSheet;
 
   @override
-  Widget build(BuildContext context) {
-    final cards = <_CreateCardSpec>[
+  Widget build(BuildContext context, WidgetRef ref) {
+    final contentActions = <_CreateCardSpec>[
       _CreateCardSpec(
         id: 'video',
+        icon: CupertinoIcons.videocam,
         title: UITextConstants.webPcCreateVideoTitle,
         subtitle: UITextConstants.webPcCreateVideoSubtitle,
         action: () =>
@@ -908,28 +938,70 @@ class _WebCreateWorkspace extends StatelessWidget {
       ),
       _CreateCardSpec(
         id: 'gallery',
+        icon: CupertinoIcons.photo_on_rectangle,
         title: UITextConstants.webPcCreateGalleryTitle,
         subtitle: UITextConstants.webPcCreateGallerySubtitle,
         action: () => _openCreate(context, EditorStartAction.gallery),
       ),
       _CreateCardSpec(
         id: 'write',
+        icon: CupertinoIcons.pencil_outline,
         title: UITextConstants.webPcCreateTextTitle,
         subtitle: UITextConstants.webPcCreateTextSubtitle,
         action: () => _openCreate(context, EditorStartAction.write),
       ),
       _CreateCardSpec(
         id: 'drafts',
+        icon: CupertinoIcons.doc_text,
         title: UITextConstants.webPcCreateDraftsTitle,
         subtitle: UITextConstants.webPcCreateDraftsSubtitle,
-        action: onOpenCreateSheet,
+        action: () => runWhenLoggedIn(
+          ref,
+          context,
+          AuthGateReason.createPost,
+          () => presentCreateDraftPickerAndGo(context, GoRouter.of(context)),
+        ),
+      ),
+    ];
+    final socialActions = <_CreateCardSpec>[
+      _CreateCardSpec(
+        id: 'group-chat',
+        icon: CupertinoIcons.chat_bubble_2,
+        title: UITextConstants.webPcCreateGroupChatTitle,
+        subtitle: UITextConstants.webPcCreateGroupChatSubtitle,
+        action: () => runWhenLoggedIn(
+          ref,
+          context,
+          AuthGateReason.startGroupChat,
+          () => GlobalQuickActionSheet.openStartGroupChat(context),
+        ),
+      ),
+      _CreateCardSpec(
+        id: 'add-contact',
+        icon: CupertinoIcons.person_add,
+        title: UITextConstants.webPcCreateAddContactTitle,
+        subtitle: UITextConstants.webPcCreateAddContactSubtitle,
+        action: () => runWhenLoggedIn(
+          ref,
+          context,
+          AuthGateReason.addContact,
+          () => GlobalQuickActionSheet.openAddContact(context),
+        ),
+      ),
+      _CreateCardSpec(
+        id: 'create-circle',
+        icon: CupertinoIcons.circle_grid_hex,
+        title: UITextConstants.webPcCreateCircleTitle,
+        subtitle: UITextConstants.webPcCreateCircleSubtitle,
+        action: () => runWhenLoggedIn(
+          ref,
+          context,
+          AuthGateReason.createCircle,
+          () => GlobalQuickActionSheet.openCreateCircle(context),
+        ),
       ),
     ];
     return _WebDesktopFrame(
-      rightRail: const _WebInfoRail(
-        title: UITextConstants.webPcCreateRailTitle,
-        body: UITextConstants.webPcCreateRailBody,
-      ),
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
@@ -950,19 +1022,18 @@ class _WebCreateWorkspace extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
-            children: [
-              for (final card in cards)
-                SizedBox(
-                  width: AppSpacing.webPcCreateCardWidth,
-                  child: _CreateWorkspaceCard(
-                    spec: card,
-                    selected: card.id == activeTabId,
-                  ),
-                ),
-            ],
+          _WebCreateGroup(
+            groupKey: const ValueKey<String>('web-create-group-content'),
+            title: UITextConstants.webPcCreateContentGroupTitle,
+            cards: contentActions,
+            activeTabId: activeTabId,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          _WebCreateGroup(
+            groupKey: const ValueKey<String>('web-create-group-social'),
+            title: UITextConstants.webPcCreateSocialGroupTitle,
+            cards: socialActions,
+            activeTabId: activeTabId,
           ),
         ],
       ),
@@ -986,6 +1057,53 @@ class _WebCreateWorkspace extends StatelessWidget {
   }
 }
 
+class _WebCreateGroup extends StatelessWidget {
+  const _WebCreateGroup({
+    required this.groupKey,
+    required this.title,
+    required this.cards,
+    required this.activeTabId,
+  });
+
+  final Key groupKey;
+  final String title;
+  final List<_CreateCardSpec> cards;
+  final String activeTabId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: groupKey,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: AppTypography.webPcSectionTitle,
+            fontWeight: AppTypography.bold,
+            color: AppColors.iosLabel(context),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.md,
+          children: [
+            for (final card in cards)
+              SizedBox(
+                width: AppSpacing.webPcCreateCardWidth,
+                child: _CreateWorkspaceCard(
+                  spec: card,
+                  selected: card.id == activeTabId,
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _CreateWorkspaceCard extends StatelessWidget {
   const _CreateWorkspaceCard({required this.spec, required this.selected});
 
@@ -995,6 +1113,7 @@ class _CreateWorkspaceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoButton(
+      key: ValueKey<String>('web-create-card-${spec.id}'),
       padding: EdgeInsets.zero,
       onPressed: spec.action,
       child: Container(
@@ -1013,7 +1132,7 @@ class _CreateWorkspaceCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(CupertinoIcons.plus_app, color: AppColors.primaryColor),
+            Icon(spec.icon, color: AppColors.primaryColor),
             const SizedBox(height: AppSpacing.md),
             Text(
               spec.title,
@@ -1040,10 +1159,9 @@ class _CreateWorkspaceCard extends StatelessWidget {
 }
 
 class _WebDesktopFrame extends StatelessWidget {
-  const _WebDesktopFrame({required this.child, required this.rightRail});
+  const _WebDesktopFrame({required this.child});
 
   final Widget child;
-  final Widget rightRail;
 
   @override
   Widget build(BuildContext context) {
@@ -1052,326 +1170,7 @@ class _WebDesktopFrame extends StatelessWidget {
         constraints: const BoxConstraints(
           maxWidth: AppSpacing.webPcShellMaxWidth,
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: child),
-            const SizedBox(width: AppSpacing.md),
-            SizedBox(
-              width: AppSpacing.webPcRightRailWidth,
-              child: Padding(
-                padding: const EdgeInsets.only(
-                  top: AppSpacing.lg,
-                  right: AppSpacing.lg,
-                  bottom: AppSpacing.lg,
-                ),
-                child: rightRail,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _WebFeedSection extends ConsumerStatefulWidget {
-  const _WebFeedSection({required this.channelId, required this.title});
-
-  final String channelId;
-  final String title;
-
-  @override
-  ConsumerState<_WebFeedSection> createState() => _WebFeedSectionState();
-}
-
-class _WebFeedSectionState extends ConsumerState<_WebFeedSection> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      unawaited(
-        ref.read(discoveryFeedMapProvider.notifier).load(widget.channelId),
-      );
-    });
-  }
-
-  @override
-  void didUpdateWidget(_WebFeedSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.channelId == widget.channelId) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      unawaited(
-        ref.read(discoveryFeedMapProvider.notifier).load(widget.channelId),
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final value = ref.watch(discoveryFeedMapProvider)[widget.channelId];
-    final state = value?.value;
-    final items = state?.items ?? const <PostBaseDto>[];
-    if (value == null || value.isLoading) {
-      return const Center(child: CupertinoActivityIndicator());
-    }
-    if (state?.errorMessage != null && items.isEmpty) {
-      return Center(child: Text(state!.errorMessage!));
-    }
-    if (items.isEmpty) {
-      return Center(
-        child: Text(
-          UITextConstants.webPcFeedEmpty,
-          style: TextStyle(color: AppColors.iosSecondaryLabel(context)),
-        ),
-      );
-    }
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      children: [
-        Text(
-          widget.title,
-          style: TextStyle(
-            fontSize: AppTypography.iosLargeTitle,
-            fontWeight: AppTypography.black,
-            color: AppColors.iosLabel(context),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        _WebHeroPostCard(post: items.first),
-        const SizedBox(height: AppSpacing.lg),
-        Wrap(
-          spacing: AppSpacing.md,
-          runSpacing: AppSpacing.md,
-          children: [
-            for (final post
-                in items.skip(1).take(AppSpacing.webPcFeedPreviewItemLimit))
-              SizedBox(
-                width: AppSpacing.webPcFeedCardWidth,
-                child: _WebPostCard(post: post),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _WebHeroPostCard extends StatelessWidget {
-  const _WebHeroPostCard({required this.post});
-
-  final PostBaseDto post;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: AppSpacing.webPcHeroCardHeight,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
-        color: AppColors.iosGroupedSurface(context),
-        border: Border.all(color: AppColors.feedCardBorder(context)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Row(
-        children: [
-          Expanded(flex: 3, child: _PostVisual(url: post.primaryVisualUrl)),
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: _PostCopy(post: post, hero: true),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WebPostCard extends StatelessWidget {
-  const _WebPostCard({required this.post});
-
-  final PostBaseDto post;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.iosGroupedSurface(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-        border: Border.all(color: AppColors.feedCardBorder(context)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: AppSpacing.webPcFeedCardImageHeight,
-            child: _PostVisual(url: post.primaryVisualUrl),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: _PostCopy(post: post),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PostVisual extends StatefulWidget {
-  const _PostVisual({required this.url});
-
-  final String url;
-
-  @override
-  State<_PostVisual> createState() => _PostVisualState();
-}
-
-class _PostVisualState extends State<_PostVisual> {
-  @override
-  Widget build(BuildContext context) {
-    final resolvedCandidates = resolveContentMediaUrlCandidates(widget.url);
-    if (resolvedCandidates.isEmpty) {
-      return const DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.webPcMediaFallbackGradientTop,
-              AppColors.webPcMediaFallbackGradientBottom,
-            ],
-          ),
-        ),
-        child: Center(child: Icon(CupertinoIcons.sparkles)),
-      );
-    }
-    return AppCachedNetworkImage(
-      imageUrl: resolvedCandidates.first,
-      imageUrlCandidates: resolvedCandidates,
-      key: ValueKey<String>('web-post-visual-${resolvedCandidates.first}'),
-      fit: BoxFit.cover,
-      placeholder: const DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.webPcMediaFallbackGradientTop,
-              AppColors.webPcMediaFallbackGradientBottom,
-            ],
-          ),
-        ),
-        child: Center(child: CupertinoActivityIndicator()),
-      ),
-      errorWidget: const DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.webPcMediaFallbackGradientTop,
-              AppColors.webPcMediaFallbackGradientBottom,
-            ],
-          ),
-        ),
-        child: Center(child: Icon(CupertinoIcons.photo)),
-      ),
-    );
-  }
-}
-
-class _PostCopy extends StatelessWidget {
-  const _PostCopy({required this.post, this.hero = false});
-
-  final PostBaseDto post;
-  final bool hero;
-
-  @override
-  Widget build(BuildContext context) {
-    final title = post.normalizedTitle.isNotEmpty
-        ? post.normalizedTitle
-        : (post.normalizedBody.isNotEmpty
-              ? post.normalizedBody
-              : post.displayName);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          title,
-          maxLines: hero ? 3 : 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: hero ? AppTypography.iosTitle2 : AppTypography.iosCallout,
-            fontWeight: AppTypography.semiBold,
-            color: AppColors.iosLabel(context),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          post.displayName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: AppTypography.iosFootnote,
-            color: AppColors.iosSecondaryLabel(context),
-          ),
-        ),
-        if (hero && post.normalizedBody.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            post.normalizedBody,
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: AppTypography.iosCallout,
-              height: AppSpacing.textLineHeightBody,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _WebInfoRail extends StatelessWidget {
-  const _WebInfoRail({required this.title, required this.body});
-
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.iosGroupedSurface(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-        border: Border.all(color: AppColors.feedCardBorder(context)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: AppTypography.iosTitle3,
-                fontWeight: AppTypography.semiBold,
-                color: AppColors.iosLabel(context),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              body,
-              style: TextStyle(
-                fontSize: AppTypography.iosFootnote,
-                height: AppSpacing.textLineHeightBody,
-                color: AppColors.iosSecondaryLabel(context),
-              ),
-            ),
-          ],
-        ),
+        child: child,
       ),
     );
   }
@@ -1387,12 +1186,14 @@ class _WebContextTabSpec {
 class _CreateCardSpec {
   const _CreateCardSpec({
     required this.id,
+    required this.icon,
     required this.title,
     required this.subtitle,
     required this.action,
   });
 
   final String id;
+  final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback action;

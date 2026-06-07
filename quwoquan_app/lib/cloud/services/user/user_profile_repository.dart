@@ -945,20 +945,8 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   static String _normalizeRelationshipState(Map<String, dynamic> map) {
-    final state =
-        map['relationState']?.toString() ??
-        map['relationTier']?.toString() ??
-        '';
+    final state = map['relationState']?.toString() ?? '';
     if (state.isNotEmpty) {
-      switch (state) {
-        case 'same_interest':
-        case 'close_friend':
-          return 'mutual';
-        case 'following_only':
-          return 'following';
-        case 'none':
-          return 'not_following';
-      }
       return state;
     }
     final isFollowing = map['isFollowing'] == true;

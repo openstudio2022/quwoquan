@@ -2566,7 +2566,7 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
                 {
                     "name": "media-public-sample",
                     "scope": "media",
-                    "url": f"{str(public_bases['mediaImage']).rstrip('/')}/media/image/post/fixture_photo_001/v1/cover.png",
+                    "url": f"{str(public_bases['mediaImage']).rstrip('/')}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                 },
             ]
         )
@@ -2576,7 +2576,7 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
                 {
                     "name": "media-origin-sample",
                     "scope": "media",
-                    "url": f"{media_origin}/media/image/post/fixture_photo_001/v1/cover.png",
+                    "url": f"{media_origin}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                 }
             )
     if scope in {"service", "full"}:

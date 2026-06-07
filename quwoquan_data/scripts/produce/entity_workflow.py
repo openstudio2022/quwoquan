@@ -24,8 +24,6 @@ from _common.draft_io import (
     write_prompt,
     write_writing_pack,
 )
-from _common.io import read_json
-from _common.paths import batch_inputs_dir
 from _common.stage_reports import write_gate_report, write_repair_report, write_stage_result
 from _common.template_fingerprints import template_fingerprint_issues
 from _common.writing_pack import build_writing_pack, render_prompt_md
@@ -39,6 +37,7 @@ from produce.route_workflow import (
     _check_cross_article_similarity,
     _check_evidence_quality,
     _check_image_gate,
+    _check_prose_style,
     _check_provenance_rewrite,
     _check_travelogue_density,
     _jaccard,
@@ -59,19 +58,14 @@ def is_entity_brief(brief: Mapping[str, Any]) -> bool:
 
 
 def iter_entity_briefs(task_id: str, batch_id: str, refs: Sequence[str] | None = None) -> list[tuple[str, dict[str, Any]]]:
+    from _common.content_object import iter_briefs
+
     wanted = {ref for ref in (refs or []) if ref}
-    input_dir = batch_inputs_dir(task_id, batch_id, "produce", "compose")
-    rows: list[tuple[str, dict[str, Any]]] = []
-    if not input_dir.exists():
-        return rows
-    for brief_file in sorted(input_dir.glob("*.json")):
-        ref = brief_file.stem
-        if wanted and ref not in wanted:
-            continue
-        brief = read_json(brief_file)
-        if is_entity_brief(brief):
-            rows.append((ref, brief))
-    return rows
+    return [
+        (ref, brief)
+        for ref, brief in iter_briefs(task_id, batch_id)
+        if (not wanted or ref in wanted) and is_entity_brief(brief)
+    ]
 
 
 def _entity_name(evidence_bundle: Mapping[str, Any], brief: Mapping[str, Any]) -> str:
@@ -119,7 +113,7 @@ def _entity_section_intents(brief: Mapping[str, Any], name: str) -> list[str]:
         f"最打动我的：具体写一处让你愿意为 {name} 慢下来的细节（来自素材）。",
         f"也得说说不足：诚实写一处劝退/扫兴点（来自素材），并给出心理准备建议。",
         "去之前要知道的：把开放/门票/到达/时段等关键事实就地融入叙述，禁止另起清单块。",
-        f"{name} 适合谁：用取舍收尾，给出时间有限时的优先建议。",
+        f"收尾：用一处真实取舍判断自然收束（{name} 值不值、时间有限时怎么取舍就地融进叙述），禁止『它到底适合谁／适合谁／{name} 适合谁』之类的固定小标题。",
     ]
 
 
@@ -130,6 +124,9 @@ def build_entity_writing_pack(
     brief: Mapping[str, Any],
     quality_payload: Mapping[str, Any],
 ) -> dict[str, Any]:
+    from _common.content_object import register_from_brief
+
+    register_from_brief(task_id, batch_id, ref, brief, content_type="article")
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
     name = _entity_name(evidence_bundle, brief)
     assets = _build_route_assets(task_id, batch_id, ref, brief, evidence_bundle)
@@ -200,7 +197,7 @@ def _compose_payload_from_pack(
     draft_meta: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
-    story_spine = quality_payload.get("storySpine") or {}
+    story_spine = (evidence_bundle.get("storySpine") or {}) if isinstance(evidence_bundle, Mapping) else {}
     carrier = str(pack.get("carrier") or "article")
     template = (brief.get("render") or {}).get("articleTemplate") or "journal"
     meta = draft_meta or {}
@@ -275,7 +272,7 @@ def review_entity_draft(
     checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
-        "suggestions": ["按 prompt.md 由会话模型创作正文并写回 drafts/{ref}/article.md（generator=agent）。"] if authenticity_issues else [],
+        "suggestions": ["按 prompt.md 由会话模型创作正文并写回对象 `4.draft/draft.article.md`（generator=agent）。"] if authenticity_issues else [],
     }
     checks["factTraceability"] = {
         "passed": not traceability,
@@ -319,8 +316,6 @@ def review_entity_draft(
         fallback = _entity_fallback_stage(checks)
         if fallback == "download":
             rerun_chain = ["download", "quality_analysis", "compose-brief", "review", "materialize"]
-        elif fallback == "manual":
-            rerun_chain = ["manual_image_review", "review", "materialize"]
         elif fallback == "agent_compose":
             rerun_chain = ["agent_compose", "review", "materialize"]
         else:
@@ -356,6 +351,7 @@ def _entity_review_checks(
         "provenanceRewrite": _check_provenance_rewrite(article, brief, quality_payload),
         "evidenceQuality": _check_evidence_quality(article, brief, quality_payload, compose_payload),
         "carrierConsistency": _check_carrier_consistency(compose_payload),
+        "proseStyle": _check_prose_style(article),
         "imageGate": _check_image_gate(compose_payload),
     }
     if str(compose_payload.get("carrier") or "article") != "gallery":
@@ -405,7 +401,7 @@ def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
         return "agent_compose"
     image_gate = checks.get("imageGate", {"passed": True})
     if not image_gate["passed"]:
-        return "manual" if image_gate.get("humanReview") and len(image_gate.get("issues") or []) == 1 else "agent_compose"
+        return "agent_compose"
     if not checks.get("carrierConsistency", {"passed": True})["passed"]:
         return "agent_compose"
     return "review"

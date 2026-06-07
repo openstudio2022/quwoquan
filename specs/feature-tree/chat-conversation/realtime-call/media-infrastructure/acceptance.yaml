@@ -7,30 +7,67 @@ node:
   parent_domain_service: chat-conversation
   parent_business_capability: realtime-call
 scope:
-  summary: media infrastructure 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: SFU/TURN/录制媒体基础设施与三端来电推送通道（VoIP/FCM/Web Push）。
+  in_scope:
+    - LiveKit SFU 房间生命周期与 Token 签发
+    - WS 信令 wire type 端云一致
+    - 来电推送负载契约（VoIP/FCM/Web Push）
+  out_of_scope:
+    - 端侧通话 UI（见 call-experience）
 gwt_acceptance:
-  GWT1:
-    title: media infrastructure GWT
+  GWT1_signaling_wire_type:
+    title: WS 信令 wire type 端云一致
     given:
-    - 前置条件明确。
+    - events.yaml 已声明 client_ws_type（call.ringing 等）。
     when:
-    - 用户或系统动作发生。
+    - rtc-service 发布 CallRinging/ParticipantJoined 等事件。
     then:
-    - 可观察结果符合预期。
+    - 推送的 WS type 为 wire type，端侧 parseRtcWsPayload 可解析，无 domain 常量泄漏到线协议。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 端云信令 type 完全对齐且来电可被端侧识别。
+    edge_cases:
+    - 未知 type 端侧降级为 unknown payload 不崩溃。
+    contract_refs:
+    - rtc/call_session events.yaml client_ws_type
+    performance_points:
+    - 信令延迟（发起→来电通知）≤1s。
     evidence:
       primary:
-      - T1_contract
+      - T1_static_contract
+      - T3_app_api_integration
+      supporting:
       - T2_module_interaction
-      supporting: []
     tests:
-      planned: []
+      planned:
+      - quwoquan_service/services/rtc-service/tests/ws_event_wire_type_contract_test.go
+      - quwoquan_app/test/cloud/rtc/rtc_signaling_wire_type_test.dart
+      recorded: []
+    status: pending
+  GWT2_incoming_push_payload:
+    title: 三端来电推送负载契约
+    given:
+    - 一通呼叫发起，被叫离线或后台。
+    when:
+    - rtc-service 在 call.initiated/ringing 投递推送。
+    then:
+    - VoIP/FCM/Web Push 负载含 callId/发起人/来源/类型/信任标记/过期，端侧据此唤起来电页。
+    done_when:
+    - 三端推送负载契约一致且可驱动来电唤醒。
+    edge_cases:
+    - 推送过期或重复时端侧幂等处理。
+    contract_refs:
+    - rtc/call_session events.yaml CallRinging push_policy
+    performance_points:
+    - 离线推送到达 ≤5s。
+    evidence:
+      primary:
+      - T3_app_api_integration
+      - T4_e2e_journey
+      supporting:
+      - T1_static_contract
+    tests:
+      planned:
+      - quwoquan_service/services/rtc-service/tests/incoming_push_payload_contract_test.go
       recorded: []
     status: pending
 execution:

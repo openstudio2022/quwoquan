@@ -161,7 +161,7 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
         prompt: UITextConstants.authGatePromptJoinCircle,
         requiredOperations: <String>['JoinCircle'],
       ),
-      // 加好友 / 发起群聊 / 建圈子 属「先开面板、动作再登录」的产品级动作门，
+      // 添加联系人 / 发起群聊 / 建圈子 属「先开面板、动作再登录」的产品级动作门，
       // 登录约束是产品决策而非单一 required API，故 requiredOperations 留空。
       AuthGateReason.addContact: AuthGateEntry(
         reason: AuthGateReason.addContact,

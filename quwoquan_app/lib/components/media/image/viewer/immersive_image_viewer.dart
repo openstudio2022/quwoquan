@@ -12,8 +12,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
-import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+import 'package:quwoquan_app/components/comment_system/immersive_comment_split_sheet.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
@@ -150,6 +149,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   bool _showFollowButton = false;
   Timer? _followButtonTimer;
   bool _isPureMode = false;
+  bool _isCommentSplitOpen = false;
   final Map<String, bool> _expandedCaptions = {};
   final Map<String, double> _imageAspectRatios = {};
   final Set<String> _resolvingImageAspectRatios = <String>{};
@@ -471,37 +471,36 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   void _handleCommentsClick() {
     final currentPost = _currentPost;
     if (currentPost != null) {
-      // 显示评论弹窗
-      final commentConfig = CommentConfig();
-
-      CommentViewer.showModal(
-        context: context,
-        postId: currentPost.postId.isNotEmpty
-            ? currentPost.postId
-            : 'mock_post_id',
-        initialComments: [],
-        config: commentConfig,
-        modalHeight: CommentModalHeight.adaptive,
-        onCommentAdded: (commentId) {
-          debugPrint('Comment added: $commentId');
-        },
-        onCommentLiked: (comment) {
-          debugPrint('Comment liked: ${comment.id}');
-        },
-        onReplyAdded: (commentId, replyId) {
-          debugPrint('Reply added: $replyId to $commentId');
-        },
-        onUserTapped: (userId) {
-          debugPrint('User tapped: $userId');
-        },
-        onLoadMoreComments: (postId) {
-          debugPrint('Load more comments for post: $postId');
-        },
-        onClose: () {
-          debugPrint('Comment modal closed');
-        },
-      );
+      setState(() => _isCommentSplitOpen = true);
     }
+  }
+
+  Widget _buildCommentSplitContent(BuildContext context, bool isDark) {
+    final post = _currentPost;
+    if (post == null) {
+      return const SizedBox.shrink();
+    }
+    final imageUrls = _collectPostImageUrls(post);
+    final imageUrl = widget.layoutMode == 'nested'
+        ? (imageUrls.isEmpty
+              ? ''
+              : imageUrls[_currentImageIndex.clamp(0, imageUrls.length - 1)])
+        : (_currentEntry?.imageUrl ?? (imageUrls.isEmpty ? '' : imageUrls.first));
+    return ColoredBox(
+      color: AppColors.black,
+      child: _buildMediaPage(
+        context,
+        post,
+        MediaItem(
+          type: ContentTypeConstants.image,
+          url: imageUrl,
+          aspectRatio: _postAspectRatio(post),
+        ),
+        isDark,
+        true,
+        false,
+      ),
+    );
   }
 
   void _handleMoreClick() {
@@ -858,6 +857,16 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
 
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final currentPost = _currentPost;
+    if (_isCommentSplitOpen && currentPost != null) {
+      return ImmersiveCommentSplitSheet(
+        postId: currentPost.postId,
+        content: _buildCommentSplitContent(context, isDark),
+        likeCount: _likesCount,
+        isLiked: _isLiked,
+        onLikeTap: _handleLikeClick,
+        onClose: () => setState(() => _isCommentSplitOpen = false),
+      );
+    }
     final currentEntry = _currentEntry;
     final currentPostImages = currentPost == null
         ? const <String>[]

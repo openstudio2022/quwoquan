@@ -23,8 +23,19 @@ SOP_ROOT = DATA_ROOT / "sop"
 TASKS_ROOT = RUNTIME_ROOT / "tasks"
 # committed 任务规格根（受版本控制；与 runtime/tasks 同 taskId 对应）
 COMMITTED_TASKS_ROOT = Path(os.environ.get("QWQ_COMMITTED_TASKS_ROOT", DATA_ROOT / "tasks"))
-COMMANDS = ("explore", "build", "download", "produce", "reconcile", "publish")
+COMMANDS = ("explore", "build", "download", "produce", "publish")
 NOW_ISO = "2026-05-15T00:00:00+08:00"
+
+WORKSPACE_ROOT_BY_COMMAND = {
+    "build": "task_build",
+    "download": "task_download",
+    "produce": "task_produce",
+    "publish": "task_publish",
+    "pipeline": "task_workflow",
+    "task_run": "task_workflow",
+    "workflow": "task_workflow",
+    "workflow_run": "task_workflow",
+}
 
 
 # ─── taskId ↔ 目录 互转 ────────────────────────────────────────────
@@ -145,16 +156,46 @@ def task_root(task_id: str) -> Path:
     return TASKS_ROOT / task_id
 
 
+def runtime_shared_dir() -> Path:
+    return RUNTIME_ROOT / "_shared"
+
+
+def global_batch_seq_path() -> Path:
+    return runtime_shared_dir() / "global_batch_seq.json"
+
+
+def global_batch_seq_lock_path() -> Path:
+    return runtime_shared_dir() / ".global_batch_seq.lock"
+
+
 def task_data(task_id: str) -> DataRoot:
     return DataRoot(task_root(task_id))
 
 
+def task_shared_dir(task_id: str) -> Path:
+    return task_root(task_id) / "_shared"
+
+
 def task_manifest(task_id: str) -> Path:
+    """任务定义快照（§14.1：vertical/organizeBy/scope/content.angles），由 task run 写。"""
     return task_root(task_id) / "task_manifest.json"
+
+
+def dedup_ledger(task_id: str) -> Path:
+    """跨批次去重账本（completedEntities/...）；与任务定义快照 task_manifest.json 分离。"""
+    return task_root(task_id) / "dedup_ledger.json"
 
 
 def task_catalog(task_id: str) -> Path:
     return task_root(task_id) / "catalog.ndjson"
+
+
+def task_explore_packet_path(task_id: str) -> Path:
+    return task_shared_dir(task_id) / "explore_packet.json"
+
+
+def task_baseline_freeze_packet_path(task_id: str) -> Path:
+    return task_shared_dir(task_id) / "baseline_freeze_packet.json"
 
 
 def task_changeset_dir(task_id: str) -> Path:
@@ -202,7 +243,7 @@ def batch_root(task_id: str, batch_id: str) -> Path:
 
 
 def batch_command_root(task_id: str, batch_id: str, command: str) -> Path:
-    return batch_root(task_id, batch_id) / command
+    return batch_root(task_id, batch_id) / WORKSPACE_ROOT_BY_COMMAND.get(command, command)
 
 
 def batch_inputs_dir(task_id: str, batch_id: str, command: str, step: str) -> Path:
@@ -221,10 +262,170 @@ def batch_sources_dir(task_id: str, batch_id: str, entity_name: str) -> Path:
     return batch_command_root(task_id, batch_id, "download") / "sources" / entity_name
 
 
+# ─── 对象同构目录（与 publish DataRoot 同构 + 过程阶段编号）─────────
+# 真相源：docs/pipeline_directory_layout_spec.md。
+# 实体对象 = batches/{batch}/entities/{domain}/{type}/{name}/
+# 内容对象 = batches/{batch}/posts/{contentType}/{angle}/{title}/{seq}/
+# 对象目录下过程阶段统一编号；成品落对象根（promote 时与 publish 同名直拷）。
+STAGE_DOWNLOAD = "1.download"
+STAGE_QUALITY = "2.quality"
+STAGE_COMPOSE = "3.compose"
+STAGE_DRAFT = "4.draft"
+STAGE_REVIEW = "5.review"
+# 对象过程阶段统一线性枚举；实体/内容共享同一阶段骨架，差异只体现在阶段产物内容。
+OBJECT_STAGES = (
+    STAGE_DOWNLOAD,
+    STAGE_QUALITY,
+    STAGE_COMPOSE,
+    STAGE_DRAFT,
+    STAGE_REVIEW,
+)
+
+
+def batch_shared_dir(task_id: str, batch_id: str) -> Path:
+    """批次级公共产物（跨对象共享，不属于任一对象）。"""
+    return batch_root(task_id, batch_id) / "_shared"
+
+
+def batch_posts_root(task_id: str, batch_id: str) -> Path:
+    """成品内容对象根（对象优先）：`batch/posts/{type}/{angle}/{title}/{seq}/`。"""
+    return batch_root(task_id, batch_id) / "posts"
+
+
+def batch_post_roots(task_id: str, batch_id: str) -> list[Path]:
+    """成品 posts 根候选（存在的）：对象优先 `batch/posts`。"""
+    roots = [batch_posts_root(task_id, batch_id)]
+    seen: set[str] = set()
+    out: list[Path] = []
+    for r in roots:
+        key = str(r)
+        if key in seen or not r.is_dir():
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
+
+
+def batch_manifest_path(task_id: str, batch_id: str) -> Path:
+    """批次级公共信息：参数/env/salt/命令链/时间（不在对象目录重复）。"""
+    return batch_root(task_id, batch_id) / "batch_manifest.json"
+
+
+def batch_entity_object_dir(
+    task_id: str, batch_id: str, domain: str, etype: str, name: str
+) -> Path:
+    return batch_root(task_id, batch_id) / "entities" / domain / etype / name
+
+
+def batch_entity_stage_dir(
+    task_id: str, batch_id: str, domain: str, etype: str, name: str, stage: str
+) -> Path:
+    return batch_entity_object_dir(task_id, batch_id, domain, etype, name) / stage
+
+
+def batch_post_object_dir(
+    task_id: str,
+    batch_id: str,
+    content_type: str,
+    angle: str,
+    title: str,
+    seq: int = 1,
+) -> Path:
+    return (
+        batch_root(task_id, batch_id)
+        / "posts"
+        / content_type
+        / angle
+        / title
+        / str(seq)
+    )
+
+
+def batch_post_stage_dir(
+    task_id: str,
+    batch_id: str,
+    content_type: str,
+    angle: str,
+    title: str,
+    seq: int,
+    stage: str,
+) -> Path:
+    return (
+        batch_post_object_dir(task_id, batch_id, content_type, angle, title, seq) / stage
+    )
+
+
+def source_unit_dir(object_dir: Path, ordinal: int, source_id: str) -> Path:
+    """对象的来源单元：{object}/1.download/sources/{NN}.{sourceKind}/（NN 两位补零）。
+
+    来源是自包含单元（source.md + meta.json + assets/ + assets/index.json），
+    禁止把图片散落到对象级 images/。
+    """
+    return object_dir / STAGE_DOWNLOAD / "sources" / f"{ordinal:02d}.{source_id}"
+
+
+def relative_batch_ref(target: Path, task_id: str, batch_id: str) -> str:
+    """把 batch 内绝对路径转成相对 batch 根的 POSIX 相对路径（发布/迁移友好）。
+
+    用于 manifest/provenance 的 citedSourceRefs / sourceAssetRef / sourcePaths，
+    禁止绝对路径进入发布契约。
+    """
+    base = batch_root(task_id, batch_id).resolve()
+    return os.path.relpath(Path(target).resolve(), base).replace(os.sep, "/")
+
+
+def relative_task_ref(target: Path, task_id: str) -> str:
+    """相对 task 根的 POSIX 相对路径（实体成品在 task 根 entities/ 时用）。"""
+    base = task_root(task_id).resolve()
+    return os.path.relpath(Path(target).resolve(), base).replace(os.sep, "/")
+
+
+# ─── 对象索引与批次工作区（规格 §14/§15；纯新增，零回归）─────────────
+def object_index_path(object_dir: Path) -> Path:
+    """对象索引 _object.json（实体过程对象根 / 内容对象根各一份）。"""
+    return object_dir / "_object.json"
+
+
+def batch_source_catalog_path(task_id: str, batch_id: str) -> Path:
+    """受控来源类目（批次级共享，唯一真相源）。"""
+    return batch_shared_dir(task_id, batch_id) / "source_catalog.json"
+
+
+def batch_workflow_state_path(task_id: str, batch_id: str) -> Path:
+    """workflow 状态属批次工作区，落 _shared（不进对象目录、不进 publish）。"""
+    return batch_shared_dir(task_id, batch_id) / "task_workflow_state.json"
+
+
+def batch_assistant_tasks_dir(task_id: str, batch_id: str) -> Path:
+    """会话任务投递（批次工作区，可清理可重投）。"""
+    return batch_shared_dir(task_id, batch_id) / "assistant_tasks"
+
+
+def batch_workflow_packets_dir(task_id: str, batch_id: str) -> Path:
+    """workflow 过程 packet 落点（批次工作区，按 stage 分文件）。"""
+    return batch_shared_dir(task_id, batch_id) / "workflow_packets"
+
+
+def batch_workflow_packet_path(task_id: str, batch_id: str, stage: str) -> Path:
+    return batch_workflow_packets_dir(task_id, batch_id) / f"{stage}.json"
+
+
+def batch_entity_page_input_path(
+    task_id: str,
+    batch_id: str,
+    domain: str,
+    etype: str,
+    name: str,
+) -> Path:
+    """实体主页输入契约：batch 内对象过程 `3.compose/entity_page_input.json`。"""
+    return batch_entity_stage_dir(task_id, batch_id, domain, etype, name, STAGE_COMPOSE) / "entity_page_input.json"
+
+
 # ─── layout helpers ───────────────────────────────────────────────
 def ensure_task_layout(task_id: str) -> Path:
     root = task_root(task_id)
     root.mkdir(parents=True, exist_ok=True)
+    task_shared_dir(task_id).mkdir(parents=True, exist_ok=True)
     d = task_data(task_id)
     d.entities_dir().mkdir(exist_ok=True)
     d.tags_dir().mkdir(exist_ok=True)

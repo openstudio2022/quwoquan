@@ -92,7 +92,7 @@ class HomepageMockData {
     relatedGroups: <HomepageRelatedGroupSummary>[
       HomepageRelatedGroupSummary(
         circleId: 'west_lake_circle_1',
-        name: '西湖散步同好群',
+        name: '西湖散步兴趣群',
         memberCount: 146,
         linkedHomepageId: 'homepage_sight_west_lake',
         linkedHomepageTitle: '西湖景区',
@@ -290,7 +290,7 @@ HomepageDetail _travelPhotoHomepage(String id, String title, String city) {
     relatedGroups: <HomepageRelatedGroupSummary>[
       HomepageRelatedGroupSummary(
         circleId: '${id}_circle_001',
-        name: '$title 同好圈',
+        name: '$title 兴趣圈',
         memberCount: 480,
         linkedHomepageId: id,
         linkedHomepageTitle: title,

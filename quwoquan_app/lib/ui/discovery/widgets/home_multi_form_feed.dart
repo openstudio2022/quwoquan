@@ -29,13 +29,13 @@ import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
-import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
+import 'package:quwoquan_app/ui/discovery/services/discovery_share_template.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_layout_policy.dart';
@@ -59,9 +59,6 @@ const ArticleDistributionProfileConfig _followingArticleDistributionProfile =
       summaryLineLimit: 2,
     );
 
-/// 首页多形态信息流：按频道 layout policy 渲染单列关系流、双列发现流与交集模块。
-///
-/// `moment` 仅作为内容 identity / feed query 枚举保留；首页架构不再以 Moment 命名。
 class HomeMultiFormFeed extends ConsumerWidget {
   const HomeMultiFormFeed({
     super.key,
@@ -79,7 +76,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
   final bool isDark;
   final String channelId;
 
-  /// 频道模板（来自 homeChannels.template；旧字段，仅作为 layout policy 缺省兼容）。
   final String template;
   final bool inlineImageCarousel;
   final bool disableImageViewerOnTap;
@@ -91,7 +87,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
   })
   onUserTap;
 
-  /// 点击图片/视频时打开侵入式浏览器；若仅需埋点可传 (post, i) => _trackBehavior('click', post)
   final void Function(
     PostBaseDto post,
     int index, {
@@ -100,13 +95,11 @@ class HomeMultiFormFeed extends ConsumerWidget {
   onPostTap;
   final void Function(PostBaseDto post)? onMoreTap;
 
-  /// 发现交集对象卡卡体点击：跳转对应对象/聚合页（路由由宿主按 metadata 解析）。
   final void Function(IntersectionReason reason)? onIntersectionObjectOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(postInteractionStateProvider);
-    // 交集曝光归因：频道交集就绪即上报曝光（驱动推荐冷却窗口）+ 漏斗 impression。
     ref.listen<AsyncValue<List<IntersectionReason>>>(
       channelIntersectionReasonsProvider(channelId),
       (previous, next) => _reportIntersectionExposure(ref, previous, next),
@@ -357,11 +350,16 @@ class HomeMultiFormFeed extends ConsumerWidget {
             );
           });
         },
-        onMoreTap: () {
+        onMoreTap: (cardWidth) {
           if (onMoreTap != null) {
             onMoreTap!(dto);
           } else {
-            _showMoreActions(context, ref, dto);
+            _showMoreActions(
+              context,
+              ref,
+              dto,
+              panelMaxWidth: cardWidth,
+            );
           }
         },
       );
@@ -427,9 +425,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
     );
   }
 
-  /// 交集曝光上报：频道交集 Provider 首次产出非空数据时，
-  /// 上报曝光给推荐冷却窗口（reportExposure）并补漏斗 impression（带 intersectionId/dimension/class）。
-  /// trackImpression 按 objectId session 去重，故重复 build 不会重复上报。
   void _reportIntersectionExposure(
     WidgetRef ref,
     AsyncValue<List<IntersectionReason>>? previous,
@@ -475,10 +470,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
     }
   }
 
-  /// 从当前 feed 各帖聚合去重的交集理由，供首页 full-span 交集模块消费。
-  /// 不引入第二套业务列表（数据来自已加载的 feed item），无来源时返回空。
-  /// 频道气质文案：按 channelId 匹配运营下发的 [ContentUIConfig.homeChannels]
-  /// 解析 moodCopyKey（真相源 = ui_config home_channels）；无匹配返回空串。
   String _resolveChannelMoodCopy() {
     for (final channel in ContentUIConfig.homeChannels) {
       if (channel.id == channelId) {
@@ -504,9 +495,9 @@ class HomeMultiFormFeed extends ConsumerWidget {
     required bool enableIdentityTemplate,
   }) {
     runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
-      final template = _buildShareTemplate(
-        ref: ref,
+      final template = buildDiscoveryShareTemplate(
         post: post,
+        wire: _rawDiscoveryItem(ref, post.id),
         enableIdentityTemplate: enableIdentityTemplate,
       );
       ContentShareSheet.show(
@@ -519,9 +510,15 @@ class HomeMultiFormFeed extends ConsumerWidget {
     });
   }
 
-  void _showMoreActions(BuildContext context, WidgetRef ref, PostBaseDto post) {
+  void _showMoreActions(
+    BuildContext context,
+    WidgetRef ref,
+    PostBaseDto post, {
+    double? panelMaxWidth,
+  }) {
     MoreActionPopup.show(
       context: context,
+      panelMaxWidth: panelMaxWidth,
       config: MediaPostMoreActionConfig(
         showShareAction: false,
         showViewOriginalAction: false,
@@ -583,12 +580,12 @@ class HomeMultiFormFeed extends ConsumerWidget {
   }) async {
     final result = await const DefaultContentShareActionHandler().execute(
       context,
-      _buildShareTemplate(
-        ref: ref,
+      buildDiscoveryShareTemplate(
         post: post,
+        wire: _rawDiscoveryItem(ref, post.id),
         enableIdentityTemplate: enableIdentityTemplate,
       ),
-      const ContentShareAction(
+      ContentShareAction(
         id: 'copy_link',
         label: UITextConstants.copyLink,
       ),
@@ -596,25 +593,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
     if (result.success) {
       await _recordShare(ref, post.id, result.actionId);
     }
-  }
-
-  ContentShareTemplate _buildShareTemplate({
-    required WidgetRef ref,
-    required PostBaseDto post,
-    required bool enableIdentityTemplate,
-  }) {
-    final wire = _rawDiscoveryItem(ref, post.id);
-    final circleName = wire?.circleName ?? '';
-    final surfaceView = ContentSurfaceViewMapper.fromDto(
-      post,
-      wire: wire?.toWireMap(),
-    );
-    return ContentShareTemplateBuilder.build(
-      surfaceView: surfaceView,
-      enableIdentityTemplate: enableIdentityTemplate,
-      visibility: wire?.visibility ?? 'public',
-      circleNames: circleName.isEmpty ? const <String>[] : <String>[circleName],
-    );
   }
 
   Future<void> _recordShare(
@@ -1015,7 +993,7 @@ class _HomeRelationPostCard extends ConsumerStatefulWidget {
   final VoidCallback onCommentTap;
   final VoidCallback onShareTap;
   final VoidCallback onLikeTap;
-  final VoidCallback onMoreTap;
+  final void Function(double cardWidth) onMoreTap;
 
   @override
   ConsumerState<_HomeRelationPostCard> createState() =>
@@ -1046,178 +1024,185 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
-    final isDark = widget.isDark;
-    final fg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final muted = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    final cardBg = SettingsSemanticConstants.conversationSheetCardSurface(
-      isDark,
-    );
-    final cardBorder = widget.wideLayout
-        ? SettingsSemanticConstants.conversationSheetCardBorderColor(isDark)
-        : AppColors.transparent;
-    final borderRadius = widget.wideLayout
-        ? BorderRadius.circular(AppSpacing.contentPreviewCornerRadius)
-        : BorderRadius.zero;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final item = widget.item;
+        final isDark = widget.isDark;
+        final cardWidth = constraints.hasBoundedWidth && constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final fg = AppColorsFunctional.getColor(
+          isDark,
+          ColorType.foregroundPrimary,
+        );
+        final muted = AppColorsFunctional.getColor(
+          isDark,
+          ColorType.foregroundSecondary,
+        );
+        final cardBg = SettingsSemanticConstants.conversationSheetCardSurface(
+          isDark,
+        );
+        final cardBorder = widget.wideLayout
+            ? SettingsSemanticConstants.conversationSheetCardBorderColor(isDark)
+            : AppColors.transparent;
+        final borderRadius = widget.wideLayout
+            ? BorderRadius.circular(AppSpacing.contentPreviewCornerRadius)
+            : BorderRadius.zero;
 
-    return DecoratedBox(
-      key: widget.cardContainerKey,
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: borderRadius,
-        border: Border.all(color: cardBorder, width: AppSpacing.hairline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.containerMd,
-          _feedCardVerticalPadding,
-          AppSpacing.containerMd,
-          _feedCardVerticalPadding,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        return DecoratedBox(
+          key: widget.cardContainerKey,
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: borderRadius,
+            border: Border.all(color: cardBorder, width: AppSpacing.hairline),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              _feedCardVerticalPadding,
+              AppSpacing.containerMd,
+              _feedCardVerticalPadding,
+            ),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  onPressed: () => widget.onUserTap(item.authorId),
-                  child: RoundedSquareAvatar(
-                    size: AppSpacing.avatarUserSm,
-                    imageUrl: item.avatarUrl,
-                    name: item.displayName,
-                    borderRadius: AppSpacing.avatarUserSm / 2,
-                    backgroundColor: AppColors.iosSecondaryFill(context),
-                    fallbackIcon: CupertinoIcons.person_crop_circle_fill,
-                  ),
-                ),
-                SizedBox(width: AppSpacing.intraGroupMd),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      onPressed: () => widget.onUserTap(item.authorId),
+                      child: RoundedSquareAvatar(
+                        size: AppSpacing.avatarUserSm,
+                        imageUrl: item.avatarUrl,
+                        name: item.displayName,
+                        borderRadius: AppSpacing.avatarUserSm / 2,
+                        backgroundColor: AppColors.iosSecondaryFill(context),
+                        fallbackIcon: CupertinoIcons.person_crop_circle_fill,
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.intraGroupMd),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              item.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize:
-                                    AppTypography.feedAuthorNameResponsive(
-                                      context,
-                                    ),
-                                fontWeight: AppTypography.medium,
-                                color: fg,
-                                letterSpacing: -0.08,
-                                height: AppSpacing.textLineHeightDense,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.displayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize:
+                                        AppTypography.feedAuthorNameResponsive(
+                                          context,
+                                        ),
+                                    fontWeight: AppTypography.medium,
+                                    color: fg,
+                                    letterSpacing: -0.08,
+                                    height: AppSpacing.textLineHeightDense,
+                                  ),
+                                ),
                               ),
-                            ),
+                              SizedBox(width: AppSpacing.intraGroupXs),
+                              _HomeFeedMoreButton(
+                                key: widget.moreButtonKey,
+                                isDark: isDark,
+                                color: muted,
+                                onPressed: () => widget.onMoreTap(cardWidth),
+                              ),
+                            ],
                           ),
-                          SizedBox(width: AppSpacing.intraGroupXs),
-                          _HomeFeedMoreButton(
-                            key: widget.moreButtonKey,
-                            isDark: isDark,
-                            color: muted,
-                            onPressed: widget.onMoreTap,
+                          const SizedBox(height: AppSpacing.two),
+                          Text(
+                            _buildMetaLine(context),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppTypography.iosCaption1,
+                              color: muted,
+                              letterSpacing: -0.04,
+                              height: AppSpacing.one,
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: AppSpacing.two),
-                      Text(
-                        _buildMetaLine(context),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosCaption1,
-                          color: muted,
-                          letterSpacing: -0.04,
-                          height: AppSpacing.one,
-                        ),
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+
+                // 交集理由位（一行 displayText，只读；无来源不展示）
+                if (_intersectionReasonText != null) ...[
+                  const SizedBox(height: _feedCardSectionGap),
+                  IntersectionReasonChip(
+                    text: _intersectionReasonText!,
+                    isDark: isDark,
                   ),
+                ],
+
+                // 正文（5 行截断 + 就地展开）
+                if (item.normalizedBody.isNotEmpty) ...[
+                  const SizedBox(height: _feedCardSectionGap),
+                  _ExpandableText(
+                    text: item.normalizedBody,
+                    maxLines: _maxLines,
+                    isDark: isDark,
+                    expanded: _isExpanded,
+                    onToggle: () => setState(() => _isExpanded = !_isExpanded),
+                  ),
+                ],
+
+                // 图片区域（自适应宫格）
+                if (item.hasImages) ...[
+                  const SizedBox(height: _feedCardSectionGap),
+                  widget.inlineImageCarousel
+                      ? _HomeFeedImageCarousel(
+                          urls: item.imageUrls,
+                          isDark: isDark,
+                          onTap: widget.onImageTap,
+                        )
+                      : _HomeFeedImageGrid(
+                          urls: item.imageUrls,
+                          isDark: isDark,
+                          onTap: widget.onImageTap,
+                        ),
+                ],
+
+                // 视频卡片
+                if (item.hasVideo && !item.hasImages) ...[
+                  const SizedBox(height: _feedCardSectionGap),
+                  _HomeFeedVideoCard(
+                    dto: item,
+                    isDark: isDark,
+                    onTap: () => widget.onImageTap(0),
+                  ),
+                ],
+
+                // 互动栏
+                const SizedBox(height: _feedCardSectionGap),
+                _ActionRow(
+                  item: item,
+                  isDark: isDark,
+                  isLiked: widget.isLiked,
+                  likeCount: widget.likeCount,
+                  likeCtrl: _likeCtrl,
+                  onLike: () {
+                    HapticFeedback.lightImpact();
+                    _likeCtrl.forward(from: 0);
+                    widget.onLikeTap();
+                  },
+                  onComment: widget.onCommentTap,
+                  onShare: widget.onShareTap,
                 ),
               ],
             ),
-
-            // 交集理由位（一行 displayText，只读；无来源不展示）
-            if (_intersectionReasonText != null) ...[
-              const SizedBox(height: _feedCardSectionGap),
-              IntersectionReasonChip(
-                text: _intersectionReasonText!,
-                isDark: isDark,
-              ),
-            ],
-
-            // 正文（5 行截断 + 就地展开）
-            if (item.normalizedBody.isNotEmpty) ...[
-              const SizedBox(height: _feedCardSectionGap),
-              _ExpandableText(
-                text: item.normalizedBody,
-                maxLines: _maxLines,
-                isDark: isDark,
-                expanded: _isExpanded,
-                onToggle: () => setState(() => _isExpanded = !_isExpanded),
-              ),
-            ],
-
-            // 图片区域（自适应宫格）
-            if (item.hasImages) ...[
-              const SizedBox(height: _feedCardSectionGap),
-              widget.inlineImageCarousel
-                  ? _HomeFeedImageCarousel(
-                      urls: item.imageUrls,
-                      isDark: isDark,
-                      onTap: widget.onImageTap,
-                    )
-                  : _HomeFeedImageGrid(
-                      urls: item.imageUrls,
-                      isDark: isDark,
-                      onTap: widget.onImageTap,
-                    ),
-            ],
-
-            // 视频卡片
-            if (item.hasVideo && !item.hasImages) ...[
-              const SizedBox(height: _feedCardSectionGap),
-              _HomeFeedVideoCard(
-                dto: item,
-                isDark: isDark,
-                onTap: () => widget.onImageTap(0),
-              ),
-            ],
-
-            // 互动栏
-            const SizedBox(height: _feedCardSectionGap),
-            _ActionRow(
-              item: item,
-              isDark: isDark,
-              isLiked: widget.isLiked,
-              likeCount: widget.likeCount,
-              likeCtrl: _likeCtrl,
-              onLike: () {
-                HapticFeedback.lightImpact();
-                _likeCtrl.forward(from: 0);
-                widget.onLikeTap();
-              },
-              onComment: widget.onCommentTap,
-              onShare: widget.onShareTap,
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 

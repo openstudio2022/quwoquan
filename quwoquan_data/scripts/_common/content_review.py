@@ -7,7 +7,7 @@ import re
 from typing import Iterable
 
 from _common.io import read_json
-from _common.paths import batch_command_root, batch_inputs_dir
+from _common.paths import batch_command_root
 from _common.fact_coverage import FACT_COVERAGE_ALIASES, fact_covered
 from _common.template_fingerprints import template_fingerprint_issues
 
@@ -254,9 +254,10 @@ def check_factual_grounding(article_path: Path, task: str | None = None, batch: 
     ref = article_path.parent.name
     issues: list[str] = []
     if task and batch:
-        brief_path = batch_inputs_dir(task, batch, "produce", "compose") / f"{ref}.json"
-        if brief_path.exists():
-            brief = read_json(brief_path)
+        from _common.content_object import read_brief_object
+
+        brief = read_brief_object(task, batch, ref)
+        if brief:
             for fact in [str(x) for x in (brief.get("mustIncludeFacts") or []) if x]:
                 if not fact_covered(fact, article):
                     issues.append(f"{ref}: mustIncludeFact not reflected: {fact}")

@@ -9,8 +9,8 @@ import urllib.parse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-_DEFAULT_GROUP_AVATAR = "media/avatar/group/fixture_conv_group/v1/composite.png"
-_PHOTO_GROUP_AVATAR = "media/avatar/group/fixture_conv_photo_group/v1/composite.png"
+_DEFAULT_GROUP_AVATAR = "media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png"
+_PHOTO_GROUP_AVATAR = "media/avatar/s/archived-avatar/group/fixture_conv_photo_group/v1/composite.png"
 _CONVERSATION_AVATAR_ALIASES = {
     "conv_002": _DEFAULT_GROUP_AVATAR,
     "conv_006": _PHOTO_GROUP_AVATAR,

@@ -20,7 +20,6 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
-import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
@@ -483,10 +482,10 @@ void main() {
       // 加号后置登录：先出现动作面板，不弹登录页。
       expect(find.byType(LoginPage), findsNothing);
       expect(find.text(UITextConstants.createActionWrite), findsOneWidget);
-      expect(find.text(UITextConstants.addSameInterest), findsOneWidget);
+      expect(find.text(UITextConstants.addContactSheetTitle), findsOneWidget);
 
-      // 选「加好友」这一账号态动作时才触发登录。
-      await tester.tap(find.text(UITextConstants.addSameInterest));
+      // 选「添加联系人」这一账号态动作时才触发登录。
+      await tester.tap(find.text(UITextConstants.addContactSheetTitle));
       await tester.pumpAndSettle();
 
       expect(find.byType(LoginPage), findsOneWidget);
@@ -877,7 +876,15 @@ void main() {
       expect(find.byType(WelcomeFlowerMark), findsOneWidget);
       expect(find.byType(WebAppInstallBanner), findsNothing);
 
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, -260));
+      final recommendedTab = find
+          .text(UITextConstants.homeTabRecommended)
+          .first;
+      final tabLeftBeforePinned = tester.getTopLeft(recommendedTab).dx;
+
+      await tester.drag(
+        find.byKey(const ValueKey<String>('web-shell-scroll')),
+        const Offset(0, -260),
+      );
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(
@@ -900,14 +907,24 @@ void main() {
         find.byKey(const ValueKey<String>('web-primary-profile')),
         findsOneWidget,
       );
+      expect(
+        tester.getSize(find.byKey(const ValueKey<String>('web-primary-home'))),
+        tester.getSize(
+          find.byKey(const ValueKey<String>('web-primary-create')),
+        ),
+      );
       expect(find.text(UITextConstants.homeTabFollowing), findsOneWidget);
       expect(find.text(UITextConstants.homeTabRecommended), findsWidgets);
       expect(find.text(UITextConstants.webPcSearchHintHome), findsOneWidget);
       expect(find.text(UITextConstants.globalXiaoquSearchAsk), findsNothing);
-      expect(find.byType(AppCachedNetworkImage), findsWidgets);
+      // 首页内容流复用移动端 HomeMultiFormFeed（多列 + 同源埋点），而非 Web 自绘卡片。
+      expect(
+        find.byKey(const ValueKey<String>('web-content-feed-recommend')),
+        findsOneWidget,
+      );
 
       final scrollView = tester.widget<CustomScrollView>(
-        find.byType(CustomScrollView),
+        find.byKey(const ValueKey<String>('web-shell-scroll')),
       );
       scrollView.controller!.jumpTo(0);
       await tester.pump(const Duration(milliseconds: 120));
@@ -918,6 +935,7 @@ void main() {
         find.byKey(const ValueKey<String>('web-toolbar-brand')),
         findsOneWidget,
       );
+      expect(tester.getTopLeft(recommendedTab).dx, tabLeftBeforePinned);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('web-primary-featured')),
@@ -992,7 +1010,10 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, -260));
+      await tester.drag(
+        find.byKey(const ValueKey<String>('web-shell-scroll')),
+        const Offset(0, -260),
+      );
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(
         find.byKey(const ValueKey<String>('web-primary-create')),

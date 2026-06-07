@@ -43,8 +43,8 @@ http://<current-public-ip>:18200
 3. 本机抽样验证：
 
 ```bash
-curl -I "https://<your-tunnel-domain>/media/avatar/user/fixture_user_current/v1/avatar.png"
-curl -I "https://<your-tunnel-domain>/media/image/post/fixture_photo_001/v1/cover.png"
+curl -I "https://<your-tunnel-domain>/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png"
+curl -I "https://<your-tunnel-domain>/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
 ```
 
 若是“公网 IP 直连模式”，可额外从公网侧检查端口是否真的打开：

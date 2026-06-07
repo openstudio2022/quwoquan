@@ -11,7 +11,7 @@
         "cityWalk"
       ],
       "portraitSourceIds": [
-        "portrait_legacy_photography_01",
+        "portrait_archived_photography_01",
         "portrait_curated_design_02"
       ],
       "backgroundSourceIds": [
@@ -53,7 +53,7 @@
         "outdoor"
       ],
       "portraitSourceIds": [
-        "portrait_legacy_travel_01",
+        "portrait_archived_travel_01",
         "portrait_curated_outdoor_01"
       ],
       "backgroundSourceIds": [
@@ -95,8 +95,8 @@
         "coffee"
       ],
       "portraitSourceIds": [
-        "portrait_legacy_city_01",
-        "portrait_legacy_photography_01"
+        "portrait_archived_city_01",
+        "portrait_archived_photography_01"
       ],
       "backgroundSourceIds": [
         "scene_city_01",
@@ -137,7 +137,7 @@
         "lifestyle"
       ],
       "portraitSourceIds": [
-        "portrait_legacy_food_01",
+        "portrait_archived_food_01",
         "portrait_curated_family_01"
       ],
       "backgroundSourceIds": [
@@ -180,7 +180,7 @@
       ],
       "portraitSourceIds": [
         "portrait_curated_writing_01",
-        "portrait_legacy_lifestyle_01"
+        "portrait_archived_lifestyle_01"
       ],
       "backgroundSourceIds": [
         "object_coffee_01",
@@ -221,8 +221,8 @@
         "parenting"
       ],
       "portraitSourceIds": [
-        "portrait_legacy_lifestyle_01",
-        "portrait_legacy_design_01"
+        "portrait_archived_lifestyle_01",
+        "portrait_archived_design_01"
       ],
       "backgroundSourceIds": [
         "scene_lifestyle_home_01",
@@ -306,7 +306,7 @@
       ],
       "portraitSourceIds": [
         "portrait_curated_family_01",
-        "portrait_legacy_food_01"
+        "portrait_archived_food_01"
       ],
       "backgroundSourceIds": [
         "scene_pet_01",
@@ -390,7 +390,7 @@
       ],
       "portraitSourceIds": [
         "portrait_curated_outdoor_01",
-        "portrait_legacy_travel_01"
+        "portrait_archived_travel_01"
       ],
       "backgroundSourceIds": [
         "scene_outdoor_peak_01",
@@ -432,7 +432,7 @@
       ],
       "portraitSourceIds": [
         "portrait_curated_tech_01",
-        "portrait_legacy_city_01"
+        "portrait_archived_city_01"
       ],
       "backgroundSourceIds": [
         "scene_tech_01",
@@ -474,7 +474,7 @@
       ],
       "portraitSourceIds": [
         "portrait_curated_writing_01",
-        "portrait_legacy_design_01"
+        "portrait_archived_design_01"
       ],
       "backgroundSourceIds": [
         "scene_design_office_01",

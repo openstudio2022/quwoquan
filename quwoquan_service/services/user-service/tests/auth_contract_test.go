@@ -116,9 +116,9 @@ func TestAuth_AnonymousLogin_ReusesOwnerAndCreatesSingleDeviceBinding(t *testing
 func TestAuth_AnonymousLogin_BackfillsDeviceBindingFromExistingCredential(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	ownerID := "uo_01_ad_00aa_legacyanonymousowner00000001"
-	subAccountID := "us_01_00aa_legacyanonymoussub000000001"
-	createTestProfile(t, ownerID, "legacy-anon")
+	ownerID := "uo_01_ad_00aa_anonowner00000001"
+	subAccountID := "us_01_00aa_anonowner000000001"
+	createTestProfile(t, ownerID, "anon-owner")
 	if _, err := pgPool.Exec(
 		context.Background(),
 		`UPDATE user_profiles
@@ -128,16 +128,16 @@ func TestAuth_AnonymousLogin_BackfillsDeviceBindingFromExistingCredential(t *tes
 		  WHERE user_id = $1`,
 		ownerID,
 	); err != nil {
-		t.Fatalf("update legacy anonymous profile: %v", err)
+		t.Fatalf("update anonymous profile: %v", err)
 	}
-	createTestPersonaFull(t, "", ownerID, subAccountID, "LegacyAnon", "open", true, true)
-	createTestCredential(t, "cred_legacy_anonymous", ownerID, "anonymous_device", "fp_legacy_device")
+	createTestPersonaFull(t, "", ownerID, subAccountID, "AnonProfile", "open", true, true)
+	createTestCredential(t, "cred_anonymous", ownerID, "anonymous_device", "fp_anonymous_device")
 
 	rec := doRequest(
 		t,
 		http.MethodPost,
 		"/v1/auth/login/anonymous",
-		`{"installId":"install-legacy-1","deviceFingerprintHash":"fp_legacy_device","platform":"android","appVersion":"2.0.0"}`,
+		`{"installId":"install-anonymous-1","deviceFingerprintHash":"fp_anonymous_device","platform":"android","appVersion":"2.0.0"}`,
 		nil,
 	)
 	if rec.Code != http.StatusOK {
@@ -156,7 +156,7 @@ func TestAuth_AnonymousLogin_BackfillsDeviceBindingFromExistingCredential(t *tes
 		context.Background(),
 		`SELECT count(*), min(owner_id), min(platform)
 		   FROM anonymous_device_bindings
-		  WHERE device_fingerprint_hash = 'fp_legacy_device'`,
+		WHERE device_fingerprint_hash = 'fp_anonymous_device'`,
 	).Scan(&bindingCount, &bindingOwnerID, &bindingPlatform); err != nil {
 		t.Fatalf("query backfilled anonymous device binding: %v", err)
 	}

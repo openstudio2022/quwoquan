@@ -117,9 +117,9 @@ List<IntersectionReason> _mockIntersectionReasons(
   List<ObjectRelationEdge> relationEdges,
 ) {
   final interestLabel = switch (homepage.homepageType) {
-    'university' => '你和这所学校有校园交集',
-    'travel_photo' || 'sight' => '你们都喜欢旅行与摄影',
-    _ => '你们都关注这些内容',
+    'university' => '校园交集',
+    'travel_photo' || 'sight' => '共同足迹',
+    _ => '共同关注',
   };
   final firstEdge = relationEdges.isNotEmpty ? relationEdges.first : null;
   return <IntersectionReason>[
@@ -145,10 +145,10 @@ List<IntersectionReason> _mockIntersectionReasons(
         tagRefs: homepage.categoryTags,
         relationKind: 'mutual',
         relationObjectId: firstEdge?.sourceObjectId ?? '',
-        label: '这里有你可能想加入的相关圈子',
+        label: '相关圈子',
         sharedCount: relationEdges.length,
         strength: 0.78,
-        displayText: '这里有你可能想加入的相关圈子',
+        displayText: '相关圈子',
         actionType: 'join',
         actionTargetId: firstEdge?.sourceObjectId ?? '',
         source: 'followEdge',
@@ -169,6 +169,11 @@ IntersectionReason _mockReasonWithPoint(
     label: reason.label,
     displayText: reason.displayText,
     sourceRef: reason.source,
+    count: reason.sharedCount,
+    sampleText: reason.displayName,
+    sampleAvatarUrls: reason.avatarUrl.trim().isNotEmpty
+        ? <String>[reason.avatarUrl.trim()]
+        : const <String>[],
   );
   final isRecommended = pointClass == 'recommended';
   return reason.copyWith(

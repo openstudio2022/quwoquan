@@ -7,30 +7,67 @@ node:
   parent_domain_service: chat-conversation
   parent_business_capability: realtime-call
 scope:
-  summary: one to one call 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 1v1 语音/视频通话端到端：发起、呼叫、接听/拒绝/超时、通话、挂断、通话记录。
+  in_scope:
+    - 互相关注门禁下的发起与状态机
+    - 呼出取消、振铃超时、忙线提示
+    - 挂断收尾与通话记录消息
+  out_of_scope:
+    - 多人房间（见 group-call）
 gwt_acceptance:
-  GWT1:
-    title: one to one call GWT
+  GWT1_initiate_and_answer:
+    title: 互相关注发起并接听 1v1 通话
     given:
-    - 前置条件明确。
+    - 双方为互相关注状态，被叫在线。
     when:
-    - 用户或系统动作发生。
+    - 主叫从会话输入区发起视频通话并被对方接听。
     then:
-    - 可观察结果符合预期。
+    - 双方进入通话页并渲染真实音视频流，状态机经 initiated→ringing→connecting→in_call。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 1v1 视频通话可建连且双方可见对方画面。
+    edge_cases:
+    - 被叫忙线时主叫收到结构化“对方正在通话中”提示。
+    contract_refs:
+    - rtc/call_session service.yaml InitiateCall
+    - rtc/call_session service.yaml AnswerCall
+    performance_points:
+    - 强网通话建立 ≤3s。
     evidence:
       primary:
-      - T1_contract
       - T2_module_interaction
-      supporting: []
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
     tests:
-      planned: []
+      planned:
+      - quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
+      recorded: []
+    status: pending
+  GWT2_reject_timeout_cancel:
+    title: 拒绝、超时与取消收尾
+    given:
+    - 主叫发起呼叫，被叫处于振铃态。
+    when:
+    - 被叫拒绝 / 30s 未接 / 主叫主动取消。
+    then:
+    - 通话结束并写入对应 endReason（rejected/no_answer/cancelled）与通话记录消息。
+    done_when:
+    - 三种收尾路径均可达且状态一致。
+    edge_cases:
+    - 主叫取消与被叫接听竞态时以服务端状态机为准。
+    contract_refs:
+    - rtc/call_session service.yaml RejectCall
+    - rtc/call_session service.yaml CancelCall
+    performance_points:
+    - 状态同步延迟 ≤500ms。
+    evidence:
+      primary:
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned:
+      - quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
       recorded: []
     status: pending
 execution:

@@ -17,6 +17,7 @@ class PlatformCapabilities {
     required this.camera,
     required this.realtimeCommunication,
     required this.incomingCallUi,
+    required this.webPushIncomingCall,
     required this.nativeVideoEditing,
     required this.secureStorage,
     required this.backgroundAudio,
@@ -38,7 +39,16 @@ class PlatformCapabilities {
   final bool realtimeCommunication;
 
   /// Native incoming-call UI (CallKit / VoIP / system call screen).
+  ///
+  /// True on mobile (iOS CallKit / Android 全屏意图)；web / desktop / 初始 ohos
+  /// 无原生来电屏，需走 [webPushIncomingCall] 或站内弹窗降级。
   final bool incomingCallUi;
+
+  /// Web Push + Service Worker 后台来电通知能力。
+  ///
+  /// 仅 web 为 true：后台经 Web Push 通知点击进会；前台走站内弹窗。
+  /// 原生端为 false（用 [incomingCallUi]）。业务只读能力位决定唤醒通道与降级。
+  final bool webPushIncomingCall;
 
   /// Native video trim/mute/export via platform channel.
   final bool nativeVideoEditing;
@@ -68,6 +78,7 @@ class PlatformCapabilities {
     bool? camera,
     bool? realtimeCommunication,
     bool? incomingCallUi,
+    bool? webPushIncomingCall,
     bool? nativeVideoEditing,
     bool? secureStorage,
     bool? backgroundAudio,
@@ -82,6 +93,7 @@ class PlatformCapabilities {
       realtimeCommunication:
           realtimeCommunication ?? this.realtimeCommunication,
       incomingCallUi: incomingCallUi ?? this.incomingCallUi,
+      webPushIncomingCall: webPushIncomingCall ?? this.webPushIncomingCall,
       nativeVideoEditing: nativeVideoEditing ?? this.nativeVideoEditing,
       secureStorage: secureStorage ?? this.secureStorage,
       backgroundAudio: backgroundAudio ?? this.backgroundAudio,
@@ -108,6 +120,7 @@ class CapabilityProfile {
     camera: true,
     realtimeCommunication: true,
     incomingCallUi: true,
+    webPushIncomingCall: false,
     nativeVideoEditing: true,
     secureStorage: true,
     backgroundAudio: true,
@@ -122,6 +135,7 @@ class CapabilityProfile {
     camera: true,
     realtimeCommunication: true,
     incomingCallUi: false,
+    webPushIncomingCall: true,
     nativeVideoEditing: false,
     secureStorage: false,
     backgroundAudio: false,
@@ -138,6 +152,7 @@ class CapabilityProfile {
     camera: true,
     realtimeCommunication: false,
     incomingCallUi: false,
+    webPushIncomingCall: false,
     nativeVideoEditing: false,
     secureStorage: true,
     backgroundAudio: true,
@@ -152,6 +167,7 @@ class CapabilityProfile {
     camera: false,
     realtimeCommunication: true,
     incomingCallUi: false,
+    webPushIncomingCall: false,
     nativeVideoEditing: false,
     secureStorage: true,
     backgroundAudio: true,

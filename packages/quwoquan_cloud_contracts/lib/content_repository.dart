@@ -161,8 +161,6 @@ abstract class ContentCommentRepository {
     required String postId,
     required String commentId,
   });
-  Future<void> likeComment({required String commentId});
-  Future<void> unlikeComment({required String commentId});
   Future<CommentDto> reactToComment({
     required String commentId,
     required String reaction,

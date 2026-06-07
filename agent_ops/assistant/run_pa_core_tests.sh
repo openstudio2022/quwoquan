@@ -49,7 +49,7 @@ BUCKET_A_TESTS=(
 echo "[pa-core] ── Bucket A: flutter test (pure VM, no network) ─────────────────"
 for t in "${BUCKET_A_TESTS[@]}"; do
   echo "[pa-core] -> $t"
-  flutter test "$t" --no-pub -r compact 2>&1 || {
+  python3 scripts/env/run_flutter_test_guarded.py "$t" -r compact 2>&1 || {
     echo "[pa-core] FAIL: $t" >&2
     exit 1
   }
@@ -74,7 +74,7 @@ BUCKET_B_TESTS=(
 echo "[pa-core] ── Bucket B: flutter test (engine integration) ─────────────────"
 for t in "${BUCKET_B_TESTS[@]}"; do
   echo "[pa-core] -> $t"
-  flutter test "$t" --no-pub -r compact 2>&1 || {
+  python3 scripts/env/run_flutter_test_guarded.py "$t" -r compact 2>&1 || {
     echo "[pa-core] FAIL: $t" >&2
     exit 1
   }
@@ -94,7 +94,7 @@ BUCKET_C_TESTS=(
 echo "[pa-core] ── Bucket C: flutter test (UI contract) ────────────────────────"
 for t in "${BUCKET_C_TESTS[@]}"; do
   echo "[pa-core] -> $t"
-  flutter test "$t" --no-pub -r compact 2>&1 || {
+  python3 scripts/env/run_flutter_test_guarded.py "$t" -r compact 2>&1 || {
     echo "[pa-core] FAIL (flutter test): $t" >&2
     exit 1
   }

@@ -125,7 +125,7 @@ python3 quwoquan_data/tools/cli.py crawl feedback-verify --spec <spec>
 
 ```bash
 python3 quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py
-python3 quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py
+python3 quwoquan_data/scripts/cli.py verify --scope current
 ```
 
 ### manual

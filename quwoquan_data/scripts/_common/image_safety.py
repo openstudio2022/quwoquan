@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import struct
@@ -356,6 +357,49 @@ def is_near_duplicate(path_a: str | Path, path_b: str | Path, *, threshold: int 
     if ha is None or hb is None:
         return False
     return bool((ha - hb) <= threshold)
+
+
+def _avg_hash_bytes(data: bytes):
+    if not _HASH_OK or not data:
+        return None
+    import io
+
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            return imagehash.average_hash(im.convert("RGB"))
+    except Exception:
+        return None
+
+
+def dedupe_image_payloads(
+    payloads: Sequence[dict], *, threshold: int = NEAR_DUP_HAMMING
+) -> tuple[list[dict], list[int]]:
+    """对内存图片字节按感知哈希去重（下载落盘前），保留先出现者。
+
+    每项需含 "bytes"。返回 (保留项, 被判重复的原索引列表)。
+    哈希后端缺失时退化为按 sha256/字节恒等去重，绝不放水成「全保留」。
+    """
+    kept: list[dict] = []
+    kept_hashes: list = []
+    seen_sha: set[str] = set()
+    dup_indices: list[int] = []
+    for idx, payload in enumerate(payloads):
+        data = payload.get("bytes") if isinstance(payload, dict) else None
+        if not data:
+            continue
+        sha = payload.get("sha256") or hashlib.sha256(data).hexdigest()
+        if sha in seen_sha:
+            dup_indices.append(idx)
+            continue
+        h = _avg_hash_bytes(data)
+        if h is not None and any((h - kh) <= threshold for kh in kept_hashes):
+            dup_indices.append(idx)
+            continue
+        seen_sha.add(sha)
+        if h is not None:
+            kept_hashes.append(h)
+        kept.append(payload)
+    return kept, dup_indices
 
 
 def dedupe_images(paths: Sequence[str | Path], *, threshold: int = NEAR_DUP_HAMMING) -> list[Path]:

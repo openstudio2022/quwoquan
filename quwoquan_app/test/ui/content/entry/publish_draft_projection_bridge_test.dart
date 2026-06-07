@@ -149,9 +149,9 @@ void main() {
         articleDocument: document,
         articleBlocks: const <CreateTextBlock>[
           CreateTextBlock(
-            id: 'legacy',
+            id: 'block_1',
             type: CreateTextBlockType.paragraph,
-            text: 'legacy blocks 不应进入 Markdown',
+            text: 'blocks 不应进入 Markdown',
           ),
         ],
       );
@@ -165,7 +165,7 @@ void main() {
         contains(':::figure id="fig1" layout="wrapLeft" caption="节点图注"'),
       );
       expect(markdown, contains('节点正文第一段。'));
-      expect(markdown, isNot(contains('legacy blocks')));
+      expect(markdown, isNot(contains('blocks 不应进入 Markdown')));
     });
 
     test('draft storage persists Markdown triple and can restore document', () {

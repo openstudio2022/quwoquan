@@ -299,30 +299,15 @@ RelationshipCapabilityDto _copyCapabilityWithFollowState(
   RelationshipCapabilityDto capability,
   bool isFollowing,
 ) {
-  final next = RelationshipCapabilityDto.fromFollowFlags(
+  return RelationshipCapabilityDto.fromFollowFlags(
     viewerId: capability.viewerSubAccountId,
     targetId: capability.targetSubAccountId,
     isFollowing: isFollowing,
     isFollowedBy: capability.targetFollowsViewer,
-    closeFriend: capability.isCloseFriend,
-  );
-  return RelationshipCapabilityDto(
-    viewerSubAccountId: capability.viewerSubAccountId,
-    targetSubAccountId: capability.targetSubAccountId,
-    relationState: next.relationState,
-    relationTier: next.relationTier,
-    canFollow: next.canFollow,
-    canUnfollow: next.canUnfollow,
-    canMessage: next.canMessage,
-    canFollowBack: next.canFollowBack,
-    canGreet: next.canGreet,
-    canOpenConversation: next.canOpenConversation,
-    canAddSameInterest: next.canAddSameInterest,
-    canSetCloseFriend: next.canSetCloseFriend,
-    canStartVoiceCall: next.canStartVoiceCall,
-    canStartVideoCall: next.canStartVideoCall,
     isBlocked: capability.isBlocked,
     isBlockedBy: capability.isBlockedBy,
+    hasFormalConversation: capability.hasFormalConversation,
+    hasPendingGreeting: capability.hasPendingGreeting,
   );
 }
 

@@ -50,15 +50,13 @@ sit_acceptance:
       - runtime/recpolicy/policy_test.go
       - runtime/recpolicy/store_test.go
       - runtime/recpolicy/sync_test.go
-      - runtime/recommendation/engine_test.go::TestEngine_SegmentTargeting_DrivesPolicyResolution
+      - runtime/recommendation/engine_test.go
       - services/content-service/internal/infrastructure/recommendation/segment_test.go
       - scripts/recommendation/test_rec_policy_advisor.py
       - scripts/recommendation/test_eval_content_flywheel_loop.py
       - deploy/monitoring/dashboards/l2_content_flywheel.json
-      - deploy/monitoring/alerts/quwoquan_alerts.yaml::quwoquan_content_flywheel
-      - make verify-metadata
-      - make verify-rec-policy-advisor
-      - make verify-content-flywheel-tests
+      - deploy/monitoring/alerts/quwoquan_alerts.yaml
+      - quwoquan_service/tools/verify_metadata/main_test.go
     status: implemented
 execution:
   local_gate:

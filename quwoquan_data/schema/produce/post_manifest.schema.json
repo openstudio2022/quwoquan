@@ -29,8 +29,6 @@
     "citedSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文创作时引用的 source 证据路径" },
     "reviewDecision": { "type": "string", "enum": ["approved", "revision_needed", "rejected"] },
     "articleMarkdownVersion": { "type": "string" },
-    "articleMarkdownDigest": { "type": "string" },
-    "articleAssetManifest": { "type": "object" },
     "articleRenderProfile": { "type": "object" },
     "publishLayout": { "type": "string" },
     "publishAngle": { "type": "string" },

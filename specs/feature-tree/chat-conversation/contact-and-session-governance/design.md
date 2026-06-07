@@ -1,38 +1,30 @@
-# 联系人与会话治理设计方案
+# 关注、拉黑与私信治理设计方案
 
 ## 设计动因
 
-`contact-and-session-governance/spec.md` 已冻结“关注 -> 打招呼 -> 回复建会话 -> 会话内加同好 -> 同好/密友”的产品链路，但现有端云基础只具备：
+`contact-and-session-governance/spec.md` 已冻结单一关系概念：`关注`。现有端云基础有 `FollowEdge`、`BlockEdge`、`Conversation` 和部分能力位，但缺少三条闭环：
 
-- `FollowEdge`：关注/互关布尔关系
-- `BlockEdge`：用户级阻断
-- `Conversation`：正式会话容器
-- `UserSetting.allowStrangerMsg`：陌生人消息设置
+1. 拉黑写入后的关注边清理、请求失效、事件发布和服务端强门禁。
+2. 打招呼请求箱到正式私信的升级语义。
+3. 主页、会话、消息发送、RTC 发起共享同一份关系能力真相源。
 
-缺失的是中间层：
-
-1. 未回复前的接触请求容器
-2. 正式会话与请求箱的升级语义
-3. 同好/密友能力位的统一真相源
-4. 对打招呼、会话升级、RTC 门禁、对象级治理的统一判定
-
-如果直接把打招呼落成正式 `Conversation`，会污染普通聊天列表，也会让 RTC、群治理、请求箱的状态语义全部耦合到聊天主容器中。因此本设计采用“请求箱对象 + 正式会话升级 + 能力位投影”的分层方案。
+本设计采用“关注边 + 拉黑门禁 + 请求箱对象 + 正式会话升级 + 能力位投影”的分层方案。`mutual` 仅表示两条关注边同时存在，不命名为额外关系等级。
 
 ## 上游输入评审
 
-- `spec.md` 已冻结五态关系、请求箱边界、群治理边界和 RTC 门禁语义
-- `realtime-call/spec.md` 已冻结 1v1/多人通话、多人选择规则、通话中加人与链接入会
-- `group-settings/spec.md` 已冻结群设置页只保留 `退出群聊`
-- 当前无额外产品阻断项
+- `spec.md` 已冻结关注状态机、拉黑级联、请求箱边界、正式私信门禁和 RTC 服务端门禁。
+- `realtime-call/spec.md` 需跟随本设计，把 1v1 门禁从旧关系词迁移为 `mutual + !blocked`。
+- `group-settings` 继续只承担群会话设置与退出；拉黑是用户对象级门禁。
+- 本 L2 不定义群组空间、相册和文件库。
 
 ## 对标输入分析
 
-| 对标 | 借鉴 | 不借鉴 | 当前差距 |
-|------|------|--------|---------|
-| 微信好友申请 | 请求箱与正式会话分层、先通过再进入稳定沟通 | 强行把所有申请都做成会话 | 当前缺请求箱对象 |
-| Instagram 私信请求 | 请求不污染主列表、由接收方决定是否升级 | 请求与正式私信并存过久导致心智混乱 | 当前缺会话升级语义 |
-| 微信联系人关系 | 同意后进入稳定联系人，可进一步强化关系 | 好友语义过强、无法表达密友层 | 当前仅有 follow 布尔值 |
-| Signal/WhatsApp 隐私门禁 | 由对象级 block/设置控制准入 | 以弱提醒代替强门禁 | 当前 allowStrangerMsg 未被 chat/rtc 消费 |
+| 对标 | 借鉴 | 不借鉴 | 本设计落点 |
+|------|------|--------|------------|
+| 微信申请流程 | 请求箱与正式会话分层、先通过再进入稳定沟通 | 复制第三方关系等级 | `GreetingRequest` 未回复不进普通会话列表 |
+| Instagram 私信请求 | 请求不污染主列表，由接收方决定是否升级 | 请求与正式私信长期并存 | 回复后创建或复用正式 1v1 conversation |
+| Signal/WhatsApp 隐私门禁 | 对象级 block 服务端强阻断 | 仅端侧隐藏入口 | CreateConversation、SendMessage、RTC 均复核 block |
+| 小红书/微博关注制 | 关注作为主要关系动作 | 额外好友等级 | FollowEdge 是唯一关系写侧真相源 |
 
 ## 方案对比
 
@@ -40,297 +32,222 @@
 
 #### 方案 A：直接创建正式会话
 
-打招呼一发送就创建 `Conversation(type=direct)`，在列表中标记为“待对方回复”。
+打招呼一发送就创建 `Conversation(type=direct)`，在列表中标记为“待回复”。
 
-**优点**：
-- 复用现有聊天对象与列表
-- 表层实现简单
-
-**缺点**：
-- 污染普通聊天列表
-- 会话状态需要承载“待回复/已忽略/被拒绝”非聊天语义
-- 后续同好/密友、RTC 门禁判断都要从 Conversation 反推
+缺点：污染普通会话列表，Conversation 承载过多非聊天状态，拉黑/忽略/过期会污染主链。
 
 #### 方案 B：独立 GreetingRequest，再升级 Conversation（选定）
 
-未回复前使用独立请求对象；回复后创建或升级为正式会话。
+未回复前使用独立请求对象；回复后创建或复用正式会话。
 
-**优点**：
-- 请求箱与正式会话职责清晰
-- 主聊天列表不被污染
-- 关系、治理、RTC 门禁更易统一
+优点：请求箱与正式会话职责清晰，主聊天列表不被污染，服务端门禁更易统一。
 
-**缺点**：
-- 需要新增 metadata 对象、事件和读模型
+### 对比 2：拉黑是否保留关注边
 
-### 对比 2：同好/密友如何建模
+#### 方案 A：拉黑只作为遮罩
 
-#### 方案 A：仅用 FollowEdge 布尔值推导
+创建 BlockEdge 后不清理 FollowEdge，取消拉黑后隐式恢复旧关注状态。
 
-`同好 = isMutual`，`密友` 作为前端本地标签或 `UserSetting` 字段。
+缺点：用户以为已断开关系，系统却隐式恢复，推荐、交集和通知也会看到脏关系。
 
-**优点**：
-- 初始成本低
+#### 方案 B：拉黑清理双方关注边（选定）
 
-**缺点**：
-- 密友缺乏稳定真相源
-- 无法为会话、RTC、推荐统一输出能力位
-- 取消关注后的关系回收难做审计
+创建 BlockEdge 后删除双方 FollowEdge，取消拉黑不自动恢复关注。
 
-#### 方案 B：FollowEdge + RelationshipTier 投影（选定）
+优点：用户语义清楚，推荐/交集事实边干净，取消拉黑后需要重新关注，避免隐式复联。
 
-保留 `FollowEdge` 作为底层边；通过新对象/新读模型统一输出 `none/following_only/same_interest/close_friend`。
-
-**优点**：
-- 互关与密友可统一计算与审计
-- 能给聊天页、主页、RTC 一次性输出能力位
-
-**缺点**：
-- 需要新增对象或至少新增 relation-tier 投影
-
-### 对比 3：RTC 门禁放在哪层
+### 对比 3：关系门禁放在哪层
 
 #### 方案 A：页面层零散判断
 
-资料页、聊天页、RTC Provider 各自判断是否展示语音/视频按钮。
+页面隐藏按钮，但服务端不拦截。
 
-**优点**：
-- 前端可快速落 UI
+缺点：可绕过，端云漂移。
 
-**缺点**：
-- 多处漂移
-- 云侧仍无法阻断绕过
+#### 方案 B：能力位 + 服务端强校验（选定）
 
-#### 方案 B：能力位统一下沉（选定）
+`RelationshipCapabilityView` 只负责读侧展示；CreateConversation、SendMessage、RTC 发起在服务端各自复核。
 
-关系层统一计算：
-
-- `canGreet`
-- `canOpenConversation`
-- `canAddSameInterest`
-- `canStartVoiceCall`
-- `canStartVideoCall`
-- `canSetCloseFriend`
-
-前端只消费能力位，云侧 API 同步复核。
-
-**优点**：
-- 单一真相源
-- 前后端语义一致
+优点：用户界面与真实权限一致，越权入口无法绕过。
 
 ## 关键设计决策
 
-### KD-1：请求箱对象（已定）
+### KD-1：唯一关系真相源
 
-新增独立对象 `GreetingRequest`，作为未升级前的请求容器。
-
-建议字段：
-
-| 字段 | 说明 |
-|------|------|
-| `id` | 请求 ID |
-| `requesterSubAccountId` | 发起方 |
-| `targetSubAccountId` | 接收方 |
-| `requestMessage` | 自定义内容 |
-| `status` | `pending/replied/ignored/rejected/cancelled/expired/blocked` |
-| `source` | `profile/conversation/invite/recommendation` |
-| `promotedConversationId` | 升级后的正式会话 |
-| `createdAt/updatedAt/decisionAt/expireAt` | 生命周期字段 |
-
-### KD-2：关系层输出（已定）
-
-底层保留 `FollowEdge`，上层统一输出 `RelationshipCapabilityView`：
+`FollowEdge` 是唯一关系写侧对象。读侧 `RelationshipState` 只派生：
 
 ```text
-relationTier: self | stranger | following_only | same_interest | close_friend
-isFollowing
-isFollowedBy
-isMutual
-isCloseFriend
-hasPendingGreeting
-hasFormalConversation
-canGreet
-canOpenConversation
-canAddSameInterest
-canStartVoiceCall
-canStartVideoCall
-canSetCloseFriend
+self
+not_following
+following
+followed_by
+mutual
 ```
 
-其中：
+禁止新增或保留旧关系等级字段。
 
-- `same_interest = isMutual`
-- `close_friend = isMutual && closeFriendFlag`
-- 取消关注后自动回收 `same_interest/close_friend` 能力
+### KD-2：BlockGate 级联
 
-### KD-3：会话升级语义（已定）
+创建 `BlockEdge(blocker, blocked)` 时：
 
-正式会话与请求箱分层：
+1. 幂等写入 BlockEdge。
+2. 删除 `blocker -> blocked` 与 `blocked -> blocker` 两条 FollowEdge。
+3. 将双方之间 pending GreetingRequest 标记为 `blocked`。
+4. 发布 `UserBlocked`。
+5. 既有 direct conversation 保留记录，但切成只读门禁态。
 
-```mermaid
-flowchart LR
-  stranger[Stranger] --> followOnly[FollowingOnly]
-  followOnly --> greetingPending[GreetingPending]
-  greetingPending -->|reply| formalConversation[FormalConversation]
-  formalConversation -->|addSameInterest| sameInterestConversation[SameInterestConversation]
-  sameInterestConversation -->|setCloseFriend| closeFriendConversation[CloseFriendConversation]
-  sameInterestConversation -->|unfollow| followOnly
-  closeFriendConversation -->|unfollow| followOnly
+取消拉黑时：
+
+1. 幂等删除 BlockEdge。
+2. 发布 `UserUnblocked`。
+3. 不恢复关注边，不恢复 blocked 请求。
+
+### KD-3：RelationshipCapabilityView
+
+统一输出读侧能力：
+
+```text
+relationState
+isBlocked
+isBlockedBy
+canFollow
+canUnfollow
+canGreet
+canCreateDirectConversation
+canSendMessage
+canStartVoiceCall
+canStartVideoCall
+hasPendingGreeting
+hasFormalConversation
+```
+
+页面只消费能力位；服务端 API 仍必须复核权限。
+
+### KD-4：请求箱对象
+
+`GreetingRequest` 是未升级前的请求容器，状态：
+
+```text
+pending
+replied
+ignored
+blocked
+cancelled
+expired
 ```
 
 规则：
 
-1. `GreetingPending` 不进入普通聊天列表
-2. `reply` 后进入 `FormalConversation`
-3. `FormalConversation` 但未互关时，在会话顶部展示“加同好”
-4. 升级为同好后，RTC 入口解锁
+1. 任一方向拉黑拒绝创建。
+2. `mutual` 不需要打招呼，直接进入正式私信。
+3. 同一 requester-target 只允许一条 pending。
+4. 回复 pending 请求时创建或复用 direct conversation，并写 `promotedConversationId`。
+5. 回复建会话不自动创建关注边。
 
-### KD-4：列表分层（已定）
+### KD-5：正式私信门禁
 
-列表拆成两层：
+`CreateConversation(type=direct)` 只允许两类来源：
 
-1. 请求箱
-   - 收件箱
-   - 发件箱
-2. 正式聊天列表
-   - 只展示正式 `Conversation`
+1. 双方 `mutual` 且未拉黑。
+2. `GreetingRequest.status=replied` 的升级流程。
 
-请求箱和正式聊天列表共享同一导航域，但数据源与 badge 分离，避免污染主聊天列表。
+其他状态返回 metadata 生成的结构化错误。
 
-### KD-5：免骚扰与阻断策略（已定）
+`SendMessage` 必须校验：
 
-`GreetingRequest.create` 前置校验：
+1. 发送者是 conversation 成员。
+2. direct conversation 双方任一方向未拉黑。
+3. conversation 未处于只读门禁态。
 
-1. `BlockEdge`：任一方拉黑，直接拒绝
-2. `allowStrangerMsg` / isolation policy：不允许陌生人打招呼则拒绝
-3. Pending 去重：同一对用户最多 1 条有效 pending 请求
-4. 频控：同一发起者对同一目标设置冷却期
+### KD-6：RTC 门禁
 
-云侧与端侧都消费同一错误码族。
+1v1 RTC 发起必须校验：
 
-### KD-6：对象级治理边界（已定）
+1. 双方 `mutual`。
+2. 任一方向未拉黑。
 
-1v1 与群聊中的举报/拉黑统一下沉到对象级：
+群 RTC 的成员选择规则由 `realtime-call` 继续定义，本设计只提供 1v1 用户关系门禁。
 
-- 用户对象：主页、成员卡片
-- 消息对象：长按菜单
-
-群对象当前不提供举报能力。
-
-### KD-7：前端状态分层（已定）
+### KD-7：前端状态分层
 
 推荐 Provider 分层：
 
 ```text
-relationshipProvider(userId)
+relationshipCapabilityProvider(userId)
 greetingInboxProvider()
 greetingOutboxProvider()
-conversationMetaProvider(conversationId)
 conversationCapabilityProvider(conversationId)
 composerUiProvider(conversationId)
 ```
 
-`ChatDetailPage` 只消费能力位，不自行推导互关、密友、待回复状态。
+`ChatDetailPage` 不自行推导关注或拉黑状态。
 
 ## Metadata-first 落地顺序
 
-### 1. 对象与字段
-
-建议顺序：
-
-1. 新增 `GreetingRequest`
-2. 新增/扩展 `RelationshipTier` 读模型
-3. 扩展 `Conversation` 的升级来源字段
-4. 扩展 `rtc/call_session/errors.yaml` 的门禁错误码
-
-### 2. API 与事件
-
-建议新增：
-
-- GreetingRequest API：
-  - `CreateGreetingRequest`
-  - `ListGreetingInbox`
-  - `ListGreetingOutbox`
-  - `ReplyGreetingRequest`
-  - `IgnoreGreetingRequest`
-  - `CancelGreetingRequest`
-- 关系 API：
-  - `AddSameInterest`
-  - `SetCloseFriend`
-  - `UnsetCloseFriend`
-  - `GetRelationshipCapability`
-- Events：
-  - `GreetingRequested`
-  - `GreetingReplied`
-  - `GreetingPromotedToConversation`
-  - `SameInterestGranted`
-  - `SameInterestRevoked`
-  - `CloseFriendSet`
-  - `CloseFriendUnset`
-
-### 3. 投影与读模型
-
-至少需要：
-
-- `greeting_inbox_view`
-- `relationship_capability_view`
-
-如果不先做投影，前端会同时依赖 `follow_edge + block_edge + conversation + settings + greeting_request` 多源拼装，风险过高。
+1. `_shared/types.yaml` 删除旧关系枚举与字段，只保留 RelationshipState。
+2. `user/follow_edge` 与 relationship capability 投影补齐能力位。
+3. `user/block_edge` 补级联事件和服务语义。
+4. `user/greeting_request` 补完整 API、事件、错误码与 storage 唯一索引。
+5. `messages/conversation` 补 CreateConversation/SendMessage 关系门禁错误码和升级来源字段。
+6. `rtc` 补 1v1 blocked/non-mutual 错误码。
+7. codegen 后再改 Go service、Dart repository/provider/UI。
 
 ## 扩展场景映射
 
 | 需求 | 扩展场景 |
 |------|----------|
-| 新增 GreetingRequest | `S01` 或 `S03` |
-| 扩展 Conversation 字段 | `S11` |
-| 新增请求/关系 API | `S05` / `S15` |
-| 新增事件 | `S06` |
-| 新增关系/请求投影 | `S07` |
+| 新增或补全 GreetingRequest | `S01` / `S03` |
+| 扩展 Conversation 升级来源字段 | `S11` |
+| 新增关系门禁错误码 | `S15` |
+| 新增 UserBlocked/UserUnblocked/GreetingRequestReplied 事件 | `S06` |
+| 新增关系能力投影 | `S07` |
 | 增加门禁契约测试 | `S20` |
 
 ## 与下游特性的协作
 
 ### 对 `realtime-call`
 
-- 提供 `canStartVoiceCall/canStartVideoCall`
-- `InitiateCall/InviteToCall` 必须复核关系门禁
+- 1v1 入口与服务端发起均消费 `mutual + !blocked`。
+- 文案与错误码不得再使用旧关系词。
 
 ### 对 `group-settings`
 
-- 提供群对象治理边界说明
-- 让群设置页只承担设置与退出，不承担举报/拉黑逻辑
+- 群设置页不提供拉黑群。
+- 成员卡片和成员主页提供用户级拉黑。
 
 ### 对 `profile/chat`
 
-- 主页消费五态按钮矩阵
-- 会话页消费“加同好关系条”
+- 主页消费关注状态动作矩阵。
+- 请求箱和普通会话列表分层展示。
+- blocked conversation 展示只读记录，不展示输入区和 1v1 RTC。
+
+### 对 `intersection-unified-experience`
+
+- 只消费关注边和共同关系事实，不新增关系名。
+- 拉黑后被清理的关注边不得继续作为交集事实。
 
 ## 风险与预案
 
-### 风险 1：对象建模过度分散
+### 风险 1：跨存储一致性
 
-如果请求箱、关系层、会话升级分别由多个服务临时维护，状态会飘。
+BlockEdge、FollowEdge、GreetingRequest、Conversation 分属不同存储或服务，拉黑级联容易出现竞态。
 
-**预案**：优先把请求对象和能力位统一到 `user/chat` 边界内，避免前端拼装多个不一致来源。
+**预案**：Block 写入必须发布事件；关注边清理和请求失效采用同步优先、事件补偿兜底；补偿任务可按 BlockEdge 反扫修复。
 
-### 风险 2：直接在 Conversation 上扩 pending 状态
+### 风险 2：服务端门禁遗漏
 
-会让正式聊天列表和请求箱边界被破坏。
+只隐藏端侧按钮会被 API 绕过。
 
-**预案**：请求独立建模，仅在升级成功后落正式会话。
+**预案**：CreateConversation、SendMessage、RTC 发起各自补 T3 契约测试，断言非授权状态不落库。
 
-### 风险 3：前端继续把能力判断分散在页面
+### 风险 3：旧关系词回流
 
-**预案**：设计阶段明确 provider 层输出能力位，页面只消费。
+旧规格和 UI 常量中仍存在旧词。
+
+**预案**：在 M0/M1 加静态扫描，禁止新增旧关系词作为关系等级；旧文档按本设计迁移。
 
 ## 适用场景与约束
 
-- **适用**：关注、打招呼、正式会话、同好/密友升级、1v1 RTC 门禁
-- **约束**：与 `user/follow_edge`、`user/block_edge`、`messages/conversation`、`rtc/call_session` 保持 metadata 一致
-- **局限性**：本设计不覆盖群对象举报，也不覆盖推荐算法判定同好
-
-## 未来演进
-
-1. 基于共同圈子/互动强度推荐“可能成为同好”
-2. 对密友增加专属排序或快捷入口
-3. 把请求箱与通知中心进一步融合
+- **适用**：关注、取消关注、拉黑、取消拉黑、打招呼、正式私信、1v1 RTC 门禁。
+- **约束**：与 `user/follow_edge`、`user/block_edge`、`user/greeting_request`、`messages/conversation`、`rtc` metadata 一致。
+- **局限性**：不覆盖群对象举报，不覆盖群组空间，不定义额外关系等级。

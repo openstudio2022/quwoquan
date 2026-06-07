@@ -20,10 +20,33 @@ import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exce
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_summary.g.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
-    show appLogUploaderProvider;
+    show appLogUploaderProvider, realtimeConnectionManagerProvider;
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
+
+void handleQuwoquanAppLifecycleState({
+  required AppLifecycleState state,
+  required VoidCallback refreshAppearance,
+  required VoidCallback onRealtimeForeground,
+  required VoidCallback onRealtimeBackground,
+}) {
+  switch (state) {
+    case AppLifecycleState.resumed:
+      refreshAppearance();
+      onRealtimeForeground();
+      break;
+    case AppLifecycleState.paused:
+    case AppLifecycleState.detached:
+    case AppLifecycleState.hidden:
+      onRealtimeBackground();
+      break;
+    case AppLifecycleState.inactive:
+      break;
+  }
+}
 
 void logQuwoquanAppException({
   required String source,
@@ -130,17 +153,15 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-
-    switch (state) {
-      case AppLifecycleState.resumed:
-        ref.read(appearanceSettingsControllerProvider.notifier).refresh();
-        break;
-      case AppLifecycleState.paused:
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.detached:
-      case AppLifecycleState.hidden:
-        break;
-    }
+    handleQuwoquanAppLifecycleState(
+      state: state,
+      refreshAppearance: () =>
+          ref.read(appearanceSettingsControllerProvider.notifier).refresh(),
+      onRealtimeForeground: () =>
+          ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground(),
+      onRealtimeBackground: () =>
+          ref.read(realtimeConnectionManagerProvider.notifier).onAppBackground(),
+    );
   }
 
   @override
@@ -200,6 +221,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       // 3. 欢迎结束后再装配完整路由，此时首页可直接消费已预热数据。
       ref.read(authSessionControllerProvider);
       ref.read(appLogUploaderProvider);
+      ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground();
       unawaited(
         ref.read(appearanceSettingsControllerProvider.notifier).ensureLoaded(),
       );
@@ -229,6 +251,11 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   @override
   Widget build(BuildContext context) {
     final snapshot = ref.watch(appearanceSnapshotProvider);
+    final platform = ref.watch(platformTargetProvider);
+
+    if (platform == AppPlatform.web) {
+      return _buildWebStartupApp(snapshot);
+    }
 
     if (!_routerEnabled) {
       return _buildStartupWelcomeApp(snapshot);
@@ -255,6 +282,42 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         context: context,
         snapshot: snapshot,
         child: child ?? const SizedBox.shrink(),
+      ),
+    );
+  }
+
+  Widget _buildWebStartupApp(AppearanceSnapshot snapshot) {
+    final router = ref.watch(appRouterProvider);
+    return MaterialApp.router(
+      title: '趣我圈',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: snapshot.themeMode,
+      routerConfig: router,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+      locale: const Locale('zh', 'CN'),
+      builder: (context, child) => wrapWithQuwoquanAppAppearance(
+        context: context,
+        snapshot: snapshot,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            child ?? const SizedBox.shrink(),
+            if (!_routerEnabled)
+              WelcomeScreen(
+                loginPrompt: null,
+                deferSequenceStart: true,
+                onFinish: _completeStartupWelcome,
+              ),
+          ],
+        ),
       ),
     );
   }

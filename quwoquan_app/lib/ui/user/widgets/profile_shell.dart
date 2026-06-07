@@ -6,13 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -25,7 +24,6 @@ import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_header.dart';
@@ -39,7 +37,7 @@ part 'profile_shell_builders.dart';
 
 /// 用户主页壳层（V3 统一对象页骨架 ObjectPageShell + full 吸顶模式）。
 /// 几何/滚动/吸顶由 ObjectPageShell 收口；本壳提供用户主页业务插槽与二级页签。
-/// 历史「共鸣/我的交集」假数据卡片与独立页链路已彻底移除（V5/S3）；
+/// 先前「共鸣/我的交集」假数据卡片与独立页链路已彻底移除（V5/S3）；
 /// 统一交集卡 ObjectIntersectionCard 在 profile detail intersectionReasons 真实下发后接入（V5/S5）。
 class ProfileShell extends ConsumerStatefulWidget {
   const ProfileShell({

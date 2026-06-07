@@ -274,7 +274,7 @@ class PersonalAssistantStreamController
         return subAccountId;
       }
     } catch (_) {
-      /* best-effort: 解析活跃分身上下文失败时回退到当前用户 id 作为历史归属键 */
+      /* best-effort: 解析活跃分身上下文失败时回退到当前用户 id 作为归属键 */
     }
     return ref.read(currentUserIdProvider).trim();
   }

@@ -1,31 +1,26 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/components/comment_system/comment_input_overlay.dart';
+import 'package:quwoquan_app/components/comment_system/comment_models.dart';
+import 'package:quwoquan_app/components/comment_system/comment_thread_view.dart';
+import 'package:quwoquan_app/components/comment_system/comment_toolbar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart';
-import 'package:quwoquan_app/components/comment_system/comment_viewer.dart'
-    show CommentInput;
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/providers/comment_provider.dart';
-import 'package:quwoquan_app/l10n/l10n.dart';
 
+/// 卡片弹窗评论入口：从发现页 / Moment 卡 / 媒体卡片底部弹出。
 class CommentViewer {
+  const CommentViewer._();
+
   static Future<void> showModal({
     required BuildContext context,
     required String postId,
-    List<CommentModel> initialComments = const [],
     CommentConfig config = const CommentConfig(),
-    CommentModalHeight modalHeight = CommentModalHeight.adaptive,
-    Function(String)? onCommentAdded,
-    Future<void> Function(String content)? onSubmitComment,
-    Function(CommentModel)? onCommentLiked,
-    Function(String, String)? onReplyAdded,
-    Function(String)? onUserTapped,
-    Function(String)? onLoadMoreComments,
+    void Function(String commentId)? onCommentAdded,
     VoidCallback? onClose,
   }) async {
-    await showCupertinoModalPopup(
+    await showCupertinoModalPopup<void>(
       context: context,
       barrierColor: AppColors.transparent,
       builder: (ctx) => _CommentSheet(
@@ -39,11 +34,6 @@ class CommentViewer {
 }
 
 class _CommentSheet extends ConsumerStatefulWidget {
-  final String postId;
-  final CommentConfig config;
-  final Function(String)? onCommentAdded;
-  final VoidCallback? onClose;
-
   const _CommentSheet({
     required this.postId,
     required this.config,
@@ -51,19 +41,18 @@ class _CommentSheet extends ConsumerStatefulWidget {
     this.onClose,
   });
 
+  final String postId;
+  final CommentConfig config;
+  final void Function(String commentId)? onCommentAdded;
+  final VoidCallback? onClose;
+
   @override
   ConsumerState<_CommentSheet> createState() => _CommentSheetState();
 }
 
 class _CommentSheetState extends ConsumerState<_CommentSheet> {
-  CommentModel? _replyTo;
   final ScrollController _scrollController = ScrollController();
   bool _initialLoaded = false;
-
-  void _dismissSheet() {
-    Navigator.of(context).pop();
-    widget.onClose?.call();
-  }
 
   @override
   void initState() {
@@ -79,15 +68,73 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
   }
 
   void _onScroll() {
+    if (!_scrollController.hasClients) return;
     if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
+        _scrollController.position.maxScrollExtent - AppSpacing.xl) {
       ref.read(commentProviderFamily(widget.postId).notifier).loadMore();
     }
+  }
+
+  void _scrollToList() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _dismiss() {
+    Navigator.of(context).pop();
+    widget.onClose?.call();
+  }
+
+  Future<void> _openInput({CommentModel? replyTo}) async {
+    await CommentInputOverlay.show(
+      context,
+      postId: widget.postId,
+      config: widget.config,
+      replyTo: replyTo,
+      surfaceMode: 'card_modal',
+    );
+  }
+
+  void _toggleLike() {
+    final interaction = ref.read(postInteractionStateProvider);
+    final isLiked = interaction.isLiked(widget.postId);
+    final likeCount = interaction.likeCountFor(widget.postId);
+    runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+      syncPostLikeIntent(
+        ref,
+        postId: widget.postId,
+        isLiked: !isLiked,
+        likeCount: isLiked
+            ? (likeCount - 1).clamp(0, 1 << 31).toInt()
+            : likeCount + 1,
+      );
+    });
+  }
+
+  void _toggleFavorite() {
+    final interaction = ref.read(postInteractionStateProvider);
+    final isSaved = interaction.isSaved(widget.postId);
+    final bookmarkCount = interaction.bookmarkCountFor(widget.postId);
+    runWhenLoggedIn(ref, context, AuthGateReason.favorite, () {
+      syncPostSaveIntent(
+        ref,
+        postId: widget.postId,
+        isSaved: !isSaved,
+        bookmarkCount: isSaved
+            ? (bookmarkCount - 1).clamp(0, 1 << 31).toInt()
+            : bookmarkCount + 1,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final commentState = ref.watch(commentProviderFamily(widget.postId));
+    final interaction = ref.watch(postInteractionStateProvider);
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
 
     if (!_initialLoaded) {
@@ -98,178 +145,65 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
     }
 
     return AppBottomModalSurface(
-      onDismiss: _dismissSheet,
-      backgroundColor:
-          SettingsSemanticConstants.conversationSheetPanelBackground(isDark),
+      onDismiss: _dismiss,
+      backgroundColor: SettingsSemanticConstants.conversationSheetPanelBackground(
+        isDark,
+      ),
       maxHeightRatio: AppSpacing.modalSheetMaxHeightRatio,
+      showHandle: false,
       panelKey: TestKeys.modalBottomSheetPanel,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           _Header(
             isDark: isDark,
-            commentCount: commentState.comments.length,
+            commentCount: interaction.commentCountFor(
+              widget.postId,
+              fallback: commentState.comments.length,
+            ),
             sortMode: commentState.sortMode,
-            onSortChanged: (mode) {
-              ref
-                  .read(commentProviderFamily(widget.postId).notifier)
-                  .switchSort(mode);
-            },
-            onClose: _dismissSheet,
+            onSortChanged: (mode) => ref
+                .read(commentProviderFamily(widget.postId).notifier)
+                .switchSort(mode),
+            onClose: _dismiss,
           ),
           Flexible(
             fit: FlexFit.loose,
-            child: _buildCommentList(commentState, isDark, _scrollController),
+            child: CommentThreadView(
+              postId: widget.postId,
+              scrollController: _scrollController,
+              showHeader: false,
+              onReplySelected: (comment) => _openInput(
+                replyTo: CommentModel(
+                  id: comment.id,
+                  content: comment.content,
+                  authorId: comment.authorId,
+                  username: comment.displayName ?? comment.authorId,
+                ),
+              ),
+            ),
           ),
-          CommentInput(
-            config: widget.config,
-            replyTo: _replyTo,
-            onSubmit: (content) async {
-              try {
-                final confirmed = await ref
-                    .read(commentProviderFamily(widget.postId).notifier)
-                    .addComment(content, replyToCommentId: _replyTo?.id);
-                if (confirmed != null) {
-                  widget.onCommentAdded?.call(confirmed.id);
-                }
-                if (mounted) setState(() => _replyTo = null);
-              } catch (error) {
-                assert(() {
-                  debugPrint('Comment submit failed: $error');
-                  return true;
-                }());
-              }
-            },
-            onCancelReply: () {
-              setState(() => _replyTo = null);
-            },
+          CommentToolbar(
+            likeCount: interaction.likeCountFor(widget.postId),
+            favoriteCount: interaction.bookmarkCountFor(widget.postId),
+            commentCount: interaction.commentCountFor(
+              widget.postId,
+              fallback: commentState.comments.length,
+            ),
+            isLiked: interaction.isLiked(widget.postId),
+            isFavorited: interaction.isSaved(widget.postId),
+            onInputTap: _openInput,
+            onLikeTap: _toggleLike,
+            onFavoriteTap: _toggleFavorite,
+            onCommentTap: _scrollToList,
           ),
         ],
       ),
     );
   }
-
-  Widget _buildCommentList(
-    CommentState state,
-    bool isDark,
-    ScrollController scrollController,
-  ) {
-    if (state.isLoading && state.comments.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
-    }
-    if (state.status == CommentListStatus.error && state.comments.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.containerMd),
-          child: AppSectionErrorCard(
-            semantic: UiErrorSemantic(
-              category: UiErrorCategory.sectionLoad,
-              scope: UiErrorScope.section,
-              title: '评论暂时没加载出来',
-              message: UITextConstants.contentLoadSoftFailed,
-              primaryAction: const UiErrorAction(
-                type: UiErrorActionType.retry,
-                label: UITextConstants.tryAgain,
-              ),
-            ),
-            margin: EdgeInsets.zero,
-            onAction: (action) async {
-              if (action.type == UiErrorActionType.retry ||
-                  action.type == UiErrorActionType.resubmit) {
-                await ref
-                    .read(commentProviderFamily(widget.postId).notifier)
-                    .loadComments();
-              }
-            },
-          ),
-        ),
-      );
-    }
-    if (state.comments.isEmpty) {
-      return Center(
-        child: Text(
-          UITextConstants.noComment,
-          style: TextStyle(
-            fontSize: AppTypography.sm,
-            color: AppColorsFunctional.getColor(
-              isDark,
-              ColorType.foregroundSecondary,
-            ),
-          ),
-        ),
-      );
-    }
-
-    final topLevel = state.comments
-        .where((c) => c.replyToCommentId == null || c.replyToCommentId!.isEmpty)
-        .toList();
-
-    return ListView.builder(
-      controller: _scrollController,
-      shrinkWrap: true,
-      physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      itemCount:
-          topLevel.length +
-          (state.status == CommentListStatus.loadingMore ? 1 : 0),
-      itemBuilder: (ctx, index) {
-        if (index >= topLevel.length) {
-          return Padding(
-            padding: EdgeInsets.all(AppSpacing.md),
-            child: const Center(child: CupertinoActivityIndicator()),
-          );
-        }
-        final comment = topLevel[index];
-        final replies = state.comments
-            .where((c) => c.replyToCommentId == comment.id)
-            .toList();
-        final isLiked = state.likedCommentIds.contains(comment.id);
-
-        return _CommentItem(
-          comment: comment,
-          replies: replies,
-          isLiked: isLiked,
-          likedIds: state.likedCommentIds,
-          isDark: isDark,
-          onLike: () => runWhenLoggedIn(ref, context, AuthGateReason.like, () {
-            ref
-                .read(commentProviderFamily(widget.postId).notifier)
-                .toggleLike(comment.id);
-          }),
-          onReply: () {
-            setState(() {
-              _replyTo = CommentModel(
-                id: comment.id,
-                content: comment.content,
-                authorId: comment.authorId,
-                username: comment.displayName ?? comment.authorId,
-              );
-            });
-          },
-          onDelete: comment.authorId == 'me'
-              ? () => ref
-                    .read(commentProviderFamily(widget.postId).notifier)
-                    .deleteComment(comment.id)
-              : null,
-          onReplyLike: (replyId) =>
-              runWhenLoggedIn(ref, context, AuthGateReason.like, () {
-                ref
-                    .read(commentProviderFamily(widget.postId).notifier)
-                    .toggleLike(replyId);
-              }),
-        );
-      },
-    );
-  }
 }
 
 class _Header extends StatelessWidget {
-  final bool isDark;
-  final int commentCount;
-  final CommentSortMode sortMode;
-  final ValueChanged<CommentSortMode> onSortChanged;
-  final VoidCallback onClose;
-
   const _Header({
     required this.isDark,
     required this.commentCount,
@@ -277,6 +211,12 @@ class _Header extends StatelessWidget {
     required this.onSortChanged,
     required this.onClose,
   });
+
+  final bool isDark;
+  final int commentCount;
+  final CommentSortMode sortMode;
+  final ValueChanged<CommentSortMode> onSortChanged;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -288,10 +228,17 @@ class _Header extends StatelessWidget {
       child: Row(
         children: [
           Text(
-            '${UITextConstants.comment}${commentCount > 0 ? " $commentCount" : ""}',
+            UITextConstants.commentCountTitleTemplate.replaceFirst(
+              '%s',
+              '$commentCount',
+            ),
             style: TextStyle(
-              fontSize: AppTypography.base,
-              fontWeight: FontWeight.w600,
+              fontSize: AppTypography.sectionTitle,
+              fontWeight: AppTypography.semiBold,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundPrimary,
+              ),
             ),
           ),
           const Spacer(),
@@ -303,19 +250,14 @@ class _Header extends StatelessWidget {
           SizedBox(width: AppSpacing.sm),
           CupertinoButton(
             padding: EdgeInsets.zero,
-            minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
+            minimumSize: const Size.square(AppSpacing.appChromeActionButtonSize),
             onPressed: onClose,
-            child: SizedBox.square(
-              dimension: AppSpacing.appChromeActionButtonSize,
-              child: Center(
-                child: Icon(
-                  CupertinoIcons.xmark,
-                  size: AppSpacing.appChromeActionIconSize,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundSecondary,
-                  ),
-                ),
+            child: Icon(
+              CupertinoIcons.xmark,
+              size: AppSpacing.appChromeActionIconSize,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundSecondary,
               ),
             ),
           ),
@@ -326,15 +268,15 @@ class _Header extends StatelessWidget {
 }
 
 class _SortToggle extends StatelessWidget {
-  final bool isDark;
-  final CommentSortMode sortMode;
-  final ValueChanged<CommentSortMode> onChanged;
-
   const _SortToggle({
     required this.isDark,
     required this.sortMode,
     required this.onChanged,
   });
+
+  final bool isDark;
+  final CommentSortMode sortMode;
+  final ValueChanged<CommentSortMode> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -342,17 +284,24 @@ class _SortToggle extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildChip(
-          context,
           CommentSortMode.latest,
           UITextConstants.circleSortLatest,
         ),
         SizedBox(width: AppSpacing.xs),
-        _buildChip(context, CommentSortMode.hot, UITextConstants.circleSortHot),
+        _buildChip(
+          CommentSortMode.recommended,
+          UITextConstants.commentSortRecommended,
+        ),
+        SizedBox(width: AppSpacing.xs),
+        _buildChip(
+          CommentSortMode.mostLiked,
+          UITextConstants.commentSortMostLiked,
+        ),
       ],
     );
   }
 
-  Widget _buildChip(BuildContext context, CommentSortMode mode, String label) {
+  Widget _buildChip(CommentSortMode mode, String label) {
     final isActive = sortMode == mode;
     return GestureDetector(
       onTap: () => onChanged(mode),
@@ -377,397 +326,9 @@ class _SortToggle extends StatelessWidget {
                     isDark,
                     ColorType.foregroundSecondary,
                   ),
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            fontWeight: isActive ? AppTypography.semiBold : FontWeight.normal,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _CommentItem extends StatelessWidget {
-  final CommentDto comment;
-  final List<CommentDto> replies;
-  final bool isLiked;
-  final Set<String> likedIds;
-  final bool isDark;
-  final VoidCallback onLike;
-  final VoidCallback onReply;
-  final VoidCallback? onDelete;
-  final ValueChanged<String> onReplyLike;
-
-  const _CommentItem({
-    required this.comment,
-    required this.replies,
-    required this.isLiked,
-    required this.likedIds,
-    required this.isDark,
-    required this.onLike,
-    required this.onReply,
-    this.onDelete,
-    required this.onReplyLike,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isXiaoquReply =
-        comment.authorId == AppConceptConstants.assistantSenderId ||
-        (comment.displayName ?? '').contains(
-          UITextConstants.assistantEntryXiaoqu,
-        );
-    return Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              RoundedSquareAvatar(
-                size: AppSpacing.iconMedium,
-                imageUrl: comment.avatarUrl,
-                name: comment.displayName,
-                borderRadius: AppSpacing.iconMedium / 2,
-                backgroundColor: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.backgroundSecondary,
-                ),
-                fallbackIcon: CupertinoIcons.person_fill,
-              ),
-              SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            comment.displayName ?? comment.authorId,
-                            style: TextStyle(
-                              fontSize: AppTypography.xs,
-                              color: AppColorsFunctional.getColor(
-                                isDark,
-                                ColorType.foregroundSecondary,
-                              ),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        if (comment.isAuthor)
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.xs,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryColor.withValues(
-                                alpha: 0.1,
-                              ),
-                              borderRadius: BorderRadius.circular(
-                                AppSpacing.smallBorderRadius,
-                              ),
-                            ),
-                            child: Text(
-                              UITextConstants.commentAuthorBadge,
-                              style: TextStyle(
-                                fontSize: AppTypography.xs,
-                                color: AppColors.primaryColor,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    SizedBox(height: AppSpacing.xs),
-                    if (isXiaoquReply)
-                      _buildXiaoquReplyCard(context)
-                    else
-                      Text(
-                        comment.content,
-                        style: TextStyle(fontSize: AppTypography.sm),
-                      ),
-                    SizedBox(height: AppSpacing.xs),
-                    _buildActions(context),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (replies.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(
-                left: AppSpacing.iconMedium + AppSpacing.sm,
-              ),
-              child: Column(
-                children: replies.take(3).map((reply) {
-                  final replyLiked = likedIds.contains(reply.id);
-                  return _ReplyItem(
-                    reply: reply,
-                    isDark: isDark,
-                    isLiked: replyLiked,
-                    onLike: () => onReplyLike(reply.id),
-                  );
-                }).toList(),
-              ),
-            ),
-          if (replies.length > 3)
-            Padding(
-              padding: EdgeInsets.only(
-                left: AppSpacing.iconMedium + AppSpacing.sm,
-              ),
-              child: GestureDetector(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                  child: Text(
-                    context.l10n.expandRepliesTemplate(replies.length),
-                    style: TextStyle(
-                      fontSize: AppTypography.xs,
-                      color: AppColors.primaryColor,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildXiaoquReplyCard(BuildContext context) {
-    return Container(
-      key: TestKeys.commentXiaoquReplyCard,
-      padding: EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.primaryColor.withValues(alpha: isDark ? 0.14 : 0.08),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        border: Border.all(
-          color: AppColors.primaryColor.withValues(alpha: isDark ? 0.28 : 0.16),
-          width: AppSpacing.one,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                CupertinoIcons.sparkles,
-                size: AppSpacing.iconSmall,
-                color: AppColors.assistantMarkColor,
-              ),
-              SizedBox(width: AppSpacing.xs),
-              Text(
-                UITextConstants.commentXiaoquBadge,
-                style: TextStyle(
-                  fontSize: AppTypography.xs,
-                  fontWeight: AppTypography.semiBold,
-                  color: AppColors.assistantMarkColor,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: AppSpacing.xs),
-          Text(comment.content, style: TextStyle(fontSize: AppTypography.sm)),
-          SizedBox(height: AppSpacing.xs),
-          Text(
-            UITextConstants.commentXiaoquSource,
-            style: TextStyle(
-              fontSize: AppTypography.xs,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundSecondary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActions(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          _formatTime(context, comment.createdAt),
-          style: TextStyle(
-            fontSize: AppTypography.xs,
-            color: AppColorsFunctional.getColor(
-              isDark,
-              ColorType.foregroundTertiary,
-            ),
-          ),
-        ),
-        SizedBox(width: AppSpacing.md),
-        GestureDetector(
-          onTap: onReply,
-          child: Text(
-            UITextConstants.replyAction,
-            style: TextStyle(
-              fontSize: AppTypography.xs,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundSecondary,
-              ),
-            ),
-          ),
-        ),
-        const Spacer(),
-        GestureDetector(
-          onTap: onLike,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-                size: AppSpacing.iconSmall,
-                color: isLiked
-                    ? AppColors.error
-                    : AppColorsFunctional.getColor(
-                        isDark,
-                        ColorType.foregroundTertiary,
-                      ),
-              ),
-              if (comment.likeCount > 0) ...[
-                SizedBox(width: AppSpacing.xs),
-                Text(
-                  '${comment.likeCount}',
-                  style: TextStyle(
-                    fontSize: AppTypography.xs,
-                    color: AppColorsFunctional.getColor(
-                      isDark,
-                      ColorType.foregroundTertiary,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        if (onDelete != null) ...[
-          SizedBox(width: AppSpacing.md),
-          GestureDetector(
-            onTap: onDelete,
-            child: Icon(
-              CupertinoIcons.trash,
-              size: AppSpacing.iconSmall,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundTertiary,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  String _formatTime(BuildContext context, DateTime time) {
-    final l10n = context.l10n;
-    final diff = DateTime.now().difference(time);
-    if (diff.inMinutes < 1) return l10n.justNow;
-    if (diff.inHours < 1) return l10n.minutesAgoTemplate(diff.inMinutes);
-    if (diff.inDays < 1) return l10n.hoursAgoTemplate(diff.inHours);
-    if (diff.inDays < 30) return l10n.daysAgoTemplate(diff.inDays);
-    return l10n.monthDayTemplate(time.month, time.day);
-  }
-}
-
-class _ReplyItem extends StatelessWidget {
-  final CommentDto reply;
-  final bool isDark;
-  final bool isLiked;
-  final VoidCallback onLike;
-
-  const _ReplyItem({
-    required this.reply,
-    required this.isDark,
-    required this.isLiked,
-    required this.onLike,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(top: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          RoundedSquareAvatar(
-            size: AppSpacing.iconSmall,
-            imageUrl: reply.avatarUrl,
-            name: reply.displayName,
-            borderRadius: AppSpacing.iconSmall / 2,
-            backgroundColor: AppColorsFunctional.getColor(
-              isDark,
-              ColorType.backgroundSecondary,
-            ),
-            fallbackIcon: CupertinoIcons.person_fill,
-          ),
-          SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                RichText(
-                  text: TextSpan(
-                    children: [
-                      TextSpan(
-                        text: reply.displayName ?? reply.authorId,
-                        style: TextStyle(
-                          fontSize: AppTypography.xs,
-                          color: AppColorsFunctional.getColor(
-                            isDark,
-                            ColorType.foregroundSecondary,
-                          ),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      if (reply.replyToDisplayName != null) ...[
-                        TextSpan(
-                          text: context.l10n.replyToPrefix,
-                          style: TextStyle(
-                            fontSize: AppTypography.xs,
-                            color: AppColorsFunctional.getColor(
-                              isDark,
-                              ColorType.foregroundTertiary,
-                            ),
-                          ),
-                        ),
-                        TextSpan(
-                          text: reply.replyToDisplayName!,
-                          style: TextStyle(
-                            fontSize: AppTypography.xs,
-                            color: AppColors.primaryColor,
-                          ),
-                        ),
-                      ],
-                      TextSpan(
-                        text: '：${reply.content}',
-                        style: TextStyle(fontSize: AppTypography.xs),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: onLike,
-            child: Padding(
-              padding: EdgeInsets.only(left: AppSpacing.xs),
-              child: Icon(
-                isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-                size: AppSpacing.iconSmall - 2,
-                color: isLiked
-                    ? AppColors.error
-                    : AppColorsFunctional.getColor(
-                        isDark,
-                        ColorType.foregroundTertiary,
-                      ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

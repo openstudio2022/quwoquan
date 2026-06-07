@@ -19,6 +19,7 @@ import 'package:quwoquan_app/ui/rtc/widgets/call_stage_chrome.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_controls_bar.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_duration_badge.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/call_stage_banner.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/participant_list_sheet.dart';
 
 class VoiceCallPage extends ConsumerStatefulWidget {
@@ -119,7 +120,9 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                     children: [
                       SizedBox(height: AppSpacing.xl),
                       const CallDurationBadge(),
-                      SizedBox(height: AppSpacing.xl),
+                      SizedBox(height: AppSpacing.md),
+                      const CallStageBanner(),
+                      SizedBox(height: AppSpacing.md),
                       Expanded(
                         child: Center(
                           child: _buildParticipantAvatars(participants),

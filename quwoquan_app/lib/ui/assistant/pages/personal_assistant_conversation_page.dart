@@ -115,11 +115,7 @@ class _PersonalAssistantConversationPageState
   }
 
   Future<void> _submitChatInput(ChatInputSubmitPayload payload) async {
-    var text = payload.text.trim();
-    if (payload.isVoiceMessage && text.isEmpty) {
-      text = '语音消息（${payload.voiceDuration.inSeconds}s）';
-    }
-    await _sendText(text);
+    await _sendText(payload.text.trim());
   }
 
   Future<void> _sendInitialQueryIfNeeded() async {

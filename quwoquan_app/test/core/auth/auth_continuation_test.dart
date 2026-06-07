@@ -3,8 +3,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart';
-import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
+import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
+import 'package:quwoquan_app/components/comment_system/comment_input_overlay.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
@@ -39,10 +39,12 @@ void main() {
     });
   });
 
-  group('评论登录后续接', () {
-    testWidgets('游客输入评论点提交→登录→自动续提原文本', (tester) async {
+  group('评论统一输入浮层登录续接', () {
+    testWidgets('游客输入评论点提交→登记续接并引导登录→登录后同一浮层续提原文本', (
+      tester,
+    ) async {
       AuthGate.resetDebounce();
-      final submitted = <String>[];
+      final submitted = <CommentComposerPayload>[];
       final container = ProviderContainer(
         overrides: [
           authSessionControllerProvider.overrideWith(_FlippableSession.new),
@@ -56,9 +58,17 @@ void main() {
           GoRoute(
             path: '/home',
             builder: (context, state) => Scaffold(
-              body: CommentInput(
-                config: const CommentConfig(),
-                onSubmit: submitted.add,
+              body: Builder(
+                builder: (context) => Center(
+                  child: ElevatedButton(
+                    onPressed: () => CommentInputOverlay.show(
+                      context,
+                      postId: 'post-1',
+                      onSubmit: submitted.add,
+                    ),
+                    child: const Text('open-input'),
+                  ),
+                ),
               ),
             ),
           ),
@@ -87,27 +97,31 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.tap(find.text('open-input'));
+      await tester.pumpAndSettle();
+
       await tester.enterText(find.byKey(TestKeys.commentTextField), '第一条评论');
       await tester.pump();
       await tester.tap(find.byKey(TestKeys.submitCommentButton));
       await tester.pumpAndSettle();
 
-      // 游客提交：未登录，已引导到登录占位页，评论未发出。
+      // 游客提交：未登录，已引导到登录占位页，评论未发出，但待续接评论已登记。
       expect(find.text('LOGIN_PLACEHOLDER'), findsOneWidget);
       expect(submitted, isEmpty);
-      // 待续接评论已登记。
       expect(
         container.read(authContinuationProvider),
         isA<SubmitCommentContinuation>(),
       );
 
-      // 模拟登录成功：auth 翻转为已认证，触发自动续提。
-      (container.read(authSessionControllerProvider.notifier) as _FlippableSession)
+      // 模拟登录成功：浮层仍在栈上并监听登录态翻转，自动续提原文本。
+      (container.read(authSessionControllerProvider.notifier)
+              as _FlippableSession)
           .loginNow();
       await tester.pumpAndSettle();
 
-      expect(submitted, <String>['第一条评论']);
-      // 续接后续接槽位已清空，不会重复发出。
+      expect(submitted.length, 1);
+      expect(submitted.single.content, '第一条评论');
+      // 续接后槽位清空，不会重复发出。
       expect(container.read(authContinuationProvider), isNull);
 
       await tester.pump(const Duration(seconds: 3));

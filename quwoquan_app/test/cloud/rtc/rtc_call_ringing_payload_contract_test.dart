@@ -12,8 +12,12 @@ void main() {
         'targetUserId',
         'conversationId',
       ]));
+      // 信任两态（SIT3）扩展：来源标签 / 信任关系 / 链接过期，均为可选客户端字符串。
       expect(rtcCallRingingOptionalClientStringWireKeys, equals(<String>[
         'callerName',
+        'sourceLabel',
+        'trustRelation',
+        'expiresAt',
       ]));
     });
 

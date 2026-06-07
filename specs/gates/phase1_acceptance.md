@@ -14,10 +14,10 @@
 ### T1-8 无人值守产线编排器 `qwq-data task run`
 - 新增 `quwoquan_data/scripts/task/run.py`：固定 DAG 薄编排壳，串
   download_plan→download_fetch→build_prepare→build_homepage→build_validate→
-  produce_compose→produce_author→produce_annotate→produce_review→ship。
+  produce_compose→produce_author→produce_annotate→produce_review→publish。
 - 双类节点：确定性 stage 直接跑既有 handler；Agent checkpoint（source_plan /
   实体主页 / 正文创作）写指引并暂停（退出码 10），物化产物后 `--resume` 自动推进。
-- `pipeline_state.json` 落 `runtime/tasks/<人读taskId>/batches/<batch>/pipeline/`，
+- `task_workflow_state.json` 落 `runtime/tasks/<人读taskId>/batches/<batch>/_shared/`，
   记 completed / waitingCheckpoint / reactRewinds，幂等可 resume；`--until` 早停。
 - 在 task handler 注册 `task run`，docstring 同步。
 
@@ -26,7 +26,7 @@
   agent 存疑且分≤阈值的「明确违规」(image_safety unsafe=水印/平台标记→1分)
   自动 discard，不占用人工；明确合格(safe→4分)自动 publishable；只有真正模糊
   的 needs_review(人脸边界→2分)才转人工 fix。
-- 默认 `autoDiscardScoreAtMost=1`，向后兼容（关闭即退回旧的全转人工行为）。
+- 默认 `autoDiscardScoreAtMost=1`，关闭时退回全转人工行为。
 
 ### T1-10 ReAct 自省自动回退（自学习闭环）
 - 各 stage gate report 既有的 `fallbackStage` 信号接入编排器：build_validate /
@@ -47,16 +47,16 @@
 | 校验 | 命令 | 结果 |
 |---|---|---|
 | 编排器注册 | `cli.py task run --help` | OK（DAG 10 stage 可见） |
-| 编排器 DAG/checkpoint/resume/ReAct 回退 | `tests/test_task_run_pipeline.py` | 5 PASS |
-| HITL 最小化 | `tests/test_hitl_autopass.py` | 4 PASS |
-| 实体主页链路 | `tests/test_build_homepage.py` | PASS（既有） |
+| 编排器 DAG/checkpoint/resume/ReAct 回退 | `tests/workflow/test_task_run_pipeline.py` | 5 PASS |
+| HITL 最小化 | `tests/integration/test_hitl_autopass.py` | 4 PASS |
+| 实体主页链路 | `tests/build/test_build_homepage.py` | PASS（既有） |
 | 全量门禁 | `make verify-quwoquan-data` | PASSED |
 
 新测试已挂入 `quwoquan_data/scripts/verify/verify_quwoquan_data.sh` Phase 1 块。
 
 ## 待运行（不阻断能力就绪，属产线实际执行）
 
-- `publish/entities/` 当前为空（历史清理后未回填）。稻城亚丁真实标杆 + 川西/
+- `publish/entities/` 当前为空（过往清理后未回填）。稻城亚丁真实标杆 + 川西/
   四川景区 fan-out 需走 Agent 联网检索(web_search/浏览器)→实体主页→逐篇正文
   创作的完整 checkpoint 循环，是产线运行而非工程能力建设。
 - 运行方式：`qwq-data task run --task 旅行/地域/四川省/景区/景区全覆盖 --batch <b>`，

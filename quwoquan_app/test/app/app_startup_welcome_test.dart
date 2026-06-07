@@ -4,10 +4,16 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
+import 'package:quwoquan_app/ui/user/pages/login_page.dart';
+import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 
 void main() {
@@ -38,6 +44,40 @@ void main() {
     expect(find.byType(WelcomeFlowerMark), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 16));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
+  testWidgets('Web 启动先出内容壳，再叠欢迎层且不显示登录 prompt', (
+    tester,
+  ) async {
+    final blockingStore = _BlockingAuthSessionStore();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
+          authSessionStoreProvider.overrideWithValue(blockingStore),
+          platformTargetProvider.overrideWithValue(AppPlatform.web),
+          platformCapabilitiesProvider.overrideWithValue(CapabilityProfile.web),
+        ],
+        child: const QuWoQuanAppRoot(),
+      ),
+    );
+
+    expect(blockingStore.readStarted, isTrue);
+    expect(find.byType(MainAppShell), findsOneWidget);
+    expect(find.byType(WelcomeScreen), findsOneWidget);
+    expect(find.text(UITextConstants.welcomeLoginPromptTitle), findsNothing);
+    expect(find.byType(LoginPage), findsNothing);
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(find.byType(MainAppShell), findsOneWidget);
+    expect(find.byType(WelcomeScreen), findsOneWidget);
+    expect(find.byType(LoginPage), findsNothing);
+
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
   });

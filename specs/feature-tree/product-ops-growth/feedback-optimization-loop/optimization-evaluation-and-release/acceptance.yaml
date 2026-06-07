@@ -51,8 +51,8 @@ gwt_acceptance:
       - runtime/recpolicy/policy_test.go
       - runtime/recpolicy/store_test.go
       - runtime/recpolicy/sync_test.go
-      - runtime/recommendation/engine_test.go::TestEngine_SegmentTargeting_DrivesPolicyResolution
-      - make verify-metadata
+      - runtime/recommendation/engine_test.go
+      - quwoquan_service/tools/verify_metadata/main_test.go
     status: implemented
   GWT2:
     title: 顾问只产建议且至多 :simulate（绝不 activate）
@@ -82,7 +82,6 @@ gwt_acceptance:
       planned: []
       recorded:
       - scripts/recommendation/test_rec_policy_advisor.py
-      - make verify-rec-policy-advisor
     status: implemented
 execution:
   local_gate:

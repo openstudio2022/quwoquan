@@ -215,7 +215,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: retryable
+      - name: recoveryAction
         type: bool
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -262,7 +262,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: retryable
+      - name: recoveryAction
         type: bool
         constraints: [NOT_NULL]
         classification: PUBLIC

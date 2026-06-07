@@ -12,6 +12,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_loc
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/services/fake_location_permission_checker.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
@@ -133,7 +134,7 @@ void main() {
         reason: '云端超时应展示 locationUpstreamTimeout 文案',
       );
       expect(
-        find.widgetWithText(CupertinoButton, l10n.retry),
+        find.widgetWithText(CupertinoButton, UITextConstants.tryAgain),
         findsOneWidget,
         reason: '非权限错误时应展示内联重试按钮（与错误文案同区）',
       );
