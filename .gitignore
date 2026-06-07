@@ -87,3 +87,6 @@ quwoquan_data/release/
 state/
 quwoquan_service/.local_models/
 
+# Git worktrees
+.worktrees/
+
