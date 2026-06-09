@@ -2,15 +2,15 @@ schemaVersion: app-runtime-config
 runtime:
   appRuntimeEnv: prod
   appDataSource: remote
-  gatewayBaseUrl: https://api.quwoquan.com
-  realtimeBaseUrl: wss://api.quwoquan.com
-  mediaAvatarCdnBaseUrl: https://avatar-cdn.quwoquan.com
-  mediaImageCdnBaseUrl: https://image-cdn.quwoquan.com
-  mediaVideoCdnBaseUrl: https://video-cdn.quwoquan.com
-  mediaUploadBaseUrl: https://upload.quwoquan.com
+  gatewayBaseUrl: http://118.31.239.122:19000
+  realtimeBaseUrl: ws://118.31.239.122:19000
+  mediaAvatarCdnBaseUrl: http://118.31.239.122:19100
+  mediaImageCdnBaseUrl: http://118.31.239.122:19100
+  mediaVideoCdnBaseUrl: http://118.31.239.122:19100
+  mediaUploadBaseUrl: http://118.31.239.122:19100
   currentUserId: ""
 seed:
   enabled: false
   manifest: ""
 gray:
-  strategyEndpoint: https://api.quwoquan.com/v1/runtime/gray-strategy
+  strategyEndpoint: http://118.31.239.122:19000/v1/runtime/gray-strategy

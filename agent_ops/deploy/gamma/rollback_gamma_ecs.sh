@@ -73,7 +73,7 @@ rm -rf "\${REMOTE_DIR}"
 mkdir -p "\${REMOTE_DIR}"
 tar -xzf "\${BACKUP}" -C "\${REMOTE_DIR}"
 cd "\${REMOTE_DIR}"
-export LOCAL_GAMMA_HTTP_PORT="\${LOCAL_GAMMA_HTTP_PORT:-18000}"
+export LOCAL_GAMMA_HTTP_PORT="\${LOCAL_GAMMA_HTTP_PORT:-19000}"
 export LOCAL_GAMMA_HTTPS_PORT="\${LOCAL_GAMMA_HTTPS_PORT:-18443}"
 export LOCAL_GAMMA_ADMIN_PORT="\${LOCAL_GAMMA_ADMIN_PORT:-12019}"
 bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh

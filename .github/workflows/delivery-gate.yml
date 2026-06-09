@@ -252,6 +252,7 @@ jobs:
           echo "result=success" >> "$GITHUB_OUTPUT"
       - name: Upload delivery gate timing summary
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: delivery-gate-timing-summary

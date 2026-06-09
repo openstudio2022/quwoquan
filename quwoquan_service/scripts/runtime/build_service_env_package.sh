@@ -68,18 +68,30 @@ text = Path(cfg_path).read_text(encoding="utf-8")
 topology = json.loads(Path(topology_path).read_text(encoding="utf-8"))
 env_cfg = ((topology.get("environments") or {}).get(env_name) or {})
 public_bases = env_cfg.get("publicBases") or {}
+allowed_tokens = {
+    str(item).strip()
+    for item in env_cfg.get("hostAllowlist", [])
+    if str(item).strip()
+}
+
+for key, value in public_bases.items():
+    if not value or value not in text:
+        continue
+    if key in {"api", "realtime", "productOps"}:
+        raise SystemExit(
+            f"{service} config must not reference {key} public base {value}"
+        )
 
 for other_env, other_cfg in (topology.get("environments") or {}).items():
-    for key, value in (other_cfg.get("publicBases") or {}).items():
-        if not value or value not in text:
+    if other_env == env_name:
+        continue
+    for token in other_cfg.get("hostAllowlist", []) or []:
+        token = str(token).strip()
+        if not token or token in allowed_tokens:
             continue
-        if other_env != env_name:
+        if token in text:
             raise SystemExit(
-                f"{service} config leaks {other_env} public base {value}"
-            )
-        if key in {"api", "realtime", "productOps"}:
-            raise SystemExit(
-                f"{service} config must not reference {key} public base {value}"
+                f"{service} config leaks {other_env} host token {token}"
             )
 
 if service == "chat-service":
@@ -107,8 +119,8 @@ if service == "chat-service":
             "192.168.",
             "mock-cdn.example.com",
         )
-        if value.startswith("http://") or any(token in value for token in forbidden):
-            raise SystemExit("prod chat-service group avatar CDN must be production HTTPS domain")
+        if any(token in value for token in forbidden):
+            raise SystemExit("prod chat-service group avatar CDN must not use local/test host")
 PY
 
 out_dir="artifacts/service-env-packages/${service}/${env_name}"

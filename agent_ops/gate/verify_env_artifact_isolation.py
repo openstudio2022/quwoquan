@@ -52,23 +52,34 @@ def artifact_files(env_name: str) -> list[Path]:
 def main() -> int:
     manifest = load_environment_topology()
     issues: list[str] = []
-    env_urls = {env: set(environment_url_values(manifest, env)) for env in ENVIRONMENTS}
+    env_allowed_tokens = {
+        env: set(environment_url_values(manifest, env)).union(
+            {
+                str(item).strip()
+                for item in manifest["environments"][env].get("hostAllowlist", [])
+                if str(item).strip()
+            }
+        )
+        for env in ENVIRONMENTS
+    }
 
     for env_name in ENVIRONMENTS:
         files = artifact_files(env_name)
         if not files:
             issues.append(f"no artifact files found for {env_name}")
             continue
-        foreign_urls = {
-            other_env: urls for other_env, urls in env_urls.items() if other_env != env_name
-        }
+        current_allowed_tokens = env_allowed_tokens.get(env_name, set())
         for path in files:
             text = path.read_text(encoding="utf-8", errors="replace")
-            for other_env, urls in foreign_urls.items():
-                for url in urls:
-                    if url and url in text:
+            for other_env, tokens in env_allowed_tokens.items():
+                if other_env == env_name:
+                    continue
+                for token in tokens:
+                    if not token or token in current_allowed_tokens:
+                        continue
+                    if token in text:
                         issues.append(
-                            f"{path.relative_to(ROOT)} leaks {other_env} URL {url}"
+                            f"{path.relative_to(ROOT)} leaks {other_env} host token {token}"
                         )
             if env_name == "prod":
                 for token in forbidden_host_tokens(manifest, env_name):

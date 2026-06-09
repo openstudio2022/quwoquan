@@ -115,13 +115,13 @@
     },
     "gamma": {
       "publicBases": {
-        "api": "https://gamma-api.quwoquan-env.test",
-        "realtime": "wss://gamma-api.quwoquan-env.test",
-        "productOps": "https://gamma-product-ops.quwoquan-env.test",
-        "mediaAvatar": "https://gamma-avatar.quwoquan-env.test",
-        "mediaImage": "https://gamma-image.quwoquan-env.test",
-        "mediaVideo": "https://gamma-video.quwoquan-env.test",
-        "mediaUpload": "https://gamma-upload.quwoquan-env.test"
+        "api": "http://118.31.239.122:19000",
+        "realtime": "ws://118.31.239.122:19000",
+        "productOps": "http://118.31.239.122:19010",
+        "mediaAvatar": "http://118.31.239.122:19100",
+        "mediaImage": "http://118.31.239.122:19100",
+        "mediaVideo": "http://118.31.239.122:19100",
+        "mediaUpload": "http://118.31.239.122:19100"
       },
       "subnets": {
         "edge": "172.40.10.0/24",
@@ -159,12 +159,7 @@
         }
       },
       "hostAllowlist": [
-        "gamma-api.quwoquan-env.test",
-        "gamma-product-ops.quwoquan-env.test",
-        "gamma-avatar.quwoquan-env.test",
-        "gamma-image.quwoquan-env.test",
-        "gamma-video.quwoquan-env.test",
-        "gamma-upload.quwoquan-env.test"
+        "118.31.239.122"
       ],
       "forbiddenHostTokens": ["api.quwoquan.com", "avatar-cdn.quwoquan.com"],
       "rolloutStagePolicy": {
@@ -174,13 +169,13 @@
     },
     "prod": {
       "publicBases": {
-        "api": "https://api.quwoquan.com",
-        "realtime": "wss://api.quwoquan.com",
-        "productOps": "https://product-ops.quwoquan.com",
-        "mediaAvatar": "https://avatar-cdn.quwoquan.com",
-        "mediaImage": "https://image-cdn.quwoquan.com",
-        "mediaVideo": "https://video-cdn.quwoquan.com",
-        "mediaUpload": "https://upload.quwoquan.com"
+        "api": "http://118.31.239.122:19000",
+        "realtime": "ws://118.31.239.122:19000",
+        "productOps": "http://118.31.239.122:19010",
+        "mediaAvatar": "http://118.31.239.122:19100",
+        "mediaImage": "http://118.31.239.122:19100",
+        "mediaVideo": "http://118.31.239.122:19100",
+        "mediaUpload": "http://118.31.239.122:19100"
       },
       "subnets": {
         "edge": "10.60.10.0/24",
@@ -218,12 +213,7 @@
         }
       },
       "hostAllowlist": [
-        "api.quwoquan.com",
-        "product-ops.quwoquan.com",
-        "avatar-cdn.quwoquan.com",
-        "image-cdn.quwoquan.com",
-        "video-cdn.quwoquan.com",
-        "upload.quwoquan.com"
+        "118.31.239.122"
       ],
       "forbiddenHostTokens": [
         ".test",
@@ -295,16 +285,16 @@
       "backend": "ssh-hosted",
       "portProfile": null,
       "publicBases": {
-        "api": "https://gamma-api.quwoquan-env.test",
-        "realtime": "wss://gamma-api.quwoquan-env.test",
-        "productOps": "https://gamma-product-ops.quwoquan-env.test",
-        "mediaAvatar": "https://gamma-avatar.quwoquan-env.test",
-        "mediaImage": "https://gamma-image.quwoquan-env.test",
-        "mediaVideo": "https://gamma-video.quwoquan-env.test",
-        "mediaUpload": "https://gamma-upload.quwoquan-env.test"
+        "api": "http://118.31.239.122:19000",
+        "realtime": "ws://118.31.239.122:19000",
+        "productOps": "http://118.31.239.122:19010",
+        "mediaAvatar": "http://118.31.239.122:19100",
+        "mediaImage": "http://118.31.239.122:19100",
+        "mediaVideo": "http://118.31.239.122:19100",
+        "mediaUpload": "http://118.31.239.122:19100"
       },
       "origins": {
-        "mediaOrigin": "https://gamma-origin.quwoquan-env.test"
+        "mediaOrigin": "http://118.31.239.122:19110"
       }
     },
     "prod-sim": {
@@ -329,16 +319,16 @@
       "backend": "workflow",
       "portProfile": null,
       "publicBases": {
-        "api": "https://api.quwoquan.com",
-        "realtime": "wss://api.quwoquan.com",
-        "productOps": "https://product-ops.quwoquan.com",
-        "mediaAvatar": "https://avatar-cdn.quwoquan.com",
-        "mediaImage": "https://image-cdn.quwoquan.com",
-        "mediaVideo": "https://video-cdn.quwoquan.com",
-        "mediaUpload": "https://upload.quwoquan.com"
+        "api": "http://118.31.239.122:19000",
+        "realtime": "ws://118.31.239.122:19000",
+        "productOps": "http://118.31.239.122:19010",
+        "mediaAvatar": "http://118.31.239.122:19100",
+        "mediaImage": "http://118.31.239.122:19100",
+        "mediaVideo": "http://118.31.239.122:19100",
+        "mediaUpload": "http://118.31.239.122:19100"
       },
       "origins": {
-        "mediaOrigin": "https://media-origin.quwoquan.com"
+        "mediaOrigin": "http://118.31.239.122:19110"
       }
     }
   }

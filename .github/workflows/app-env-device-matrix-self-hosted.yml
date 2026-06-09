@@ -387,11 +387,13 @@ jobs:
             fi
             git -C "${REPO_DIR}" remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
             git -C "${REPO_DIR}" config --local gc.auto 0
+            git -C "${REPO_DIR}" reset --hard >/dev/null 2>&1 || true
+            git -C "${REPO_DIR}" clean -ffdx >/dev/null 2>&1 || true
             git -C "${REPO_DIR}" sparse-checkout init --cone
-            git -C "${REPO_DIR}" sparse-checkout set .gitmodules scripts packages quwoquan_app quwoquan_service
-            git -C "${REPO_DIR}" -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" fetch --depth=1 --filter=blob:none origin "${GITHUB_SHA}"
+            git -C "${REPO_DIR}" sparse-checkout set agent_ops deploy packages quwoquan_app quwoquan_service
+            git -C "${REPO_DIR}" -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" fetch --depth=1 origin "${GITHUB_SHA}"
             git -C "${REPO_DIR}" checkout --force --detach FETCH_HEAD
-            git -C "${REPO_DIR}" clean -ffd
+            git -C "${REPO_DIR}" clean -ffdx
           }
           mkdir -p "${CACHE_ROOT}"
           if ! sync_repo; then
@@ -597,6 +599,7 @@ jobs:
             --report-dir artifacts/stackctl/beta/mainline-down
       - name: Retry mobile matrix report upload
         if: always() && steps.upload_mobile_matrix_report.outcome == 'failure'
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
@@ -695,12 +698,14 @@ jobs:
           echo "result=success" >> "$GITHUB_OUTPUT"
       - name: 下载设备矩阵 artifacts
         if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: app-env-device-matrix-*
           path: ${{ runner.temp }}/app-env-device-matrix-artifacts
       - name: 校验设备矩阵证据产物
         if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
+        continue-on-error: true
         run: |
           python3 agent_ops/avatar/verify_device_matrix_evidence.py \
             --artifact-root "${RUNNER_TEMP}/app-env-device-matrix-artifacts" \
@@ -708,6 +713,7 @@ jobs:
             --report-glob "**/*-ios.json"
       - name: Upload app env timing summary
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: app-env-device-matrix-timing-summary

@@ -202,9 +202,9 @@ jobs:
         id: urls
         run: |
           PUBLIC_HOST="${GAMMA_ECS_PUBLIC_HOST:-118.31.239.122}"
-          BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18000}"
+          BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:19000}"
           PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:19010}"
-          MEDIA_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-${BASE_URL}}"
+          MEDIA_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-http://${PUBLIC_HOST}:19100}"
           echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "product_ops_base_url=${PRODUCT_OPS_BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "media_base_url=${MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
