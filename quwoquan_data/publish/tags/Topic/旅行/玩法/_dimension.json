@@ -1,0 +1,10 @@
+{
+  "label": "玩法",
+  "labelEn": "Activities",
+  "description": "旅行中在目的地执行的具体活动体验；与旅行主题正交：主题=旅行整体气质，玩法=具体子活动",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 22
+}

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from _common.io import read_json, write_json
-from _common.paths import batch_command_root
+from _common.paths import batch_shared_dir
 
 # ─── 词表 ──────────────────────────────────────────────────────────
 KIND_IMAGE = "image"
@@ -38,7 +38,12 @@ OVERRIDE_PUBLISHABLE = "publishable"
 OVERRIDE_DISCARD = "discard"
 
 DEFAULT_POLICY: dict[str, Any] = {
-    "autoApprove": {"agentMinScore": 3, "requireHumanWhenDoubtful": True},
+    # autoApprove: agent 可信且分≥agentMinScore 自动放行
+    # requireHumanWhenDoubtful: agent 存疑是否一律转人工（HITL 总开关）
+    # autoDiscardScoreAtMost: agent 存疑且分≤此阈值视为"明确违规"，自动 discard 不转人工
+    #   （image_safety unsafe=水印/平台标记 → 1 分；needs_review 人脸边界 → 2 分）
+    # 净效果：明确违规自动丢弃、明确合格自动采纳，只有真正模糊(needs_review)留给人。
+    "autoApprove": {"agentMinScore": 3, "requireHumanWhenDoubtful": True, "autoDiscardScoreAtMost": 1},
     "reprocess": {"maxAttempts": 3},
 }
 
@@ -81,8 +86,10 @@ class ReviewItem:
 def resolve_publish_state(item: ReviewItem, policy: dict[str, Any] | None = None) -> str:
     """推导发布态。人判定优先；其次 agent 默认放行；低质量进入可再加工/锁定。"""
     pol = policy or DEFAULT_POLICY
-    min_score = int(pol.get("autoApprove", {}).get("agentMinScore", 3))
-    require_human_when_doubtful = bool(pol.get("autoApprove", {}).get("requireHumanWhenDoubtful", True))
+    auto = pol.get("autoApprove", {})
+    min_score = int(auto.get("agentMinScore", 3))
+    require_human_when_doubtful = bool(auto.get("requireHumanWhenDoubtful", True))
+    auto_discard_at_most = auto.get("autoDiscardScoreAtMost", None)
 
     # 1) 人直接置发布态（最高优先）
     if item.humanOverride == OVERRIDE_DISCARD:
@@ -98,7 +105,10 @@ def resolve_publish_state(item: ReviewItem, policy: dict[str, Any] | None = None
 
     # 3) 人未判定 → 看 agent
     if item.agentJudgment == JUDGE_DOUBTFUL:
-        # agent 存疑必须人工确认（可配置）；否则按打分默认
+        # 3a) 明确违规（agent 存疑且分≤阈值，如水印/平台标记）→ 自动丢弃，不占用人工
+        if auto_discard_at_most is not None and item.agentScore <= int(auto_discard_at_most):
+            return STATE_DISCARD
+        # 3b) 模糊存疑（needs_review）→ 按总开关决定是否转人工
         if require_human_when_doubtful:
             return STATE_FIX
         return STATE_PUBLISHABLE if item.agentScore >= min_score else STATE_FIX
@@ -255,16 +265,38 @@ def post_publishability(ledger: ReviewLedger) -> tuple[bool, list[str], list[str
 
 
 # ─── sidecar 路径与读写 ────────────────────────────────────────────
+# 复核账本/实体边车按对象优先落 `5.review/`（与 review/compose 报告同处对象树）。
+OBJECT_LEDGER_FILE = "review_ledger.json"
+OBJECT_ENTITIES_FILE = "review_entities.json"
+
+
 def review_dir(task_id: str, batch_id: str) -> Path:
-    return batch_command_root(task_id, batch_id, "produce") / "review"
+    """批次级复核共享根（policy 等批次共享文件）。"""
+    return batch_shared_dir(task_id, batch_id) / "review"
+
+
+def _object_review_dir(task_id: str, batch_id: str, ref: str) -> Path | None:
+    """已登记内容对象的 `5.review/` 目录；未登记返回 None。"""
+    from _common import content_object  # 延迟导入避免循环依赖
+    from _common.paths import STAGE_REVIEW
+
+    if not content_object.content_coords(task_id, batch_id, ref):
+        return None
+    return content_object.content_object_stage_dir(task_id, batch_id, ref, STAGE_REVIEW)
 
 
 def ledger_path(task_id: str, batch_id: str, ref: str) -> Path:
-    return review_dir(task_id, batch_id) / "ledger" / f"{ref}.json"
+    obj = _object_review_dir(task_id, batch_id, ref)
+    if obj is None:
+        raise KeyError(f"review ledger not registered for ref={ref!r} (task={task_id} batch={batch_id})")
+    return obj / OBJECT_LEDGER_FILE
 
 
 def entities_path(task_id: str, batch_id: str, ref: str) -> Path:
-    return review_dir(task_id, batch_id) / "entities" / f"{ref}.json"
+    obj = _object_review_dir(task_id, batch_id, ref)
+    if obj is None:
+        raise KeyError(f"review entities not registered for ref={ref!r} (task={task_id} batch={batch_id})")
+    return obj / OBJECT_ENTITIES_FILE
 
 
 def policy_path(task_id: str, batch_id: str) -> Path:
@@ -279,10 +311,13 @@ def load_policy(task_id: str, batch_id: str) -> dict[str, Any]:
 
 
 def load_ledger(task_id: str, batch_id: str, ref: str) -> ReviewLedger | None:
-    p = ledger_path(task_id, batch_id, ref)
-    if not p.exists():
+    try:
+        p = ledger_path(task_id, batch_id, ref)
+    except KeyError:
         return None
-    return ReviewLedger.from_dict(read_json(p))
+    if p.exists():
+        return ReviewLedger.from_dict(read_json(p))
+    return None
 
 
 def save_ledger(ledger: ReviewLedger) -> Path:
@@ -292,10 +327,12 @@ def save_ledger(ledger: ReviewLedger) -> Path:
 
 
 def iter_ledgers(task_id: str, batch_id: str) -> list[ReviewLedger]:
-    d = review_dir(task_id, batch_id) / "ledger"
-    if not d.is_dir():
-        return []
+    """枚举账本：仅按对象路由枚举对象侧车。"""
+    from _common import content_object  # 延迟导入避免循环依赖
+
     out: list[ReviewLedger] = []
-    for f in sorted(d.glob("*.json")):
-        out.append(ReviewLedger.from_dict(read_json(f)))
+    for ref in content_object.iter_content_refs(task_id, batch_id):
+        p = ledger_path(task_id, batch_id, ref)
+        if p.is_file():
+            out.append(ReviewLedger.from_dict(read_json(p)))
     return out

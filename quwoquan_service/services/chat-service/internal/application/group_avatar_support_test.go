@@ -12,7 +12,7 @@ func TestResolveConversationAvatarURLPrefersPrecomposedGroupAsset(t *testing.T) 
 	conv := model.Conversation{
 		ID:                    "conv_test_001",
 		Type:                  conversationTypeGroup,
-		AvatarUrl:             "https://legacy.test/user.png",
+		AvatarUrl:             "https://archived.test/user.png",
 		GroupAvatarAssetId:    "group_asset_001",
 		GroupAvatarVersion:    3,
 		GroupAvatarSourceHash: "source_hash_001",
@@ -27,12 +27,12 @@ func TestResolveConversationAvatarURLPrefersPrecomposedGroupAsset(t *testing.T) 
 	}
 }
 
-func TestResolveConversationAvatarURLIgnoresLegacyGroupAvatarURL(t *testing.T) {
+func TestResolveConversationAvatarURLUsesArchivedGroupAvatarURL(t *testing.T) {
 	ConfigureGroupAvatarCDNBase("https://cdn.test")
 
 	conv := model.Conversation{
 		Type:      conversationTypeGroup,
-		AvatarUrl: "https://legacy.test/user.png",
+		AvatarUrl: "https://archived.test/user.png",
 	}
 
 	want := DefaultGroupAvatarURL()
@@ -50,10 +50,10 @@ func TestResolveConversationAvatarURLWithMembersUsesCreatorAvatarBeforePrecompos
 	}
 
 	members := []model.ConversationMember{
-		{UserId: "member_user", AvatarUrl: "https://legacy.test/member.png"},
-		{UserId: "creator_user", AvatarUrl: "https://legacy.test/creator.png"},
+		{UserId: "member_user", AvatarUrl: "https://archived.test/member.png"},
+		{UserId: "creator_user", AvatarUrl: "https://archived.test/creator.png"},
 	}
-	want := "https://legacy.test/creator.png"
+	want := "https://archived.test/creator.png"
 	if got := ResolveConversationAvatarURLWithMembers(conv, members); got != want {
 		t.Fatalf("expected creator avatar fallback %q, got %q", want, got)
 	}
@@ -64,10 +64,10 @@ func TestResolveConversationAvatarURLBuildsPublicURLForDirectObjectKey(t *testin
 
 	conv := model.Conversation{
 		Type:      conversationTypeDirect,
-		AvatarUrl: "media/avatar/user/fixture_user_friend/v1/avatar.png",
+		AvatarUrl: "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
 	}
 
-	want := "https://cdn.test/media/avatar/user/fixture_user_friend/v1/avatar.png"
+	want := "https://cdn.test/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png"
 	if got := ResolveConversationAvatarURL(conv); got != want {
 		t.Fatalf("expected direct object-key avatar to resolve to %q, got %q", want, got)
 	}
@@ -89,8 +89,8 @@ func TestResolveConversationAvatarURLFallsBackToDefaultGroupAvatar(t *testing.T)
 func TestResolveGroupAvatarSourceURLBuildsPublicURLFromObjectKey(t *testing.T) {
 	ConfigureGroupAvatarCDNBase("https://cdn.test")
 
-	got := resolveGroupAvatarSourceURL("media/avatar/user/u1/v1/avatar.png")
-	want := "https://cdn.test/media/avatar/user/u1/v1/avatar.png"
+	got := resolveGroupAvatarSourceURL("media/avatar/s/archived-avatar/user/u1/v1/avatar.png")
+	want := "https://cdn.test/media/avatar/s/archived-avatar/user/u1/v1/avatar.png"
 	if got != want {
 		t.Fatalf("expected normalized source url %q, got %q", want, got)
 	}

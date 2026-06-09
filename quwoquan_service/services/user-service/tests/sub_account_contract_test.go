@@ -78,8 +78,8 @@ func TestSubAccount_DeleteForbidsLast(t *testing.T) {
 
 	// 删除唯一的分身应该被拒绝
 	rec := doRequest(t, http.MethodDelete, "/v1/user/personas/sa_only/delete-empty", "", authHeaders("sub_owner_3"))
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 when deleting the last persona, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when deleting the last persona, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

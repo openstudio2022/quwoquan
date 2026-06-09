@@ -6,26 +6,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 单用例原则：settle 上界 1s，避免默认 10 分钟超时拖死整批测试。
-const Duration _kHubPumpSettleTimeout = Duration(seconds: 1);
-
 Future<void> _hubPumpSettled(WidgetTester tester) async {
-  await tester.pumpAndSettle(
-    const Duration(milliseconds: 100),
-    EnginePhase.sendSemanticsUpdate,
-    _kHubPumpSettleTimeout,
-  );
+  for (var i = 0; i < 24; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+    _consumeImageLoadExceptions(tester);
+  }
 }
 
 class _FakeHttpOverrides extends HttpOverrides {
@@ -137,6 +135,15 @@ class _HubTestMockDataSourceModeNotifier extends AppDataSourceModeNotifier {
   AppDataSourceMode build() => AppDataSourceMode.mock;
 }
 
+class _FailingHubCircleRepository extends MockCircleRepository {
+  @override
+  Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
+    int limit = kHomeCircleDiscoveryFeedDefaultLimit,
+  }) async {
+    throw StateError('hub unavailable');
+  }
+}
+
 class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
   static const _kTransparentPng = [
     0x89,
@@ -233,7 +240,10 @@ class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
   }
 }
 
-Widget _buildTestApp({double textScaleFactor = 1.0}) {
+Widget _buildTestApp({
+  double textScaleFactor = 1.0,
+  List overrides = const [],
+}) {
   final router = GoRouter(
     routes: [
       GoRoute(
@@ -262,6 +272,7 @@ Widget _buildTestApp({double textScaleFactor = 1.0}) {
       appDataSourceModeProvider.overrideWith(
         _HubTestMockDataSourceModeNotifier.new,
       ),
+      ...overrides,
     ],
     child: MaterialApp.router(
       routerConfig: router,
@@ -279,8 +290,14 @@ Widget _buildTestApp({double textScaleFactor = 1.0}) {
 }
 
 void _consumeImageLoadExceptions(WidgetTester tester) {
-  while (tester.takeException() != null) {
-    // swallow network image loading errors in widget tests
+  Object? exception;
+  while ((exception = tester.takeException()) != null) {
+    final message = exception.toString();
+    if (message.contains('HTTP request failed') ||
+        message.contains('NetworkImageLoadException')) {
+      continue;
+    }
+    fail('Unexpected test exception: $message');
   }
 }
 
@@ -304,8 +321,9 @@ Future<void> _pumpUntilHubGridKeysVisible(WidgetTester tester) async {
   );
   await _hubPumpSettled(tester);
   // 渐进式 bootstrap 后 feed 先 setState；短帧轮询有上界（≤~192ms 虚拟时间）
-  for (var i = 0; i < 12 && probe.evaluate().isEmpty; i++) {
-    await tester.pump(const Duration(milliseconds: 16));
+  for (var i = 0; i < 40 && probe.evaluate().isEmpty; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    _consumeImageLoadExceptions(tester);
   }
   await _hubPumpSettled(tester);
 }
@@ -313,8 +331,9 @@ Future<void> _pumpUntilHubGridKeysVisible(WidgetTester tester) async {
 Future<void> _pumpUntilHubCategoryTabsVisible(WidgetTester tester) async {
   final probe = find.text('车之家');
   await _hubPumpSettled(tester);
-  for (var i = 0; i < 12 && probe.evaluate().isEmpty; i++) {
-    await tester.pump(const Duration(milliseconds: 16));
+  for (var i = 0; i < 40 && probe.evaluate().isEmpty; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    _consumeImageLoadExceptions(tester);
   }
   await _hubPumpSettled(tester);
 }
@@ -375,6 +394,20 @@ void main() {
         lessThan(tester.getTopLeft(find.text(labels[i + 1])).dx),
       );
     }
+  });
+
+  testWidgets('圈子 hub bootstrap 失败时展示统一页态', (tester) async {
+    await tester.pumpWidget(
+      _buildTestApp(
+        overrides: [
+          circleRepositoryProvider.overrideWithValue(_FailingHubCircleRepository()),
+        ],
+      ),
+    );
+    await _hubPumpSettled(tester);
+
+    expect(find.byType(AppPageErrorState), findsOneWidget);
+    expect(find.text(UITextConstants.tryAgain), findsOneWidget);
   });
 
   testWidgets('旧频道偏好不会恢复已下线垂类', (tester) async {

@@ -28,7 +28,7 @@ LOCAL_TARBALL="${GAMMA_ECS_LOCAL_TARBALL:-}"
 REPORT_DIR="${ROOT}/artifacts/ecs-onebox"
 REPORT_PATH="${REPORT_DIR}/deploy-report.json"
 BACKUP_PARENT="${GAMMA_ECS_BACKUP_PARENT:-}"
-CURATED_MEDIA_ROOT="${ROOT}/artifacts/local-gamma/media"
+CURATED_MEDIA_ROOT="${ROOT}/state/local/gamma/media"
 CURATED_MEDIA_BUNDLE="${ROOT}/deploy/shared/gamma_curated_media_bundle.json"
 DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS="${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}"
 DEFAULT_COMPOSE_TIMEOUT_SECONDS="${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-3600}"
@@ -201,7 +201,7 @@ if [[ "$SKIP_UPLOAD" != "1" ]]; then
       --exclude='apps/ops-portal/node_modules' \
       --exclude='quwoquan_service/contracts/metadata/_shared/test_fixtures/media' \
       --exclude='quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media' \
-      --exclude='artifacts/local-gamma/media' \
+      --exclude='state/local/gamma/media' \
       -czf - . | remote_tar_extract_into "$REMOTE_STAGE_DIR"
   fi
   activate_remote_stage_dir
@@ -209,8 +209,8 @@ if [[ "$SKIP_UPLOAD" != "1" ]]; then
 
   echo "[gamma-ecs] uploading curated gamma media bundle"
   FAILURE_STAGE="upload_curated_media"
-  remote_exec "rm -rf '$REMOTE_DIR/artifacts/local-gamma/media' && mkdir -p '$REMOTE_DIR/artifacts/local-gamma'"
-  tar -czf - -C "$ROOT/artifacts/local-gamma" media | remote_tar_extract_into "$REMOTE_DIR/artifacts/local-gamma"
+  remote_exec "rm -rf '$REMOTE_DIR/state/local/gamma/media' && mkdir -p '$REMOTE_DIR/state/local/gamma'"
+  tar -czf - -C "$ROOT/state/local/gamma" media | remote_tar_extract_into "$REMOTE_DIR/state/local/gamma"
 else
   echo "[gamma-ecs] skip_upload=1 — using existing tree at ${REMOTE_DIR}"
   echo "[gamma-ecs] skip_upload=1 — reusing existing curated media bundle on remote"

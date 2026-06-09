@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
 enum AudioOutput {
   earpiece,
@@ -76,6 +80,7 @@ class MediaDeviceNotifier extends Notifier<MediaDeviceState> {
 
   void setAudioOutput(AudioOutput output) {
     state = state.copyWith(audioOutput: output);
+    _applyAudioOutput(output);
   }
 
   void toggleSpeaker() {
@@ -83,11 +88,31 @@ class MediaDeviceNotifier extends Notifier<MediaDeviceState> {
         ? AudioOutput.earpiece
         : AudioOutput.speaker;
     state = state.copyWith(audioOutput: next);
+    _applyAudioOutput(next);
   }
 
   void flipCamera() {
     state = state.copyWith(
       cameraPosition: state.cameraPosition.toggle(),
+    );
+    final room = ref.read(liveKitRoomServiceProvider);
+    unawaited(
+      room.switchCamera().catchError((Object e) {
+        if (kDebugMode) {
+          debugPrint('MediaDevice: switchCamera failed: $e');
+        }
+      }),
+    );
+  }
+
+  void _applyAudioOutput(AudioOutput output) {
+    final room = ref.read(liveKitRoomServiceProvider);
+    unawaited(
+      room.setSpeakerOn(output == AudioOutput.speaker).catchError((Object e) {
+        if (kDebugMode) {
+          debugPrint('MediaDevice: setSpeakerOn failed: $e');
+        }
+      }),
     );
   }
 

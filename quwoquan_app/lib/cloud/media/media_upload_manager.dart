@@ -8,9 +8,9 @@ import 'package:quwoquan_app/cloud/media/upload_policy.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 /// Upload task state.
@@ -137,20 +137,22 @@ class MediaUploadManager {
   }
 
   Future<ContentMediaInitUploadResponseDto> _initUpload(UploadTask task) async {
-    final uri = Uri.parse('$_baseUrl${ContentApiMetadata.initMediaUploadPath}');
+    final uri = Uri.parse('$_baseUrl${ChatApiMetadata.initChatUploadPath}');
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.initMediaUpload),
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.initChatUpload),
       body: {
-        'category': task.category.name,
+        'mediaType': _mediaTypeForCategory(task.category),
         'ownerId': task.ownerId,
         'fileName': task.fileName,
         'contentType': task.contentType,
         'fileSize': task.fileSize,
+        'assetScope': 'draft',
+        'sourceKind': 'chat_attachment',
       },
     );
     return ContentMediaInitUploadResponseDto.fromMap(
-      CloudResponseDecoder.asObject(decoded, context: ContentRequestPageIds.initMediaUpload),
+      CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.initChatUpload),
     );
   }
 
@@ -177,18 +179,21 @@ class MediaUploadManager {
   Future<ContentMediaCompleteUploadResponseDto> _completeUpload(
     UploadTask task,
   ) async {
-    final uri = Uri.parse(
-      '$_baseUrl${ContentApiMetadata.completeMediaUploadPath(sessionId: task.sessionId ?? '')}',
-    );
+    final uri = Uri.parse('$_baseUrl${ChatApiMetadata.completeChatUploadPath}');
+    final body = <String, dynamic>{
+      'sessionId': task.sessionId ?? '',
+      'mediaType': _mediaTypeForCategory(task.category),
+      'assetScope': 'draft',
+      'sourceKind': 'chat_attachment',
+      ...?task.completionMetadata,
+    };
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        ContentRequestPageIds.completeMediaUpload,
-      ),
-      body: task.completionMetadata ?? {},
+      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.completeChatUpload),
+      body: body,
     );
     return ContentMediaCompleteUploadResponseDto.fromMap(
-      CloudResponseDecoder.asObject(decoded, context: ContentRequestPageIds.completeMediaUpload),
+      CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.completeChatUpload),
     );
   }
 
@@ -222,4 +227,13 @@ class MediaUploadManager {
 
   int get pendingCount => _queue.length;
   int get activeCount => _active.length;
+}
+
+String _mediaTypeForCategory(MediaCategory category) {
+  return switch (category) {
+    MediaCategory.chatVoice => 'audio',
+    MediaCategory.chatVideo => 'video',
+    MediaCategory.chatFile => 'file',
+    _ => 'image',
+  };
 }

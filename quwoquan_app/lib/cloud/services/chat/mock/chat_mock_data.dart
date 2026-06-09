@@ -16,7 +16,7 @@ class ChatMockData {
       'https://i.pravatar.cc/150?u=$userId';
 
   static String groupAvatarFor(String conversationId, {int version = 1}) =>
-      'https://example.com/media/avatar/conversation/$conversationId/v$version/mock.png';
+      'https://example.com/media/avatar/s/archived-avatar/conversation/$conversationId/v$version/mock.png';
 
   static String _relativeIso({
     required int daysAgo,
@@ -1042,36 +1042,50 @@ class ChatMockData {
       'userId': 'user_002',
       'displayName': '李明',
       'avatarUrl': avatarFor('user_002'),
+      'relationState': 'mutual',
+      'source': 'follow',
     },
     {
       'userId': 'user_003',
       'displayName': '张华',
       'avatarUrl': avatarFor('user_003'),
+      'relationState': 'mutual',
+      'source': 'follow',
     },
     {
       'userId': 'user_004',
       'displayName': '王芳',
       'avatarUrl': avatarFor('user_004'),
+      'relationState': 'mutual',
+      'source': 'follow',
     },
     {
       'userId': 'user_006',
       'displayName': '李想',
       'avatarUrl': avatarFor('user_006'),
+      'relationState': 'mutual',
+      'source': 'follow',
     },
     {
       'userId': 'user_007',
       'displayName': '李青',
       'avatarUrl': avatarFor('user_007'),
+      'relationState': 'mutual',
+      'source': 'follow',
     },
     {
       'userId': 'user_008',
       'displayName': '李悦',
       'avatarUrl': avatarFor('user_008'),
+      'relationState': 'mutual',
+      'source': 'follow',
     },
     {
       'userId': 'user_009',
       'displayName': '李泽',
       'avatarUrl': avatarFor('user_009'),
+      'relationState': 'mutual',
+      'source': 'follow',
     },
   ];
 

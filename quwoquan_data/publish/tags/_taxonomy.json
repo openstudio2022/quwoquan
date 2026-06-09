@@ -1,0 +1,364 @@
+{
+  "version": "v4",
+  "schemaVersion": "1.0",
+  "groups": [
+    "Topic",
+    "Audience",
+    "Format",
+    "Entity"
+  ],
+  "dimensions": [
+    {
+      "id": "Topic/命理玄学",
+      "group": "Topic",
+      "label": "命理玄学",
+      "count": 18
+    },
+    {
+      "id": "Topic/摄影",
+      "group": "Topic",
+      "label": "摄影",
+      "count": 30
+    },
+    {
+      "id": "Topic/历史文化",
+      "group": "Topic",
+      "label": "历史文化",
+      "count": 17
+    },
+    {
+      "id": "Topic/家居生活",
+      "group": "Topic",
+      "label": "家居生活",
+      "count": 11
+    },
+    {
+      "id": "Topic/情感关系",
+      "group": "Topic",
+      "label": "情感关系",
+      "count": 9
+    },
+    {
+      "id": "Topic/人文社科",
+      "group": "Topic",
+      "label": "人文社科",
+      "count": 9
+    },
+    {
+      "id": "Topic/健康养生",
+      "group": "Topic",
+      "label": "健康养生",
+      "count": 29
+    },
+    {
+      "id": "Topic/法律政务",
+      "group": "Topic",
+      "label": "法律政务",
+      "count": 6
+    },
+    {
+      "id": "Topic/亲子育儿",
+      "group": "Topic",
+      "label": "亲子育儿",
+      "count": 12
+    },
+    {
+      "id": "Topic/旅行",
+      "group": "Topic",
+      "label": "旅行",
+      "count": 87
+    },
+    {
+      "id": "Topic/二次元",
+      "group": "Topic",
+      "label": "二次元",
+      "count": 8
+    },
+    {
+      "id": "Topic/公益社会",
+      "group": "Topic",
+      "label": "公益社会",
+      "count": 6
+    },
+    {
+      "id": "Topic/事件",
+      "group": "Topic",
+      "label": "事件",
+      "count": 7
+    },
+    {
+      "id": "Topic/影视娱乐",
+      "group": "Topic",
+      "label": "影视娱乐",
+      "count": 9
+    },
+    {
+      "id": "Topic/教育成长",
+      "group": "Topic",
+      "label": "教育成长",
+      "count": 74
+    },
+    {
+      "id": "Topic/住宿",
+      "group": "Topic",
+      "label": "住宿",
+      "count": 106
+    },
+    {
+      "id": "Topic/游戏电竞",
+      "group": "Topic",
+      "label": "游戏电竞",
+      "count": 8
+    },
+    {
+      "id": "Topic/时尚穿搭",
+      "group": "Topic",
+      "label": "时尚穿搭",
+      "count": 19
+    },
+    {
+      "id": "Topic/宠物动物",
+      "group": "Topic",
+      "label": "宠物动物",
+      "count": 8
+    },
+    {
+      "id": "Topic/三农生活",
+      "group": "Topic",
+      "label": "三农生活",
+      "count": 6
+    },
+    {
+      "id": "Topic/自然风光",
+      "group": "Topic",
+      "label": "自然风光",
+      "count": 14
+    },
+    {
+      "id": "Topic/话题",
+      "group": "Topic",
+      "label": "话题",
+      "count": 7
+    },
+    {
+      "id": "Topic/职场效率",
+      "group": "Topic",
+      "label": "职场效率",
+      "count": 10
+    },
+    {
+      "id": "Topic/科技",
+      "group": "Topic",
+      "label": "科技",
+      "count": 9
+    },
+    {
+      "id": "Topic/美食餐饮",
+      "group": "Topic",
+      "label": "美食餐饮",
+      "count": 132
+    },
+    {
+      "id": "Topic/运动",
+      "group": "Topic",
+      "label": "运动",
+      "count": 35
+    },
+    {
+      "id": "Topic/地理",
+      "group": "Topic",
+      "label": "地理",
+      "count": 3541
+    },
+    {
+      "id": "Topic/购物消费",
+      "group": "Topic",
+      "label": "购物消费",
+      "count": 8
+    },
+    {
+      "id": "Topic/军事国防",
+      "group": "Topic",
+      "label": "军事国防",
+      "count": 5
+    },
+    {
+      "id": "Topic/国际视野",
+      "group": "Topic",
+      "label": "国际视野",
+      "count": 6
+    },
+    {
+      "id": "Topic/汽车文化",
+      "group": "Topic",
+      "label": "汽车文化",
+      "count": 7
+    },
+    {
+      "id": "Topic/时间",
+      "group": "Topic",
+      "label": "时间",
+      "count": 70
+    },
+    {
+      "id": "Topic/金融理财",
+      "group": "Topic",
+      "label": "金融理财",
+      "count": 8
+    },
+    {
+      "id": "Topic/数码",
+      "group": "Topic",
+      "label": "数码",
+      "count": 9
+    },
+    {
+      "id": "Topic/宗教信仰",
+      "group": "Topic",
+      "label": "宗教信仰",
+      "count": 7
+    },
+    {
+      "id": "Topic/艺术创作",
+      "group": "Topic",
+      "label": "艺术创作",
+      "count": 9
+    },
+    {
+      "id": "Topic/场景",
+      "group": "Topic",
+      "label": "场景",
+      "count": 20
+    },
+    {
+      "id": "Topic/美妆护肤",
+      "group": "Topic",
+      "label": "美妆护肤",
+      "count": 19
+    },
+    {
+      "id": "Topic/非遗民俗",
+      "group": "Topic",
+      "label": "非遗民俗",
+      "count": 8
+    },
+    {
+      "id": "Audience/创作者",
+      "group": "Audience",
+      "label": "创作者",
+      "count": 22
+    },
+    {
+      "id": "Audience/圈子",
+      "group": "Audience",
+      "label": "圈子",
+      "count": 21
+    },
+    {
+      "id": "Audience/用户",
+      "group": "Audience",
+      "label": "用户",
+      "count": 190
+    },
+    {
+      "id": "Format/互动玩法",
+      "group": "Format",
+      "label": "互动玩法",
+      "count": 7
+    },
+    {
+      "id": "Format/表现手法",
+      "group": "Format",
+      "label": "表现手法",
+      "count": 57
+    },
+    {
+      "id": "Format/商业形式",
+      "group": "Format",
+      "label": "商业形式",
+      "count": 8
+    },
+    {
+      "id": "Format/视觉风格",
+      "group": "Format",
+      "label": "视觉风格",
+      "count": 23
+    },
+    {
+      "id": "Format/内容角度",
+      "group": "Format",
+      "label": "内容角度",
+      "count": 108
+    },
+    {
+      "id": "Format/内容载体",
+      "group": "Format",
+      "label": "内容载体",
+      "count": 47
+    },
+    {
+      "id": "Entity/品牌",
+      "group": "Entity",
+      "label": "品牌",
+      "count": 39
+    },
+    {
+      "id": "Entity/地点",
+      "group": "Entity",
+      "label": "地点",
+      "count": 102
+    },
+    {
+      "id": "Entity/交通工具",
+      "group": "Entity",
+      "label": "交通工具",
+      "count": 6
+    },
+    {
+      "id": "Entity/活动",
+      "group": "Entity",
+      "label": "活动",
+      "count": 6
+    },
+    {
+      "id": "Entity/作品",
+      "group": "Entity",
+      "label": "作品",
+      "count": 10
+    },
+    {
+      "id": "Entity/商品",
+      "group": "Entity",
+      "label": "商品",
+      "count": 58
+    },
+    {
+      "id": "Entity/人物",
+      "group": "Entity",
+      "label": "人物",
+      "count": 31
+    },
+    {
+      "id": "Entity/机构",
+      "group": "Entity",
+      "label": "机构",
+      "count": 44
+    },
+    {
+      "id": "Entity/生物",
+      "group": "Entity",
+      "label": "生物",
+      "count": 15
+    }
+  ],
+  "totalCount": 5197,
+  "stats": {
+    "byGroup": {
+      "Topic": 4403,
+      "Audience": 233,
+      "Format": 250,
+      "Entity": 311
+    }
+  },
+  "generatedAt": "2026-05-15T00:00:00+08:00"
+}

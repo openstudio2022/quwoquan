@@ -26,16 +26,12 @@ func TestExtractSliceIDFromObjectKey(t *testing.T) {
 	}
 }
 
-func TestResolveSliceIDFromObjectKeyFallsBackToLegacyPrefixes(t *testing.T) {
-	cases := map[string]string{
-		"media/avatar/user/u1/v1/avatar.png": LegacyAvatarSliceID,
-		"media/background/user/u1/v1/background.png": LegacyAvatarSliceID,
-		"media/image/post/p1/v1/cover.png": LegacyImageSliceID,
-		"media/video/post/p1/v1/cover.mp4": LegacyVideoSliceID,
+func TestResolveSliceIDFromObjectKeyRequiresExplicitSlice(t *testing.T) {
+	got := ResolveSliceIDFromObjectKey("content/avatar/s/archived-avatar/user/u1/avatar/avatar.png")
+	if got != ArchivedAvatarSliceID {
+		t.Fatalf("unexpected archived slice id: %s", got)
 	}
-	for objectKey, want := range cases {
-		if got := ResolveSliceIDFromObjectKey(objectKey); got != want {
-			t.Fatalf("unexpected legacy slice for %s: got=%s want=%s", objectKey, got, want)
-		}
+	if got := ResolveSliceIDFromObjectKey("media/avatar/no-slice/user/u1/v1/avatar.png"); got != "" {
+		t.Fatalf("expected path without slice to stop resolving, got %s", got)
 	}
 }

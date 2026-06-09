@@ -136,7 +136,23 @@ func main() {
 	tokenSvc := application.NewTokenService(cfg.LiveKit.APIKey, cfg.LiveKit.APISecret)
 
 	signalHandler := wsadapter.NewSignalHandler(callCache, logger)
-	orchestrator := application.NewCallOrchestrator(callStore, callCache, domainSvc, roomSvc, tokenSvc, eventPublisher, signalHandler)
+	userServiceBaseURL := strings.TrimSpace(os.Getenv("USER_SERVICE_BASE_URL"))
+	relationshipGate := application.DenyRelationshipGate()
+	if userServiceBaseURL != "" {
+		profileCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
+		profileClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 2 * time.Second}, profileCB)
+		relationshipGate = httpadapter.NewUserRelationshipGate(userServiceBaseURL, profileClient)
+	}
+	orchestrator := application.NewCallOrchestrator(
+		callStore,
+		callCache,
+		domainSvc,
+		roomSvc,
+		tokenSvc,
+		eventPublisher,
+		relationshipGate,
+		signalHandler,
+	)
 	handler := httpadapter.NewCallHandler(orchestrator, signalHandler).Routes()
 
 	healthChecker := rthealth.NewChecker()

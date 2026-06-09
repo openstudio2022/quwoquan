@@ -10,6 +10,7 @@ class AssistantRequestPageIds {
     'CreateSkillSubscription': 'assistant.create.skill.subscription',
     'GetAssistantConversation': 'assistant.get.assistant.conversation',
     'GetAssistantTurn': 'assistant.get.assistant.turn',
+    'GetEntryPersonalization': 'assistant.get.entry.personalization',
     'GetLearningOpsSummary': 'assistant.get.learning.ops.summary',
     'GetPolicy': 'assistant.policy.get',
     'GetSkillSubscription': 'assistant.get.skill.subscription',
@@ -35,6 +36,7 @@ class AssistantRequestPageIds {
   static const String createSkillSubscription = 'assistant.create.skill.subscription';
   static const String getAssistantConversation = 'assistant.get.assistant.conversation';
   static const String getAssistantTurn = 'assistant.get.assistant.turn';
+  static const String getEntryPersonalization = 'assistant.get.entry.personalization';
   static const String getLearningOpsSummary = 'assistant.get.learning.ops.summary';
   static const String getPolicy = 'assistant.policy.get';
   static const String getSkillSubscription = 'assistant.get.skill.subscription';

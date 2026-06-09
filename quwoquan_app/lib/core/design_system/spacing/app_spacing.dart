@@ -44,12 +44,47 @@ class AppSpacing {
   static const double webInstallBannerWideHeight = 56.0;
   static const double webNavigationRailWidth = 96.0;
   static const double webPcHeaderHeight = 64.0;
+  static const double webPcToolbarBrandSlotWidth = 96.0;
+  static const double webPcToolbarBrandIconSize = 20.0;
+  static const double webPcToolbarActionSize = 36.0;
+  static const double webPcToolbarActionIconSize = 18.0;
   static const double webPcMasonryColumnWidth = 236.0;
   static const double webPcMasonryGap = 20.0;
   static const double webPcReadingMinWidth = 720.0;
   static const double webPcReadingMaxWidth = 820.0;
-  static const double webPcRightRailWidth = 280.0;
+  static const double webPcRightRailWidth = 240.0;
   static const double webPcInstallCtaCardWidth = 260.0;
+  static const double webPcShellMaxWidth = 1320.0;
+
+  /// 宽屏认证态页面（消息/我的/设置/更多）统一的内容最大宽度。
+  /// 中间内容区固定该宽度并居中，左右用 page background 填充以区分阅读区。
+  static const double webPageContentMaxWidth = 860.0;
+  static const double webPcSearchMinWidth = 320.0;
+  static const double webPcSearchMaxWidth = 460.0;
+  static const double webPcWelcomeHeroHeight = 144.0;
+  static const double webPcWelcomeVisualDiameter = 88.0;
+  static const double webPcDownloadQrSize = 64.0;
+  static const double webPcCreateCardWidth = 260.0;
+  static const double webPcFeedCardWidth = 220.0;
+  static const double webPcHeroCardHeight = 240.0;
+  static const double webPcFeedCardImageHeight = 124.0;
+  static const double webPcContextTabSelectedIndicatorWidth = 20.0;
+  static const double webPcContextTabIndicatorHeight = 2.0;
+  static const double webPcHeroPinnedProgressDistance = 360.0;
+  static const double webPcHeroParallaxDistance = 32.0;
+  static const double webPcToolbarElevationBlurRadius = 18.0;
+  static const double webPcLoginSurfaceWidth = 440.0;
+  static const double webPcLoginSurfaceMaxHeight = 720.0;
+  static const double webPcLoginSurfaceBackdropBlur = 18.0;
+  static const double webPcLoginSurfaceInset = 40.0;
+  static const int webPcFeedPreviewItemLimit = 12;
+  static const Duration webPcContextTabSwitchDuration = Duration(
+    milliseconds: 180,
+  );
+  static const Duration webPcScrollToContentDuration = Duration(
+    milliseconds: 360,
+  );
+  static const Duration webPcLoginSurfaceDuration = Duration(milliseconds: 220);
 
   // ==================== 基础间距 ====================
   /// 极小间距: 4.0
@@ -104,10 +139,10 @@ class AppSpacing {
 
   /// 首页统一对象推荐卡最大宽度（横滑流内单卡上限，避免过宽）。
   static const double homeObjectCardMaxWidth = 260.0;
-
   /// 首页统一对象推荐卡横滑流固定高度（含两行文案 + 行动按钮触控余量）。
   static const double homeObjectCardRailHeight = 88.0;
-
+  static const double objectIntersectionCardWideWidth = 132.0;
+  static const double objectIntersectionCardWideCoverHeight = 92.0;
   // ==================== 文本行高语义 ====================
   /// 单行紧凑标题/标签（line height 倍数 1.0）
   static const double textLineHeightSingle = 1.0;
@@ -132,6 +167,12 @@ class AppSpacing {
 
   /// 长文正文行高，适用于文章分页阅读场景
   static const double textLineHeightArticleBody = 1.82;
+
+  /// 辅助文案行高，适用于 footnote 级别的说明文本
+  static const double textLineHeightFootnote = 1.3;
+
+  /// 角标说明行高，适用于 caption 级别的短说明文本
+  static const double textLineHeightCaption = 1.25;
 
   /// 获取文案按钮内边距（按断点适配，不受容器约束）
   static EdgeInsets buttonPadding(BuildContext context, String size) {
@@ -364,6 +405,29 @@ class AppSpacing {
 
   /// 评论输入默认高度，与对话输入单行槽一致。
   static const double commentInputHeight = chatInputToolbarMinHeight;
+
+  /// 侵入式分屏评论区默认占屏高比例（评论区 2/3，媒体区 1/3）。
+  static const double immersiveCommentSheetRatio = 0.66;
+
+  /// 侵入式分屏评论区可拖拽的最小/最大占屏高比例。
+  static const double immersiveCommentSheetMinRatio = 0.5;
+  static const double immersiveCommentSheetMaxRatio = 0.9;
+
+  /// 评论输入浮层多行输入框默认两行高度与最多五行高度。
+  static const double commentComposerMinHeight = 64.0;
+  static const double commentComposerMaxHeight = 132.0;
+
+  /// 评论输入浮层最近 emoji 横条高度。
+  static const double commentComposerRecentEmojiHeight = 44.0;
+
+  /// 评论输入浮层底部单张图片缩略图边长。
+  static const double commentAttachmentThumbnailSize = 72.0;
+
+  /// 评论缩略图删除角标图标尺寸。
+  static const double iconXSmall = 12.0;
+
+  /// 评论列表虚拟化缓存高度（约一屏评论高度）。
+  static const double commentListCacheExtent = 520.0;
 
   /// 简版媒体底栏内容区高度。
   static double mediaBottomBarHeight(BuildContext context) =>
@@ -949,7 +1013,8 @@ class AppSpacing {
 
   static double webPcReadingWidth(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final usable = width - webPcRightRailWidth - webPcMasonryGap * 2;
+    final horizontalPadding = webShellContentPadding(context).horizontal;
+    final usable = (width - horizontalPadding).clamp(0, webContentMaxWidth);
     return usable.clamp(webPcReadingMinWidth, webPcReadingMaxWidth).toDouble();
   }
 

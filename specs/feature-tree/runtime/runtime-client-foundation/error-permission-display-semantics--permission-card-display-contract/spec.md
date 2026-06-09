@@ -2,7 +2,7 @@
 
 ## 功能说明
 
-权限类（定位、相册、相机、麦克风）的统一展示契约：卡片形态、主操作（去设置）、l10n key、交互流程。
+权限类（定位、相册、相机、麦克风）的统一展示契约：卡片形态、主操作（去设置）、l10n key、交互流程，并作为统一 `AppInlineGateState` / `AppPageErrorState` 的第一类可复用 gate 场景。
 
 ## 范围
 
@@ -10,6 +10,7 @@
 - 永久拒绝 → 展示「去设置」；可再请求 → 引导重试或再次 request
 - l10n：locationAppPermissionRequired、mediaPickerPermissionDenied、openSettings 等
 - 地图/位置特定：加载态、权限态、云端错误态区分
+- gate 语义：权限被拒绝时说明“当前为什么不能继续”以及“继续所需动作”
 
 ## 与父节点关系
 
@@ -21,4 +22,5 @@
 - 相册权限拒绝使用 mediaPickerPermissionDenied
 - 卡片使用 AppSpacing、colorScheme token
 - **LocationPermissionChecker 可注入**：支持测试注入 FakeChecker，便于 L1b 覆盖权限态
+- **统一 gate 载体**：权限态与登录门禁态共享 `AppInlineGateState` 结构，但图标、按钮和副说明由权限语义决定
 - **L4 Patrol（advisory）**：真机权限拒绝后展示「去设置」、点击可打开系统设置

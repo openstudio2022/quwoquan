@@ -24,8 +24,11 @@ type SkillSubscriptionTrigger struct {
 }
 
 type SkillSubscriptionDestination struct {
-	DestinationType string `bson:"destinationType" json:"destinationType"`
-	DestinationID   string `bson:"destinationId" json:"destinationId"`
+	DestinationType  string `bson:"destinationType" json:"destinationType"`
+	DestinationID    string `bson:"destinationId" json:"destinationId"`
+	MaxPerDay        int    `bson:"maxPerDay,omitempty" json:"maxPerDay,omitempty"`
+	CooldownMinutes  int    `bson:"cooldownMinutes,omitempty" json:"cooldownMinutes,omitempty"`
+	QuietHoursPolicy string `bson:"quietHoursPolicy,omitempty" json:"quietHoursPolicy,omitempty"`
 }
 
 type SkillSubscription struct {

@@ -132,6 +132,19 @@ def build_sample_bundle(
         ref_key="entityRef",
         bucket_key=_entity_bucket,
     )
+    # 引用闭包：post 一旦进入环境，所引用且已发布的 entity 必须同批进入。
+    # 否则内容详情、实体主页和推荐条件画像会在目标环境产生悬挂引用。
+    known_entities = {str(e.get("entityRef")) for e in entities if e.get("entityRef")}
+    selected_posts = {str(ref) for ref in post_refs}
+    required_entities: set[str] = set()
+    for post in posts:
+        if str(post.get("postRef") or "") not in selected_posts:
+            continue
+        for entity_ref in post.get("entityRefs") or []:
+            ref = str(entity_ref)
+            if ref in known_entities:
+                required_entities.add(ref)
+    entity_refs = sorted(set(entity_refs) | required_entities)
     return {
         "schemaVersion": "quwoquan.content_sample_bundle",
         "environment": env,

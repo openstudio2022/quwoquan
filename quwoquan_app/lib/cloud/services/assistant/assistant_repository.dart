@@ -16,12 +16,15 @@ import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelo
 import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart';
 import 'package:quwoquan_app/core/models/app_content_prototype_models.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_codec.dart';
 
 export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
     show
         AssistantInteractionReportBatchAck,
         AssistantPolicyView,
+        AssistantEntryPersonalizationChipView,
+        AssistantEntryPersonalizationView,
         AssistantReportPageContextRequestWire,
         AssistantScorecardReportBatchAck,
         AssistantSearchCitationView,
@@ -31,6 +34,9 @@ export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_a
         AssistantUserMemoryView,
         AssistantUserTaskView,
         InteractionEvent,
+        PageContextAck,
+        SuggestedAction,
+        SuggestedActionListView,
         Scorecard;
 export 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart'
     show AssistantConversationWire;
@@ -119,6 +125,95 @@ AssistantSearchResultView _buildFallbackSearchResult({
   );
 }
 
+AssistantEntryPersonalizationView _buildFallbackEntryPersonalization(
+  AssistantOpenContext context,
+) {
+  final pageType = assistantPageTypeForSource(context.source);
+  final welcome = switch (pageType) {
+    'chat' => '我可以结合当前会话帮你整理话题、找资料或写回复。',
+    'search' => '我可以把站内结果、网页线索和你的上下文串起来。',
+    'create' => '我可以帮你找灵感、配文案或整理发布计划。',
+    'home' => '我可以结合当前主页、关系和交集帮你解释信息。',
+    _ => '有什么想让我帮忙的？',
+  };
+  return AssistantEntryPersonalizationView(
+    welcomeMessage: welcome,
+    suggestionLines: const <String>['说一句你想做的事，或选上面的推荐试试'],
+    chips: const <AssistantEntryPersonalizationChipView>[
+      AssistantEntryPersonalizationChipView(
+        chipId: 'find',
+        label: '帮我找',
+        actionType: 'command',
+        value: 'find',
+      ),
+      AssistantEntryPersonalizationChipView(
+        chipId: 'remember',
+        label: '帮我记',
+        actionType: 'command',
+        value: 'remember',
+      ),
+      AssistantEntryPersonalizationChipView(
+        chipId: 'share',
+        label: '帮我分享',
+        actionType: 'command',
+        value: 'share',
+      ),
+    ],
+    personalized: false,
+  );
+}
+
+Map<String, dynamic> assistantContextSnapshotFromOpenContext(
+  AssistantOpenContext context, {
+  String? operationId,
+}) {
+  final now = DateTime.now().toUtc().toIso8601String();
+  final pageType = assistantPageTypeForSource(context.source);
+  final objectType = context.objectType?.trim() ?? '';
+  final objectId = context.entityId?.trim() ?? '';
+  return <String, dynamic>{
+    'snapshotVersion': 'assistant_context_v1',
+    'capturedAt': now,
+    'routeId': AppUiSurfaces.personalAssistantDialog.routeId,
+    'surfaceId': AppUiSurfaces.personalAssistantDialog.id,
+    if (operationId != null && operationId.trim().isNotEmpty)
+      'operationId': operationId.trim(),
+    'pageType': pageType,
+    'sourceSurfaceId': context.source.name,
+    'experienceLevel': context.experienceLevel.name,
+    'visitTarget': context.visitTarget.targetKey,
+    if (objectType.isNotEmpty && objectId.isNotEmpty)
+      'pageObjects': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'objectTypeRef': objectType,
+          'objectId': objectId,
+          if ((context.hints['title'] ?? '').toString().trim().isNotEmpty)
+            'title': context.hints['title'].toString().trim(),
+          if ((context.hints['snippet'] ?? '').toString().trim().isNotEmpty)
+            'snippet': context.hints['snippet'].toString().trim(),
+        },
+      ],
+    if (context.intersectionRefs.isNotEmpty)
+      'intersectionRefs': context.intersectionRefs,
+    if ((context.tab ?? '').trim().isNotEmpty) 'matchedSegments': <String>[
+      context.tab!.trim(),
+    ],
+    if ((context.dimension ?? '').trim().isNotEmpty) 'matchedInterestTags': <String>[
+      context.dimension!.trim(),
+    ],
+    'consentMatrix': const <String, dynamic>{
+      'canReadCurrentPage': true,
+      'canReadConversation': false,
+      'canUseProfile': true,
+      'canUseRelationshipGraph': true,
+      'canUseTags': true,
+      'canDeliverProactively': false,
+      'consentSource': 'app_open_context',
+      'consentVersion': 'assistant_context_v1',
+    },
+  };
+}
+
 abstract class AssistantRepository {
   Future<AssistantPolicyView> getPolicySnapshot({
     String policyVersionHint = '',
@@ -144,6 +239,21 @@ abstract class AssistantRepository {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
+    Map<String, dynamic>? contextSnapshot,
+  });
+
+  Future<PageContextAck> reportPageContext({
+    required AssistantOpenContext context,
+    String? userAction,
+    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
+  });
+
+  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
+    required AssistantOpenContext context,
+  });
+
+  Future<SuggestedActionListView> getSuggestedActions({
+    required AssistantOpenContext context,
   });
 
   /// GET /v1/assistant/tasks
@@ -292,10 +402,53 @@ class MockAssistantRepository implements AssistantRepository {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
+    Map<String, dynamic>? contextSnapshot,
   }) async {
     return _buildFallbackSearchResult(
       query: query,
       searchIntensity: searchIntensity,
+    );
+  }
+
+  @override
+  Future<PageContextAck> reportPageContext({
+    required AssistantOpenContext context,
+    String? userAction,
+    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
+  }) async {
+    return PageContextAck(
+      accepted: true,
+      contextKey: 'mock:${assistantPageTypeForSource(context.source)}',
+      expiresAt: DateTime.now()
+          .toUtc()
+          .add(const Duration(minutes: 5))
+          .toIso8601String(),
+    );
+  }
+
+  @override
+  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
+    required AssistantOpenContext context,
+  }) async {
+    return _buildFallbackEntryPersonalization(context);
+  }
+
+  @override
+  Future<SuggestedActionListView> getSuggestedActions({
+    required AssistantOpenContext context,
+  }) async {
+    final personalization = _buildFallbackEntryPersonalization(context);
+    return SuggestedActionListView(
+      items: personalization.chips
+          .map(
+            (chip) => SuggestedAction(
+              actionId: chip.chipId,
+              type: chip.actionType,
+              label: chip.label,
+              payload: <String, dynamic>{'value': chip.value ?? ''},
+            ),
+          )
+          .toList(growable: false),
     );
   }
 
@@ -935,6 +1088,7 @@ class RemoteAssistantRepository implements AssistantRepository {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
+    Map<String, dynamic>? contextSnapshot,
   }) async {
     final trimmedQuery = query.trim();
     if (trimmedQuery.isEmpty) {
@@ -959,7 +1113,10 @@ class RemoteAssistantRepository implements AssistantRepository {
             searchIntensity: searchIntensity,
             sourceSurfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
             fromGlobalSearch: true,
-          ).toJson(),
+          ).toJson()
+            ..addAll(<String, dynamic>{
+              if (contextSnapshot != null) 'contextSnapshot': contextSnapshot,
+            }),
         ),
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -984,6 +1141,164 @@ class RemoteAssistantRepository implements AssistantRepository {
     return _buildFallbackSearchResult(
       query: trimmedQuery,
       searchIntensity: searchIntensity,
+    );
+  }
+
+  @override
+  Future<PageContextAck> reportPageContext({
+    required AssistantOpenContext context,
+    String? userAction,
+    List<Map<String, dynamic>> userActions = const <Map<String, dynamic>>[],
+  }) async {
+    final snapshot = assistantContextSnapshotFromOpenContext(
+      context,
+      operationId: AssistantApiMetadata.reportPageContextOperation,
+    );
+    final pageType = assistantPageTypeForSource(context.source);
+    final objectType = context.objectType?.trim() ?? '';
+    final objectId = context.entityId?.trim() ?? '';
+    final businessObjects = <Map<String, dynamic>>[
+      if (objectType.isNotEmpty && objectId.isNotEmpty)
+        <String, dynamic>{'objectType': objectType, 'objectId': objectId},
+    ];
+    try {
+      final response = await _httpClient.post(
+        _assistantUri(AssistantApiMetadata.reportPageContextPath),
+        headers: <String, String>{
+          ..._headersForPersonalAssistantDialog(
+            operationId: AssistantApiMetadata.reportPageContextOperation,
+            clientPageId: AssistantRequestPageIds.reportPageContext,
+          ),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(
+          AssistantReportPageContextRequestWire(
+            pageType: pageType,
+            businessObjects: businessObjects,
+            userAction: userAction,
+            userActions: userActions.isEmpty ? null : userActions,
+          ).toJson()
+            ..addAll(<String, dynamic>{'contextSnapshot': snapshot}),
+        ),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = response.body.trim().isEmpty
+            ? <String, dynamic>{}
+            : CloudResponseDecoder.asObject(
+                jsonDecode(response.body),
+                context: _personalAssistantDialogContext(
+                  operationId: AssistantApiMetadata.reportPageContextOperation,
+                ),
+              );
+        return PageContextAck.fromJson(decoded);
+      }
+    } catch (_) {
+      // 页面上下文上报是体验增强，失败时不阻断半屏入口。
+    }
+    return PageContextAck(
+      accepted: false,
+      contextKey: 'fallback:$pageType',
+      expiresAt: DateTime.now()
+          .toUtc()
+          .add(const Duration(minutes: 5))
+          .toIso8601String(),
+    );
+  }
+
+  @override
+  Future<AssistantEntryPersonalizationView> getEntryPersonalization({
+    required AssistantOpenContext context,
+  }) async {
+    try {
+      final uri = _assistantGetUri(
+        AssistantApiMetadata.getEntryPersonalizationPath,
+        <String, String>{
+          'source': context.source.name,
+          'pageType': assistantPageTypeForSource(context.source),
+          if ((context.tab ?? '').trim().isNotEmpty) 'tab': context.tab!.trim(),
+          if ((context.dimension ?? '').trim().isNotEmpty)
+            'dimension': context.dimension!.trim(),
+          if ((context.entityId ?? '').trim().isNotEmpty)
+            'objectId': context.entityId!.trim(),
+          if ((context.objectType ?? '').trim().isNotEmpty)
+            'objectType': context.objectType!.trim(),
+          'experienceLevel': context.experienceLevel.name,
+        },
+      );
+      final response = await _httpClient.get(
+        uri,
+        headers: _headersForPersonalAssistantDialog(
+          operationId: AssistantApiMetadata.getEntryPersonalizationOperation,
+          clientPageId: AssistantRequestPageIds.getEntryPersonalization,
+        ),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = response.body.trim().isEmpty
+            ? <String, dynamic>{}
+            : CloudResponseDecoder.asObject(
+                jsonDecode(response.body),
+                context: _personalAssistantDialogContext(
+                  operationId:
+                      AssistantApiMetadata.getEntryPersonalizationOperation,
+                ),
+              );
+        final view = AssistantEntryPersonalizationView.fromJson(decoded);
+        if (view.welcomeMessage.trim().isNotEmpty) {
+          return view;
+        }
+      }
+    } catch (_) {
+      // 个性化入口失败时保留本地 prompt 兜底。
+    }
+    return _buildFallbackEntryPersonalization(context);
+  }
+
+  @override
+  Future<SuggestedActionListView> getSuggestedActions({
+    required AssistantOpenContext context,
+  }) async {
+    try {
+      final uri = _assistantGetUri(
+        AssistantApiMetadata.getSuggestedActionsPath,
+        <String, String>{
+          'pageType': assistantPageTypeForSource(context.source),
+          if ((context.entityId ?? '').trim().isNotEmpty)
+            'objectId': context.entityId!.trim(),
+        },
+      );
+      final response = await _httpClient.get(
+        uri,
+        headers: _headersForPersonalAssistantDialog(
+          operationId: AssistantApiMetadata.getSuggestedActionsOperation,
+          clientPageId: AssistantRequestPageIds.getSuggestedActions,
+        ),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = response.body.trim().isEmpty
+            ? <String, dynamic>{}
+            : CloudResponseDecoder.asObject(
+                jsonDecode(response.body),
+                context: _personalAssistantDialogContext(
+                  operationId: AssistantApiMetadata.getSuggestedActionsOperation,
+                ),
+              );
+        return SuggestedActionListView.fromJson(decoded);
+      }
+    } catch (_) {
+      // 建议动作失败时半屏仍使用 entry personalization chips。
+    }
+    final personalization = _buildFallbackEntryPersonalization(context);
+    return SuggestedActionListView(
+      items: personalization.chips
+          .map(
+            (chip) => SuggestedAction(
+              actionId: chip.chipId,
+              type: chip.actionType,
+              label: chip.label,
+              payload: <String, dynamic>{'value': chip.value ?? ''},
+            ),
+          )
+          .toList(growable: false),
     );
   }
 

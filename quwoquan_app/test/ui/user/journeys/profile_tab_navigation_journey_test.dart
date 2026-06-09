@@ -27,12 +27,25 @@ class _AuthedSessionStore implements AuthSessionStore {
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
+    lastRefreshAtEpochMs: 0,
+    lastForegroundAuthCheckAtEpochMs: 0,
     manualLoggedOut: false,
     launchPromptDismissed: true,
   );
 
   @override
-  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+  Future<void> saveLoginResult(
+    AuthLoginResultDto result, {
+    AuthRememberedLoginMethod rememberedLoginMethod =
+        AuthRememberedLoginMethod.unknown,
+    String? rememberedLoginMaskedIdentifier,
+  }) async {}
+
+  @override
+  Future<void> saveRefreshedTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
@@ -42,6 +55,9 @@ class _AuthedSessionStore implements AuthSessionStore {
 
   @override
   Future<void> markLaunchPromptDismissed() async {}
+
+  @override
+  Future<void> markForegroundAuthCheckNow() async {}
 }
 
 /// 在 pump 期间主动 watch 登录态，让他人主页关注/私信按钮的 requireLogin 放行。
@@ -177,7 +193,7 @@ void main() {
       expect(find.textContaining('@'), findsNothing);
     });
 
-    testWidgets('旅程 D2：other 模式渲染等宽「关注」与主消息入口', (tester) async {
+    testWidgets('旅程 D2：other 模式渲染等宽「关注」与打招呼入口', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -185,10 +201,7 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
       expect(_profileActionLabel('关注'), findsOneWidget);
-      expect(
-        _profileActionLabel(UITextConstants.profileDirectMessage),
-        findsOneWidget,
-      );
+      expect(_profileActionLabel(UITextConstants.profileGreet), findsOneWidget);
     });
 
     testWidgets('旅程 D3：mine 模式渲染「资料编辑」「分身管理」', (tester) async {
@@ -288,8 +301,9 @@ void main() {
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
       await tester.pumpAndSettle();
 
-      final summaryFinder =
-          find.byKey(const ValueKey<String>('profile-shell-summary-card'));
+      final summaryFinder = find.byKey(
+        const ValueKey<String>('profile-shell-summary-card'),
+      );
       final summaryBefore = tester.getTopLeft(summaryFinder).dy;
 
       final circlesTab = _pinnedProfileSegment('圈子').evaluate().isNotEmpty
@@ -336,7 +350,10 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.byIcon(AppNavigationSemanticConstants.settingsActionIcon), findsOneWidget);
+      expect(
+        find.byIcon(AppNavigationSemanticConstants.settingsActionIcon),
+        findsOneWidget,
+      );
       expect(find.byIcon(CupertinoIcons.ellipsis), findsNothing);
     });
 
@@ -348,7 +365,10 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
       expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
-      expect(find.byIcon(AppNavigationSemanticConstants.settingsActionIcon), findsNothing);
+      expect(
+        find.byIcon(AppNavigationSemanticConstants.settingsActionIcon),
+        findsNothing,
+      );
     });
   });
 }

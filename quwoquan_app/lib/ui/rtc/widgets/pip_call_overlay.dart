@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -168,7 +169,7 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
             ),
             SizedBox(height: AppSpacing.xs),
             Text(
-              speaker?.displayName ?? '通话中',
+              speaker?.displayName ?? UITextConstants.callOngoing,
               style: TextStyle(
                 color: AppColors.white,
                 fontSize: AppTypography.xs,
@@ -193,16 +194,16 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
     showCupertinoDialog<void>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('结束通话'),
-        content: const Text('确定要挂断当前通话吗？'),
+        title: const Text(UITextConstants.callHangupConfirmTitle),
+        content: const Text(UITextConstants.callHangupConfirmBody),
         actions: [
           CupertinoDialogAction(
-            child: const Text('取消'),
+            child: const Text(UITextConstants.cancel),
             onPressed: () => Navigator.pop(ctx),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
-            child: const Text('挂断'),
+            child: const Text(UITextConstants.callHangup),
             onPressed: () {
               Navigator.pop(ctx);
               widget.onHangup();

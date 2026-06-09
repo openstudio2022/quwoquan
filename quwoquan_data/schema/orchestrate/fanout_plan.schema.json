@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "fan-out 编排分片计划树 — runtime/_shared/orchestrate/{planId}/fanout_plan.json（见 docs/fanout_scaffold_spec.md）。阶段 A planner agent 发现式逐层分片写回；冻结后是阶段 B 唯一真相源。",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": "string" },
+    "planId": { "type": "string" },
+    "goal": { "type": "string", "description": "顶层目标自然语言，如『全国景点主页』" },
+    "vertical": { "type": "string", "enum": ["travel", "campus", "photography", "tech", "car"] },
+    "partitionDimension": { "type": "string", "description": "分片维度的人读标签（agent 按指令决定，如 省/区县/类别/批；不绑定固定行政区划）" },
+    "status": { "type": "string", "enum": ["draft", "frozen", "running", "done"] },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" },
+    "frozenAt": { "type": ["string", "null"] },
+    "defaults": {
+      "type": "object",
+      "description": "应用到每个分区/叶子的缺省值（task new 与 object-queue enqueue 消费）",
+      "properties": {
+        "stage": { "type": "string" },
+        "organizeBy": { "type": "string", "enum": ["地域", "环线", "主题"] },
+        "category": { "type": "string" },
+        "strategy": { "type": "string", "enum": ["by-partition", "flat-pool", "by-leaf", "by-batch"] },
+        "concurrency": { "type": "integer", "minimum": 1 },
+        "batchSize": { "type": "integer", "minimum": 1 },
+        "budget": {
+          "type": "object",
+          "properties": {
+            "maxWallClockSeconds": { "type": "integer", "minimum": 1 },
+            "maxAttempts": { "type": "integer", "minimum": 1 },
+            "stuckThreshold": { "type": "integer", "minimum": 1 },
+            "tokenBudget": { "type": "integer", "minimum": 0 },
+            "costBudgetUsd": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "coverageTargets": {
+      "type": "object",
+      "description": "声明的覆盖目标（可选）：用于冻结门校验分区/叶子规模无遗漏。",
+      "properties": {
+        "partitions": { "type": "integer", "minimum": 0 },
+        "leaves": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "partitions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/partition" }
+    }
+  },
+  "required": ["schemaVersion", "planId", "goal", "vertical", "status", "partitions"],
+  "$defs": {
+    "partition": {
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "description": "分区键，如『四川省』『成都市武侯区』『美食』" },
+        "path": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "从根到本分区的层级路径（支持递归子分区）"
+        },
+        "taskKey": { "type": "string", "description": "task new --key（默认取 key）" },
+        "category": { "type": "string", "description": "task new --category（默认取 defaults.category）" },
+        "leaves": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/leaf" }
+        },
+        "partitions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/partition" },
+          "description": "递归子分区（如省→区县）"
+        }
+      },
+      "required": ["key", "path"]
+    },
+    "leaf": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "叶子对象名，如『九寨沟』『清华大学』" },
+        "entityType": { "type": "string", "description": "实体类型，如『地点/景区』『机构/学校』" },
+        "ref": { "type": "string", "description": "稳定 ref = entityType__name（/ 替换为 _）；object-queue jobId 据此派生" },
+        "mutexKey": { "type": "string", "description": "同源互斥键（默认取 ref）" }
+      },
+      "required": ["name", "ref"]
+    }
+  }
+}

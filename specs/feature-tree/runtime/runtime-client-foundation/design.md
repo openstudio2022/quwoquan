@@ -18,6 +18,7 @@
          ├── app-locale-infrastructure       (对应 runtime-config：配置/文本资源注入)
          ├── app-theme-infrastructure        (对应 runtime-config：主题资源注入)
          ├── error-permission-display-semantics (云端错误与权限类统一展示语义)
+         ├── app-remote-config               (App 远程运营配置：运营参数 / feature flag / LKG 快照)
          └── page-layout-semantics (页面布局统一语义：顶部 leading、内容区、底部栏；不含用户/作者/圈子主页)
 ```
 

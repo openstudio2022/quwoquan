@@ -7,30 +7,45 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: settings-and-device-token
 scope:
-  summary: settings audit 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 设置域中账号、通知、隐私、外观与分身入口的登录鉴权与审计验收。
+  in_scope:
+  - Get/UpdateNotificationSettings、Get/UpdatePrivacySettings、Get/UpdateAppearanceSettings、Get/UpdateCallSettings 的 owner 级鉴权
+  - 设置页“账号与分身”入口、外观与字号、隐私设置的真实取数与回写
+  - settings 页不得继续用 public API 假装 owner 私有数据
+  out_of_scope:
+  - 账号注销、恢复申诉、数据导出等尚未实现的设置项 UI
+  - 推送 token 注册与设备审计页
 gwt_acceptance:
   GWT1:
-    title: settings audit GWT
+    title: 设置页账号与隐私配置必须在 owner 登录态下可读写
     given:
-    - 前置条件明确。
+    - 用户已登录并进入 SettingsPage，或游客从设置域强入口尝试进入账号设置。
     when:
-    - 用户或系统动作发生。
+    - 用户读取/修改通知、隐私、外观、分身等 owner 私有配置。
     then:
-    - 可观察结果符合预期。
+    - 相关 API 在 metadata 与生成鉴权快照中均为 required，游客不能绕过登录读取 owner 私有设置。
+    - 登录用户可以读取真实配置并写回；设置页入口与 repository 能力一致，不出现“待接入但已暴露”空壳入口。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 设置页内账号与分身、外观与字号、隐私设置的能力边界清晰，游客态与登录态呈现符合商用品质。
+    edge_cases:
+    - feature flag 关闭分身管理时隐藏入口，不影响其它设置项。
+    - 设置读取失败时提供结构化错误，不展示默认 public 假数据。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    - quwoquan_app/lib/ui/settings/pages/settings_page.dart
+    performance_points:
+    - 设置首屏与二级设置页首帧 P95 <= 1.5s。
     evidence:
       primary:
-      - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T1_contract
+      - T3_app_api_integration
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
+      - quwoquan_app/test/ui/user/widgets/persona_management_page_test.dart
+      - quwoquan_app/test/ui/user/providers/persona_management_provider_test.dart
       recorded: []
     status: pending
 execution:

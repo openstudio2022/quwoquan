@@ -1,8 +1,8 @@
 """data produce — 两阶段内容生产（compose-brief → 会话模型创作 → review）。
 
 正文由会话模型（Agent）创作，CLI 不再拼接任何句子：
-  --stage compose-brief : 准备写作契约 writing_pack.json + prompt.md + 占位草稿（produce/drafts/）。
-  （人/Agent 据 prompt.md 创作正文写回 drafts/{ref}.article.md，generator=agent）
+  --stage compose-brief : 准备写作契约 writing_pack.json + prompt.md + 占位草稿（posts/.../4.draft/）。
+  （人/Agent 据 prompt.md 创作正文写回 4.draft/article.md，generator=agent）
   --stage review        : 读 agent 草稿，过模板指纹/事实可回溯/出处三道门 + 质量门；--materialize 落地 approved。
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ import argparse
 import sys
 
 from _common.draft_io import (
-    drafts_dir,
+    draft_package_dir,
     draft_article_path,
     draft_meta_path,
     is_placeholder,
@@ -24,8 +24,9 @@ from _common.entity_annotation import (
     build_entity_dictionary,
 )
 from _common.batch_orchestration import batch_dir, plan_batches, write_batch
+from _common.batch_manifest import write_batch_manifest
 from _common.io import write_json
-from _common.paths import batch_inputs_dir, ensure_batch_layout, batch_command_root
+from _common.paths import ensure_batch_layout, batch_command_root
 from produce.materialize import materialize_posts
 from produce.entity_workflow import (
     build_entity_writing_pack,
@@ -50,11 +51,45 @@ def _collect_briefs(task_id: str, batch_id: str, refs):
     return routes, entities
 
 
+def _apply_writing_intent_override(brief, override):
+    """把 content_plan_packet 的 writingIntent/baseSourceRef 注入 brief（任务层覆盖默认值）。"""
+    if not override:
+        return brief
+    merged = dict(brief)
+    if override.get("writingIntent"):
+        merged["writingIntent"] = override["writingIntent"]
+    if override.get("baseSourceRef") and not merged.get("baseSourceRef"):
+        merged["baseSourceRef"] = override["baseSourceRef"]
+    return merged
+
+
+def _assign_base_draft(task_id: str, batch_id: str, ref: str, brief):
+    """认领唯一底稿（baseSourceRef 永远非空目标）；返回(brief, 缺底稿告警)。"""
+    from _common.base_draft import assign_base_draft
+
+    chosen = assign_base_draft(task_id, batch_id, ref, brief)
+    if chosen and chosen != brief.get("baseSourceRef"):
+        merged = dict(brief)
+        merged["baseSourceRef"] = chosen
+        return merged, None
+    if not chosen and not brief.get("baseSourceRef"):
+        return brief, f"{ref}: 无可用底稿（来源单元不足或均已被其它篇占用）"
+    return brief, None
+
+
 def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int = 1) -> int:
+    from _common.content_plan import load_writing_intent_overrides
+
+    overrides = load_writing_intent_overrides(task_id, batch_id)
     routes, entities = _collect_briefs(task_id, batch_id, refs)
     prepared_refs: list[str] = []
     blocked = 0
+    base_draft_warnings: list[str] = []
     for ref, brief in routes:
+        brief = _apply_writing_intent_override(brief, overrides.get(ref))
+        brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        if warn:
+            base_draft_warnings.append(warn)
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
         if quality.get("recommendation") == "skip":
             blocked += 1
@@ -63,6 +98,10 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
         build_route_writing_pack(task_id, batch_id, ref, brief, quality)
         prepared_refs.append(ref)
     for ref, brief in entities:
+        brief = _apply_writing_intent_override(brief, overrides.get(ref))
+        brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        if warn:
+            base_draft_warnings.append(warn)
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
         if quality.get("recommendation") == "skip":
             blocked += 1
@@ -70,9 +109,12 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
             continue
         build_entity_writing_pack(task_id, batch_id, ref, brief, quality)
         prepared_refs.append(ref)
-    out_dir = drafts_dir(task_id, batch_id)
+    for warn in base_draft_warnings:
+        print(f"[produce] BASE-DRAFT WARN {warn}", file=sys.stderr)
+    out_dir = draft_package_dir(task_id, batch_id, prepared_refs[0]) if prepared_refs else None
     print(f"[produce] compose-brief prepared {len(prepared_refs)} writing pack(s); blocked={blocked}")
-    print(f"[produce] Drafts dir: {out_dir}")
+    if out_dir is not None:
+        print(f"[produce] Drafts dir: {out_dir.parent}")
     if batch_size > 1 and prepared_refs:
         groups = plan_batches(prepared_refs, batch_size)
         for seq, group in enumerate(groups, start=1):
@@ -81,10 +123,10 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
             f"[produce] single-session batches: {len(prepared_refs)} ref(s) → {len(groups)} batch prompt(s) "
             f"(size={batch_size}); see {batch_dir(task_id, batch_id)}"
         )
-        print("[produce] Next: 会话模型阅读 _batch/{seq}.batch_prompt.md，一会话产 N 篇分别写回各 {ref}.article.md。")
+        print("[produce] Next: 会话模型阅读 _batch/{seq}.batch_prompt.md，一会话产 N 篇分别写回各 4.draft/draft.article.md。")
     else:
-        print("[produce] Next: 会话模型阅读 {ref}.prompt.md 与 {ref}.writing_pack.json 创作正文，写回 {ref}.article.md (generator=agent)。")
-    print("[produce] 然后运行: qwq-data produce --task <T> --batch <B> --type article --stage review --materialize")
+        print("[produce] Next: 会话模型阅读 4.draft/prompt.md 与 3.compose/writing_pack.json 创作正文，写回 4.draft/draft.article.md (generator=agent)。")
+    print("[produce] 然后运行: qwq-data data produce --task <T> --batch <B> --type article --stage review --materialize")
     return len(prepared_refs)
 
 
@@ -122,13 +164,29 @@ def _stage_annotate_entities(task_id: str, batch_id: str, refs, *, allow_partial
             refs_with_issues += 1
             print(f"[produce] annotate-entities ISSUES {ref}: {issues}", file=sys.stderr)
     print(f"[produce] annotate-entities annotated {total_links} link(s); {refs_with_issues} ref(s) with closure issues")
-    print("[produce] Next: qwq-data produce --task <T> --batch <B> --type article --stage review --materialize")
+    print("[produce] Next: qwq-data data produce --task <T> --batch <B> --type article --stage review --materialize")
     if refs_with_issues and not allow_partial:
         raise SystemExit(1)
 
 
 def _stage_review(task_id: str, batch_id: str, refs, *, materialize: bool, allow_partial: bool) -> None:
     routes, entities = _collect_briefs(task_id, batch_id, refs)
+    from media.gate import gate_media_check
+    from media.handler import check_images
+
+    check_refs = [ref for ref, _ in [*routes, *entities]]
+    media_statuses = check_images(task_id, batch_id, check_refs, allow_needs_review=False)
+    media_issues = gate_media_check(task_id, batch_id, allow_needs_review=False)
+    if media_statuses:
+        passed = sum(1 for row in media_statuses if row["passed"])
+        failed = len(media_statuses) - passed
+        print(f"[produce] media_check handled {len(media_statuses)} ref(s); passed={passed} failed={failed}")
+    if media_issues:
+        for issue in media_issues[:10]:
+            print(f"[produce] media_check FAIL {issue}", file=sys.stderr)
+        if not allow_partial:
+            raise SystemExit(1)
+
     statuses: list[dict] = []
     for ref, brief in routes:
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
@@ -164,13 +222,15 @@ def handle_produce(args: argparse.Namespace) -> None:
 
     ensure_batch_layout(task_id, batch_id, "produce")
     produce_root = batch_command_root(task_id, batch_id, "produce")
+    write_batch_manifest(task_id, batch_id, command=f"produce:{stage}")
     refs = [item.strip() for item in (getattr(args, "refs", "") or "").split(",") if item.strip()] or None
 
     print(f"[produce] Task: {task_id}, Batch: {batch_id}, Type: {content_type}, Stage: {stage}")
     print(f"[produce] Work dir: {produce_root}")
 
-    compose_inputs_dir = batch_inputs_dir(task_id, batch_id, "produce", "compose")
-    if content_type != "article" or not compose_inputs_dir.exists():
+    from _common.content_object import has_briefs
+
+    if content_type != "article" or not has_briefs(task_id, batch_id):
         if getattr(args, "materialize", False):
             paths = materialize_posts(task_id, batch_id, content_type)
             print(f"[produce] Materialized {len(paths)} approved post package(s).")
@@ -224,6 +284,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--materialize",
         action="store_true",
-        help="(review stage) Materialize approved review results into produce/posts/",
+        help="(review stage) Materialize approved review results into batch/posts/",
     )
     p.set_defaults(handler=handle_produce)

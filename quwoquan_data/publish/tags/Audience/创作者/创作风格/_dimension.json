@@ -1,0 +1,9 @@
+{
+  "label": "创作风格",
+  "labelEn": "Creator Style",
+  "description": "创作者的内容生产风格",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

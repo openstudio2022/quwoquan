@@ -59,6 +59,15 @@ func TestMockMediaStore_CompleteUpload(t *testing.T) {
 	if asset.CDNURL == "" {
 		t.Error("expected non-empty CDN URL")
 	}
+	if asset.Sha256 == "" {
+		t.Error("expected non-empty sha256")
+	}
+	if asset.TemporaryOSSKey == "" {
+		t.Error("expected temporary object key")
+	}
+	if asset.OSSKey == asset.TemporaryOSSKey {
+		t.Error("expected final object key to differ from temporary upload key")
+	}
 	if asset.DurationMs != 5200 {
 		t.Errorf("expected durationMs=5200, got %d", asset.DurationMs)
 	}

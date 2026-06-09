@@ -1,0 +1,38 @@
+version: 1
+aggregate: SmsOtp
+
+events:
+  - name: SmsOtpQueued
+    description: 手机验证码短信请求已进入可靠队列。
+    producer: integration-service
+    consumers: [user-service, platform-ops]
+    channel: event_store
+    payload_fields: [requestId, challengeId, phoneHash, status, queuedAt]
+
+  - name: SmsOtpProviderAttempted
+    description: 一次短信 provider 调用尝试已完成并写入 ledger。
+    producer: integration-service
+    consumers: [platform-ops]
+    channel: event_store
+    payload_fields: [requestId, challengeId, provider, providerMessageId, status, latencyMs, normalizedError]
+
+  - name: SmsOtpDeliverySucceeded
+    description: 短信发送成功或已被供应商接收。
+    producer: integration-service
+    consumers: [user-service, platform-ops]
+    channel: callback_or_event
+    payload_fields: [requestId, challengeId, providerMessageId, status, timestamp]
+
+  - name: SmsOtpDeliveryFailed
+    description: 短信发送最终失败。
+    producer: integration-service
+    consumers: [user-service, platform-ops]
+    channel: callback_or_event
+    payload_fields: [requestId, challengeId, normalizedError, recoveryAction, timestamp]
+
+  - name: SmsOtpPassThroughDebtUsed
+    description: 非生产环境验证码正确性校验跳过已被使用，必须关联债务。
+    producer: user-service
+    consumers: [platform-ops]
+    channel: event_store
+    payload_fields: [requestId, challengeId, passThroughMode, debtId, owner, expiresAt]

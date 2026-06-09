@@ -2364,6 +2364,11 @@ void main() {
     final analytics = _FakeAnalyticsService();
     final repo = _ConfigurableContentRepository(
       appConfig: <String, dynamic>{
+        'app_bootstrap': <String, dynamic>{
+          'activationPolicy': <String, dynamic>{
+            'default': 'immediate',
+          },
+        },
         'content': <String, dynamic>{
           'feature_flags': <String, dynamic>{
             'enable_article_book_reader': false,

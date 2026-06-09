@@ -17,8 +17,8 @@
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
-          "coverUrl": "media/image/circle/fixture_circle_tech/v1/cover.png",
-          "avatarUrl": "media/avatar/circle/fixture_circle_tech/v1/avatar.png",
+          "coverUrl": "media/image/s/archived-image/circle/fixture_circle_tech/v1/cover.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_tech/v1/avatar.png",
           "description": "科技 核心夹具圈子。",
           "visibility": "public",
           "joinPolicy": "approval",
@@ -43,8 +43,8 @@
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-05-06T00:00:00Z",
           "ownerDisplayNameSnapshot": "契约撰稿人",
-          "avatarObjectKey": "media/avatar/circle/fixture_circle_tech/v1/avatar.png",
-          "coverObjectKey": "media/image/circle/fixture_circle_tech/v1/cover.png"
+          "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_tech/v1/avatar.png",
+          "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_tech/v1/cover.png"
         },
         {
           "id": "fixture_circle_life",
@@ -53,8 +53,8 @@
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
-          "coverUrl": "media/image/circle/fixture_circle_life/v1/cover.png",
-          "avatarUrl": "media/avatar/circle/fixture_circle_life/v1/avatar.png",
+          "coverUrl": "media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_life/v1/avatar.png",
           "description": "生活方式 核心夹具圈子。",
           "visibility": "public",
           "joinPolicy": "approval",
@@ -79,8 +79,8 @@
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-05-06T00:00:00Z",
           "ownerDisplayNameSnapshot": "契约同伴一",
-          "avatarObjectKey": "media/avatar/circle/fixture_circle_life/v1/avatar.png",
-          "coverObjectKey": "media/image/circle/fixture_circle_life/v1/cover.png"
+          "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_life/v1/avatar.png",
+          "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png"
         },
         {
           "id": "fixture_circle_travel",
@@ -89,8 +89,8 @@
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
-          "coverUrl": "media/image/circle/fixture_circle_travel/v1/cover.png",
-          "avatarUrl": "media/avatar/circle/fixture_circle_travel/v1/avatar.png",
+          "coverUrl": "media/image/s/archived-image/circle/fixture_circle_travel/v1/cover.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_travel/v1/avatar.png",
           "description": "旅行 核心夹具圈子。",
           "visibility": "public",
           "joinPolicy": "approval",
@@ -115,8 +115,8 @@
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-05-06T00:00:00Z",
           "ownerDisplayNameSnapshot": "契约旅行圈主",
-          "avatarObjectKey": "media/avatar/circle/fixture_circle_travel/v1/avatar.png",
-          "coverObjectKey": "media/image/circle/fixture_circle_travel/v1/cover.png"
+          "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_travel/v1/avatar.png",
+          "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_travel/v1/cover.png"
         },
         {
           "id": "fixture_circle_photo",
@@ -125,8 +125,8 @@
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
-          "coverUrl": "media/image/circle/fixture_circle_photo/v1/cover.png",
-          "avatarUrl": "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "coverUrl": "media/image/s/archived-image/circle/fixture_circle_photo/v1/cover.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
           "description": "摄影 核心夹具圈子。",
           "visibility": "public",
           "joinPolicy": "approval",
@@ -151,8 +151,8 @@
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-05-06T00:00:00Z",
           "ownerDisplayNameSnapshot": "契约摄影社主理人",
-          "avatarObjectKey": "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
-          "coverObjectKey": "media/image/circle/fixture_circle_photo/v1/cover.png"
+          "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_photo/v1/cover.png"
         }
       ],
       "groups": {
@@ -252,8 +252,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约科技作者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_tech_01/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png"
           },
           {
             "_id": "fixture_member_tech_fixture_user_tech_02",
@@ -264,8 +264,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约科技副作者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_tech_02/v1/avatar.jpg",
-            "avatarUrl": "media/avatar/user/fixture_user_tech_02/v1/avatar.jpg"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_tech_02/v1/avatar.jpg",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_tech_02/v1/avatar.jpg"
           },
           {
             "_id": "fixture_member_tech_fixture_user_tech_03",
@@ -276,8 +276,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约科技圈主",
-            "avatarObjectKey": "media/avatar/user/fixture_user_tech_03/v1/avatar.jpg",
-            "avatarUrl": "media/avatar/user/fixture_user_tech_03/v1/avatar.jpg"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_tech_03/v1/avatar.jpg",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_tech_03/v1/avatar.jpg"
           },
           {
             "_id": "fixture_member_tech_fixture_user_tech_04",
@@ -288,8 +288,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约科技组织者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_tech_04/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_tech_04/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_tech_04/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_tech_04/v1/avatar.png"
           },
           {
             "_id": "fixture_member_tech_fixture_user_tech_05",
@@ -300,8 +300,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约科技联系人",
-            "avatarObjectKey": "media/avatar/user/fixture_user_tech_05/v1/avatar.jpg",
-            "avatarUrl": "media/avatar/user/fixture_user_tech_05/v1/avatar.jpg"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_tech_05/v1/avatar.jpg",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_tech_05/v1/avatar.jpg"
           },
           {
             "_id": "fixture_member_tech_fixture_user_tech_06",
@@ -312,8 +312,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约科技评论者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_tech_06/v1/avatar.jpg",
-            "avatarUrl": "media/avatar/user/fixture_user_tech_06/v1/avatar.jpg"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_tech_06/v1/avatar.jpg",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_tech_06/v1/avatar.jpg"
           }
         ],
         "fixture_circle_life": [
@@ -326,8 +326,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约当前用户",
-            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png"
           },
           {
             "_id": "fixture_member_life_fixture_user_weekend_1",
@@ -338,8 +338,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 10,
             "displayName": "契约同伴一",
-            "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png"
           },
           {
             "_id": "fixture_member_life_fixture_user_lifestyle_01",
@@ -350,8 +350,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约生活方式作者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_01/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_lifestyle_01/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_01/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_01/v1/avatar.png"
           },
           {
             "_id": "fixture_member_life_fixture_user_lifestyle_02",
@@ -362,8 +362,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约生活方式副作者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_02/v1/avatar.jpg",
-            "avatarUrl": "media/avatar/user/fixture_user_lifestyle_02/v1/avatar.jpg"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_02/v1/avatar.jpg",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_02/v1/avatar.jpg"
           },
           {
             "_id": "fixture_member_life_fixture_user_lifestyle_03",
@@ -374,8 +374,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约生活方式圈主",
-            "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_03/v1/avatar.jpg",
-            "avatarUrl": "media/avatar/user/fixture_user_lifestyle_03/v1/avatar.jpg"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_03/v1/avatar.jpg",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_03/v1/avatar.jpg"
           },
           {
             "_id": "fixture_member_life_fixture_user_lifestyle_04",
@@ -386,8 +386,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约生活方式组织者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_04/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_lifestyle_04/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_04/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_04/v1/avatar.png"
           }
         ],
         "fixture_circle_travel": [
@@ -400,8 +400,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约旅行家",
-            "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png"
           },
           {
             "_id": "fixture_member_travel_fixture_user_travel_owner",
@@ -412,8 +412,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 10,
             "displayName": "契约旅行圈主",
-            "avatarObjectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel_owner/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_owner/v1/avatar.png"
           },
           {
             "_id": "fixture_member_travel_fixture_user_travel_01",
@@ -424,8 +424,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约旅行作者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_travel_01/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_travel_01/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel_01/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_01/v1/avatar.png"
           },
           {
             "_id": "fixture_member_travel_fixture_user_travel_02",
@@ -436,8 +436,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约旅行副作者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_travel_02/v1/avatar.jpg",
-            "avatarUrl": "media/avatar/user/fixture_user_travel_02/v1/avatar.jpg"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/v1/avatar.jpg",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/v1/avatar.jpg"
           },
           {
             "_id": "fixture_member_travel_fixture_user_travel_03",
@@ -448,8 +448,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约旅行圈主",
-            "avatarObjectKey": "media/avatar/user/fixture_user_travel_03/v1/avatar.jpg",
-            "avatarUrl": "media/avatar/user/fixture_user_travel_03/v1/avatar.jpg"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel_03/v1/avatar.jpg",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_03/v1/avatar.jpg"
           },
           {
             "_id": "fixture_member_travel_fixture_user_travel_04",
@@ -460,8 +460,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约旅行组织者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_travel_04/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_travel_04/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel_04/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_04/v1/avatar.png"
           }
         ],
         "fixture_circle_photo": [
@@ -474,8 +474,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约摄影师",
-            "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png"
           },
           {
             "_id": "fixture_member_photo_fixture_user_owner",
@@ -486,8 +486,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 10,
             "displayName": "契约摄影社主理人",
-            "avatarObjectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_owner/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_owner/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_owner/v1/avatar.png"
           },
           {
             "_id": "fixture_member_photo_fixture_user_photography_01",
@@ -498,8 +498,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约摄影作者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_photography_01/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_photography_01/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photography_01/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_01/v1/avatar.png"
           },
           {
             "_id": "fixture_member_photo_fixture_user_photography_02",
@@ -510,8 +510,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约摄影副作者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_photography_02/v1/avatar.jpg",
-            "avatarUrl": "media/avatar/user/fixture_user_photography_02/v1/avatar.jpg"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photography_02/v1/avatar.jpg",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_02/v1/avatar.jpg"
           },
           {
             "_id": "fixture_member_photo_fixture_user_photography_03",
@@ -522,8 +522,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约摄影圈主",
-            "avatarObjectKey": "media/avatar/user/fixture_user_photography_03/v1/avatar.jpg",
-            "avatarUrl": "media/avatar/user/fixture_user_photography_03/v1/avatar.jpg"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photography_03/v1/avatar.jpg",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_03/v1/avatar.jpg"
           },
           {
             "_id": "fixture_member_photo_fixture_user_photography_04",
@@ -534,8 +534,8 @@
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
             "displayName": "契约摄影组织者",
-            "avatarObjectKey": "media/avatar/user/fixture_user_photography_04/v1/avatar.png",
-            "avatarUrl": "media/avatar/user/fixture_user_photography_04/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photography_04/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_04/v1/avatar.png"
           }
         ]
       },
@@ -549,7 +549,7 @@
             "fileType": "image",
             "mimeType": "image/png",
             "sizeBytes": 4096,
-            "objectKey": "media/image/circle/fixture_circle_photo/v1/cover.png",
+            "objectKey": "media/image/s/archived-image/circle/fixture_circle_photo/v1/cover.png",
             "uploaderId": "fixture_user_owner",
             "status": "active",
             "createdAt": "2026-05-11T20:00:00Z",

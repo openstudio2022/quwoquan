@@ -19,11 +19,40 @@
 - **统一证据归档**：每个 promotion 阶段必须落 `artifacts/stackctl/<env>/<run-id>/report.json` 与 `summary.md`，workflow 同步上传 artifact。
 - **15 分钟硬预算**：阻断主链的 `critical_path_seconds <= 900`，重型 Patrol/full semantic/全设备全旅程留在 `nightly_full` 与 `release_candidate`。
 - **local-gamma left shift**：仍作为提交前左移预测试拓扑，但不替代 `main` 后自动 promotion。
+- **ACK 集群拓扑形态**：`prod-hosted` 采用 single-cluster + modular-monolith-first + 独立 Deployment + 托管数据面 + Strangler split-ready，且 `gamma-local` 与 `prod-hosted` 工作负载图谱同构。
+
+## ACK 集群部署形态与 split-ready（本轮 baseline 冻结）
+
+> 本节冻结 `prod-hosted` 在阿里云 ACK 上的标准部署形态，对齐业界云原生最佳实践（Modular Monolith 起步 + 共享集群 bin-packing + Strangler Fig 渐进拆分），不引入定制结构。
+
+### 三层正交边界
+
+- 逻辑边界 = 领域服务（DDD bounded context）：独立路由前缀 `/v1/<domain>/*`、独立 `service.name`、独立指标/日志/配置段/错误码，是第一真相源。
+- 部署单元 = Kubernetes Deployment：最小发布与伸缩单元，初期尽量少、规模后按需增多；对外稳定标识是 Service（DNS 名/路由），不是 Deployment。
+- 物理资源 = 单 ACK 集群 + 共享节点池：靠 `requests/limits` + bin-packing + HPA + cluster-autoscaler + namespace `ResourceQuota` 复用资源降本。
+
+### 首发形态（modular-monolith-first）
+
+- 应用平面：`seed-box` 为单一 Deployment 承载 Go Modular Monolith 进程，聚合可聚合的 Go 领域；`recommendation-service`（Python）为同集群独立 Deployment。
+- 实时/媒体平面：`realtime-gateway / rtc-service / livekit-sfu / coturn` 从第一天即为同集群独立 workload（Deployment/StatefulSet + hostNetwork/UDP），不并入 Modular Monolith。
+- 数据平面：PostgreSQL / Redis / MongoDB 用阿里云托管（同 VPC 私网 + ExternalName/DSN 抽象 + Secret 注入 + 安全组白名单），不进集群自建 StatefulSet；采用固定小规格的存算分离弹性单主（单写主节点 + 按需加只读节点扩性能 + 共享存储自动扩容量），不做主备冗余与分库分表，归档才做冷分区。不依赖 Serverless 形态（MongoDB Serverless 已于 2025-12-31 EOS）。
+- 部署形态唯一：所有服务一律独立 Deployment，不用 sidecar 承载领域职责。
+
+### split-ready（Strangler Fig）
+
+- 满足拆分触发阈值（域级资源占用 / SLO 伸缩曲线 / 发布频率 / 故障域隔离 / 安全合规）时，把某域从 `seed-box` 抽成独立 Deployment + HPA + PDB + Service。
+- 拆分不变量：域级 API / route / Service DNS 名 / 端侧 runtime 注入 / 数据面归属保持不变。
+
+### 环境同构
+
+- `gamma-local`：复用与 `prod-hosted` 同构的工作负载图谱（同 Deployment 拓扑、Service 名、路由前缀、edge/media 分层、数据面 Service 名/DSN 变量），只把 backend 换成本机容器编排 + 本机模拟器/浏览器。
+- `gamma-hosted`：保留为云侧手动复验、nightly、发布前高置信度回归。
 
 ## 适用范围与约束
 
 - **适用**：PR 前 required checks、`main` 后自动 promotion、gamma hosted 复验、prod 自动灰度、prod 自动回滚。
 - **不适用**：新增 `beta-hosted`、`prod-gray` 等额外环境名或第二套拓扑命名。
+- **不适用（部署形态反模式）**：多业务容器共享 Pod 当常态、sidecar 承载领域职责、跨技术栈合并超级二进制、集群内自建数据库 StatefulSet 作为默认、业务代码硬编码 DB 连接或跨域直连他域库表。
 - **约束**：
   - `03/04/05` 名称与 required-check 语义必须保持稳定。
   - `stackctl` 是环境自动化唯一入口；workflow 只编排，不复制第二套环境逻辑。
@@ -52,3 +81,7 @@
 - A6：`prod checks` 或 `prod full` 失败时，workflow 必须自动回滚到上一稳定 `image/config` 并恢复 ready 状态。
 - A7：每个阶段都能输出 `report.json`、`summary.md`、stdout/diagnostics，支持人工排障与 workflow 复用。
 - A8：主链耗时摘要必须落关键路径统计，并以 `critical_path_seconds <= 900` 作为硬门禁。
+- A9：`prod-hosted` 首发形态为 `seed-box` 单 Deployment + `recommendation`/实时/媒体各自独立 Deployment，无 sidecar 承载领域职责。
+- A10：每个 workload 标准 K8s 原语齐全（独立 Deployment/Service/HPA/PDB/probe/resources），且 domain 不双归属。
+- A11：Strangler 拆分前后，域级 API / route / Service 名 / 端侧配置 / 数据面归属完全不变。
+- A12：`gamma-local` 与 `prod-hosted` 工作负载图谱（含数据面 Service 名/DSN 变量）同构，`stackctl` / workflow / ACK root 对同一 inventory 解释一致。

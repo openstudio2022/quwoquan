@@ -121,7 +121,7 @@ APP_ENV=prod SERVICE_NAME=seed-box CONFIG_ROOT=/etc/seed-box-config CONFIG_VERSI
 运行口径补充：
 
 - `beta` 在开发机本地联调时只允许一套组合拓扑，重新启动前必须停止旧实例。
-- `gamma` 在 ECS 或 local-gamma mirror 中都只允许一套组合拓扑；部署 / mirror 切换应先清理历史实例再启动新实例。
+- `gamma` 在 ECS 或 local-gamma mirror 中都只允许一套组合拓扑；部署 / mirror 切换应先清理既有实例再启动新实例。
 - 多实例能力只属于端侧 App 进程，不属于 `seed-box` / `recommendation-service` 这类组合进程。
 
 3) 发布前全量门禁：
@@ -165,37 +165,42 @@ make gate-full
 
 ---
 
-## 5. Kustomize（all-in-one Sidecar）
+## 5. Kustomize（modular-monolith-first：seed-box 与 recommendation 各自独立 Deployment）
 
 目录：
-- `deploy/service/seed-box/kustomize/base`
-- `deploy/service/seed-box/kustomize/overlays/dev`（迁移期对应 `APP_ENV=alpha`）
-- `deploy/service/seed-box/kustomize/overlays/integration`（迁移期对应 `APP_ENV=gamma`）
-- `deploy/service/seed-box/kustomize/overlays/prod`
+- `deploy/service/seed-box/kustomize/base`（Go Modular Monolith 单 Deployment + Service/HPA/PDB）
+- `deploy/service/seed-box/kustomize/overlays/{dev,integration,beta,prod}`（迁移期 dev→`APP_ENV=alpha`、integration→`APP_ENV=gamma`）
+- `deploy/service/recommendation-service/kustomize/base`（Python 独立 Deployment + Service/HPA/PDB）
+- `deploy/service/recommendation-service/kustomize/overlays/{dev,integration,beta,prod}`
+- `deploy/kustomization/{aliyun,volcengine,huaweicloud}-{integration,prod}`（root，聚合上面两个独立 overlay）
 
 约束：
 - base 只放跨环境稳定模板（Deployment/Service/HPA/PDB）
 - 环境差异仅在 overlays 注入
 - 参数化覆盖：`CONFIG_VERSION`、`IMAGE_VERSION`、`replicas`、HPA 阈值
+- seed-box 与 recommendation-service 各自独立 Deployment/Service/HPA/PDB；禁止把 recommendation 作为 seed-box Pod 内 sidecar 容器
+- seed-box 调用 recommendation 走集群 Service DNS（`http://recommendation-service:8000`），不走 Pod 内 `127.0.0.1`
 
 示例：
 
 ```bash
-# 渲染 alpha 兼容 overlay
-kustomize build deploy/service/seed-box/kustomize/overlays/dev
+# 渲染 prod root（同时聚合 seed-box 与 recommendation 两个独立 workload）
+kustomize build deploy/kustomization/aliyun-prod
 
-# 渲染 gamma 兼容 overlay
-kustomize build deploy/service/seed-box/kustomize/overlays/integration
-
-# 渲染 prod
+# 渲染 seed-box overlay
 kustomize build deploy/service/seed-box/kustomize/overlays/prod
+
+# 渲染 recommendation-service overlay
+kustomize build deploy/service/recommendation-service/kustomize/overlays/prod
 ```
 
 ---
 
-## 6. 后续拆分独立 Pod（迁移指引）
+## 6. 渐进拆分独立 Deployment（Strangler Fig 迁移指引）
 
-- 现态：`seed-box` + `recommendation-service` 同 Pod（Sidecar）
+> 完整拆分手册（触发阈值、契约不变门禁、模板与回滚）见 `deploy/shared/strangler_split_playbook.md`。
+
+- 现态：`seed-box`（Go Modular Monolith 单 Deployment）与 `recommendation-service`（Python 独立 Deployment）同集群、同 namespace、各自独立 Service/HPA/PDB；`seed-box` 经集群 Service DNS `http://recommendation-service:8000` 调用，已不再 sidecar 共用 Pod
 - 拆分触发：某领域服务需要独立扩缩容/独立发布窗口/独立故障域
 - 拆分原则：
   - 保持 `process_domain_mapping.yaml` 归属唯一与 beta/gamma/prod 一致性
@@ -238,10 +243,12 @@ chat-avatar-worker-package:
 
 1) 修改 `deploy/shared/process_domain_mapping.yaml`  
 2) 修改 `deploy/shared/module_package_mapping.yaml`、`deploy/shared/reliable_task_module_catalog.yaml` 或 `deploy/shared/reliable_task_retention_policy.yaml`（如涉及模块/任务/保留策略）
-3) 执行 `bash scripts/verify_deployment_domain_mapping.sh`
-4) 执行 `python3 scripts/verify_module_package_mapping.py`
-5) 执行 `python3 scripts/verify_reliable_task_catalog.py`
-6) 执行 `python3 scripts/verify_reliable_task_retention_policy.py`
-7) 执行 `make verify`（至少）
-8) 提交前执行 `make gate-full`
+3) 若涉及部署形态 / 新增 workload / Strangler 拆分，修改 `deploy/shared/workload_topology_inventory.yaml`（三态分类 + 标准原语 + `wired_to_prod_root`）
+4) 执行 `bash scripts/verify_deployment_domain_mapping.sh`
+5) 执行 `python3 scripts/verify_module_package_mapping.py`
+6) 执行 `python3 quwoquan_service/scripts/deploy/verify_workload_topology_inventory.py`
+7) 执行 `python3 scripts/verify_reliable_task_catalog.py`
+8) 执行 `python3 scripts/verify_reliable_task_retention_policy.py`
+9) 执行 `make verify`（至少）
+10) 提交前执行 `make gate-full`
 

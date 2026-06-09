@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/greeting_reply_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
     show SubAccountProfileViewData, UserLifeItem, UserWorkItem;
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
@@ -293,36 +296,91 @@ class ProfileNotifier extends Notifier<ProfileState> {
       optimisticFollowOverride: state.capability == null ? null : nextFollowing,
     );
   }
+
+  Future<GreetingRequestDto> sendGreeting({
+    String? requestMessage,
+    String source = 'profile',
+  }) async {
+    final targetUserId = state.profile?.subAccountId.isNotEmpty == true
+        ? state.profile!.subAccountId
+        : _userId;
+    final greeting = await ref
+        .read(greetingRepositoryProvider)
+        .sendGreeting(
+          targetSubAccountId: targetUserId,
+          requestMessage: requestMessage,
+          source: source,
+        );
+    final capability = state.capability;
+    if (capability != null) {
+      state = state.copyWith(
+        capability: capability.copyWith(
+          canGreet: false,
+          hasPendingGreeting: true,
+        ),
+      );
+    }
+    return greeting;
+  }
+
+  Future<ChatConversationCreatedDto> openOrCreateDirectConversation() async {
+    final targetUserId = state.profile?.subAccountId.isNotEmpty == true
+        ? state.profile!.subAccountId
+        : _userId;
+    final result = await ref
+        .read(chatRepositoryProvider)
+        .createConversation(
+          type: 'direct',
+          initialMemberIds: <String>[targetUserId],
+        );
+    _promoteFormalConversation(result.conversationId);
+    return result;
+  }
+
+  Future<GreetingReplyResultDto> replyGreetingIntoConversation(
+    String requestId,
+  ) async {
+    final result = await ref.read(greetingRepositoryProvider).replyGreeting(
+          requestId,
+        );
+    _promoteFormalConversation(result.conversationId);
+    return result;
+  }
+
+  void markFormalConversationAvailable({String? conversationId}) {
+    _promoteFormalConversation(conversationId);
+  }
+
+  void _promoteFormalConversation(String? conversationId) {
+    final capability = state.capability;
+    if (capability == null) {
+      return;
+    }
+    state = state.copyWith(
+      capability: capability.copyWith(
+        hasFormalConversation: true,
+        hasPendingGreeting: false,
+        canOpenConversation: true,
+        canSendMessage: true,
+        canGreet: false,
+      ),
+    );
+  }
 }
 
 RelationshipCapabilityDto _copyCapabilityWithFollowState(
   RelationshipCapabilityDto capability,
   bool isFollowing,
 ) {
-  final next = RelationshipCapabilityDto.fromFollowFlags(
+  return RelationshipCapabilityDto.fromFollowFlags(
     viewerId: capability.viewerSubAccountId,
     targetId: capability.targetSubAccountId,
     isFollowing: isFollowing,
     isFollowedBy: capability.targetFollowsViewer,
-    closeFriend: capability.isCloseFriend,
-  );
-  return RelationshipCapabilityDto(
-    viewerSubAccountId: capability.viewerSubAccountId,
-    targetSubAccountId: capability.targetSubAccountId,
-    relationState: next.relationState,
-    relationTier: next.relationTier,
-    canFollow: next.canFollow,
-    canUnfollow: next.canUnfollow,
-    canMessage: next.canMessage,
-    canFollowBack: next.canFollowBack,
-    canGreet: next.canGreet,
-    canOpenConversation: next.canOpenConversation,
-    canAddSameInterest: next.canAddSameInterest,
-    canSetCloseFriend: next.canSetCloseFriend,
-    canStartVoiceCall: next.canStartVoiceCall,
-    canStartVideoCall: next.canStartVideoCall,
     isBlocked: capability.isBlocked,
     isBlockedBy: capability.isBlockedBy,
+    hasFormalConversation: capability.hasFormalConversation,
+    hasPendingGreeting: capability.hasPendingGreeting,
   );
 }
 

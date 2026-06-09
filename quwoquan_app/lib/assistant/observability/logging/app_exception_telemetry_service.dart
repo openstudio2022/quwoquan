@@ -8,6 +8,7 @@ import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_s
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
+import 'package:quwoquan_app/core/services/hive_runtime.dart';
 
 const String kAppExceptionQueueBoxName = 'app_exception_queue';
 
@@ -89,6 +90,9 @@ class AppExceptionTelemetryService {
 
   Future<void> flushPending() async {
     final box = await _ensureBox();
+    if (box == null) {
+      return;
+    }
     final events = <OpsEventRecordInput>[];
     final keys = box.keys.map((key) => key.toString()).toList(growable: false)
       ..sort();
@@ -118,20 +122,15 @@ class AppExceptionTelemetryService {
     }
   }
 
-  Future<Box<String>> _ensureBox() async {
-    if (!Hive.isBoxOpen(_queueBoxName)) {
-      try {
-        await Hive.initFlutter();
-      } catch (_) {
-        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
-      }
-      return Hive.openBox<String>(_queueBoxName);
-    }
-    return Hive.box<String>(_queueBoxName);
+  Future<Box<String>?> _ensureBox() async {
+    return HiveRuntime.openStringBoxOrNull(_queueBoxName);
   }
 
   Future<void> _enqueue(OpsEventRecordInput event) async {
     final box = await _ensureBox();
+    if (box == null) {
+      return;
+    }
     await box.put(event.eventId, jsonEncode(event.toJson()));
     if (box.length > 100) {
       final keys = box.keys.map((key) => key.toString()).toList(growable: false)

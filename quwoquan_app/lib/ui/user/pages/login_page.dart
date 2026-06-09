@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
@@ -32,6 +35,423 @@ class LoginPage extends ConsumerStatefulWidget {
 /// 一键登录检测必须有短超时与失败兜底，禁止主按钮区域长期转圈。
 enum LoginPrimaryMode { checking, oneTap, phone }
 
+void _showOtpSendResult(BuildContext context, OtpSendResultData result) {
+  if (result.isDebugCodeVisible) {
+    final hint = result.deliveryStatus == 'pass_through'
+        ? UITextConstants.loginOtpPassThroughDebugHint
+        : UITextConstants.loginOtpQueued;
+    AppToast.show(
+      context,
+      '$hint，${UITextConstants.loginOtpDebugCodePrefix}${result.debugCode}',
+    );
+    return;
+  }
+  AppToast.show(context, UITextConstants.loginOtpQueued);
+}
+
+class WebInlineLoginSurface extends ConsumerStatefulWidget {
+  const WebInlineLoginSurface({
+    super.key,
+    required this.onDismiss,
+    required this.onLoggedIn,
+    this.reason,
+  });
+
+  final VoidCallback onDismiss;
+  final VoidCallback onLoggedIn;
+  final String? reason;
+
+  @override
+  ConsumerState<WebInlineLoginSurface> createState() =>
+      _WebInlineLoginSurfaceState();
+}
+
+class _WebInlineLoginSurfaceState extends ConsumerState<WebInlineLoginSurface> {
+  static const Duration _oneTapProbeTimeout = Duration(milliseconds: 1200);
+
+  bool _agreementAccepted = false;
+  bool _isSubmitting = false;
+  bool _isSendingOtp = false;
+  LoginPrimaryMode _primaryMode = LoginPrimaryMode.checking;
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
+
+  bool get _isActionRequired =>
+      widget.reason == AuthPromptReason.actionRequired.name ||
+      authGateTitleForReasonName(widget.reason) != null;
+
+  bool get _isReturnUser =>
+      widget.reason == AuthPromptReason.manualLoggedOut.name ||
+      widget.reason == AuthPromptReason.sessionExpired.name;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadOneTapAvailability());
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadOneTapAvailability() async {
+    var available = false;
+    try {
+      available = await ref
+          .read(oneTapLoginClientProvider)
+          .isAvailable()
+          .timeout(_oneTapProbeTimeout, onTimeout: () => false);
+    } catch (_) {
+      available = false;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _primaryMode = available
+          ? LoginPrimaryMode.oneTap
+          : LoginPrimaryMode.phone;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = ref.watch(authSessionControllerProvider);
+    final gateReason = authGateReasonForName(widget.reason);
+    final pendingContinuation = ref.watch(authContinuationProvider);
+    final gateSemantic = gateReason == null
+        ? null
+        : authGateSemantic(
+            context,
+            reason: gateReason,
+            continuation: pendingContinuation,
+            scope: UiErrorScope.page,
+          );
+    final title =
+        gateSemantic?.title ??
+        (_isReturnUser
+            ? UITextConstants.loginTitleReturn
+            : UITextConstants.loginTitleFirstRun);
+    final subtitle =
+        gateSemantic?.secondaryMessage ??
+        gateSemantic?.message ??
+        (_isActionRequired
+            ? UITextConstants.loginSubtitleActionRequired
+            : _isReturnUser
+            ? UITextConstants.loginSubtitleReturn
+            : UITextConstants.loginSubtitleFirstRun);
+
+    return DefaultTextStyle.merge(
+      style: const TextStyle(
+        decoration: TextDecoration.none,
+        decorationThickness: 0,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.iosPageBackground(context),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
+          boxShadow: const <BoxShadow>[
+            BoxShadow(
+              color: AppColors.webPcLoginSurfaceShadow,
+              blurRadius: AppSpacing.webPcToolbarElevationBlurRadius,
+              offset: Offset(AppSpacing.zero, AppSpacing.ten),
+            ),
+          ],
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: AppSpacing.webPcLoginSurfaceWidth,
+            maxHeight: AppSpacing.webPcLoginSurfaceMaxHeight,
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      const Spacer(),
+                      AppNavigationBarIconButton(
+                        icon: CupertinoIcons.xmark,
+                        onPressed: _continueAsGuest,
+                      ),
+                    ],
+                  ),
+                  _BrandMark(isReturnUser: _isReturnUser),
+                  SizedBox(height: AppSpacing.interGroupLg),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosTitle2,
+                      fontWeight: AppTypography.bold,
+                      height: AppSpacing.textLineHeightHeadline,
+                      color: AppColors.iosLabel(context),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosCallout,
+                      height: AppSpacing.textLineHeightBody,
+                      color: AppColors.iosSecondaryLabel(context),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.interGroupLg),
+                  if (session.hasRememberedLogin) ...<Widget>[
+                    _RememberedLoginHintCard(session: session),
+                    SizedBox(height: AppSpacing.interGroupMd),
+                  ],
+                  _LoginCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        if (_primaryMode == LoginPrimaryMode.checking)
+                          const _LoginModeLoading()
+                        else if (_primaryMode == LoginPrimaryMode.oneTap)
+                          _PrimaryLoginButton(
+                            isSubmitting: _isSubmitting,
+                            label: UITextConstants.loginOneTapPrimary,
+                            onPressed: _handleOneTapLogin,
+                          )
+                        else
+                          _PhoneLoginForm(
+                            phoneController: _phoneController,
+                            otpController: _otpController,
+                            isSubmitting: _isSubmitting,
+                            rememberedPhoneHint:
+                                session.rememberedLoginMethod ==
+                                    AuthRememberedLoginMethod.phoneOtp
+                                ? session.rememberedLoginMaskedIdentifier
+                                : '',
+                            onSendOtp: _handleSendOtp,
+                            onSubmit: _handlePhoneLogin,
+                          ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.interGroupMd),
+                  _LaterLoginButton(onPressed: _continueAsGuest),
+                  SizedBox(height: AppSpacing.interGroupMd),
+                  _AgreementRow(
+                    accepted: _agreementAccepted,
+                    onToggle: () {
+                      setState(() => _agreementAccepted = !_agreementAccepted);
+                    },
+                    onAgreementTap: () =>
+                        context.push(AppRoutePaths.legalUserAgreement),
+                    onPrivacyTap: () =>
+                        context.push(AppRoutePaths.legalPrivacyPolicy),
+                  ),
+                  SizedBox(height: AppSpacing.interGroupLg),
+                  _OtherLoginMethods(
+                    ensureAgreementAccepted: () async =>
+                        _ensureAgreementAccepted(),
+                    onLoggedIn: widget.onLoggedIn,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _ensureAgreementAccepted() {
+    if (_agreementAccepted) {
+      return true;
+    }
+    AppToast.show(context, UITextConstants.authConsentRequired);
+    return false;
+  }
+
+  UiErrorSemantic _loginActionFailureSemantic({
+    required Object error,
+    required String title,
+    required String message,
+  }) {
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.submit,
+      scope: UiErrorScope.global,
+    );
+    return UiErrorSemantic(
+      category: resolved.category,
+      scope: resolved.scope,
+      title: title,
+      message: resolved.message.isNotEmpty ? resolved.message : message,
+      secondaryMessage: resolved.secondaryMessage,
+      primaryAction: const UiErrorAction(
+        type: UiErrorActionType.dismiss,
+        label: UITextConstants.confirm,
+      ),
+      secondaryAction: resolved.secondaryAction,
+      dismissible: resolved.dismissible,
+      sourceCode: resolved.sourceCode,
+      failureKind: resolved.failureKind,
+      recoveryAction: resolved.recoveryAction,
+    );
+  }
+
+  Future<void> _handleOneTapLogin() async {
+    if (!_ensureAgreementAccepted()) {
+      return;
+    }
+    setState(() => _isSubmitting = true);
+    UiErrorSemantic? errorSemantic;
+    try {
+      final oneTap = await ref
+          .read(oneTapLoginClientProvider)
+          .requestLoginToken()
+          .timeout(_oneTapProbeTimeout);
+      final session = ref.read(authSessionControllerProvider);
+      final result = await ref
+          .read(authRepositoryProvider)
+          .loginOneTap(
+            vendor: oneTap.vendor,
+            carrierToken: oneTap.carrierToken,
+            deviceId: session.installId,
+            platform: CloudRequestHeaders.platform(),
+            agreementVersion: AuthLegalConfig.agreementVersion,
+            privacyVersion: AuthLegalConfig.privacyVersion,
+          );
+      await ref
+          .read(authSessionControllerProvider.notifier)
+          .applyRememberedLoginResult(
+            result,
+            rememberedLoginMethod: AuthRememberedLoginMethod.oneTap,
+            rememberedLoginMaskedIdentifier: oneTap.maskedPhone,
+          );
+      widget.onLoggedIn();
+    } catch (error) {
+      if (mounted) {
+        errorSemantic = _loginActionFailureSemantic(
+          error: error,
+          title: '一键登录未完成',
+          message: UITextConstants.loginFailed,
+        );
+        setState(() => _primaryMode = LoginPrimaryMode.phone);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+    final semantic = errorSemantic;
+    if (semantic != null && mounted) {
+      await AppActionErrorFeedback.show(context, semantic: semantic);
+    }
+  }
+
+  Future<void> _handlePhoneLogin() async {
+    if (!_ensureAgreementAccepted()) {
+      return;
+    }
+    final phone = _phoneController.text.trim();
+    final otp = _otpController.text.trim();
+    if (phone.isEmpty) {
+      AppToast.show(context, UITextConstants.loginPhoneRequired);
+      return;
+    }
+    if (otp.isEmpty) {
+      AppToast.show(context, UITextConstants.loginOtpRequired);
+      return;
+    }
+    setState(() => _isSubmitting = true);
+    UiErrorSemantic? errorSemantic;
+    try {
+      final session = ref.read(authSessionControllerProvider);
+      final result = await ref
+          .read(authRepositoryProvider)
+          .login(
+            credentialType: 'phone',
+            credentialKey: phone,
+            otpCode: otp,
+            displayLabel: phone,
+            deviceId: session.installId,
+            platform: CloudRequestHeaders.platform(),
+          );
+      await ref
+          .read(authSessionControllerProvider.notifier)
+          .applyRememberedLoginResult(
+            result,
+            rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
+            rememberedLoginMaskedIdentifier: _maskPhoneForDisplay(phone),
+          );
+      TextInput.finishAutofillContext();
+      widget.onLoggedIn();
+    } catch (error) {
+      if (mounted) {
+        errorSemantic = _loginActionFailureSemantic(
+          error: error,
+          title: '登录未完成',
+          message: UITextConstants.loginFailed,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+    final semantic = errorSemantic;
+    if (semantic != null && mounted) {
+      await AppActionErrorFeedback.show(context, semantic: semantic);
+    }
+  }
+
+  Future<void> _handleSendOtp() async {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      AppToast.show(context, UITextConstants.loginPhoneRequired);
+      return;
+    }
+    if (_isSendingOtp) {
+      return;
+    }
+    setState(() => _isSendingOtp = true);
+    UiErrorSemantic? errorSemantic;
+    try {
+      final result = await ref
+          .read(authRepositoryProvider)
+          .sendOtp(phone: phone);
+      if (!mounted) {
+        return;
+      }
+      _showOtpSendResult(context, result);
+    } catch (error) {
+      if (mounted) {
+        errorSemantic = _loginActionFailureSemantic(
+          error: error,
+          title: '验证码发送未完成',
+          message: UITextConstants.loginFailed,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingOtp = false);
+      }
+    }
+    final semantic = errorSemantic;
+    if (semantic != null && mounted) {
+      await AppActionErrorFeedback.show(context, semantic: semantic);
+    }
+  }
+
+  Future<void> _continueAsGuest() async {
+    await ref.read(authSessionControllerProvider.notifier).continueAsGuest();
+    if (!mounted) return;
+    widget.onDismiss();
+  }
+}
+
 class _LoginPageState extends ConsumerState<LoginPage> {
   /// 一键登录可用性探测的最长等待时间；超时即切手机号兜底。
   static const Duration _oneTapProbeTimeout = Duration(milliseconds: 1200);
@@ -44,7 +464,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final TextEditingController _otpController = TextEditingController();
 
   bool get _isReturnUser =>
-      widget.reason == AuthPromptReason.manualLoggedOut.name;
+      widget.reason == AuthPromptReason.manualLoggedOut.name ||
+      widget.reason == AuthPromptReason.sessionExpired.name;
 
   bool get _isActionRequired =>
       widget.reason == AuthPromptReason.actionRequired.name ||
@@ -77,22 +498,38 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       return;
     }
     setState(() {
-      _primaryMode = available ? LoginPrimaryMode.oneTap : LoginPrimaryMode.phone;
+      _primaryMode = available
+          ? LoginPrimaryMode.oneTap
+          : LoginPrimaryMode.phone;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(authSessionControllerProvider);
+    final gateReason = authGateReasonForName(widget.reason);
+    final pendingContinuation = ref.watch(authContinuationProvider);
+    final gateSemantic = gateReason == null
+        ? null
+        : authGateSemantic(
+            context,
+            reason: gateReason,
+            continuation: pendingContinuation,
+            scope: UiErrorScope.page,
+          );
     final title =
-        authGateTitleForReasonName(widget.reason) ??
+        gateSemantic?.title ??
         (_isReturnUser
             ? UITextConstants.loginTitleReturn
             : UITextConstants.loginTitleFirstRun);
-    final subtitle = _isActionRequired
-        ? UITextConstants.loginSubtitleActionRequired
-        : _isReturnUser
-        ? UITextConstants.loginSubtitleReturn
-        : UITextConstants.loginSubtitleFirstRun;
+    final subtitle =
+        gateSemantic?.secondaryMessage ??
+        gateSemantic?.message ??
+        (_isActionRequired
+            ? UITextConstants.loginSubtitleActionRequired
+            : _isReturnUser
+            ? UITextConstants.loginSubtitleReturn
+            : UITextConstants.loginSubtitleFirstRun);
 
     return AppScaffold(
       backgroundColor: AppColors.iosPageBackground(context),
@@ -159,6 +596,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   ),
                                 ),
                                 SizedBox(height: AppSpacing.interGroupLg),
+                                if (session.hasRememberedLogin) ...<Widget>[
+                                  _RememberedLoginHintCard(session: session),
+                                  SizedBox(height: AppSpacing.interGroupMd),
+                                ],
                                 _LoginCard(
                                   child: Column(
                                     crossAxisAlignment:
@@ -180,6 +621,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                           phoneController: _phoneController,
                                           otpController: _otpController,
                                           isSubmitting: _isSubmitting,
+                                          rememberedPhoneHint:
+                                              session.rememberedLoginMethod ==
+                                                  AuthRememberedLoginMethod
+                                                      .phoneOtp
+                                              ? session
+                                                    .rememberedLoginMaskedIdentifier
+                                              : '',
                                           onSendOtp: _handleSendOtp,
                                           onSubmit: _handlePhoneLogin,
                                         ),
@@ -207,7 +655,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   ),
                                 ),
                                 SizedBox(height: AppSpacing.interGroupLg),
-                                const _OtherLoginMethods(),
+                                _OtherLoginMethods(
+                                  ensureAgreementAccepted: () async =>
+                                      _ensureAgreementAccepted(),
+                                  onLoggedIn: _goAfterLogin,
+                                ),
                                 SizedBox(height: AppSpacing.intraGroupSm),
                                 CupertinoButton(
                                   padding: EdgeInsets.zero,
@@ -242,11 +694,41 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return false;
   }
 
+  UiErrorSemantic _loginActionFailureSemantic({
+    required Object error,
+    required String title,
+    required String message,
+  }) {
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.submit,
+      scope: UiErrorScope.global,
+    );
+    return UiErrorSemantic(
+      category: resolved.category,
+      scope: resolved.scope,
+      title: title,
+      message: resolved.message.isNotEmpty ? resolved.message : message,
+      secondaryMessage: resolved.secondaryMessage,
+      primaryAction: const UiErrorAction(
+        type: UiErrorActionType.dismiss,
+        label: UITextConstants.confirm,
+      ),
+      secondaryAction: resolved.secondaryAction,
+      dismissible: resolved.dismissible,
+      sourceCode: resolved.sourceCode,
+      failureKind: resolved.failureKind,
+      recoveryAction: resolved.recoveryAction,
+    );
+  }
+
   Future<void> _handleOneTapLogin() async {
     if (!_ensureAgreementAccepted()) {
       return;
     }
     setState(() => _isSubmitting = true);
+    UiErrorSemantic? errorSemantic;
     try {
       final oneTap = await ref
           .read(oneTapLoginClientProvider)
@@ -265,18 +747,30 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           );
       await ref
           .read(authSessionControllerProvider.notifier)
-          .applyLoginResult(result);
+          .applyRememberedLoginResult(
+            result,
+            rememberedLoginMethod: AuthRememberedLoginMethod.oneTap,
+            rememberedLoginMaskedIdentifier: oneTap.maskedPhone,
+          );
       _goAfterLogin();
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        AppToast.show(context, UITextConstants.loginFailed);
         // 一键登录失败不停留在一键登录态，切到手机号兜底，避免按钮区域卡住。
+        errorSemantic = _loginActionFailureSemantic(
+          error: error,
+          title: '一键登录未完成',
+          message: UITextConstants.loginFailed,
+        );
         setState(() => _primaryMode = LoginPrimaryMode.phone);
       }
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
+    }
+    final semantic = errorSemantic;
+    if (semantic != null && mounted) {
+      await AppActionErrorFeedback.show(context, semantic: semantic);
     }
   }
 
@@ -295,7 +789,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       return;
     }
     setState(() => _isSubmitting = true);
+    UiErrorSemantic? errorSemantic;
     try {
+      final session = ref.read(authSessionControllerProvider);
       final result = await ref
           .read(authRepositoryProvider)
           .login(
@@ -303,19 +799,34 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             credentialKey: phone,
             otpCode: otp,
             displayLabel: phone,
+            deviceId: session.installId,
+            platform: CloudRequestHeaders.platform(),
           );
       await ref
           .read(authSessionControllerProvider.notifier)
-          .applyLoginResult(result);
+          .applyRememberedLoginResult(
+            result,
+            rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
+            rememberedLoginMaskedIdentifier: _maskPhoneForDisplay(phone),
+          );
+      TextInput.finishAutofillContext();
       _goAfterLogin();
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        AppToast.show(context, UITextConstants.loginFailed);
+        errorSemantic = _loginActionFailureSemantic(
+          error: error,
+          title: '登录未完成',
+          message: UITextConstants.loginFailed,
+        );
       }
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
+    }
+    final semantic = errorSemantic;
+    if (semantic != null && mounted) {
+      await AppActionErrorFeedback.show(context, semantic: semantic);
     }
   }
 
@@ -329,6 +840,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       return;
     }
     setState(() => _isSendingOtp = true);
+    UiErrorSemantic? errorSemantic;
     try {
       final result = await ref
           .read(authRepositoryProvider)
@@ -336,20 +848,23 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (!mounted) {
         return;
       }
-      AppToast.show(context, UITextConstants.loginOtpSent);
-      // 非生产调试码：自动回填，便于本地/CI 联调（生产为 null，不回填）。
-      final debugCode = result.debugCode;
-      if (debugCode != null && debugCode.isNotEmpty) {
-        _otpController.text = debugCode;
-      }
-    } catch (_) {
+      _showOtpSendResult(context, result);
+    } catch (error) {
       if (mounted) {
-        AppToast.show(context, UITextConstants.loginFailed);
+        errorSemantic = _loginActionFailureSemantic(
+          error: error,
+          title: '验证码发送未完成',
+          message: UITextConstants.loginFailed,
+        );
       }
     } finally {
       if (mounted) {
         setState(() => _isSendingOtp = false);
       }
+    }
+    final semantic = errorSemantic;
+    if (semantic != null && mounted) {
+      await AppActionErrorFeedback.show(context, semantic: semantic);
     }
   }
 
@@ -396,6 +911,99 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       context.go(fallback);
     }
   }
+}
+
+String _maskPhoneForDisplay(String phone) {
+  final trimmed = phone.trim();
+  if (trimmed.length <= 7) {
+    return trimmed;
+  }
+  return '${trimmed.substring(0, 3)}****${trimmed.substring(trimmed.length - 4)}';
+}
+
+Future<void> _handleNativeLoginAction({
+  required BuildContext context,
+  required WidgetRef ref,
+  required NativeAuthProvider provider,
+  required VoidCallback onLoggedIn,
+  required Future<bool> Function() ensureAgreementAccepted,
+}) async {
+  if (!await ensureAgreementAccepted()) {
+    return;
+  }
+  final bridge = ref.read(nativeAuthBridgeProvider);
+  final capability = await bridge.getCapability(provider);
+  if (!capability.isAvailable) {
+    if (context.mounted) {
+      AppToast.show(context, UITextConstants.loginMethodUnavailable);
+    }
+    return;
+  }
+
+  try {
+    final nativeResult = provider == NativeAuthProvider.passkey
+        ? await bridge.signInWithPasskey()
+        : await bridge.signIn(provider);
+    final session = ref.read(authSessionControllerProvider);
+    final authRepository = ref.read(authRepositoryProvider);
+    final platform = CloudRequestHeaders.platform();
+
+    final result = switch (provider) {
+      NativeAuthProvider.wechat => authRepository.loginWechat(
+        wechatCode: nativeResult.ticket,
+        deviceId: session.installId,
+        platform: platform,
+      ),
+      NativeAuthProvider.apple => authRepository.loginApple(
+        appleIdToken: nativeResult.ticket,
+        deviceId: session.installId,
+        platform: platform,
+      ),
+      NativeAuthProvider.systemCredential => authRepository.loginPasskey(
+        passkeyAssertion: nativeResult.ticket,
+        deviceId: session.installId,
+        platform: platform,
+        displayLabel: nativeResult.displayLabel,
+      ),
+      NativeAuthProvider.passkey => authRepository.loginPasskey(
+        passkeyAssertion: nativeResult.ticket,
+        deviceId: session.installId,
+        platform: platform,
+        displayLabel: nativeResult.displayLabel,
+      ),
+    };
+
+    final rememberedMethod = switch (provider) {
+      NativeAuthProvider.wechat => AuthRememberedLoginMethod.wechat,
+      NativeAuthProvider.apple => AuthRememberedLoginMethod.apple,
+      NativeAuthProvider.systemCredential => AuthRememberedLoginMethod.passkey,
+      NativeAuthProvider.passkey => AuthRememberedLoginMethod.passkey,
+    };
+    await ref.read(authSessionControllerProvider.notifier).applyRememberedLoginResult(
+      await result,
+      rememberedLoginMethod: rememberedMethod,
+      rememberedLoginMaskedIdentifier: nativeResult.maskedAccount,
+    );
+    onLoggedIn();
+  } catch (_) {
+    if (context.mounted) {
+      AppToast.show(context, UITextConstants.loginFailed);
+    }
+  }
+}
+
+class _OtherLoginEntry {
+  const _OtherLoginEntry({
+    required this.icon,
+    required this.label,
+    this.provider,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String label;
+  final NativeAuthProvider? provider;
+  final bool enabled;
 }
 
 class _PrimaryLoginButton extends StatelessWidget {
@@ -615,6 +1223,7 @@ class _PhoneLoginForm extends StatelessWidget {
     required this.phoneController,
     required this.otpController,
     required this.isSubmitting,
+    required this.rememberedPhoneHint,
     required this.onSendOtp,
     required this.onSubmit,
   });
@@ -622,6 +1231,7 @@ class _PhoneLoginForm extends StatelessWidget {
   final TextEditingController phoneController;
   final TextEditingController otpController;
   final bool isSubmitting;
+  final String rememberedPhoneHint;
   final VoidCallback onSendOtp;
   final VoidCallback onSubmit;
 
@@ -632,8 +1242,14 @@ class _PhoneLoginForm extends StatelessWidget {
       children: <Widget>[
         _LoginTextField(
           controller: phoneController,
-          placeholder: UITextConstants.loginPhoneNumberPlaceholder,
+          placeholder: rememberedPhoneHint.isNotEmpty
+              ? '$rememberedPhoneHint（${UITextConstants.loginPhoneNumberPlaceholder}）'
+              : UITextConstants.loginPhoneNumberPlaceholder,
           keyboardType: TextInputType.phone,
+          autofillHints: const <String>[
+            AutofillHints.telephoneNumber,
+            AutofillHints.username,
+          ],
         ),
         SizedBox(height: AppSpacing.intraGroupMd),
         Row(
@@ -643,6 +1259,7 @@ class _PhoneLoginForm extends StatelessWidget {
                 controller: otpController,
                 placeholder: UITextConstants.loginOtpPlaceholder,
                 keyboardType: TextInputType.number,
+                autofillHints: const <String>[AutofillHints.oneTimeCode],
               ),
             ),
             SizedBox(width: AppSpacing.intraGroupSm),
@@ -678,17 +1295,21 @@ class _LoginTextField extends StatelessWidget {
     required this.controller,
     required this.placeholder,
     required this.keyboardType,
+    this.autofillHints,
   });
 
   final TextEditingController controller;
   final String placeholder;
   final TextInputType keyboardType;
+  final Iterable<String>? autofillHints;
 
   @override
   Widget build(BuildContext context) {
     return CupertinoTextField(
       controller: controller,
       keyboardType: keyboardType,
+      autofillHints: autofillHints,
+      textInputAction: TextInputAction.done,
       minLines: 1,
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerMd,
@@ -698,6 +1319,77 @@ class _LoginTextField extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.iosSecondaryFill(context),
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+    );
+  }
+}
+
+class _RememberedLoginHintCard extends StatelessWidget {
+  const _RememberedLoginHintCard({required this.session});
+
+  final AuthSessionState session;
+
+  @override
+  Widget build(BuildContext context) {
+    final methodLabel = switch (session.rememberedLoginMethod) {
+      AuthRememberedLoginMethod.phoneOtp =>
+        UITextConstants.loginRememberedMethodPhoneOtp,
+      AuthRememberedLoginMethod.oneTap =>
+        UITextConstants.loginRememberedMethodOneTap,
+      AuthRememberedLoginMethod.wechat =>
+        UITextConstants.loginRememberedMethodWechat,
+      AuthRememberedLoginMethod.apple =>
+        UITextConstants.loginRememberedMethodApple,
+      AuthRememberedLoginMethod.passkey =>
+        UITextConstants.loginRememberedMethodPasskey,
+      AuthRememberedLoginMethod.anonymous =>
+        UITextConstants.loginRememberedMethodAnonymous,
+      AuthRememberedLoginMethod.unknown => '',
+    };
+    if (methodLabel.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.iosSecondaryFill(context),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.containerMd,
+          vertical: AppSpacing.containerSm,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              UITextConstants.loginRememberedMethodTitle,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: AppColors.iosSecondaryLabel(context),
+              ),
+            ),
+            SizedBox(height: AppSpacing.xs),
+            Text(
+              methodLabel,
+              style: TextStyle(
+                fontSize: AppTypography.iosBody,
+                fontWeight: AppTypography.semiBold,
+                color: AppColors.iosLabel(context),
+              ),
+            ),
+            if (session.rememberedLoginMaskedIdentifier.isNotEmpty) ...<Widget>[
+              SizedBox(height: AppSpacing.xs),
+              Text(
+                session.rememberedLoginMaskedIdentifier,
+                style: TextStyle(
+                  fontSize: AppTypography.iosCallout,
+                  color: AppColors.iosSecondaryLabel(context),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -798,11 +1490,63 @@ class _LinkText extends StatelessWidget {
   }
 }
 
-class _OtherLoginMethods extends StatelessWidget {
-  const _OtherLoginMethods();
+class _OtherLoginMethods extends ConsumerWidget {
+  const _OtherLoginMethods({
+    required this.ensureAgreementAccepted,
+    required this.onLoggedIn,
+  });
+
+  final Future<bool> Function() ensureAgreementAccepted;
+  final VoidCallback onLoggedIn;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final caps = ref.watch(platformCapabilitiesProvider);
+    final entries = <_OtherLoginEntry>[
+      if (caps.wechatNativeLogin)
+        const _OtherLoginEntry(
+          icon: CupertinoIcons.chat_bubble_2_fill,
+          label: UITextConstants.loginMethodWechat,
+          provider: NativeAuthProvider.wechat,
+        ),
+      if (caps.appleNativeLogin)
+        const _OtherLoginEntry(
+          icon: CupertinoIcons.person_crop_circle_badge_checkmark,
+          label: UITextConstants.loginMethodApple,
+          provider: NativeAuthProvider.apple,
+        ),
+      if (caps.systemCredentialLogin)
+        const _OtherLoginEntry(
+          icon: CupertinoIcons.lock_shield_fill,
+          label: UITextConstants.loginMethodCredentialManager,
+          provider: NativeAuthProvider.systemCredential,
+        ),
+      if (caps.passkeyLogin)
+        const _OtherLoginEntry(
+          icon: CupertinoIcons.lock_fill,
+          label: UITextConstants.loginMethodPasskey,
+          provider: NativeAuthProvider.passkey,
+        ),
+      const _OtherLoginEntry(
+        icon: CupertinoIcons.at_circle_fill,
+        label: UITextConstants.loginMethodWeibo,
+        enabled: false,
+      ),
+      const _OtherLoginEntry(
+        icon: CupertinoIcons.person_2_fill,
+        label: UITextConstants.loginMethodQq,
+        enabled: false,
+      ),
+      const _OtherLoginEntry(
+        icon: CupertinoIcons.money_yen_circle_fill,
+        label: UITextConstants.loginMethodAlipay,
+        enabled: false,
+      ),
+    ];
+    if (entries.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       children: <Widget>[
         Text(
@@ -813,26 +1557,28 @@ class _OtherLoginMethods extends StatelessWidget {
           ),
         ),
         SizedBox(height: AppSpacing.intraGroupSm),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const <Widget>[
-            _OtherLoginMethod(
-              icon: CupertinoIcons.chat_bubble_2_fill,
-              label: UITextConstants.loginMethodWechat,
-            ),
-            _OtherLoginMethod(
-              icon: CupertinoIcons.at_circle_fill,
-              label: UITextConstants.loginMethodWeibo,
-            ),
-            _OtherLoginMethod(
-              icon: CupertinoIcons.person_2_fill,
-              label: UITextConstants.loginMethodQq,
-            ),
-            _OtherLoginMethod(
-              icon: CupertinoIcons.money_yen_circle_fill,
-              label: UITextConstants.loginMethodAlipay,
-            ),
-          ],
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
+          children: entries
+              .map(
+                (entry) => _OtherLoginMethod(
+                  icon: entry.icon,
+                  label: entry.label,
+                  enabled: entry.enabled,
+                  onPressed: entry.provider == null
+                      ? null
+                      : () => _handleNativeLoginAction(
+                            context: context,
+                            ref: ref,
+                            provider: entry.provider!,
+                            onLoggedIn: onLoggedIn,
+                            ensureAgreementAccepted: ensureAgreementAccepted,
+                          ),
+                ),
+              )
+              .toList(growable: false),
         ),
       ],
     );
@@ -840,10 +1586,17 @@ class _OtherLoginMethods extends StatelessWidget {
 }
 
 class _OtherLoginMethod extends StatelessWidget {
-  const _OtherLoginMethod({required this.icon, required this.label});
+  const _OtherLoginMethod({
+    required this.icon,
+    required this.label,
+    this.onPressed,
+    this.enabled = true,
+  });
 
   final IconData icon;
   final String label;
+  final VoidCallback? onPressed;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -853,10 +1606,12 @@ class _OtherLoginMethod extends StatelessWidget {
         AppSpacing.minInteractiveSize,
         AppSpacing.minInteractiveSize,
       ),
-      onPressed: () => AppToast.show(
-        context,
-        '$label${UITextConstants.loginMethodComingSoon}',
-      ),
+      onPressed: enabled
+          ? onPressed
+          : () => AppToast.show(
+              context,
+              '$label${UITextConstants.loginMethodComingSoon}',
+            ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[

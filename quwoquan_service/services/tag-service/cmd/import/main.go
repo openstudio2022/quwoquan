@@ -1,5 +1,5 @@
-// Command import 把数据工程路径制 taxonomy（publish/tags 目录树）灌入 mongo tag_nodes。
-// 唯一标签真相源为 publish/tags（单一发布主线）；本工具只读消费其目录结构，幂等 upsert，可重跑。
+// Command import 把数据工程路径制 taxonomy（publish/v1/tags 目录树）灌入 mongo tag_nodes。
+// 唯一标签真相源为 publish/v1/tags（单一发布主线）；本工具只读消费其目录结构，幂等 upsert，可重跑。
 package main
 
 import (
@@ -15,6 +15,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	persistence "quwoquan_service/services/tag-service/internal/infrastructure/persistence"
 )
 
 type definition struct {
@@ -25,9 +27,11 @@ type definition struct {
 var validGroups = map[string]bool{"Topic": true, "Entity": true, "Audience": true, "Format": true}
 
 func main() {
-	tagsDir := flag.String("tags-dir", "../quwoquan_data/publish/tags", "path to publish/tags directory tree")
+	tagsDir := flag.String("tags-dir", "../quwoquan_data/publish/v1/tags", "path to publish/v1/tags directory tree")
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "mongo connection uri")
 	dbName := flag.String("db", "quwoquan_tag", "target database")
+	releaseID := flag.String("release-id", "adhoc", "data release id")
+	sourceOwner := flag.String("source-owner", "qwq_data", "source owner for imported tag nodes")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -38,11 +42,9 @@ func main() {
 	defer client.Disconnect(ctx)
 
 	coll := client.Database(*dbName).Collection("tag_nodes")
-	if _, err := coll.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "tagRef", Value: 1}},
-		Options: options.Index().SetName("idx_tag_ref").SetUnique(true),
-	}); err != nil {
-		log.Printf("WARN: ensure idx_tag_ref: %v", err)
+	store := persistence.NewMongoTagNodeStore(coll)
+	if err := store.EnsureIndexes(ctx); err != nil {
+		log.Printf("WARN: ensure tag_nodes indexes: %v", err)
 	}
 
 	count := 0
@@ -84,14 +86,18 @@ func main() {
 		}
 		now := time.Now().UTC()
 		setDoc := bson.M{
-			"tagRef":    tagRef,
-			"group":     group,
-			"label":     def.Label,
-			"labelEn":   def.LabelEn,
-			"aliases":   "",
-			"ancestors": ancestors,
-			"depth":     len(segs) - 1,
-			"updatedAt": now,
+			"tagRef":               tagRef,
+			"group":                group,
+			"label":                def.Label,
+			"labelEn":              def.LabelEn,
+			"aliases":              "",
+			"ancestors":            ancestors,
+			"depth":                len(segs) - 1,
+			"updatedAt":            now,
+			"releaseId":            *releaseID,
+			"visibleFromReleaseId": *releaseID,
+			"sourceOwner":          *sourceOwner,
+			"lifecycleStatus":      "active",
 		}
 		if _, uerr := coll.UpdateOne(ctx,
 			bson.M{"tagRef": tagRef},

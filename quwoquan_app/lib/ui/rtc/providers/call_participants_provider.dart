@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:quwoquan_app/cloud/rtc/models/call_participant_dto.dart';
+import 'package:quwoquan_app/cloud/rtc/livekit_room_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
 class CallParticipantsState {
@@ -77,6 +80,75 @@ class CallParticipantsNotifier extends Notifier<CallParticipantsState> {
         .map((dto) => CallParticipant.fromDto(dto))
         .toList();
     state = state.copyWith(participants: participants);
+  }
+
+  /// Merges the server-side participant roster (metadata: displayName, role,
+  /// trust) with the live LiveKit room (real connection/track/speaking state),
+  /// keyed on userId == LiveKit participant identity. This is the single bind
+  /// point that turns the placeholder grid into real video; see design REV-5 S2.
+  void syncFromLiveKit(LiveKitRoomService room, List<CallParticipantDto> dtos) {
+    final byId = <String, CallParticipantDto>{
+      for (final dto in dtos) dto.userId: dto,
+    };
+
+    final live = <CallParticipant>[];
+
+    final local = room.localParticipant;
+    if (local != null) {
+      live.add(_mergeParticipant(local, byId[local.identity], isLocal: true));
+    }
+    for (final remote in room.remoteParticipants) {
+      live.add(_mergeParticipant(remote, byId[remote.identity], isLocal: false));
+    }
+
+    // Include roster entries that have not yet established media (invited /
+    // ringing / connecting) so the grid can show waiting tiles.
+    final liveIds = live.map((p) => p.userId).toSet();
+    for (final dto in dtos) {
+      if (!liveIds.contains(dto.userId)) {
+        live.add(CallParticipant.fromDto(dto));
+      }
+    }
+
+    state = state.copyWith(
+      participants: live,
+      activeSpeakerId: room.activeSpeaker.value,
+    );
+  }
+
+  CallParticipant _mergeParticipant(
+    lk.Participant participant,
+    CallParticipantDto? dto, {
+    required bool isLocal,
+  }) {
+    final cameraPub = participant.videoTrackPublications
+        .where((pub) => pub.source == lk.TrackSource.camera)
+        .firstOrNull;
+    final videoTrack = cameraPub?.track is lk.VideoTrack
+        ? cameraPub!.track as lk.VideoTrack
+        : null;
+    final isCameraOn = videoTrack != null && !(cameraPub?.muted ?? true);
+    final isMuted = participant.isMuted;
+
+    final base = dto != null
+        ? CallParticipant.fromDto(dto)
+        : CallParticipant(
+            userId: participant.identity,
+            displayName: participant.name.isNotEmpty
+                ? participant.name
+                : participant.identity,
+          );
+
+    return base.copyWith(
+      status: ParticipantStatus.connected,
+      isMuted: isMuted,
+      isCameraOn: isCameraOn,
+      isSpeaking: participant.isSpeaking,
+      audioLevel: participant.audioLevel,
+      videoTrack: videoTrack,
+      clearVideoTrack: videoTrack == null,
+      isLocal: isLocal,
+    );
   }
 
   void updateAudioLevel(String userId, double level) {

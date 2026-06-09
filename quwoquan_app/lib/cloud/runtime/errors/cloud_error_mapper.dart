@@ -31,6 +31,7 @@ class CloudErrorMapper {
         code: code,
         errorCode: errorCode,
         runtimeFailure: runtimeFailure,
+        userMessage: parsedUserMessage(body),
       );
     }
     if (statusCode == 403) {
@@ -41,6 +42,7 @@ class CloudErrorMapper {
         code: code,
         errorCode: errorCode,
         runtimeFailure: runtimeFailure,
+        userMessage: parsedUserMessage(body),
       );
     }
     if (statusCode == 404) {
@@ -51,6 +53,7 @@ class CloudErrorMapper {
         code: code,
         errorCode: errorCode,
         runtimeFailure: runtimeFailure,
+        userMessage: parsedUserMessage(body),
       );
     }
     if (statusCode >= 500) {
@@ -61,6 +64,7 @@ class CloudErrorMapper {
         code: code,
         errorCode: errorCode,
         runtimeFailure: runtimeFailure,
+        userMessage: parsedUserMessage(body),
       );
     }
     return CloudException(
@@ -70,6 +74,7 @@ class CloudErrorMapper {
       code: code,
       errorCode: errorCode,
       runtimeFailure: runtimeFailure,
+      userMessage: parsedUserMessage(body),
     );
   }
 
@@ -114,6 +119,7 @@ class CloudErrorMapper {
       message: message,
       code: failure.code,
       runtimeFailure: failure,
+      userMessage: message,
     );
   }
 
@@ -274,6 +280,12 @@ class CloudErrorMapper {
     final code = _readCode(body);
     if (code == null) return ContentErrorCode.unknown;
     return _contentErrorCodeFromRuntimeCode(code) ?? ContentErrorCode.unknown;
+  }
+
+  static String? parsedUserMessage(String? body) {
+    final parsed = _readRuntimeErrorResponse(body);
+    final userMessage = parsed?.userMessage.trim() ?? '';
+    return userMessage.isEmpty ? null : userMessage;
   }
 }
 

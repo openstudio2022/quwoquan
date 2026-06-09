@@ -30,9 +30,17 @@ gwt_acceptance:
       - T2_module_interaction
       supporting: []
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - quwoquan_app/test/core/services/visit_recorder_service_test.dart
+      - quwoquan_app/test/app/app_startup_welcome_test.dart
+      - quwoquan_app/test/ui/welcome/welcome_screen_test.dart
+      - quwoquan_app/test/cloud/ops/api_contract_runner.dart
+      recorded:
+      - quwoquan_app/test/core/services/visit_recorder_service_test.dart
+      - quwoquan_app/test/app/app_startup_welcome_test.dart
+      - quwoquan_app/test/ui/welcome/welcome_screen_test.dart
+      - quwoquan_app/test/cloud/ops/api_contract_runner.dart
+    status: implemented
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -1,0 +1,183 @@
+version: 1
+schema_id: app_remote_config_catalog
+description: AppRemoteConfig 可运营配置目录。BuildRuntimeConfig、ServiceRuntimeConfig、PageDataBundle 不在此作为远程运营字段维护。
+categories:
+  - id: build_runtime_config
+    source: quwoquan_app/configs/*/app_runtime.yaml
+    remote_editable: false
+    description: 构建期/环境期常量，经 --dart-define 注入。
+    items:
+      - key: APP_RUNTIME_ENV
+        owner: runtime
+        risk_level: critical
+        reload_policy: restart_only
+        activation_policy: restart_only
+        fallback: alpha
+        expiry: never
+      - key: CLOUD_GATEWAY_BASE_URL
+        owner: runtime
+        risk_level: critical
+        reload_policy: restart_only
+        activation_policy: restart_only
+        fallback: http://127.0.0.1:17000
+        expiry: never
+      - key: MEDIA_IMAGE_CDN_BASE_URL
+        owner: runtime-media
+        risk_level: critical
+        reload_policy: restart_only
+        activation_policy: restart_only
+        fallback: https://127.0.0.1:17100
+        expiry: never
+  - id: app_remote_config
+    source: GET /v1/config/app
+    remote_editable: true
+    description: App 可公开消费的运营参数和轻系统参数。
+    items:
+      - key: content.comment.max_length
+        owner: content
+        risk_level: medium
+        reload_policy: hot
+        activation_policy: next_navigation
+        fallback: 500
+        expiry: never
+      - key: content.comment.reply_preview_count
+        owner: content
+        risk_level: low
+        reload_policy: hot
+        activation_policy: next_navigation
+        fallback: 1
+        expiry: never
+      - key: content.comment.reply_expand_page_size
+        owner: content
+        risk_level: low
+        reload_policy: hot
+        activation_policy: next_navigation
+        fallback: 10
+        expiry: never
+      - key: content.comment.fold_line_count
+        owner: content
+        risk_level: low
+        reload_policy: hot
+        activation_policy: next_navigation
+        fallback: 3
+        expiry: never
+      - key: content.comment.attachment.max_images
+        owner: content
+        risk_level: medium
+        reload_policy: hot
+        activation_policy: next_navigation
+        fallback: 1
+        expiry: never
+      - key: content.home_channels
+        owner: discovery-content
+        risk_level: medium
+        reload_policy: hot
+        activation_policy: next_session
+        fallback: ContentUIConfig.homeChannels
+        expiry: never
+      - key: content.intersection.inline_expand_count
+        owner: recommendation
+        risk_level: low
+        reload_policy: hot
+        activation_policy: next_navigation
+        fallback: 3
+        expiry: never
+      - key: content.intersection.max_candidate_window
+        owner: recommendation
+        risk_level: medium
+        reload_policy: hot
+        activation_policy: next_session
+        fallback: 20
+        expiry: never
+      - key: content.client_state_sync.flush_delay_sec
+        owner: runtime
+        risk_level: medium
+        reload_policy: hot
+        activation_policy: next_session
+        fallback: 10
+        expiry: never
+      - key: content.client_state_sync.retry_delay_sec
+        owner: runtime
+        risk_level: medium
+        reload_policy: hot
+        activation_policy: next_session
+        fallback: 300
+        expiry: never
+      - key: content.client_state_sync.max_batch_size
+        owner: runtime
+        risk_level: low
+        reload_policy: hot
+        activation_policy: next_session
+        fallback: 20
+        expiry: never
+      - key: content.feature_flags.enable_article_book_reader
+        owner: content
+        risk_level: medium
+        reload_policy: hot
+        activation_policy: next_session
+        fallback: false
+        expiry: 2026-12-31
+      - key: content.feature_flags.enable_article_page_curl
+        owner: content
+        risk_level: medium
+        reload_policy: hot
+        activation_policy: next_session
+        fallback: false
+        expiry: 2026-12-31
+      - key: content.feature_flags.ops.user.persona_management_v1
+        owner: user
+        risk_level: medium
+        reload_policy: hot
+        activation_policy: next_session
+        fallback: true
+        expiry: 2026-12-31
+      - key: content.gray_release
+        owner: product-ops
+        risk_level: medium
+        reload_policy: hot
+        activation_policy: next_session
+        fallback: control
+        expiry: never
+  - id: static_ui_config
+    source: contracts/metadata/**/ui_config.yaml -> codegen
+    remote_editable: false
+    description: 编译进 App 的页面结构与默认 UI 配置，作为 AppRemoteConfig fallback。
+    items:
+      - key: ContentUIConfig.homeChannels
+        owner: discovery-content
+        risk_level: low
+        reload_policy: app_release
+        activation_policy: restart_only
+        fallback: required
+        expiry: never
+      - key: ContentUIConfig.emptyStates
+        owner: runtime-client-foundation
+        risk_level: low
+        reload_policy: app_release
+        activation_policy: restart_only
+        fallback: required
+        expiry: never
+  - id: page_data_bundle
+    source: domain APIs
+    remote_editable: false
+    description: 页面业务数据，不作为全局配置维护。
+    items:
+      - key: entity.object_page_bundle
+        owner: entity
+        risk_level: medium
+        reload_policy: request
+        activation_policy: request
+        fallback: empty_state
+        expiry: never
+  - id: seed_fixture
+    source: contracts/metadata/_shared/test_fixtures/app_*_seed_manifest.json
+    remote_editable: false
+    description: alpha/beta/gamma 测试与联调数据，不是 prod 启动配置源。
+    items:
+      - key: app_alpha_seed_manifest
+        owner: runtime
+        risk_level: low
+        reload_policy: test_only
+        activation_policy: test_only
+        fallback: none
+        expiry: never

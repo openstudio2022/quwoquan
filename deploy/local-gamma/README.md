@@ -1,6 +1,6 @@
 # Local Gamma Mirror
 
-本目录定义提交前本地 gamma 镜像预测试的反代与设备连接说明。它不是第六个环境；服务仍使用 `APP_ENV=gamma`，App 仍使用 `APP_RUNTIME_ENV=gamma`、`APP_DATA_SOURCE=remote`。
+本目录定义提交前本地 gamma 镜像预测试的反代与设备连接说明。它不是额外环境；服务仍使用 `APP_ENV=gamma`，App 仍使用 `APP_RUNTIME_ENV=gamma`、`APP_DATA_SOURCE=remote`。
 
 ## 一键启动
 
@@ -10,9 +10,20 @@ quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
 
 默认会生成：
 
-- `artifacts/local-gamma/config-root`：满足 `CONFIG_ROOT` 与 `CONFIG_VERSION=local-gamma-v1` 的本地配置树。
-- `artifacts/local-gamma/media`：本地 media/CDN 测试目录。
+- `state/local/gamma/config-root`：满足 `CONFIG_ROOT` 与 `CONFIG_VERSION=local-gamma-v1` 的本地配置树。
+- `state/local/gamma/media`：本地 media/CDN 测试目录。
 - `artifacts/local-gamma/report.json`：后续 gate 汇总报告。
+
+若 `quwoquan_data/publish/tags` 不存在，启动脚本会按当前标签真相源自动生成 taxonomy，并重建 `publish/index/` 派生索引后继续 local-gamma 启动。
+
+## 实际运行形态
+
+`local-gamma mirror` 的运行时口径是单机 `docker compose` 单栈，不是 K8s，也没有 Pod 概念。
+
+- Compose 定义 12 个服务：`postgres`、`mongodb`、`mongo-init`、`redis`、`rec-model-service`、`content-service`、`chat-service`、`user-service`、`assistant-service`、`product-ops-service`、`tag-service`、`gamma-proxy`。
+- `mongo-init` 是一次性 init 容器；稳定态为 11 个常驻容器。
+- 宿主机还会额外启动 1 个 `media-origin` 进程，监听 `19110`，用于本地 media origin 验证。
+- 对外入口以 `gamma-proxy` 为主：`19000` 提供 API edge，`19100` 提供 media edge；`19010` 直连 `product-ops-service`。
 
 ## DNS
 

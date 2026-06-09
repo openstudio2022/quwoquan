@@ -19,6 +19,7 @@ type ChatHandler struct {
 	messageService      *application.MessageService
 	memberService       *application.MemberService
 	inboxService        *application.InboxService
+	mediaUploadService  *application.ChatMediaUploadService
 	userSyncService     *runtimesync.Service
 }
 
@@ -34,6 +35,7 @@ func NewChatHandler(
 		messageService:      messageService,
 		memberService:       memberService,
 		inboxService:        inboxService,
+		mediaUploadService:  application.NewChatMediaUploadService(),
 		userSyncService:     userSyncService,
 	}
 }
@@ -47,7 +49,9 @@ func (h *ChatHandler) Routes() http.Handler {
 	mux.HandleFunc("PATCH /v1/chat/conversations/{conversationId}/owner", h.handleTransferOwnership)
 	mux.HandleFunc("PUT /v1/chat/conversations/{conversationId}/admins", h.handleUpdateGroupAdmins)
 	mux.HandleFunc("DELETE /v1/chat/conversations/{conversationId}", h.handleDissolveConversation)
+	h.registerMediaUploadRoutes(mux)
 	RegisterGeneratedRoutes(mux, h)
+	h.registerInternalRoutes(mux)
 	return mux
 }
 
@@ -122,6 +126,10 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 		Type             string   `json:"type"`
 		Title            string   `json:"title"`
 		CircleId         string   `json:"circleId"`
+		CircleGroupId    string   `json:"circleGroupId"`
+		OriginType       string   `json:"originType"`
+		BindingType      string   `json:"bindingType"`
+		LifecyclePolicy  string   `json:"lifecyclePolicy"`
 		MaxGroupSize     int      `json:"maxGroupSize"`
 		InitialMemberIds []string `json:"initialMemberIds"`
 	}
@@ -131,7 +139,8 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 	}
 
 	conv, err := h.conversationService.CreateConversation(r.Context(), application.CreateConversationRequest{
-		Type: body.Type, Title: body.Title, CircleId: body.CircleId,
+		Type: body.Type, Title: body.Title, CircleId: body.CircleId, CircleGroupId: body.CircleGroupId,
+		OriginType: body.OriginType, BindingType: body.BindingType, LifecyclePolicy: body.LifecyclePolicy,
 		MaxGroupSize: body.MaxGroupSize, CreatorId: resolveUserID(r), InitialMemberIds: body.InitialMemberIds,
 	})
 	if err != nil {
@@ -484,6 +493,22 @@ func (h *ChatHandler) handleListContacts(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{"items": contacts})
 }
 
+func (h *ChatHandler) handleListGroupCandidates(w http.ResponseWriter, r *http.Request) {
+	limit := queryInt(r, "limit", 100)
+	conversationID := strings.TrimSpace(r.URL.Query().Get("conversationId"))
+	candidates, err := h.memberService.ListGroupCandidates(
+		r.Context(),
+		resolveUserID(r),
+		conversationID,
+		limit,
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": candidates, "cursor": ""})
+}
+
 func (h *ChatHandler) handleSearchContacts(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("query")
 	if query == "" {
@@ -510,6 +535,7 @@ func (h *ChatHandler) handleSearchContacts(w http.ResponseWriter, r *http.Reques
 			"avatarUrl":        contact.AvatarURL,
 			"conversationId":   contact.ConversationID,
 			"conversationType": contact.ConversationType,
+			"source":           contact.Source,
 			"subtitle":         contact.Subtitle,
 			"highlightText":    contact.HighlightText,
 			"matchedField":     contact.MatchedField,
@@ -641,12 +667,16 @@ func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Convers
 		"id":                    conv.ID,
 		"_id":                   conv.ID,
 		"conversationId":        conv.ID,
-		"type":                  application.PublicConversationType(conv.Type, conv.CircleId),
+		"type":                  conv.Type,
 		"title":                 conv.Title,
 		"avatarUrl":             avatarURL,
 		"groupAvatarVersion":    conv.GroupAvatarVersion,
 		"creatorId":             conv.CreatorId,
 		"circleId":              conv.CircleId,
+		"circleGroupId":         conv.CircleGroupId,
+		"originType":            conv.OriginType,
+		"bindingType":           conv.BindingType,
+		"lifecyclePolicy":       conv.LifecyclePolicy,
 		"maxSeq":                conv.MaxSeq,
 		"memberCount":           conv.MemberCount,
 		"membersRosterRevision": conv.MembersRosterRevision,
@@ -663,7 +693,7 @@ func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Convers
 }
 
 func (h *ChatHandler) resolveConversationAvatarURL(ctx context.Context, conv model.Conversation) string {
-	if application.PublicConversationType(conv.Type, conv.CircleId) != "group" {
+	if conv.Type != "group" {
 		return application.ResolveConversationAvatarURL(conv)
 	}
 	if application.ResolveGroupAvatarURL(conv) != "" {

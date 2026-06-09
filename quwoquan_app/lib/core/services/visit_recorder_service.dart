@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_visit_repository.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
+import 'package:quwoquan_app/core/services/hive_runtime.dart';
 
 const String kVisitRecordsBoxName = 'visit_records';
 const String kVisitPendingSyncBoxName = 'visit_records_pending_sync';
@@ -24,32 +25,22 @@ class VisitRecorderService {
   final String _currentUserId;
   Timer? _pendingFlushTimer;
 
-  Future<Box<String>> _ensurePendingBox() async {
-    if (!Hive.isBoxOpen(kVisitPendingSyncBoxName)) {
-      try {
-        await Hive.initFlutter();
-      } catch (_) {
-        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
-      }
-      return Hive.openBox<String>(kVisitPendingSyncBoxName);
-    }
-    return Hive.box<String>(kVisitPendingSyncBoxName);
+  Future<Box<String>?> _ensurePendingBox() async {
+    return HiveRuntime.openStringBoxOrNull(kVisitPendingSyncBoxName);
   }
 
-  Future<Box<String>> _ensureBox() async {
-    if (!Hive.isBoxOpen(_boxName)) {
-      try {
-        await Hive.initFlutter();
-      } catch (_) {
-        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
-      }
-      return Hive.openBox<String>(_boxName);
-    }
-    return Hive.box<String>(_boxName);
+  Future<Box<String>?> _ensureBox() async {
+    return HiveRuntime.openStringBoxOrNull(_boxName);
   }
 
   Future<void> recordVisit(VisitTarget target) async {
     final box = await _ensureBox();
+    if (box == null) {
+      if (_remoteRepository != null) {
+        unawaited(_syncRemote(target));
+      }
+      return;
+    }
     final key = target.targetKey;
     final now = DateTime.now();
     final existing = _getRecordFromBox(box, key);
@@ -173,6 +164,9 @@ class VisitRecorderService {
 
   Future<void> _flushPending(OpsVisitRepository repository) async {
     final box = await _ensurePendingBox();
+    if (box == null) {
+      return;
+    }
     final keys = box.keys.map((key) => key.toString()).toList(growable: false)
       ..sort();
     for (final key in keys) {
@@ -196,6 +190,9 @@ class VisitRecorderService {
 
   Future<void> _enqueuePending(OpsVisitReportInput input) async {
     final box = await _ensurePendingBox();
+    if (box == null) {
+      return;
+    }
     final key = DateTime.now().microsecondsSinceEpoch.toString();
     await box.put(key, jsonEncode(input.toJson()));
     const maxBacklog = 200;

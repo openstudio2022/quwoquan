@@ -6,8 +6,6 @@ namespace: seed-box-prod
 images:
   - name: ghcr.io/openstudio2022/quwoquan/seed-box
     newTag: v2026.02.28.1
-  - name: ghcr.io/openstudio2022/quwoquan/recommendation-service
-    newTag: v2026.02.28.1
 generatorOptions:
   disableNameSuffixHash: true
 configMapGenerator:
@@ -32,7 +30,6 @@ replacements:
           name: seed-box
         fieldPaths:
           - spec.template.spec.containers.[name=seed-box].env.[name=APP_ENV].value
-          - spec.template.spec.containers.[name=recommendation-service].env.[name=APP_ENV].value
   - source:
       kind: ConfigMap
       name: deploy-params
@@ -43,7 +40,6 @@ replacements:
           name: seed-box
         fieldPaths:
           - spec.template.spec.containers.[name=seed-box].env.[name=CONFIG_VERSION].value
-          - spec.template.spec.containers.[name=recommendation-service].env.[name=CONFIG_VERSION].value
   - source:
       kind: ConfigMap
       name: deploy-params
@@ -54,7 +50,6 @@ replacements:
           name: seed-box
         fieldPaths:
           - spec.template.spec.containers.[name=seed-box].env.[name=IMAGE_VERSION].value
-          - spec.template.spec.containers.[name=recommendation-service].env.[name=IMAGE_VERSION].value
   - source:
       kind: ConfigMap
       name: deploy-params

@@ -121,7 +121,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 
 ### 2.1 local-gamma mirror（提交前本地预测试）
 
-`local-gamma mirror` 是提交前左移预测试拓扑，不是第六个环境，也不是 `main` 的 required check：
+`local-gamma mirror` 是提交前左移预测试拓扑，不是额外环境，也不是 `main` 的 required check：
 
 - 服务仍使用 `APP_ENV=gamma`，端侧仍使用 `APP_RUNTIME_ENV=gamma` 与 `APP_DATA_SOURCE=remote`。
 - 测试数据只来自 `app_gamma_seed_manifest.json` 与 metadata fixtures，不新增 `app_local_gamma_seed_manifest.json`；当前 gamma manifest 允许指向 curated fixture 子集。
@@ -154,7 +154,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 `python3 quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py --base-url "$GAMMA_BASE_URL"`。  
 若报 `route_not_found` 或 plain-text catch-all，说明入口指向错误端口，需要重新执行 ECS 部署或校验远端 Caddy/compose。
 
-当前 gamma 默认走 ECS 本地 curated 媒体目录：部署前先生成 `deploy/shared/gamma_curated_media_bundle.json` 与 `artifacts/local-gamma/media`，再单独同步到远端 `/srv/media`。`GAMMA_ECS_MEDIA_ORIGIN_BASE_URL` 只作为应急兜底，且需显式允许后才会生效；默认不会依赖本机公网回源。
+当前 gamma 默认走 ECS 本地 curated 媒体目录：部署前先生成 `deploy/shared/gamma_curated_media_bundle.json` 与 `state/local/gamma/media`，再单独同步到远端 `/srv/media`。`GAMMA_ECS_MEDIA_ORIGIN_BASE_URL` 只作为应急兜底，且需显式允许后才会生效；默认不会依赖本机公网回源。
 
 ## 4. 推荐验证命令
 

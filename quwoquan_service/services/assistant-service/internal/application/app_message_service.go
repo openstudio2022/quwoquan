@@ -157,6 +157,10 @@ func (s *AssistantService) normalizeAppMessageInput(input assistant.CreateAppMes
 			TargetType: strings.TrimSpace(input.Target.TargetType),
 			TargetID:   strings.TrimSpace(input.Target.TargetID),
 		},
-		CreatedAt: s.now(),
+		Personalized:    input.Personalized,
+		InterestTags:    compactStrings(input.InterestTags),
+		MatchedSegments: compactStrings(input.MatchedSegments),
+		LifecycleStage:  strings.TrimSpace(input.LifecycleStage),
+		CreatedAt:       s.now(),
 	}, nil
 }

@@ -49,7 +49,7 @@ if [[ ! -f "$deploy_file" ]]; then
   exit 1
 fi
 
-state_dir="$ROOT/.release-state"
+state_dir="$ROOT/state/release"
 mkdir -p "$state_dir"
 lock_dir="$state_dir/$SERVICE.rollback.lock"
 audit_file="$state_dir/$SERVICE.audit.log"

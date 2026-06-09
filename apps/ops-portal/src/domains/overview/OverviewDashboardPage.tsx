@@ -86,12 +86,20 @@ export function OverviewDashboardPage() {
     ],
     [summary?.pendingDualReview, workflows],
   );
-  const rolloutHealthTrend = useMemo(
+  // 只展示控制面真实返回的发布字段；SLO 成功率/延迟需待 Prometheus recording rule 落点后接入，
+  // 在此之前显式标注「暂无数据」，禁止用 index 合成趋势冒充真实健康度（T7.1）。
+  const rolloutHealthRows = useMemo(
     () =>
-      releases.slice(0, 4).map((release, index) => ({
-        stage: `${release.grayStages[index] ?? release.grayStages[0] ?? (index + 1) * 25}%`,
-        successRate: 99.2 - index * 0.15,
-        latency: 720 + index * 45,
+      releases.slice(0, 6).map((release) => ({
+        releaseId: release.releaseId,
+        service: release.service,
+        stage:
+          release.currentStage != null
+            ? `${release.currentStage}%`
+            : release.grayStages.length > 0
+              ? `${release.grayStages[release.grayStages.length - 1]}%`
+              : '—',
+        state: release.stageState ?? release.releaseState,
       })),
     [releases],
   );
@@ -303,23 +311,33 @@ export function OverviewDashboardPage() {
       </div>
 
       <div className="section-grid section-grid--two">
-        <SectionCard title="配置灰度健康" subtitle="沿用 5% -> 25% -> 50% -> 100% 的统一放量阶梯">
+        <SectionCard title="配置灰度健康" subtitle="沿用 5% -> 25% -> 50% -> 100% 的统一放量阶梯（成功率/延迟待 SLO 落点）">
           <table className="table">
             <thead>
               <tr>
-                <th>阶段</th>
+                <th>服务</th>
+                <th>当前阶段</th>
+                <th>状态</th>
                 <th>成功率</th>
                 <th>延迟 P95</th>
               </tr>
             </thead>
             <tbody>
-              {rolloutHealthTrend.map((row) => (
-                <tr key={row.stage}>
-                  <td>{row.stage}</td>
-                  <td>{row.successRate}%</td>
-                  <td>{row.latency}ms</td>
+              {rolloutHealthRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>暂无进行中的灰度发布</td>
                 </tr>
-              ))}
+              ) : (
+                rolloutHealthRows.map((row) => (
+                  <tr key={row.releaseId}>
+                    <td>{row.service}</td>
+                    <td>{row.stage}</td>
+                    <td>{row.state}</td>
+                    <td>暂无数据</td>
+                    <td>暂无数据</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </SectionCard>

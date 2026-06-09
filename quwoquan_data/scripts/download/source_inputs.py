@@ -1,39 +1,48 @@
 """通用来源计划读取（取代任务/区域专属 curated 语料）。
 
-来源候选由任务/Agent 在 download source_plan 输入中给出，主线不内置任何区域语料：
-  runtime/tasks/{task}/batches/{batch}/download/inputs/source_plan/{entity_id}.json
-  {
-    "sources": [
-      {"source_id": "...", "platform": "...", "url": "https://...", "body": "(可选离线兜底正文)"}
-    ]
-  }
+来源候选由任务/Agent 在 download source_plan 输入中给出，主线不内置任何区域语料。
+对象优先布局（真相源 docs/pipeline_directory_layout_spec.md §15）：
+  runtime/tasks/{task}/batches/{batch}/entities/{domain}/{type}/{name}/1.download/source_plan.json
+统一 payload 形态：
+  {"sources": [{"source_id","platform","url","body?","imageUrls?"}], "imageUrls": [...]}
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from _common.io import read_json
-from _common.paths import batch_inputs_dir
+from _common.paths import STAGE_DOWNLOAD
+from _common.source_unit import resolve_entity_object_dir
+
+
+def _source_plan_file(task_id: str, batch_id: str, entity_id: str, entity_type: str = "") -> Path | None:
+    """对象优先 source_plan 路径。"""
+    obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
+    object_plan = obj / STAGE_DOWNLOAD / "source_plan.json"
+    if object_plan.is_file():
+        return object_plan
+    return None
 
 
 def _extract_sources(data: Any) -> list[dict[str, Any]]:
-    """兼容三种 source_plan 形态：顶层 sources / envelope payload.sources / payload.existingSources。"""
+    """读取 source_plan 的 sources（顶层或 envelope payload.sources）。"""
     if not isinstance(data, dict):
         return []
     payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
     raw = (
         data.get("sources")
         or payload.get("sources")
-        or payload.get("existingSources")
-        or data.get("existingSources")
         or []
     )
     return raw if isinstance(raw, list) else []
 
 
-def curated_sources_for_entity(task_id: str, batch_id: str, entity_id: str) -> list[dict[str, Any]]:
-    plan_file = batch_inputs_dir(task_id, batch_id, "download", "source_plan") / f"{entity_id}.json"
-    if not plan_file.is_file():
+def curated_sources_for_entity(
+    task_id: str, batch_id: str, entity_id: str, entity_type: str = ""
+) -> list[dict[str, Any]]:
+    plan_file = _source_plan_file(task_id, batch_id, entity_id, entity_type)
+    if plan_file is None:
         return []
     sources = _extract_sources(read_json(plan_file))
     out: list[dict[str, Any]] = []
@@ -61,28 +70,48 @@ def _normalize_image_specs(raw: Any) -> list[dict[str, Any]]:
         return out
     for item in raw:
         if isinstance(item, str):
-            url, license_, credit = item, "", ""
+            spec = {"url": item, "license": "", "credit": ""}
         elif isinstance(item, dict):
             url = item.get("url") or item.get("link") or ""
-            license_ = item.get("license", "")
-            credit = item.get("credit") or item.get("author") or ""
+            spec = {
+                "url": url,
+                "license": item.get("license", ""),
+                "credit": item.get("credit") or item.get("author") or "",
+                "sourceUrl": item.get("sourceUrl") or url,
+                "termsUrl": item.get("termsUrl", ""),
+                "licenseSnapshot": item.get("licenseSnapshot", ""),
+                "usageScope": item.get("usageScope", ""),
+                "platform": item.get("platform") or item.get("sourcePlatform") or "",
+                "modelReleaseRequired": item.get("modelReleaseRequired", ""),
+                "modelReleaseStatus": item.get("modelReleaseStatus", ""),
+                "authorizationProof": item.get("authorizationProof", ""),
+                # 相关性/说明/类型/尺寸：供 relevance 门、caption 与像素门消费。
+                "caption": item.get("caption", ""),
+                "relevance": item.get("relevance") or item.get("caption") or "",
+                "contentType": item.get("contentType", ""),
+                "width": item.get("width", ""),
+                "height": item.get("height", ""),
+            }
         else:
             continue
+        url = spec["url"]
         if not url or url in seen:
             continue
         seen.add(url)
-        out.append({"url": url, "license": license_, "credit": credit})
+        out.append(spec)
     return out
 
 
-def curated_images_for_entity(task_id: str, batch_id: str, entity_id: str) -> list[dict[str, Any]]:
+def curated_images_for_entity(
+    task_id: str, batch_id: str, entity_id: str, entity_type: str = ""
+) -> list[dict[str, Any]]:
     """读 source_plan 中实体级 imageUrls（顶层/payload）+ 各 source 的 imageUrls，去重合并。
 
     每项规范化为 {url, license, credit}。Agent 在 source_plan 输入里给出真实可用图（CC/PD/授权），
-    download 据此下图到 sources/{entity}/images/，供 produce 选图与 imageGate 体检。
+    download 据此下图到来源单元 assets/，供 produce 选图与 imageGate 体检。
     """
-    plan_file = batch_inputs_dir(task_id, batch_id, "download", "source_plan") / f"{entity_id}.json"
-    if not plan_file.is_file():
+    plan_file = _source_plan_file(task_id, batch_id, entity_id, entity_type)
+    if plan_file is None:
         return []
     data = read_json(plan_file)
     if not isinstance(data, dict):

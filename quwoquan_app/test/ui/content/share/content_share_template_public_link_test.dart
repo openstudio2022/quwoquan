@@ -32,11 +32,15 @@ void main() {
           visibility: 'public',
         );
 
+        // landingUrl 以规范公网 URL 为基础，并追加单次分享归因参数。
         expect(
           template.landingUrl,
-          AppPublicContentLinks.postWebUrl('moment_public_link'),
+          startsWith(AppPublicContentLinks.postWebUrl('moment_public_link')),
         );
         expect(template.landingUrl, startsWith('https://'));
+        expect(template.landingUrl, contains('share_id='));
+        expect(template.landingUrl, contains('utm_source='));
+        expect(template.shareId, isNotEmpty);
         expect(template.deeplink, 'quwoquan://content/post/moment_public_link');
         expect(template.deeplink, isNot(template.landingUrl));
       },
@@ -74,8 +78,9 @@ void main() {
 
         expect(
           template.landingUrl,
-          AppPublicContentLinks.postWebUrl('work_circle_link'),
+          startsWith(AppPublicContentLinks.postWebUrl('work_circle_link')),
         );
+        expect(template.landingUrl, contains('share_id='));
         expect(
           template.deeplink,
           'quwoquan://content/post/work_circle_link?scope=circle',

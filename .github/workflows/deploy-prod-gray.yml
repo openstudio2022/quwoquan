@@ -15,15 +15,15 @@ on:
           - aliyun
           - volcengine
           - huaweicloud
-      # 留空则从 .release-state/seed-box.state 自动读取（每天新版本时只需填 target）
+      # 留空则从 state/release/seed-box.state 自动读取（每天新版本时只需填 target）
       from_image:
-        description: 'Current prod image (empty = auto from .release-state/seed-box.state)'
+        description: 'Current prod image (empty = auto from state/release/seed-box.state)'
         required: false
       to_image:
         description: 'Target image version (must match pre-release integration)'
         required: true
       from_config:
-        description: 'Current prod config (empty = auto from .release-state/seed-box.state)'
+        description: 'Current prod config (empty = auto from state/release/seed-box.state)'
         required: false
       to_config:
         description: 'Target config version (must match pre-release integration)'
@@ -67,15 +67,15 @@ jobs:
           SERVICE="seed-box"
           FROM_IMG="${{ github.event.inputs.from_image }}"
           FROM_CFG="${{ github.event.inputs.from_config }}"
-          STATE=".release-state/${SERVICE}.state"
+          STATE="state/release/${SERVICE}.state"
           if [[ -z "$FROM_IMG" || -z "$FROM_CFG" ]]; then
             if [[ ! -f "$STATE" ]]; then
-              echo "::error::Current prod version needed but .release-state/$SERVICE.state not found. Either fill 'Current prod' fields or run first rollout with them set."
+              echo "::error::Current prod version needed but state/release/$SERVICE.state not found. Either fill 'Current prod' fields or run first rollout with them set."
               exit 1
             fi
             FROM_IMG=$(awk -F= '/^to_image=/{print $2; exit}' "$STATE")
             FROM_CFG=$(awk -F= '/^to_config=/{print $2; exit}' "$STATE")
-            echo "Resolved from .release-state/$SERVICE.state: from_image=$FROM_IMG from_config=$FROM_CFG"
+            echo "Resolved from state/release/$SERVICE.state: from_image=$FROM_IMG from_config=$FROM_CFG"
           fi
           echo "from_image=$FROM_IMG" >> $GITHUB_OUTPUT
           echo "from_config=$FROM_CFG" >> $GITHUB_OUTPUT
@@ -95,7 +95,7 @@ jobs:
           fi
       - name: Check step sequence
         run: |
-          state=".release-state/seed-box.state"
+          state="state/release/seed-box.state"
           prev=0
           if [[ -f "$state" ]]; then
             prev=$(awk -F= '/^step=/{print $2}' "$state" || echo 0)

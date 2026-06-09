@@ -33,7 +33,7 @@ api_routes:
     operation: CreateConversation
     description: 创建会话（自动创建 ConversationMember + ConversationUserState；圈子发起的默认群仍使用 group + circleId）
     request_entity: Conversation
-    writable_fields: [type, title, circleId, circleGroupId, maxGroupSize, initialMemberIds]
+    writable_fields: [type, title, circleId, circleGroupId, originType, bindingType, lifecyclePolicy, maxGroupSize, initialMemberIds]
 
   - method: POST
     path: /v1/chat/conversations/batch
@@ -192,6 +192,15 @@ api_routes:
     path: /v1/chat/contacts
     operation: ListContacts
     description: 联系人列表
+    response_entity: ChatContactListRow
+
+  - method: GET
+    path: /v1/chat/group-candidates
+    operation: ListGroupCandidates
+    description: 发起群聊/添加成员候选源，由 chat-service 聚合互关联系人、可复用群会话成员，并排除当前会话已有成员；前端不得再自行拼装 inbox + contacts + circles
+    query_params: [conversationId, cursor, limit]
+    response_entity: ChatContactListRow
+    auth: required
 
   - method: GET
     path: /v1/chat/contacts/search
@@ -343,7 +352,7 @@ contract_test:
             - "db.conversation_members.CountDocuments → 999 (unchanged)"
 
   coverage_requirements:
-    - all conversation types (direct/group/encrypted, with legacy circle compatibility) covered
+    - all conversation types (direct/group/encrypted, with circle input merged into group) covered
     - circleGroupId compatibility link covered
     - message seq monotonicity verified under concurrent sends
     - clientMsgId dedup verified

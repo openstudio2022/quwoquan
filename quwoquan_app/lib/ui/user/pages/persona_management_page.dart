@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/providers/persona_management_provider.dart';
@@ -25,6 +26,83 @@ class PersonaManagementPage extends ConsumerStatefulWidget {
 }
 
 class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
+  UiErrorSemantic _resolvePageErrorSemantic(Object error) {
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+    return UiErrorSemantic(
+      category: resolved.category,
+      scope: resolved.scope,
+      title: '分身管理暂不可用',
+      message: resolved.message,
+      secondaryMessage: resolved.secondaryMessage,
+      primaryAction:
+          resolved.primaryAction ??
+          const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
+          ),
+      secondaryAction: resolved.secondaryAction,
+      dismissible: resolved.dismissible,
+      sourceCode: resolved.sourceCode,
+      failureKind: resolved.failureKind,
+      recoveryAction: resolved.recoveryAction,
+      presentation: resolved.presentation,
+      tone: resolved.tone,
+    );
+  }
+
+  Future<void> _showActionErrorFeedback({
+    required Object error,
+    required String title,
+    required String fallbackMessage,
+    Future<void> Function()? onRetry,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.submit,
+      scope: UiErrorScope.global,
+    );
+    final semantic = UiErrorSemantic(
+      category: resolved.category,
+      scope: resolved.scope,
+      title: title,
+      message: fallbackMessage,
+      secondaryMessage: resolved.secondaryMessage,
+      primaryAction: onRetry == null
+          ? resolved.primaryAction
+          : const UiErrorAction(
+              type: UiErrorActionType.retry,
+              label: UITextConstants.tryAgain,
+            ),
+      secondaryAction: resolved.secondaryAction,
+      dismissible: resolved.dismissible,
+      sourceCode: resolved.sourceCode,
+      failureKind: resolved.failureKind,
+      recoveryAction: resolved.recoveryAction,
+      presentation: resolved.presentation,
+      tone: resolved.tone,
+    );
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: semantic,
+      onAction: (action) async {
+        if ((action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) &&
+            onRetry != null) {
+          await onRetry();
+        }
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +118,9 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     final state = ref.watch(personaManagementProvider);
     final notifier = ref.read(personaManagementProvider.notifier);
     final quota = state.quota;
+    final pageErrorSemantic = state.rawError == null
+        ? null
+        : _resolvePageErrorSemantic(state.rawError!);
     final canCreate =
         quota == null || quota.usedSubAccounts < quota.maxSubAccounts;
 
@@ -79,27 +160,15 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
             )
           : state.isLoading
           ? const Center(child: CupertinoActivityIndicator())
-          : state.error != null
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Padding(
-                    padding: EdgeInsets.all(AppSpacing.containerMd),
-                    child: Text(
-                      state.error!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: AppColors.iosSecondaryLabel(context),
-                      ),
-                    ),
-                  ),
-                  CupertinoButton(
-                    onPressed: notifier.load,
-                    child: const Text(UITextConstants.retry),
-                  ),
-                ],
-              ),
+          : pageErrorSemantic != null
+          ? AppPageErrorState(
+              semantic: pageErrorSemantic,
+              onAction: (action) async {
+                if (action.type == UiErrorActionType.retry ||
+                    action.type == UiErrorActionType.resubmit) {
+                  await notifier.load();
+                }
+              },
             )
           : ListView(
               padding: EdgeInsets.only(
@@ -301,9 +370,13 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                   await _showCreateSuccessDialog(notifier, created);
                 } catch (e) {
                   if (mounted) {
-                    AppToast.show(
-                      context,
-                      '${UITextConstants.profileSubAccountCreateFailed}: $e',
+                    await _showActionErrorFeedback(
+                      error: e,
+                      title: '创建分身未完成',
+                      fallbackMessage: '创建分身失败，请稍后重试。',
+                      onRetry: () async {
+                        await _showCreateDialog(notifier);
+                      },
                     );
                   }
                 }
@@ -426,7 +499,11 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                   );
                 } catch (e) {
                   if (mounted) {
-                    AppToast.show(context, runtimeErrorDisplayMessage(e));
+                    await _showActionErrorFeedback(
+                      error: e,
+                      title: '分身编辑未完成',
+                      fallbackMessage: '分身信息保存失败，请稍后重试。',
+                    );
                   }
                 }
               },
@@ -516,7 +593,11 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       }
     } catch (e) {
       if (mounted) {
-        AppToast.show(context, runtimeErrorDisplayMessage(e));
+        await _showActionErrorFeedback(
+          error: e,
+          title: '删除分身未完成',
+          fallbackMessage: '删除分身失败，请稍后重试。',
+        );
       }
     }
   }
@@ -529,7 +610,14 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       await notifier.applySyncSuggestion(suggestion: suggestion);
     } catch (e) {
       if (mounted) {
-        AppToast.show(context, runtimeErrorDisplayMessage(e));
+        await _showActionErrorFeedback(
+          error: e,
+          title: '同步建议未完成',
+          fallbackMessage: '应用同步建议失败，请稍后重试。',
+          onRetry: () async {
+            await _applySuggestion(notifier, suggestion);
+          },
+        );
       }
     }
   }

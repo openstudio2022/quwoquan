@@ -8,7 +8,8 @@ class ChatContactRowDto {
   final String bio;
   final String metFrom;
   final String lastInteraction;
-  final bool isFriend;
+  final String relationState;
+  final String source;
   final bool isStarred;
 
   ChatContactRowDto({
@@ -18,7 +19,8 @@ class ChatContactRowDto {
     this.bio = '',
     this.metFrom = '',
     this.lastInteraction = '',
-    this.isFriend = false,
+    this.relationState = 'not_following',
+    this.source = '',
     this.isStarred = false,
   });
 
@@ -30,7 +32,8 @@ class ChatContactRowDto {
       bio: m['bio']?.toString() ?? '',
       metFrom: m['metFrom']?.toString() ?? '',
       lastInteraction: m['lastInteraction']?.toString() ?? '',
-      isFriend: m['isFriend'] as bool? ?? false,
+      relationState: m['relationState']?.toString() ?? 'not_following',
+      source: m['source']?.toString() ?? m['contactSource']?.toString() ?? '',
       isStarred: m['isStarred'] as bool? ?? false,
     );
   }
@@ -43,7 +46,8 @@ class ChatContactRowDto {
       'bio': bio,
       'metFrom': metFrom,
       'lastInteraction': lastInteraction,
-      'isFriend': isFriend,
+      'relationState': relationState,
+      'source': source,
       'isStarred': isStarred,
     };
   }
@@ -55,7 +59,8 @@ class ChatContactRowDto {
     String? bio,
     String? metFrom,
     String? lastInteraction,
-    bool? isFriend,
+    String? relationState,
+    String? source,
     bool? isStarred,
   }) {
     return ChatContactRowDto(
@@ -65,7 +70,8 @@ class ChatContactRowDto {
       bio: bio ?? this.bio,
       metFrom: metFrom ?? this.metFrom,
       lastInteraction: lastInteraction ?? this.lastInteraction,
-      isFriend: isFriend ?? this.isFriend,
+      relationState: relationState ?? this.relationState,
+      source: source ?? this.source,
       isStarred: isStarred ?? this.isStarred,
     );
   }

@@ -27,6 +27,7 @@ import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/entry/models/create_entry_arguments.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/developer_settings_page.dart';
@@ -194,7 +195,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
               child:
-                  const SizedBox.shrink(), // DiscoveryPage 在 MainAppShell 中渲染
+                  const SizedBox.shrink(), // HomePage 由 MainAppShell 的 IndexedStack 承载渲染
             ),
           ),
           GoRoute(
@@ -412,9 +413,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final typeStr = state.uri.queryParameters['type'];
           final initialTabKey = state.uri.queryParameters['tab'];
+          final entryArgs = state.extra is CreateEntryArguments
+              ? state.extra! as CreateEntryArguments
+              : null;
           final initialHomepage = state.extra is HomepageCanonicalReference
               ? state.extra! as HomepageCanonicalReference
-              : null;
+              : entryArgs?.homepage;
+          final initialCircleId = entryArgs?.circleId;
+          final initialCircleName = entryArgs?.circleName;
           final draftIdRaw = state.uri.queryParameters['draftId']?.trim();
           final initialDraftId = draftIdRaw != null && draftIdRaw.isNotEmpty
               ? draftIdRaw
@@ -435,6 +441,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               initialAction: action,
               initialTabKey: initialTabKey,
               initialHomepage: initialHomepage,
+              initialCircleId: initialCircleId,
+              initialCircleName: initialCircleName,
               initialDraftId: initialDraftId,
             ),
           );

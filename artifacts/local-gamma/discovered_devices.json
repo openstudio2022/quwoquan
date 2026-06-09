@@ -1,26 +1,18 @@
 {
-  "capturedAt": "2026-06-01T08:29:54.002895Z",
+  "capturedAt": "2026-06-08T23:34:59.987110Z",
   "suite": "gamma-patrol-matrix",
   "requestedEnvironments": [
     "local-gamma"
   ],
-  "deviceCount": 2,
+  "deviceCount": 1,
   "devices": [
     {
-      "id": "emulator-5554",
-      "name": "sdk gphone64 arm64",
-      "targetPlatform": "android-arm64",
-      "sdk": "Android 12 (API 31)",
-      "emulator": true,
-      "ephemeral": false
-    },
-    {
-      "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
-      "name": "iPhone 17 Pro",
+      "id": "dry-run-device",
+      "name": "Dry Run Device",
       "targetPlatform": "ios",
-      "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-26-3",
+      "sdk": "dry-run",
       "emulator": true,
-      "ephemeral": false
+      "screenClass": "phone"
     }
   ],
   "extra": {

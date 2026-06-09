@@ -49,11 +49,21 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 - CLI 负责 IO/拉取/落盘/打分/校验/落写作契约；语义创作只在会话模型内完成；
 - 每个 stage 必落 stage result + gate report，失败写 repair report 并按 `fallbackStage` 回退重跑直至全绿（provenance/traceability/叙事问题回退到 `agent_compose` 重新创作）。
 
+## 底稿轻改范式（核心：以真实底稿为基础适度加工，不从零总结、不套模板）
+
+- **每篇/每个主页只认领一篇底稿**（某来源单元 `source.md`），由 compose 阶段自动分配（`baseSourceRef` 永远非空）；
+  批次级账本 `batches/<batch>/_shared/base_draft_ledger.json` 记录 `sourceRef -> postRef` 一对一，**一源仅一稿**；
+  已被占用的源在其它篇目只能进 `evidenceRefs` 作补充材料，不得再当底稿。
+- **加工方式 = 轻改**：保留底稿叙事顺序与结构，只做去语病/纠错别字/理顺语句/补可回溯证据/去版权与平台痕迹；排版可适度优化。
+- **与底稿相似度维持 70%~90%**（HARD 门 `baseDraftFidelity`）：`<70%` 视为脱离底稿/从零另写，`>90%` 视为逐句搬运/未去版权。
+- **结构跟随底稿**：`prompt.md` 内联底稿正文（## 底稿），few-shot 仅供参考口吻与颗粒度；章节意图仅参考，不强套固定骨架。
+
 ## 三道真实性门（review + verify 交付面强制）
 
 1. **generator 出处门**：`draft_meta`/manifest 必须 `generator=agent` 且带 `model` 与 `citedSourceRefs`；非 agent 直接 `revision_needed`，`materialize` 拒绝落地。
 2. **模板指纹门**：扫描旧脚本模板的强/弱指纹短语（`_common/template_fingerprints.py`），命中即判为机械拼接并阻断。
 3. **事实可回溯门**：`mustIncludeFacts` 必须在正文出现；正文中带单位的关键数值（票价/海拔/时长等）必须能在 source 证据中回溯。
+4. **底稿贴合度门 `baseDraftFidelity`**：成品与底稿相似度须落 70%~90%；与 `_long_phrase_hits`（禁 ≥28 字逐句搬运）共同构成上限约束。
 
 ## Human-in-loop 标注 + 发布门（账本驱动）
 
@@ -138,13 +148,19 @@ python3 quwoquan_data/scripts/cli.py verify --release <release_id>
 4. **三道真实性门**：generator 出处门 + 模板指纹门 + 事实可回溯门，review 与 verify 交付面强制；非 agent / 命中指纹 / 数值不可回溯一律阻断。
 5. **图片治理**：发布图必须过 `media check-images`；unsafe→改稿，needs_review(人脸/后端缺失)→人工复核，近重复→去重。
 6. **载体路由**：图多文少→gallery（配小字、禁大空白）；图带交叠文字→article（避免大空白）。
-7. **游记感密度**：route 文章必须有出发动机、显式喜欢/不喜欢、取舍判断；注意事项就地融入，禁独立"实用信息/来源平台"清单块。
+7. **修辞/结构骨架=软门（仅建议+降分，不阻断）**：开篇钩子、显式喜欢/不喜欢、取舍判断、口语化标题、章节镜像、分节形态等不再硬阻断忠实轻改稿；硬门保留真实性/反抄袭/反雷同/数值可回溯/图片/联系方式/语域/载体/路线覆盖/底稿贴合度。
 8. **Mock/来源隔离**：不泄露平台名/作者名/用户名/水印；来源痕迹必须改写。
+9. **证据后置篇目（content_plan）**：只冻结实体与 `content.quotas`；ref/title 在 download+build 后由 `content_plan_packet` 定义，禁止 download 前预置营销 ref。B 组线路须有来源联游互证。
+10. **Ralph 准出**：每阶段必须 hook-check gate；FAIL 写 repair 并 re-inject，禁止无 gate 证据 `--resume`。
+11. **人读与语气**：以底稿为锚做适度加工（轻改）而非从零重写；遵从底稿结构与口吻，禁止百科罗列、机械收尾、独立「实用信息」清单、统一模板小标题。
+14. **实体主页 = 百科底稿轻改 + 必图 + 章节语义**：以最完整的百科 `source.md` 为底稿；**结构尊重原文**——SOP `template.md` 的章节只是「规范化参考」（命名/归类对齐），**非强制逐节填满**，可按底稿增减/合并；`概况`必备、其余章节有真实内容才写、无内容直接省略、禁止硬凑；`历史沿革`必须是真实历史（年份/朝代/建置沿革），否则省略，禁把地质成因/评级塞入；每个实体主页须配 ≥1 张真实 CC 图（`source_plan` 每实体提供结构化 `imageUrls`：license+credit+relevance）。
+12. **tagRefs 对齐 publish**：`brief.json` / manifest 的 `tagRefs` 必须指向 `publish/v1/tags/**` 已发布路径（地理/玩法/内容角度等），禁止扁平省名/品类名；ship 前自检 `intersectionHints` 含 content+interest。
+13. **写作主线 + 公共/SOP/任务分工**：每篇 `writingIntent` 单一（攻略=planning_consultation｜体验=decision_experience｜游记=post_trip_journal），结构须与之匹配；垂类写法（题材矩阵、版面、语域禁忌）见垂类 SOP（`quwoquan_data/sop/**`），本批特例只写任务 `notes.md`，公共层不写具体 region/实体/batch。
 
 ## 门禁
 
 - `bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh`（template lint 系列 + `verify --scope current`）。
 - `python3 quwoquan_data/scripts/verify/verify_cli_first.py`（拦截新增直跑业务入口脚本）。
-- 契约测试：`quwoquan_data/tests/test_image_safety_gate.py`、`test_route_assets_layout.py`、`test_gallery_carrier.py`、`test_travelogue_density.py`、`test_review_image_gate.py`、`test_route_brief_and_evidence.py`、`test_entity_composer.py`、`test_verify_pilot_gwt.py`、`test_article_markdown_contract.py`、`test_hitl_pipeline.py`（manifest 最小化+账本+实体主页）、`test_annotate_publish_filter.py`（标注 CLI+发布门）、`test_ship_sampling.py`（确定性采样+ship e2e）、`test_mixed_layout_gate.py`（图文混编门）、`test_review_ledger_state_machine.py`、`test_asset_id_stability.py`。
+- 契约测试：`quwoquan_data/tests/quality/test_image_safety_gate.py`、`test_route_assets_layout.py`、`test_gallery_carrier.py`、`test_travelogue_density.py`、`test_review_image_gate.py`、`test_route_brief_and_evidence.py`、`test_entity_composer.py`、`test_verify_pilot_gwt.py`、`test_article_markdown_contract.py`、`test_hitl_pipeline.py`（manifest 最小化+账本+实体主页）、`test_annotate_publish_filter.py`（标注 CLI+发布门）、`test_ship_sampling.py`（确定性采样+ship e2e）、`test_mixed_layout_gate.py`（图文混编门）、`test_review_ledger_state_machine.py`、`test_asset_id_stability.py`。
 - 服务侧 importer 测试：`loader_test.go`（publish→doc 加载 + sample bundle 过滤）+ `mongo_import_test.go`（真实 mongo 写入：插入/字段/幂等重跑/唯一索引/load→upsert 子集，由 `quwoquan_service/scripts/content/run_content_import_mongo_test.sh` 起临时 mongod 跑）。
-- 去版本化/去区域硬编码门禁：`python3 quwoquan_data/scripts/verify_no_legacy_hardcode.py`（禁止 `publish/v{N}` / `/v{N}/` objectKey / `chuanxi` 等回归）。
+- 去版本化/去区域硬编码门禁：`python3 quwoquan_data/scripts/verify/verify_no_legacy_hardcode.py`（禁止 `publish/v{N}` / `/v{N}/` objectKey / `chuanxi` 等回归）。

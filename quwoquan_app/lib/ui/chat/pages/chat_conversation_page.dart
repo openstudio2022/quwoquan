@@ -14,7 +14,8 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_manager.dart';
+import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
+import 'package:quwoquan_app/cloud/media/upload_policy.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.dart';
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
@@ -30,10 +31,13 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/voice_offline_queue.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_player_manager.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
@@ -115,6 +119,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
 
   @override
   void dispose() {
+    AppToast.dismiss();
     unawaited(_voiceRecorder.dispose());
     _inputController.removeListener(_onInputChanged);
     _inputController.dispose();
@@ -125,6 +130,102 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
 
   void _onInputChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _showVoiceSendFailure(Object error) async {
+    if (!mounted) {
+      return;
+    }
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.submit,
+      scope: UiErrorScope.global,
+    );
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: UiErrorSemantic(
+        category: resolved.category,
+        scope: resolved.scope,
+        title: UITextConstants.chatVoiceSendFailedTitle,
+        message: resolved.message,
+        secondaryMessage: resolved.secondaryMessage,
+        primaryAction:
+            resolved.primaryAction ??
+            const UiErrorAction(
+              type: UiErrorActionType.dismiss,
+              label: UITextConstants.confirm,
+            ),
+        secondaryAction: resolved.secondaryAction,
+        dismissible: true,
+        sourceCode: resolved.sourceCode,
+        failureKind: resolved.failureKind,
+        recoveryAction: resolved.recoveryAction,
+      ),
+    );
+  }
+
+  Future<void> _showVoicePermissionFailure({required bool openSettings}) async {
+    if (!mounted) {
+      return;
+    }
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: UiErrorSemantic(
+        category: UiErrorCategory.permissionRequired,
+        scope: UiErrorScope.global,
+        title: UITextConstants.chatVoicePermissionDenied,
+        message: openSettings
+            ? UITextConstants.chatVoicePermissionOpenSettings
+            : UITextConstants.chatVoicePermissionDenied,
+        primaryAction: UiErrorAction(
+          type: openSettings
+              ? UiErrorActionType.openSettings
+              : UiErrorActionType.dismiss,
+          label: openSettings
+              ? UITextConstants.openSettings
+              : UITextConstants.confirm,
+        ),
+        secondaryAction: openSettings
+            ? const UiErrorAction(
+                type: UiErrorActionType.dismiss,
+                label: UITextConstants.cancel,
+              )
+            : null,
+        dismissible: true,
+        presentation: UiErrorPresentation.actionDialog,
+      ),
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.openSettings) {
+          await openAppSettings();
+        }
+      },
+    );
+  }
+
+  Future<void> _showAttachmentFailure({
+    required String title,
+    required String message,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: UiErrorSemantic(
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+        title: title,
+        message: message,
+        primaryAction: const UiErrorAction(
+          type: UiErrorActionType.dismiss,
+          label: UITextConstants.confirm,
+        ),
+        dismissible: true,
+        presentation: UiErrorPresentation.actionDialog,
+        tone: UiErrorTone.caution,
+      ),
+    );
   }
 
   Future<void> _loadConversationTitle() async {
@@ -179,6 +280,32 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
 
   int get _memberCount => _conversationDto?.memberCount ?? 0;
 
+  bool get _isBlockedConversation => _conversationDto?.status == 'blocked';
+
+  bool get _canInitiateOneToOneCall {
+    if (_isGroupChat) {
+      return true;
+    }
+    return _otherParticipantId != null &&
+        !_isBlockedConversation &&
+        (_relationshipCapability?.canStartVoiceCall == true ||
+            _relationshipCapability?.canStartVideoCall == true);
+  }
+
+  bool get _shouldDisableComposer {
+    if (_isGroupChat) {
+      return false;
+    }
+    if (_isBlockedConversation) {
+      return true;
+    }
+    final capability = _relationshipCapability;
+    if (capability == null) {
+      return false;
+    }
+    return !capability.canSendMessage;
+  }
+
   String get _conversationTitle {
     if (_resolvedTitle != null) return _resolvedTitle!;
     _loadConversationTitle();
@@ -197,6 +324,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
             id: 'img_${DateTime.now().millisecondsSinceEpoch}_${image.name}',
             type: ChatInputAttachmentType.image,
             name: image.name,
+            localPath: image.path,
             subtitle: '',
             thumbnailProvider: FileImage(File(image.path)),
           ),
@@ -214,6 +342,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
       id: 'cam_${DateTime.now().millisecondsSinceEpoch}_${picked.name}',
       type: ChatInputAttachmentType.image,
       name: picked.name,
+      localPath: picked.path,
       thumbnailProvider: FileImage(File(picked.path)),
     );
   }
@@ -232,6 +361,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
             id: 'file_${now}_${file.name}',
             type: ChatInputAttachmentType.file,
             name: file.name,
+            localPath: file.path,
             subtitle: _formatFileSize(file.size),
           ),
         )
@@ -249,6 +379,216 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)}GB';
   }
 
+  static const Set<String> _imageExtensions = <String>{
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'webp',
+    'heic',
+  };
+
+  static const Set<String> _videoExtensions = <String>{
+    'mp4',
+    'mov',
+    'm4v',
+    'avi',
+    'mkv',
+    'webm',
+    '3gp',
+  };
+
+  String _attachmentSourcePath(ChatInputAttachment item) {
+    return item.localPath?.trim() ?? '';
+  }
+
+  String _attachmentExtension(ChatInputAttachment item) {
+    final source = _attachmentSourcePath(item).isNotEmpty
+        ? _attachmentSourcePath(item)
+        : item.name;
+    final dot = source.lastIndexOf('.');
+    if (dot < 0 || dot == source.length - 1) {
+      return '';
+    }
+    return source.substring(dot + 1).toLowerCase();
+  }
+
+  bool _looksLikeImageAttachment(ChatInputAttachment item) {
+    if (item.type == ChatInputAttachmentType.image) return true;
+    return _imageExtensions.contains(_attachmentExtension(item));
+  }
+
+  bool _looksLikeVideoAttachment(ChatInputAttachment item) {
+    return _videoExtensions.contains(_attachmentExtension(item));
+  }
+
+  MediaCategory _attachmentCategory(ChatInputAttachment item) {
+    if (_looksLikeImageAttachment(item)) {
+      return MediaCategory.chatImage;
+    }
+    if (_looksLikeVideoAttachment(item)) {
+      return MediaCategory.chatVideo;
+    }
+    return MediaCategory.chatFile;
+  }
+
+  String _attachmentContentType(ChatInputAttachment item) {
+    final ext = _attachmentExtension(item);
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+        return 'image/heic';
+      case 'mp4':
+      case 'm4v':
+      case '3gp':
+        return 'video/mp4';
+      case 'mov':
+        return 'video/quicktime';
+      case 'avi':
+        return 'video/x-msvideo';
+      case 'mkv':
+        return 'video/x-matroska';
+      case 'webm':
+        return 'video/webm';
+      default:
+        return _attachmentCategory(item) == MediaCategory.chatImage
+            ? 'image/*'
+            : _attachmentCategory(item) == MediaCategory.chatVideo
+            ? 'video/*'
+            : 'application/octet-stream';
+    }
+  }
+
+  String _attachmentMessageType(ChatInputAttachment item) {
+    if (_looksLikeImageAttachment(item)) return 'image';
+    if (_looksLikeVideoAttachment(item)) return 'video';
+    return 'file';
+  }
+
+  String _attachmentFallbackLabel(ChatInputAttachment item) {
+    if (_looksLikeVideoAttachment(item)) {
+      return UITextConstants.chatMoreVideo;
+    }
+    if (_looksLikeImageAttachment(item)) {
+      return UITextConstants.chatMorePhoto;
+    }
+    return UITextConstants.chatMoreFile;
+  }
+
+  Future<UploadTask> _awaitUploadCompletion(
+    MediaUploadManager manager,
+    UploadTask task,
+  ) async {
+    if (task.status == UploadStatus.completed ||
+        task.status == UploadStatus.failed) {
+      return task;
+    }
+    final completer = Completer<UploadTask>();
+    late final StreamSubscription<UploadTask> subscription;
+    subscription = manager.onTaskUpdate.listen((update) {
+      if (update.localPath != task.localPath) return;
+      if (update.status != UploadStatus.completed &&
+          update.status != UploadStatus.failed) {
+        return;
+      }
+      if (!completer.isCompleted) {
+        completer.complete(update);
+      }
+      unawaited(subscription.cancel());
+    });
+    return completer.future.timeout(
+      const Duration(seconds: 120),
+      onTimeout: () {
+        unawaited(subscription.cancel());
+        return task
+          ..status = UploadStatus.failed
+          ..error = 'upload timeout';
+      },
+    );
+  }
+
+  Future<void> _sendChatAttachment(
+    ChatInputAttachment item,
+    ChatMessageNotifier notifier,
+  ) async {
+    final localPath = _attachmentSourcePath(item);
+    if (localPath.isEmpty) {
+      await notifier.sendMessage(
+        'text',
+        '[${_attachmentFallbackLabel(item)}] ${item.name}',
+      );
+      return;
+    }
+    final file = File(localPath);
+    if (!await file.exists()) {
+      await _showAttachmentFailure(
+        title: UITextConstants.chatAttachmentUploadFailed,
+        message: '本地附件不存在，请重新选择后再试。',
+      );
+      return;
+    }
+    final category = _attachmentCategory(item);
+    final ownerId = ref.read(currentUserIdProvider).trim();
+    final uploadManager = ref.read(mediaUploadManagerProvider);
+    final queued = await uploadManager.enqueue(
+      UploadTask(
+        localPath: localPath,
+        category: category,
+        contentType: _attachmentContentType(item),
+        fileSize: await file.length(),
+        ownerId: ownerId.isNotEmpty ? ownerId : 'current_user',
+        fileName: item.name,
+        completionMetadata: <String, dynamic>{
+          'fileName': item.name,
+          'kind': category.name,
+        },
+      ),
+    );
+    final uploaded = await _awaitUploadCompletion(uploadManager, queued);
+    final cdnUrl = uploaded.cdnUrl?.trim() ?? '';
+    if (uploaded.status == UploadStatus.failed || cdnUrl.isEmpty) {
+      await _showAttachmentFailure(
+        title: UITextConstants.chatAttachmentUploadFailed,
+        message: '附件上传未完成，请稍后再试。',
+      );
+      return;
+    }
+    final messageType = _attachmentMessageType(item);
+    final mediaPayload = <String, dynamic>{
+      'url': cdnUrl,
+      'fileName': item.name,
+      'mimeType': _attachmentContentType(item),
+      'fileSizeBytes': uploaded.fileSize,
+    };
+    if (messageType == 'image') {
+      mediaPayload['thumbnailUrl'] = cdnUrl;
+    }
+    if (messageType == 'video') {
+      mediaPayload['thumbnailUrl'] = cdnUrl;
+      mediaPayload['durationMs'] = 0;
+    }
+    final sent = await notifier.sendMessage(
+      messageType,
+      messageType == 'image' ? '' : item.name,
+      mediaUrl: cdnUrl,
+      media: mediaPayload,
+    );
+    if (!sent) {
+      await _showAttachmentFailure(
+        title: UITextConstants.chatAttachmentSendFailed,
+        message: '附件发送未完成，请稍后再试。',
+      );
+    }
+  }
+
   Future<bool> _requestMicPermissionForChat() async {
     final micStatus = await Permission.microphone.status;
     if (micStatus.isGranted) {
@@ -259,8 +599,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
       return true;
     }
     if (requested.isPermanentlyDenied && mounted) {
-      AppToast.show(context, UITextConstants.chatVoicePermissionDenied);
-      openAppSettings();
+      await _showVoicePermissionFailure(openSettings: true);
+    } else if (mounted) {
+      await _showVoicePermissionFailure(openSettings: false);
     }
     return false;
   }
@@ -268,7 +609,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   Future<bool> _startVoiceRecordForChat() async {
     final started = await _voiceRecorder.start();
     if (!started && mounted) {
-      AppToast.show(context, UITextConstants.chatVoicePermissionDenied);
+      AppToast.show(context, UITextConstants.chatVoiceRecordUnavailable);
     }
     return started;
   }
@@ -291,7 +632,10 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     final sendState = ref.read(voiceSendProvider(widget.conversationId));
     if (sendState.status == VoiceSendStatus.failed &&
         (sendState.error ?? '').isNotEmpty) {
-      AppToast.show(context, sendState.error!);
+      await ref
+          .read(voiceOfflineQueueProvider(widget.conversationId).notifier)
+          .enqueue(result);
+      await _showVoiceSendFailure(sendState.error!);
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -313,6 +657,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   }
 
   Future<void> _submitChatInput(ChatInputSubmitPayload payload) async {
+    if (_shouldDisableComposer) {
+      return;
+    }
     // 防御性二次拦截：私信发送是需登录写动作。会话页虽已被路由守卫保护，
     // 这里再兜底一次，避免任何绕过路由的发送路径让游客写入。
     if (!await requireLogin(ref, context, AuthGateReason.sendMessage)) {
@@ -324,30 +671,31 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     );
     if (payload.attachments.isNotEmpty) {
       for (final item in payload.attachments) {
-        final kind = item.type == ChatInputAttachmentType.image
-            ? UITextConstants.chatMorePhoto
-            : UITextConstants.chatMoreFile;
-        await notifier.sendMessage('text', '[$kind] ${item.name}');
+        await _sendChatAttachment(item, notifier);
       }
-    }
-    if (payload.isVoiceMessage) {
-      return;
     }
     var text = payload.text.trim();
     if (text.isNotEmpty) {
-      await _sendMessage(draftText: text);
+      await _sendMessage(draftText: text, mentions: payload.mentions);
     }
   }
 
-  Future<void> _sendMessage({String? draftText}) async {
+  Future<void> _sendMessage({String? draftText, List<String>? mentions}) async {
+    if (_shouldDisableComposer) {
+      return;
+    }
     _inputFocusNode.unfocus();
     await Future<void>.delayed(const Duration(milliseconds: 150));
     final text = (draftText ?? _inputController.text).trim();
     if (text.isEmpty) return;
     if (draftText == null) _inputController.clear();
+    final resolvedMentions = _resolveAssistantMentions(
+      text: text,
+      mentions: mentions,
+    );
     ref
         .read(chatMessageProvider(widget.conversationId).notifier)
-        .sendMessage('text', text);
+        .sendMessage('text', text, mentions: resolvedMentions);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -359,12 +707,22 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     });
   }
 
+  List<String>? _resolveAssistantMentions({
+    required String text,
+    List<String>? mentions,
+  }) {
+    if (!_isGroupChat) {
+      return null;
+    }
+    final values = <String>{...?mentions};
+    if (text.contains(UITextConstants.commentAtXiaoqu)) {
+      values.add('assistant');
+    }
+    return values.isEmpty ? null : values.toList(growable: false);
+  }
+
   List<ChatInputExtraPanelItem> _buildCallPanelItems() {
-    final canCall =
-        _isGroupChat ||
-        (_otherParticipantId != null &&
-            (_relationshipCapability?.canStartVoiceCall == true ||
-                _relationshipCapability?.canStartVideoCall == true));
+    final canCall = _canInitiateOneToOneCall;
     if (!canCall) return const <ChatInputExtraPanelItem>[];
     final voiceLabel = _isGroupChat
         ? UITextConstants.callGroupVoice
@@ -402,6 +760,31 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   }
 
   Future<void> _initiateCall(String callType) async {
+    if (!_isGroupChat && !_canInitiateOneToOneCall) {
+      if (!mounted) {
+        return;
+      }
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: StateError('relationship gate denied call'),
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      await AppActionErrorFeedback.show(context, semantic: resolved);
+      return;
+    }
+    final requestedType = CallType.fromString(callType);
+    final permissionOutcome = await CallPermissionGuard.ensure(
+      context,
+      callType: requestedType,
+    );
+    if (!mounted || permissionOutcome == CallPermissionOutcome.blocked) {
+      return;
+    }
+    final effectiveType =
+        permissionOutcome == CallPermissionOutcome.fallbackVoiceOnly
+        ? CallType.audio
+        : requestedType;
     final notifier = ref.read(callSessionProvider.notifier);
     final List<String> targetIds;
     if (_isGroupChat) {
@@ -420,7 +803,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
       targetIds = <String>[otherId];
     }
     final callId = await notifier.initiateCall(
-      callTypeStr: callType,
+      callTypeStr: effectiveType.toApiString(),
       targetUserIds: targetIds,
       conversationId: widget.conversationId,
     );
@@ -443,26 +826,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     await context.push(AppRoutePaths.rtcIncoming(callId: callId));
   }
 
-  Future<void> _sendSameInterestRequest() async {
-    final otherId = _otherParticipantId;
-    if (otherId == null || otherId.isEmpty) return;
-    try {
-      await ref
-          .read(greetingRepositoryProvider)
-          .sendGreeting(
-            targetSubAccountId: otherId,
-            requestMessage: '想和你成为同好，一起聊聊吧',
-            source: 'chat',
-          );
-      if (!mounted) return;
-      AppToast.show(context, '已发送同好邀请');
-    } catch (_) {
-      if (!mounted) return;
-      AppToast.show(context, '发送失败，请稍后再试');
-    }
-  }
-
-  Widget _buildSameInterestPromptBar() {
+  Widget _buildMutualFollowRtcHintBar() {
     return Container(
       width: double.infinity,
       margin: EdgeInsets.only(bottom: AppSpacing.sm),
@@ -477,37 +841,162 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
           color: AppColors.primaryColor.withValues(alpha: 0.18),
         ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              '成为同好后可直接发起语音和视频通话',
-              style: TextStyle(
-                color: AppColors.primaryColor,
-                fontSize: AppTypography.sm,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+      child: Text(
+        UITextConstants.chatMutualFollowRtcHint,
+        style: TextStyle(
+          color: AppColors.primaryColor,
+          fontSize: AppTypography.sm,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlockedConversationHintBar() {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        UITextConstants.chatBlockedConversationHint,
+        style: TextStyle(
+          color: AppColors.error,
+          fontSize: AppTypography.sm,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVoiceSendStatusBar(VoiceSendState state) {
+    final queuedCount = ref.watch(
+      voiceOfflineQueueProvider(widget.conversationId),
+    );
+    if (state.status == VoiceSendStatus.idle ||
+        state.status == VoiceSendStatus.completed) {
+      if (queuedCount > 0) {
+        return _buildVoiceQueuedStatusBar(queuedCount);
+      }
+      return const SizedBox.shrink();
+    }
+    final isFailed = state.status == VoiceSendStatus.failed;
+    final fg = isFailed ? AppColors.error : AppColors.primaryColor;
+    final label = switch (state.status) {
+      VoiceSendStatus.uploading => UITextConstants.chatVoiceUploading,
+      VoiceSendStatus.sending => UITextConstants.chatVoiceSending,
+      VoiceSendStatus.failed =>
+        state.error ?? UITextConstants.chatVoiceSendFailed,
+      _ => UITextConstants.chatVoiceSending,
+    };
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.sm),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: fg.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          border: Border.all(color: fg.withValues(alpha: 0.18)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupSm,
           ),
-          SizedBox(width: AppSpacing.sm),
-          CupertinoButton(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            color: AppColors.primaryColor,
-            borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-            onPressed: _sendSameInterestRequest,
-            child: Text(
-              UITextConstants.profileAddSameInterest,
-              style: TextStyle(
-                color: AppColors.white,
-                fontSize: AppTypography.sm,
-                fontWeight: FontWeight.w600,
+          child: Row(
+            children: [
+              Icon(
+                isFailed
+                    ? CupertinoIcons.arrow_clockwise_circle_fill
+                    : CupertinoIcons.waveform,
+                size: AppSpacing.iconSmall,
+                color: fg,
               ),
-            ),
+              SizedBox(width: AppSpacing.intraGroupXs),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    fontWeight: AppTypography.medium,
+                    color: fg,
+                  ),
+                ),
+              ),
+              if (isFailed)
+                CupertinoButton(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                  minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                  onPressed: () => ref
+                      .read(voiceSendProvider(widget.conversationId).notifier)
+                      .reset(),
+                  child: Text(
+                    UITextConstants.gotIt,
+                    style: TextStyle(fontSize: AppTypography.sm, color: fg),
+                  ),
+                ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVoiceQueuedStatusBar(int queuedCount) {
+    final fg = AppColors.primaryColor;
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.sm),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: fg.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          border: Border.all(color: fg.withValues(alpha: 0.18)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupSm,
+          ),
+          child: Row(
+            children: [
+              Icon(CupertinoIcons.clock, size: AppSpacing.iconSmall, color: fg),
+              SizedBox(width: AppSpacing.intraGroupXs),
+              Expanded(
+                child: Text(
+                  '${UITextConstants.chatVoiceQueued} ($queuedCount)',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    fontWeight: AppTypography.medium,
+                    color: fg,
+                  ),
+                ),
+              ),
+              CupertinoButton(
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                onPressed: () => ref
+                    .read(
+                      voiceOfflineQueueProvider(widget.conversationId).notifier,
+                    )
+                    .drain(),
+                child: Text(
+                  UITextConstants.tryAgain,
+                  style: TextStyle(fontSize: AppTypography.sm, color: fg),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -608,6 +1097,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
         .messages
         .map((dto) => dto.toDisplayItem(currentUserId: currentUserId))
         .toList();
+    final voiceSendState = ref.watch(voiceSendProvider(widget.conversationId));
     final timelinePadding = EdgeInsets.symmetric(
       horizontal:
           AppSpacing.semantic[DesignSemanticConstants
@@ -628,6 +1118,10 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
           )
         : null;
 
+    // 时间分隔降噪：仅首条与「距上次展示时间 ≥ 阈值」处居中显示，避免连续
+    // 消息每分钟都插一条时间，导致密集分隔（深浅色与移动端一致）。
+    final showTimeFlags = _computeTimeSeparatorFlags(displayMessages);
+
     final bodyContent = Column(
       children: [
         if (widget.searchAnchorContext case final anchor?)
@@ -640,10 +1134,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
             itemCount: displayMessages.length,
             itemBuilder: (context, index) {
               final msg = displayMessages[index];
-              final prevTime = index > 0
-                  ? displayMessages[index - 1].timestampLabel
-                  : null;
-              final showTime = index == 0 || msg.timestampLabel != prevTime;
+              final showTime = showTimeFlags[index];
               final timeStr = formatChatTime(msg.timestampLabel);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -724,10 +1215,13 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (_isBlockedConversation)
+                    _buildBlockedConversationHintBar(),
                   if (!_isGroupChat &&
-                      _relationshipCapability?.isSameInterest != true &&
+                      _relationshipCapability?.isMutual != true &&
                       _otherParticipantId != null)
-                    _buildSameInterestPromptBar(),
+                    _buildMutualFollowRtcHintBar(),
+                  _buildVoiceSendStatusBar(voiceSendState),
                   CustomizableChatInputBar(
                     controller: _inputController,
                     focusNode: _inputFocusNode,
@@ -740,9 +1234,12 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                     onStartRecord: _startVoiceRecordForChat,
                     onStopRecord: _stopVoiceRecordForChat,
                     onCancelRecord: _cancelVoiceRecordForChat,
+                    voiceAmplitudeStream: _voiceRecorder.onAmplitude,
                     onSend: _submitChatInput,
+                    enableVoiceInput: true,
                     showEmojiButton: true,
                     showXiaoquMentionButton: _isGroupChat,
+                    disabled: _shouldDisableComposer,
                     extraPanelItems: _buildCallPanelItems(),
                   ),
                 ],
@@ -790,12 +1287,43 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                       ),
                     ),
             ),
-      body: bodyContent,
+      body: WebPageMaxWidthFrame(sideColor: bgColor, child: bodyContent),
       overlays: actionMenuOverlay == null
           ? const <Widget>[]
           : <Widget>[actionMenuOverlay],
     );
   }
+
+  /// 计算每条消息是否需要在其上方居中展示时间分隔。
+  ///
+  /// 规则：首条恒展示；其余仅当与「上一次展示时间的消息」间隔 ≥ [_timeSeparatorGap]
+  /// 时展示。缺少可解析 ISO 时间戳时回退到旧的「标签变化」规则，保证健壮。
+  List<bool> _computeTimeSeparatorFlags(List<ChatMessageDisplayItem> items) {
+    final flags = List<bool>.filled(items.length, false, growable: false);
+    DateTime? lastShown;
+    String? lastLabel;
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      final sentAt = DateTime.tryParse(item.sentAtIso);
+      if (sentAt == null) {
+        final changed = i == 0 || item.timestampLabel != lastLabel;
+        flags[i] = changed;
+        if (changed) {
+          lastLabel = item.timestampLabel;
+        }
+        continue;
+      }
+      if (lastShown == null ||
+          (sentAt.difference(lastShown)).abs() >= _timeSeparatorGap) {
+        flags[i] = true;
+        lastShown = sentAt;
+        lastLabel = item.timestampLabel;
+      }
+    }
+    return flags;
+  }
+
+  static const Duration _timeSeparatorGap = Duration(minutes: 5);
 }
 
 class _SearchAnchorBanner extends StatelessWidget {

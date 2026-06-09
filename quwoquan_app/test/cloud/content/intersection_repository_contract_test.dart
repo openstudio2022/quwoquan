@@ -50,6 +50,18 @@ void main() {
       expect(items.length, 2);
       expect(items.every((r) => r.dimension == 'relationship'), isTrue);
     });
+
+    test('我的交集列表下发可展示交集点，摘要数字由列表派生', () async {
+      final repo = MockIntersectionRepository();
+      final items = await repo.listMyIntersections();
+      expect(items, isNotEmpty);
+      expect(items.every((r) => r.displayText.trim().isNotEmpty), isTrue);
+      expect(items.every((r) => r.intersectionPoints.isNotEmpty), isTrue);
+      expect(
+        items.every((r) => r.totalPointCount == r.intersectionPoints.length),
+        isTrue,
+      );
+    });
   });
 
   group('MockIntersectionRepository 频道交集（campus/travel）', () {
@@ -74,10 +86,26 @@ void main() {
       final items = await repo.getFeedIntersections(channel: 'unknown_x');
       expect(items, isNotEmpty);
     });
+
+    test('feed 交集全部带交集点列表，事实与推荐都可直接展示', () async {
+      final repo = MockIntersectionRepository();
+      final items = await repo.getFeedIntersections(channel: 'travel');
+      expect(items, isNotEmpty);
+      expect(items.every((r) => r.displayText.trim().isNotEmpty), isTrue);
+      expect(items.every((r) => r.intersectionPoints.isNotEmpty), isTrue);
+      final affinity = items.firstWhere(
+        (r) => r.intersectionClass == 'affinity',
+      );
+      expect(
+        affinity.recommendedPointCount,
+        affinity.intersectionPoints.length,
+      );
+      expect(affinity.pointClassLabel, '推荐交集');
+    });
   });
 
-  group('MockIntersectionRepository 冷却窗口 / 分通道', () {
-    test('曝光上报后同对象不再下发（推荐冷却）', () async {
+  group('MockIntersectionRepository 曝光保留 / 分通道', () {
+    test('曝光上报后同对象仍保留但降权为 seen', () async {
       final repo = MockIntersectionRepository();
       final before = await repo.getFeedIntersections(channel: 'campus');
       expect(before.map((r) => r.actionTargetId), contains('u_su'));
@@ -85,7 +113,10 @@ void main() {
       await repo.reportExposure(objectIds: <String>['u_su']);
 
       final after = await repo.getFeedIntersections(channel: 'campus');
-      expect(after.map((r) => r.actionTargetId), isNot(contains('u_su')));
+      expect(after.map((r) => r.actionTargetId), contains('u_su'));
+      expect(after.last.actionTargetId, 'u_su');
+      expect(after.last.rankState, 'seen');
+      expect(after.last.seenAt, isNotEmpty);
     });
 
     test('概率交集标 affinity + confidenceLabel；事实交集为 fact', () async {

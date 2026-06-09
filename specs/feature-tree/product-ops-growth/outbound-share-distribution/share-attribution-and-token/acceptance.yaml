@@ -1,0 +1,153 @@
+version: 2
+node:
+  id: share-attribution-and-token
+  level: L3_story
+  path: specs/feature-tree/product-ops-growth/outbound-share-distribution/share-attribution-and-token
+  title: share attribution and token
+  parent_domain_service: product-ops-growth
+  parent_business_capability: outbound-share-distribution
+scope:
+  summary: 分享归因（share_id/UTM/inviter）与跨 App 口令引流（小红书/今日头条），三路径同源回流并落库。
+  journey_scenarios:
+  - outbound-object-share-distribution
+  out_of_scope:
+  - 卡片视觉（object-share-cards）。
+  - 面板交互（share-channel-panel）。
+  - 入站解析路由（runtime/external-inbound-deeplink-routing 提供 resolver）。
+gwt_acceptance:
+  GWT1:
+    title: 每次分享生成归因并注入对外物料
+    given:
+    - 用户从面板选择任一渠道分享某对象。
+    when:
+    - 生成 share_id 与 UTM 并注入链接/中转页/海报二维码/口令。
+    then:
+    - 物料携带 share_id/utm_source/utm_medium/utm_campaign（及 inviter/referral）。
+    - 归因与分享落库、埋点同源。
+    done_when:
+    - 各渠道注入归因的契约测试通过。
+    edge_cases:
+    - 游客分享缺 inviter 时仍生成设备维度归因。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
+    - content/post service.yaml SharePost
+    performance_points: []
+    evidence:
+      primary:
+      - T1_static_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_app/test/ui/share/share_attribution_inject_test.dart
+      recorded: []
+    status: pending
+  GWT2:
+    title: 口令三路径同源回流并归因
+    given:
+    - 分享生成 token，写入服务端短链表（token → target+归因）。
+    when:
+    - 用户把口令投放到小红书/今日头条，他端识别口令或扫码或点击短链。
+    then:
+    - 口令 token、海报二维码短链 s/{token}、中转页 open?token 解析到同一目标与归因。
+    - 还原后交 DeepLinkResolver 路由到对应对象。
+    done_when:
+    - 口令/二维码/短链三路径解析一致性测试通过。
+    edge_cases:
+    - 口令失效/过期返回结构化错误。
+    - 剪贴板仅用户主动粘贴/授权场景读取。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
+    - specs/feature-tree/runtime/runtime-client-foundation/external-inbound-deeplink-routing/spec.md
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned:
+      - quwoquan_app/test/ui/share/share_token_resolution_test.dart
+      - quwoquan_service/services/content-service/tests/share_short_link_contract_test.go
+      recorded: []
+    status: pending
+  GWT3:
+    title: 5 类对象分享落库端云一致
+    given:
+    - 用户成功分享内容/圈子/用户/实体主页。
+    when:
+    - 分享落库携带 share_id/utm/channel。
+    then:
+    - 内容复用 SharePost；circle/user/entity 走对齐 operation；游客设备维度与登录账号维度独立计数。
+    - Mock 与 Remote 落库行为断言一一对应。
+    done_when:
+    - 5 类对象分享落库契约测试通过。
+    edge_cases:
+    - 重复分享幂等按设备/账号维度处理。
+    contract_refs:
+    - content/post service.yaml SharePost
+    - quwoquan_service/contracts/metadata/social/circle/service.yaml
+    - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    - quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+    performance_points: []
+    evidence:
+      primary:
+      - T1_static_contract
+      - T3_app_api_integration
+      supporting:
+      - T2_module_interaction
+    tests:
+      planned:
+      - quwoquan_service/services/content-service/tests/object_share_attribution_contract_test.go
+      recorded: []
+    status: pending
+  GWT4:
+    title: 分享与安装归因可按渠道与对象统计
+    given:
+    - 分享与回流链路携带 share_id/utm/对象类型。
+    when:
+    - 执行分享与回流埋点上报。
+    then:
+    - shareIntent/shareClick/shareSuccess/tokenResolved/installAttributed 上报可按渠道/对象类型/活动切分。
+    - 对接 analytics-metric-dictionary 主口径，不另起字典。
+    done_when:
+    - 埋点维度与指标口径契约测试通过。
+    edge_cases:
+    - 归因参数缺失使用默认来源不阻断。
+    contract_refs:
+    - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/spec.md
+    performance_points: []
+    evidence:
+      primary:
+      - T1_static_contract
+      supporting:
+      - T2_module_interaction
+    tests:
+      planned:
+      - quwoquan_app/test/core/trackers/share_attribution_tracking_test.dart
+      recorded: []
+    status: pending
+contract_acceptance:
+  CONTRACT1:
+    title: 分享落库与短链/口令契约
+    metadata_refs:
+    - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
+    - quwoquan_service/contracts/metadata/content/post/service.yaml
+    done_when:
+    - share_id/utm 落库字段、短链解析、口令结构来自 metadata，端云一致。
+    evidence:
+      primary:
+      - T1_metadata_contract
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_service/services/content-service/tests/share_short_link_contract_test.go
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

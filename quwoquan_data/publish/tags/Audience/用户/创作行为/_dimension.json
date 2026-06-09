@@ -1,0 +1,9 @@
+{
+  "label": "创作行为",
+  "labelEn": "Creative Behavior",
+  "description": "用户的内容创作倾向",
+  "maxDepth": 2,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

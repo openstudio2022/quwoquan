@@ -1,0 +1,10 @@
+{
+  "label": "行程形态",
+  "labelEn": "Trip Format",
+  "description": "旅行的组织与产品形态",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 6
+}

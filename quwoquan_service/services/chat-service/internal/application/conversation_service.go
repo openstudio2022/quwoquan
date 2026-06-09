@@ -18,6 +18,7 @@ type ConversationService struct {
 	cache         *cache.ConversationCache
 	publisher     EventPublisher
 	profiles      ProfileSnapshotResolver
+	relationships RelationshipGate
 	media         GroupAvatarAssetizer
 	syncPublisher UserSyncPublisher
 	scheduler     GroupAvatarTaskScheduler
@@ -28,6 +29,7 @@ func NewConversationService(
 	cache *cache.ConversationCache,
 	publisher EventPublisher,
 	profiles ProfileSnapshotResolver,
+	relationships RelationshipGate,
 	media GroupAvatarAssetizer,
 	sync UserSyncPublisher,
 	scheduler GroupAvatarTaskScheduler,
@@ -38,6 +40,9 @@ func NewConversationService(
 	if profiles == nil {
 		profiles = noopProfileResolver{}
 	}
+	if relationships == nil {
+		relationships = DenyRelationshipGate()
+	}
 	if scheduler == nil {
 		scheduler = NoopGroupAvatarTaskScheduler()
 	}
@@ -46,6 +51,7 @@ func NewConversationService(
 		cache:         cache,
 		publisher:     publisher,
 		profiles:      profiles,
+		relationships: relationships,
 		media:         media,
 		syncPublisher: sync,
 		scheduler:     scheduler,
@@ -56,14 +62,39 @@ type CreateConversationRequest struct {
 	Type             string
 	Title            string
 	CircleId         string
+	CircleGroupId    string
+	OriginType       string
+	BindingType      string
+	LifecyclePolicy  string
 	MaxGroupSize     int
 	CreatorId        string
 	InitialMemberIds []string
 }
 
 func (s *ConversationService) CreateConversation(ctx context.Context, req CreateConversationRequest) (*model.Conversation, error) {
+	return s.createDirectConversation(ctx, req, false)
+}
+
+func (s *ConversationService) createDirectConversation(
+	ctx context.Context,
+	req CreateConversationRequest,
+	bypassRelationshipGate bool,
+) (*model.Conversation, error) {
 	now := time.Now()
 	req.Type = NormalizeConversationType(req.Type, req.CircleId)
+	if req.Type != conversationTypeDirect && req.Type != conversationTypeGroup && req.Type != conversationTypeEncrypted {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"不支持的会话类型",
+			"unsupported conversation type",
+		)
+	}
+	originType := defaultString(req.OriginType, "direct_init")
+	bindingType := defaultString(req.BindingType, "none")
+	lifecyclePolicy := defaultString(req.LifecyclePolicy, "persistent")
+	if req.Type == conversationTypeGroup {
+		originType, bindingType, lifecyclePolicy = inferGroupConversationSemantics(req, originType, bindingType, lifecyclePolicy)
+	}
 	maxGroupSize := req.MaxGroupSize
 	if maxGroupSize <= 0 {
 		switch req.Type {
@@ -74,6 +105,31 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		}
 	}
 	initialMemberIds := dedupeUserIDs(req.InitialMemberIds, req.CreatorId)
+	if req.Type == conversationTypeDirect || req.Type == conversationTypeEncrypted {
+		if len(initialMemberIds) != 1 {
+			return nil, rterr.NewInvalidArgument(
+				rterr.ModuleChat,
+				"1 对 1 会话必须只有一个对方成员",
+				"direct conversation requires exactly one invitee",
+			)
+		}
+		peerID := initialMemberIds[0]
+		if existing, findErr := s.repo.FindDirectConversationBetween(ctx, req.CreatorId, peerID); findErr == nil && existing != nil {
+			return existing, nil
+		}
+		if !bypassRelationshipGate {
+			capability, err := s.relationships.GetCapability(ctx, req.CreatorId, peerID)
+			if err != nil {
+				return nil, err
+			}
+			if capability.IsBlocked || capability.IsBlockedBy {
+				return nil, chatBlocked("direct conversation blocked by relationship gate")
+			}
+			if !capability.CanCreateDirectConversation && !capability.HasFormalConversation {
+				return nil, chatGreetingRequired("direct conversation requires mutual follow or replied greeting")
+			}
+		}
+	}
 	if req.Type == conversationTypeGroup && len(initialMemberIds)+1 > maxGroupSize {
 		return nil, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
@@ -84,16 +140,20 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	receiptEnabled := maxGroupSize <= 50
 
 	conv := &model.Conversation{
-		ID:             generateID(),
-		Type:           req.Type,
-		Title:          req.Title,
-		CreatorId:      req.CreatorId,
-		CircleId:       req.CircleId,
-		MaxGroupSize:   maxGroupSize,
-		ReceiptEnabled: receiptEnabled,
-		Status:         "active",
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID:              generateID(),
+		Type:            req.Type,
+		Title:           req.Title,
+		CreatorId:       req.CreatorId,
+		CircleId:        req.CircleId,
+		CircleGroupId:   req.CircleGroupId,
+		OriginType:      originType,
+		BindingType:     bindingType,
+		LifecyclePolicy: lifecyclePolicy,
+		MaxGroupSize:    maxGroupSize,
+		ReceiptEnabled:  receiptEnabled,
+		Status:          "active",
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 	profileIDs := append([]string{req.CreatorId}, initialMemberIds...)
 	profMap, _ := s.profiles.ResolveMany(ctx, profileIDs)
@@ -200,12 +260,16 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 
 	go func() {
 		if err := s.publisher.PublishDomainEvent(context.Background(), event.ConversationCreated, conv.ID, req.CreatorId, map[string]any{
-			"type":           conv.Type,
-			"creatorId":      req.CreatorId,
-			"circleId":       conv.CircleId,
-			"maxGroupSize":   conv.MaxGroupSize,
-			"receiptEnabled": conv.ReceiptEnabled,
-			"createdAt":      conv.CreatedAt,
+			"type":            conv.Type,
+			"creatorId":       req.CreatorId,
+			"circleId":        conv.CircleId,
+			"circleGroupId":   conv.CircleGroupId,
+			"originType":      conv.OriginType,
+			"bindingType":     conv.BindingType,
+			"lifecyclePolicy": conv.LifecyclePolicy,
+			"maxGroupSize":    conv.MaxGroupSize,
+			"receiptEnabled":  conv.ReceiptEnabled,
+			"createdAt":       conv.CreatedAt,
 		}); err != nil {
 			slog.Error("publish ConversationCreated failed", "err", err, "conversationId", conv.ID)
 		}
@@ -289,8 +353,82 @@ func dedupeUserIDs(ids []string, exclude ...string) []string {
 	return out
 }
 
+func defaultString(value string, fallback string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fallback
+	}
+	return trimmed
+}
+
+func inferGroupConversationSemantics(
+	req CreateConversationRequest,
+	originType string,
+	bindingType string,
+	lifecyclePolicy string,
+) (string, string, string) {
+	hasCircleGroup := strings.TrimSpace(req.CircleGroupId) != ""
+	hasCircle := strings.TrimSpace(req.CircleId) != ""
+	if hasCircleGroup {
+		if originType == "direct_init" {
+			originType = "circle_self_built_group"
+		}
+		if bindingType == "none" {
+			bindingType = "circle_group"
+		}
+		if lifecyclePolicy == "persistent" {
+			lifecyclePolicy = "bound_to_circle"
+		}
+		return originType, bindingType, lifecyclePolicy
+	}
+	if hasCircle {
+		if originType == "direct_init" {
+			originType = "circle_default_group"
+		}
+		if bindingType == "none" {
+			bindingType = "circle"
+		}
+		if lifecyclePolicy == "persistent" {
+			lifecyclePolicy = "bound_to_circle"
+		}
+		return originType, bindingType, lifecyclePolicy
+	}
+	if originType == "direct_init" {
+		originType = "ad_hoc_group"
+	}
+	return originType, bindingType, lifecyclePolicy
+}
+
 func (s *ConversationService) GetConversation(ctx context.Context, conversationId string) (*model.Conversation, error) {
 	return s.repo.FindConversationByID(ctx, conversationId)
+}
+
+func (s *ConversationService) CreateOrReuseDirect(ctx context.Context, creatorID, peerID string) (*model.Conversation, error) {
+	if strings.TrimSpace(creatorID) == "" || strings.TrimSpace(peerID) == "" {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"创建 1v1 会话需要双方成员",
+			"creatorId and peerId required",
+		)
+	}
+	if existing, err := s.repo.FindDirectConversationBetween(ctx, creatorID, peerID); err != nil {
+		return nil, err
+	} else if existing != nil {
+		return existing, nil
+	}
+	return s.createDirectConversation(ctx, CreateConversationRequest{
+		Type:             conversationTypeDirect,
+		CreatorId:        creatorID,
+		InitialMemberIds: []string{peerID},
+	}, true)
+}
+
+func (s *ConversationService) HasDirectBetween(ctx context.Context, memberA, memberB string) (bool, error) {
+	conv, err := s.repo.FindDirectConversationBetween(ctx, memberA, memberB)
+	if err != nil {
+		return false, err
+	}
+	return conv != nil, nil
 }
 
 type ListConversationsRequest struct {

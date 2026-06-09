@@ -61,10 +61,41 @@ class CircleStatsPage extends ConsumerStatefulWidget {
 class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
   String get _type => widget.type;
   String _searchQuery = '';
+  bool _isLoading = true;
+  UiErrorSemantic? _pageErrorSemantic;
 
   List<CircleStatsMemberRowViewData> _users = [];
   List<CircleStatsGroupRowViewData> _groups = [];
   List<CircleStatsLikeRowViewData> _likes = [];
+
+  UiErrorSemantic _resolvePageErrorSemantic(Object error) {
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+    return UiErrorSemantic(
+      category: resolved.category,
+      scope: resolved.scope,
+      title: '${CircleStatsPage._title(_type)}暂不可用',
+      message: resolved.message,
+      secondaryMessage: resolved.secondaryMessage,
+      primaryAction:
+          resolved.primaryAction ??
+          const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
+          ),
+      secondaryAction: resolved.secondaryAction,
+      dismissible: resolved.dismissible,
+      sourceCode: resolved.sourceCode,
+      failureKind: resolved.failureKind,
+      recoveryAction: resolved.recoveryAction,
+      presentation: resolved.presentation,
+      tone: resolved.tone,
+    );
+  }
 
   @override
   void initState() {
@@ -74,6 +105,12 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
 
   Future<void> _loadFromRepository() async {
     final repo = ref.read(circleRepositoryProvider);
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _pageErrorSemantic = null;
+      });
+    }
     try {
       switch (_type) {
         case 'groups':
@@ -85,13 +122,19 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
             _groups = groups
                 .map(circleStatsGroupRowFromGroupDto)
                 .toList(growable: false);
+            _pageErrorSemantic = null;
+            _isLoading = false;
           });
           break;
         case 'likes':
           if (!mounted) {
             return;
           }
-          setState(() => _likes = const []);
+          setState(() {
+            _likes = const [];
+            _pageErrorSemantic = null;
+            _isLoading = false;
+          });
           break;
         case 'members':
         case 'fans':
@@ -104,9 +147,11 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
             _users = roster.map(circleStatsMemberRowFromRosterItem).toList(
                   growable: false,
                 );
+            _pageErrorSemantic = null;
+            _isLoading = false;
           });
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
@@ -114,6 +159,8 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         _users = [];
         _groups = [];
         _likes = [];
+        _pageErrorSemantic = _resolvePageErrorSemantic(error);
+        _isLoading = false;
       });
     }
   }
@@ -199,7 +246,19 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
             ),
           ),
           Expanded(
-            child: _type == 'likes'
+            child: _isLoading
+                ? const Center(child: CupertinoActivityIndicator())
+                : _pageErrorSemantic != null
+                ? AppPageErrorState(
+                    semantic: _pageErrorSemantic!,
+                    onAction: (action) async {
+                      if (action.type == UiErrorActionType.retry ||
+                          action.type == UiErrorActionType.resubmit) {
+                        await _loadFromRepository();
+                      }
+                    },
+                  )
+                : _type == 'likes'
                 ? _buildLikesList(fg, fgSecondary, borderColor, bg)
                 : _type == 'groups'
                 ? _buildGroupsList(fg, fgSecondary, borderColor)

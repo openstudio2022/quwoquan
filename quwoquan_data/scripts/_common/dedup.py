@@ -1,21 +1,32 @@
-"""Deduplication tracking via task_manifest.json."""
+"""跨批次去重账本（completedEntities/Topics/downloadedSources）。
+
+落 ``task/_shared/dedup_ledger.json``；与 ``task_manifest.json``（任务定义快照，§14.1）
+分离，避免两类语义共用同一文件名。读取保留对历史 task 根旧位的只读兼容。
+"""
 from __future__ import annotations
 
-from pathlib import Path
-
-from .paths import task_manifest
+from .paths import dedup_ledger, resolve_existing_task_shared_path
 from .io import read_json, write_json
+
+LEDGER_SCHEMA = "quwoquan_data.dedup_ledger/1"
 
 
 def load_manifest(task_id: str) -> dict:
-    path = task_manifest(task_id)
+    path = resolve_existing_task_shared_path(task_id, "dedup_ledger.json")
     if path.exists():
         return read_json(path)
-    return {"taskId": task_id, "completedEntities": [], "completedTopics": [], "downloadedSources": []}
+    return {
+        "schemaVersion": LEDGER_SCHEMA,
+        "taskId": task_id,
+        "completedEntities": [],
+        "completedTopics": [],
+        "downloadedSources": [],
+    }
 
 
 def save_manifest(task_id: str, manifest: dict) -> None:
-    write_json(task_manifest(task_id), manifest)
+    manifest.setdefault("schemaVersion", LEDGER_SCHEMA)
+    write_json(dedup_ledger(task_id), manifest)
 
 
 def is_entity_done(task_id: str, entity_id: str) -> bool:

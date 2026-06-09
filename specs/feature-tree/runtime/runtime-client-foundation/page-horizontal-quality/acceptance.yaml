@@ -31,7 +31,13 @@ gwt_acceptance:
       supporting: []
     tests:
       planned: []
-      recorded: []
+      recorded:
+      - quwoquan_app/test/app/shell/web_page_max_width_frame_test.dart
+      - quwoquan_app/test/app/shell/web_create_groups_test.dart
+      - quwoquan_app/test/app/shell/web_featured_no_queue_test.dart
+      - quwoquan_app/test/app/shell/web_feed_post_tap_viewer_test.dart
+      - quwoquan_app/test/app/shell/web_chat_frame_test.dart
+      - quwoquan_app/test/app/shell/main_app_shell_widget_test.dart
     status: pending
 execution:
   local_gate:

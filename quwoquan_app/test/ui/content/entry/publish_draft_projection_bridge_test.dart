@@ -83,6 +83,38 @@ void main() {
       },
     );
 
+    test('article asset manifest requests server-side variant generation', () {
+      final document = ArticleDocumentData(
+        nodes: const <ArticleDocumentNode>[
+          ArticleDocumentNode(
+            id: 'fig1',
+            type: ArticleDocumentNodeType.figure,
+            assetId: 'fig1',
+            imageUrl: '/tmp/fig1.jpg',
+          ),
+        ],
+      );
+      final state = CreateEditorState.initial().copyWith(
+        title: 'T',
+        body: 'x' * 200,
+        articleDocument: document,
+        articleCoverImagePath: '/tmp/cover.jpg',
+      );
+
+      final manifest = buildArticleAssetManifestForPayload(state);
+      final assets = manifest['assets'] as List<Object?>;
+      final cover = assets.cast<Map<Object?, Object?>>().firstWhere(
+        (asset) => asset['assetId'] == 'cover',
+      );
+      final variantGeneration =
+          cover['variantGeneration'] as Map<Object?, Object?>;
+
+      expect(variantGeneration['required'], isTrue);
+      expect(variantGeneration['source'], 'server');
+      expect(variantGeneration['profiles'], contains('display'));
+      expect(variantGeneration['profiles'], contains('original'));
+    });
+
     test('article markdown is serialized directly from document nodes', () {
       final document = ArticleDocumentData(
         nodes: const <ArticleDocumentNode>[
@@ -117,9 +149,9 @@ void main() {
         articleDocument: document,
         articleBlocks: const <CreateTextBlock>[
           CreateTextBlock(
-            id: 'legacy',
+            id: 'block_1',
             type: CreateTextBlockType.paragraph,
-            text: 'legacy blocks 不应进入 Markdown',
+            text: 'blocks 不应进入 Markdown',
           ),
         ],
       );
@@ -133,7 +165,7 @@ void main() {
         contains(':::figure id="fig1" layout="wrapLeft" caption="节点图注"'),
       );
       expect(markdown, contains('节点正文第一段。'));
-      expect(markdown, isNot(contains('legacy blocks')));
+      expect(markdown, isNot(contains('blocks 不应进入 Markdown')));
     });
 
     test('draft storage persists Markdown triple and can restore document', () {

@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metad
 /// In production, fetched from `GET /v1/config/realtime`.
 class RealtimeConfig {
   final String wsUrl;
+  final String gatewayBaseUrl;
   final int heartbeatIntervalSec;
   final int wsIdleTimeoutSec;
   final int longPollHoldSec;
@@ -14,6 +15,7 @@ class RealtimeConfig {
 
   const RealtimeConfig({
     required this.wsUrl,
+    this.gatewayBaseUrl = CloudRuntimeConfig.gatewayBaseUrl,
     this.heartbeatIntervalSec = 15,
     this.wsIdleTimeoutSec = 120,
     this.longPollHoldSec = 60,
@@ -29,12 +31,15 @@ class RealtimeConfig {
         .replaceFirst('http://', 'ws://');
     return RealtimeConfig(
       wsUrl: '$wsBase${RealtimeApiMetadata.webSocketUpgradePath}',
+      gatewayBaseUrl: base,
     );
   }
 
   factory RealtimeConfig.fromMap(Map<String, dynamic> map) {
     return RealtimeConfig(
       wsUrl: map['wsUrl'] as String? ?? '',
+      gatewayBaseUrl:
+          map['gatewayBaseUrl'] as String? ?? CloudRuntimeConfig.gatewayBaseUrl,
       heartbeatIntervalSec:
           (map['heartbeatIntervalSec'] as num?)?.toInt() ?? 15,
       wsIdleTimeoutSec: (map['wsIdleTimeoutSec'] as num?)?.toInt() ?? 120,

@@ -74,6 +74,32 @@ def fetch_source(url: str, output_dir: Path) -> dict:
     }
 
 
+def fetch_source_payload(url: str) -> dict:
+    """抓取原文但不落盘，返回 {url, statusCode, htmlBytes, text, sha256}。
+
+    供来源单元写入器把 page.html/source.md 落进 1.download/sources/{NN}.{sourceKind}/。
+    网络异常抛出，由调用方走离线兜底。
+    """
+    parsed = urllib.parse.urlparse(url)
+    conn_cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+    conn = conn_cls(parsed.hostname, parsed.port, timeout=15)
+    path = parsed.path or "/"
+    if parsed.query:
+        path += f"?{parsed.query}"
+    conn.request("GET", path, headers={"User-Agent": _USER_AGENT})
+    resp = conn.getresponse()
+    body = resp.read()
+    status = resp.status
+    conn.close()
+    return {
+        "url": url,
+        "statusCode": status,
+        "htmlBytes": body,
+        "text": body.decode("utf-8", errors="replace")[:50000],
+        "sha256": hashlib.sha256(body).hexdigest(),
+    }
+
+
 def _parse_retry_after(raw: str | None, *, attempt: int) -> float:
     """解析 Retry-After 头(秒)；缺省用指数退避 2,4,8,16(上限30s)。"""
     if raw:
@@ -129,6 +155,30 @@ def _http_get_bytes(
         conn.close()
         break
     return status, body, content_type
+
+
+def fetch_image_payload(url: str, *, min_bytes: int = 3000) -> dict | None:
+    """下载单张图片但不落盘，返回 {url, ext, bytes, contentType, sha256}。
+
+    供来源单元写入器（write_source_unit）把图片直接落进来源 assets/，
+    避免对象级散落 images/。非 200 / 过小 / 非图片 / 网络异常一律返回 None。
+    """
+    try:
+        status, body, content_type = _http_get_bytes(url)
+    except Exception:
+        return None
+    if status != 200 or len(body) < min_bytes:
+        return None
+    ext = sniff_image_ext(body, content_type)
+    if ext is None:
+        return None
+    return {
+        "url": url,
+        "ext": ext,
+        "bytes": body,
+        "contentType": content_type,
+        "sha256": hashlib.sha256(body).hexdigest(),
+    }
 
 
 def fetch_image(url: str, images_dir: Path, *, index: int, min_bytes: int = 3000) -> dict | None:

@@ -7,9 +7,8 @@ import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 ///
 /// Emits OpsEvent records for key user actions to enable L1/L2 funnel analysis.
 ///
-/// [AppTraceContextStore] does not expose a stable "current page visit" id; callers
-/// that have a visit id from navigation (e.g. route settings) should pass it via
-/// [payload] until a shared visit context is wired here.
+/// 页级归因优先使用 [AppTraceContextStore.currentPageVisitId]（由导航在打开页面时铸造）；
+/// 调用方若持有更精确的 visit id（如来自 route settings），可通过 [pageVisitId] 显式覆盖。
 class JourneyEventTracker {
   JourneyEventTracker({required this.eventRepository});
 
@@ -23,12 +22,15 @@ class JourneyEventTracker {
     String targetKey = '',
     String entityType = '',
     String entityId = '',
+    String? pageVisitId,
     Map<String, dynamic> payload = const {},
   }) async {
     final trace = AppTraceContextStore.instance;
     final now = DateTime.now().toUtc().toIso8601String();
     final eventId = trace.newRequestId();
     final requestId = trace.newRequestId();
+    final resolvedPageVisitId =
+        pageVisitId ?? trace.currentPageVisitId ?? '';
     try {
       await eventRepository.reportEventBatch(
         events: <OpsEventRecordInput>[
@@ -39,7 +41,7 @@ class JourneyEventTracker {
             occurredAt: now,
             clientSentAt: now,
             sessionId: trace.sessionId,
-            pageVisitId: '',
+            pageVisitId: resolvedPageVisitId,
             requestId: requestId,
             producer: 'app.journey_tracker',
             source: journey,

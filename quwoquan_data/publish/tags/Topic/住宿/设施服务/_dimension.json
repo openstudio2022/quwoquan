@@ -1,0 +1,10 @@
+{
+  "label": "设施服务",
+  "labelEn": "Amenities",
+  "description": "住宿的设施与服务配置",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 15
+}

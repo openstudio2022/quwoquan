@@ -13,7 +13,9 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_REPORT = ROOT / "artifacts/local-gamma/report.json"
-DEFAULT_STACK_REPORT = ROOT / "artifacts/local-gamma/stack_state.json"
+DEFAULT_STACK_REPORT = ROOT / "state/local/gamma/stack_state.json"
+START_SCRIPT = ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+README = ROOT / "deploy/local-gamma/README.md"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -38,6 +40,23 @@ def status_of(section: dict[str, Any]) -> str:
     return str(section.get("status") or "gate_block")
 
 
+def static_contract_issues() -> list[str]:
+    """Guard local-gamma against falling back to the retired versioned publish tree."""
+    retired_tags_path = "/".join(("publish", "v1", "tags"))
+    issues: list[str] = []
+    for path in (START_SCRIPT, README):
+        text = path.read_text(encoding="utf-8")
+        if retired_tags_path in text:
+            issues.append(f"{path.relative_to(ROOT)} still references {retired_tags_path}")
+    script = START_SCRIPT.read_text(encoding="utf-8")
+    expected = "$ROOT/quwoquan_data/publish/tags"
+    if expected not in script:
+        issues.append("start_local_gamma_mirror.sh must default LOCAL_GAMMA_TAGS_DIR to quwoquan_data/publish/tags")
+    if "build_publish_lookup_indexes.py" not in script:
+        issues.append("local-gamma tag bootstrap must rebuild publish lookup/link target indexes")
+    return issues
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
@@ -48,6 +67,11 @@ def main() -> int:
     parser.add_argument("--image-version", default="0.0.1")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    static_issues = static_contract_issues()
+    if static_issues:
+        for issue in static_issues:
+            print(f"[local-gamma] FAIL: {issue}")
+        return 1
 
     if args.dry_run:
         report = {

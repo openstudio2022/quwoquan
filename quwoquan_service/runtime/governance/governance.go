@@ -46,7 +46,7 @@ type CircuitBreaker struct {
 type CircuitState int
 
 const (
-	StateClosed   CircuitState = iota
+	StateClosed CircuitState = iota
 	StateOpen
 	StateHalfOpen
 )
@@ -165,6 +165,25 @@ func (rl *RateLimiter) refill() {
 		}
 		rl.lastFill = now
 	}
+}
+
+func (rl *RateLimiter) SetRate(ratePerSecond int) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	if ratePerSecond <= 0 {
+		return
+	}
+	rl.rate = ratePerSecond
+	rl.capacity = ratePerSecond
+	if rl.tokens > rl.capacity {
+		rl.tokens = rl.capacity
+	}
+}
+
+func (rl *RateLimiter) Rate() int {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	return rl.rate
 }
 
 // Retry executes fn with retry logic based on policy.

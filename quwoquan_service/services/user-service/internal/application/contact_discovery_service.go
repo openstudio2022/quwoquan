@@ -2,24 +2,19 @@ package application
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
+	"quwoquan_service/services/user-service/internal/generated"
 )
 
 const (
 	discoveryRateLimit   = 5   // per owner per day
 	discoveryBatchLimit  = 5000
 	discoveryTTLHours    = 72
-)
-
-var (
-	ErrDiscoveryRateLimited  = fmt.Errorf("daily contact discovery limit reached")
-	ErrDiscoveryBatchTooLarge = fmt.Errorf("too many contacts, maximum 5000 per request")
 )
 
 // ContactDiscoveryService handles contact matching with privacy guarantees.
@@ -35,7 +30,7 @@ func NewContactDiscoveryService(discoveries userrepo.ContactDiscoveryRepository)
 // Privacy: returns only the record ID and status; caller fetches matches separately.
 func (s *ContactDiscoveryService) Initiate(ctx context.Context, ownerID string, hashedPhones []string) (*model.ContactDiscoveryRecord, error) {
 	if len(hashedPhones) > discoveryBatchLimit {
-		return nil, ErrDiscoveryBatchTooLarge
+		return nil, generated.AppErrorFromTooManyContacts("too many contacts, maximum 5000 per request")
 	}
 
 	count, err := s.discoveries.CountTodayByOwner(ctx, ownerID)
@@ -43,7 +38,7 @@ func (s *ContactDiscoveryService) Initiate(ctx context.Context, ownerID string, 
 		return nil, err
 	}
 	if count >= discoveryRateLimit {
-		return nil, ErrDiscoveryRateLimited
+		return nil, generated.AppErrorFromContactDiscoveryRateLimited("daily contact discovery limit reached")
 	}
 
 	record := &model.ContactDiscoveryRecord{
@@ -97,10 +92,10 @@ func (s *ContactDiscoveryService) Dismiss(ctx context.Context, ownerID, id strin
 		return err
 	}
 	if r == nil {
-		return fmt.Errorf("discovery record not found")
+		return generated.AppErrorFromContactDiscoveryNotFound("discovery record not found")
 	}
 	if r.OwnerAccountID != ownerID {
-		return fmt.Errorf("discovery record not found") // security: same error for auth mismatch
+		return generated.AppErrorFromContactDiscoveryNotFound("discovery record not found") // security: same error for auth mismatch
 	}
 	return s.discoveries.Dismiss(ctx, id)
 }

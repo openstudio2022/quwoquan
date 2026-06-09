@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
@@ -341,6 +342,7 @@ class _CircleEditSettingsPageState
     final wireDto = CircleCreateWireDto.fromMap(wire);
     bool success = false;
     String? createdCircleId;
+    Object? actionError;
     if (_isCreateMode) {
       try {
         await ref.read(activePersonaContextProvider.future);
@@ -352,7 +354,8 @@ class _CircleEditSettingsPageState
         if (success) {
           ref.read(circleDirectoryRefreshProvider.notifier).bump();
         }
-      } catch (_) {
+      } catch (error) {
+        actionError = error;
         success = false;
       }
     } else {
@@ -378,7 +381,40 @@ class _CircleEditSettingsPageState
         Navigator.of(context).pop();
       }
     } else {
-      AppToast.show(context, UITextConstants.loadFailed);
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: actionError ?? UITextConstants.loadFailed,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      final semantic = UiErrorSemantic(
+        category: resolved.category,
+        scope: resolved.scope,
+        title: _isCreateMode ? '创建圈子未完成' : '保存圈子未完成',
+        message: resolved.message,
+        secondaryMessage: resolved.secondaryMessage,
+        primaryAction: const UiErrorAction(
+          type: UiErrorActionType.retry,
+          label: UITextConstants.tryAgain,
+        ),
+        secondaryAction: resolved.secondaryAction,
+        dismissible: resolved.dismissible,
+        sourceCode: resolved.sourceCode,
+        failureKind: resolved.failureKind,
+        recoveryAction: resolved.recoveryAction,
+        presentation: resolved.presentation,
+        tone: resolved.tone,
+      );
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: semantic,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _save();
+          }
+        },
+      );
     }
   }
 

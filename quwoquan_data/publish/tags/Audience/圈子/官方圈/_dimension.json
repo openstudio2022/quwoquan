@@ -1,0 +1,9 @@
+{
+  "label": "官方圈",
+  "labelEn": "Official Circles",
+  "description": "机构、品牌或政务背书的官方社群",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

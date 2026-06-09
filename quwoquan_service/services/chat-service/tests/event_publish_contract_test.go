@@ -428,13 +428,51 @@ func TestEventPublish_AssistantInvited(t *testing.T) {
 }
 
 func TestEventPublish_AssistantMentioned(t *testing.T) {
-	t.Skip("event_publisher not yet integrated into handler pipeline")
-
 	t.Cleanup(func() { cleanAll(t) })
 
 	conv := createConversation(t, `{"type":"group","title":"mention event"}`)
 	convId := conv["_id"].(string)
-	_ = convId
+	doPost(t, "/v1/chat/conversations/"+convId+"/assistant", `{"skillId":"general"}`, "user_test_001", http.StatusOK)
+
+	channel := "rt:conversation:" + convId
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	sendMessage(t, convId, `{"type":"text","content":"@小趣 总结一下刚才聊的内容","mentions":["assistant"],"clientMsgId":"evt-assistant-mentioned-1"}`)
+
+	for {
+		select {
+		case raw := <-sub.Channel():
+			var evt mqpkg.DomainEvent
+			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if evt.Type != event.AssistantMentioned {
+				continue
+			}
+			if evt.ConversationID != convId {
+				t.Errorf("expected conversationId=%s, got %s", convId, evt.ConversationID)
+			}
+			if evt.Payload["content"] != "@小趣 总结一下刚才聊的内容" {
+				t.Errorf("expected content payload, got %v", evt.Payload["content"])
+			}
+			if evt.Payload["assistantMemberId"] != "assistant" {
+				t.Errorf("expected assistantMemberId=assistant, got %v", evt.Payload["assistantMemberId"])
+			}
+			if evt.Payload["assistantSkillId"] != "general" {
+				t.Errorf("expected assistantSkillId=general, got %v", evt.Payload["assistantSkillId"])
+			}
+			return
+		case <-ctx.Done():
+			t.Fatal("AssistantMentioned event not received within timeout")
+		}
+	}
 }
 
 func TestEventPublish_AssistantRemoved(t *testing.T) {
@@ -605,4 +643,3 @@ func TestEventPublish_ChannelFormat(t *testing.T) {
 		t.Fatal("did not receive event within timeout")
 	}
 }
-

@@ -43,7 +43,10 @@ void main() {
       final gridGroup = inbox.firstWhere((item) => item.id == 'conv_grid_10');
 
       expect(gridGroup.type, 'group');
-      expect(gridGroup.avatarUrl, contains('/media/avatar/conversation/'));
+      expect(
+        gridGroup.avatarUrl,
+        contains('/media/avatar/s/archived-avatar/conversation/'),
+      );
       expect(gridGroup.avatarUrl, isNot(contains('grid_10_member_1')));
       expect(gridGroup.groupAvatarVersion, greaterThan(0));
     });
@@ -63,6 +66,26 @@ void main() {
       final full = await repo.getConversation(conv.conversationId);
       expect(full.type, 'group');
       expect(full.status, 'active');
+    });
+
+    test('createConversation 保留群家族语义字段', () async {
+      final created = await repo.createConversation(
+        type: 'group',
+        title: '班级群',
+        circleId: 'school_circle_001',
+        circleGroupId: 'classroom_group_001',
+        originType: 'organization_node_group',
+        bindingType: 'organization_node',
+        lifecyclePolicy: 'bound_to_organization_node',
+      );
+
+      final full = await repo.getConversation(created.conversationId);
+      expect(full.type, 'group');
+      expect(full.circleId, 'school_circle_001');
+      expect(full.circleGroupId, 'classroom_group_001');
+      expect(full.originType, 'organization_node_group');
+      expect(full.bindingType, 'organization_node');
+      expect(full.lifecyclePolicy, 'bound_to_organization_node');
     });
 
     test('getConversation 返回指定会话', () async {
@@ -211,6 +234,12 @@ void main() {
       final contacts = await repo.listContacts();
       expect(contacts, isList);
       expect(contacts, isNotEmpty);
+      expect(contacts.first.relationState, isNotEmpty);
+      expect(contacts.first.source, isNotEmpty);
+      expect(
+        contacts.where((contact) => contact.relationState == 'mutual'),
+        isNotEmpty,
+      );
     });
 
     test('searchContacts 返回匹配结果', () async {

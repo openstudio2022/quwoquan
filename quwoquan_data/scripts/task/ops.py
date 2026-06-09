@@ -10,12 +10,16 @@ from typing import Any
 from _common.io import read_json
 from _common.paths import (
     PUBLISH_ROOT,
+    TASK_SHARED_LEDGER_FILENAMES,
     committed_task_notes,
     committed_task_root,
     committed_task_runs_dir,
     iter_committed_task_specs,
+    iter_existing_task_legacy_entries,
     publish_data,
     task_id_from_committed_path,
+    task_root,
+    task_shared_dir,
 )
 from task.store import (
     append_run,
@@ -110,7 +114,13 @@ def show(task_id: str) -> None:
     prog = load_progress(task_id)
     lock = read_lock(task_id)
     print(json.dumps(
-        {"rawSpec": raw, "effectiveSpec": effective, "progress": prog, "lock": lock},
+        {
+            "rawSpec": raw,
+            "effectiveSpec": effective,
+            "progress": prog,
+            "lock": lock,
+            "postOutputs": latest_post_outputs(task_id),
+        },
         ensure_ascii=False, indent=2,
     ))
 
@@ -148,6 +158,44 @@ def compute_gaps(task_id: str) -> dict[str, Any]:
         "missingConditionCells": missing_cells,
         "openGaps": prog.get("openGaps", []),
     }
+
+
+def latest_post_outputs(task_id: str, limit: int = 10) -> list[dict[str, Any]]:
+    """Return materialized post package locations under runtime batches."""
+    root = runtime_task_root(task_id)
+    posts_root = root / "batches"
+    if not posts_root.is_dir():
+        return []
+    rows: list[dict[str, Any]] = []
+    # 对象优先：成品落 batch/posts/{type}/{angle}/{title}/{seq}/。
+    for manifest in sorted(posts_root.rglob("manifest.json")):
+        leaf = manifest.parent
+        try:
+            rel = leaf.relative_to(root)
+        except ValueError:
+            continue
+        parts = rel.parts
+        if len(parts) < 5 or parts[0] != "batches" or parts[2] != "posts":
+            continue
+        if not ((leaf / "article.md").exists() or (leaf / "gallery.md").exists()):
+            continue
+        try:
+            data = read_json(manifest)
+        except Exception:  # noqa: BLE001
+            continue
+        batch_id = parts[1] if len(parts) > 1 and parts[0] == "batches" else ""
+        rows.append(
+            {
+                "batchId": batch_id,
+                "title": data.get("publishTitle") or data.get("title") or manifest.parent.parent.name,
+                "contentType": data.get("contentType") or "",
+                "path": str(rel).replace("\\", "/"),
+                "articlePath": str((rel / "article.md")).replace("\\", "/"),
+                "sourceBatchId": data.get("sourceBatchId") or batch_id,
+            }
+        )
+    rows.sort(key=lambda r: (r["batchId"], r["path"]), reverse=True)
+    return rows[:limit]
 
 
 def resume(task_id: str) -> None:
@@ -191,6 +239,11 @@ def status(task_id: str) -> None:
     print(f"  深度: anglesByEntity={len(prog.get('anglesByEntity', {}))} 实体有角度记录; conditionCells={len(prog.get('conditionCells', []))}")
     print(f"  计数: entities={prog.get('counts', {}).get('entities', 0)} posts={prog.get('counts', {}).get('posts', 0)}")
     print(f"  lastRunId: {prog.get('lastRunId')}")
+    outputs = latest_post_outputs(task_id, limit=5)
+    if outputs:
+        print("  最新文章产物:")
+        for item in outputs:
+            print(f"    - [{item['batchId']}] {item['title']} -> {item['articlePath']}")
 
 
 # ─── record-run + 反思账本 ──────────────────────────────────────────
@@ -452,3 +505,54 @@ def hydrate(task_id: str) -> None:
         shutil.copytree(path.parent, dst)
         copied += 1
     print(f"[hydrate] {task_id}: 拉回 {copied} 项到 {dst_root}")
+
+
+def cleanup_runtime(task_id: str) -> dict[str, Any]:
+    """一次性收敛 task runtime 根目录：迁移 `_shared` 账本并清理历史镜像位。"""
+    root = task_root(task_id)
+    if not root.is_dir():
+        raise FileNotFoundError(f"task runtime root not found: {root}")
+    shared_dir = task_shared_dir(task_id)
+    shared_dir.mkdir(parents=True, exist_ok=True)
+
+    migrated: list[str] = []
+    removed: list[str] = []
+    skipped: list[str] = []
+
+    for filename in TASK_SHARED_LEDGER_FILENAMES:
+        legacy = root / filename
+        canonical = shared_dir / filename
+        if not legacy.exists():
+            continue
+        if canonical.exists():
+            skipped.append(f"{filename}: canonical exists, drop legacy")
+        else:
+            canonical.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(legacy), str(canonical))
+            migrated.append(filename)
+            continue
+        if legacy.is_dir():
+            shutil.rmtree(legacy, ignore_errors=True)
+        else:
+            legacy.unlink(missing_ok=True)
+        removed.append(filename)
+
+    for legacy in iter_existing_task_legacy_entries(task_id):
+        if legacy.name in TASK_SHARED_LEDGER_FILENAMES:
+            continue
+        if legacy.is_dir():
+            shutil.rmtree(legacy, ignore_errors=True)
+        else:
+            legacy.unlink(missing_ok=True)
+        removed.append(legacy.name)
+
+    remaining_legacy = [path.name for path in iter_existing_task_legacy_entries(task_id)]
+    result = {
+        "taskId": task_id,
+        "migrated": sorted(migrated),
+        "removed": sorted(set(removed)),
+        "skipped": skipped,
+        "remainingLegacyEntries": remaining_legacy,
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return result

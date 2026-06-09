@@ -1,0 +1,70 @@
+id: CR-20260606-030-external-acquisition-and-deeplink-baseline
+title: 对外引流与深链回流规格基线（分享分发 / 微信唤起 / SEO / 安装转化）
+status: specified
+feature_path: product-ops-growth/outbound-share-distribution
+summary: |
+  冻结跨领域 Journey external-acquisition-and-deeplink 的完整规格：5 类对象（内容四形态 /
+  实体主页 / 用户 / 圈子 /「我」=user）的对外分享分发、微信朋友圈/聊天群原生卡片、海报与口令、
+  公开 Web SEO、智能中转页、入站深链回流与微信唤起拦截兜底、未装下载后延迟深链还原。
+  本 CR 为规格冻结（spec-first），不落业务/原生代码与 codegen 产物；contracts/metadata/_shared/link_templates.yaml
+  新增对外引流结构（attribution_params / transfer_pages / share_token），其余 metadata 改动为 /dev 切片清单。
+artifacts:
+  - specs/feature-tree/journey_scenario_registry.yaml
+  - specs/feature-tree/acceptance.yaml
+  - specs/feature-tree/tree_index.yaml
+  - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/entity-link-templates-metadata/acceptance.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/external-inbound-deeplink-routing/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/external-inbound-deeplink-routing/acceptance.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md
+  - specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/acceptance.yaml
+  - specs/feature-tree/product-ops-growth/outbound-share-distribution/spec.md
+  - specs/feature-tree/product-ops-growth/outbound-share-distribution/design.md
+  - specs/feature-tree/product-ops-growth/outbound-share-distribution/acceptance.yaml
+  - specs/feature-tree/product-ops-growth/outbound-share-distribution/object-share-cards/spec.md
+  - specs/feature-tree/product-ops-growth/outbound-share-distribution/object-share-cards/acceptance.yaml
+  - specs/feature-tree/product-ops-growth/outbound-share-distribution/share-channel-panel/spec.md
+  - specs/feature-tree/product-ops-growth/outbound-share-distribution/share-channel-panel/acceptance.yaml
+  - specs/feature-tree/product-ops-growth/outbound-share-distribution/share-attribution-and-token/spec.md
+  - specs/feature-tree/product-ops-growth/outbound-share-distribution/share-attribution-and-token/acceptance.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+related_cr:
+  - CR-20260330-015-entity-link-templates-metadata-baseline
+  - CR-20260401-017-event-learning-baseline
+  - CR-20260531-028-v6-arch-source-unify-growth-closure
+nodes_added:
+  - runtime/runtime-client-foundation/external-inbound-deeplink-routing (L3, new)
+  - product-ops-growth/outbound-share-distribution (L2, new)
+  - product-ops-growth/outbound-share-distribution/object-share-cards (L3, new)
+  - product-ops-growth/outbound-share-distribution/share-channel-panel (L3, new)
+  - product-ops-growth/outbound-share-distribution/share-attribution-and-token (L3, new)
+nodes_extended:
+  - runtime/runtime-client-foundation/entity-link-templates-metadata (新增对外引流结构与 GWT)
+  - runtime/runtime-client-foundation/public-content-web-entry (扩展 4 类对象 SEO / 中转页 / 安装转化)
+metadata_changes_done:
+  - file: quwoquan_service/contracts/metadata/_shared/link_templates.yaml
+    change: 新增 attribution_params（utm/share_id/inviter/referral）、transfer_pages（short_link s/{token}、universal_landing open）、share_token（口令结构）。
+metadata_changes_planned:
+  - file: quwoquan_service/contracts/metadata/content/post/service.yaml
+    change: 扩展既有 SharePost 携带 share_id/utm/channel；新增短链/口令解析 operation（GetShareTarget）。
+  - file: quwoquan_service/contracts/metadata/social/circle/service.yaml
+    change: 新增对齐 ShareCircle 落库 operation（设备维度 vs 账号维度独立计数）。
+  - file: quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    change: 新增对齐 ShareProfile 落库 operation。
+  - file: quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+    change: 新增对齐 ShareHomepage 落库 operation。
+  - file: quwoquan_service/contracts/metadata/_shared/ui_surfaces.yaml
+    change: 新增 objectSharePanel surface 与 operation_ids。
+  - file: quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+    change: 评估是否新增中转/落地相关 route（如端内 universal landing 调试入口）。
+  - files: contracts/metadata/**/errors.yaml
+    change: 新增 SHARE.* / DEEPLINK.* / TOKEN.* 运行时错误码（微信未安装、UL 未就绪、口令失效、解析失败）+ recovery（遵循 10-runtime-error-cutover）。
+  - files: contracts/metadata/**/behaviors.yaml
+    change: 新增 shareIntent/shareClick/shareSuccess/tokenResolved/deeplinkOpen/installAttributed 埋点信号 + 推荐 HotPath 消费评估（R20/R32）。
+dev_log:
+  - date: "2026-06-06"
+    change: 规格冻结；新增 Journey/Scenarios 与 UAT_EXTERNAL_ACQUISITION；新增 L2/L3 节点与 link_templates 对外引流结构；登记 tree_index 与页面横向质量矩阵。
+    verify:
+      - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+      - bash agent_ops/scaffold/verify_acceptance_standard.sh

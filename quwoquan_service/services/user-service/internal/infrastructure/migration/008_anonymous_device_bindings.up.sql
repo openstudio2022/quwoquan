@@ -17,4 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_anonymous_device_bindings_owner_id ON anonymous_d
 
 CREATE INDEX IF NOT EXISTS idx_anonymous_device_bindings_install_id_hash ON anonymous_device_bindings (install_id_hash);
 
-ALTER TABLE anonymous_device_bindings ADD CONSTRAINT uq_anonymous_device_bindings_fingerprint UNIQUE (device_fingerprint_hash);
+DO $do$ BEGIN
+    ALTER TABLE anonymous_device_bindings ADD CONSTRAINT uq_anonymous_device_bindings_fingerprint UNIQUE (device_fingerprint_hash);
+EXCEPTION WHEN duplicate_table THEN NULL; WHEN duplicate_object THEN NULL;
+END $do$;

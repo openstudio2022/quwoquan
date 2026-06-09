@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 
@@ -26,6 +27,9 @@ class ParticipantTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveRadius =
         borderRadius ?? BorderRadius.circular(AppSpacing.sm);
+    // Prefer the track bound onto the participant VM (synced from LiveKit);
+    // fall back to an explicitly passed track for callers that manage it.
+    final effectiveTrack = videoTrack ?? participant.videoTrack;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -52,9 +56,9 @@ class ParticipantTile extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (participant.isCameraOn && videoTrack != null)
-            VideoTrackRenderer(videoTrack!)
-          else if (participant.isCameraOn && videoTrack == null)
+          if (participant.isCameraOn && effectiveTrack != null)
+            VideoTrackRenderer(effectiveTrack)
+          else if (participant.isCameraOn && effectiveTrack == null)
             Container(
               color: AppColors.overlayMedium,
               child: Center(
@@ -111,6 +115,41 @@ class ParticipantTile extends StatelessWidget {
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          if (!participant.isLocal && participant.needsTrustWarning)
+            Positioned(
+              left: AppSpacing.sm,
+              top: AppSpacing.sm,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.85),
+                  borderRadius:
+                      BorderRadius.circular(AppSpacing.smallBorderRadius),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      CupertinoIcons.shield_fill,
+                      color: AppColors.white,
+                      size: AppSpacing.iconSmall,
+                    ),
+                    SizedBox(width: AppSpacing.xs),
+                    Text(
+                      UITextConstants.callTrustUnknownBadge,
+                      style: TextStyle(
+                        color: AppColors.white,
+                        fontSize: AppTypography.xs,
+                        fontWeight: AppTypography.semiBold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

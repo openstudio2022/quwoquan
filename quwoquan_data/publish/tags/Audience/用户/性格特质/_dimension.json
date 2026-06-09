@@ -1,0 +1,9 @@
+{
+  "label": "性格特质",
+  "labelEn": "Personality Traits",
+  "description": "用户性格特征标签",
+  "maxDepth": 2,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

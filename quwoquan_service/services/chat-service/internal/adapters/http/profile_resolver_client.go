@@ -20,6 +20,7 @@ type UserProfileResolver struct {
 type userProfileSnapshotResponse struct {
 	Profile struct {
 		Nickname      string `json:"nickname"`
+		Bio           string `json:"bio"`
 		AvatarURL     string `json:"avatarUrl"`
 		AvatarAssetID string `json:"avatarAssetId"`
 		AvatarVersion int    `json:"avatarVersion"`
@@ -104,5 +105,6 @@ func (r *UserProfileResolver) resolveOne(
 		AvatarURL:     avatarURL,
 		AvatarAssetID: strings.TrimSpace(payload.Profile.AvatarAssetID),
 		AvatarVersion: payload.Profile.AvatarVersion,
+		Bio:           strings.TrimSpace(payload.Profile.Bio),
 	}, nil
 }

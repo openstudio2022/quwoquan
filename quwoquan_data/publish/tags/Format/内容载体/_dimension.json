@@ -1,0 +1,10 @@
+{
+  "label": "内容载体",
+  "labelEn": "Content Medium",
+  "description": "内容以何种物理形式存在；保留文章/视频/图文/直播/音频/问答/行程单七大媒介",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 55
+}

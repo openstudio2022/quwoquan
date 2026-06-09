@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
@@ -15,6 +16,7 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 /// 聊天设置/聊天信息页；全屏表单布局复用 [SettingsInsetFormPageScaffold]。
@@ -57,6 +59,41 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       }
     } catch (_) {
       /* best-effort: 拉取会话标题失败时保留空名占位，页面其余内容仍可正常展示 */
+    }
+  }
+
+  /// 退出群聊：二次确认 → removeMember(self) 走 Remote → 返回会话列表。
+  Future<void> _confirmExitGroup() async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(UITextConstants.exitGroupChat),
+        content: Text(UITextConstants.exitGroupChatConfirmMessage),
+        actions: [
+          CupertinoDialogAction(
+            child: Text(UITextConstants.cancel),
+            onPressed: () => Navigator.pop(dialogContext, false),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: Text(UITextConstants.exitGroupChat),
+            onPressed: () => Navigator.pop(dialogContext, true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final selfId = ref.read(currentUserIdProvider);
+    try {
+      await ref
+          .read(chatRepositoryProvider)
+          .removeMember(conversationId: widget.conversationId, userId: selfId);
+      if (!mounted) return;
+      AppToast.show(context, UITextConstants.exitGroupChatSuccess);
+      context.go(AppRoutePaths.chat);
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(context, runtimeErrorDisplayMessage(e));
     }
   }
 
@@ -122,8 +159,44 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     setState(() => _groupName = newName);
                     AppToast.show(context, UITextConstants.groupNameUpdated);
                   }
-                } catch (_) {
-                  /* best-effort: 群名更新失败时保留原名，本页无独立错误提示设施，不改变控制流 */
+                } catch (error) {
+                  if (!mounted) {
+                    return;
+                  }
+                  final resolved = runtimeErrorSemantic(
+                    context,
+                    error: error,
+                    category: UiErrorCategory.submit,
+                    scope: UiErrorScope.global,
+                  );
+                  final semantic = UiErrorSemantic(
+                    category: resolved.category,
+                    scope: resolved.scope,
+                    title: '群名称修改未完成',
+                    message: resolved.message,
+                    secondaryMessage: resolved.secondaryMessage,
+                    primaryAction: const UiErrorAction(
+                      type: UiErrorActionType.retry,
+                      label: UITextConstants.tryAgain,
+                    ),
+                    secondaryAction: resolved.secondaryAction,
+                    dismissible: resolved.dismissible,
+                    sourceCode: resolved.sourceCode,
+                    failureKind: resolved.failureKind,
+                    recoveryAction: resolved.recoveryAction,
+                    presentation: resolved.presentation,
+                    tone: resolved.tone,
+                  );
+                  await AppActionErrorFeedback.show(
+                    context,
+                    semantic: semantic,
+                    onAction: (action) async {
+                      if (action.type == UiErrorActionType.retry ||
+                          action.type == UiErrorActionType.resubmit) {
+                        _showEditGroupNameDialog();
+                      }
+                    },
+                  );
                 }
               }
             },
@@ -334,29 +407,6 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     ),
                     onTap: _showEditGroupNameDialog,
                   ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.qrCode,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.qr_code_2,
-                          size: AppSpacing.iconMedium,
-                          color: fgPrimary,
-                        ),
-                        SizedBox(width: AppSpacing.containerSm),
-                        Icon(
-                          CupertinoIcons.chevron_forward,
-                          size: AppSpacing.iconMedium,
-                          color: chevronColor,
-                        ),
-                      ],
-                    ),
-                    onTap: () {},
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
                   if (isAdminOrOwner) ...[
                     SettingsInsetFormRow(
                       isDark: isDark,
@@ -370,18 +420,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                         AppRoutePaths.chatManage(id: widget.conversationId),
                       ),
                     ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
                   ],
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.groupAnnouncement,
-                    trailing: Icon(
-                      CupertinoIcons.chevron_forward,
-                      size: AppSpacing.iconMedium,
-                      color: chevronColor,
-                    ),
-                    onTap: () {},
-                  ),
                 ],
               ),
             ),
@@ -450,46 +489,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             SettingsInsetGroupedSection(
               isDark: isDark,
               density: SettingsInsetSectionDensity.compact,
-              child: Column(
-                children: [
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.setChatBackground,
-                    trailing: Icon(
-                      CupertinoIcons.chevron_forward,
-                      size: AppSpacing.iconMedium,
-                      color: chevronColor,
-                    ),
-                    onTap: () {},
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.clearChatHistory,
-                    trailing: Icon(
-                      CupertinoIcons.chevron_forward,
-                      size: AppSpacing.iconMedium,
-                      color: chevronColor,
-                    ),
-                    onTap: () {},
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-            ),
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              density: SettingsInsetSectionDensity.compact,
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
-                onPressed: () {
-                  AppToast.show(
-                    context,
-                    '${UITextConstants.exitGroupChat}（开发中）',
-                  );
-                },
+                onPressed: _confirmExitGroup,
                 child: SizedBox(
                   width: double.infinity,
                   height: AppSpacing.buttonHeight,

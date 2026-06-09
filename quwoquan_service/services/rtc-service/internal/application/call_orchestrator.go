@@ -2,12 +2,14 @@ package application
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/rtc-service/internal/adapters/mq"
 	wsadapter "quwoquan_service/services/rtc-service/internal/adapters/ws"
 	callsession "quwoquan_service/services/rtc-service/internal/domain/call_session"
+	"quwoquan_service/services/rtc-service/internal/generated"
 	"quwoquan_service/services/rtc-service/internal/domain/call_session/event"
 	"quwoquan_service/services/rtc-service/internal/domain/call_session/model"
 	"quwoquan_service/services/rtc-service/internal/infrastructure/cache"
@@ -22,6 +24,7 @@ type CallOrchestrator struct {
 	tokenService   *TokenService
 	eventPublisher *mq.EventPublisher
 	signalHandler  *wsadapter.SignalHandler
+	relationships  RelationshipGate
 }
 
 func NewCallOrchestrator(
@@ -31,8 +34,12 @@ func NewCallOrchestrator(
 	roomSvc *RoomService,
 	tokenSvc *TokenService,
 	eventPub *mq.EventPublisher,
+	relationships RelationshipGate,
 	sigHandler ...*wsadapter.SignalHandler,
 ) *CallOrchestrator {
+	if relationships == nil {
+		relationships = DenyRelationshipGate()
+	}
 	o := &CallOrchestrator{
 		repo:           repo,
 		cache:          cache,
@@ -40,6 +47,7 @@ func NewCallOrchestrator(
 		roomService:    roomSvc,
 		tokenService:   tokenSvc,
 		eventPublisher: eventPub,
+		relationships:  relationships,
 	}
 	if len(sigHandler) > 0 {
 		o.signalHandler = sigHandler[0]
@@ -63,15 +71,15 @@ type InitiateCallResponse struct {
 func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallRequest) (*InitiateCallResponse, error) {
 	existingCallID, _ := o.cache.GetActiveCallForUser(ctx, req.InitiatorID)
 	if existingCallID != "" {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "conflict"),
-			"您正在通话中", "user already in active call",
-		)
+		return nil, generated.AppErrorFromAlreadyInCall("user already in active call")
+	}
+	if err := o.ensureOneToOneRelationshipGate(ctx, req); err != nil {
+		return nil, err
 	}
 
 	session, err := o.domainService.InitiateCall(req.InitiatorID, req.CallType, req.ConversationID, req.CircleID, req.InviteeIDs)
 	if err != nil {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleRTC, "通话参数无效", err.Error())
+		return nil, generated.AppErrorFromInvalidCallAction("initiate: " + err.Error())
 	}
 
 	session.ID = generateID()
@@ -82,10 +90,7 @@ func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallReq
 	}
 
 	if err := o.repo.CreateCall(ctx, session); err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleRTC, rterr.KindSystem, "internal_error"),
-			rterr.DefaultUserMessage, "persist call: "+err.Error(),
-		)
+		return nil, generated.AppErrorFromInternalError("persist call: " + err.Error())
 	}
 
 	_ = o.cache.SetCallState(ctx, session)
@@ -119,10 +124,7 @@ func (o *CallOrchestrator) AnswerCall(ctx context.Context, callID, userID string
 		return nil, err
 	}
 	if err := o.domainService.AnswerCall(session, userID); err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法接听", err.Error(),
-		)
+		return nil, generated.AppErrorFromCannotAnswer(err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -146,10 +148,7 @@ func (o *CallOrchestrator) RejectCall(ctx context.Context, callID, userID string
 		return nil, err
 	}
 	if err := o.domainService.RejectCall(session, userID); err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法拒绝", err.Error(),
-		)
+		return nil, generated.AppErrorFromInvalidCallAction("reject: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -166,10 +165,7 @@ func (o *CallOrchestrator) CancelCall(ctx context.Context, callID, userID string
 		return nil, err
 	}
 	if err := o.domainService.CancelCall(session, userID); err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法取消", err.Error(),
-		)
+		return nil, generated.AppErrorFromInvalidCallAction("cancel: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -186,10 +182,7 @@ func (o *CallOrchestrator) HangupCall(ctx context.Context, callID, userID string
 		return nil, err
 	}
 	if err := o.domainService.HangupCall(session, userID); err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法挂断", err.Error(),
-		)
+		return nil, generated.AppErrorFromInvalidCallAction("hangup: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -212,10 +205,7 @@ func (o *CallOrchestrator) JoinCall(ctx context.Context, callID, userID string) 
 		return nil, "", err
 	}
 	if err := o.domainService.JoinCall(session, userID); err != nil {
-		return nil, "", rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法加入通话", err.Error(),
-		)
+		return nil, "", generated.AppErrorFromInvalidCallAction("join: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, "", wrapSystemError(err)
@@ -238,10 +228,7 @@ func (o *CallOrchestrator) LeaveCall(ctx context.Context, callID, userID string)
 		return nil, err
 	}
 	if err := o.domainService.LeaveCall(session, userID); err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法离开通话", err.Error(),
-		)
+		return nil, generated.AppErrorFromInvalidCallAction("leave: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -268,10 +255,7 @@ func (o *CallOrchestrator) InviteToCall(ctx context.Context, callID, userID stri
 		return nil, err
 	}
 	if err := o.domainService.InviteToCall(session, inviteeIDs); err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法邀请", err.Error(),
-		)
+		return nil, generated.AppErrorFromInvalidCallAction("invite: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -286,8 +270,33 @@ func (o *CallOrchestrator) GetCall(ctx context.Context, callID string) (*model.C
 	return o.loadSession(ctx, callID)
 }
 
-func (o *CallOrchestrator) ListCalls(ctx context.Context, userID string, limit int, cursor string) ([]*model.CallSession, error) {
-	return o.repo.ListCallsByUserID(ctx, userID, limit, cursor)
+// ListCallsFilter 表达通话记录列表的筛选条件（与 service.yaml ListCalls query_params 对齐）。
+type ListCallsFilter struct {
+	// Status 仅返回该状态的通话（空表示不限）。
+	Status string
+	// MissedOnly 为 true 时仅返回对 userID 而言的未接来电。
+	MissedOnly bool
+}
+
+func (o *CallOrchestrator) ListCalls(ctx context.Context, userID string, limit int, cursor string, filter ListCallsFilter) ([]*model.CallSession, error) {
+	calls, err := o.repo.ListCallsByUserID(ctx, userID, limit, cursor)
+	if err != nil {
+		return nil, err
+	}
+	if filter.Status == "" && !filter.MissedOnly {
+		return calls, nil
+	}
+	filtered := make([]*model.CallSession, 0, len(calls))
+	for _, c := range calls {
+		if filter.Status != "" && c.Status != filter.Status {
+			continue
+		}
+		if filter.MissedOnly && !c.IsMissedFor(userID) {
+			continue
+		}
+		filtered = append(filtered, c)
+	}
+	return filtered, nil
 }
 
 type ToggleMuteRequest struct {
@@ -300,7 +309,7 @@ func (o *CallOrchestrator) ToggleMute(ctx context.Context, callID, userID string
 		return nil, err
 	}
 	if err := o.domainService.ToggleMute(session, userID, muted); err != nil {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleRTC, "操作失败", err.Error())
+		return nil, generated.AppErrorFromInvalidCallAction("toggle mute: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -319,7 +328,7 @@ func (o *CallOrchestrator) ToggleCamera(ctx context.Context, callID, userID stri
 		return nil, err
 	}
 	if err := o.domainService.ToggleCamera(session, userID, cameraOn); err != nil {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleRTC, "操作失败", err.Error())
+		return nil, generated.AppErrorFromInvalidCallAction("toggle camera: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -334,7 +343,7 @@ func (o *CallOrchestrator) StartRecording(ctx context.Context, callID, userID st
 		return nil, err
 	}
 	if err := o.domainService.StartRecording(session, userID); err != nil {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleRTC, "无法开始录制", err.Error())
+		return nil, generated.AppErrorFromRecordingNotAllowed("start recording: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -350,7 +359,7 @@ func (o *CallOrchestrator) StopRecording(ctx context.Context, callID, userID str
 		return nil, err
 	}
 	if err := o.domainService.StopRecording(session, userID); err != nil {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleRTC, "无法停止录制", err.Error())
+		return nil, generated.AppErrorFromRecordingNotAllowed("stop recording: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -366,7 +375,7 @@ func (o *CallOrchestrator) StartScreenShare(ctx context.Context, callID, userID 
 		return nil, err
 	}
 	if err := o.domainService.StartScreenShare(session, userID); err != nil {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleRTC, "无法共享屏幕", err.Error())
+		return nil, generated.AppErrorFromScreenShareConflict("start screen share: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -382,7 +391,7 @@ func (o *CallOrchestrator) StopScreenShare(ctx context.Context, callID, userID s
 		return nil, err
 	}
 	if err := o.domainService.StopScreenShare(session, userID); err != nil {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleRTC, "无法停止共享", err.Error())
+		return nil, generated.AppErrorFromScreenShareConflict("stop screen share: " + err.Error())
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
 		return nil, wrapSystemError(err)
@@ -392,6 +401,27 @@ func (o *CallOrchestrator) StopScreenShare(ctx context.Context, callID, userID s
 	return session, nil
 }
 
+func (o *CallOrchestrator) ensureOneToOneRelationshipGate(ctx context.Context, req InitiateCallRequest) error {
+	if strings.TrimSpace(req.CircleID) != "" || len(req.InviteeIDs) != 1 {
+		return nil
+	}
+	peerID := strings.TrimSpace(req.InviteeIDs[0])
+	if peerID == "" {
+		return nil
+	}
+	capability, err := o.relationships.GetCapability(ctx, req.InitiatorID, peerID)
+	if err != nil {
+		return err
+	}
+	if capability.IsBlocked || capability.IsBlockedBy {
+		return generated.AppErrorFromBlocked("one-to-one call blocked by relationship gate")
+	}
+	if !capability.IsMutual {
+		return generated.AppErrorFromNotMutual("one-to-one call requires mutual follow")
+	}
+	return nil
+}
+
 func (o *CallOrchestrator) loadSession(ctx context.Context, callID string) (*model.CallSession, error) {
 	cached, _ := o.cache.GetCallState(ctx, callID)
 	if cached != nil {
@@ -399,10 +429,7 @@ func (o *CallOrchestrator) loadSession(ctx context.Context, callID string) (*mod
 	}
 	session, err := o.repo.FindCallByID(ctx, callID)
 	if err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "not_found"),
-			"通话不存在", "call not found: "+callID,
-		)
+		return nil, generated.AppErrorFromCallNotFound("call not found: " + callID)
 	}
 	_ = o.cache.SetCallState(ctx, session)
 	return session, nil
@@ -440,7 +467,7 @@ func (o *CallOrchestrator) publishEvent(ctx context.Context, eventType string, s
 
 	if o.signalHandler != nil {
 		wsEvent := map[string]any{
-			"type":    eventType,
+			"type":    signalWireType(eventType),
 			"callId":  session.ID,
 			"actorId": actorID,
 			"payload": payload,
@@ -462,8 +489,5 @@ func (o *CallOrchestrator) publishEvent(ctx context.Context, eventType string, s
 }
 
 func wrapSystemError(err error) *rterr.AppError {
-	return rterr.NewAppError(
-		rterr.NewCode(rterr.ModuleRTC, rterr.KindSystem, "internal_error"),
-		rterr.DefaultUserMessage, err.Error(),
-	)
+	return generated.AppErrorFromInternalError(err.Error())
 }

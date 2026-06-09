@@ -8,9 +8,10 @@
 本脚本看存量数据的"闭环完整性 + 跨投影一致性"，供运营飞轮实证与回归对照。
 
 校验的真相源集合：
-  - content 库 rm_recommend_feature   行为归一后的 userFeatures + 顶层 segments($set 回写)
-  - content 库 rec_learning_events    反馈事件（大循环燃料）
-  - user 库    rm_user_profile_view    interestProfile + segments（对外画像单一真相源）
+  - content 库   rm_recommend_feature   行为归一后的 userFeatures + 顶层 segments($set 回写)
+  - content 库   rec_learning_events    反馈事件（大循环燃料）
+  - user 库      rm_user_profile_view   interestProfile + segments（对外画像单一真相源）
+  - assistant 库 app_messages           主动触达消息 + 个性化归因(interestTags/matchedSegments)
 
 闭环分段（loop stages）：
   1. behavior_to_features      行为 → rm_recommend_feature.userFeatures 已落库
@@ -18,6 +19,7 @@
   3. interest_projection       UserInterestRecomputed 投影出 user 域 interestProfile
   4. segment_cqrs_consistency  同一用户在宽表与画像两路投影的 segments 一致（单一 MatchSegments 计算源）
   5. feedback_events           反馈事件已记录（闭环可持续）
+  6. proactive_consumption     画像被小艺主动消费：主动消息引用 interestProfile 派生 tags/segments 并落库可审计
 
 用法：
   python3 scripts/recommendation/eval_content_flywheel_loop.py
@@ -36,6 +38,7 @@ from datetime import datetime, timezone
 CONTENT_FEATURE_COLLECTION = "rm_recommend_feature"
 CONTENT_LEARNING_COLLECTION = "rec_learning_events"
 USER_PROFILE_COLLECTION = "rm_user_profile_view"
+ASSISTANT_APP_MESSAGE_COLLECTION = "app_messages"
 
 CRITICAL_STAGES = (
     "behavior_to_features",
@@ -43,6 +46,7 @@ CRITICAL_STAGES = (
     "interest_projection",
     "segment_cqrs_consistency",
     "feedback_events",
+    "proactive_consumption",
 )
 
 
@@ -57,14 +61,18 @@ def evaluate_flywheel(
     profiles: list[dict],
     learning_event_count: int,
     *,
+    proactive_messages: list[dict] | None = None,
     min_segment_consistency: float = 0.99,
 ) -> dict:
     """纯函数：对已抽取的扁平输入计算飞轮闭环报告。
 
     features: [{userId, hasFeatures(bool), segmentsUpdated(bool), segments:[str]}]
     profiles: [{userId, hasInterests(bool), lifecycleStage(str), segments:[str]}]
+    proactive_messages: [{userId, personalized(bool), interestTags:[str],
+                          matchedSegments:[str], lifecycleStage:str}]
     """
     now = datetime.now(timezone.utc)
+    proactive_messages = proactive_messages or []
 
     feature_count = len(features)
     feature_with_features = sum(1 for f in features if f.get("hasFeatures"))
@@ -97,6 +105,22 @@ def evaluate_flywheel(
 
     interest_coverage = _rate(profile_with_interests, profile_count)
 
+    # 飞轮末端：画像被小艺主动消费。主动消息须 personalized 且带 interestProfile
+    # 派生证据(tags/segments)，且其用户确有画像投影（闭环可溯源）。
+    profile_user_ids = {p["userId"] for p in profiles if p.get("userId")}
+    proactive_count = len(proactive_messages)
+    proactive_personalized = [m for m in proactive_messages if m.get("personalized")]
+    proactive_with_evidence = [
+        m
+        for m in proactive_personalized
+        if m.get("interestTags") or m.get("matchedSegments")
+    ]
+    proactive_linked = [
+        m for m in proactive_with_evidence if m.get("userId") in profile_user_ids
+    ]
+    proactive_evidence_count = len(proactive_with_evidence)
+    proactive_linked_rate = _rate(len(proactive_linked), proactive_evidence_count)
+
     stages = {
         "behavior_to_features": {
             "ok": feature_count > 0 and feature_with_features > 0,
@@ -125,6 +149,14 @@ def evaluate_flywheel(
             "ok": learning_event_count > 0,
             "learningEventCount": learning_event_count,
         },
+        "proactive_consumption": {
+            # 画像被主动消费并落库：至少一条个性化主动消息带画像派生证据。
+            "ok": proactive_evidence_count > 0,
+            "proactiveMessageCount": proactive_count,
+            "personalizedCount": len(proactive_personalized),
+            "withProfileEvidenceCount": proactive_evidence_count,
+            "linkedToProfileRate": proactive_linked_rate,
+        },
     }
 
     failing = [name for name in CRITICAL_STAGES if not stages[name]["ok"]]
@@ -141,6 +173,9 @@ def evaluate_flywheel(
             "interestCoverageRate": interest_coverage,
             "segmentConsistencyRate": consistency_rate,
             "learningEventCount": learning_event_count,
+            "proactiveMessageCount": proactive_count,
+            "proactivePersonalizedCount": len(proactive_personalized),
+            "proactiveProfileEvidenceCount": proactive_evidence_count,
         },
     }
 
@@ -183,6 +218,31 @@ def _extract_profiles(coll) -> list[dict]:
     return out
 
 
+def _extract_proactive_messages(coll) -> list[dict]:
+    out: list[dict] = []
+    cursor = coll.find(
+        {},
+        {
+            "userId": 1,
+            "personalized": 1,
+            "interestTags": 1,
+            "matchedSegments": 1,
+            "lifecycleStage": 1,
+        },
+    )
+    for doc in cursor:
+        out.append(
+            {
+                "userId": doc.get("userId"),
+                "personalized": bool(doc.get("personalized")),
+                "interestTags": list(doc.get("interestTags") or []),
+                "matchedSegments": list(doc.get("matchedSegments") or []),
+                "lifecycleStage": doc.get("lifecycleStage") or "",
+            }
+        )
+    return out
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="内容飞轮大循环实证（数据面闭环校验）")
     p.add_argument(
@@ -198,6 +258,11 @@ def main() -> int:
         "--user-db",
         default=os.environ.get("MONGODB_USER_DATABASE", "quwoquan"),
         help="user 服务库（rm_user_profile_view）",
+    )
+    p.add_argument(
+        "--assistant-db",
+        default=os.environ.get("MONGODB_ASSISTANT_DATABASE", "quwoquan_assistant"),
+        help="assistant 服务库（app_messages 主动触达消息）",
     )
     p.add_argument("--output", default="", help="报告写入路径（默认 stdout）")
     p.add_argument(
@@ -224,8 +289,12 @@ def main() -> int:
     try:
         content_db = client[args.content_db]
         user_db = client[args.user_db]
+        assistant_db = client[args.assistant_db]
         features = _extract_features(content_db[CONTENT_FEATURE_COLLECTION])
         profiles = _extract_profiles(user_db[USER_PROFILE_COLLECTION])
+        proactive_messages = _extract_proactive_messages(
+            assistant_db[ASSISTANT_APP_MESSAGE_COLLECTION]
+        )
         learning_event_count = content_db[CONTENT_LEARNING_COLLECTION].count_documents({})
     finally:
         client.close()
@@ -234,10 +303,12 @@ def main() -> int:
         features,
         profiles,
         learning_event_count,
+        proactive_messages=proactive_messages,
         min_segment_consistency=args.min_segment_consistency,
     )
     report["contentDb"] = args.content_db
     report["userDb"] = args.user_db
+    report["assistantDb"] = args.assistant_db
 
     payload = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:

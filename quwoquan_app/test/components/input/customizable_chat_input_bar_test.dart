@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,7 +39,6 @@ void main() {
 
       expect(submitted, isNotNull);
       expect(submitted!.text, '你好，小趣');
-      expect(submitted!.isVoiceMessage, isFalse);
       expect(submitted!.attachments, isEmpty);
     });
 
@@ -74,6 +75,8 @@ void main() {
 
     testWidgets('群聊输入区可插入 @小趣 上下文 mention', (tester) async {
       final controller = TextEditingController();
+      const sendButtonKey = ValueKey<String>('send_button');
+      ChatInputSubmitPayload? submitted;
       addTearDown(controller.dispose);
 
       await tester.pumpWidget(
@@ -82,7 +85,8 @@ void main() {
             home: Scaffold(
               body: CustomizableChatInputBar(
                 controller: controller,
-                onSend: (_) async {},
+                onSend: (payload) async => submitted = payload,
+                sendButtonKey: sendButtonKey,
                 showXiaoquMentionButton: true,
               ),
             ),
@@ -96,6 +100,10 @@ void main() {
       await tester.pump();
 
       expect(controller.text, startsWith('@小趣 '));
+      await tester.tap(find.byKey(sendButtonKey));
+      await tester.pump();
+
+      expect(submitted?.mentions, contains('assistant'));
     });
 
     testWidgets('超过五行后出现展开入口', (tester) async {
@@ -129,12 +137,27 @@ void main() {
       expect(find.byKey(TestKeys.chatInputExpandButton), findsOneWidget);
     });
 
-    testWidgets('语音模式切换后左侧按钮变为键盘', (tester) async {
+    testWidgets('语音入口默认关闭，启用后左侧按钮可切换键盘', (tester) async {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
             home: Scaffold(
               body: CustomizableChatInputBar(onSend: (_) async {}),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byKey(TestKeys.chatInputVoiceToggleButton), findsNothing);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                onSend: (_) async {},
+                enableVoiceInput: true,
+              ),
             ),
           ),
         ),
@@ -149,10 +172,10 @@ void main() {
       expect(find.text(UITextConstants.chatVoiceHoldToTalk), findsOneWidget);
     });
 
-    testWidgets('语音按住松开发送 voice payload', (tester) async {
+    testWidgets('语音按住松手只交给录音回调，不产生文本 payload', (tester) async {
       var startCount = 0;
       var stopCount = 0;
-      ChatInputSubmitPayload? submitted;
+      var sendCount = 0;
 
       await tester.pumpWidget(
         ProviderScope(
@@ -165,9 +188,10 @@ void main() {
                   return true;
                 },
                 onStopRecord: (_) async => stopCount++,
-                onSend: (payload) async {
-                  submitted = payload;
+                onSend: (_) async {
+                  sendCount++;
                 },
+                enableVoiceInput: true,
               ),
             ),
           ),
@@ -187,8 +211,40 @@ void main() {
 
       expect(startCount, 1);
       expect(stopCount, 1);
-      expect(submitted, isNotNull);
-      expect(submitted!.isVoiceMessage, isTrue);
+      expect(sendCount, 0);
+    });
+
+    testWidgets('语音录制 HUD 显示录音计时', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                onRequestMicPermission: () async => true,
+                onStartRecord: () async => true,
+                onStopRecord: (_) async {},
+                onSend: (_) async {},
+                enableVoiceInput: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(TestKeys.chatInputVoiceToggleButton));
+      await tester.pump();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(TestKeys.chatInputVoiceHoldButton)),
+      );
+      await tester.pump(const Duration(seconds: 2));
+
+      expect(
+        find.textContaining(UITextConstants.chatVoiceRecording),
+        findsOneWidget,
+      );
+
+      await gesture.up();
+      await tester.pump();
     });
 
     testWidgets('语音上滑取消不会提交 payload', (tester) async {
@@ -205,6 +261,7 @@ void main() {
                 onSend: (_) async {
                   sendCount++;
                 },
+                enableVoiceInput: true,
               ),
             ),
           ),
@@ -226,6 +283,44 @@ void main() {
 
       expect(cancelCount, 1);
       expect(sendCount, 0);
+    });
+
+    testWidgets('语音录制 HUD 消费真实振幅流渲染时间序列波形', (tester) async {
+      final amplitudes = StreamController<List<double>>.broadcast();
+      addTearDown(amplitudes.close);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                onRequestMicPermission: () async => true,
+                onStartRecord: () async => true,
+                onStopRecord: (_) async {},
+                voiceAmplitudeStream: amplitudes.stream,
+                onSend: (_) async {},
+                enableVoiceInput: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(TestKeys.chatInputVoiceToggleButton));
+      await tester.pump();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(TestKeys.chatInputVoiceHoldButton)),
+      );
+      await tester.pump();
+
+      amplitudes.add(const <double>[-60, -30, -6]);
+      await tester.pump(const Duration(milliseconds: 80));
+
+      expect(find.byKey(TestKeys.chatInputVoiceRecordHud), findsOneWidget);
+      expect(find.byKey(TestKeys.chatInputVoiceWaveform), findsWidgets);
+
+      await gesture.up();
+      await tester.pump();
     });
 
     testWidgets('compact 宽度下群聊输入栏不挤出 overflow', (tester) async {

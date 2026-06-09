@@ -39,22 +39,25 @@ var DailyMetricDimensions = []string{
 
 // DailyMetric is a pre-aggregated daily metric row.
 type DailyMetric struct {
-	Date         string    `bson:"date"`
-	Dimension    string    `bson:"dimension"`
-	DimensionKey string    `bson:"dimensionKey"`
-	Impressions  int64     `bson:"impressions"`
-	Clicks       int64     `bson:"clicks"`
-	Dwells       int64     `bson:"dwells"`
-	Likes        int64     `bson:"likes"`
-	Shares       int64     `bson:"shares"`
-	Comments     int64     `bson:"comments"`
-	Dislikes     int64     `bson:"dislikes"`
-	Favorites    int64     `bson:"favorites"`
-	Reports      int64     `bson:"reports"`
-	TotalDwellMs int64     `bson:"totalDwellMs"`
-	AvgDepth     float64   `bson:"avgDepth"`
-	UniqueUsers  int64     `bson:"uniqueUsers"`
-	CreatedAt    time.Time `bson:"createdAt"`
+	Date                  string    `bson:"date"`
+	Dimension             string    `bson:"dimension"`
+	DimensionKey          string    `bson:"dimensionKey"`
+	Impressions           int64     `bson:"impressions"`
+	Clicks                int64     `bson:"clicks"`
+	Dwells                int64     `bson:"dwells"`
+	Likes                 int64     `bson:"likes"`
+	Shares                int64     `bson:"shares"`
+	Comments              int64     `bson:"comments"`
+	Dislikes              int64     `bson:"dislikes"`
+	Favorites             int64     `bson:"favorites"`
+	Reports               int64     `bson:"reports"`
+	FollowConversions     int64     `bson:"followConversions"`
+	JoinCircleConversions int64     `bson:"joinCircleConversions"`
+	AddContactConversions int64     `bson:"addContactConversions"`
+	TotalDwellMs          int64     `bson:"totalDwellMs"`
+	AvgDepth              float64   `bson:"avgDepth"`
+	UniqueUsers           int64     `bson:"uniqueUsers"`
+	CreatedAt             time.Time `bson:"createdAt"`
 }
 
 // DailyMetricsStore manages pre-aggregated daily metrics.
@@ -102,7 +105,8 @@ func (s *DailyMetricsStore) ensureIndexes() {
 
 // IncrementMetric atomically increments a daily metric using upsert. The action
 // -> counter mapping is aligned with the analytics-metric-dictionary behavior
-// domain (impression/click/dwell/like/share/comment/dislike/favorite/report);
+// domain (impression/click/dwell/like/share/comment/dislike/favorite/report)
+// plus the intersection conversion actions (follow/join_circle/add_contact);
 // dimension must be one of DailyMetricDimensions. Actions outside the counted
 // set still upsert the dimension row (createdAt) but increment nothing, avoiding
 // an empty $inc.
@@ -136,6 +140,12 @@ func (s *DailyMetricsStore) IncrementMetric(ctx context.Context, date, dimension
 		incFields["favorites"] = int64(1)
 	case "report":
 		incFields["reports"] = int64(1)
+	case "follow":
+		incFields["followConversions"] = int64(1)
+	case "join_circle":
+		incFields["joinCircleConversions"] = int64(1)
+	case "add_contact":
+		incFields["addContactConversions"] = int64(1)
 	}
 
 	update := bson.M{

@@ -88,6 +88,7 @@ void main() {
         'content_depth',
         'join_circle',
         'add_contact',
+        'assistant_interest',
       ];
       final actualWireValues =
           BehaviorAction.values.map((a) => a.wireValue).toList();

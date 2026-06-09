@@ -113,22 +113,29 @@ api_routes:
   - method: GET
     path: /v1/content/posts/{postId}/comments
     operation: ListComments
-    description: 评论列表（支持 hot/latest 排序）
+    description: 评论列表（支持 recommended/latest/most_liked 排序；一级评论可携带 replyPreview 与 replyNextCursor）
     query_params: [sort, cursor, limit]
     response_entity: Comment
 
   - method: POST
     path: /v1/content/posts/{postId}/comments
     operation: CreateComment
-    description: 发表评论
+    description: 发表评论或回复；replyToCommentId 可选，服务端规范化 parentCommentId
     request_entity: Comment
-    writable_fields: [content, replyToCommentId, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    writable_fields: [content, replyToCommentId, attachmentMediaIds, mentions, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
     security:
       auth_mode: required
       principal: owner
       token_transport: bearer
       anonymous_policy: deny
       visibility: private
+
+  - method: GET
+    path: /v1/content/posts/{postId}/comments/{commentId}/replies
+    operation: ListCommentReplies
+    description: 二级回复独立分页；默认 limit 取 sys.content.comment.reply_expand_page_size
+    query_params: [cursor, limit]
+    response_entity: Comment
 
   - method: DELETE
     path: /v1/content/posts/{postId}/comments/{commentId}
@@ -142,15 +149,11 @@ api_routes:
       visibility: private
 
   - method: POST
-    path: /v1/content/comments/{commentId}/like
-    operation: LikeComment
-    description: 评论点赞（幂等，Redis SISMEMBER 去重 + INCR 计数 → 异步刷盘）
-    auth: required
-
-  - method: DELETE
-    path: /v1/content/comments/{commentId}/like
-    operation: UnlikeComment
-    description: 取消评论点赞（幂等）
+    path: /v1/content/comments/{commentId}/reaction
+    operation: ReactToComment
+    description: 评论赞踩三态反应；body.reaction 为 like/dislike/none，like 与 dislike 互斥
+    request_entity: Comment
+    writable_fields: [viewerReaction]
     auth: required
 
   - method: GET
@@ -183,6 +186,15 @@ api_routes:
     description: 个人主页发出的互动活动（赞/评论/转发）
     query_params: [cursor, limit]
     response_entity: ProfileInteractionActivityView
+    auth: required
+
+  - method: GET
+    path: /v1/content/sub-accounts/{subAccountId}/author-impact
+    operation: GetAuthorImpact
+    description: 创作者影响力真实动作摘要（按 authorId 反向聚合交集转化、关系、进圈、决策、知识与传播帮助）
+    query_params: [limit]
+    response_entity: AuthorImpactSummary
+    response_fields: [authorId, total, items]
     auth: required
 
   - method: GET
@@ -317,6 +329,12 @@ api_routes:
     auth: required
 
   - method: POST
+    path: /v1/content/comments/{commentId}/media:bind
+    operation: BindMediaAssetsToComment
+    description: 将 comment_attachment 素材绑定到评论，供图片评论回显与审核追踪
+    auth: required
+
+  - method: POST
     path: /v1/content/media/{mediaId}/cover:auto
     operation: SelectAutoVideoCover
     description: 视频封面默认策略（首帧）
@@ -394,6 +412,18 @@ api_routes:
     path: /v1/content/intersections/exposure
     operation: ReportIntersectionExposure
     description: 交集曝光上报（写跨会话冷却集，曝光未转化在窗口内不再重复推荐）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /v1/content/intersections/object
+    operation: GetObjectIntersections
+    description: 对象页「我与该对象」的关系类交集（共同好友/联系人来过/好友加入等证据组，与标签交集在端合并）
+    query_params: [objectId, objectType, limit]
     security:
       auth_mode: required
       principal: owner

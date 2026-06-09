@@ -24,7 +24,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         with mock.patch("agent_ops.deploy.stackctl._is_interactive_terminal", return_value=False):
             result = stackctl._tail_file_for_startup(Path("/tmp/does-not-matter.log"))
         self.assertEqual(result["followed"], False)
-        self.assertEqual(result["reason"], "non-interactive")
+        self.assertEqual(result["reason"], "log-not-created")
 
     def test_tail_file_for_startup_reads_existing_lines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -65,6 +65,90 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     ready_idle_timeout_seconds=0.01,
                 )
             self.assertTrue(result["readySeen"])
+
+    def test_tail_file_for_startup_reads_ready_in_non_interactive_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "app.log"
+            log_path.write_text(
+                "Launching lib/main.dart on iPhone...\n"
+                "A Dart VM Service on iPhone is available at: http://127.0.0.1:1234/\n",
+                encoding="utf-8",
+            )
+            with mock.patch("agent_ops.deploy.stackctl._is_interactive_terminal", return_value=False):
+                result = stackctl._tail_file_for_startup(
+                    log_path,
+                    process=None,
+                    idle_timeout_seconds=0.01,
+                    max_follow_seconds=0.05,
+                    ready_patterns=("A Dart VM Service",),
+                    ready_idle_timeout_seconds=0.01,
+                )
+            self.assertTrue(result["followed"])
+            self.assertTrue(result["readySeen"])
+
+    def test_tail_file_for_startup_waits_until_timeout_before_ready(self) -> None:
+        class _RunningProcess:
+            def poll(self) -> None:
+                return None
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "app.log"
+            log_path.write_text(
+                "Launching lib/main.dart on iPhone...\n"
+                "Running Xcode build...\n",
+                encoding="utf-8",
+            )
+            with mock.patch("agent_ops.deploy.stackctl._is_interactive_terminal", return_value=False):
+                result = stackctl._tail_file_for_startup(
+                    log_path,
+                    process=_RunningProcess(),
+                    idle_timeout_seconds=0.01,
+                    max_follow_seconds=0.05,
+                    ready_patterns=("A Dart VM Service",),
+                    ready_idle_timeout_seconds=0.01,
+                )
+            self.assertEqual(result["reason"], "timeout")
+            self.assertFalse(result["readySeen"])
+
+    def test_app_launch_failure_detail_requires_ready_signal(self) -> None:
+        detail = stackctl._app_launch_failure_detail(
+            {
+                "failureSeen": False,
+                "readySeen": False,
+                "reason": "idle",
+            },
+            default_message="alpha app launch failed",
+            process_exit_code=None,
+        )
+        self.assertEqual(
+            detail,
+            "alpha app launch failed: app did not reach Flutter ready state before idle",
+        )
+
+    def test_app_launch_failure_detail_accepts_ready_process(self) -> None:
+        detail = stackctl._app_launch_failure_detail(
+            {
+                "failureSeen": False,
+                "readySeen": True,
+                "reason": "idle",
+            },
+            default_message="alpha app launch failed",
+            process_exit_code=None,
+        )
+        self.assertIsNone(detail)
+
+    def test_app_launch_failure_detail_prefers_failure_line(self) -> None:
+        detail = stackctl._app_launch_failure_detail(
+            {
+                "failureSeen": True,
+                "failureLine": "Failed to build iOS app",
+                "readySeen": False,
+                "reason": "process-exited",
+            },
+            default_message="alpha app launch failed",
+            process_exit_code=1,
+        )
+        self.assertEqual(detail, "Failed to build iOS app")
 
     def test_run_with_live_output_collects_stdout(self) -> None:
         script = "import sys; print('hello'); print('world')"

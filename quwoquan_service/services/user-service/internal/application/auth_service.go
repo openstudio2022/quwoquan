@@ -6,11 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/attribute"
 
 	rtauth "quwoquan_service/runtime/auth"
@@ -48,7 +50,10 @@ type AuthService struct {
 	shardDirectory   *ShardDirectory
 	oneTapResolver   OneTapPhoneResolver
 	otp              OtpCodeStore
+	otpChallenges    OtpChallengeStore
+	externalClient   ExternalInteractionClient
 	otpDebugReveal   bool
+	otpPassThrough   SmsOtpPassThroughConfig
 	accessSigner     *rtauth.Signer
 }
 
@@ -84,6 +89,8 @@ func NewAuthService(
 		pcache:           pcache,
 		shardDirectory:   shardDirectory,
 		oneTapResolver:   TokenEncodedOneTapPhoneResolver{},
+		otpChallenges:    NewMemoryOtpChallengeStore(),
+		otpPassThrough:   SmsOtpPassThroughConfig{Mode: SmsOtpPassThroughDisabled},
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -114,6 +121,20 @@ func WithOtpCodeStore(store OtpCodeStore) AuthServiceOption {
 	}
 }
 
+func WithOtpChallengeStore(store OtpChallengeStore) AuthServiceOption {
+	return func(s *AuthService) {
+		if store != nil {
+			s.otpChallenges = store
+		}
+	}
+}
+
+func WithExternalInteractionClient(client ExternalInteractionClient) AuthServiceOption {
+	return func(s *AuthService) {
+		s.externalClient = client
+	}
+}
+
 // WithOtpDebugReveal 在非生产环境下让 SendOtp 返回明文验证码，便于本地/CI 联调。
 // 生产必须为 false。
 func WithOtpDebugReveal(reveal bool) AuthServiceOption {
@@ -122,8 +143,17 @@ func WithOtpDebugReveal(reveal bool) AuthServiceOption {
 	}
 }
 
+func WithSmsOtpPassThroughConfig(config SmsOtpPassThroughConfig) AuthServiceOption {
+	return func(s *AuthService) {
+		if strings.TrimSpace(config.Mode) == "" {
+			config.Mode = SmsOtpPassThroughDisabled
+		}
+		s.otpPassThrough = config
+	}
+}
+
 // WithAccessTokenSigner 注入 access token 签发器；注入后 accessToken 为短期 JWT，
-// 可被各服务/网关本地验签。未注入时回退到不透明随机串（过渡期兼容）。
+// 可被各服务/网关本地验签。未注入时回退到不透明随机串（过渡期回退）。
 func WithAccessTokenSigner(signer *rtauth.Signer) AuthServiceOption {
 	return func(s *AuthService) {
 		s.accessSigner = signer
@@ -155,7 +185,7 @@ func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey
 	}
 	existing, err := s.credentials.FindByTypeAndKey(ctx, credType, credKey)
 	if err != nil {
-		return nil, fmt.Errorf("credential lookup: %w", err)
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("credential lookup: %v", err))
 	}
 
 	var ownerID string
@@ -166,7 +196,7 @@ func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey
 		// New user: create OwnerAccount + default SubAccount
 		ownerID, err = s.createOwnerAccount(ctx, credType, credKey, displayLabel)
 		if err != nil {
-			return nil, fmt.Errorf("create owner: %w", err)
+			return nil, generated.AppErrorFromInternalError(fmt.Sprintf("create owner: %v", err))
 		}
 	}
 
@@ -182,7 +212,7 @@ func (s *AuthService) issueLoginResult(
 	}
 	profile, err := s.profiles.FindByID(ctx, ownerID)
 	if err != nil {
-		return nil, fmt.Errorf("load profile: %w", err)
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("load profile: %v", err))
 	}
 	if profile != nil && strings.TrimSpace(credType) != credentialAnonymousDevice {
 		updated := false
@@ -196,7 +226,7 @@ func (s *AuthService) issueLoginResult(
 		}
 		if updated {
 			if err := s.profiles.Update(ctx, profile); err != nil {
-				return nil, fmt.Errorf("promote owner profile: %w", err)
+				return nil, generated.AppErrorFromInternalError(fmt.Sprintf("promote owner profile: %v", err))
 			}
 		}
 	}
@@ -220,7 +250,7 @@ func (s *AuthService) issueLoginResult(
 		return nil, err
 	}
 	if err := s.persistRefreshToken(ctx, ownerID, refreshToken); err != nil {
-		return nil, fmt.Errorf("persist refresh token: %w", err)
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist refresh token: %v", err))
 	}
 
 	return &LoginResult{
@@ -254,25 +284,25 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (_ 
 
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
-		return nil, fmt.Errorf("refreshToken is required")
+		return nil, generated.AppErrorFromInvalidArgument("refreshToken is required")
 	}
 	if s.userAuth == nil {
-		return nil, fmt.Errorf("refresh token store unavailable")
+		return nil, generated.AppErrorFromInternalError("refresh token store unavailable")
 	}
 	auth, err := s.userAuth.FindByRefreshToken(ctx, refreshToken)
 	if err != nil {
-		return nil, fmt.Errorf("lookup refresh token: %w", err)
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("lookup refresh token: %v", err))
 	}
 	if auth == nil || strings.TrimSpace(auth.UserID) == "" {
-		return nil, fmt.Errorf("refresh token invalid")
+		return nil, generated.AppErrorFromUnauthorized("refresh token invalid")
 	}
 	if auth.RefreshTokenExpiresAt == nil || auth.RefreshTokenExpiresAt.Before(time.Now().UTC()) {
 		_ = s.userAuth.RevokeRefreshTokenValue(ctx, refreshToken)
-		return nil, fmt.Errorf("refresh token expired")
+		return nil, generated.AppErrorFromTokenExpired("refresh token expired")
 	}
 	profile, err := s.profiles.FindByID(ctx, auth.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("load profile: %w", err)
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("load profile: %v", err))
 	}
 	credType := credentialPhone
 	if profile != nil && strings.TrimSpace(profile.IdentityOrigin) != "" {
@@ -316,15 +346,15 @@ func (s *AuthService) LoginWithOneTap(
 
 	resolver := s.oneTapResolver
 	if resolver == nil {
-		return nil, fmt.Errorf("one tap resolver unavailable")
+		return nil, generated.AppErrorFromInternalError("one tap resolver unavailable")
 	}
 	phone, displayLabel, err := resolver.ResolvePhone(ctx, vendor, carrierToken)
 	if err != nil {
-		return nil, fmt.Errorf("resolve one tap phone: %w", err)
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("resolve one tap phone: %v", err))
 	}
 	phone = normalizePhoneCredentialKey(phone)
 	if phone == "" {
-		return nil, fmt.Errorf("one tap phone is empty")
+		return nil, generated.AppErrorFromInvalidArgument("one tap phone is empty")
 	}
 	if strings.TrimSpace(displayLabel) == "" {
 		displayLabel = maskPhoneForDisplay(phone)
@@ -346,17 +376,17 @@ func (s *AuthService) LoginAnonymously(
 	installIDHash := hashInstallID(installID)
 	deviceFingerprintHash = normalizeAnonymousCredentialKey(deviceFingerprintHash)
 	if installIDHash == "" {
-		return nil, fmt.Errorf("installId is required")
+		return nil, generated.AppErrorFromInvalidArgument("installId is required")
 	}
 	if deviceFingerprintHash == "" {
-		return nil, fmt.Errorf("deviceFingerprintHash is required")
+		return nil, generated.AppErrorFromInvalidArgument("deviceFingerprintHash is required")
 	}
 
 	var ownerID string
 	if s.anonymousDevices != nil {
 		binding, err := s.anonymousDevices.FindByDeviceFingerprintHash(ctx, deviceFingerprintHash)
 		if err != nil {
-			return nil, fmt.Errorf("lookup anonymous device binding: %w", err)
+			return nil, generated.AppErrorFromInternalError(fmt.Sprintf("lookup anonymous device binding: %v", err))
 		}
 		if binding != nil {
 			ownerID = strings.TrimSpace(binding.OwnerID)
@@ -366,7 +396,7 @@ func (s *AuthService) LoginAnonymously(
 	if ownerID == "" {
 		existing, err := s.credentials.FindByTypeAndKey(ctx, credentialAnonymousDevice, deviceFingerprintHash)
 		if err != nil {
-			return nil, fmt.Errorf("anonymous credential lookup: %w", err)
+			return nil, generated.AppErrorFromInternalError(fmt.Sprintf("anonymous credential lookup: %v", err))
 		}
 		if existing != nil {
 			ownerID = existing.OwnerID
@@ -377,7 +407,7 @@ func (s *AuthService) LoginAnonymously(
 		displayLabel := anonymousDisplayLabel(platform)
 		created, err := s.createOwnerAccount(ctx, credentialAnonymousDevice, deviceFingerprintHash, displayLabel)
 		if err != nil {
-			return nil, fmt.Errorf("create anonymous owner account: %w", err)
+			return nil, generated.AppErrorFromInternalError(fmt.Sprintf("create anonymous owner account: %v", err))
 		}
 		ownerID = created
 	}
@@ -389,7 +419,7 @@ func (s *AuthService) LoginAnonymously(
 		platform,
 		appVersion,
 	); err != nil {
-		return nil, fmt.Errorf("persist anonymous device binding: %w", err)
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist anonymous device binding: %v", err))
 	}
 	return s.issueLoginResult(ctx, ownerID, credentialAnonymousDevice, "")
 }
@@ -508,7 +538,7 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 	}
 
 	if err := s.profiles.Create(ctx, profile); err != nil {
-		return "", fmt.Errorf("create profile: %w", err)
+		return "", generated.AppErrorFromInternalError(fmt.Sprintf("create profile: %v", err))
 	}
 
 	persona := &model.Persona{
@@ -524,7 +554,7 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 	}
 	normalizePersonaPersistence(persona)
 	if err := s.personas.Create(ctx, persona); err != nil {
-		return "", fmt.Errorf("create persona: %w", err)
+		return "", generated.AppErrorFromInternalError(fmt.Sprintf("create persona: %v", err))
 	}
 
 	cred := &model.CredentialBinding{
@@ -536,7 +566,7 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 		IsActive:       true,
 	}
 	if err := s.credentials.Create(ctx, cred); err != nil {
-		return "", fmt.Errorf("create credential: %w", err)
+		return "", generated.AppErrorFromInternalError(fmt.Sprintf("create credential: %v", err))
 	}
 
 	return ownerID, nil
@@ -548,7 +578,7 @@ func (s *AuthService) resolvePhysicalShard(ownerID string) (string, error) {
 	}
 	physicalShard := strings.TrimSpace(s.shardDirectory.ResolvePhysicalShardForOwnerID(ownerID))
 	if physicalShard == "" {
-		return "", fmt.Errorf("resolve physical shard for owner %s", ownerID)
+		return "", generated.AppErrorFromInternalError(fmt.Sprintf("resolve physical shard for owner %s", ownerID))
 	}
 	return physicalShard, nil
 }
@@ -608,8 +638,8 @@ func profileIntField(profile *model.UserProfile, getter func(*model.UserProfile)
 
 // Sentinel errors – returned from AuthService methods.
 var (
-	ErrCredentialConflict = fmt.Errorf("credential already bound to another account")
-	ErrLastCredential     = fmt.Errorf("cannot unbind the last credential")
+	ErrCredentialConflict = generated.AppErrorFromCredentialConflict("credential already bound to another account")
+	ErrLastCredential     = generated.AppErrorFromLastCredential("cannot unbind the last credential")
 )
 
 // TokenEncodedOneTapPhoneResolver is a local/dev resolver boundary. Production
@@ -620,13 +650,13 @@ type TokenEncodedOneTapPhoneResolver struct{}
 func (TokenEncodedOneTapPhoneResolver) ResolvePhone(_ context.Context, _ string, carrierToken string) (string, string, error) {
 	token := strings.TrimSpace(carrierToken)
 	if token == "" {
-		return "", "", fmt.Errorf("carrierToken is required")
+		return "", "", generated.AppErrorFromInvalidArgument("carrierToken is required")
 	}
 	if strings.HasPrefix(token, "phone:") {
 		phone := normalizePhoneCredentialKey(strings.TrimPrefix(token, "phone:"))
 		return phone, maskPhoneForDisplay(phone), nil
 	}
-	return "", "", fmt.Errorf("one tap resolver requires carrier server exchange")
+	return "", "", generated.AppErrorFromInternalError("one tap resolver requires carrier server exchange")
 }
 
 type StaticOneTapPhoneResolver map[string]string
@@ -634,7 +664,7 @@ type StaticOneTapPhoneResolver map[string]string
 func (r StaticOneTapPhoneResolver) ResolvePhone(_ context.Context, _ string, carrierToken string) (string, string, error) {
 	phone := normalizePhoneCredentialKey(r[strings.TrimSpace(carrierToken)])
 	if phone == "" {
-		return "", "", fmt.Errorf("carrierToken not recognized")
+		return "", "", generated.AppErrorFromInvalidArgument("carrierToken not recognized")
 	}
 	return phone, maskPhoneForDisplay(phone), nil
 }
@@ -664,11 +694,13 @@ func (s *AuthService) issueAccessToken(ownerID string, activeSub *model.Persona)
 type OtpSendResult struct {
 	MaskedPhone      string `json:"maskedPhone"`
 	ExpiresInSeconds int    `json:"expiresInSeconds"`
+	RequestID        string `json:"requestId,omitempty"`
+	ChallengeID      string `json:"challengeId,omitempty"`
+	DeliveryStatus   string `json:"deliveryStatus"`
 	DebugCode        string `json:"debugCode,omitempty"`
 }
 
-// SendOtp 校验号码、限频后生成并存储验证码（真实短信下发由网关/供应商对接，
-// 当前以日志/调试码替代）。
+// SendOtp 校验号码、限频后创建 OTP challenge，并通过 integration-service 提交短信发送。
 func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResult, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.SendOtp")
 	defer func() { rtobs.EndSpan(span, err) }()
@@ -679,6 +711,9 @@ func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResu
 	}
 	if s.otp == nil {
 		return nil, generated.AppErrorFromInternalError("otp store unavailable")
+	}
+	if s.otpChallenges == nil {
+		return nil, generated.AppErrorFromInternalError("otp challenge store unavailable")
 	}
 	allowed, retryAfter, err := s.otp.AllowSend(ctx, normalized)
 	if err != nil {
@@ -692,39 +727,105 @@ func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResu
 	if err != nil {
 		return nil, generated.AppErrorFromInternalError("otp generate")
 	}
-	if err := s.otp.SaveCode(ctx, normalized, code); err != nil {
-		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp save: %v", err))
+	challengeID, err := generateToken()
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError("otp challenge id generate")
+	}
+	requestID, err := generateToken()
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError("otp request id generate")
+	}
+	expiresAt := time.Now().UTC().Add(time.Duration(otpCodeExpirySeconds) * time.Second)
+	challenge := OtpChallenge{
+		ChallengeID:    "otp_ch_" + strings.TrimRight(challengeID, "="),
+		RequestID:      "otp_req_" + strings.TrimRight(requestID, "="),
+		Phone:          normalized,
+		PhoneHash:      hashOTPPhone(normalized),
+		CodeHash:       hashOTPCode("otp_ch_"+strings.TrimRight(challengeID, "="), normalized, code),
+		Status:         OtpChallengeStatusPendingDispatch,
+		IdempotencyKey: "otp:" + normalized + ":" + expiresAt.Format("200601021504"),
+		ExpiresAt:      expiresAt,
+	}
+	challenge, err = s.otpChallenges.CreateChallenge(ctx, challenge)
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge save: %v", err))
 	}
 	result := &OtpSendResult{
 		MaskedPhone:      maskPhoneForDisplay(normalized),
 		ExpiresInSeconds: int(otpCodeExpirySeconds),
+		RequestID:        challenge.RequestID,
+		ChallengeID:      challenge.ChallengeID,
+		DeliveryStatus:   "queued",
 	}
-	if s.otpDebugReveal {
+	passThroughAllowed := s.otpPassThrough.Allows(time.Now().UTC())
+	if s.externalClient != nil {
+		if _, err := s.externalClient.SubmitSMSOTP(ctx, SMSOTPDispatchRequest{
+			RequestID:      challenge.RequestID,
+			ChallengeID:    challenge.ChallengeID,
+			Phone:          normalized,
+			PhoneHash:      challenge.PhoneHash,
+			MaskedPhone:    result.MaskedPhone,
+			Code:           code,
+			IdempotencyKey: challenge.IdempotencyKey,
+			ExpiresAt:      expiresAt,
+		}); err != nil {
+			if !passThroughAllowed {
+				_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, err.Error())
+				return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp integration submit: %v", err))
+			}
+			result.DeliveryStatus = "pass_through"
+			_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
+		} else {
+			_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
+			result.DeliveryStatus = "queued"
+		}
+	} else if passThroughAllowed {
+		result.DeliveryStatus = "pass_through"
+		_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
+	} else {
+		_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, "external interaction client unavailable")
+		return nil, generated.AppErrorFromInternalError("otp external interaction client unavailable")
+	}
+	if passThroughAllowed || s.otpDebugReveal {
 		result.DebugCode = code
 	}
 	return result, nil
 }
 
-// verifyOtp 校验验证码：缺失/过期 -> 过期；不匹配 -> 不匹配；成功后立即清除。
+// verifyOtp 校验验证码：只信任持久化 challenge 状态、hash、过期与一次性消费标记。
 func (s *AuthService) verifyOtp(ctx context.Context, phone, code string) error {
-	if s.otp == nil {
-		return generated.AppErrorFromInternalError("otp store unavailable")
+	if s.otpChallenges == nil {
+		return generated.AppErrorFromInternalError("otp challenge store unavailable")
 	}
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return generated.AppErrorFromInvalidArgument("otpCode required")
 	}
-	stored, found, err := s.otp.ReadCode(ctx, phone)
-	if err != nil {
-		return generated.AppErrorFromInternalError(fmt.Sprintf("otp read: %v", err))
+	now := time.Now().UTC()
+	if s.otpPassThrough.Allows(now) {
+		challenge, err := s.otpChallenges.FindLatestChallenge(ctx, phone, now)
+		if err != nil {
+			return generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge read: %v", err))
+		}
+		if challenge != nil {
+			_ = s.otpChallenges.ConsumeChallenge(ctx, challenge.ChallengeID, now)
+		}
+		return nil
 	}
-	if !found {
+	challenge, err := s.otpChallenges.FindLatestChallenge(ctx, phone, now)
+	if err != nil {
+		return generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge read: %v", err))
+	}
+	if challenge == nil {
 		return generated.AppErrorFromInvalidArgument("otp expired")
 	}
-	if stored != code {
+	if challenge.Status != OtpChallengeStatusActive {
+		return generated.AppErrorFromInvalidArgument("otp not ready")
+	}
+	if challenge.CodeHash != hashOTPCode(challenge.ChallengeID, phone, code) {
 		return generated.AppErrorFromInvalidArgument("otp mismatch")
 	}
-	_ = s.otp.ClearCode(ctx, phone)
+	_ = s.otpChallenges.ConsumeChallenge(ctx, challenge.ChallengeID, now)
 	return nil
 }
 
@@ -738,6 +839,20 @@ func (s *AuthService) LoginWithPhone(ctx context.Context, phone, otpCode, displa
 		return nil, err
 	}
 	return s.LoginWithCredential(ctx, credentialPhone, normalized, displayLabel)
+}
+
+func (s *AuthService) HandleOtpDeliveryCallback(ctx context.Context, requestID string, status string, normalizedError string) error {
+	if s.otpChallenges == nil {
+		return generated.AppErrorFromInternalError("otp challenge store unavailable")
+	}
+	switch strings.TrimSpace(status) {
+	case "delivered", "sent_unconfirmed", "active", "queued":
+		return s.otpChallenges.MarkChallengeDelivered(ctx, strings.TrimSpace(requestID), OtpChallengeStatusActive)
+	case "failed", "dead_letter":
+		return s.otpChallenges.MarkChallengeFailed(ctx, strings.TrimSpace(requestID), normalizedError)
+	default:
+		return generated.AppErrorFromInvalidArgument("otp delivery status unsupported")
+	}
 }
 
 const otpCodeExpirySeconds = 5 * 60
@@ -819,7 +934,7 @@ func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string
 	p.LastProfileSyncAt = &now
 	normalizePersonaPersistence(p)
 	if err := s.personas.Create(ctx, p); err != nil {
-		if strings.Contains(err.Error(), "uq_personas_user_handle") {
+		if isPersonaHandleUniqueConstraint(err) {
 			return nil, ErrPersonaHandleTaken
 		}
 		return nil, err
@@ -880,7 +995,7 @@ func (s *SubAccountService) UpdatePersona(ctx context.Context, ownerID, personaI
 	}
 	normalizePersonaPersistence(persona)
 	if err := s.personas.Update(ctx, persona); err != nil {
-		if strings.Contains(err.Error(), "uq_personas_user_handle") {
+		if isPersonaHandleUniqueConstraint(err) {
 			return nil, ErrPersonaHandleTaken
 		}
 		return nil, err
@@ -1701,7 +1816,7 @@ func (s *SubAccountService) applyPersonaProfileSync(ctx context.Context, ownerID
 		target.LastProfileSyncSource = "manual_sync"
 		normalizePersonaPersistence(target)
 		if err := s.personas.Update(ctx, target); err != nil {
-			if strings.Contains(err.Error(), "uq_personas_user_handle") {
+			if isPersonaHandleUniqueConstraint(err) {
 				return applied, ErrPersonaHandleTaken
 			}
 			return applied, err
@@ -1717,6 +1832,17 @@ func defaultString(value, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func isPersonaHandleUniqueConstraint(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	return pgErr.ConstraintName == "uq_personas_user_handle"
 }
 
 func hashInstallID(installID string) string {
@@ -1798,15 +1924,15 @@ func (s *AuthService) ensureAnonymousDeviceBinding(
 }
 
 var (
-	ErrSubAccountNotFound       = fmt.Errorf("sub-account not found")
-	ErrPrimarySubAccount        = fmt.Errorf("primary persona cannot be deleted or retired")
-	ErrLastSubAccount           = fmt.Errorf("cannot retire or delete the last active persona")
-	ErrActiveSubAccountAction   = fmt.Errorf("switch to another persona before deleting or retiring this one")
-	ErrRetiredPersonaAction     = fmt.Errorf("retired persona cannot accept new actions")
-	ErrDeleteEmptyPersonaOnly   = fmt.Errorf("empty persona should be deleted directly")
-	ErrSubAccountRetireRequired = fmt.Errorf("persona has history and must be retired instead of deleted")
-	ErrSubAccountStrictIso      = fmt.Errorf("user not found") // intentionally vague
-	ErrPersonaHandleTaken       = fmt.Errorf("persona_handle_taken")
+	ErrSubAccountNotFound       = generated.AppErrorFromSubAccountNotFound("sub-account not found")
+	ErrPrimarySubAccount        = generated.AppErrorFromPrimarySubAccountGuard("primary persona cannot be deleted or retired")
+	ErrLastSubAccount           = generated.AppErrorFromLastSubAccount("cannot retire or delete the last active persona")
+	ErrActiveSubAccountAction   = generated.AppErrorFromActiveSubAccountGuard("switch to another persona before deleting or retiring this one")
+	ErrRetiredPersonaAction     = generated.AppErrorFromRetiredSubAccountGuard("retired persona cannot accept new actions")
+	ErrDeleteEmptyPersonaOnly   = generated.AppErrorFromDeleteEmptySubAccountOnly("empty persona should be deleted directly")
+	ErrSubAccountRetireRequired = generated.AppErrorFromSubAccountRetireRequired("persona has history and must be retired instead of deleted")
+	ErrSubAccountStrictIso      = generated.AppErrorFromSubAccountStrictIsolation("user not found")
+	ErrPersonaHandleTaken       = generated.AppErrorFromSubAccountHandleTaken("persona_handle_taken")
 )
 
 // PersonaRepository needs FindBySubAccountID – add it to the interface extension.

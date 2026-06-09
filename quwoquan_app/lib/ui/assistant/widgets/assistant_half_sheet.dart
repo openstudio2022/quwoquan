@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
@@ -8,8 +9,64 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/assistant/config/assistant_prompt_config.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 
+final assistantHalfSheetPersonalizationProvider =
+    FutureProvider.autoDispose
+        .family<AssistantHalfSheetPersonalization, AssistantOpenContext>((
+          ref,
+          openContext,
+        ) async {
+          final repository = ref.read(assistantRepositoryProvider);
+          await repository.reportPageContext(
+            context: openContext,
+            userAction: 'open_assistant_entry',
+          );
+          final personalization = await repository.getEntryPersonalization(
+            context: openContext,
+          );
+          final suggestedActions = await repository.getSuggestedActions(
+            context: openContext,
+          );
+          return AssistantHalfSheetPersonalization(
+            welcomeMessage: personalization.welcomeMessage.trim().isEmpty
+                ? AssistantPromptConfig.getWelcomeMessage(openContext)
+                : personalization.welcomeMessage.trim(),
+            chips: personalization.chips.isEmpty
+                ? AssistantPromptConfig.getChips(openContext)
+                : personalization.chips
+                      .map(
+                        (chip) => AssistantChipEntry(
+                          label: chip.label,
+                          actionType: chip.actionType,
+                          value: chip.value,
+                        ),
+                      )
+                      .toList(growable: false),
+            suggestionLines: suggestedActions.items.isEmpty
+                ? (personalization.suggestionLines.isEmpty
+                      ? AssistantPromptConfig.getSuggestionLines(openContext)
+                      : personalization.suggestionLines)
+                : suggestedActions.items
+                      .map((item) => item.label.trim())
+                      .where((label) => label.isNotEmpty)
+                      .take(2)
+                      .toList(growable: false),
+          );
+        });
+
+class AssistantHalfSheetPersonalization {
+  const AssistantHalfSheetPersonalization({
+    required this.welcomeMessage,
+    required this.chips,
+    required this.suggestionLines,
+  });
+
+  final String welcomeMessage;
+  final List<AssistantChipEntry> chips;
+  final List<String> suggestionLines;
+}
+
 /// 私助半弹窗：约 50% 屏高、可拖拽，展示欢迎句、推荐 chips、「当前适合干啥」、输入框与「进入完整对话」。
-class AssistantHalfSheet extends StatelessWidget {
+class AssistantHalfSheet extends ConsumerWidget {
   const AssistantHalfSheet({super.key, required this.openContext});
 
   final AssistantOpenContext openContext;
@@ -62,7 +119,7 @@ class AssistantHalfSheet extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final bgColor = AppColorsFunctional.getColor(
       isDark,
@@ -85,9 +142,17 @@ class AssistantHalfSheet extends StatelessWidget {
             .intraGroup]?[DesignSemanticConstants.sm] ??
         AppSpacing.intraGroupSm;
 
-    final welcome = AssistantPromptConfig.getWelcomeMessage(openContext);
-    final chips = AssistantPromptConfig.getChips(openContext);
-    final suggestions = AssistantPromptConfig.getSuggestionLines(openContext);
+    final fallback = AssistantHalfSheetPersonalization(
+      welcomeMessage: AssistantPromptConfig.getWelcomeMessage(openContext),
+      chips: AssistantPromptConfig.getChips(openContext),
+      suggestionLines: AssistantPromptConfig.getSuggestionLines(openContext),
+    );
+    final personalization = ref
+        .watch(assistantHalfSheetPersonalizationProvider(openContext))
+        .maybeWhen(data: (value) => value, orElse: () => fallback);
+    final welcome = personalization.welcomeMessage;
+    final chips = personalization.chips;
+    final suggestions = personalization.suggestionLines;
 
     return Container(
       decoration: BoxDecoration(

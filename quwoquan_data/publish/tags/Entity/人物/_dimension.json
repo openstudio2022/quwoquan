@@ -1,0 +1,10 @@
+{
+  "label": "人物类型",
+  "labelEn": "Person Type",
+  "description": "可被关注或研究的人物类型骨架，具体人物实例进入 entities/人物/ 目录",
+  "maxDepth": 3,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 30
+}

@@ -107,7 +107,7 @@ class MockCircleRepository implements CircleRepository {
             'joinPolicy': 'apply_only',
             'ownerUserId': ownerUserId,
             'memberCount': circle.memberCount,
-            'conversationId': circle.conversationId,
+            'conversationId': 'conv_${circleId}_group_default',
             'isDefaultPublicGroup': true,
             'lastActiveAt': circle.updatedAt.toIso8601String(),
           },

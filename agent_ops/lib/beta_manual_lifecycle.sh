@@ -84,7 +84,7 @@ argv = sys.argv[4:]
 
 log_file.parent.mkdir(parents=True, exist_ok=True)
 process_file.parent.mkdir(parents=True, exist_ok=True)
-log = log_file.open("ab", buffering=0)
+log = log_file.open("wb", buffering=0)
 child: subprocess.Popen[bytes] | None = None
 stopping = False
 

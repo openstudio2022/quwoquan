@@ -5,6 +5,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
   fetchPlatformConfigInstanceReports,
   fetchProductL1L4Metrics,
+  type ProductL1L4AlertState,
   fetchProductProjectionSummary,
   fetchRuntimeClusters,
   fetchRuntimeInstances,
@@ -50,6 +51,7 @@ export function ProductL1L4MetricsPage() {
   const { pathname } = useLocation();
   const [summary, setSummary] = useState<ProductProjectionSummary | null>(null);
   const [metrics, setMetrics] = useState<ProductMetricItem[]>([]);
+  const [metricsPayload, setMetricsPayload] = useState<ProductL1L4MetricsResponse | null>(null);
   const [instanceReports, setInstanceReports] = useState<ConfigInstanceReportItem[]>([]);
   const [clusters, setClusters] = useState<RuntimeClusterItem[]>([]);
   const [services, setServices] = useState<RuntimeServiceItem[]>([]);
@@ -97,10 +99,12 @@ export function ProductL1L4MetricsPage() {
       level: activeLevel === 'all' ? undefined : activeLevel,
     })
       .then((payload: ProductL1L4MetricsResponse) => {
+        setMetricsPayload(payload);
         setMetrics(payload.items);
         setRuntimeError(null);
       })
       .catch((error) => {
+        setMetricsPayload(null);
         setRuntimeError(coerceRuntimeError(error));
       });
   }, [activeLevel, environment, selectedCluster, selectedInstance, selectedService]);
@@ -168,6 +172,7 @@ export function ProductL1L4MetricsPage() {
           <span className="badge badge--success">{cardRegistry.length} 个层级指标</span>
           <span className="badge badge--success">env={environment}</span>
           <span className="badge badge--neutral">view={activeRouteMeta.label}</span>
+          <span className="badge badge--neutral">source={metricsPayload?.source ?? 'snapshot'}</span>
           <span className="badge badge--neutral">{metrics.length} 条指标</span>
           <RuntimeErrorBadge error={runtimeError} />
         </>
@@ -290,8 +295,77 @@ export function ProductL1L4MetricsPage() {
         ))}
       </div>
 
+      <SectionCard title="实时元数据" subtitle="L1-L4 与 dashboard 共用同一份 live telemetry / alert / coverage 口径">
+        <div className="section-grid section-grid--cards">
+          <KpiCard
+            label="数据来源"
+            value={metricsPayload?.source ?? 'snapshot'}
+            icon={<Activity size={20} color="#2563EB" />}
+            trendLabel={`window=${metricsPayload?.window ?? 'n/a'}`}
+            trendTone="positive"
+            description={`freshness=${metricsPayload?.freshness ?? 'n/a'}`}
+          />
+          <KpiCard
+            label="实时覆盖"
+            value={`${metricsPayload?.coverage.liveMetrics ?? 0}/${metricsPayload?.coverage.totalMetrics ?? 0}`}
+            icon={<ShieldCheck size={20} color="#16A34A" />}
+            trendLabel={`fallback=${metricsPayload?.coverage.fallbackMetrics ?? 0}`}
+            trendTone={(metricsPayload?.coverage.fallbackMetrics ?? 0) > 0 ? 'warning' : 'positive'}
+            description={`eventSignals=${metricsPayload?.coverage.eventSignals ?? 0}`}
+          />
+          <KpiCard
+            label="告警态"
+            value={String(metricsPayload?.alerts.length ?? 0)}
+            icon={<AlertTriangle size={20} color="#F59E0B" />}
+            trendLabel={metricsPayload?.alerts[0]?.state ?? 'quiet'}
+            trendTone={metricsPayload?.alerts[0]?.state === 'firing' ? 'warning' : 'positive'}
+            description={metricsPayload?.alerts[0]?.metric ?? '当前无实时告警'}
+          />
+          <KpiCard
+            label="当前主指标"
+            value={metrics[0] ? `${metrics[0].value}${metrics[0].unit}` : 'n/a'}
+            icon={<Sparkles size={20} color="#2563EB" />}
+            trendLabel={metrics[0]?.metric ?? '等待指标'}
+            trendTone={metrics[0]?.status === 'warning' ? 'warning' : 'positive'}
+            description={metrics[0]?.source ? `source=${metrics[0].source}` : 'snapshot'}
+          />
+        </div>
+        <div className="stack-list" style={{ marginTop: 12 }}>
+          {(metricsPayload?.alerts ?? []).map((item: ProductL1L4AlertState) => (
+            <div className="policy-item" key={item.id}>
+              <div>
+                <p className="item-title">{item.metric}</p>
+                <p className="item-subtitle">
+                  level={item.level} · severity={item.severity} · source={item.source}
+                </p>
+                <p className="item-subtitle">{item.summary}</p>
+              </div>
+              <div className="badge-row">
+                <span className={`badge badge--${item.state === 'firing' ? 'warning' : item.state === 'warning' ? 'warning' : 'success'}`}>
+                  {item.state}
+                </span>
+                <span className="badge badge--neutral">{item.value}</span>
+                {item.runbookRoute ? <Link className="button" to={item.runbookRoute}>查看 runbook</Link> : null}
+                {item.repairEntry ? <Link className="button button--primary" to={item.repairEntry}>进入修复入口</Link> : null}
+                {item.auditRoute ? <Link className="button" to={item.auditRoute}>查看审计链</Link> : null}
+                {item.alertId ? <span className="badge badge--neutral">alert={item.alertId}</span> : null}
+              </div>
+            </div>
+          ))}
+          {(metricsPayload?.alerts ?? []).length === 0 ? (
+            <div className="policy-item">
+              <div>
+                <p className="item-title">暂无实时告警</p>
+                <p className="item-subtitle">当前实时聚合没有产生新的 alert state。</p>
+              </div>
+              <span className="badge badge--success">quiet</span>
+            </div>
+          ) : null}
+        </div>
+      </SectionCard>
+
       <div className="section-grid section-grid--two">
-        <SectionCard title="四层指标明细" subtitle="来自 product-ops control plane 的真实四层指标快照">
+        <SectionCard title="四层指标明细" subtitle="来自 product-ops control plane 的真实四层指标响应">
           <table className="table">
             <thead>
               <tr>
@@ -300,6 +374,7 @@ export function ProductL1L4MetricsPage() {
                 <th>主指标</th>
                 <th>值</th>
                 <th>状态</th>
+                <th>source</th>
               </tr>
             </thead>
             <tbody>
@@ -310,6 +385,7 @@ export function ProductL1L4MetricsPage() {
                   <td>{item.metric}</td>
                   <td>{item.value}{item.unit}</td>
                   <td>{item.status}</td>
+                  <td>{item.source ?? 'snapshot'}</td>
                 </tr>
               ))}
             </tbody>
@@ -372,6 +448,7 @@ export function ProductL1L4MetricsPage() {
                   {item.cluster ? ` · cluster=${item.cluster}` : ''}
                   {item.service ? ` · service=${item.service}` : ''}
                   {item.instanceId ? ` · instance=${item.instanceId}` : ''}
+                  {item.source ? ` · source=${item.source}` : ''}
                 </p>
               </div>
               <div className="badge-row">

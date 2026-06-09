@@ -17,12 +17,17 @@ class PlatformCapabilities {
     required this.camera,
     required this.realtimeCommunication,
     required this.incomingCallUi,
+    required this.webPushIncomingCall,
     required this.nativeVideoEditing,
     required this.secureStorage,
     required this.backgroundAudio,
     required this.wideScreenLayout,
     required this.promotesAppInstall,
     required this.oneTapLogin,
+    required this.wechatNativeLogin,
+    required this.appleNativeLogin,
+    required this.systemCredentialLogin,
+    required this.passkeyLogin,
   });
 
   /// Local random-access file system (`dart:io File/Directory`). False on web.
@@ -38,7 +43,16 @@ class PlatformCapabilities {
   final bool realtimeCommunication;
 
   /// Native incoming-call UI (CallKit / VoIP / system call screen).
+  ///
+  /// True on mobile (iOS CallKit / Android 全屏意图)；web / desktop / 初始 ohos
+  /// 无原生来电屏，需走 [webPushIncomingCall] 或站内弹窗降级。
   final bool incomingCallUi;
+
+  /// Web Push + Service Worker 后台来电通知能力。
+  ///
+  /// 仅 web 为 true：后台经 Web Push 通知点击进会；前台走站内弹窗。
+  /// 原生端为 false（用 [incomingCallUi]）。业务只读能力位决定唤醒通道与降级。
+  final bool webPushIncomingCall;
 
   /// Native video trim/mute/export via platform channel.
   final bool nativeVideoEditing;
@@ -62,18 +76,35 @@ class PlatformCapabilities {
   /// Carrier / vendor one-tap login SDK.
   final bool oneTapLogin;
 
+  /// WeChat native OpenSDK login.
+  final bool wechatNativeLogin;
+
+  /// Apple native sign-in / AuthenticationServices entry.
+  final bool appleNativeLogin;
+
+  /// System credential entry (Android Credential Manager / iOS Password AutoFill).
+  final bool systemCredentialLogin;
+
+  /// WebAuthn / passkey entry available for this platform.
+  final bool passkeyLogin;
+
   PlatformCapabilities copyWith({
     bool? hasLocalFileSystem,
     bool? mediaLibrary,
     bool? camera,
     bool? realtimeCommunication,
     bool? incomingCallUi,
+    bool? webPushIncomingCall,
     bool? nativeVideoEditing,
     bool? secureStorage,
     bool? backgroundAudio,
     bool? wideScreenLayout,
     bool? promotesAppInstall,
     bool? oneTapLogin,
+    bool? wechatNativeLogin,
+    bool? appleNativeLogin,
+    bool? systemCredentialLogin,
+    bool? passkeyLogin,
   }) {
     return PlatformCapabilities(
       hasLocalFileSystem: hasLocalFileSystem ?? this.hasLocalFileSystem,
@@ -82,12 +113,18 @@ class PlatformCapabilities {
       realtimeCommunication:
           realtimeCommunication ?? this.realtimeCommunication,
       incomingCallUi: incomingCallUi ?? this.incomingCallUi,
+      webPushIncomingCall: webPushIncomingCall ?? this.webPushIncomingCall,
       nativeVideoEditing: nativeVideoEditing ?? this.nativeVideoEditing,
       secureStorage: secureStorage ?? this.secureStorage,
       backgroundAudio: backgroundAudio ?? this.backgroundAudio,
       wideScreenLayout: wideScreenLayout ?? this.wideScreenLayout,
       promotesAppInstall: promotesAppInstall ?? this.promotesAppInstall,
       oneTapLogin: oneTapLogin ?? this.oneTapLogin,
+      wechatNativeLogin: wechatNativeLogin ?? this.wechatNativeLogin,
+      appleNativeLogin: appleNativeLogin ?? this.appleNativeLogin,
+      systemCredentialLogin:
+          systemCredentialLogin ?? this.systemCredentialLogin,
+      passkeyLogin: passkeyLogin ?? this.passkeyLogin,
     );
   }
 }
@@ -108,12 +145,17 @@ class CapabilityProfile {
     camera: true,
     realtimeCommunication: true,
     incomingCallUi: true,
+    webPushIncomingCall: false,
     nativeVideoEditing: true,
     secureStorage: true,
     backgroundAudio: true,
     wideScreenLayout: false,
     promotesAppInstall: false,
     oneTapLogin: true,
+    wechatNativeLogin: true,
+    appleNativeLogin: true,
+    systemCredentialLogin: true,
+    passkeyLogin: true,
   );
 
   static const PlatformCapabilities web = PlatformCapabilities(
@@ -122,12 +164,17 @@ class CapabilityProfile {
     camera: true,
     realtimeCommunication: true,
     incomingCallUi: false,
+    webPushIncomingCall: true,
     nativeVideoEditing: false,
     secureStorage: false,
     backgroundAudio: false,
     wideScreenLayout: true,
     promotesAppInstall: true,
     oneTapLogin: false,
+    wechatNativeLogin: false,
+    appleNativeLogin: false,
+    systemCredentialLogin: false,
+    passkeyLogin: false,
   );
 
   // HarmonyOS / OpenHarmony initial baseline. RTC / incoming-call / native
@@ -138,12 +185,17 @@ class CapabilityProfile {
     camera: true,
     realtimeCommunication: false,
     incomingCallUi: false,
+    webPushIncomingCall: false,
     nativeVideoEditing: false,
     secureStorage: true,
     backgroundAudio: true,
     wideScreenLayout: false,
     promotesAppInstall: false,
     oneTapLogin: false,
+    wechatNativeLogin: false,
+    appleNativeLogin: false,
+    systemCredentialLogin: false,
+    passkeyLogin: false,
   );
 
   static const PlatformCapabilities desktop = PlatformCapabilities(
@@ -152,12 +204,17 @@ class CapabilityProfile {
     camera: false,
     realtimeCommunication: true,
     incomingCallUi: false,
+    webPushIncomingCall: false,
     nativeVideoEditing: false,
     secureStorage: true,
     backgroundAudio: true,
     wideScreenLayout: true,
     promotesAppInstall: false,
     oneTapLogin: false,
+    wechatNativeLogin: false,
+    appleNativeLogin: false,
+    systemCredentialLogin: false,
+    passkeyLogin: false,
   );
 }
 
@@ -165,6 +222,7 @@ class CapabilityProfile {
 PlatformCapabilities platformCapabilitiesFor(AppPlatform platform) {
   switch (platform) {
     case AppPlatform.android:
+      return CapabilityProfile.mobile.copyWith(appleNativeLogin: false);
     case AppPlatform.ios:
       return CapabilityProfile.mobile;
     case AppPlatform.web:

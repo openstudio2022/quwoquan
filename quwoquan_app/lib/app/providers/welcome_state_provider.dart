@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 
 /// 欢迎页状态
 ///
@@ -10,7 +12,7 @@ final welcomeCompletedProvider =
 
 class WelcomeCompletedNotifier extends Notifier<bool> {
   @override
-  bool build() => false;
+  bool build() => ref.read(platformTargetProvider) == AppPlatform.web;
 
   void setCompleted(bool value) {
     state = value;

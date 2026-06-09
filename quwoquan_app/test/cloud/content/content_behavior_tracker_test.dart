@@ -131,6 +131,7 @@ void main() {
 
       final event = repo.recorded.single;
       expect(event.action, BehaviorAction.follow);
+      expect(event.authorId, equals('author_1'));
       expect(event.intersectionDimension, equals('identity'));
       expect(event.intersectionTagRefs, contains('identity/campus/xdf'));
     });
@@ -162,6 +163,7 @@ void main() {
       final event = repo.recorded.single;
       expect(event.action, BehaviorAction.addContact);
       expect(event.contentId, equals('author_2'));
+      expect(event.authorId, equals('author_2'));
       expect(event.intersectionDimension, equals('location'));
       expect(event.intersectionTagRefs, contains('Entity/地点/北京'));
     });
@@ -170,10 +172,14 @@ void main() {
       expect(BehaviorAction.follow.wireValue, equals('follow'));
       expect(BehaviorAction.joinCircle.wireValue, equals('join_circle'));
       expect(BehaviorAction.addContact.wireValue, equals('add_contact'));
-      expect(BehaviorAction.fromWireValue('join_circle'),
-          equals(BehaviorAction.joinCircle));
-      expect(BehaviorAction.fromWireValue('add_contact'),
-          equals(BehaviorAction.addContact));
+      expect(
+        BehaviorAction.fromWireValue('join_circle'),
+        equals(BehaviorAction.joinCircle),
+      );
+      expect(
+        BehaviorAction.fromWireValue('add_contact'),
+        equals(BehaviorAction.addContact),
+      );
     });
 
     // ── S6 修复：BehaviorEvent JSON roundtrip 不得丢失交集归因（入队重试场景）──
@@ -192,9 +198,13 @@ void main() {
 
     // ── P3 飞轮：小艺对话浮现兴趣回流（assistant_interest，不绑定具体 post）──
     test('assistant_interest 回流 tagRefs，不绑 post，去重并过滤空值', () async {
-      tracker.trackAssistantInterest(
-        const <String>['Topic/旅行', ' Topic/景区 ', 'Topic/旅行', '', '   '],
-      );
+      tracker.trackAssistantInterest(const <String>[
+        'Topic/旅行',
+        ' Topic/景区 ',
+        'Topic/旅行',
+        '',
+        '   ',
+      ]);
       await tracker.flush();
 
       final event = repo.recorded.single;

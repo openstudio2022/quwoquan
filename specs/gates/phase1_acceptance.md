@@ -1,67 +1,71 @@
-# Phase 1 验收凭证 — 稻城亚丁标杆 + 川西/四川景区 fan-out
+# Phase 1 验收凭证 — 全自动 ReAct 产线（目标① 全流程自动化）
 
-- 阶段：内容飞轮工程 Phase 1（纯 `quwoquan_data`，真实素材→主页→文章→publish 到当前环境集合）
-- 状态：PASSED
-- 日期：2026-06-01
-- 任务：`旅行/地域/四川省/景区/景区全覆盖`
-- 批次：`phase1_daocheng`（标杆）、`phase1_fanout`（fan-out）
+- 阶段：内容飞轮工程 Phase 1（纯 quwoquan_data，不改云侧）
+- 状态：能力就绪 CAPABILITY-READY（工程能力全绿；真实内容产出待运行，见下）
+- 日期：2026-06-03
 
-## 交付总览
+## 目标① 自动化能力裁定
 
-| 维度 | 目标 | 实际 |
-|---|---|---|
-| 真实文章 N | ≈13 篇过门 | **11 篇**（稻城 3 + fan-out 8）全部 `approved` + `materialize` + `ship` |
-| 实体主页 | ≥800 字 + conditionProfile | **6/6**（900–1136 字，均含 `regions`/`seasons`） |
-| 发布环境 | 当前环境集合 + prod 全量 | `publish_meta.shipSummary` 当前环境集合齐全：prod 全量 / alpha·beta·gamma 各 10% |
-| 抽检 | 3 篇真实可发布 | 稻城攻略 / 海螺沟攻略 / 九寨沟体验：动机开篇+亮点+不足+事实就地融入+figure 完整 |
+目标①要求：内容生产全流程自动化，人只在入口(任务定义)与出口(抽检)介入。本阶段
+补齐了把零散 CLI 串成无人值守闭环所缺的三块能力，使中间环节不再逐步手敲。
 
-### 6 实体 × 11 篇明细
+## 任务完成（工程能力）
 
-| 实体 | 主页字数 | conditionProfile | 文章 |
-|---|---|---|---|
-| 稻城亚丁（标杆） | 1136 | regions/seasons | 攻略 + 体验 + 影像志（3） |
-| 四姑娘山 | 916 | regions/seasons | 攻略 + 体验（2） |
-| 海螺沟 | 941 | regions/seasons | 攻略 + 体验（2） |
-| 九寨沟 | 900 | regions/seasons | 攻略 + 体验（2） |
-| 都江堰 | 903 | regions/seasons | 攻略（1） |
-| 乐山大佛 | 931 | regions/seasons | 攻略（1） |
+### T1-8 无人值守产线编排器 `qwq-data task run`
+- 新增 `quwoquan_data/scripts/task/run.py`：固定 DAG 薄编排壳，串
+  download_plan→download_fetch→build_prepare→build_homepage→build_validate→
+  produce_compose→produce_author→produce_annotate→produce_review→publish。
+- 双类节点：确定性 stage 直接跑既有 handler；Agent checkpoint（source_plan /
+  实体主页 / 正文创作）写指引并暂停（退出码 10），物化产物后 `--resume` 自动推进。
+- `task_workflow_state.json` 落 `runtime/tasks/<人读taskId>/batches/<batch>/_shared/`，
+  记 completed / waitingCheckpoint / reactRewinds，幂等可 resume；`--until` 早停。
+- 在 task handler 注册 `task run`，docstring 同步。
 
-全部 11 篇通过：模板指纹 / 事实可回溯 / 出处三道门 + `evidenceQuality` / `factTraceability` / `numericTraceability` / `travelogueDensity` / `entityCoverage` / `carrierConsistency` / `imageGate`。
+### T1-9 HITL 最小化（人只看真正模糊的项）
+- `_common/review_ledger.py` 新增策略 `autoApprove.autoDiscardScoreAtMost`：
+  agent 存疑且分≤阈值的「明确违规」(image_safety unsafe=水印/平台标记→1分)
+  自动 discard，不占用人工；明确合格(safe→4分)自动 publishable；只有真正模糊
+  的 needs_review(人脸边界→2分)才转人工 fix。
+- 默认 `autoDiscardScoreAtMost=1`，关闭时退回全转人工行为。
 
-## 关键技术债清偿（本阶段修复）
+### T1-10 ReAct 自省自动回退（自学习闭环）
+- 各 stage gate report 既有的 `fallbackStage` 信号接入编排器：build_validate /
+  produce_review 失败时，按 fallbackStage（download→重检索 / compose→重组）
+  自动回退 DAG 指针并重跑。
+- `reactRewinds[stage]` 计数 + `MAX_REACT_REWINDS=2` 上限，超限转人工，防无限自省。
+- 每次回退写 `repair_report`（反思账本：failedStage / issues / rerunChain）。
 
-### 1. composer 主实体 entityRef 短格式 → 发布门误过滤（GATE_BLOCK 级，已修）
-- **现象**：`promote` dry-run 中所有 post 的 `entityRefs` 被 `filtered (no homepage)`，主实体失去关联。
-- **根因**：`route_workflow` / `entity_workflow` 把主实体拼成 `/entity/{name}` 短格式，而 `publish_filter._parse_entity_ref` 需 `domain/type/name` 三段，短格式解析失败 → 误判无主页。
-- **修复（单一真相源）**：在 `_common/entity_extract.py` 新增共享 `normalize_entity_refs`，用 compose input 已有的 `subject.type`（如 `地点/景区`）补全为 `/entity/{domain}/{type}/{name}`；两个 workflow 共用、删除重复逻辑（R25 横切提取）。
-- **回归测试**：`tests/test_entity_composer.py::test_normalize_entity_refs_full_path` + e2e materialize 断言 manifest `entityRefs` 为可解析全路径（R13）。
-
-### 2. 图片下载限流阻断（已修）
-- `download/fetch.py`：`_USER_AGENT` 补合规联系方式；`_http_get_bytes` 对 `HTTP 429/503` 加指数退避重试 + `Retry-After` 解析，解 Wikimedia Commons 限流导致的 `images=0`。
-
-### 3. needs_review 图不硬拦 produce（边界确认，符合设计）
-- 景观图误判人脸 / 缺 CV 后端 → `needs_review`，`produce review` 记账不硬拦，延到 `publish` 人工门裁决；`unsafe`/重复图仍硬拦。
+### 既有能力复核（P1 范围内已落地，本轮核实）
+- 实体主页真实链路：`build/homepage.py` 的 prepare 下发主页产出契约 + validate
+  采纳门（page.md≥字数门 / _entity.json conditionProfile / manifest）已就绪。
+- media 自动化：`media check-images` 真实 CV 体检（人脸/水印/OCR/去重）+ gate，
+  失败 `fallbackStage=compose`，缺图回退指针已就绪。
+- Agent 检索范式：download source_plan→fetch（裸 GET + body 离线兜底）已就绪。
 
 ## gate-out 校验
 
 | 校验 | 命令 | 结果 |
 |---|---|---|
-| 11 篇过门 + 物化 | `produce --stage review --materialize`（两批） | approved=11 failed=0 |
-| 主页合规 | 6 实体 page.md ≥800 字 + `_entity.json.conditionProfile` | 6/6 PASS |
-| 发布门保留实体 | `promote_to_publish --dry-run` | filtered entityRefs = 0 |
-| ship 当前环境集合 | `cli ship --task … --batch …`（两批） | prod/gamma/beta/alpha bundle 全写，`publish_meta.lastShip` 更新 |
-| entityRef 全路径回归 | `tests/test_entity_composer.py` | 4 PASS（含 `test_normalize_entity_refs_full_path`） |
+| 编排器注册 | `cli.py task run --help` | OK（DAG 10 stage 可见） |
+| 编排器 DAG/checkpoint/resume/ReAct 回退 | `tests/workflow/test_task_run_pipeline.py` | 5 PASS |
+| HITL 最小化 | `tests/integration/test_hitl_autopass.py` | 4 PASS |
+| 实体主页链路 | `tests/build/test_build_homepage.py` | PASS（既有） |
 | 全量门禁 | `make verify-quwoquan-data` | PASSED |
 
-## 反思账本
+新测试已挂入 `quwoquan_data/scripts/verify/verify_quwoquan_data.sh` Phase 1 块。
 
-已通过 `cli task record-run` 沉淀至 `tasks/旅行/地域/四川省/景区/景区全覆盖/notes.md`（run `run_20260601_215839`）：
-- 归因：composer entityRef 契约不一致（执行/契约问题，非证据不足）。
-- 决策：subject.type 驱动全路径补全 + 共享函数 + 回归测试；限流退避；needs_review 人工门兜底。
+## 待运行（不阻断能力就绪，属产线实际执行）
 
-## Phase 1 结论与后续
+- `publish/entities/` 当前为空（过往清理后未回填）。稻城亚丁真实标杆 + 川西/
+  四川景区 fan-out 需走 Agent 联网检索(web_search/浏览器)→实体主页→逐篇正文
+  创作的完整 checkpoint 循环，是产线运行而非工程能力建设。
+- 运行方式：`qwq-data task run --task 旅行/地域/四川省/景区/景区全覆盖 --batch <b>`，
+  在每个 checkpoint 按指引由 Agent 物化真实产物后 `--resume`。
 
-- [x] 标杆复刻：稻城亚丁 3 篇真实成稿，作为 fan-out 范式。
-- [x] fan-out：川西/四川 5 景区真实素材 → 主页 → 文章 → publish 到当前环境集合。
-- [x] 真相源收敛：实体引用补全逻辑单一化 + 回归测试防回退。
-- [ ] 后续（next）：都江堰/乐山补体验篇凑 N≈13；川西其余景区继续 fan-out；接服务侧 `content-service/cmd/import` 灌 alpha 冒烟，打通端云桥。
+## Phase 2 gate-in 就绪声明
+
+- [x] 全自动 ReAct 产线工程能力就绪（编排器 + HITL 最小化 + 自动回退）。
+- [x] `make verify-quwoquan-data` 全绿。
+- [ ] 真实内容产出（稻城亚丁标杆 + fan-out）—— 待按产出范围运行。
+
+→ 工程能力满足 Phase 2（云侧效果归因）gate-in；真实内容产出可按确认的范围分批运行。

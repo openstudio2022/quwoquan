@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from template.blueprint import (
     REQUIRED_BLUEPRINT_FIELDS,
+    canonical_blueprint_relpath,
     collect_tag_refs,
     render_font,
     render_template,
@@ -11,7 +12,7 @@ from template.blueprint import (
 from template.condition import scan_region_locked_terms, validate_region_season
 from template.creator import validate_creators
 from template.recommend import validate_recommendation_contract
-from template.registry import TemplateRegistry, tag_exists
+from template.registry import BLUEPRINTS_ROOT, TemplateRegistry, tag_exists
 from template.source import validate_source_catalog
 from template.style import validate_style_catalog
 
@@ -47,6 +48,19 @@ def lint_templates(registry: TemplateRegistry) -> list[str]:
         subject = blueprint.get("subject")
         if not isinstance(subject, dict) or subject.get("kind") not in {"entity", "topic"}:
             errors.append(f"{label}: subject.kind must be entity or topic")
+        else:
+            expected_rel = canonical_blueprint_relpath(blueprint)
+            actual_path = registry.blueprint_paths.get(template_id)
+            if expected_rel and actual_path is not None:
+                try:
+                    actual_rel = actual_path.relative_to(BLUEPRINTS_ROOT).as_posix()
+                except ValueError:
+                    actual_rel = actual_path.as_posix()
+                if actual_rel != expected_rel:
+                    errors.append(
+                        f"{label}: blueprint path not isomorphic to tag system; "
+                        f"expected blueprints/{expected_rel}, found blueprints/{actual_rel}"
+                    )
         if not isinstance(blueprint.get("imagePlan"), list) or not blueprint.get("imagePlan"):
             errors.append(f"{label}: imagePlan must be a non-empty list")
 
@@ -71,12 +85,8 @@ def lint_templates(registry: TemplateRegistry) -> list[str]:
             for field in ("openingTension", "explicitFeelings", "decisionPoints", "tipsEmbeddingPolicy"):
                 if not isinstance(blueprint.get(field), dict) or not blueprint.get(field):
                     errors.append(f"{label}: route blueprint missing narrative contract field {field}")
-            feelings = blueprint.get("explicitFeelings") or {}
-            if feelings and not (feelings.get("requireLike") and feelings.get("requireDislike")):
-                errors.append(f"{label}: explicitFeelings must require both like and dislike")
-            tips_policy = blueprint.get("tipsEmbeddingPolicy") or {}
-            if tips_policy and not tips_policy.get("forbidStandaloneBlock"):
-                errors.append(f"{label}: tipsEmbeddingPolicy.forbidStandaloneBlock must be true")
+            # 注：不再强制 explicitFeelings 双 true 或 tipsEmbeddingPolicy.forbidStandaloneBlock=true。
+            # 这些修辞骨架已在评审聚合中降级为软门（建议），允许 blueprint 不套骨架（底稿轻改范式）。
 
         if str(blueprint.get("carrier")) == "gallery":
             policy = blueprint.get("imagePolicy")

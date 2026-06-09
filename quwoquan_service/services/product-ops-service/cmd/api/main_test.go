@@ -303,6 +303,19 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 	}
 	server := newTestServerMux(service)
 
+	recordReq := httptest.NewRequest(http.MethodPost, "/v1/ops/events", bytes.NewBufferString(`{
+		"events": [
+			{"eventId":"evt-l3-latency","eventType":"experience","eventName":"page_return_perf","occurredAt":"2026-06-07T08:00:01Z","pageName":"home","surfaceId":"homeFeed","metrics":{"durationMs":1300}},
+			{"eventId":"evt-l3-error","eventType":"experience","eventName":"request_failed","occurredAt":"2026-06-07T08:00:02Z","pageName":"home","surfaceId":"homeFeed","errorCode":"OPS.NETWORK.timeout"}
+		]
+	}`))
+	recordReq.Header.Set("Content-Type", "application/json")
+	recordResp := httptest.NewRecorder()
+	server.ServeHTTP(recordResp, recordReq)
+	if recordResp.Code != http.StatusOK {
+		t.Fatalf("record metrics events status=%d body=%s", recordResp.Code, recordResp.Body.String())
+	}
+
 	req := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/metrics/l1l4?env=beta&level=L3", nil)
 	resp := httptest.NewRecorder()
 	server.ServeHTTP(resp, req)
@@ -311,14 +324,41 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 	}
 
 	var payload struct {
+		Source    string `json:"source"`
+		Freshness string `json:"freshness"`
+		Window    string `json:"window"`
+		Coverage  struct {
+			TotalMetrics    int `json:"totalMetrics"`
+			LiveMetrics     int `json:"liveMetrics"`
+			FallbackMetrics int `json:"fallbackMetrics"`
+			EventSignals    int `json:"eventSignals"`
+		} `json:"coverage"`
+		Alerts []struct {
+			ID          string `json:"id"`
+			State       string `json:"state"`
+			Metric      string `json:"metric"`
+			Source      string `json:"source"`
+			RunbookID   string `json:"runbookId"`
+			RunbookRoute string `json:"runbookRoute"`
+			RepairEntry string `json:"repairEntry"`
+			AlertID     string `json:"alertId"`
+			Owner       string `json:"owner"`
+		} `json:"alerts"`
 		Items []struct {
 			Level       string `json:"level"`
 			Environment string `json:"environment"`
 			Metric      string `json:"metric"`
+			Source      string `json:"source"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("unmarshal l1l4 metrics: %v", err)
+	}
+	if payload.Source == "" || payload.Freshness == "" || payload.Window == "" {
+		t.Fatalf("expected live metadata, got %+v", payload)
+	}
+	if payload.Coverage.TotalMetrics == 0 {
+		t.Fatalf("expected coverage totals, got %+v", payload.Coverage)
 	}
 	if len(payload.Items) == 0 {
 		t.Fatalf("expected l1l4 metric items")
@@ -330,5 +370,83 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 		if item.Environment != "beta" {
 			t.Fatalf("expected beta environment, got %+v", payload.Items)
 		}
+		if item.Source == "" {
+			t.Fatalf("expected metric source, got %+v", payload.Items)
+		}
+	}
+	if len(payload.Alerts) == 0 {
+		t.Fatalf("expected derived alerts, got %+v", payload)
+	}
+	if payload.Alerts[0].RunbookRoute == "" || payload.Alerts[0].RepairEntry == "" || payload.Alerts[0].AlertID == "" || payload.Alerts[0].Owner == "" {
+		t.Fatalf("expected alert repair semantics, got %+v", payload.Alerts[0])
+	}
+}
+
+func TestProductTriageSummaryEndpoint(t *testing.T) {
+	service := newTestProductService(t)
+	if err := service.seed(); err != nil {
+		t.Fatalf("seed service: %v", err)
+	}
+	server := newTestServerMux(service)
+
+	recordReq := httptest.NewRequest(http.MethodPost, "/v1/ops/events", bytes.NewBufferString(`{
+		"events": [
+			{"eventId":"evt-open","eventType":"experience","eventName":"page_open","occurredAt":"2026-06-07T08:00:00Z","pageName":"home"},
+			{"eventId":"evt-perf","eventType":"experience","eventName":"page_return_perf","occurredAt":"2026-06-07T08:00:01Z","pageName":"home","surfaceId":"homeFeed","payload":{"durationMs":1300}}
+		]
+	}`))
+	recordReq.Header.Set("Content-Type", "application/json")
+	recordResp := httptest.NewRecorder()
+	server.ServeHTTP(recordResp, recordReq)
+	if recordResp.Code != http.StatusOK {
+		t.Fatalf("record events status=%d body=%s", recordResp.Code, recordResp.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/triage/summary?pageName=home&surfaceId=homeFeed", nil)
+	resp := httptest.NewRecorder()
+	server.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("product triage summary status=%d body=%s", resp.Code, resp.Body.String())
+	}
+
+	var payload struct {
+		EventSummary struct {
+			TotalCount int `json:"totalCount"`
+		} `json:"eventSummary"`
+		RecentEvents []struct {
+			EventID   string `json:"eventId"`
+			PageName  string `json:"pageName"`
+			SurfaceID string `json:"surfaceId"`
+		} `json:"recentEvents"`
+		BacklogCandidates []struct {
+			ID            string `json:"id"`
+			Category      string `json:"category"`
+			Title         string `json:"title"`
+			NextAction    string `json:"nextAction"`
+			RunbookRoute  string `json:"runbookRoute"`
+			RepairEntry   string `json:"repairEntry"`
+			AlertID       string `json:"alertId"`
+			AuditRoute    string `json:"auditRoute"`
+		} `json:"backlogCandidates"`
+		RuntimeReady bool   `json:"runtimeReady"`
+		Source       string `json:"source"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal product triage summary: %v", err)
+	}
+	if payload.Source == "" {
+		t.Fatalf("expected triage source, got %+v", payload)
+	}
+	if payload.EventSummary.TotalCount == 0 {
+		t.Fatalf("expected event summary counts, got %+v", payload)
+	}
+	if len(payload.RecentEvents) == 0 {
+		t.Fatalf("expected recent events, got %+v", payload)
+	}
+	if len(payload.BacklogCandidates) == 0 {
+		t.Fatalf("expected backlog candidates, got %+v", payload)
+	}
+	if payload.BacklogCandidates[0].ID == "" || payload.BacklogCandidates[0].NextAction == "" || payload.BacklogCandidates[0].RunbookRoute == "" || payload.BacklogCandidates[0].RepairEntry == "" || payload.BacklogCandidates[0].AlertID == "" || payload.BacklogCandidates[0].AuditRoute == "" {
+		t.Fatalf("expected backlog candidate details, got %+v", payload.BacklogCandidates[0])
 	}
 }

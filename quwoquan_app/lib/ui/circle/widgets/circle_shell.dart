@@ -10,11 +10,12 @@ import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -27,6 +28,7 @@ import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_interaction.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
+import 'package:quwoquan_app/ui/content/entry/models/create_entry_arguments.dart';
 
 part 'circle_shell_components.dart';
 part 'circle_shell_builders.dart';
@@ -237,7 +239,15 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   }) async {
     final circle = state.circleData;
     if (circle == null) {
-      AppToast.show(context, UITextConstants.loadFailed);
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: UiErrorSemantic(
+          category: UiErrorCategory.sectionLoad,
+          scope: UiErrorScope.global,
+          title: '圈子信息暂不可用',
+          message: UITextConstants.contentLoadSoftFailed,
+        ),
+      );
       return;
     }
     await Navigator.of(context).push(
@@ -269,6 +279,15 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         const AppActionSheetSection<_CircleMoreAction>(
           items: [
             AppActionSheetItem<_CircleMoreAction>(
+              value: _CircleMoreAction.submitPost,
+              label: UITextConstants.circleSubmitPost,
+              icon: CupertinoIcons.add_circled,
+            ),
+          ],
+        ),
+        const AppActionSheetSection<_CircleMoreAction>(
+          items: [
+            AppActionSheetItem<_CircleMoreAction>(
               value: _CircleMoreAction.share,
               label: UITextConstants.share,
               icon: CupertinoIcons.share,
@@ -294,6 +313,15 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     );
     if (!context.mounted || action == null) return;
     switch (action) {
+      case _CircleMoreAction.submitPost:
+        // /create 路由门负责未登录拦截；圈子锚点经 extra 注入 PublishSettings.circleIds。
+        context.push(
+          AppRoutePaths.create(),
+          extra: CreateEntryArguments(
+            circleId: widget.circleId,
+            circleName: circleName.isEmpty ? null : circleName,
+          ),
+        );
       case _CircleMoreAction.share:
         AppToast.show(context, UITextConstants.share);
       case _CircleMoreAction.copyLink:
@@ -316,7 +344,8 @@ class _CircleShellState extends ConsumerState<CircleShell> {
       AuthSessionState next,
     ) {
       final justLoggedIn =
-          next.isAuthenticated && (previous == null || !previous.isAuthenticated);
+          next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated);
       if (justLoggedIn) {
         maybeResumeJoinContinuation(circleCtrl);
       }

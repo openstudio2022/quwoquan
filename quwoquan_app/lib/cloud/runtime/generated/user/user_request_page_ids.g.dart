@@ -53,6 +53,7 @@ class UserRequestPageIds {
     'LoginAnonymous': 'user.login.anonymous',
     'LoginOneTap': 'user.login.one.tap',
     'LoginWithApple': 'user.login.with.apple',
+    'LoginWithPasskey': 'user.login.with.passkey',
     'LoginWithPhone': 'user.login.with.phone',
     'LoginWithWechat': 'user.login.with.wechat',
     'Logout': 'user.logout',
@@ -126,6 +127,7 @@ class UserRequestPageIds {
   static const String loginAnonymous = 'user.login.anonymous';
   static const String loginOneTap = 'user.login.one.tap';
   static const String loginWithApple = 'user.login.with.apple';
+  static const String loginWithPasskey = 'user.login.with.passkey';
   static const String loginWithPhone = 'user.login.with.phone';
   static const String loginWithWechat = 'user.login.with.wechat';
   static const String logout = 'user.logout';

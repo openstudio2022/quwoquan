@@ -14,6 +14,59 @@ import 'package:flutter/services.dart';
 /// New native surfaces MUST be added behind an interface here (never a raw
 /// `MethodChannel` in business code), and unimplemented platforms must return a
 /// structured "unavailable" instead of crashing.
+enum NativeAuthProvider {
+  wechat,
+  apple,
+  systemCredential,
+  passkey,
+}
+
+enum NativeAuthAvailability {
+  available,
+  unavailable,
+}
+
+class NativeAuthCapability {
+  const NativeAuthCapability({
+    required this.provider,
+    required this.availability,
+    this.reason = '',
+  });
+
+  final NativeAuthProvider provider;
+  final NativeAuthAvailability availability;
+  final String reason;
+
+  bool get isAvailable => availability == NativeAuthAvailability.available;
+}
+
+class NativeAuthResult {
+  const NativeAuthResult({
+    required this.provider,
+    required this.ticket,
+    this.maskedAccount = '',
+    this.displayLabel = '',
+    this.rawPayload = const <String, dynamic>{},
+  });
+
+  final NativeAuthProvider provider;
+  final String ticket;
+  final String maskedAccount;
+  final String displayLabel;
+  final Map<String, dynamic> rawPayload;
+}
+
+abstract interface class NativeAuthBridge {
+  Future<NativeAuthCapability> getCapability(NativeAuthProvider provider);
+
+  Future<NativeAuthResult> signIn(NativeAuthProvider provider);
+
+  Future<NativeAuthResult> signInWithPasskey({
+    String? relyingPartyId,
+    String? challenge,
+  });
+}
+
 abstract interface class AssistantLocalContextBridge {
   /// Whether a native local-context provider is wired on this platform.
   bool get isSupported;
@@ -71,4 +124,112 @@ class UnsupportedAssistantLocalContextBridge
     List<String> requestedFields = const <String>[],
   }) async =>
       const <String, dynamic>{};
+}
+
+class MethodChannelNativeAuthBridge implements NativeAuthBridge {
+  MethodChannelNativeAuthBridge({
+    this.channel = const MethodChannel('quwoquan/auth/native_bridge'),
+  });
+
+  final MethodChannel channel;
+
+  @override
+  Future<NativeAuthCapability> getCapability(NativeAuthProvider provider) async {
+    try {
+      final result = await channel.invokeMapMethod<String, dynamic>(
+        'getCapability',
+        <String, dynamic>{'provider': provider.name},
+      );
+      final available = result?['available'] == true;
+      return NativeAuthCapability(
+        provider: provider,
+        availability: available
+            ? NativeAuthAvailability.available
+            : NativeAuthAvailability.unavailable,
+        reason: result?['reason']?.toString() ?? '',
+      );
+    } on MissingPluginException {
+      return NativeAuthCapability(
+        provider: provider,
+        availability: NativeAuthAvailability.unavailable,
+        reason: 'missing_plugin',
+      );
+    } on PlatformException catch (error) {
+      return NativeAuthCapability(
+        provider: provider,
+        availability: NativeAuthAvailability.unavailable,
+        reason: error.code,
+      );
+    }
+  }
+
+  @override
+  Future<NativeAuthResult> signIn(NativeAuthProvider provider) async {
+    final result = await channel.invokeMapMethod<String, dynamic>(
+      'signIn',
+      <String, dynamic>{'provider': provider.name},
+    );
+    return _resultFromMap(provider, result);
+  }
+
+  @override
+  Future<NativeAuthResult> signInWithPasskey({
+    String? relyingPartyId,
+    String? challenge,
+  }) async {
+    final result = await channel.invokeMapMethod<String, dynamic>(
+      'signInWithPasskey',
+      <String, dynamic>{
+        if (relyingPartyId != null && relyingPartyId.isNotEmpty)
+          'relyingPartyId': relyingPartyId,
+        if (challenge != null && challenge.isNotEmpty) 'challenge': challenge,
+      },
+    );
+    return _resultFromMap(NativeAuthProvider.passkey, result);
+  }
+
+  NativeAuthResult _resultFromMap(
+    NativeAuthProvider provider,
+    Map<String, dynamic>? result,
+  ) {
+    final ticket = result?['ticket']?.toString().trim() ?? '';
+    if (ticket.isEmpty) {
+      throw StateError('${provider.name} ticket is empty');
+    }
+    return NativeAuthResult(
+      provider: provider,
+      ticket: ticket,
+      maskedAccount: result?['maskedAccount']?.toString().trim() ?? '',
+      displayLabel: result?['displayLabel']?.toString().trim() ?? '',
+      rawPayload: result == null
+          ? const <String, dynamic>{}
+          : Map<String, dynamic>.from(result),
+    );
+  }
+}
+
+class UnsupportedNativeAuthBridge implements NativeAuthBridge {
+  const UnsupportedNativeAuthBridge();
+
+  @override
+  Future<NativeAuthCapability> getCapability(NativeAuthProvider provider) async {
+    return NativeAuthCapability(
+      provider: provider,
+      availability: NativeAuthAvailability.unavailable,
+      reason: 'unsupported_platform',
+    );
+  }
+
+  @override
+  Future<NativeAuthResult> signIn(NativeAuthProvider provider) async {
+    throw StateError('${provider.name} native auth is unavailable');
+  }
+
+  @override
+  Future<NativeAuthResult> signInWithPasskey({
+    String? relyingPartyId,
+    String? challenge,
+  }) async {
+    throw StateError('passkey native auth is unavailable');
+  }
 }

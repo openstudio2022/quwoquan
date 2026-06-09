@@ -1,0 +1,10 @@
+{
+  "label": "创作者画像",
+  "labelEn": "Creator Profile",
+  "description": "内容创作者的规模、风格与商业特征",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 50
+}

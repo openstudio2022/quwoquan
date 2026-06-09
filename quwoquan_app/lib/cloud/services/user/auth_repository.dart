@@ -13,6 +13,9 @@ class OtpSendResultData {
   const OtpSendResultData({
     required this.maskedPhone,
     required this.expiresInSeconds,
+    required this.deliveryStatus,
+    this.requestId,
+    this.challengeId,
     this.debugCode,
   });
 
@@ -20,13 +23,24 @@ class OtpSendResultData {
     return OtpSendResultData(
       maskedPhone: (map['maskedPhone'] as String?) ?? '',
       expiresInSeconds: (map['expiresInSeconds'] as num?)?.toInt() ?? 0,
+      deliveryStatus: (map['deliveryStatus'] as String?) ?? 'queued',
+      requestId: map['requestId'] as String?,
+      challengeId: map['challengeId'] as String?,
       debugCode: map['debugCode'] as String?,
     );
   }
 
   final String maskedPhone;
   final int expiresInSeconds;
+  final String deliveryStatus;
+  final String? requestId;
+  final String? challengeId;
   final String? debugCode;
+
+  bool get isDebugCodeVisible =>
+      debugCode != null &&
+      debugCode!.isNotEmpty &&
+      (deliveryStatus == 'debug' || deliveryStatus == 'pass_through');
 }
 
 /// AuthRepository: 登录、凭证管理、分身管理。
@@ -41,6 +55,8 @@ abstract class AuthRepository {
     required String credentialKey,
     String? otpCode,
     String? displayLabel,
+    String? deviceId,
+    String? platform,
   });
 
   /// 运营商一键登录。App 只上传授权 token，真实手机号由服务端置换。
@@ -51,6 +67,28 @@ abstract class AuthRepository {
     required String platform,
     required String agreementVersion,
     required String privacyVersion,
+  });
+
+  /// 微信授权码登录。App 只上传短期授权码，服务端负责换取长期会话。
+  Future<AuthLoginResultDto> loginWechat({
+    required String wechatCode,
+    required String deviceId,
+    required String platform,
+  });
+
+  /// Apple ID token 登录。App 只上传身份断言，服务端负责校验与换取会话。
+  Future<AuthLoginResultDto> loginApple({
+    required String appleIdToken,
+    required String deviceId,
+    required String platform,
+  });
+
+  /// passkey / 系统凭据登录预留：客户端只透传 assertion/ticket，不做本地验签。
+  Future<AuthLoginResultDto> loginPasskey({
+    required String passkeyAssertion,
+    required String deviceId,
+    required String platform,
+    String? displayLabel,
   });
 
   /// 基于安装标识的匿名/游客恢复。
@@ -101,6 +139,9 @@ class MockAuthRepository implements AuthRepository {
     return OtpSendResultData(
       maskedPhone: _maskPhone(phone),
       expiresInSeconds: 300,
+      deliveryStatus: 'debug',
+      requestId: 'mock_otp_request',
+      challengeId: 'mock_otp_challenge',
       debugCode: '000000',
     );
   }
@@ -119,6 +160,8 @@ class MockAuthRepository implements AuthRepository {
     required String credentialKey,
     String? otpCode,
     String? displayLabel,
+    String? deviceId,
+    String? platform,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
     return AuthLoginResultDto.fromMap(<String, dynamic>{
@@ -148,6 +191,61 @@ class MockAuthRepository implements AuthRepository {
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'phone',
+    });
+  }
+
+  @override
+  Future<AuthLoginResultDto> loginWechat({
+    required String wechatCode,
+    required String deviceId,
+    required String platform,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return AuthLoginResultDto.fromMap(<String, dynamic>{
+      'accessToken': 'mock_wechat_token_${wechatCode.hashCode}',
+      'refreshToken': 'mock_wechat_refresh',
+      'ownerId': 'mock_owner_id',
+      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'subAccountCount': 1,
+      'accountState': 'active',
+      'identityOrigin': 'wechat',
+    });
+  }
+
+  @override
+  Future<AuthLoginResultDto> loginApple({
+    required String appleIdToken,
+    required String deviceId,
+    required String platform,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return AuthLoginResultDto.fromMap(<String, dynamic>{
+      'accessToken': 'mock_apple_token_${appleIdToken.hashCode}',
+      'refreshToken': 'mock_apple_refresh',
+      'ownerId': 'mock_owner_id',
+      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'subAccountCount': 1,
+      'accountState': 'active',
+      'identityOrigin': 'apple',
+    });
+  }
+
+  @override
+  Future<AuthLoginResultDto> loginPasskey({
+    required String passkeyAssertion,
+    required String deviceId,
+    required String platform,
+    String? displayLabel,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return AuthLoginResultDto.fromMap(<String, dynamic>{
+      'accessToken': 'mock_passkey_token_${passkeyAssertion.hashCode}',
+      'refreshToken': 'mock_passkey_refresh',
+      'ownerId': 'mock_owner_id',
+      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'subAccountCount': 1,
+      'accountState': 'active',
+      'identityOrigin': 'passkey',
     });
   }
 
@@ -314,6 +412,8 @@ class RemoteAuthRepository implements AuthRepository {
     required String credentialKey,
     String? otpCode,
     String? displayLabel,
+    String? deviceId,
+    String? platform,
   }) async {
     final isPhone = credentialType.trim().toLowerCase() == 'phone';
     final body = <String, dynamic>{
@@ -321,6 +421,8 @@ class RemoteAuthRepository implements AuthRepository {
       'credentialKey': credentialKey,
       if (isPhone) 'phone': credentialKey,
       if (otpCode != null && otpCode.isNotEmpty) 'otpCode': otpCode,
+      if (isPhone && deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
+      if (isPhone && platform != null && platform.isNotEmpty) 'platform': platform,
     };
     if (displayLabel != null) {
       body['displayLabel'] = displayLabel;
@@ -358,6 +460,66 @@ class RemoteAuthRepository implements AuthRepository {
         'platform': platform,
         'agreementVersion': agreementVersion,
         'privacyVersion': privacyVersion,
+      },
+    );
+    return _authResultFromResponse(resp, context);
+  }
+
+  @override
+  Future<AuthLoginResultDto> loginWechat({
+    required String wechatCode,
+    required String deviceId,
+    required String platform,
+  }) async {
+    final context = UserRequestPageIds.loginWithWechat;
+    final resp = await _client.postJson(
+      _uri(UserApiMetadata.loginWithWechatPath),
+      headers: CloudRequestHeaders.forPage(context),
+      body: <String, dynamic>{
+        'wechatCode': wechatCode,
+        'deviceId': deviceId,
+        'platform': platform,
+      },
+    );
+    return _authResultFromResponse(resp, context);
+  }
+
+  @override
+  Future<AuthLoginResultDto> loginApple({
+    required String appleIdToken,
+    required String deviceId,
+    required String platform,
+  }) async {
+    final context = UserRequestPageIds.loginWithApple;
+    final resp = await _client.postJson(
+      _uri(UserApiMetadata.loginWithApplePath),
+      headers: CloudRequestHeaders.forPage(context),
+      body: <String, dynamic>{
+        'appleIdToken': appleIdToken,
+        'deviceId': deviceId,
+        'platform': platform,
+      },
+    );
+    return _authResultFromResponse(resp, context);
+  }
+
+  @override
+  Future<AuthLoginResultDto> loginPasskey({
+    required String passkeyAssertion,
+    required String deviceId,
+    required String platform,
+    String? displayLabel,
+  }) async {
+    final context = UserRequestPageIds.loginWithPasskey;
+    final resp = await _client.postJson(
+      _uri(UserApiMetadata.loginWithPasskeyPath),
+      headers: CloudRequestHeaders.forPage(context),
+      body: <String, dynamic>{
+        'passkeyAssertion': passkeyAssertion,
+        'deviceId': deviceId,
+        'platform': platform,
+        if (displayLabel != null && displayLabel.isNotEmpty)
+          'displayLabel': displayLabel,
       },
     );
     return _authResultFromResponse(resp, context);

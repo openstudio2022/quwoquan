@@ -529,10 +529,6 @@ files:
     zone: ui
     material_import: full
     imports_cupertino: false
-  - path: quwoquan_app/lib/ui/chat/widgets/voice/voice_record_overlay.dart
-    zone: ui
-    material_import: none
-    imports_cupertino: true
   - path: quwoquan_app/lib/ui/chat/widgets/voice/voice_recorder.dart
     zone: ui
     material_import: none

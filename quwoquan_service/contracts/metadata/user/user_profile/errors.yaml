@@ -188,6 +188,17 @@ errors:
       zh: "Apple 登录失败，请重试"
       en: "Apple sign-in failed, please try again"
 
+  - code: USER.AUTH.passkey_auth_failed
+    kind: AUTH
+    reason: third_party_failure
+    http_status: 502
+    recovery_action: retry
+    dart_const: passkeyAuthFailed
+    go_const: ErrPasskeyAuthFailed
+    user_message:
+      zh: "Passkey 登录失败，请重试或改用其他方式"
+      en: "Passkey sign-in failed, please retry or use another method"
+
   - code: USER.AUTH.token_expired
     kind: AUTH
     reason: token_expired
@@ -277,3 +288,36 @@ errors:
     user_message:
       zh: "该分身已有记录数据，请使用退役而不是删除"
       en: "This persona has history and must be retired instead of deleted"
+
+  - code: USER.SUB_ACCOUNT.retired_guard
+    kind: SUB_ACCOUNT
+    reason: invalid_status_transition
+    http_status: 400
+    recovery_action: surface
+    dart_const: retiredSubAccountGuard
+    go_const: ErrRetiredSubAccountGuard
+    user_message:
+      zh: "该分身已退役，当前操作不可继续"
+      en: "This persona is retired and cannot continue this action"
+
+  - code: USER.SUB_ACCOUNT.delete_empty_only
+    kind: SUB_ACCOUNT
+    reason: invalid_status_transition
+    http_status: 400
+    recovery_action: surface
+    dart_const: deleteEmptySubAccountOnly
+    go_const: ErrDeleteEmptySubAccountOnly
+    user_message:
+      zh: "空白分身请直接删除，无需退役"
+      en: "Empty persona should be deleted directly instead of retired"
+
+  - code: USER.SUB_ACCOUNT.handle_taken
+    kind: SUB_ACCOUNT
+    reason: conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: subAccountHandleTaken
+    go_const: ErrSubAccountHandleTaken
+    user_message:
+      zh: "该分身号已被占用，请换一个"
+      en: "This persona handle is already taken, please choose another"

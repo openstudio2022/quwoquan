@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -122,7 +123,7 @@ func (s *MongoChatStore) ListGroupConversationsNeedingAvatar(ctx context.Context
 	}
 	filter := bson.M{
 		"status": bson.M{"$in": bson.A{"", "active"}},
-		"type":   bson.M{"$in": bson.A{"group", "circle"}},
+		"type":   "group",
 		"$or": bson.A{
 			bson.M{"avatarUrl": bson.M{"$exists": false}},
 			bson.M{"avatarUrl": ""},
@@ -428,6 +429,55 @@ func (s *MongoChatStore) ListUserStates(ctx context.Context, userId string, limi
 		return nil, err
 	}
 	return states, nil
+}
+
+func (s *MongoChatStore) FindDirectConversationBetween(ctx context.Context, memberA, memberB string) (*model.Conversation, error) {
+	if strings.TrimSpace(memberA) == "" || strings.TrimSpace(memberB) == "" {
+		return nil, fmt.Errorf("conversation members required")
+	}
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{
+			"userId":     bson.M{"$in": []string{memberA, memberB}},
+			"memberType": "user",
+		}}},
+		{{Key: "$group", Value: bson.M{
+			"_id":       "$conversationId",
+			"memberIds": bson.M{"$addToSet": "$userId"},
+			"count":     bson.M{"$sum": 1},
+		}}},
+		{{Key: "$match", Value: bson.M{
+			"count": 2,
+			"memberIds": bson.M{
+				"$all": []string{memberA, memberB},
+			},
+		}}},
+		{{Key: "$limit", Value: 1}},
+	}
+	cur, err := s.members.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var rows []struct {
+		ID string `bson:"_id"`
+	}
+	if err := cur.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	conv, err := s.FindConversationByID(ctx, rows[0].ID)
+	if err != nil {
+		return nil, err
+	}
+	if conv.Type != "direct" && conv.Type != "encrypted" {
+		return nil, nil
+	}
+	if conv.Status != "" && conv.Status != "active" {
+		return nil, nil
+	}
+	return conv, nil
 }
 
 // ── Receipts ─────────────────────────────────────────────────────────────────

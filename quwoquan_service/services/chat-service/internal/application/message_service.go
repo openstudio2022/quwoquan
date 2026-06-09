@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -18,16 +19,25 @@ import (
 const recallTimeLimit = 2 * time.Minute
 
 type MessageService struct {
-	repo      persistence.ChatRepository
-	cache     *cache.ConversationCache
-	publisher EventPublisher
+	repo          persistence.ChatRepository
+	cache         *cache.ConversationCache
+	publisher     EventPublisher
+	relationships RelationshipGate
 }
 
-func NewMessageService(repo persistence.ChatRepository, cache *cache.ConversationCache, publisher EventPublisher) *MessageService {
+func NewMessageService(
+	repo persistence.ChatRepository,
+	cache *cache.ConversationCache,
+	publisher EventPublisher,
+	relationships RelationshipGate,
+) *MessageService {
 	if publisher == nil {
 		publisher = NoopEventPublisher()
 	}
-	return &MessageService{repo: repo, cache: cache, publisher: publisher}
+	if relationships == nil {
+		relationships = DenyRelationshipGate()
+	}
+	return &MessageService{repo: repo, cache: cache, publisher: publisher, relationships: relationships}
 }
 
 type SendMessageRequest struct {
@@ -72,6 +82,10 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 			Seq:       existing.Seq,
 			Timestamp: existing.Timestamp.Format(time.RFC3339Nano),
 		}, nil
+	}
+
+	if err := s.ensureMessageAllowed(ctx, req); err != nil {
+		return nil, err
 	}
 
 	seq, err := s.cache.NextSeq(ctx, req.ConversationId)
@@ -135,6 +149,25 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 		}); err != nil {
 			slog.Error("publish MessageSent failed", "err", err, "conversationId", req.ConversationId)
 		}
+		if isAssistantGeneratedMessage(req) {
+			return
+		}
+		assistantMember, ok := s.mentionedAssistantMember(context.Background(), req.ConversationId, msg.Mentions)
+		if !ok {
+			return
+		}
+		if err := s.publisher.PublishDomainEvent(context.Background(), event.AssistantMentioned, req.ConversationId, req.SenderId, map[string]any{
+			"conversationId":     req.ConversationId,
+			"messageId":          msg.ID,
+			"seq":                seq,
+			"senderId":           req.SenderId,
+			"content":            msg.Content,
+			"assistantMemberId":  assistantMember.UserId,
+			"assistantSkillId":   assistantMember.AssistantSkillId,
+			"triggerClientMsgId": req.ClientMsgId,
+		}); err != nil {
+			slog.Error("publish AssistantMentioned failed", "err", err, "conversationId", req.ConversationId)
+		}
 	}()
 
 	return &SendMessageResponse{
@@ -142,6 +175,64 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 		Seq:       seq,
 		Timestamp: now.Format(time.RFC3339Nano),
 	}, nil
+}
+
+func (s *MessageService) mentionedAssistantMember(ctx context.Context, conversationID string, mentions []string) (*model.ConversationMember, bool) {
+	if len(mentions) == 0 {
+		return nil, false
+	}
+	assistantMember, err := s.repo.FindAssistantMember(ctx, conversationID)
+	if err != nil || assistantMember == nil {
+		return nil, false
+	}
+	for _, mention := range mentions {
+		if mention == assistantMember.UserId || mention == "assistant" {
+			return assistantMember, true
+		}
+	}
+	return nil, false
+}
+
+func isAssistantGeneratedMessage(req SendMessageRequest) bool {
+	return req.SenderId == "assistant" || strings.HasPrefix(strings.TrimSpace(req.ClientMsgId), "assistant-")
+}
+
+func (s *MessageService) ensureMessageAllowed(ctx context.Context, req SendMessageRequest) error {
+	conv, err := s.repo.FindConversationByID(ctx, req.ConversationId)
+	if err != nil {
+		return err
+	}
+	if conv.Status != "" && conv.Status != "active" {
+		return chatBlocked("conversation is not active")
+	}
+	if conv.Type != conversationTypeDirect && conv.Type != conversationTypeEncrypted {
+		return nil
+	}
+	members, err := s.repo.ListMembers(ctx, req.ConversationId, 10, "", "", "joined_asc")
+	if err != nil {
+		return err
+	}
+	peerID := ""
+	for _, member := range members {
+		if member.UserId != req.SenderId && member.MemberType == "user" {
+			peerID = member.UserId
+			break
+		}
+	}
+	if peerID == "" {
+		return chatBlocked("direct conversation peer missing")
+	}
+	capability, err := s.relationships.GetCapability(ctx, req.SenderId, peerID)
+	if err != nil {
+		return err
+	}
+	if capability.IsBlocked || capability.IsBlockedBy {
+		return chatBlocked("send message blocked by relationship gate")
+	}
+	if !capability.CanSendMessage {
+		return chatNotMutual("send message requires mutual follow")
+	}
+	return nil
 }
 
 func (s *MessageService) RecallMessage(ctx context.Context, conversationId, messageId, senderId string) (err error) {

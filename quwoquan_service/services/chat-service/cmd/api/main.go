@@ -230,17 +230,20 @@ func main() {
 	profileCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
 	profileClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 2 * time.Second}, profileCB)
 	profileResolver := httpadapter.NewUserProfileResolver(userServiceBaseURL, profileClient)
+	relationshipGate := httpadapter.NewUserRelationshipGate(userServiceBaseURL, profileClient)
+	socialContactResolver := httpadapter.NewUserSocialContactResolver(userServiceBaseURL, profileClient)
 
 	conversationSvc := application.NewConversationService(
 		chatStore,
 		convCache,
 		eventPublisher,
 		profileResolver,
+		relationshipGate,
 		groupAvatarMedia,
 		userSyncService,
 		groupAvatarScheduler,
 	)
-	messageSvc := application.NewMessageService(chatStore, convCache, eventPublisher)
+	messageSvc := application.NewMessageService(chatStore, convCache, eventPublisher, relationshipGate)
 	memberSvc := application.NewMemberService(
 		chatStore,
 		convCache,
@@ -249,6 +252,8 @@ func main() {
 		groupAvatarMedia,
 		userSyncService,
 		groupAvatarScheduler,
+		application.WithRelationshipGate(relationshipGate),
+		application.WithSocialContactResolver(socialContactResolver),
 	)
 	inboxSvc := application.NewInboxService(chatStore)
 	userAvatarConsumer := mq.NewUserAvatarUpdateConsumer(

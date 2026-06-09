@@ -43,6 +43,14 @@ api_routes:
     response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy]
 
   - method: POST
+    path: /v1/auth/login/passkey
+    operation: LoginWithPasskey
+    description: passkey assertion 登录；客户端只透传 assertion/ticket，服务端完成 challenge 校验与会话签发
+    auth_required: false
+    request_fields: [passkeyAssertion, deviceId, platform, displayLabel]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy]
+
+  - method: POST
     path: /v1/auth/login/one-tap
     operation: LoginOneTap
     description: 运营商一键登录；App 只提交授权 token，服务端向认证厂商置换真实手机号后创建或恢复 OwnerAccount
@@ -70,7 +78,13 @@ api_routes:
     path: /v1/auth/logout
     operation: Logout
     description: 登出（吊销 refresh token）
-    request_fields: [deviceId]
+    request_fields: [refreshToken, deviceId]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   # ── 凭证管理（OwnerAccount 视图，需登录） ────────────────────────────────
 
@@ -91,12 +105,24 @@ api_routes:
     path: /v1/owner/credentials/bind
     operation: BindCredential
     description: 绑定新凭证（phone/wechat/apple）
-    request_fields: [credentialType, verificationPayload]
+    request_fields: [credentialType, credentialKey, displayLabel]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: DELETE
     path: /v1/owner/credentials/{credentialType}
     operation: UnbindCredential
     description: 解绑凭证（不能解绑最后一个）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   # ── 分身管理（用户私有视图，需登录） ───────────────────────────────────
 
@@ -119,6 +145,12 @@ api_routes:
     description: 获取分身管理台摘要（数量、配额、主分身与当前激活分身）
     response_entity: PersonaManagementQuotaView
     response_fields: [ownerUserId, totalCount, quotaLimit, remainingCount, activeSubAccountId, primarySubAccountId]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/personas/active
@@ -126,6 +158,12 @@ api_routes:
     description: 获取当前激活分身上下文快照（供跨域动作主体透传）
     response_entity: ActivePersonaContextView
     response_fields: [ownerUserId, subAccountId, isolationLevel, profileVisibility, contextVersion, personaSnapshotVersion, sourceSurfaceId, explicitOverride, switchedAt]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/user/personas
@@ -148,6 +186,12 @@ api_routes:
     description: 更新分身资料或隔离等级
     request_entity: SubAccountProfileMutation
     request_fields: [displayName, userHandle, phone, email, avatarUrl, isolationLevel, purposeHint, applyScope, syncTargetIds, fieldsMask]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
     response_entity: PersonaManagementItemView
     response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
@@ -157,6 +201,12 @@ api_routes:
     description: 将某个分身的资料字段同步到全部或指定其它分身
     request_entity: SubAccountProfileMutation
     request_fields: [applyScope, syncTargetIds, fieldsMask]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/personas/{subAccountId}/lifecycle-guard
@@ -164,11 +214,23 @@ api_routes:
     description: 获取该分身当前可否删除/退役的保护状态
     response_entity: PersonaLifecycleGuardView
     response_fields: [subAccountId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/user/personas/{subAccountId}/retire
     operation: RetirePersona
     description: 退役已有记录归因的分身，保留记录对象作者归因
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
     response_entity: PersonaLifecycleGuardView
     response_fields: [subAccountId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
 
@@ -176,11 +238,23 @@ api_routes:
     path: /v1/user/personas/{subAccountId}/delete-empty
     operation: DeleteEmptyPersona
     description: 删除无记录归因的空白分身
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/user/personas/{subAccountId}/activate
     operation: ActivatePersona
     description: 切换激活分身（强一致，排他写）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
     response_entity: ActivePersonaContextView
     response_fields: [ownerUserId, subAccountId, isolationLevel, profileVisibility, contextVersion, personaSnapshotVersion, sourceSurfaceId, explicitOverride, switchedAt]
 
@@ -267,26 +341,56 @@ api_routes:
     description: "[已有] 更新主控账号资料"
     request_entity: SubAccountProfileMutation
     request_fields: [nickname, displayName, avatarUrl, backgroundUrl, bio, gender, birthDate, region, profileVisibility, applyScope, syncTargetIds, fieldsMask]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/settings/notifications
     operation: GetNotificationSettings
     response_entity: UserSetting
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: PATCH
     path: /v1/user/settings/notifications
     operation: UpdateNotificationSettings
     request_entity: UserSetting
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/settings/privacy
     operation: GetPrivacySettings
     response_entity: UserSetting
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: PATCH
     path: /v1/user/settings/privacy
     operation: UpdatePrivacySettings
     request_entity: UserSetting
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/settings/calls
@@ -294,6 +398,12 @@ api_routes:
     description: 获取来电与铃声设置
     response_entity: UserSetting
     response_fields: [defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: PATCH
     path: /v1/user/settings/calls
@@ -301,6 +411,12 @@ api_routes:
     description: 更新来电与铃声设置（仅支持官方铃声库 ID）
     request_entity: UserSetting
     request_fields: [defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/settings/appearance
@@ -308,6 +424,12 @@ api_routes:
     description: 获取 owner 默认值与当前子账号 override 聚合后的外观与字号设置
     response_entity: AppearanceSettingsView
     response_fields: [themeMode, fontSizePreset, source, ownerDefaultThemeMode, ownerDefaultFontSizePreset, hasSubAccountOverride, version, updatedAt]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: PATCH
     path: /v1/user/settings/appearance
@@ -315,6 +437,12 @@ api_routes:
     description: 更新外观与字号设置；支持全账号同步、当前子账号覆盖、恢复继承 owner 默认
     request_entity: AppearanceSettingsMutation
     request_fields: [themeMode, fontSizePreset, applyScope]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
     response_entity: AppearanceSettingsView
     response_fields: [themeMode, fontSizePreset, source, ownerDefaultThemeMode, ownerDefaultFontSizePreset, hasSubAccountOverride, version, updatedAt]
 

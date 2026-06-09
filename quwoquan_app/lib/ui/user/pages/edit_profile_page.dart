@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -72,10 +73,43 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         AppToast.show(context, '资料已更新');
         context.pop();
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(() => _isSaving = false);
-        AppToast.show(context, '保存失败，请稍后再试');
+        final resolved = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        );
+        final semantic = UiErrorSemantic(
+          category: resolved.category,
+          scope: resolved.scope,
+          title: '资料保存未完成',
+          message: resolved.message,
+          secondaryMessage: resolved.secondaryMessage,
+          primaryAction: const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
+          ),
+          secondaryAction: resolved.secondaryAction,
+          dismissible: resolved.dismissible,
+          sourceCode: resolved.sourceCode,
+          failureKind: resolved.failureKind,
+          recoveryAction: resolved.recoveryAction,
+          presentation: resolved.presentation,
+          tone: resolved.tone,
+        );
+        await AppActionErrorFeedback.show(
+          context,
+          semantic: semantic,
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _save();
+            }
+          },
+        );
       }
     }
   }

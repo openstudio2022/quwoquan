@@ -12,6 +12,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
 
 RawReceivePort? _rootIsolateErrorPort;
@@ -109,7 +110,7 @@ Future<void> runQuwoquanApp({
 }
 
 void _installRootIsolateErrorListener() {
-  if (kIsWeb) {
+  if (currentAppPlatform == AppPlatform.web) {
     return;
   }
   if (_rootIsolateErrorPort != null) {

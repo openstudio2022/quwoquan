@@ -13,25 +13,38 @@ var _ = time.Now
 
 // Comment domain model.
 type Comment struct {
-	ID                        string    `json:"_id" bson:"_id"`
-	PostId                    string    `json:"postId" bson:"postId"`
-	AuthorId                  string    `json:"authorId" bson:"authorId"`
-	AuthorDisplayNameSnapshot string    `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
-	AuthorAvatarUrlSnapshot   string    `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
-	PersonaContextVersion     int64     `json:"personaContextVersion" bson:"personaContextVersion"`
-	Content                   string    `json:"content" bson:"content"`
-	ReplyToCommentId          string    `json:"replyToCommentId" bson:"replyToCommentId"`
-	ReplyToUserId             string    `json:"replyToUserId" bson:"replyToUserId"`
-	EntityRefs                []string  `json:"entityRefs" bson:"entityRefs"`
-	PrimaryHomepageId         string    `json:"primaryHomepageId" bson:"primaryHomepageId"`
-	CanonicalEntityId         string    `json:"canonicalEntityId" bson:"canonicalEntityId"`
-	AssistantMentioned        bool      `json:"assistantMentioned" bson:"assistantMentioned"`
-	AssistantReplySource      string    `json:"assistantReplySource" bson:"assistantReplySource"`
-	AssistantCorrectionStatus string    `json:"assistantCorrectionStatus" bson:"assistantCorrectionStatus"`
-	ReplyCount                int64     `json:"replyCount" bson:"replyCount"`
-	LikeCount                 int64     `json:"likeCount" bson:"likeCount"`
-	Status                    string    `json:"status" bson:"status"`
-	CreatedAt                 time.Time `json:"createdAt" bson:"createdAt"`
+	ID                        string         `json:"_id" bson:"_id"`
+	PostId                    string         `json:"postId" bson:"postId"`
+	AuthorId                  string         `json:"authorId" bson:"authorId"`
+	AuthorDisplayNameSnapshot string         `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
+	AuthorAvatarUrlSnapshot   string         `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
+	PersonaContextVersion     int64          `json:"personaContextVersion" bson:"personaContextVersion"`
+	Content                   string         `json:"content" bson:"content"`
+	ReplyToCommentId          string         `json:"replyToCommentId" bson:"replyToCommentId"`
+	ReplyToUserId             string         `json:"replyToUserId" bson:"replyToUserId"`
+	ParentCommentId           string         `json:"parentCommentId" bson:"parentCommentId"`
+	AttachmentMediaIds        any            `json:"attachmentMediaIds" bson:"attachmentMediaIds"`
+	Attachments               any            `json:"attachments" bson:"attachments"`
+	Mentions                  any            `json:"mentions" bson:"mentions"`
+	EntityRefs                []string       `json:"entityRefs" bson:"entityRefs"`
+	PrimaryHomepageId         string         `json:"primaryHomepageId" bson:"primaryHomepageId"`
+	CanonicalEntityId         string         `json:"canonicalEntityId" bson:"canonicalEntityId"`
+	AssistantMentioned        bool           `json:"assistantMentioned" bson:"assistantMentioned"`
+	AssistantReplySource      string         `json:"assistantReplySource" bson:"assistantReplySource"`
+	AssistantCorrectionStatus string         `json:"assistantCorrectionStatus" bson:"assistantCorrectionStatus"`
+	ReplyCount                int64          `json:"replyCount" bson:"replyCount"`
+	ReplyPreview              any            `json:"replyPreview" bson:"replyPreview"`
+	ReplyNextCursor           string         `json:"replyNextCursor" bson:"replyNextCursor"`
+	PostSummary               map[string]any `json:"postSummary" bson:"postSummary"`
+	LikeCount                 int64          `json:"likeCount" bson:"likeCount"`
+	DislikeCount              int64          `json:"dislikeCount" bson:"dislikeCount"`
+	ViewerReaction            string         `json:"viewerReaction" bson:"viewerReaction"`
+	RecommendedScore          float64        `json:"recommendedScore" bson:"recommendedScore"`
+	Status                    string         `json:"status" bson:"status"`
+	CanDelete                 bool           `json:"canDelete" bson:"canDelete"`
+	CanReply                  bool           `json:"canReply" bson:"canReply"`
+	CanReport                 bool           `json:"canReport" bson:"canReport"`
+	CreatedAt                 time.Time      `json:"createdAt" bson:"createdAt"`
 }
 
 // ContentReaction domain model.

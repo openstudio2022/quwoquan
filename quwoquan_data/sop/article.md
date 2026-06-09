@@ -59,6 +59,33 @@ Agent 根据 entityType + tagRefs 自动推导：
 | 景区_文化_article | 文化探索 | 历史/特色/故事/当代意义      | 800-2000 |
 
 
+## 写作主线（writingIntent）与题材矩阵
+
+每篇文章必须选定且仅选定一条顶层主线（与单一门库 `_common/quality_gates.WRITING_INTENTS` 对齐，review/verify 校验结构匹配）：
+
+| writingIntent | 读者阶段 | 正文必含结构（命中≥3 桶） |
+| --- | --- | --- |
+| `planning_consultation` | 计划前咨询/攻略 | 顺序/动线、交通(怎么去)、票务(门票/预约/开放时间)、取舍(建议/注意/避开) |
+| `decision_experience` | 犹豫值不值得去 | 适合/不适合人群、体验价值、真实喜欢/遗憾、关键取舍 |
+| `post_trip_journal` | 游后过程记录 | 时间线、现场场景、情绪转折、复盘 |
+
+旅行题材矩阵（SOP 题材 → 顶层主线映射，供选题与下单配比）：
+
+| 题材 | 顶层主线 | 版面组织 |
+| --- | --- | --- |
+| 快速攻略 quick_guide / 深度攻略 deep_guide | planning_consultation | 结论先行 → 怎么去 → 怎么玩 → 费用/预约 → 风险/替代 → 适合谁 |
+| 路线计划 route_plan | planning_consultation | 路线成立理由 → 节点顺序 → 转场成本 → 每节点亮点/风险 → 删减方案 |
+| 决策体验 decision_experience | decision_experience | 为什么去 → 现场过程 → 喜欢/不喜欢 → 关键取舍 → 是否值得 |
+| 游后游记 post_trip_journal | post_trip_journal | 时间线 → 现场感 → 情绪转折 → 复盘 |
+| 图集 photo_gallery / 视频脚本 video_script | （载体专属） | 视觉节奏/镜头顺序为主，区分镜头脚本与游记正文 |
+
+## 语域与底稿约束（SOP 注入门库）
+
+- **禁用语域**：户外景区/自然线路禁止博物馆语域（`看展`/`展厅`/`展陈`）；该词表由本 SOP 以 `bannedRegisterTerms` 注入 brief → writing_pack，review/verify 的 `registerMismatch` 门据此判定。
+- **主底稿 baseSourceRef**：每篇选一个主底稿来源作为风格与事实锚点；其它来源只能补事实，不得成为多篇通用底稿（reducer 会标 `source_reuse_risk`）。
+- **图片服务正文**：图片必须贴近所服务的节点/段落（`asset://`），不得只做封面；路线文每个核心节点应有图或显式缺图理由。
+- 以上为公共机制 + 旅行垂类规则；具体 region/batch 经验只写任务 `notes.md`，不回写本 SOP。
+
 ## 图文引用
 
 ```markdown

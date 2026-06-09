@@ -425,7 +425,7 @@ class AssistantSessionStore {
           return '';
         }
       } catch (_) {
-        /* best-effort: 历史结构化文本解析失败时回退到已剥离的纯文本继续过滤 */
+        /* best-effort: 结构化文本解析失败时回退到已剥离的纯文本继续过滤 */
       }
     }
     if (_containsInternalHistoryText(stripped)) return '';

@@ -11,6 +11,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/core/services/hive_runtime.dart';
 
 const String kOpsEventQueueBoxName = 'ops_event_queue';
 
@@ -569,16 +570,8 @@ class RemoteOpsEventRepository
     ).replace(queryParameters: queryParameters);
   }
 
-  Future<Box<String>> _ensureBox() async {
-    if (!Hive.isBoxOpen(_queueBoxName)) {
-      try {
-        await Hive.initFlutter();
-      } catch (_) {
-        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
-      }
-      return Hive.openBox<String>(_queueBoxName);
-    }
-    return Hive.box<String>(_queueBoxName);
+  Future<Box<String>?> _ensureBox() async {
+    return HiveRuntime.openStringBoxOrNull(_queueBoxName);
   }
 
   @override
@@ -589,6 +582,9 @@ class RemoteOpsEventRepository
     _isFlushing = true;
     try {
       final box = await _ensureBox();
+      if (box == null) {
+        return;
+      }
       final keys = box.keys.map((key) => key.toString()).toList(growable: false)
         ..sort();
       var consecutiveFailures = 0;
@@ -744,6 +740,9 @@ class RemoteOpsEventRepository
 
   Future<void> _enqueue(List<OpsEventRecordInput> events) async {
     final box = await _ensureBox();
+    if (box == null) {
+      return;
+    }
     final now = DateTime.now().microsecondsSinceEpoch.toString();
     await box.put(
       now,

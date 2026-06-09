@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, BellRing, ShieldCheck, Siren } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Link } from 'react-router-dom';
 
 import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated.js';
 import {
   fetchAlertTemplates,
   fetchPlatformAudits,
+  fetchPlatformTriageSummary,
   fetchPlatformProjectionSummary,
   fetchReleases,
   fetchSLOPolicies,
+  type ControlPlaneBacklogCandidate,
   type AlertTemplateItem,
   type PlatformAuditItem,
   type PlatformProjectionSummary,
+  type PlatformTriageSummaryResponse,
   type ReleaseItem,
   type SLOPolicyItem,
 } from '../../shared/api/controlPlane.js';
@@ -30,6 +34,7 @@ export function PlatformObservabilityPage() {
   const [audits, setAudits] = useState<PlatformAuditItem[]>([]);
   const [releases, setReleases] = useState<ReleaseItem[]>([]);
   const [summary, setSummary] = useState<PlatformProjectionSummary | null>(null);
+  const [triage, setTriage] = useState<PlatformTriageSummaryResponse | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
@@ -40,13 +45,15 @@ export function PlatformObservabilityPage() {
       fetchPlatformAudits(),
       fetchReleases(),
       fetchPlatformProjectionSummary(),
+      fetchPlatformTriageSummary({ env: 'beta' }),
     ])
-      .then(([sloItems, alertItems, auditItems, releaseItems, summaryItem]) => {
+      .then(([sloItems, alertItems, auditItems, releaseItems, summaryItem, triageItem]) => {
         setSlos(sloItems);
         setAlerts(alertItems);
         setAudits(auditItems);
         setReleases(releaseItems);
         setSummary(summaryItem);
+        setTriage(triageItem);
         setRemoteReady(true);
         setRuntimeError(null);
       })
@@ -67,6 +74,8 @@ export function PlatformObservabilityPage() {
         : [],
     [releases],
   );
+  const backlogCandidates = triage?.backlogCandidates ?? [];
+  const highlightBacklog = backlogCandidates[0];
 
   return (
     <PageScaffold
@@ -79,6 +88,7 @@ export function PlatformObservabilityPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实可观测数据已接入' : '等待平台控制面连接'}
           </span>
+          <span className="badge badge--neutral">backlog={backlogCandidates.length}</span>
           <RuntimeErrorBadge error={runtimeError} />
         </>
       }
@@ -186,6 +196,80 @@ export function PlatformObservabilityPage() {
               <div>
                 <p className="item-title">等待审计时间线</p>
                 <p className="item-subtitle">平台控制面可达后将展示最近的发布、告警与回滚事件。</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="统一告警入口" subtitle="平台告警模板与产品实时告警共享 runbook / repair / audit 处置语义">
+        <div className="stack-list">
+          {alerts.map((item: AlertTemplateItem) => (
+            <div className="policy-item" key={item.id}>
+              <div>
+                <p className="item-title">{item.title}</p>
+                <p className="item-subtitle">
+                  severity={item.severity} · status={item.status} · owner={item.owner ?? 'platform-ops'}
+                </p>
+              </div>
+              <div className="badge-row">
+                {item.runbookRoute ? <Link className="button" to={item.runbookRoute}>查看 runbook</Link> : null}
+                {item.repairEntry ? <Link className="button button--primary" to={item.repairEntry}>进入修复入口</Link> : null}
+                {item.auditRoute ? <Link className="button" to={item.auditRoute}>查看审计链</Link> : null}
+                {(item.alertId ?? item.id) ? <span className="badge badge--neutral">alert={item.alertId ?? item.id}</span> : null}
+              </div>
+            </div>
+          ))}
+          {alerts.length === 0 ? (
+            <div className="policy-item">
+              <div>
+                <p className="item-title">暂无平台告警模板</p>
+                <p className="item-subtitle">控制面接通后，这里会展示真实告警模板与统一处置入口。</p>
+              </div>
+              <span className="badge badge--success">quiet</span>
+            </div>
+          ) : null}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Triage / Backlog" subtitle="平台配置漂移、回退链路和运行时缺口统一生成可执行待办">
+        <div className="stack-list">
+          {backlogCandidates.map((item: ControlPlaneBacklogCandidate) => (
+            <div className="policy-item" key={item.id}>
+              <div>
+                <p className="item-title">{item.title}</p>
+                <p className="item-subtitle">
+                  {item.category} · {item.summary}
+                </p>
+                <p className="item-subtitle">next: {item.nextAction}</p>
+              </div>
+              <div className="badge-row">
+                <span className={`badge ${item.severity === 'critical' ? 'badge--danger' : 'badge--warning'}`}>
+                  {item.severity}
+                </span>
+                {item.drilldownRoute ? <Link className="button" to={item.drilldownRoute}>进入 drilldown</Link> : null}
+                {item.runbookRoute ? <Link className="button" to={item.runbookRoute}>查看 runbook</Link> : null}
+                {item.repairEntry ? <Link className="button button--primary" to={item.repairEntry}>进入修复入口</Link> : null}
+                {item.auditRoute ? <Link className="button" to={item.auditRoute}>查看审计链</Link> : null}
+                {item.alertId ? <span className="badge badge--neutral">alert={item.alertId}</span> : null}
+              </div>
+            </div>
+          ))}
+          {backlogCandidates.length === 0 ? (
+            <div className="timeline-item">
+              <div>
+                <p className="item-title">当前无平台待办</p>
+                <p className="item-subtitle">当 triage 发现配置漂移、磁盘回退或 ACK 不收敛时，这里会直接生成 backlog。</p>
+              </div>
+            </div>
+          ) : null}
+          {highlightBacklog ? (
+            <div className="timeline-item">
+              <div>
+                <p className="item-title">主待办</p>
+                <p className="item-subtitle">
+                  {highlightBacklog.title} · owner={highlightBacklog.owner ?? 'platform-ops'}
+                </p>
               </div>
             </div>
           ) : null}

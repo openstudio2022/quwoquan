@@ -1,0 +1,11 @@
+{
+  "label": "宗教文化",
+  "labelEn": "Religious Culture",
+  "description": "佛教道教伊斯兰基督教等宗教文化",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "aliases": [
+    "佛教",
+    "道教"
+  ]
+}

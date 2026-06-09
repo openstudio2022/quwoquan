@@ -30,7 +30,29 @@ if [[ ! -f "$topology_manifest" ]]; then
   exit 1
 fi
 
-APP_RUNTIME_ENV="$env_name" bash agent_ops/deploy/shared/verify_cdn_domain_injection.sh
+cdn_domain="$(python3 - "$topology_manifest" "$env_name" <<'PY'
+import json
+import sys
+from pathlib import Path
+from urllib.parse import urlparse
+
+manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+env_name = sys.argv[2]
+public_bases = ((manifest.get("environments") or {}).get(env_name) or {}).get("publicBases") or {}
+media_image = str(public_bases.get("mediaImage") or "")
+host = urlparse(media_image).hostname or media_image
+host = host.strip()
+if not host:
+    print("")
+elif host == "localhost" or all(part.isdigit() for part in host.split(".")):
+    print(host)
+else:
+    parts = host.split(".")
+    print(".".join(parts[-2:]) if len(parts) >= 2 else host)
+PY
+)"
+
+APP_RUNTIME_ENV="$env_name" CDN_DOMAIN="$cdn_domain" bash agent_ops/deploy/shared/verify_cdn_domain_injection.sh
 
 python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py >/dev/null
 

@@ -14,6 +14,7 @@ class ContentApiMetadata {
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AbortMediaUpload': '/v1/content/media/uploads/{sessionId}:abort',
+    'BindMediaAssetsToComment': '/v1/content/comments/{commentId}/media:bind',
     'BindMediaAssetsToPost': '/v1/content/posts/{postId}/media:bind',
     'CompleteMediaUpload': '/v1/content/media/uploads/{sessionId}:complete',
     'CreateComment': '/v1/content/posts/{postId}/comments',
@@ -24,19 +25,21 @@ class ContentApiMetadata {
     'FavoritePost': '/v1/content/posts/{postId}/favorite',
     'GenerateArticleSummary': '/v1/content/articles/summary:generate',
     'GetAppConfig': '/v1/config/app',
+    'GetAuthorImpact': '/v1/content/sub-accounts/{subAccountId}/author-impact',
     'GetCounters': '/v1/content/posts/{postId}/counters',
     'GetFeed': '/v1/content/feed',
     'GetFeedIntersections': '/v1/content/feed/intersections',
     'GetHelperRead': '/v1/content/helper-read/{contentId}',
     'GetMediaAsset': '/v1/content/media/{mediaId}',
     'GetMyIntersectionSummary': '/v1/content/intersections/summary',
+    'GetObjectIntersections': '/v1/content/intersections/object',
     'GetPost': '/v1/content/posts/{postId}',
     'GetReactionState': '/v1/content/posts/{postId}/reactions',
     'GetRecommendation': '/v1/content/recommend',
     'GetReport': '/v1/content/reports/{reportId}',
     'InitMediaUpload': '/v1/content/media/uploads:init',
-    'LikeComment': '/v1/content/comments/{commentId}/like',
     'LikePost': '/v1/content/posts/{postId}/like',
+    'ListCommentReplies': '/v1/content/posts/{postId}/comments/{commentId}/replies',
     'ListComments': '/v1/content/posts/{postId}/comments',
     'ListCommentsByAuthor': '/v1/content/users/me/comments',
     'ListCommentsForPostAuthor': '/v1/content/users/me/received-comments',
@@ -48,6 +51,7 @@ class ContentApiMetadata {
     'PromotePostToWork': '/v1/content/posts/{postId}:promoteToWork',
     'PublishPost': '/v1/content/posts/{postId}/publish',
     'QuoteToCircle': '/v1/content/posts/{postId}/quote',
+    'ReactToComment': '/v1/content/comments/{commentId}/reaction',
     'ReportBehaviors': '/v1/content/behaviors',
     'ReportIntersectionExposure': '/v1/content/intersections/exposure',
     'RepostToCircle': '/v1/content/posts/{postId}/repost',
@@ -58,7 +62,6 @@ class ContentApiMetadata {
     'SelectManualVideoCover': '/v1/content/media/{mediaId}/cover:manual',
     'SharePost': '/v1/content/posts/{postId}/share',
     'UnfavoritePost': '/v1/content/posts/{postId}/favorite',
-    'UnlikeComment': '/v1/content/comments/{commentId}/like',
     'UnlikePost': '/v1/content/posts/{postId}/like',
     'UnsharePost': '/v1/content/posts/{postId}/share',
     'UpdatePost': '/v1/content/posts/{postId}',
@@ -68,6 +71,7 @@ class ContentApiMetadata {
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AbortMediaUpload': 'POST',
+    'BindMediaAssetsToComment': 'POST',
     'BindMediaAssetsToPost': 'POST',
     'CompleteMediaUpload': 'POST',
     'CreateComment': 'POST',
@@ -78,19 +82,21 @@ class ContentApiMetadata {
     'FavoritePost': 'POST',
     'GenerateArticleSummary': 'POST',
     'GetAppConfig': 'GET',
+    'GetAuthorImpact': 'GET',
     'GetCounters': 'GET',
     'GetFeed': 'GET',
     'GetFeedIntersections': 'GET',
     'GetHelperRead': 'GET',
     'GetMediaAsset': 'GET',
     'GetMyIntersectionSummary': 'GET',
+    'GetObjectIntersections': 'GET',
     'GetPost': 'GET',
     'GetReactionState': 'GET',
     'GetRecommendation': 'POST',
     'GetReport': 'GET',
     'InitMediaUpload': 'POST',
-    'LikeComment': 'POST',
     'LikePost': 'POST',
+    'ListCommentReplies': 'GET',
     'ListComments': 'GET',
     'ListCommentsByAuthor': 'GET',
     'ListCommentsForPostAuthor': 'GET',
@@ -102,6 +108,7 @@ class ContentApiMetadata {
     'PromotePostToWork': 'POST',
     'PublishPost': 'POST',
     'QuoteToCircle': 'POST',
+    'ReactToComment': 'POST',
     'ReportBehaviors': 'POST',
     'ReportIntersectionExposure': 'POST',
     'RepostToCircle': 'POST',
@@ -112,7 +119,6 @@ class ContentApiMetadata {
     'SelectManualVideoCover': 'POST',
     'SharePost': 'POST',
     'UnfavoritePost': 'DELETE',
-    'UnlikeComment': 'DELETE',
     'UnlikePost': 'DELETE',
     'UnsharePost': 'DELETE',
     'UpdatePost': 'PATCH',
@@ -123,6 +129,7 @@ class ContentApiMetadata {
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'AbortMediaUpload': 'required',
+    'BindMediaAssetsToComment': 'required',
     'BindMediaAssetsToPost': 'required',
     'CompleteMediaUpload': 'required',
     'CreateComment': 'required',
@@ -133,19 +140,21 @@ class ContentApiMetadata {
     'FavoritePost': 'required',
     'GenerateArticleSummary': 'required',
     'GetAppConfig': 'public',
+    'GetAuthorImpact': 'required',
     'GetCounters': 'public',
     'GetFeed': 'optional',
     'GetFeedIntersections': 'optional',
     'GetHelperRead': 'public',
     'GetMediaAsset': 'public',
     'GetMyIntersectionSummary': 'required',
+    'GetObjectIntersections': 'required',
     'GetPost': 'public',
     'GetReactionState': 'optional',
     'GetRecommendation': 'public',
     'GetReport': 'public',
     'InitMediaUpload': 'required',
-    'LikeComment': 'required',
     'LikePost': 'optional',
+    'ListCommentReplies': 'public',
     'ListComments': 'public',
     'ListCommentsByAuthor': 'required',
     'ListCommentsForPostAuthor': 'required',
@@ -157,6 +166,7 @@ class ContentApiMetadata {
     'PromotePostToWork': 'required',
     'PublishPost': 'required',
     'QuoteToCircle': 'required',
+    'ReactToComment': 'required',
     'ReportBehaviors': 'public',
     'ReportIntersectionExposure': 'required',
     'RepostToCircle': 'required',
@@ -167,7 +177,6 @@ class ContentApiMetadata {
     'SelectManualVideoCover': 'required',
     'SharePost': 'optional',
     'UnfavoritePost': 'required',
-    'UnlikeComment': 'required',
     'UnlikePost': 'optional',
     'UnsharePost': 'optional',
     'UpdatePost': 'required',
@@ -176,6 +185,7 @@ class ContentApiMetadata {
   };
 
   static const String abortMediaUploadOperation = 'AbortMediaUpload';
+  static const String bindMediaAssetsToCommentOperation = 'BindMediaAssetsToComment';
   static const String bindMediaAssetsToPostOperation = 'BindMediaAssetsToPost';
   static const String completeMediaUploadOperation = 'CompleteMediaUpload';
   static const String createCommentOperation = 'CreateComment';
@@ -186,19 +196,21 @@ class ContentApiMetadata {
   static const String favoritePostOperation = 'FavoritePost';
   static const String generateArticleSummaryOperation = 'GenerateArticleSummary';
   static const String getAppConfigOperation = 'GetAppConfig';
+  static const String getAuthorImpactOperation = 'GetAuthorImpact';
   static const String getCountersOperation = 'GetCounters';
   static const String getFeedOperation = 'GetFeed';
   static const String getFeedIntersectionsOperation = 'GetFeedIntersections';
   static const String getHelperReadOperation = 'GetHelperRead';
   static const String getMediaAssetOperation = 'GetMediaAsset';
   static const String getMyIntersectionSummaryOperation = 'GetMyIntersectionSummary';
+  static const String getObjectIntersectionsOperation = 'GetObjectIntersections';
   static const String getPostOperation = 'GetPost';
   static const String getReactionStateOperation = 'GetReactionState';
   static const String getRecommendationOperation = 'GetRecommendation';
   static const String getReportOperation = 'GetReport';
   static const String initMediaUploadOperation = 'InitMediaUpload';
-  static const String likeCommentOperation = 'LikeComment';
   static const String likePostOperation = 'LikePost';
+  static const String listCommentRepliesOperation = 'ListCommentReplies';
   static const String listCommentsOperation = 'ListComments';
   static const String listCommentsByAuthorOperation = 'ListCommentsByAuthor';
   static const String listCommentsForPostAuthorOperation = 'ListCommentsForPostAuthor';
@@ -210,6 +222,7 @@ class ContentApiMetadata {
   static const String promotePostToWorkOperation = 'PromotePostToWork';
   static const String publishPostOperation = 'PublishPost';
   static const String quoteToCircleOperation = 'QuoteToCircle';
+  static const String reactToCommentOperation = 'ReactToComment';
   static const String reportBehaviorsOperation = 'ReportBehaviors';
   static const String reportIntersectionExposureOperation = 'ReportIntersectionExposure';
   static const String repostToCircleOperation = 'RepostToCircle';
@@ -220,7 +233,6 @@ class ContentApiMetadata {
   static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
   static const String sharePostOperation = 'SharePost';
   static const String unfavoritePostOperation = 'UnfavoritePost';
-  static const String unlikeCommentOperation = 'UnlikeComment';
   static const String unlikePostOperation = 'UnlikePost';
   static const String unsharePostOperation = 'UnsharePost';
   static const String updatePostOperation = 'UpdatePost';
@@ -231,6 +243,12 @@ class ContentApiMetadata {
   static String abortMediaUploadPath({required String sessionId}) {
     return _fillPath(abortMediaUploadPathTemplate, <String, String>{
       'sessionId': sessionId,
+    });
+  }
+  static const String bindMediaAssetsToCommentPathTemplate = '/v1/content/comments/{commentId}/media:bind';
+  static String bindMediaAssetsToCommentPath({required String commentId}) {
+    return _fillPath(bindMediaAssetsToCommentPathTemplate, <String, String>{
+      'commentId': commentId,
     });
   }
   static const String bindMediaAssetsToPostPathTemplate = '/v1/content/posts/{postId}/media:bind';
@@ -274,6 +292,12 @@ class ContentApiMetadata {
   }
   static const String generateArticleSummaryPath = '/v1/content/articles/summary:generate';
   static const String getAppConfigPath = '/v1/config/app';
+  static const String getAuthorImpactPathTemplate = '/v1/content/sub-accounts/{subAccountId}/author-impact';
+  static String getAuthorImpactPath({required String subAccountId}) {
+    return _fillPath(getAuthorImpactPathTemplate, <String, String>{
+      'subAccountId': subAccountId,
+    });
+  }
   static const String getCountersPathTemplate = '/v1/content/posts/{postId}/counters';
   static String getCountersPath({required String postId}) {
     return _fillPath(getCountersPathTemplate, <String, String>{
@@ -295,6 +319,7 @@ class ContentApiMetadata {
     });
   }
   static const String getMyIntersectionSummaryPath = '/v1/content/intersections/summary';
+  static const String getObjectIntersectionsPath = '/v1/content/intersections/object';
   static const String getPostPathTemplate = '/v1/content/posts/{postId}';
   static String getPostPath({required String postId}) {
     return _fillPath(getPostPathTemplate, <String, String>{
@@ -315,16 +340,17 @@ class ContentApiMetadata {
     });
   }
   static const String initMediaUploadPath = '/v1/content/media/uploads:init';
-  static const String likeCommentPathTemplate = '/v1/content/comments/{commentId}/like';
-  static String likeCommentPath({required String commentId}) {
-    return _fillPath(likeCommentPathTemplate, <String, String>{
-      'commentId': commentId,
-    });
-  }
   static const String likePostPathTemplate = '/v1/content/posts/{postId}/like';
   static String likePostPath({required String postId}) {
     return _fillPath(likePostPathTemplate, <String, String>{
       'postId': postId,
+    });
+  }
+  static const String listCommentRepliesPathTemplate = '/v1/content/posts/{postId}/comments/{commentId}/replies';
+  static String listCommentRepliesPath({required String postId, required String commentId}) {
+    return _fillPath(listCommentRepliesPathTemplate, <String, String>{
+      'postId': postId,
+      'commentId': commentId,
     });
   }
   static const String listCommentsPathTemplate = '/v1/content/posts/{postId}/comments';
@@ -373,6 +399,12 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
+  static const String reactToCommentPathTemplate = '/v1/content/comments/{commentId}/reaction';
+  static String reactToCommentPath({required String commentId}) {
+    return _fillPath(reactToCommentPathTemplate, <String, String>{
+      'commentId': commentId,
+    });
+  }
   static const String reportBehaviorsPath = '/v1/content/behaviors';
   static const String reportIntersectionExposurePath = '/v1/content/intersections/exposure';
   static const String repostToCirclePathTemplate = '/v1/content/posts/{postId}/repost';
@@ -416,12 +448,6 @@ class ContentApiMetadata {
   static String unfavoritePostPath({required String postId}) {
     return _fillPath(unfavoritePostPathTemplate, <String, String>{
       'postId': postId,
-    });
-  }
-  static const String unlikeCommentPathTemplate = '/v1/content/comments/{commentId}/like';
-  static String unlikeCommentPath({required String commentId}) {
-    return _fillPath(unlikeCommentPathTemplate, <String, String>{
-      'commentId': commentId,
     });
   }
   static const String unlikePostPathTemplate = '/v1/content/posts/{postId}/like';

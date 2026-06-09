@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-STATE_DIR="$ROOT_DIR/tmp/beta_stack"
+STATE_DIR="$ROOT_DIR/state/local/beta_stack"
 ENV_FILE="$ROOT_DIR/.env.beta.local"
 APP_BETA="$ROOT_DIR/quwoquan_app/scripts/device/start_app_beta_manual.sh"
 OPS_PORTAL_DIR="$ROOT_DIR/apps/ops-portal"
@@ -140,7 +140,7 @@ log_path = Path(sys.argv[3])
 argv = sys.argv[4:]
 
 log_path.parent.mkdir(parents=True, exist_ok=True)
-with log_path.open("ab", buffering=0) as log:
+with log_path.open("wb", buffering=0) as log:
     proc = subprocess.Popen(
         argv,
         stdout=log,
@@ -293,14 +293,17 @@ case "$ACTION" in
     stop_bg app-beta
     if [[ "$START_APP" == "1" ]]; then
       resolve_device_id_if_needed
-      build_app_beta_command
-      start_bg app-beta "${APP_BETA_CMD[@]}"
     fi
-    start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && APP_ENV='beta' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+    # `app-beta` owns the local beta gateway/chat/assistant stack. When START_APP=0
+    # we still launch it in `--skip-app` backend-only mode so stackctl can keep the
+    # beta services alive while launching Flutter separately.
+    build_app_beta_command
+    start_bg app-beta "${APP_BETA_CMD[@]}"
     start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/platform-ops-service' && APP_ENV='beta' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+    wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60 || true
+    start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && APP_ENV='beta' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
     start_bg ops-portal env VITE_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_PORT}" VITE_PLATFORM_OPS_BASE_URL="http://127.0.0.1:${PLATFORM_OPS_PORT}" VITE_GATEWAY_BASE_URL="http://127.0.0.1:${GATEWAY_PORT}" npm --prefix "$OPS_PORTAL_DIR" run dev -- --host 127.0.0.1 --port "${OPS_PORTAL_PORT}"
     wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_PORT}/healthz" 60 || true
-    wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60 || true
     wait_service_ok ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/" 60 || true
     maybe_open_ops
     status_one app-beta "http://127.0.0.1:${GATEWAY_PORT}/healthz"

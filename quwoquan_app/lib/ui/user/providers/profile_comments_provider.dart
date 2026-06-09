@@ -8,31 +8,33 @@ class ProfileCommentsState {
   final String? nextCursor;
   final bool isLoading;
   final bool isLoadingMore;
-  final String? error;
+  final Object? rawError;
 
   const ProfileCommentsState({
     this.comments = const [],
     this.nextCursor,
     this.isLoading = false,
     this.isLoadingMore = false,
-    this.error,
+    this.rawError,
   });
 
   bool get hasMore => nextCursor != null;
+  String? get error =>
+      rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
 
   ProfileCommentsState copyWith({
     List<CommentDto>? comments,
     String? Function()? nextCursor,
     bool? isLoading,
     bool? isLoadingMore,
-    String? Function()? error,
+    Object? Function()? rawError,
   }) {
     return ProfileCommentsState(
       comments: comments ?? this.comments,
       nextCursor: nextCursor != null ? nextCursor() : this.nextCursor,
       isLoading: isLoading ?? this.isLoading,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
-      error: error != null ? error() : this.error,
+      rawError: rawError != null ? rawError() : this.rawError,
     );
   }
 }
@@ -43,7 +45,7 @@ class SentCommentsNotifier extends Notifier<ProfileCommentsState> {
 
   Future<void> load() async {
     if (state.isLoading) return;
-    state = state.copyWith(isLoading: true, error: () => null);
+    state = state.copyWith(isLoading: true, rawError: () => null);
     final repo = ref.read(contentRepositoryProvider);
     try {
       final page = await repo.listCommentsByAuthor();
@@ -55,7 +57,7 @@ class SentCommentsNotifier extends Notifier<ProfileCommentsState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: () => runtimeErrorDisplayMessage(e),
+        rawError: () => e,
       );
     }
   }
@@ -83,7 +85,7 @@ class ReceivedCommentsNotifier extends Notifier<ProfileCommentsState> {
 
   Future<void> load() async {
     if (state.isLoading) return;
-    state = state.copyWith(isLoading: true, error: () => null);
+    state = state.copyWith(isLoading: true, rawError: () => null);
     final repo = ref.read(contentRepositoryProvider);
     try {
       final page = await repo.listCommentsForPostAuthor();
@@ -95,7 +97,7 @@ class ReceivedCommentsNotifier extends Notifier<ProfileCommentsState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: () => runtimeErrorDisplayMessage(e),
+        rawError: () => e,
       );
     }
   }

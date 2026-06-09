@@ -71,6 +71,29 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   static const int _kLocalAnchorMaxCount = 10;
   List<String> _paths = const [];
 
+  Future<void> _showEditorActionFailure({
+    required String title,
+    String? message,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: UiErrorSemantic(
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+        title: title,
+        message: message ?? UITextConstants.operationFailed,
+        primaryAction: const UiErrorAction(
+          type: UiErrorActionType.dismiss,
+          label: UITextConstants.confirm,
+        ),
+        dismissible: true,
+      ),
+    );
+  }
+
   int _currentIndex = 0;
   PageController? _pageController;
   ScrollController? _thumbScrollController;
@@ -2772,6 +2795,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         params['path'] = rotatedPath;
         _resetRotateState();
       } else {
+        await _showEditorActionFailure(title: '旋转未保存');
         return;
       }
     }
@@ -2785,6 +2809,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         params['ratio'] = _cropRatio;
         params['path'] = croppedPath;
       } else {
+        await _showEditorActionFailure(title: '裁剪未保存');
         return;
       }
     }
@@ -2792,7 +2817,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       final preset = _selectedFilterPreset;
       if (preset != null && _hasFilterAdjustments) {
         final filteredPath = await _applyFilterToCurrentImage();
-        if (filteredPath == null) return;
+        if (filteredPath == null) {
+          await _showEditorActionFailure(title: '滤镜未保存');
+          return;
+        }
         _paths[_currentIndex] = filteredPath;
         _loadImageAspectRatio(filteredPath);
         _clearFilterPreviewCache();
@@ -2847,7 +2875,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   Future<void> _confirmCropAndExit() async {
     if (_selectedToolIndex != kImageEditorToolCrop) return;
     final croppedPath = await _applyCropToCurrentImage();
-    if (croppedPath == null) return;
+    if (croppedPath == null) {
+      await _showEditorActionFailure(title: '裁剪未保存');
+      return;
+    }
     _paths[_currentIndex] = croppedPath;
     _loadImageAspectRatio(croppedPath);
     _clearFilterPreviewCache();
@@ -3916,10 +3947,12 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         _hasBwLevelsAdjustments ||
         _hasLocalAdjustments) {
       final adjustedPath = await _applyProAdjustmentsToCurrentImage();
-      if (adjustedPath != null) {
-        _paths[_currentIndex] = adjustedPath;
-        _clearFilterPreviewCache();
+      if (adjustedPath == null) {
+        await _showEditorActionFailure(title: '编辑未保存');
+        return;
       }
+      _paths[_currentIndex] = adjustedPath;
+      _clearFilterPreviewCache();
       // 避免重复叠加导出
       _proBaseValues.updateAll((key, value) => 0);
       _proBaseSnapshotValues.updateAll((key, value) => 0);

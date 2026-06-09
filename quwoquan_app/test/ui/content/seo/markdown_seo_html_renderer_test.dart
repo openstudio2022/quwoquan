@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/ui/content/seo/markdown_seo_html_renderer.dart';
@@ -65,6 +68,7 @@ asset://cover
       expect(doc.html, contains('<blockquote>适合第一次去川西的朋友。</blockquote>'));
       expect(doc.html, contains('<figure>'));
       expect(doc.html, contains('https://cdn.example.com/cover.jpg'));
+      expect(doc.html, contains('data-asset-id="cover"'));
       expect(doc.html, contains('class="qwq-gallery"'));
       expect(doc.html, contains('class="qwq-callout"'));
       expect(doc.openGraph['og:title'], '川西自驾笔记');
@@ -96,6 +100,226 @@ asset://cover
       expect(doc.html, contains('&lt;script&gt;alert(1)&lt;/script&gt;'));
       expect(doc.html, contains('&lt;img src=x onerror=alert(1)&gt;'));
       expect(doc.html, isNot(contains('javascript:alert')));
+    });
+
+    test('resolves objectKey-only asset manifest through shared resolver', () {
+      final doc = renderer.render(
+        const MarkdownSeoRenderInput(
+          postId: 'post_object_key',
+          title: '媒体发布测试',
+          articleMarkdown: '''
+# 媒体发布测试
+
+![封面](asset://cover)
+''',
+          articleAssetManifest: <String, Object?>{
+            'assets': <Object?>[
+              <String, Object?>{
+                'assetId': 'cover',
+                'objectKey':
+                    'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+              },
+            ],
+          },
+        ),
+      );
+
+      expect(
+        doc.html,
+        contains(
+          'https://media.quwoquan.invalid/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+        ),
+      );
+      expect(doc.html, contains('data-asset-id="cover"'));
+    });
+
+    test('renders display variant and keeps asset id for web preview lookup', () {
+      final doc = renderer.render(
+        const MarkdownSeoRenderInput(
+          postId: 'post_variants',
+          title: '媒体变体测试',
+          articleMarkdown: '''
+# 媒体变体测试
+
+![封面](asset://cover)
+''',
+          articleAssetManifest: <String, Object?>{
+            'assets': <Object?>[
+              <String, Object?>{
+                'assetId': 'cover',
+                'variants': <String, Object?>{
+                  'display': <String, Object?>{
+                    'cdnUrl': 'https://cdn.example.com/cover-display.webp',
+                  },
+                  'full': <String, Object?>{
+                    'cdnUrl': 'https://cdn.example.com/cover-full.webp',
+                  },
+                  'original': <String, Object?>{
+                    'objectKey':
+                        'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+                    'requiresAccess': true,
+                  },
+                },
+              },
+            ],
+          },
+        ),
+      );
+
+      expect(doc.html, contains('src="https://cdn.example.com/cover-display.webp"'));
+      expect(doc.html, contains('data-asset-id="cover"'));
+      expect(doc.html, isNot(contains('cover-full.webp')));
+      expect(doc.referencedAssetUrls, contains('https://cdn.example.com/cover-display.webp'));
+    });
+
+    test('renders materialized pilot markdown with asset manifest closure', () {
+      final root = Directory.systemTemp.createTempSync('markdown_seo_html_renderer_pilot_');
+      addTearDown(() => root.deleteSync(recursive: true));
+      final postDir = Directory(
+        '${root.path}/posts/article/环线攻略/稻城亚丁·亚丁三神山徒步体验/1',
+      )..createSync(recursive: true);
+      final article = '''
+---
+title: 稻城亚丁·亚丁三神山徒步体验
+summary: 高原徒步与雪山同框。
+coverImage: asset://cover
+---
+# 稻城亚丁·亚丁三神山徒步体验
+
+正文段落。
+
+![封面](asset://cover)
+''';
+      File('${postDir.path}/article.md').writeAsStringSync(article, encoding: utf8);
+      File('${postDir.path}/assets/cover.jpg')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('fake-cover', encoding: utf8);
+      final renderManifest = <String, Object?>{
+        'assets': <Object?>[
+          <String, Object?>{
+            'assetId': 'cover',
+            'fileName': 'cover.jpg',
+            'sourceAssetRef': 'source/cover.jpg',
+            'cdnUrl': 'https://media.quwoquan.invalid/runtime-preview/cover.jpg',
+          },
+        ],
+      };
+      File('${postDir.path}/manifest.json').writeAsStringSync(
+        jsonEncode(<String, Object?>{
+          'topicId': 'topic_pilot_daocheng',
+          'publishTitle': '稻城亚丁·亚丁三神山徒步体验',
+          'articleMarkdownDigest': 'sha256:pilot-daocheng',
+          'articleAssetManifest': renderManifest,
+        }),
+        encoding: utf8,
+      );
+
+      final doc = renderer.render(
+        MarkdownSeoRenderInput(
+          postId: 'topic_pilot_daocheng',
+          title: '稻城亚丁·亚丁三神山徒步体验',
+          articleMarkdownDigest: 'sha256:pilot-daocheng',
+          articleMarkdown: article,
+          articleAssetManifest: renderManifest,
+        ),
+      );
+
+      expect(doc.indexable, isTrue);
+      expect(doc.html, contains('data-asset-id="cover"'));
+      expect(doc.html, contains('src="https://media.quwoquan.invalid/'));
+      expect(doc.referencedAssetUrls, isNotEmpty);
+      expect(doc.jsonLd['identifier'], 'sha256:pilot-daocheng');
+    });
+
+    test('renders object-first layout sample with sourceAssetRef closure', () {
+      // T4：新同构目录（entities/posts + 编号阶段 + 来源单元）下，
+      // article.md + articleAssetManifest 渲染出带 data-asset-id 的图片，
+      // 且每个 asset 的 sourceAssetRef 可相对 batch 根回查到来源单元里的原图。
+      final batchDir = Directory.systemTemp.createTempSync('markdown_seo_html_renderer_layout_');
+      addTearDown(() => batchDir.deleteSync(recursive: true));
+      final postDir = Directory(
+        '${batchDir.path}/posts/article/环线攻略/在海螺沟看冰川泡温泉/1',
+      )..createSync(recursive: true);
+      final article = '''
+---
+title: 在海螺沟看冰川泡温泉
+summary: 冰川与温泉同框。
+coverImage: asset://海螺沟_cover_01
+---
+# 在海螺沟看冰川泡温泉
+
+正文。
+
+![封面](asset://海螺沟_cover_01)
+![细节](asset://海螺沟_detail_02)
+''';
+      File('${postDir.path}/article.md').writeAsStringSync(article, encoding: utf8);
+      final declaredAssets = <Map<String, Object?>>[
+        <String, Object?>{
+          'assetId': '海螺沟_cover_01',
+          'fileName': '海螺沟_cover_01.jpg',
+          'sourceAssetRef': 'source/海螺沟_cover_01.jpg',
+          'cdnUrl': 'https://media.quwoquan.invalid/runtime-preview/海螺沟_cover_01.jpg',
+        },
+        <String, Object?>{
+          'assetId': '海螺沟_detail_02',
+          'fileName': '海螺沟_detail_02.jpg',
+          'sourceAssetRef': 'source/海螺沟_detail_02.jpg',
+          'cdnUrl': 'https://media.quwoquan.invalid/runtime-preview/海螺沟_detail_02.jpg',
+        },
+      ];
+      for (final asset in declaredAssets) {
+        final sourceAssetRef = asset['sourceAssetRef'] as String;
+        final sourceFile = File('${batchDir.path}/$sourceAssetRef');
+        sourceFile.parent.createSync(recursive: true);
+        sourceFile.writeAsStringSync('fake-source-image', encoding: utf8);
+      }
+      final renderManifest = <String, Object?>{
+        'assets': declaredAssets
+            .map(
+              (asset) => <String, Object?>{
+                ...asset,
+                'cdnUrl': 'https://media.quwoquan.invalid/runtime-preview/${asset['assetId']}.jpg',
+              },
+            )
+            .toList(),
+      };
+      File('${postDir.path}/manifest.json').writeAsStringSync(
+        jsonEncode(<String, Object?>{
+          'topicId': 'topic_layout_sample',
+          'publishTitle': '在海螺沟看冰川泡温泉',
+          'articleMarkdownDigest': 'sha256:layout-sample',
+          'articleAssetManifest': renderManifest,
+          'assets': declaredAssets,
+        }),
+        encoding: utf8,
+      );
+
+      final doc = renderer.render(
+        MarkdownSeoRenderInput(
+          postId: 'topic_layout_sample',
+          title: '在海螺沟看冰川泡温泉',
+          articleMarkdownDigest: 'sha256:layout-sample',
+          articleMarkdown: article,
+          articleAssetManifest: renderManifest,
+        ),
+      );
+
+      expect(doc.indexable, isTrue);
+      // 机械收尾标题门：渲染结果不得包含被禁止的 “适合谁” 小标题。
+      expect(doc.html, isNot(contains('适合谁')));
+
+      // 每个发布 asset：渲染出 data-asset-id，且 sourceAssetRef 相对 batch 根可回查到原图。
+      expect(declaredAssets, isNotEmpty);
+      for (final asset in declaredAssets) {
+        final assetId = asset['assetId'] as String;
+        final sourceAssetRef = asset['sourceAssetRef'] as String;
+        expect(doc.html, contains('data-asset-id="$assetId"'));
+        expect(sourceAssetRef.startsWith('/'), isFalse, reason: '禁止绝对路径: $sourceAssetRef');
+        final sourceFile = File('${batchDir.path}/$sourceAssetRef');
+        expect(sourceFile.existsSync(), isTrue, reason: '回查源图不存在: ${sourceFile.path}');
+      }
+      expect(doc.referencedAssetUrls, isNotEmpty);
     });
 
     test('private content is not indexable and exposes no HTML body', () {

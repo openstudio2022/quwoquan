@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
-LOG_DIR="$ROOT_DIR/tmp/app_beta_manual"
+LOG_DIR="$ROOT_DIR/state/local/app_beta_manual"
 eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
 GATEWAY_PORT="${GATEWAY_PORT}"
 FLUTTER_DEVICE_ID="${FLUTTER_DEVICE_ID:-}"

@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
 
@@ -11,16 +13,37 @@ import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
 List<IntersectionReason> sharedTagsToReasons(List<SharedTagView> shared) {
   return shared
       .where((s) => s.tagRef.trim().isNotEmpty && s.label.trim().isNotEmpty)
-      .map(
-        (s) => IntersectionReason(
-          dimension: dimensionForTagRef(s.tagRef),
+      .map((s) {
+        final dimension = dimensionForTagRef(s.tagRef);
+        final point = IntersectionPoint(
+          pointId: s.tagRef,
+          pointClass: 'fact',
+          dimension: dimension,
+          label: s.label,
+          displayText: s.label,
+          sourceRef: s.source.isNotEmpty ? s.source : 'tagRef',
+        );
+        return IntersectionReason(
+          dimension: dimension,
           tagRefs: <String>[s.tagRef],
           label: s.label,
           strength: s.strength,
           source: s.source.isNotEmpty ? s.source : 'tagRef',
           displayText: s.label,
-        ),
-      )
+          intersectionPoints: <IntersectionPoint>[point],
+          pointSummarySnapshotId: s.tagRef,
+          factPointCount: 1,
+          totalPointCount: 1,
+          dimensionPointSummary: <IntersectionDimensionTally>[
+            IntersectionDimensionTally(
+              dimension: dimension,
+              label: s.label,
+              count: 1,
+            ),
+          ],
+          pointClassLabel: '事实交集',
+        );
+      })
       .toList();
 }
 

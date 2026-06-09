@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
@@ -104,8 +102,14 @@ abstract class GreetingRepository {
 
 /// Mock 实现
 class MockGreetingRepository extends GreetingRepository {
-  final List<GreetingRequestDto> _inbox = [];
-  final List<GreetingRequestDto> _outbox = [];
+  MockGreetingRepository({
+    List<GreetingRequestDto> seedInbox = const <GreetingRequestDto>[],
+    List<GreetingRequestDto> seedOutbox = const <GreetingRequestDto>[],
+  }) : _inbox = List<GreetingRequestDto>.from(seedInbox),
+       _outbox = List<GreetingRequestDto>.from(seedOutbox);
+
+  final List<GreetingRequestDto> _inbox;
+  final List<GreetingRequestDto> _outbox;
 
   @override
   Future<GreetingRequestDto> sendGreeting({
@@ -142,28 +146,60 @@ class MockGreetingRepository extends GreetingRepository {
   }) async => _outbox.where((g) => g.status == status).toList();
 
   @override
-  Future<GreetingReplyResultDto> replyGreeting(String requestId) async =>
-      GreetingReplyResultDto.fromMap(<String, dynamic>{
-        'conversationId': 'mock_conv_$requestId',
-      });
+  Future<GreetingReplyResultDto> replyGreeting(String requestId) async {
+    final conversationId = 'mock_conv_$requestId';
+    final index = _inbox.indexWhere((g) => g.id == requestId);
+    if (index >= 0) {
+      final current = _inbox[index];
+      _inbox[index] = GreetingRequestDto(
+        id: current.id,
+        requesterSubAccountId: current.requesterSubAccountId,
+        targetSubAccountId: current.targetSubAccountId,
+        requestMessage: current.requestMessage,
+        status: 'replied',
+        source: current.source,
+        promotedConversationId: conversationId,
+        expireAt: current.expireAt,
+        decisionAt: DateTime.now(),
+        createdAt: current.createdAt,
+        updatedAt: DateTime.now(),
+      );
+    }
+    return GreetingReplyResultDto.fromMap(<String, dynamic>{
+      'conversationId': conversationId,
+    });
+  }
 
   @override
   Future<GreetingRequestDto> ignoreGreeting(String requestId) async {
     final idx = _inbox.indexWhere((g) => g.id == requestId);
     if (idx >= 0) {
-      _inbox.removeAt(idx);
+      final current = _inbox[idx];
+      final ignored = GreetingRequestDto(
+        id: current.id,
+        requesterSubAccountId: current.requesterSubAccountId,
+        targetSubAccountId: current.targetSubAccountId,
+        requestMessage: current.requestMessage,
+        status: 'ignored',
+        source: current.source,
+        promotedConversationId: current.promotedConversationId,
+        expireAt: current.expireAt,
+        decisionAt: DateTime.now(),
+        createdAt: current.createdAt,
+        updatedAt: DateTime.now(),
+      );
+      _inbox[idx] = ignored;
+      return ignored;
     }
-    return _inbox.isEmpty
-        ? GreetingRequestDto(
-            id: requestId,
-            requesterSubAccountId: '',
-            targetSubAccountId: '',
-            status: 'ignored',
-            source: 'profile',
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          )
-        : _inbox[0];
+    return GreetingRequestDto(
+      id: requestId,
+      requesterSubAccountId: '',
+      targetSubAccountId: '',
+      status: 'ignored',
+      source: 'profile',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
   }
 
   @override
@@ -192,8 +228,19 @@ class RemoteGreetingRepository extends GreetingRepository {
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
-  Map<String, String> get _headers =>
-      CloudRequestHeaders.forPage(UserRequestPageIds.sendGreetingRequest);
+  Map<String, String> _headersFor(String pageId) =>
+      CloudRequestHeaders.forPage(pageId);
+
+  List<GreetingRequestDto> _decodeGreetingList(
+    Object? decoded, {
+    required String context,
+  }) {
+    final body = CloudResponseDecoder.asObject(decoded, context: context);
+    return CloudResponseDecoder.mapList(
+      body,
+      'items',
+    ).map(GreetingRequestDto.fromMap).toList(growable: false);
+  }
 
   @override
   Future<GreetingRequestDto> sendGreeting({
@@ -209,20 +256,17 @@ class RemoteGreetingRepository extends GreetingRepository {
     if (requestMessage != null) {
       body['requestMessage'] = requestMessage;
     }
-    final resp = await _httpClient.post(
+    final decoded = await _httpClient.postJson(
       uri,
-      headers: {..._headers, 'Content-Type': 'application/json'},
-      body: jsonEncode(body),
+      headers: _headersFor(UserRequestPageIds.sendGreetingRequest),
+      body: body,
     );
-    if (resp.statusCode == 200 || resp.statusCode == 201) {
-      return GreetingRequestDto.fromMap(
-        CloudResponseDecoder.asObject(
-          jsonDecode(resp.body),
-          context: UserRequestPageIds.sendGreetingRequest,
-        ),
-      );
-    }
-    throw Exception('SendGreetingRequest failed: ${resp.statusCode}');
+    return GreetingRequestDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: UserRequestPageIds.sendGreetingRequest,
+      ),
+    );
   }
 
   @override
@@ -241,23 +285,14 @@ class RemoteGreetingRepository extends GreetingRepository {
     final uri = Uri.parse(
       '$_baseUrl${UserApiMetadata.listGreetingInboxPath}',
     ).replace(queryParameters: queryParameters);
-    final resp = await _httpClient.get(
+    final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.listGreetingInbox,
-      ),
+      headers: _headersFor(UserRequestPageIds.listGreetingInbox),
     );
-    if (resp.statusCode == 200) {
-      final body = CloudResponseDecoder.asObject(
-        jsonDecode(resp.body),
-        context: UserRequestPageIds.listGreetingInbox,
-      );
-      return CloudResponseDecoder.mapList(
-        body,
-        'items',
-      ).map(GreetingRequestDto.fromMap).toList(growable: false);
-    }
-    return [];
+    return _decodeGreetingList(
+      decoded,
+      context: UserRequestPageIds.listGreetingInbox,
+    );
   }
 
   @override
@@ -276,23 +311,14 @@ class RemoteGreetingRepository extends GreetingRepository {
     final uri = Uri.parse(
       '$_baseUrl${UserApiMetadata.listGreetingOutboxPath}',
     ).replace(queryParameters: queryParameters);
-    final resp = await _httpClient.get(
+    final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.listGreetingOutbox,
-      ),
+      headers: _headersFor(UserRequestPageIds.listGreetingOutbox),
     );
-    if (resp.statusCode == 200) {
-      final body = CloudResponseDecoder.asObject(
-        jsonDecode(resp.body),
-        context: UserRequestPageIds.listGreetingOutbox,
-      );
-      return CloudResponseDecoder.mapList(
-        body,
-        'items',
-      ).map(GreetingRequestDto.fromMap).toList(growable: false);
-    }
-    return [];
+    return _decodeGreetingList(
+      decoded,
+      context: UserRequestPageIds.listGreetingOutbox,
+    );
   }
 
   @override
@@ -300,21 +326,17 @@ class RemoteGreetingRepository extends GreetingRepository {
     final uri = _uri(
       UserApiMetadata.replyGreetingRequestPath(requestId: requestId),
     );
-    final resp = await _httpClient.post(
+    final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.replyGreetingRequest,
+      headers: _headersFor(UserRequestPageIds.replyGreetingRequest),
+      body: const <String, dynamic>{},
+    );
+    return GreetingReplyResultDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: UserRequestPageIds.replyGreetingRequest,
       ),
     );
-    if (resp.statusCode == 200) {
-      return GreetingReplyResultDto.fromMap(
-        CloudResponseDecoder.asObject(
-          jsonDecode(resp.body),
-          context: UserRequestPageIds.replyGreetingRequest,
-        ),
-      );
-    }
-    throw Exception('ReplyGreetingRequest failed: ${resp.statusCode}');
   }
 
   @override
@@ -322,21 +344,17 @@ class RemoteGreetingRepository extends GreetingRepository {
     final uri = _uri(
       UserApiMetadata.ignoreGreetingRequestPath(requestId: requestId),
     );
-    final resp = await _httpClient.post(
+    final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.ignoreGreetingRequest,
+      headers: _headersFor(UserRequestPageIds.ignoreGreetingRequest),
+      body: const <String, dynamic>{},
+    );
+    return GreetingRequestDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: UserRequestPageIds.ignoreGreetingRequest,
       ),
     );
-    if (resp.statusCode == 200) {
-      return GreetingRequestDto.fromMap(
-        CloudResponseDecoder.asObject(
-          jsonDecode(resp.body),
-          context: UserRequestPageIds.ignoreGreetingRequest,
-        ),
-      );
-    }
-    throw Exception('IgnoreGreetingRequest failed: ${resp.statusCode}');
   }
 
   @override
@@ -344,20 +362,14 @@ class RemoteGreetingRepository extends GreetingRepository {
     final uri = _uri(
       UserApiMetadata.cancelGreetingRequestPath(requestId: requestId),
     );
-    final resp = await _httpClient.delete(
+    final decoded = await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.cancelGreetingRequest,
-      ),
+      headers: _headersFor(UserRequestPageIds.cancelGreetingRequest),
     );
-    if (resp.statusCode == 200) {
-      return GreetingRequestDto.fromMap(
-        CloudResponseDecoder.asObject(
-          jsonDecode(resp.body),
-          context: UserRequestPageIds.cancelGreetingRequest,
-        ),
-      );
-    }
-    throw Exception('CancelGreetingRequest failed: ${resp.statusCode}');
+    final body = CloudResponseDecoder.asObject(
+      decoded,
+      context: UserRequestPageIds.cancelGreetingRequest,
+    );
+    return GreetingRequestDto.fromMap(body);
   }
 }

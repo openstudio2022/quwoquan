@@ -1,6 +1,6 @@
 """qwq-data annotate — Human-in-loop 标注：在发布前对账本图片/事实/文章下人判定。
 
-队列与裁决都作用于 produce 阶段账本 produce/review/ledger/{ref}.json（materialize 会随 post 拷贝）。
+队列与裁决都作用于内容对象的 `5.review/review_ledger.json`（materialize 会随 post 拷贝）。
 
 用法：
   # 列出待人工处理队列（fix 态或需人确认项）
@@ -41,10 +41,13 @@ JUDGMENTS = (JUDGE_CREDIBLE, JUDGE_DOUBTFUL)
 OVERRIDES = (OVERRIDE_PUBLISHABLE, OVERRIDE_DISCARD)
 
 
-def _print_queue(task_id: str, batch_id: str) -> int:
+def _print_queue(task_id: str, batch_id: str, refs: list[str] | None = None) -> int:
     ledgers = iter_ledgers(task_id, batch_id)
+    ref_filter = set(refs or [])
     pending = 0
     for ledger in ledgers:
+        if ref_filter and ledger.ref not in ref_filter:
+            continue
         rows = []
         for item in ledger.all_items():
             state = resolve_publish_state(item, ledger.policy)
@@ -73,7 +76,8 @@ def handle_annotate(args: argparse.Namespace) -> None:
     batch_id = args.batch
 
     if args.list:
-        _print_queue(task_id, batch_id)
+        refs = [r.strip() for r in (getattr(args, "refs", "") or "").split(",") if r.strip()]
+        _print_queue(task_id, batch_id, refs=refs or None)
         return
 
     if not (args.ref and args.kind and args.target):
@@ -124,6 +128,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--task", required=True, help="Task ID")
     p.add_argument("--batch", required=True, help="Batch ID")
     p.add_argument("--list", action="store_true", help="列出待人工处理队列")
+    p.add_argument("--refs", help="（与 --list 同用）按 ref 逗号分隔过滤队列，用于 fanout per-partition 巡检")
     p.add_argument("--ref", help="账本 ref（post topicId）")
     p.add_argument("--kind", choices=KINDS, help="标注对象类型")
     p.add_argument("--target", help="对象标识：image=assetId / fact=事实串 / article=ref")

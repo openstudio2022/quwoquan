@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Verify Xiaoqu assistant context/grounding metadata contracts."""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    print("FAIL: PyYAML required (pip install pyyaml)", file=sys.stderr)
+    sys.exit(2)
+
+
+ROOT = Path(__file__).resolve().parents[3]
+ASSISTANT_RUN = ROOT / "quwoquan_service" / "contracts" / "metadata" / "assistant" / "assistant_run"
+FIELDS_PATH = ASSISTANT_RUN / "fields.yaml"
+SERVICE_PATH = ASSISTANT_RUN / "service.yaml"
+
+
+def load_yaml(path: Path) -> dict:
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path} must contain a YAML mapping")
+    return raw
+
+
+def field_map(entity: dict) -> dict[str, dict]:
+    fields = entity.get("fields")
+    if not isinstance(fields, list):
+        return {}
+    out: dict[str, dict] = {}
+    for item in fields:
+        if isinstance(item, dict) and isinstance(item.get("name"), str):
+            out[item["name"]] = item
+    return out
+
+
+def route_map(service: dict) -> dict[str, dict]:
+    routes = service.get("api_routes")
+    if not isinstance(routes, list):
+        return {}
+    out: dict[str, dict] = {}
+    for route in routes:
+        if isinstance(route, dict) and isinstance(route.get("operation"), str):
+            out[route["operation"]] = route
+    return out
+
+
+def assert_field(
+    failures: list[str],
+    entities: dict,
+    entity_name: str,
+    field_name: str,
+    expected_type: str | None = None,
+) -> None:
+    entity = entities.get(entity_name)
+    if not isinstance(entity, dict):
+        failures.append(f"missing entity {entity_name}")
+        return
+    fields = field_map(entity)
+    field = fields.get(field_name)
+    if not isinstance(field, dict):
+        failures.append(f"{entity_name}: missing field {field_name}")
+        return
+    if expected_type is not None and field.get("type") != expected_type:
+        failures.append(
+            f"{entity_name}.{field_name}: type {field.get('type')!r}, want {expected_type!r}"
+        )
+
+
+def main() -> int:
+    failures: list[str] = []
+    fields = load_yaml(FIELDS_PATH)
+    service = load_yaml(SERVICE_PATH)
+
+    entities = fields.get("entities")
+    if not isinstance(entities, dict):
+        print("FAIL: assistant_run/fields.yaml missing entities mapping", file=sys.stderr)
+        return 1
+
+    required_entities = [
+        "AssistantContextSnapshot",
+        "AssistantConversationGroundingView",
+        "AssistantConversationGroundingMessage",
+        "AssistantConversationGroundingMember",
+        "AssistantObjectGroundingView",
+        "AssistantUserActionGroundingView",
+        "AssistantConsentMatrix",
+    ]
+    for entity_name in required_entities:
+        if entity_name not in entities:
+            failures.append(f"missing entity {entity_name}")
+
+    assert_field(failures, entities, "AssistantContextSnapshot", "pageObjects", "[]AssistantObjectGroundingView")
+    assert_field(
+        failures,
+        entities,
+        "AssistantContextSnapshot",
+        "conversationGrounding",
+        "AssistantConversationGroundingView",
+    )
+    assert_field(failures, entities, "AssistantContextSnapshot", "consentMatrix", "AssistantConsentMatrix")
+    assert_field(failures, entities, "AssistantConversationGroundingView", "recentMessages", "[]AssistantConversationGroundingMessage")
+    assert_field(failures, entities, "AssistantConversationGroundingView", "members", "[]AssistantConversationGroundingMember")
+    assert_field(failures, entities, "AssistantObjectGroundingView", "objectTypeRef", "string")
+    assert_field(failures, entities, "AssistantConsentMatrix", "canReadConversation", "bool")
+    assert_field(failures, entities, "AssistantConsentMatrix", "canDeliverProactively", "bool")
+
+    for citation_field in ("url", "deepLink", "score", "recallSource", "objectTypeRef"):
+        assert_field(failures, entities, "AssistantSearchCitationView", citation_field)
+
+    routes = route_map(service)
+    for operation in ("SearchXiaoquResults", "ReportPageContext"):
+        route = routes.get(operation)
+        if not isinstance(route, dict):
+            failures.append(f"service.yaml missing operation {operation}")
+            continue
+        request_fields = route.get("request_fields")
+        if not isinstance(request_fields, list) or "contextSnapshot" not in request_fields:
+            failures.append(f"{operation}: request_fields must include contextSnapshot")
+
+    if failures:
+        print(
+            "verify_assistant_context_contract: FAIL\n  " + "\n  ".join(failures),
+            file=sys.stderr,
+        )
+        return 1
+
+    print("verify_assistant_context_contract: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

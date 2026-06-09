@@ -153,30 +153,26 @@ class _SectionChatState extends ConsumerState<SectionChat> {
   }
 
   Widget _buildErrorCard() {
-    final fgSecondary = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundSecondary);
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.error_outline, color: AppColors.error, size: AppSpacing.iconLarge),
-          SizedBox(height: AppSpacing.sm),
-          Text(
-            UITextConstants.loadFailed,
-            style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
+    return Padding(
+      padding: EdgeInsets.all(AppSpacing.containerMd),
+      child: AppSectionErrorCard(
+        semantic: const UiErrorSemantic(
+          category: UiErrorCategory.sectionLoad,
+          scope: UiErrorScope.section,
+          title: '群聊暂时没加载出来',
+          message: UITextConstants.contentLoadSoftFailed,
+          primaryAction: UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
           ),
-          SizedBox(height: AppSpacing.sm),
-          CupertinoButton(
-            onPressed: _retry,
-            child: Text(
-              UITextConstants.retry,
-              style: TextStyle(
-                color: AppColors.primaryColor,
-                fontSize: AppTypography.base,
-              ),
-            ),
-          ),
-        ],
+        ),
+        margin: EdgeInsets.zero,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            _retry();
+          }
+        },
       ),
     );
   }

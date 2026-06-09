@@ -14,6 +14,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/core/services/hive_runtime.dart';
 
 /// Behavior action types aligned with behaviors.yaml.
 ///
@@ -338,16 +339,8 @@ class RemoteBehaviorRepository extends BehaviorRepository
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
-  Future<Box<String>> _ensureQueueBox() async {
-    if (!Hive.isBoxOpen(kBehaviorPendingQueueBoxName)) {
-      try {
-        await Hive.initFlutter();
-      } catch (_) {
-        /* best-effort: Hive 可能已被全局初始化，重复初始化抛错可安全忽略，随后直接打开盒子 */
-      }
-      return Hive.openBox<String>(kBehaviorPendingQueueBoxName);
-    }
-    return Hive.box<String>(kBehaviorPendingQueueBoxName);
+  Future<Box<String>?> _ensureQueueBox() async {
+    return HiveRuntime.openStringBoxOrNull(kBehaviorPendingQueueBoxName);
   }
 
   @override
@@ -432,6 +425,9 @@ class RemoteBehaviorRepository extends BehaviorRepository
 
   Future<void> _flushPending() async {
     final box = await _ensureQueueBox();
+    if (box == null) {
+      return;
+    }
     final keys = box.keys.map((key) => key.toString()).toList(growable: false)
       ..sort();
     var consecutiveFailures = 0;
@@ -489,6 +485,9 @@ class RemoteBehaviorRepository extends BehaviorRepository
 
   Future<void> _enqueue(List<BehaviorEvent> events) async {
     final box = await _ensureQueueBox();
+    if (box == null) {
+      return;
+    }
     final key = DateTime.now().microsecondsSinceEpoch.toString();
     final feedSid = _resolvedFeedSessionId;
     final envelope = <String, dynamic>{

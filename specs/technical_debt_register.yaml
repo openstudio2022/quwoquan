@@ -1,0 +1,10 @@
+version: 1
+debts:
+  - id: TECHDEBT-SMS-OTP-PASSTHROUGH-001
+    title: 短信验证码非生产跳过正确性校验临时放通
+    owner: backend-team
+    domain: integration
+    status: active
+    expires_at: "2026-08-31"
+    cleanup_condition: 正式短信 provider 完成 T3/T4 后删除 pass_through_enabled、debugCode reveal 与 App 联调提示
+    prod_allowed: false

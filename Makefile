@@ -6,8 +6,10 @@
 .PHONY: run-chat-avatar-commercial-matrix-local
 .PHONY: verify-app-mock-isolation
 .PHONY: verify-app-auth-policy
+.PHONY: verify-app-login-entry-loop-contract
 .PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
+.PHONY: verify-app-remote-config-contract
 .PHONY: verify-app-native-edge-navigation
 .PHONY: verify-app-pageflip-back-mainline
 .PHONY: verify-app-pageflip-backward-mainline
@@ -23,17 +25,21 @@
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-ui-app-data-source-mode-ratchet
 .PHONY: verify-app-seed-manifest
+.PHONY: fetch-app-bundled-fonts
+.PHONY: verify-app-bundled-fonts
+.PHONY: check-app-bundled-fonts-updates
+.PHONY: verify-app-web-offline-resources
 .PHONY: verify-avatar-user-pool
 .PHONY: probe-avatar-user-pool-gateway
 .PHONY: verify-business-env-data-inventory
 .PHONY: verify-quwoquan-data
 .PHONY: verify-markdown-article-no-article-document
-.PHONY: verify-quwoquan-data-post-packages
 .PHONY: verify-app-env-package
 .PHONY: verify-service-env-package
 .PHONY: verify-env-topology
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
+.PHONY: verify-sms-otp-fail-open-gate
 .PHONY: verify-env-packaging
 .PHONY: verify-env-instance-isolation
 .PHONY: observability-es-up
@@ -80,6 +86,9 @@ verify-app-mock-isolation:
 verify-app-auth-policy:
 	@python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py
 
+verify-app-login-entry-loop-contract:
+	@python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py
+
 verify-app-lib-test-only-symbols:
 	@python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py
 
@@ -87,12 +96,27 @@ verify-app-lib-test-only-symbols:
 verify-app-lib-no-test-import:
 	@python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py
 
+verify-app-remote-config-contract:
+	@python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py
+
 # UI 层 AppDataSourceMode.mock / appDataSourceModeProvider 引用棘轮（见 specs/gates/ui_app_data_source_mode_baseline.json）
 verify-app-ui-app-data-source-mode-ratchet:
 	@python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py
 
 verify-app-seed-manifest:
 	@python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py
+
+fetch-app-bundled-fonts:
+	@python3 quwoquan_app/scripts/cli.py fonts fetch
+
+verify-app-bundled-fonts:
+	@python3 quwoquan_app/scripts/cli.py fonts verify
+
+check-app-bundled-fonts-updates:
+	@python3 quwoquan_app/scripts/cli.py fonts check-updates
+
+verify-app-web-offline-resources:
+	@python3 quwoquan_app/scripts/cli.py web verify-offline --build
 
 verify-app-assistant-old-stack-retired:
 	@python3 agent_ops/assistant/verify_assistant_old_stack_retired.py
@@ -109,11 +133,24 @@ verify-business-env-data-inventory:
 verify-quwoquan-data:
 	@bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh
 
+verify-data-release-consistency:
+	@if [ -z "$(RELEASE_FILE)" ]; then \
+		echo "FAIL: RELEASE_FILE is required. Example: make verify-data-release-consistency RELEASE_FILE=quwoquan_data/publish/env_releases/<releaseId>/gamma.json"; \
+		exit 2; \
+	fi
+	@python3 quwoquan_data/scripts/cli.py verify \
+		--data-release-file "$(RELEASE_FILE)" \
+		$(if $(PUBLISH_ROOT),--publish-root "$(PUBLISH_ROOT)",) \
+		$(if $(PHASE),--phase "$(PHASE)",)
+
+verify-media-release-contract:
+	@python3 quwoquan_data/scripts/verify/verify_media_release_contract.py
+
+verify-sms-otp-fail-open-gate:
+	@python3 quwoquan_service/scripts/verify/verify_sms_otp_fail_open_gate.py
+
 verify-markdown-article-no-article-document:
 	@python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py
-
-verify-quwoquan-data-post-packages:
-	@python3 quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py
 
 .PHONY: verify-quwoquan-data-stages
 verify-quwoquan-data-stages:
@@ -175,6 +212,12 @@ verify-reliable-task-topology:
 	@python3 quwoquan_service/scripts/recommendation/verify_reliable_task_retention_policy.py
 	@python3 quwoquan_service/scripts/runtime/verify_module_permission_scope.py
 	@python3 quwoquan_service/scripts/recommendation/verify_reliable_task_migration.py
+
+.PHONY: verify-workload-topology-inventory
+verify-workload-topology-inventory:
+	@python3 quwoquan_service/scripts/deploy/verify_workload_topology_inventory.py
+	@python3 quwoquan_service/scripts/deploy/verify_strangler_contract_invariants.py
+	@python3 quwoquan_service/scripts/deploy/verify_gamma_local_prod_isomorphism.py
 
 build-app-env:
 	@if [ -z "$(ENV)" ]; then \
@@ -263,7 +306,7 @@ verify-env-instance-isolation:
 	@python3 quwoquan_service/scripts/runtime/verify_env_instance_isolation.py
 
 test-app-alpha-seed:
-	@cd quwoquan_app && flutter test test/cloud/services/contract_seeded_mock_repository_test.dart
+	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/cloud/services/contract_seeded_mock_repository_test.dart
 
 test-app-beta-seed:
 	@python3 quwoquan_app/scripts/env/run_app_alpha_beta_seed_matrix.py
@@ -298,7 +341,7 @@ verify-app-native-edge-navigation:
 	@python3 quwoquan_app/scripts/runtime/verify_native_edge_navigation.py
 
 verify-app-pageflip-back-mainline:
-	@cd quwoquan_app && flutter test test/components/pageflip/backward_sheet_partition_contract_test.dart test/components/pageflip/pageflip_contract_test.dart test/common/pageflip/pageflip_diagnostics_visual_test.dart test/components/pageflip/pageflip_widget_test.dart
+	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/components/pageflip/backward_sheet_partition_contract_test.dart test/components/pageflip/pageflip_contract_test.dart test/common/pageflip/pageflip_diagnostics_visual_test.dart test/components/pageflip/pageflip_widget_test.dart
 
 # 后翻路线 B 主线静态门禁（见 .cursor/rules/12-pageflip-backward-mainline.mdc）。
 verify-app-pageflip-backward-mainline:
@@ -330,6 +373,10 @@ verify-app-session-b-current:
 verify-retired-terms-zero:
 	@python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py
 
+# 推荐标签链路 StrictTyping：禁裸 Future<dynamic>/Future<Object?> 返回契约（cloud/services/tag）
+verify-app-cloud-tag-strict-typing:
+	@python3 quwoquan_app/scripts/runtime/verify_cloud_tag_strict_typing.py
+
 verify-global-increment-constraints:
 	@bash agent_ops/scaffold/verify_global_increment_constraints.sh
 
@@ -341,6 +388,7 @@ gate:
 	@$(MAKE) verify-global-increment-constraints
 	@bash quwoquan_service/scripts/deploy/verify_deployment_domain_mapping.sh
 	@bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
+	@$(MAKE) verify-workload-topology-inventory
 	@$(MAKE) verify-reliable-task-topology
 	@$(MAKE) verify-avatar-user-pool
 	@$(MAKE) probe-avatar-user-pool-gateway
@@ -407,6 +455,7 @@ verify:
 	@bash quwoquan_service/scripts/deploy/report_deployment_mapping_impact.sh
 	@bash quwoquan_service/scripts/recommendation/verify_recommendation_service_contract.sh
 	@bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
+	@$(MAKE) verify-workload-topology-inventory
 	@bash quwoquan_service/scripts/deploy/verify_config_gray_parallel_binding.sh
 	@$(MAKE) verify-quwoquan-data
 
@@ -497,12 +546,12 @@ test-api-contract:
 		echo "[L3] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL and $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_PRODUCT_OPS_BASE_URL"; \
 		exit 2; \
 	fi; \
-	cd quwoquan_app && flutter test test/cloud/content/api_contract_runner.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/cloud/content/api_contract_runner.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
 		--dart-define=LOCAL_GAMMA_T3_SCOPE=$${LOCAL_GAMMA_T3_SCOPE:-} \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN && \
-	flutter test test/cloud/ops/api_contract_runner.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/cloud/ops/api_contract_runner.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=$$OPS_BASE_URL
 
@@ -519,7 +568,7 @@ test-api-contract-chat:
 		echo "[L3] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL"; \
 		exit 2; \
 	fi; \
-	cd quwoquan_app && flutter test test/cloud/chat/api_contract_runner.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/cloud/chat/api_contract_runner.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN
@@ -548,7 +597,7 @@ gamma-validate-smoke-full:
 	( \
 		cd quwoquan_app && \
 		flutter pub get && \
-		flutter test test/common/assistant/assistant_environment_smoke_test.dart \
+		python3 scripts/env/run_flutter_test_guarded.py test/common/assistant/assistant_environment_smoke_test.dart \
 			--dart-define=APP_RUNTIME_ENV=gamma \
 			--dart-define=APP_DATA_SOURCE=remote \
 			--dart-define=CLOUD_GATEWAY_BASE_URL="$${GAMMA_BASE_URL}" \

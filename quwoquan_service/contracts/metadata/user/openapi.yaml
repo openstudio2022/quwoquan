@@ -398,8 +398,12 @@ components:
           relationState,
           canFollow,
           canUnfollow,
-          canMessage,
           canFollowBack,
+          canGreet,
+          canCreateDirectConversation,
+          canSendMessage,
+          hasPendingGreeting,
+          hasFormalConversation,
           canStartVoiceCall,
           canStartVideoCall,
           isBlocked,
@@ -409,15 +413,15 @@ components:
         viewerSubAccountId: { type: string }
         targetSubAccountId: { type: string }
         relationState: { type: string }
-        relationTier: { type: string, nullable: true }
         canFollow: { type: boolean }
         canUnfollow: { type: boolean }
-        canMessage: { type: boolean }
         canFollowBack: { type: boolean }
         canGreet: { type: boolean }
         canOpenConversation: { type: boolean }
-        canAddSameInterest: { type: boolean }
-        canSetCloseFriend: { type: boolean }
+        canCreateDirectConversation: { type: boolean }
+        canSendMessage: { type: boolean }
+        hasPendingGreeting: { type: boolean }
+        hasFormalConversation: { type: boolean }
         canStartVoiceCall: { type: boolean }
         canStartVideoCall: { type: boolean }
         isBlocked: { type: boolean }

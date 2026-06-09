@@ -12,4 +12,7 @@ CREATE INDEX IF NOT EXISTS idx_block_blocker ON block_edges (blocker_id);
 
 CREATE INDEX IF NOT EXISTS idx_block_blocked ON block_edges (blocked_id);
 
-ALTER TABLE block_edges ADD CONSTRAINT uq_block_edge UNIQUE (blocker_id, blocked_id);
+DO $do$ BEGIN
+    ALTER TABLE block_edges ADD CONSTRAINT uq_block_edge UNIQUE (blocker_id, blocked_id);
+EXCEPTION WHEN duplicate_table THEN NULL; WHEN duplicate_object THEN NULL;
+END $do$;

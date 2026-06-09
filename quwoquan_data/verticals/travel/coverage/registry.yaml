@@ -1,0 +1,36 @@
+schemaVersion: quwoquan.vertical_coverage.v1
+vertical: travel
+description: 旅行垂类覆盖边界。当前四川为试点；全国与海外出国游仍需 coverage seed。
+units:
+  - id: travel.china.scenic_spots
+    label: 中国景区与自然/人文景点
+    entityType: 地点/景区
+    expectedCount: 0
+    source: pending-national-scenic-catalog
+    requiredSourceCategories: [encyclopedia, official, travelogue, map_geo]
+    requiredAngles: [攻略, 体验, 避雷, 盘点]
+    maturity: gap
+  - id: travel.china.travel_scenes
+    label: 中国旅行场景
+    entityType: 场景/旅行
+    expectedCount: 0
+    source: pending-travel-scene-catalog
+    requiredSourceCategories: [official, travelogue, map_geo, weather, transport]
+    requiredAngles: [行前指南, 路线攻略, 住宿攻略, 安全提示]
+    maturity: gap
+  - id: travel.sichuan.pilot
+    label: 四川旅行试点
+    entityType: 地点/景区
+    expectedCount: 0
+    source: tasks/旅行/地域/四川省
+    requiredSourceCategories: [encyclopedia, official, travelogue]
+    requiredAngles: [攻略, 体验]
+    maturity: partial
+  - id: travel.outbound.core
+    label: 海外出国游核心国家/城市/场景
+    entityType: 地点/城市
+    expectedCount: 0
+    source: pending-outbound-travel-catalog
+    requiredSourceCategories: [official, guidebook, transport, lodging, review]
+    requiredAngles: [签证入境, 交通通信, 支付退税, 安全医疗, 路线攻略]
+    maturity: gap

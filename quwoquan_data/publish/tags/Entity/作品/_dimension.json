@@ -1,0 +1,10 @@
+{
+  "label": "作品类型",
+  "labelEn": "Creative Work Type",
+  "description": "人类创造的文化与科技产物类型",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 20
+}

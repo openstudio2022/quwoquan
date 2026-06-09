@@ -198,17 +198,19 @@ func TestCatalogLoaderValidatesChatAvatarTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
+	now := time.Now().UTC()
 	req, err := catalog.DeclareRequestForTask(
 		"chat.group_avatar.recompute",
 		"conv-1",
 		map[string]string{"rosterRevision": "1", "triggers": "members.added", "actorID": "user-1"},
 		"members.added",
-		time.Now().UTC(),
+		now,
 	)
 	if err != nil {
 		t.Fatalf("build declare request: %v", err)
 	}
-	if req.StartAt.Before(time.Now().UTC().Add(55 * time.Second)) {
+	expectedDelay := catalog.Tasks["chat.group_avatar.recompute"].MergePolicy.DelayFromNow
+	if req.StartAt.Before(now.Add(expectedDelay)) {
 		t.Fatalf("startAt did not apply catalog delay: %s", req.StartAt)
 	}
 	policy := catalog.Tasks["chat.group_avatar.recompute"].RetryPolicyConfig()

@@ -1,0 +1,10 @@
+{
+  "label": "地点类型",
+  "labelEn": "Place Type",
+  "description": "有明确地理位置的实体类型，具体地点实例进入 entities/地点/ 目录；国家节点与 Topic/地理/行政区 对齐",
+  "maxDepth": 4,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 120
+}

@@ -40,20 +40,32 @@ class SkillSubscriptionDestinationWire {
   const SkillSubscriptionDestinationWire({
     this.destinationType = "user",
     this.destinationId = "",
+    this.maxPerDay = 0,
+    this.cooldownMinutes = 0,
+    this.quietHoursPolicy = "inherit_user_setting",
   });
 
   final String destinationType;
   final String destinationId;
+  final int maxPerDay;
+  final int cooldownMinutes;
+  final String quietHoursPolicy;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'destinationType': destinationType,
         'destinationId': destinationId,
+        'maxPerDay': maxPerDay,
+        'cooldownMinutes': cooldownMinutes,
+        'quietHoursPolicy': quietHoursPolicy,
       };
 
   factory SkillSubscriptionDestinationWire.fromJson(Map<String, dynamic> json) {
     return SkillSubscriptionDestinationWire(
       destinationType: (json['destinationType'] as String?)?.trim() ?? "user",
       destinationId: (json['destinationId'] as String?)?.trim() ?? "",
+      maxPerDay: (json['maxPerDay'] as num?)?.toInt() ?? 0,
+      cooldownMinutes: (json['cooldownMinutes'] as num?)?.toInt() ?? 0,
+      quietHoursPolicy: (json['quietHoursPolicy'] as String?)?.trim() ?? "inherit_user_setting",
     );
   }
 }
@@ -61,6 +73,9 @@ class SkillSubscriptionDestinationWire {
 class SkillSubscriptionDestinationWireFields {
   static const String destinationType = 'destinationType';
   static const String destinationId = 'destinationId';
+  static const String maxPerDay = 'maxPerDay';
+  static const String cooldownMinutes = 'cooldownMinutes';
+  static const String quietHoursPolicy = 'quietHoursPolicy';
 }
 
 class SkillSubscriptionOwnerWire {

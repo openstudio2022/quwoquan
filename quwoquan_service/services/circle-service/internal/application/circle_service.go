@@ -13,6 +13,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/repository"
+	rtsearch "quwoquan_service/runtime/search"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
 )
@@ -318,8 +319,13 @@ func (s *CircleService) SearchCircles(
 		Cursor:   req.Cursor,
 		Limit:    limit * 8,
 	})
-	query := strings.TrimSpace(strings.ToLower(req.Query))
-	items := make([]CircleSearchItemWire, 0, limit)
+	query := strings.TrimSpace(req.Query)
+	type indexedCircle struct {
+		circle     model.Circle
+		categoryID string
+	}
+	index := map[string]indexedCircle{}
+	docs := make([]rtsearch.Document, 0, len(listResp.Items))
 	facetCounts := map[string]int{}
 	for _, circle := range listResp.Items {
 		categoryID := strings.TrimSpace(circle.Category)
@@ -329,24 +335,43 @@ func (s *CircleService) SearchCircles(
 		if categoryID == "" {
 			categoryID = "all"
 		}
-		if query != "" {
-			matched := false
-			for _, value := range []string{
-				circle.Name,
-				circle.Description,
-				strings.Join(asStringSlice(circle.Tags), " "),
-				categoryID,
-			} {
-				if strings.Contains(strings.ToLower(strings.TrimSpace(value)), query) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				continue
-			}
-		}
 		facetCounts[categoryID]++
+		index[circle.ID] = indexedCircle{circle: circle, categoryID: categoryID}
+		docs = append(docs, rtsearch.Document{
+			ObjectType:   rtsearch.ObjectTypeCircle,
+			ObjectID:     circle.ID,
+			Title:        circle.Name,
+			Summary:      circle.Description,
+			SourceDomain: "circle",
+			ContentType:  string(circle.Kind),
+			Visibility:   string(circle.Visibility),
+			BadgeLabel:   "圈子",
+			Tags:         asStringSlice(circle.Tags),
+			Popularity:   float64(circle.MemberCount + circle.PostCount),
+			Freshness:    circle.UpdatedAt,
+			Fields: map[string]string{
+				"categoryId":          categoryID,
+				"domainId":            circle.DomainID,
+				"displaySubjectType":  string(circle.DisplaySubjectType),
+				"linkedHomepageId":    circle.LinkedHomepageID,
+				"linkedHomepageTitle": circle.LinkedHomepageTitle,
+			},
+		})
+	}
+	searchResp := rtsearch.Execute(rtsearch.Request{
+		Query:       query,
+		Mode:        rtsearch.ModeResult,
+		ObjectTypes: []string{rtsearch.ObjectTypeCircle},
+		Limit:       limit,
+	}, docs)
+	items := make([]CircleSearchItemWire, 0, len(searchResp.Hits))
+	for _, hit := range searchResp.Hits {
+		indexed, ok := index[hit.ObjectID]
+		if !ok {
+			continue
+		}
+		circle := indexed.circle
+		categoryID := indexed.categoryID
 		items = append(items, CircleSearchItemWire{
 			CircleID:            circle.ID,
 			Name:                circle.Name,
@@ -359,15 +384,12 @@ func (s *CircleService) SearchCircles(
 			DisplaySubjectType:  string(circle.DisplaySubjectType),
 			MemberCount:         circle.MemberCount,
 			PostCount:           circle.PostCount,
-			HighlightText:       circle.Name,
-			MatchedField:        "name",
+			HighlightText:       hit.Snippet,
+			MatchedField:        hit.MatchedField,
 			LinkedHomepageID:    circle.LinkedHomepageID,
 			LinkedHomepageType:  string(circle.LinkedHomepageType),
 			LinkedHomepageTitle: circle.LinkedHomepageTitle,
 		})
-		if len(items) >= limit {
-			break
-		}
 	}
 	facetKeys := make([]string, 0, len(facetCounts))
 	for key := range facetCounts {

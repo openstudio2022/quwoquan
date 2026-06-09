@@ -190,6 +190,11 @@ type TelemetryService struct {
 	mirror    EventMirror
 }
 
+type EventTelemetrySnapshot struct {
+	Summary   EventSummary
+	Drilldown EventDrilldown
+}
+
 func NewTelemetryService(store TelemetryStore, publisher repository.EventPublisher) *TelemetryService {
 	return NewTelemetryServiceWithMirror(store, publisher, nil)
 }
@@ -264,4 +269,35 @@ func (s *TelemetryService) GetEventDrilldown(ctx context.Context, query EventDri
 		query.Limit = 50
 	}
 	return s.store.GetEventDrilldown(ctx, query)
+}
+
+func (s *TelemetryService) SnapshotEvents(ctx context.Context, summaryQuery EventSummaryQuery, drilldownLimit int) (EventTelemetrySnapshot, error) {
+	summary, err := s.GetEventSummary(ctx, summaryQuery)
+	if err != nil {
+		return EventTelemetrySnapshot{}, err
+	}
+	drilldownQuery := EventDrilldownQuery{
+		EventType:        summaryQuery.EventType,
+		EventName:        summaryQuery.EventName,
+		PageName:         summaryQuery.PageName,
+		SurfaceID:        summaryQuery.SurfaceID,
+		RouteID:          summaryQuery.RouteID,
+		TargetType:       summaryQuery.TargetType,
+		TargetKey:        summaryQuery.TargetKey,
+		EntityType:       summaryQuery.EntityType,
+		EntityID:         summaryQuery.EntityID,
+		ExperimentBucket: summaryQuery.ExperimentBucket,
+		Source:           summaryQuery.Source,
+		From:             summaryQuery.From,
+		To:               summaryQuery.To,
+		Limit:            drilldownLimit,
+	}
+	drilldown, err := s.GetEventDrilldown(ctx, drilldownQuery)
+	if err != nil {
+		return EventTelemetrySnapshot{}, err
+	}
+	return EventTelemetrySnapshot{
+		Summary:   summary,
+		Drilldown: drilldown,
+	}, nil
 }

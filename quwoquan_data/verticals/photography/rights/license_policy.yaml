@@ -1,0 +1,35 @@
+schemaVersion: quwoquan.photography_license_policy.v1
+vertical: photography
+defaultAction: block
+blockedDiscoveryOnlyPlatforms:
+  - Pinterest
+  - pinterest
+requiredImageFields:
+  - license
+  - credit
+  - sourceUrl
+  - termsUrl
+  - usageScope
+allowedLicenseKinds:
+  - CC0
+  - CC-BY
+  - CC-BY-SA
+  - Public Domain
+  - Unsplash License
+  - Pexels License
+  - Pixabay License
+  - photographer_authorized
+  - stock_authorized
+  - museum_open_access
+usageScopes:
+  - internal_reference
+  - app_publish
+  - editorial
+  - commercial
+humanSubjectPolicy:
+  modelReleaseRequiredWhenFaceDetected: true
+  requiredField: modelReleaseStatus
+  allowedStatuses:
+    - not_required
+    - obtained
+    - editorial_only

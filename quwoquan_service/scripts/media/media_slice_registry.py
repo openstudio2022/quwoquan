@@ -48,13 +48,7 @@ def resolve_slice_entry(registry: dict[str, Any], object_key: str) -> dict[str, 
         return None
     by_id = registry_slices_by_id(registry)
     explicit = extract_slice_id(normalized)
-    if explicit:
-        return by_id.get(explicit)
-    for item in registry.get("slices", []):
-        for prefix in item.get("legacyPrefixes", []):
-            if normalized.startswith(str(prefix)):
-                return item
-    return None
+    return by_id.get(explicit) if explicit else None
 
 
 def resolve_local_file(

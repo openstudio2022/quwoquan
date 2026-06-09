@@ -53,6 +53,39 @@ errors:
       zh: "发送太频繁，请稍后重试"
       en: "Sending too frequently, please wait"
 
+  - code: CHAT.USER.not_mutual
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    recovery_action: surface
+    dart_const: notMutual
+    go_const: ErrNotMutual
+    user_message:
+      zh: "互相关注后可进入正式私信"
+      en: "Mutual follow is required to enter a formal direct conversation"
+
+  - code: CHAT.USER.greeting_required
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    recovery_action: surface
+    dart_const: greetingRequired
+    go_const: ErrGreetingRequired
+    user_message:
+      zh: "请先打招呼，等对方回复后再进入正式私信"
+      en: "Send a greeting first and wait for a reply before entering formal direct conversation"
+
+  - code: CHAT.USER.blocked
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    recovery_action: surface
+    dart_const: blocked
+    go_const: ErrBlocked
+    user_message:
+      zh: "当前状态不能继续发送消息"
+      en: "Current relationship does not allow messaging"
+
   - code: CHAT.SYSTEM.internal_error
     kind: SYSTEM
     reason: internal_error

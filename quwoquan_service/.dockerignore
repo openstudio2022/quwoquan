@@ -6,4 +6,4 @@
 **/*.pyc
 .git/
 .cursor/
-.control-plane-state/
+state/

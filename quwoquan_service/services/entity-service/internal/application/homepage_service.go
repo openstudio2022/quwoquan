@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	rtobs "quwoquan_service/runtime/observability"
+	rtsearch "quwoquan_service/runtime/search"
 )
 
 const (
@@ -266,7 +267,6 @@ func (s *HomepageService) SearchHomepages(
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	needle := normalize(query)
 	filterType := normalize(homepageType)
 	filterCity := normalize(city)
 	filterStatus := normalize(status)
@@ -274,7 +274,8 @@ func (s *HomepageService) SearchHomepages(
 		limit = 20
 	}
 
-	items := make([]HomepageSearchItemView, 0, len(s.homepages))
+	index := map[string]*Homepage{}
+	docs := make([]rtsearch.Document, 0, len(s.homepages))
 	for _, homepage := range s.homepages {
 		if filterType != "" && normalize(homepage.HomepageType) != filterType {
 			continue
@@ -289,17 +290,39 @@ func (s *HomepageService) SearchHomepages(
 		} else if homepage.Status != "published" {
 			continue
 		}
-		if needle != "" {
-			haystack := normalize(strings.Join([]string{
-				homepage.Title,
-				homepage.Subtitle,
-				homepage.Address,
-				homepage.City,
-				strings.Join(homepage.CategoryTags, " "),
-			}, " "))
-			if !strings.Contains(haystack, needle) {
-				continue
-			}
+		index[homepage.ID] = homepage
+		docs = append(docs, rtsearch.Document{
+			ObjectType:   rtsearch.ObjectTypeEntityHomepage,
+			ObjectID:     homepage.ID,
+			Title:        homepage.Title,
+			Summary:      homepage.Subtitle,
+			SourceDomain: "entity",
+			ContentType:  homepage.HomepageType,
+			Visibility:   "public",
+			BadgeLabel:   "主页",
+			Tags:         homepage.CategoryTags,
+			Entities:     []string{homepage.CanonicalEntityID},
+			Popularity:   float64(homepage.RatingCount),
+			Freshness:    homepage.UpdatedAt,
+			Fields: map[string]string{
+				"address":      homepage.Address,
+				"city":         homepage.City,
+				"homepageType": homepage.HomepageType,
+				"categoryTags": strings.Join(homepage.CategoryTags, " "),
+			},
+		})
+	}
+	searchResp := rtsearch.Execute(rtsearch.Request{
+		Query:       query,
+		Mode:        rtsearch.ModeResult,
+		ObjectTypes: []string{rtsearch.ObjectTypeEntityHomepage},
+		Limit:       limit,
+	}, docs)
+	items := make([]HomepageSearchItemView, 0, len(searchResp.Hits))
+	for _, hit := range searchResp.Hits {
+		homepage, ok := index[hit.ObjectID]
+		if !ok {
+			continue
 		}
 		items = append(items, HomepageSearchItemView{
 			HomepageID:    homepage.ID,
@@ -313,17 +336,6 @@ func (s *HomepageService) SearchHomepages(
 			AverageRating: homepage.AverageRating,
 			RatingCount:   homepage.RatingCount,
 		})
-	}
-	sort.Slice(items, func(i, j int) bool {
-		leftScore := items[i].RatingCount
-		rightScore := items[j].RatingCount
-		if leftScore == rightScore {
-			return items[i].Title < items[j].Title
-		}
-		return leftScore > rightScore
-	})
-	if len(items) > limit {
-		items = items[:limit]
 	}
 	return items
 }
@@ -469,6 +481,7 @@ func (s *HomepageService) GetHomepageRelatedGroups(ctx context.Context, homepage
 
 func (s *HomepageService) GetObjectPageBundle(
 	ctx context.Context,
+	viewerID string,
 	homepageID string,
 	referralSource string,
 	feedRequestID string,
@@ -487,6 +500,8 @@ func (s *HomepageService) GetObjectPageBundle(
 		return nil, err
 	}
 	return buildObjectPageBundle(
+		ctx,
+		viewerID,
 		homepage,
 		referralSource,
 		feedRequestID,
@@ -950,6 +965,8 @@ func validateHomepageInput(input HomepageInput) error {
 }
 
 func buildObjectPageBundle(
+	ctx context.Context,
+	viewerID string,
 	homepage *Homepage,
 	referralSource string,
 	feedRequestID string,
@@ -979,6 +996,7 @@ func buildObjectPageBundle(
 		"assistantProactiveEnabled": true,
 		"relationEvidenceEnabled":   true,
 	}
+	intersectionReasons, intersections := resolveObjectPageIntersections(ctx, viewerID, homepage, relationEdges)
 	return &ObjectPageBundle{
 		ObjectType:         "homepage",
 		ObjectID:           homepage.ID,
@@ -993,8 +1011,8 @@ func buildObjectPageBundle(
 			"relatedGroupCount": len(homepage.RelatedGroups),
 			"highlightCount":    len(homepage.ContentPreview),
 		},
-		IntersectionReasons: defaultIntersectionReasons(homepage, relationEdges),
-		Intersections:       defaultObjectIntersections(homepage, relationEdges),
+		IntersectionReasons: intersectionReasons,
+		Intersections:       intersections,
 		HighlightItems:      cloneObjectSlice(homepage.ContentPreview),
 		ContentSections: map[string]any{
 			"home":    cloneObjectSlice(homepage.ContentPreview),
@@ -1129,13 +1147,13 @@ func defaultObjectIntersections(homepage *Homepage, edges []map[string]any) []ma
 	}
 	evidence := []map[string]any{
 		{
-			"evidenceId":     homepage.ID + "_ev_tag",
-			"evidenceType":   "tag",
+			"evidenceId":       homepage.ID + "_ev_tag",
+			"evidenceType":     "tag",
 			"evidenceObjectId": homepage.ID,
-			"evidenceLabel":  evidenceLabel,
-			"source":         "tagRef",
-			"referralTarget": homepage.ID,
-			"visibility":     "public",
+			"evidenceLabel":    evidenceLabel,
+			"source":           "tagRef",
+			"referralTarget":   homepage.ID,
+			"visibility":       "public",
 		},
 	}
 	return []map[string]any{

@@ -1,0 +1,9 @@
+{
+  "label": "兴趣聚合圈",
+  "labelEn": "Interest Aggregation Circles",
+  "description": "跨地域以主题/同人/技能聚合的圈子",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

@@ -25,8 +25,17 @@
 ## 验收标准概要
 
 - A1：规格、设计、验收与计划已落地，明确本地 `T1 -> T4` 左移覆盖与云端不可替代边界。
-- A2：`local-gamma` 文档明确不新增第六环境，endpoint 覆盖只通过本地脚本、runtime define 或未入库 overlay 注入。
+- A2：`local-gamma` 文档明确不新增额外环境，endpoint 覆盖只通过本地脚本、runtime define 或未入库 overlay 注入。
 - A3：本地 Docker mirror 可启动 `gamma` 语义服务，满足 `CONFIG_VERSION`、依赖、health、DNS/TLS 与 media endpoint 前置检查。
 - A4：本地 `T3` runner 使用 `app_gamma_seed_manifest.json` 验证真实 API、真实存储副作用、错误响应和 RemoteRepository 边界。
 - A5：本地 `T4` runner 统一 App 与测试进程 endpoint，至少在一台模拟器或真机完成 Patrol 核心旅程。
 - A6：`gate-local-gamma` 生成 `artifacts/local-gamma/report.json`，作为提交前左移准入，但不再成为 `main` required check。
+- A7：gamma-local 服务名册与 prod `workload_topology_inventory` 一致；recommendation 对外 DNS 名各环境统一为 `recommendation-service:8000`；edge-media 服务 profile 化、默认主栈纯净（由 `verify_gamma_local_prod_consistency.py` 守护）。
+- A8：`realtime-gateway` 实现未就绪（仅 K8s 骨架），以 `edge-media-pending` profile 显式占位作为收敛项；实现就绪后改入 `edge-media` 并纳入主验证链。
+
+## 环境一致性：服务名册与命名收敛
+
+- gamma-local 以单个 `docker-compose.gamma-local.yaml` 统一承载（当前阶段统一部署），用 compose `profiles` 实现“逻辑独立、物理按需组装”：默认主栈为应用面（含 recommendation），`docker compose --profile edge-media up` 在主栈之上叠加实时/媒体面。
+- 对外 DNS 名与 prod 对齐：recommendation 服务在各环境统一以 `http://recommendation-service:8000` 被调用；`rec-model-service` 仅作为 Python 工件名（目录/Dockerfile/metadata）与兼容网络别名，不再作为调用方主名。
+- edge-media 名册与 prod inventory 一致：`realtime-gateway / rtc-service / livekit-sfu / coturn` 均在 gamma-local compose 出现。`rtc-service / livekit-sfu / coturn` 实现就绪、归 `edge-media` profile；`realtime-gateway` 实现未就绪、归 `edge-media-pending` 占位。
+- 一致性由 `quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py` 守护并串入 `make gate`。

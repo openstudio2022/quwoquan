@@ -1,0 +1,10 @@
+{
+  "label": "互动玩法",
+  "labelEn": "Engagement Mechanics",
+  "description": "平台内特有的互动机制标签",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 15
+}

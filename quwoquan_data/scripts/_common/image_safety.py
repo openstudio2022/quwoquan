@@ -11,8 +11,11 @@
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
+import struct
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -78,6 +81,7 @@ _HANDLE_RE = re.compile(r"@[\w\u4e00-\u9fff][\w\u4e00-\u9fff\-_.]{1,30}")
 TEXT_HEAVY_RATIO = 0.16  # OCR 文字框面积占比 >= 此值视为"图中带交叠文字 = 文章"
 NEAR_DUP_HAMMING = 5  # average_hash 海明距离 <= 此值视为近重复
 _OCR_MIN_CONF = 45
+_PLACEHOLDER_MAX_EDGE_DELTA = 7.0
 
 
 STATUS_SAFE = "safe"
@@ -203,6 +207,83 @@ def _has_watermark(ocr_text: str) -> bool:
     return bool(_HANDLE_RE.search(ocr_text))
 
 
+def _png_rgb_rows(path: Path) -> tuple[int, int, list[bytes]] | None:
+    data = path.read_bytes()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    pos = 8
+    width = height = 0
+    idat = bytearray()
+    color_type = -1
+    bit_depth = -1
+    while pos + 8 <= len(data):
+        length = struct.unpack(">I", data[pos:pos + 4])[0]
+        kind = data[pos + 4:pos + 8]
+        payload = data[pos + 8:pos + 8 + length]
+        pos += 12 + length
+        if kind == b"IHDR":
+            width, height, bit_depth, color_type = struct.unpack(">IIBB", payload[:10])
+        elif kind == b"IDAT":
+            idat.extend(payload)
+        elif kind == b"IEND":
+            break
+    if width <= 0 or height <= 0 or bit_depth != 8 or color_type != 2:
+        return None
+    try:
+        raw = zlib.decompress(bytes(idat))
+    except Exception:
+        return None
+    stride = width * 3
+    rows: list[bytes] = []
+    offset = 0
+    prev = bytearray(stride)
+    for _ in range(height):
+        if offset >= len(raw):
+            return None
+        filter_type = raw[offset]
+        offset += 1
+        row = bytearray(raw[offset:offset + stride])
+        offset += stride
+        if len(row) != stride:
+            return None
+        if filter_type == 1:
+            for i in range(stride):
+                row[i] = (row[i] + (row[i - 3] if i >= 3 else 0)) & 0xFF
+        elif filter_type == 2:
+            for i in range(stride):
+                row[i] = (row[i] + prev[i]) & 0xFF
+        elif filter_type != 0:
+            return None
+        rows.append(bytes(row))
+        prev = row
+    return width, height, rows
+
+
+def _low_texture_placeholder(path: Path) -> bool:
+    parsed = _png_rgb_rows(path)
+    if parsed is None:
+        return False
+    width, height, rows = parsed
+    if width * height < 10000:
+        return False
+    total_delta = 0
+    samples = 0
+    for y in range(0, height, max(1, height // 60)):
+        row = rows[y]
+        for x in range(1, width, max(1, width // 80)):
+            i = x * 3
+            j = (x - 1) * 3
+            total_delta += abs(row[i] - row[j]) + abs(row[i + 1] - row[j + 1]) + abs(row[i + 2] - row[j + 2])
+            samples += 3
+    if samples == 0:
+        return False
+    return (total_delta / samples) <= _PLACEHOLDER_MAX_EDGE_DELTA
+
+
+def is_low_texture_placeholder_graphic(path: str | Path) -> bool:
+    return _low_texture_placeholder(Path(path))
+
+
 def assess_image(path: str | Path) -> ImageVerdict:
     p = Path(path)
     backends = _active_backends()
@@ -218,6 +299,8 @@ def assess_image(path: str | Path) -> ImageVerdict:
         )
 
     reasons: list[str] = []
+    if _low_texture_placeholder(p):
+        reasons.append("low_texture_placeholder_graphic")
     faces = _detect_faces(p)
     ocr_text, text_ratio, ocr_ran = _ocr_text_and_ratio(p)
     has_watermark = _has_watermark(ocr_text)
@@ -234,7 +317,9 @@ def assess_image(path: str | Path) -> ImageVerdict:
         reasons.append(f"text_heavy:{round(text_ratio, 3)}")
 
     # 状态优先级：unsafe > needs_review > text_heavy > safe
-    if has_watermark:
+    if "low_texture_placeholder_graphic" in reasons:
+        status = STATUS_UNSAFE
+    elif has_watermark:
         status = STATUS_UNSAFE
     elif faces > 0 or not _CV_OK or not ocr_ran:
         status = STATUS_NEEDS_REVIEW
@@ -272,6 +357,49 @@ def is_near_duplicate(path_a: str | Path, path_b: str | Path, *, threshold: int 
     if ha is None or hb is None:
         return False
     return bool((ha - hb) <= threshold)
+
+
+def _avg_hash_bytes(data: bytes):
+    if not _HASH_OK or not data:
+        return None
+    import io
+
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            return imagehash.average_hash(im.convert("RGB"))
+    except Exception:
+        return None
+
+
+def dedupe_image_payloads(
+    payloads: Sequence[dict], *, threshold: int = NEAR_DUP_HAMMING
+) -> tuple[list[dict], list[int]]:
+    """对内存图片字节按感知哈希去重（下载落盘前），保留先出现者。
+
+    每项需含 "bytes"。返回 (保留项, 被判重复的原索引列表)。
+    哈希后端缺失时退化为按 sha256/字节恒等去重，绝不放水成「全保留」。
+    """
+    kept: list[dict] = []
+    kept_hashes: list = []
+    seen_sha: set[str] = set()
+    dup_indices: list[int] = []
+    for idx, payload in enumerate(payloads):
+        data = payload.get("bytes") if isinstance(payload, dict) else None
+        if not data:
+            continue
+        sha = payload.get("sha256") or hashlib.sha256(data).hexdigest()
+        if sha in seen_sha:
+            dup_indices.append(idx)
+            continue
+        h = _avg_hash_bytes(data)
+        if h is not None and any((h - kh) <= threshold for kh in kept_hashes):
+            dup_indices.append(idx)
+            continue
+        seen_sha.add(sha)
+        if h is not None:
+            kept_hashes.append(h)
+        kept.append(payload)
+    return kept, dup_indices
 
 
 def dedupe_images(paths: Sequence[str | Path], *, threshold: int = NEAR_DUP_HAMMING) -> list[Path]:

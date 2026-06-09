@@ -7,32 +7,151 @@ node:
   parent_domain_service: chat-conversation
   parent_business_capability: list-detail-message-delivery
 scope:
-  summary: realtime push and offline sync 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: Mock/Remote 共用 realtime 连接接口、生命周期接线、fixture 驱动 mock 事件与聊天页实时更新的 Phase 1 子集验收。
+  in_scope:
+  - "`RealtimeConnectionDelegate`、`RealtimeConnectionNotifier` 与 `realtimeConnectionManagerProvider` 的统一入口。"
+  - "`QuWoQuanAppRoot` 的 foreground/background lifecycle 接线。"
+  - "Remote idle long-poll、active websocket、background disconnect 的最小状态机闭环。"
+  - "`chat_realtime_mock_core` fixture 驱动的 `MessageSent` 与 `MemberJoined` mock realtime 事件。"
+  - "`ChatConversationPage` 在 mock 模式下通过 realtime handler 追加新消息。"
+  out_of_scope:
+  - 服务端 EventPublisher 与 Redis realtime fanout。
+  - FCM/APNs 离线推送与通知点击直达聊天页。
+  - "`/v1/config/realtime` 配置拉取与热更新。"
+  - 全量 seq gap fill、断线补洞、多设备同步。
 gwt_acceptance:
   GWT1:
-    title: realtime push and offline sync GWT
+    title: mock 模式进入聊天仅走本地状态机与 fixture 事件
     given:
-    - 前置条件明确。
+    - "`appDataSourceMode=mock`，会话 fixture `conv_001` 已加载。"
+    - App 已处于前台并通过 `realtimeConnectionManagerProvider` 驱动连接状态。
     when:
-    - 用户或系统动作发生。
+    - "用户进入 `ChatConversationPage('conv_001')`。"
     then:
-    - 可观察结果符合预期。
+    - 连接状态切到 `TransportState.active`。
+    - 300-400ms 内消息列表新增来自 `chat_realtime_mock_core` 的 `MessageSent`。
+    - mock 路径不依赖 remote LongPoll / WebSocket outbound 请求。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - mock delegate、provider 与 widget 旅程测试都能证明“进聊天即有新消息”链路成立。
+    edge_cases:
+    - 页面卸载前先 `onAppBackground`，不会残留 120s idle timer 导致测试不稳定。
+    - fixture 缺失时只允许 fallback 开发兜底，不能覆盖已登记 fixture 内容。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.json
+    - quwoquan_service/contracts/metadata/_shared/test_fixtures/app_alpha_seed_manifest.json
+    performance_points:
+    - mock 追加消息目标在 400ms 内可见，足够支撑 alpha 演示和 widget 自动化测试。
     evidence:
       primary:
-      - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T1_static_contract
+      - T4_device_journey
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - quwoquan_app/test/cloud/realtime/mock_realtime_delegate_test.dart
+      - quwoquan_app/test/ui/chat/pages/chat_conversation_page_realtime_journey_test.dart
+      recorded:
+      - quwoquan_app/test/cloud/realtime/mock_realtime_delegate_test.dart
+      - quwoquan_app/test/ui/chat/pages/chat_conversation_page_realtime_journey_test.dart
+    status: implemented
+  GWT2:
+    title: 群聊 fixture 的 MemberJoined 事件能走统一 handler 分支
+    given:
+    - "`appDataSourceMode=mock`，群聊 fixture `fixture_conv_group` 已登记 `MemberJoined` realtime 事件。"
+    when:
+    - Mock realtime catalog 把事件交给 `RealtimeMessageHandler` 处理。
+    then:
+    - 会话消息列表新增系统消息，文案指向新成员加入群聊。
+    - handler 不需要 UI 特判，也不依赖 test-only helper。
+    done_when:
+    - "`MemberJoined` 作为独立分支有专门测试证据，且能在 contract fixture 中追溯到对应 payload。"
+    edge_cases:
+    - 未识别事件类型不会中断整个 handler 分发流程。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/messages/chat/test_fixtures/scenarios/chat_scenarios.json
+    performance_points:
+    - 单个 realtime 事件应同步插入 provider，不引入额外轮询等待。
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_static_contract
+    tests:
+      planned:
+      - quwoquan_app/test/cloud/realtime/realtime_member_joined_handler_test.dart
+      recorded:
+      - quwoquan_app/test/cloud/realtime/realtime_member_joined_handler_test.dart
+    status: implemented
+  GWT3:
+    title: Remote foreground idle / active / background 状态切换可验证
+    given:
+    - "`appDataSourceMode=remote`，`currentUserIdProvider` 可解析出有效用户 ID。"
+    - realtime gateway URL 与 metadata/codegen 已生成。
+    when:
+    - App 从 background 回到 foreground。
+    - 用户进入聊天页。
+    - 用户离开页面或 App 退后台。
+    then:
+    - foreground 时切到 `TransportState.idle` 并启动 long-poll。
+    - enter chat 时停止 long-poll 并发起 websocket connect。
+    - background 时 teardown transport 并回到 `TransportState.disconnected`。
+    done_when:
+    - remote lifecycle focused tests 与 transport contract tests 同时通过。
+    edge_cases:
+    - "`inactive` 不触发 background 断连。"
+    - "非 active 态调用 `onLeaveChatDetail()` 不应再额外启动 idle timer。"
+    contract_refs:
+    - quwoquan_service/contracts/metadata/realtime/connection/service.yaml
+    - quwoquan_app/lib/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart
+    - quwoquan_app/lib/cloud/runtime/generated/realtime/realtime_request_page_ids.g.dart
+    performance_points:
+    - 状态切换不引入重复 transport 实例或 leaked reconnect timer。
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned:
+      - quwoquan_app/test/cloud/realtime/remote_realtime_lifecycle_test.dart
+      - quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
+      - quwoquan_app/test/cloud/realtime/realtime_lifecycle_mapping_test.dart
+      - quwoquan_app/test/cloud/realtime/realtime_root_startup_test.dart
+      recorded:
+      - quwoquan_app/test/cloud/realtime/remote_realtime_lifecycle_test.dart
+      - quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
+      - quwoquan_app/test/cloud/realtime/realtime_lifecycle_mapping_test.dart
+      - quwoquan_app/test/cloud/realtime/realtime_root_startup_test.dart
+    status: implemented
+  GWT4:
+    title: 模式热切换能优雅销毁旧 delegate 而不再注入延迟 mock 事件
+    given:
+    - 当前连接工作在 mock active 状态，且延迟 event push 还未触发。
+    when:
+    - "`appDataSourceMode` 从 mock 切到 remote。"
+    then:
+    - provider 会重建 delegate 并回到 `TransportState.disconnected`。
+    - 旧 mock delegate 的延迟事件不会继续写入 `chatMessageProvider`。
+    done_when:
+    - mode switch focused test 能稳定证明无 leaked push / 无状态残留。
+    edge_cases:
+    - active delegate 在 dispose 前允许先执行 `onLeaveChatDetail()` + `onAppBackground()` 语义 teardown。
+    contract_refs: []
+    performance_points:
+    - 模式切换后不保留旧 timer，避免开发者设置页频繁切换导致异常堆积。
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_static_contract
+    tests:
+      planned:
+      - quwoquan_app/test/cloud/realtime/realtime_provider_mode_switch_test.dart
+      recorded:
+      - quwoquan_app/test/cloud/realtime/realtime_provider_mode_switch_test.dart
+    status: implemented
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -111,6 +111,17 @@ class AppTypography {
   static const double iosSectionHeader = iosFootnote;
   static const double iosButton = iosSubheadline;
 
+  // ==================== Web PC 壳层字体语义 ====================
+  static const double webPcToolbarLabel = iosFootnote;
+  static const double webPcToolbarBrand = iosFootnote;
+  static const double webPcSectionTitle = iosTitle3;
+  static const double webPcPostHeroTitle = iosCallout;
+  static const double webPcPostTitle = iosSubheadline;
+  static const double webPcPostMeta = iosCaption1;
+  static const double webPcPostBody = iosFootnote;
+  static const double webPcRailTitle = iosSubheadline;
+  static const double webPcRailBody = iosCaption1;
+
   /// 内容分享海报标题/正文层级
   static const double sharePosterEyebrow = 42.0;
   static const double sharePosterSubtitle = 28.0;

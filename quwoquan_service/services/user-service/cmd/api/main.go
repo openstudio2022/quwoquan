@@ -29,6 +29,7 @@ import (
 	"quwoquan_service/services/user-service/internal/adapters/mq"
 	"quwoquan_service/services/user-service/internal/application"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
+	userintegration "quwoquan_service/services/user-service/internal/infrastructure/integration"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
 	"quwoquan_service/services/user-service/internal/infrastructure/projection"
 )
@@ -74,6 +75,16 @@ type config struct {
 		General  redisSceneCfg `yaml:"general"`
 		Realtime redisSceneCfg `yaml:"realtime"`
 	} `yaml:"redis"`
+	Integration struct {
+		ExternalInteractionBaseURL string `yaml:"external_interaction_base_url"`
+		SmsOTP                     struct {
+			PassThroughEnabled   bool   `yaml:"pass_through_enabled"`
+			PassThroughDebtID    string `yaml:"pass_through_debt_id"`
+			PassThroughOwner     string `yaml:"pass_through_owner"`
+			PassThroughExpiresAt string `yaml:"pass_through_expires_at"`
+			DebugRevealEnabled   bool   `yaml:"debug_reveal_enabled"`
+		} `yaml:"sms_otp"`
+	} `yaml:"integration"`
 }
 
 func main() {
@@ -163,6 +174,7 @@ func main() {
 	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
 	settingStore := persistence.NewPgSettingStore(pgPool)
 	blockStore := persistence.NewPgBlockStore(pgPool)
+	greetingStore := persistence.NewPgGreetingStore(pgPool)
 	workStore := persistence.NewPgWorkStore(pgPool)
 	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
@@ -205,12 +217,34 @@ func main() {
 		blockStore,
 		userEventPublisher,
 	)
-	blockService := application.NewBlockService(blockStore, blockCache)
+	chatServiceBaseURL := getenvOrDefault("CHAT_SERVICE_BASE_URL", "")
+	var conversationGateway application.ConversationGateway = application.NoopConversationGateway()
+	if chatServiceBaseURL != "" {
+		conversationGateway = userintegration.NewChatServiceClient(chatServiceBaseURL, nil)
+	}
+	greetingService := application.NewGreetingService(
+		greetingStore,
+		followStore,
+		blockStore,
+		conversationGateway,
+		userEventPublisher,
+	)
+	blockService := application.NewBlockService(blockStore, followStore, blockCache, userEventPublisher, greetingStore)
 	personaService := application.NewPersonaService(personaStore, pgPool, profileCache)
 	workService := application.NewWorkService(workStore)
 	lifeItemService := application.NewLifeItemService(lifeItemStore)
 	settingService := application.NewSettingService(settingStore, settingCache)
 	otpCodeCache := cache.NewOtpCodeCache(redisClient)
+	otpChallengeStore := persistence.NewPgOtpChallengeStore(pgPool)
+	externalInteractionBaseURL := getenvOrDefault("INTEGRATION_EXTERNAL_INTERACTION_BASE_URL", cfg.Integration.ExternalInteractionBaseURL)
+	externalInteractionClient, err := userintegration.NewExternalInteractionClient(externalInteractionBaseURL, appEnv, nil)
+	if err != nil {
+		log.Fatalf("external interaction client init failed: %v", err)
+	}
+	passThroughConfig, err := smsOtpPassThroughConfig(cfg, isProdRuntimeEnv())
+	if err != nil {
+		log.Fatalf("sms otp pass-through config invalid: %v", err)
+	}
 	accessTokenSecret := []byte(getenvOrDefault("AUTH_JWT_SECRET", "dev-user-service-access-secret"))
 	accessSigner := rtauth.NewHS256Signer(accessTokenSecret, 30*time.Minute)
 	accessVerifier := rtauth.NewHS256Verifier(accessTokenSecret)
@@ -223,7 +257,10 @@ func main() {
 		shardDirectory,
 		application.WithUserAuthRepository(userAuthStore),
 		application.WithOtpCodeStore(otpCodeCache),
-		application.WithOtpDebugReveal(!isProdRuntimeEnv()),
+		application.WithOtpChallengeStore(otpChallengeStore),
+		application.WithExternalInteractionClient(externalInteractionClient),
+		application.WithSmsOtpPassThroughConfig(passThroughConfig),
+		application.WithOtpDebugReveal(smsOtpDebugRevealEnabled(cfg, isProdRuntimeEnv())),
 		application.WithAccessTokenSigner(accessSigner),
 	)
 	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
@@ -250,7 +287,7 @@ func main() {
 	}
 	interestProfileService := application.NewInterestProfileService(interestReader)
 	handler := httpadapter.NewUserHandler(
-		profileService, searchService, followService, blockService,
+		profileService, searchService, followService, blockService, greetingService,
 		personaService, workService, lifeItemService, settingService,
 		authService, subAccountService, contactDiscoveryService, inviteService,
 		interestProfileService,
@@ -339,6 +376,44 @@ func isValidAppEnv(env string) bool {
 // isProdRuntimeEnv 仅在 APP_ENV=prod 时为 true；非生产允许 SendOtp 返回调试码。
 func isProdRuntimeEnv() bool {
 	return getenvOrDefault("APP_ENV", "alpha") == "prod"
+}
+
+func smsOtpPassThroughConfig(cfg config, isProduction bool) (application.SmsOtpPassThroughConfig, error) {
+	enabled := cfg.Integration.SmsOTP.PassThroughEnabled
+	if raw := strings.TrimSpace(os.Getenv("SMS_OTP_PASS_THROUGH_ENABLED")); raw != "" {
+		enabled = strings.EqualFold(raw, "true") || raw == "1"
+	}
+	mode := application.SmsOtpPassThroughDisabled
+	if enabled {
+		mode = application.SmsOtpPassThroughEnabled
+	}
+	expiresRaw := strings.TrimSpace(getenvOrDefault("SMS_OTP_PASS_THROUGH_EXPIRES_AT", cfg.Integration.SmsOTP.PassThroughExpiresAt))
+	var expiresAt time.Time
+	if expiresRaw != "" {
+		parsed, err := time.Parse("2006-01-02", expiresRaw)
+		if err != nil {
+			return application.SmsOtpPassThroughConfig{}, err
+		}
+		expiresAt = parsed.UTC()
+	}
+	config := application.SmsOtpPassThroughConfig{
+		Mode:      mode,
+		DebtID:    getenvOrDefault("SMS_OTP_PASS_THROUGH_DEBT_ID", cfg.Integration.SmsOTP.PassThroughDebtID),
+		Owner:     getenvOrDefault("SMS_OTP_PASS_THROUGH_OWNER", cfg.Integration.SmsOTP.PassThroughOwner),
+		ExpiresAt: expiresAt,
+	}
+	return config, config.Validate(isProduction)
+}
+
+func smsOtpDebugRevealEnabled(cfg config, isProduction bool) bool {
+	if isProduction {
+		return false
+	}
+	enabled := cfg.Integration.SmsOTP.DebugRevealEnabled
+	if raw := strings.TrimSpace(os.Getenv("SMS_OTP_DEBUG_REVEAL_ENABLED")); raw != "" {
+		enabled = strings.EqualFold(raw, "true") || raw == "1"
+	}
+	return enabled
 }
 
 func requiresConfigVersion(env string) bool {

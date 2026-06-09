@@ -22,7 +22,15 @@ class AppToast {
     _timer = Timer(duration, () {
       _currentEntry?.remove();
       _currentEntry = null;
+      _timer = null;
     });
+  }
+
+  static void dismiss() {
+    _timer?.cancel();
+    _timer = null;
+    _currentEntry?.remove();
+    _currentEntry = null;
   }
 }
 

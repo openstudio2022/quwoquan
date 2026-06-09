@@ -351,7 +351,7 @@ class CachedContentRepository implements ContentRepository {
   Future<CommentPage> listComments({
     required String postId,
     String? cursor,
-    String sort = 'latest',
+    String sort = 'recommended',
     int limit = CloudApiDefaults.pageLimit,
   }) {
     return _delegate.listComments(
@@ -363,10 +363,27 @@ class CachedContentRepository implements ContentRepository {
   }
 
   @override
+  Future<CommentPage> listCommentReplies({
+    required String postId,
+    required String commentId,
+    String? cursor,
+    int limit = 10,
+  }) {
+    return _delegate.listCommentReplies(
+      postId: postId,
+      commentId: commentId,
+      cursor: cursor,
+      limit: limit,
+    );
+  }
+
+  @override
   Future<CommentDto> createComment({
     required String postId,
     required String content,
     String? replyToCommentId,
+    List<String> attachmentMediaIds = const <String>[],
+    List<Map<String, dynamic>> mentions = const <Map<String, dynamic>>[],
     String? subAccountId,
     String? personaContextVersion,
   }) {
@@ -374,6 +391,8 @@ class CachedContentRepository implements ContentRepository {
       postId: postId,
       content: content,
       replyToCommentId: replyToCommentId,
+      attachmentMediaIds: attachmentMediaIds,
+      mentions: mentions,
       subAccountId: subAccountId,
       personaContextVersion: personaContextVersion,
     );
@@ -388,13 +407,11 @@ class CachedContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> likeComment({required String commentId}) {
-    return _delegate.likeComment(commentId: commentId);
-  }
-
-  @override
-  Future<void> unlikeComment({required String commentId}) {
-    return _delegate.unlikeComment(commentId: commentId);
+  Future<CommentDto> reactToComment({
+    required String commentId,
+    required String reaction,
+  }) {
+    return _delegate.reactToComment(commentId: commentId, reaction: reaction);
   }
 
   @override

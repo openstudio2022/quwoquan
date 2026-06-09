@@ -52,7 +52,7 @@ void main() {
       expect(photoFeed.map((item) => item.id), contains('fixture_photo_001'));
       expect(
         photoFeed.every(
-          (item) => item.primaryVisualUrl.contains('media/image/post/'),
+          (item) => item.primaryVisualUrl.contains('media/image/s/archived-image/post/'),
         ),
         isTrue,
       );
@@ -88,7 +88,10 @@ void main() {
         contacts.map((item) => item.userId),
         contains('fixture_user_friend'),
       );
-      expect(contacts.every((item) => item.isFriend), isTrue);
+      final contactStates = contacts.map((item) => item.relationState).toSet();
+      expect(contactStates, contains('mutual'));
+      expect(contactStates, isNot(contains('not_following')));
+      expect(contacts.every((item) => item.source.isNotEmpty), isTrue);
       final groupMembers = await chatRepository.listMembers(
         conversationId: 'fixture_conv_group',
         limit: 20,
@@ -118,7 +121,7 @@ void main() {
       expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
       expect(
         circles.every(
-          (item) => item.coverUrl?.contains('media/image/circle/') == true,
+          (item) => item.coverUrl?.contains('media/image/s/archived-image/circle/') == true,
         ),
         isTrue,
       );
@@ -142,7 +145,7 @@ void main() {
       expect(circleHomeFeed.length, greaterThanOrEqualTo(5));
       expect(
         circleHomeFeed.every(
-          (item) => item.primaryVisualUrl.contains('media/image/post/'),
+          (item) => item.primaryVisualUrl.contains('media/image/s/archived-image/post/'),
         ),
         isTrue,
       );
@@ -156,7 +159,7 @@ void main() {
       expect(activePersonaContext.subAccountId, currentUserId);
       expect(currentUser.displayName, '契约当前用户');
       expect(
-        currentUser.backgroundUrl.contains('media/background/user/'),
+        currentUser.backgroundUrl.contains('media/background/s/archived-avatar/user/'),
         isTrue,
       );
       final userPosts = await userRepository.listUserPosts(
@@ -167,7 +170,7 @@ void main() {
       expect(userPosts.map((item) => item.id), contains('fixture_moment_001'));
       expect(
         userPosts.every(
-          (item) => item.primaryVisualUrl.contains('media/image/post/'),
+          (item) => item.primaryVisualUrl.contains('media/image/s/archived-image/post/'),
         ),
         isTrue,
       );

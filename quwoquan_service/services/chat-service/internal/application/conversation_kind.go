@@ -9,37 +9,21 @@ import (
 const (
 	conversationTypeDirect    = "direct"
 	conversationTypeGroup     = "group"
-	conversationTypeCircle    = "circle"
 	conversationTypeEncrypted = "encrypted"
 )
 
-// NormalizeConversationType 收口会话类型语义：
-// - 对外产品语义只区分 direct/group/encrypted
-// - 绑定 circleId 的会话仍是 group，只是圈子发起/绑定的默认群
-// - legacy circle 数据继续按 group 兼容读取
+// NormalizeConversationType 收口会话类型语义。商用版本只接受
+// direct/group/encrypted；历史 circle 类型必须迁移或清理，不再运行时兼容。
 func NormalizeConversationType(rawType string, circleID string) string {
 	if strings.TrimSpace(circleID) != "" {
 		return conversationTypeGroup
-	}
-	switch strings.TrimSpace(rawType) {
-	case conversationTypeCircle:
-		return conversationTypeGroup
-	default:
-		return strings.TrimSpace(rawType)
-	}
-}
-
-func PublicConversationType(rawType string, circleID string) string {
-	normalized := NormalizeConversationType(rawType, circleID)
-	if normalized != "" {
-		return normalized
 	}
 	return strings.TrimSpace(rawType)
 }
 
 func IsGroupConversationType(rawType string) bool {
 	switch strings.TrimSpace(rawType) {
-	case conversationTypeGroup, conversationTypeCircle:
+	case conversationTypeGroup:
 		return true
 	default:
 		return false
@@ -51,5 +35,5 @@ func IsGroupConversation(conv model.Conversation) bool {
 }
 
 func IsCircleBoundConversation(conv model.Conversation) bool {
-	return strings.TrimSpace(conv.CircleId) != "" || strings.TrimSpace(conv.Type) == conversationTypeCircle
+	return strings.TrimSpace(conv.CircleId) != "" || strings.TrimSpace(conv.CircleGroupId) != ""
 }

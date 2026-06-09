@@ -13,8 +13,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	rthealth "quwoquan_service/runtime/health"
+	"quwoquan_service/runtime/controlplane"
 	rtgov "quwoquan_service/runtime/governance"
+	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	rtmongo "quwoquan_service/runtime/mongodb"
@@ -158,7 +159,9 @@ func main() {
 		ServiceInstanceID: instanceID,
 	}, ioLogger, processLogger, exceptionLogger)
 
+	hotConfigStore := controlplane.NewHotConfigStore()
 	rateLimiter := rtgov.NewRateLimiter(1000)
+	go startConfigSyncLoop(serviceName, appEnv, configRoot, configVersion, imageVersion, instanceID, hotConfigStore, rateLimiter)
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observed)
 	server := &http.Server{
 		Addr:              addr,

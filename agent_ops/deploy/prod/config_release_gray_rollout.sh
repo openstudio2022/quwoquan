@@ -15,7 +15,7 @@ Usage:
 Behavior:
   - Validates rollout step sequence.
   - Ensures target config version file exists.
-  - Writes rollout state to .release-state/<service>.state.
+  - Writes rollout state to state/release/<service>.state.
 EOF
 }
 
@@ -58,7 +58,7 @@ if [[ ! -f "$cfg_file" ]]; then
   exit 1
 fi
 
-state_dir="$ROOT/.release-state"
+state_dir="$ROOT/state/release"
 mkdir -p "$state_dir"
 state_file="$state_dir/$SERVICE.state"
 audit_file="$state_dir/$SERVICE.audit.log"

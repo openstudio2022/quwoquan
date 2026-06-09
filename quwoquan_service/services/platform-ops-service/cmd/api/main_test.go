@@ -13,7 +13,7 @@ import (
 
 func newTestPlatformService(t *testing.T) *platformService {
 	t.Helper()
-	repoRoot := filepath.Clean(filepath.Join("..", "..", "..", "..", ".."))
+	repoRoot := resolveRepoRoot()
 	service := &platformService{
 		repoRoot: repoRoot,
 		store:    controlplane.NewFileStore(filepath.Join(t.TempDir(), "platform-ops-state.json")),
@@ -137,6 +137,23 @@ func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 	}
 }
 
+func TestResolveConfigSchemaPathPrefersWorkspaceMetadataRoot(t *testing.T) {
+	repoRoot := resolveRepoRoot()
+	got := resolveConfigSchemaPath(repoRoot)
+	want := filepath.Join(
+		repoRoot,
+		"quwoquan_service",
+		"contracts",
+		"metadata",
+		"_control_plane",
+		"platform",
+		"config_schema.yaml",
+	)
+	if got != want {
+		t.Fatalf("expected schema path %q, got %q", want, got)
+	}
+}
+
 func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 	server := newServerMux(newTestPlatformService(t))
 
@@ -204,5 +221,152 @@ func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
 	}
 	if _, ok := instancePayload.Summary["outOfSyncInstances"]; !ok {
 		t.Fatalf("expected drift summary, got %+v", instancePayload.Summary)
+	}
+}
+
+func TestRuntimeConfigSnapshotFiltersDriftByScope(t *testing.T) {
+	service := newTestPlatformService(t)
+	if err := service.store.DeleteDocument("config_instance_reports", "product-ops-service-beta-control-a-0"); err != nil {
+		t.Fatalf("delete bootstrap scoped report: %v", err)
+	}
+	if err := service.store.PutDocument("config_instance_reports", "beta-target", controlplane.Document{
+		"id":            "beta-target",
+		"environment":   "beta",
+		"cluster":       "beta-control-a",
+		"service":       "product-ops-service",
+		"instanceId":    "beta-target",
+		"desiredHash":   "hash-a",
+		"effectiveHash": "hash-b",
+		"inSync":        false,
+	}); err != nil {
+		t.Fatalf("seed scoped report: %v", err)
+	}
+	if err := service.store.PutDocument("config_instance_reports", "gamma-other", controlplane.Document{
+		"id":            "gamma-other",
+		"environment":   "gamma",
+		"cluster":       "gamma-control-a",
+		"service":       "content-service",
+		"instanceId":    "gamma-other",
+		"desiredHash":   "hash-x",
+		"effectiveHash": "hash-y",
+		"inSync":        false,
+	}); err != nil {
+		t.Fatalf("seed out-of-scope report: %v", err)
+	}
+	server := newServerMux(service)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/configs/resolve?env=beta&cluster=beta-control-a&service=product-ops-service", nil)
+	resp := httptest.NewRecorder()
+	server.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("runtime snapshot status=%d body=%s", resp.Code, resp.Body.String())
+	}
+
+	var payload struct {
+		DriftSummary struct {
+			TotalInstances     int `json:"totalInstances"`
+			OutOfSyncInstances int `json:"outOfSyncInstances"`
+		} `json:"driftSummary"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal runtime snapshot payload: %v", err)
+	}
+	if payload.DriftSummary.TotalInstances != 1 || payload.DriftSummary.OutOfSyncInstances != 1 {
+		t.Fatalf("expected scoped drift summary, got %+v", payload.DriftSummary)
+	}
+}
+
+func TestPlatformReleaseWorkflowRequiresApprovalAndReturnsWorkflowContext(t *testing.T) {
+	server := newServerMux(newTestPlatformService(t))
+
+	applyReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/control-plane/platform/releases/v2026.02.28.0:apply",
+		bytes.NewBufferString(`{"service":"content-service","fromImage":"img-old","toImage":"img-new","fromConfig":"v2026.02.27.1","toConfig":"v2026.02.28.0","step":25}`),
+	)
+	applyReq.Header.Set("Content-Type", "application/json")
+	applyReq.Header.Set("X-Actor", "platform-admin")
+	applyResp := httptest.NewRecorder()
+	server.ServeHTTP(applyResp, applyReq)
+	if applyResp.Code != http.StatusOK {
+		t.Fatalf("apply release status=%d body=%s", applyResp.Code, applyResp.Body.String())
+	}
+
+	var applyPayload struct {
+		WorkflowRef   string `json:"workflowRef"`
+		RollbackToken string `json:"rollbackToken"`
+		ReleaseState  string `json:"releaseState"`
+		ApprovalState string `json:"approvalState"`
+		StageState    string `json:"stageState"`
+	}
+	if err := json.Unmarshal(applyResp.Body.Bytes(), &applyPayload); err != nil {
+		t.Fatalf("unmarshal apply payload: %v", err)
+	}
+	if applyPayload.WorkflowRef == "" || applyPayload.RollbackToken == "" {
+		t.Fatalf("expected workflow context, got %+v", applyPayload)
+	}
+	if applyPayload.ApprovalState == "" || applyPayload.StageState == "" {
+		t.Fatalf("expected approval/stage lifecycle, got %+v", applyPayload)
+	}
+
+	rollbackReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/control-plane/platform/releases/v2026.02.28.0:rollback",
+		bytes.NewBufferString(`{"service":"content-service","targetConfigVersion":"v2026.02.27.1","workflowRef":"wf-1","rollbackToken":"rb-1"}`),
+	)
+	rollbackReq.Header.Set("Content-Type", "application/json")
+	rollbackReq.Header.Set("X-Actor", "platform-admin")
+	rollbackResp := httptest.NewRecorder()
+	server.ServeHTTP(rollbackResp, rollbackReq)
+	if rollbackResp.Code != http.StatusOK {
+		t.Fatalf("rollback release status=%d body=%s", rollbackResp.Code, rollbackResp.Body.String())
+	}
+
+	var rollbackPayload struct {
+		WorkflowRef   string `json:"workflowRef"`
+		RollbackToken string `json:"rollbackToken"`
+		ReleaseState  string `json:"releaseState"`
+		StageState    string `json:"stageState"`
+	}
+	if err := json.Unmarshal(rollbackResp.Body.Bytes(), &rollbackPayload); err != nil {
+		t.Fatalf("unmarshal rollback payload: %v", err)
+	}
+	if rollbackPayload.WorkflowRef == "" || rollbackPayload.RollbackToken == "" {
+		t.Fatalf("expected rollback workflow context, got %+v", rollbackPayload)
+	}
+	if rollbackPayload.StageState == "" {
+		t.Fatalf("expected rollback stage state, got %+v", rollbackPayload)
+	}
+}
+
+func TestPlatformTriageSummaryEndpointIncludesBacklogRepairSemantics(t *testing.T) {
+	server := newServerMux(newTestPlatformService(t))
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/triage/summary?env=beta&cluster=beta-control-a&service=platform-ops-service", nil)
+	resp := httptest.NewRecorder()
+	server.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("platform triage status=%d body=%s", resp.Code, resp.Body.String())
+	}
+
+	var payload struct {
+		BacklogCandidates []struct {
+			ID            string `json:"id"`
+			DrilldownRoute string `json:"drilldownRoute"`
+			RunbookRoute  string `json:"runbookRoute"`
+			RepairEntry   string `json:"repairEntry"`
+			AlertID       string `json:"alertId"`
+			AuditRoute    string `json:"auditRoute"`
+		} `json:"backlogCandidates"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal platform triage payload: %v", err)
+	}
+	if len(payload.BacklogCandidates) == 0 {
+		t.Fatalf("expected platform backlog candidates, got none")
+	}
+	first := payload.BacklogCandidates[0]
+	if first.DrilldownRoute == "" || first.RunbookRoute == "" || first.RepairEntry == "" || first.AlertID == "" || first.AuditRoute == "" {
+		t.Fatalf("expected backlog repair semantics, got %+v", first)
 	}
 }

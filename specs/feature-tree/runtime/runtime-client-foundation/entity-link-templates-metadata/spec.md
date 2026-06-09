@@ -53,6 +53,26 @@
 - **迁移**：codegen 产出稳定后，删除/收缩 `AppPublicContentLinks` 内手写 path、`ContentShareTemplateBuilder._deeplinkForPermission` 内硬编码字符串。  
 - **回滚**：保留 `link_templates.yaml` 版本字段；回滚代码时 **不删除** metadata，仅恢复调用旧 API。
 
+## 对外引流扩展（external-acquisition-and-deeplink，本次新增）
+
+本 L3 在原「实体 → 双链 + 导航锚点」真相源之上，新增对外引流所需的三类统一结构，全部冻结在 `_shared/link_templates.yaml`，禁止 UI / Web / 服务端另起第二套：
+
+1. **归因参数 `attribution_params`**：所有对外可复制/分享链接统一支持 `utm_source / utm_medium / utm_campaign / share_id / inviter / referral`。
+   - 由分享侧运行时按渠道注入到 **web HTTPS 链接与中转页**；scheme 深链通过 `extinfo`/透传字段携带等价归因。
+   - 入站后由 `external-inbound-deeplink-routing` 的 `DeepLinkResolver` **剥离并转交埋点与延迟深链归因**，绝不参与 GoRouter route 匹配。
+   - 与 `product-ops-growth/event-ingestion-and-analytics` 的事件维度、`user/invite_record` 的邀请归因对齐。
+
+2. **智能中转落地页 `transfer_pages`**：
+   - `short_link`（`s/{token}`）：口令/海报二维码默认落点。
+   - `universal_landing`（`open?target_entity&target_id&token`）：按 UA 分流（微信/浏览器/iOS/Android/PC）唤起 App、下载或 web 预览。
+   - 中转页的 `target_entity`/`target_id` 指向真实实体，解析时**回溯到上方 `entities` 的同一行**，不重复定义对象路径。
+
+3. **口令 `share_token`**：用于不支持外链的 UGC 平台（小红书/今日头条评论区等）。复制可识别码到剪贴板，App 在用户授权下读取识别并还原目标（淘口令式）。口令只携带短 token，真实目标与归因由服务端短链表解析，避免明文长链被平台屏蔽。
+
+**对象覆盖**：对外引流覆盖 5 类对象——`post`（含 article/photo/video/micro 四形态）、`circle`、`user`、`entity_homepage`；「我」对外等同 `user` 的公开视角，不单独定义实体行。
+
+**codegen 边界**：`entities` 现有产物（`AppLinkTemplates`）不受影响；本次新增三段的端侧产物（`AppShareLinks`/`AppShareToken`/`AppTransferPages`）与服务端短链解析在 `/dev` 切片落地，本文件先冻结结构。
+
 ## L1 / L2 / L3
 
 | 层级 | 标识 |

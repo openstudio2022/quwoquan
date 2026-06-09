@@ -15,7 +15,7 @@ redis:
     db: 0
 
 rec_model_service:
-  url: "http://rec-model-service:8000"
+  url: "http://recommendation-service:8000"
   timeout_ms: 100
   enabled: true
 

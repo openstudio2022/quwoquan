@@ -1,0 +1,10 @@
+{
+  "label": "房源形态",
+  "labelEn": "Accommodation Form",
+  "description": "住宿实体的空间与房源形态骨架",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 8
+}

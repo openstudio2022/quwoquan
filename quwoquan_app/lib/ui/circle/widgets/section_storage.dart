@@ -26,7 +26,7 @@ class SectionStorage extends ConsumerStatefulWidget {
 
 class _SectionStorageState extends ConsumerState<SectionStorage> {
   bool _isLoading = true;
-  String? _error;
+  UiErrorSemantic? _errorSemantic;
   List<CircleFileDto> _files = const [];
 
   @override
@@ -38,7 +38,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
   Future<void> _loadFiles() async {
     setState(() {
       _isLoading = true;
-      _error = null;
+      _errorSemantic = null;
     });
     try {
       final repo = ref.read(circleRepositoryProvider);
@@ -53,7 +53,12 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = runtimeErrorDisplayMessage(e);
+          _errorSemantic = runtimeErrorSemantic(
+            context,
+            error: e,
+            category: UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+          );
         });
       }
     }
@@ -92,7 +97,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     if (_isLoading) {
       return const Center(child: CupertinoActivityIndicator());
     }
-    if (_error != null) {
+    if (_errorSemantic != null) {
       return _buildErrorCard();
     }
 
@@ -364,38 +369,15 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
   }
 
   Widget _buildErrorCard() {
-    final fgSecondary = AppColorsFunctional.getColor(
-      widget.isDark,
-      ColorType.foregroundSecondary,
-    );
-    return Container(
-      padding: EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.error_outline,
-            color: AppColors.error,
-            size: AppSpacing.iconLarge,
-          ),
-          SizedBox(height: AppSpacing.sm),
-          Text(
-            UITextConstants.loadFailed,
-            style: TextStyle(color: fgSecondary, fontSize: AppTypography.base),
-          ),
-          SizedBox(height: AppSpacing.sm),
-          CupertinoButton(
-            onPressed: _loadFiles,
-            child: Text(
-              UITextConstants.retry,
-              style: TextStyle(
-                color: AppColors.primaryColor,
-                fontSize: AppTypography.base,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return AppSectionErrorCard(
+      semantic: _errorSemantic!,
+      margin: EdgeInsets.zero,
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry ||
+            action.type == UiErrorActionType.resubmit) {
+          await _loadFiles();
+        }
+      },
     );
   }
 }

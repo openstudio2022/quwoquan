@@ -82,13 +82,13 @@ func fixtureLogicalShard(userID string) int {
 	return int(xxhash.Sum64String(ruleVersion+"|"+originCode+"|"+strings.TrimSpace(userID)) % slotCount)
 }
 
-func createTestPersona(t *testing.T, legacyID, userID, displayName string, isPrimary bool, isActiveOverride ...bool) {
+func createTestPersona(t *testing.T, personaID, userID, displayName string, isPrimary bool, isActiveOverride ...bool) {
 	t.Helper()
 	isActive := isPrimary
 	if len(isActiveOverride) > 0 {
 		isActive = isActiveOverride[0]
 	}
-	subAccountID := legacyID + "_sa"
+	subAccountID := personaID + "_sa"
 	_, err := pgPool.Exec(context.Background(), `
 		INSERT INTO personas (user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
 		VALUES ($1, $2, $3, '', '', '', '', '', true, '{}', $4, false, $5, 0, NOW(), NOW())`,
@@ -102,7 +102,7 @@ func cleanAll(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
 	_, _ = pgPool.Exec(ctx, `TRUNCATE user_profiles, user_auth, personas, user_settings, block_edges,
-		user_works, user_life_items, credential_bindings, anonymous_device_bindings,
+		greeting_requests, user_works, user_life_items, credential_bindings, anonymous_device_bindings,
 		contact_discovery_records, invite_records CASCADE`)
 	if mongoDB != nil {
 		for _, name := range []string{"follow_edges", "posts", "comments", "messages", "notifications"} {

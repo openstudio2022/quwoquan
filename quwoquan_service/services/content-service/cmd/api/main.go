@@ -177,6 +177,8 @@ func main() {
 	var bulkImportService *application.BulkImportService
 	var behaviorEventStore persistence.BehaviorEventStore = persistence.NoopBehaviorEventStore{}
 	var dailyMetricsStore *persistence.DailyMetricsStore
+	var authorImpactStore *persistence.AuthorImpactStore
+	var intersectionService *application.IntersectionService
 	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
 		rtrec.WithLogger(logger),
@@ -288,11 +290,22 @@ func main() {
 		socialRecall := rtrec.NewSocialRecallSource(socialProvider, socialCandidateDB, 7*24*time.Hour)
 		mongoCandidateSources = append(mongoCandidateSources, socialRecall)
 		recOpts = append(recOpts, rtrec.WithSocialMiner(rtrec.NewSocialInterestMiner(socialProvider)))
+		intersectionService = application.NewIntersectionService(
+			router,
+			application.WithIntersectionSource(
+				recinfra.NewMongoIntersectionSource(
+					socialProvider,
+					recinfra.NewMongoEntityTagIndex(db),
+					socialCandidateDB,
+				),
+			),
+		)
 		log.Printf("content-service social recall + social miner enabled")
 
 		bulkImportService = application.NewBulkImportService(recinfra.NewMongoBulkImportStore(db))
 		behaviorEventStore = persistence.NewMongoBehaviorEventStore(db, logger)
 		dailyMetricsStore = persistence.NewDailyMetricsStore(db, logger)
+		authorImpactStore = persistence.NewAuthorImpactStore(db, logger)
 	} else {
 		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
 		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
@@ -352,7 +365,19 @@ func main() {
 	} else {
 		log.Printf("content-service oss presigner=stub (no access_key_id or endpoint)")
 	}
-	_ = ossPresigner // consumed by OSSMediaStore when media upload feature is wired
+	if ossCfg.CDNDomain != "" || ossCfg.Endpoint != "" {
+		postServiceOpts = append(postServiceOpts, application.WithMediaURLConfig(ossCfg.CDNDomain, ossCfg.Endpoint))
+	}
+	if ossCfg.CDNDomain != "" && ossCfg.Bucket != "" {
+		mediaStore := runtimemedia.NewOSSMediaStore(
+			ossCfg,
+			runtimemedia.NewInMemorySessionStore(),
+			runtimemedia.NewInMemoryAssetStore(),
+			nil,
+			ossPresigner,
+		)
+		postServiceOpts = append(postServiceOpts, application.WithMediaStore(mediaStore))
+	}
 
 	source := recinfra.NewPostRepositorySource(store)
 	candidateSources := append(mongoCandidateSources, source)
@@ -404,6 +429,7 @@ func main() {
 		application.WithSessionCacheInvalidator(sessionCache.Invalidate),
 		application.WithBehaviorEventStore(behaviorEventStore),
 		application.WithDailyMetricsStore(dailyMetricsStore),
+		application.WithAuthorImpactStore(authorImpactStore),
 	)
 
 	var handlerOpts []httpadapter.ContentHandlerOption
@@ -413,10 +439,13 @@ func main() {
 	}
 
 	// 交集统一体验服务：跨会话冷却窗口（rec:icool ZSET）+ per-dimension 已读水位
-	// （cache:viewer_intersections）+ 事实/概率合并排序。事实数据由环境 seed 驱动，
-	// 服务端不伪造（默认空源）；router 通过 ForKey 前缀路由到 rec/general 场景。
-	intersectionService := application.NewIntersectionService(router)
-	handlerOpts = append(handlerOpts, httpadapter.WithIntersectionService(intersectionService))
+	// （cache:viewer_intersections）+ 事实/概率合并排序。
+	if intersectionService != nil {
+		handlerOpts = append(handlerOpts, httpadapter.WithIntersectionService(intersectionService))
+	}
+	if authorImpactStore != nil {
+		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactStore(authorImpactStore))
+	}
 
 	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService, handlerOpts...).Routes()
 

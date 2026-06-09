@@ -339,7 +339,9 @@ _ParsedDirective _parseDirective(
 ) {
   final opener = lines[startIndex].trim();
   final openerLine = bodyStartLine + startIndex;
-  final match = RegExp(r'^:::([A-Za-z][A-Za-z0-9_-]*)(.*)$').firstMatch(opener);
+  final match = RegExp(
+    r'^(:{3,})([A-Za-z][A-Za-z0-9_-]*)(.*)$',
+  ).firstMatch(opener);
   if (match == null) {
     return _ParsedDirective(
       block: QwqMarkdownBlock(
@@ -362,15 +364,16 @@ _ParsedDirective _parseDirective(
     );
   }
 
-  final name = match.group(1)!.trim();
-  final attributes = _parseDirectiveAttributes(match.group(2) ?? '');
+  final fence = match.group(1)!;
+  final name = match.group(2)!.trim();
+  final attributes = _parseDirectiveAttributes(match.group(3) ?? '');
   final content = <String>[];
   var index = startIndex + 1;
-  while (index < lines.length && lines[index].trim() != ':::') {
+  while (index < lines.length && lines[index].trim() != fence) {
     content.add(lines[index]);
     index += 1;
   }
-  final closed = index < lines.length && lines[index].trim() == ':::';
+  final closed = index < lines.length && lines[index].trim() == fence;
   final nextIndex = closed ? index + 1 : lines.length;
   final endLine = closed ? bodyStartLine + index : bodyStartLine + startIndex;
   final diagnostics = <QwqMarkdownDiagnostic>[

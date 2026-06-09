@@ -1,0 +1,31 @@
+version: 1
+aggregate: SmsOtp
+
+service:
+  name: integration-service
+  domain: integration
+  owner: backend-team
+  description: 手机验证码短信 provider 适配契约，作为 external_interaction 的 operation 特化。
+
+api_routes:
+  - method: POST
+    path: /v1/integrations/sms-otp:send
+    operation: SendSmsOtp
+    description: 内部接口，提交验证码短信发送请求；外部公开入口应使用 /v1/integrations/external-requests。
+    request_entity: SmsOtpSendPayload
+    response_entity: SmsOtpAccepted
+    success_status: 202
+
+  - method: POST
+    path: /v1/integrations/sms-otp:callback
+    operation: SmsOtpProviderCallback
+    description: 供应商短信回执回调，必须验签并归一化为 ExternalInteractionResult。
+    request_entity: SmsOtpProviderCallback
+    response_entity: SmsOtpCallbackAccepted
+    success_status: 202
+
+consumers:
+  - name: user-service
+    capabilities: [sms_otp_send, sms_otp_delivery_callback]
+  - name: platform-ops
+    capabilities: [sms_provider_policy, sms_delivery_audit]

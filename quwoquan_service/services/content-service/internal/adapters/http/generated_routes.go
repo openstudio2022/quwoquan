@@ -35,6 +35,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	switch operation {
 	case "AbortMediaUpload":
 		h.handleNotImplemented(w, r, operation)
+	case "BindMediaAssetsToComment":
+		h.handleNotImplemented(w, r, operation)
 	case "BindMediaAssetsToPost":
 		h.handleNotImplemented(w, r, operation)
 	case "CompleteMediaUpload":
@@ -53,6 +55,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "GetAppConfig":
 		h.handleNotImplemented(w, r, operation)
+	case "GetAuthorImpact":
+		h.handleGetAuthorImpact(w, r)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":
@@ -65,6 +69,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "GetMyIntersectionSummary":
 		h.handleGetMyIntersectionSummary(w, r)
+	case "GetObjectIntersections":
+		h.handleGetObjectIntersections(w, r)
 	case "GetPost":
 		h.handleGetPost(w, r)
 	case "GetReactionState":
@@ -73,9 +79,9 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetRecommendation(w, r)
 	case "InitMediaUpload":
 		h.handleNotImplemented(w, r, operation)
-	case "LikeComment":
-		h.handleNotImplemented(w, r, operation)
 	case "LikePost":
+		h.handleNotImplemented(w, r, operation)
+	case "ListCommentReplies":
 		h.handleNotImplemented(w, r, operation)
 	case "ListComments":
 		h.handleNotImplemented(w, r, operation)
@@ -99,6 +105,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "QuoteToCircle":
 		h.handleNotImplemented(w, r, operation)
+	case "ReactToComment":
+		h.handleNotImplemented(w, r, operation)
 	case "ReportBehaviors":
 		h.handleReportBehaviors(w, r)
 	case "ReportIntersectionExposure":
@@ -116,8 +124,6 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "SharePost":
 		h.handleNotImplemented(w, r, operation)
 	case "UnfavoritePost":
-		h.handleNotImplemented(w, r, operation)
-	case "UnlikeComment":
 		h.handleNotImplemented(w, r, operation)
 	case "UnlikePost":
 		h.handleNotImplemented(w, r, operation)
@@ -138,13 +144,14 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "GET", pathTemplate: "/v1/config/app", operation: "GetAppConfig"},
 	{method: "POST", pathTemplate: "/v1/content/articles/summary:generate", operation: "GenerateArticleSummary"},
 	{method: "POST", pathTemplate: "/v1/content/behaviors", operation: "ReportBehaviors"},
-	{method: "DELETE", pathTemplate: "/v1/content/comments/{commentId}/like", operation: "UnlikeComment"},
-	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/like", operation: "LikeComment"},
+	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/media:bind", operation: "BindMediaAssetsToComment"},
+	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/reaction", operation: "ReactToComment"},
 	{method: "GET", pathTemplate: "/v1/content/feed", operation: "GetFeed"},
 	{method: "GET", pathTemplate: "/v1/content/feed/intersections", operation: "GetFeedIntersections"},
 	{method: "GET", pathTemplate: "/v1/content/helper-read/{contentId}", operation: "GetHelperRead"},
 	{method: "GET", pathTemplate: "/v1/content/intersections", operation: "ListMyIntersections"},
 	{method: "POST", pathTemplate: "/v1/content/intersections/exposure", operation: "ReportIntersectionExposure"},
+	{method: "GET", pathTemplate: "/v1/content/intersections/object", operation: "GetObjectIntersections"},
 	{method: "GET", pathTemplate: "/v1/content/intersections/summary", operation: "GetMyIntersectionSummary"},
 	{method: "POST", pathTemplate: "/v1/content/intersections/visit", operation: "MarkIntersectionsVisited"},
 	{method: "POST", pathTemplate: "/v1/content/media/uploads/{sessionId}:abort", operation: "AbortMediaUpload"},
@@ -163,6 +170,7 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "ListComments"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "CreateComment"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}", operation: "DeleteComment"},
+	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}/replies", operation: "ListCommentReplies"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/counters", operation: "GetCounters"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/favorite", operation: "UnfavoritePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/favorite", operation: "FavoritePost"},
@@ -178,6 +186,7 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/share", operation: "SharePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
 	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
+	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/author-impact", operation: "GetAuthorImpact"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/received", operation: "ListProfileInteractionActivitiesReceived"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/sent", operation: "ListProfileInteractionActivitiesSent"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/posts", operation: "ListUserPosts"},
@@ -279,6 +288,8 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 	"CreateComment": {
 		"content":                   {},
 		"replyToCommentId":          {},
+		"attachmentMediaIds":        {},
+		"mentions":                  {},
 		"authorDisplayNameSnapshot": {},
 		"authorAvatarUrlSnapshot":   {},
 		"personaContextVersion":     {},
@@ -351,6 +362,9 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"groupId":                 {},
 		"nodeId":                  {},
 		"assistantUsePolicy":      {},
+	},
+	"ReactToComment": {
+		"viewerReaction": {},
 	},
 	"UpdatePost": {
 		"contentType":             {},

@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -31,7 +32,6 @@ class VideoEditorResult {
   final int coverTimeMs;
   final bool muted;
 }
-
 /// 本地视频剪辑；持久草稿在父链 `CreateEditorState`（`ContentPublishDraftComposite`）。
 /// 剪辑结果回写草稿后，发布确认页的帖子元数据预览与 `publish_draft_projection_bridge`
 ///（`postReadPreviewBundleFromPublishConfirmSummary` / `PostReadSurfaceId.draftPreview`）同源。
@@ -74,7 +74,8 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
   bool _framesLoading = false;
   bool _previewDragging = false;
   bool _resumePlaybackAfterScrub = false;
-  String? _errorMessage;
+  UiErrorSemantic? _pageErrorSemantic;
+  UiErrorSemantic? _sectionErrorSemantic;
   int _durationMs = 1000;
   double _trimStartMs = 0;
   double _trimEndMs = 1000;
@@ -144,6 +145,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         _previewTimeMs = initialStart.toDouble();
         _muted = widget.initialMuted;
         _loading = false;
+        _pageErrorSemantic = null;
       });
       await _loadFrames();
       await _seekToCurrentRangeStart();
@@ -153,7 +155,17 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       }
       setState(() {
         _loading = false;
-        _errorMessage = '暂时无法加载视频预览，但仍可返回重新选择素材。';
+        _pageErrorSemantic = UiErrorSemantic(
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+          title: '视频预览暂不可用',
+          message: '暂时无法加载视频预览，但仍可返回重新选择素材。',
+          primaryAction: const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
+          ),
+          dismissible: false,
+        );
       });
     }
   }
@@ -161,7 +173,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
   Future<void> _loadFrames() async {
     setState(() {
       _framesLoading = true;
-      _errorMessage = null;
+      _sectionErrorSemantic = null;
     });
     try {
       final frames = await _editingService.extractFrames(
@@ -181,6 +193,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
           _selectedCoverPath = selected.path;
         }
         _framesLoading = false;
+        _sectionErrorSemantic = null;
       });
     } catch (_) {
       if (!mounted) {
@@ -188,7 +201,17 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       }
       setState(() {
         _framesLoading = false;
-        _errorMessage = '时间轴帧加载失败，请稍后再试。';
+        _sectionErrorSemantic = UiErrorSemantic(
+          category: UiErrorCategory.sectionLoad,
+          scope: UiErrorScope.section,
+          title: '时间轴帧暂不可用',
+          message: UITextConstants.contentLoadSoftFailed,
+          primaryAction: const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
+          ),
+          dismissible: true,
+        );
       });
     }
   }
@@ -338,7 +361,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     }
     setState(() {
       _saving = true;
-      _errorMessage = null;
+      _sectionErrorSemantic = null;
     });
     try {
       final currentVideoPath = widget.initialVideoPath.trim().isEmpty
@@ -376,13 +399,44 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
           muted: _muted,
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _errorMessage = '视频导出失败，请稍后重试。';
-      });
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      final semantic = UiErrorSemantic(
+        category: resolved.category,
+        scope: resolved.scope,
+        title: '视频导出未完成',
+        message: resolved.message,
+        secondaryMessage: resolved.secondaryMessage,
+        primaryAction: const UiErrorAction(
+          type: UiErrorActionType.retry,
+          label: UITextConstants.tryAgain,
+        ),
+        secondaryAction: resolved.secondaryAction,
+        dismissible: resolved.dismissible,
+        sourceCode: resolved.sourceCode,
+        failureKind: resolved.failureKind,
+        recoveryAction: resolved.recoveryAction,
+        presentation: resolved.presentation,
+        tone: resolved.tone,
+      );
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: semantic,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _saveEditing();
+          }
+        },
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -1010,6 +1064,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     );
     final isDark =
         CupertinoTheme.of(context).brightness == Brightness.dark;
+    final showPageError = _pageErrorSemantic != null && !_loading;
     return AppScaffold(
       backgroundColor: background,
       navigationBar: AppNavigationBar(
@@ -1022,53 +1077,64 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
           icon: CupertinoIcons.xmark,
           onPressed: () => Navigator.of(context).pop(),
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: (_loading || _saving) ? null : _saveEditing,
-          child: _saving
-              ? const CupertinoActivityIndicator()
-              : const Text('完成'),
-        ),
+        trailing: showPageError
+            ? null
+            : CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: (_loading || _saving) ? null : _saveEditing,
+                child: _saving
+                    ? const CupertinoActivityIndicator()
+                    : const Text('完成'),
+              ),
       ),
       child: SafeArea(
-        child: _loading
-            ? const Center(child: CupertinoActivityIndicator())
-            : ListView(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  AppSpacing.containerMd,
-                  AppSpacing.containerMd,
-                  AppSpacing.containerLg,
-                ),
-                children: <Widget>[
-                  _buildPreview(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildActionBar(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildPreviewTimelineSection(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildTrimSection(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildCoverSection(),
-                  if (_errorMessage != null) ...<Widget>[
-                    SizedBox(height: AppSpacing.interGroupSm),
-                    Text(
-                      _errorMessage!,
-                      style: TextStyle(
-                        color: CupertinoColors.destructiveRed.resolveFrom(
-                          context,
-                        ),
-                        fontSize: AppTypography.sm,
-                      ),
+        child: showPageError
+            ? AppPageErrorState(
+                semantic: _pageErrorSemantic!,
+                onAction: (action) async {
+                  if (action.type == UiErrorActionType.retry ||
+                      action.type == UiErrorActionType.resubmit) {
+                    await _bootstrap();
+                  }
+                },
+              )
+            : _loading
+                ? const Center(child: CupertinoActivityIndicator())
+                : ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.containerMd,
+                      AppSpacing.containerMd,
+                      AppSpacing.containerMd,
+                      AppSpacing.containerLg,
                     ),
-                  ],
-                ],
-              ),
+                    children: <Widget>[
+                      _buildPreview(),
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      _buildActionBar(),
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      _buildPreviewTimelineSection(),
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      _buildTrimSection(),
+                      SizedBox(height: AppSpacing.interGroupMd),
+                      _buildCoverSection(),
+                      if (_sectionErrorSemantic != null) ...<Widget>[
+                        SizedBox(height: AppSpacing.interGroupSm),
+                        AppSectionErrorCard(
+                          semantic: _sectionErrorSemantic!,
+                          onAction: (action) async {
+                            if (action.type == UiErrorActionType.retry ||
+                                action.type == UiErrorActionType.resubmit) {
+                              await _loadFrames();
+                            }
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
       ),
     );
   }
 }
-
 class _EditorSection extends StatelessWidget {
   const _EditorSection({
     required this.title,

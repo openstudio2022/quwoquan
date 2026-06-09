@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 
 class AppPerfProbe {
   const AppPerfProbe();
@@ -11,7 +12,9 @@ class AppPerfProbe {
     String operation = '',
     int? latencyMs,
   }) {
-    final rssBytes = kIsWeb ? null : ProcessInfo.currentRss;
+    final rssBytes = currentAppPlatform == AppPlatform.web
+        ? null
+        : ProcessInfo.currentRss;
     return <String, dynamic>{
       'event': event,
       'route': route,

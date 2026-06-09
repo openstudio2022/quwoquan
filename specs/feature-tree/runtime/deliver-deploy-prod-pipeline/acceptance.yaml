@@ -7,9 +7,15 @@ node:
   parent_domain_service: runtime
   parent_business_capability: deliver-deploy-prod-pipeline
 scope:
-  summary: deliver deploy prod pipeline 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: deliver deploy prod pipeline 验收范围（含 main 自动 promotion 主链与 ACK 集群部署形态）。
+  in_scope:
+  - main 后单一自动 promotion 主链与统一证据归档
+  - prod-hosted ACK single-cluster + modular-monolith-first + 独立 Deployment + 托管数据面
+  - Strangler split-ready 拆分与契约不变
+  - gamma-local 与 prod-hosted 工作负载图谱同构
+  out_of_scope:
+  - 新增 beta-hosted / prod-gray 等额外环境名
+  - 多业务容器共享 Pod / sidecar 承载领域职责 / 集群内自建数据库 StatefulSet 默认
 sit_acceptance:
   SIT1:
     title: deliver deploy prod pipeline 能力 SIT
@@ -34,6 +40,60 @@ sit_acceptance:
       - "`07. Deploy To Prod (Auto)` 通过主链 timing summary 与 stage artifacts 证明 900 秒预算与 rollback 闭环。"
       recorded: []
     status: pending
+  SIT2:
+    title: ACK 集群部署形态（modular-monolith-first + split-ready）SIT
+    story_refs: []
+    done_when:
+    - "`prod-hosted` 首发形态为 `seed-box` 单 Deployment + `recommendation`/实时/媒体各自独立 Deployment，无 sidecar 承载领域职责。"
+    - 三层正交边界成立：领域服务=逻辑真相源，Deployment=部署单元，单 ACK 集群+共享节点池=物理资源；对外稳定标识是 Service 而非 Deployment。
+    - 数据面采用固定小规格存算分离单主（PolarDB PostgreSQL / Tair / MongoDB 单主，不依赖 Serverless）+ 同 VPC 私网 + ExternalName/DSN 抽象 + Secret 注入；每域只连归属存储，无硬编码连接、无跨域直连。
+    - Strangler 拆分前后，域级 API / route / Service 名 / 端侧配置 / 数据面归属完全不变。
+    - "`gamma-local` 与 `prod-hosted` 工作负载图谱（含数据面 Service 名/DSN 变量）同构；`stackctl` / workflow / ACK root 对同一 inventory 解释一致。"
+    contract_refs:
+    - deploy/shared/process_domain_mapping.yaml
+    - deploy/shared/module_package_mapping.yaml
+    - deploy/kustomization/aliyun-prod/kustomization.yaml
+    - deploy/shared/environment_topology_manifest.yaml
+    performance_points:
+    - 成本优化走标准 K8s 能力（requests/limits + bin-packing + HPA + cluster-autoscaler），低峰可缩容降本。
+    evidence:
+      primary:
+      - T1_static_contract
+      - T2_module_interaction
+      supporting:
+      - T3_app_api_integration
+      - T4_end_to_end_journey
+    tests:
+      planned:
+      - "process_domain_mapping / module_package_mapping / aliyun-prod kustomization 对 seed-box 单元、独立 workload、拆分单元的 inventory 解释一致（T1）。"
+      - 每个 workload 标准 K8s 原语齐全（Deployment/Service/HPA/PDB/probe/resources）且 domain 不双归属（T1）。
+      - 契约不变合同测试：拆分前后域级 API path / route / Service DNS 名 / 端侧 runtime 注入 / 数据面归属一致（T2/T3）。
+      - gamma-local 与 prod-hosted 同构启停 + health/inspect/doctor + 用户主链路无感知漂移（T2/T4）。
+      - 反模式门禁：拒绝多业务容器共享 Pod 当常态、sidecar 承载领域职责、集群内自建 DB StatefulSet 默认、硬编码 DB 连接/跨域直连。
+      recorded:
+      - file: deploy/shared/workload_topology_inventory.yaml
+        command: python3 quwoquan_service/scripts/deploy/verify_workload_topology_inventory.py
+        evidence: T1_static_contract
+        result: "PASS：10 workloads 三态一致、标准原语齐全、无 sidecar 反模式（反模式门禁）"
+      - file: quwoquan_service/scripts/deploy/verify_strangler_contract_invariants.py
+        command: python3 quwoquan_service/scripts/deploy/verify_strangler_contract_invariants.py
+        evidence: T1_static_contract
+        result: "PASS：6 split_candidate route/Service DNS 不变量自洽、domain 唯一归属、拆分模块可迁、三真相源 seed-box 一致"
+      - file: quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
+        command: bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
+        evidence: T2_module_interaction
+        result: "PASS：domain 归属唯一 / recommendation 独立 / 对外 route 回归"
+      - file: quwoquan_service/scripts/deploy/verify_gamma_local_prod_isomorphism.py
+        command: python3 quwoquan_service/scripts/deploy/verify_gamma_local_prod_isomorphism.py
+        evidence: T2_module_interaction
+        result: "PASS：gamma/prod 暴露面与四平面键一致、数据面 8 个 DSN 变量经 Secret 注入跨环境不变"
+      - file: deploy/kustomization/aliyun-prod/kustomization.yaml
+        command: kustomize build deploy/kustomization/aliyun-prod
+        evidence: T1_static_contract
+        result: "PASS：seed-box / recommendation-service / realtime-gateway / rtc-service / livekit-sfu / coturn 全量渲染"
+      pending_evidence:
+      - "T3/T4：真实 ACK 集群 stackctl deploy/health/inspect/doctor 全链与用户主链路无感漂移，待生产账号环境执行（本地无云账号不虚标）。"
+    status: partial
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

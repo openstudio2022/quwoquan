@@ -11,14 +11,10 @@ class HomeChannelsRemoteOverride {
   const HomeChannelsRemoteOverride._();
 
   /// 从 `/v1/config/app` 响应根（wireRoot）解析首页频道覆盖列表。
-  /// 兼容 snake_case 与 camelCase；按 order 升序排序。
+  /// 仅接受 snake_case；按 order 升序排序。
   static List<HomeChannelConfig>? fromAppConfigRoot(Map<String, Object?> root) {
     final content = (root['content'] as Map?)?.cast<String, Object?>();
-    final raw =
-        content?['home_channels'] ??
-        content?['homeChannels'] ??
-        root['home_channels'] ??
-        root['homeChannels'];
+    final raw = content?['home_channels'] ?? root['home_channels'];
     if (raw is! List || raw.isEmpty) return null;
 
     final channels = <HomeChannelConfig>[];
@@ -30,27 +26,17 @@ class HomeChannelsRemoteOverride {
       channels.add(
         HomeChannelConfig(
           id: id,
-          labelKey: (m['label_key'] ?? m['labelKey'] ?? '').toString(),
+          labelKey: (m['label_key'] ?? '').toString(),
           template: (m['template'] ?? '').toString(),
-          layoutTemplate: (m['layout_template'] ?? m['layoutTemplate'] ?? '')
-              .toString(),
-          phoneColumns: _asInt(m['phone_columns'] ?? m['phoneColumns']),
+          layoutTemplate: (m['layout_template'] ?? '').toString(),
+          phoneColumns: _asInt(m['phone_columns']),
           supportsFullSpanModules:
-              _asBool(
-                m['supports_full_span_modules'] ?? m['supportsFullSpanModules'],
-              ) ??
-              false,
+              _asBool(m['supports_full_span_modules']) ?? false,
           intersectionModulePolicy:
-              (m['intersection_module_policy'] ??
-                      m['intersectionModulePolicy'] ??
-                      '')
-                  .toString(),
-          contentCardPolicy:
-              (m['content_card_policy'] ?? m['contentCardPolicy'] ?? '')
-                  .toString(),
-          feedQuery: _parseFeedQuery(m['feed_query'] ?? m['feedQuery']),
-          moodCopyKey: (m['mood_copy_key'] ?? m['moodCopyKey'] ?? '')
-              .toString(),
+              (m['intersection_module_policy'] ?? '').toString(),
+          contentCardPolicy: (m['content_card_policy'] ?? '').toString(),
+          feedQuery: _parseFeedQuery(m['feed_query']),
+          moodCopyKey: (m['mood_copy_key'] ?? '').toString(),
           order: _asInt(m['order']),
         ),
       );

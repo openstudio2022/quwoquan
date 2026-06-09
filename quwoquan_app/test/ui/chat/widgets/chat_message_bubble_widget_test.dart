@@ -86,6 +86,59 @@ void main() {
       expect(longWidth, greaterThan(shortWidth));
     });
 
+    testWidgets('文件消息展示文件卡片', (tester) async {
+      final fileMessage = _message(type: 'file', content: '会议纪要.pdf');
+      await tester.pumpWidget(_wrapBubble(message: fileMessage, isRight: true));
+      await tester.pump();
+
+      expect(find.text('会议纪要.pdf'), findsAtLeastNWidgets(1));
+      expect(find.text(UITextConstants.chatPreviewFile), findsAtLeastNWidgets(1));
+    });
+
+    testWidgets('视频消息展示视频卡片', (tester) async {
+      final videoMessage = _message(
+        type: 'video',
+        content: '旅行回顾.mp4',
+        thumbnailUrl: 'https://cdn.example.com/video-thumb.jpg',
+      );
+      await tester.pumpWidget(_wrapBubble(message: videoMessage, isRight: true));
+      await tester.pump();
+
+      expect(find.text('旅行回顾.mp4'), findsAtLeastNWidgets(1));
+      expect(find.byType(Image), findsAtLeastNWidgets(1));
+      expect(
+        find.byIcon(Icons.play_circle_fill_rounded),
+        findsAtLeastNWidgets(1),
+      );
+      expect(find.text(UITextConstants.chatPreviewVideo), findsAtLeastNWidgets(1));
+    });
+
+    testWidgets('图片消息展示图片预览', (tester) async {
+      final imageMessage = _message(
+        type: 'image',
+        imageUrl: 'https://cdn.example.com/photo.jpg',
+        thumbnailUrl: 'https://cdn.example.com/thumb.jpg',
+      );
+      await tester.pumpWidget(_wrapBubble(message: imageMessage, isRight: true));
+      await tester.pump();
+
+      expect(find.byType(Image), findsOneWidget);
+      expect(find.text(UITextConstants.chatPreviewFile), findsNothing);
+      expect(find.text(UITextConstants.chatPreviewVideo), findsNothing);
+    });
+
+    testWidgets('图片消息缺少原图时回退到缩略图', (tester) async {
+      final imageMessage = _message(
+        type: 'image',
+        imageUrl: '',
+        thumbnailUrl: 'https://cdn.example.com/thumb-only.jpg',
+      );
+      await tester.pumpWidget(_wrapBubble(message: imageMessage, isRight: true));
+      await tester.pump();
+
+      expect(find.byType(Image), findsOneWidget);
+    });
+
     testWidgets('撤回后的语音消息不再展示播放气泡', (tester) async {
       final recalledVoice = _message(
         type: 'audio',
@@ -102,6 +155,21 @@ void main() {
         find.text(UITextConstants.chatPreviewRecalled),
         findsAtLeastNWidgets(1),
       );
+    });
+
+    testWidgets('语音 URL 为空时展示发送中不可播放态', (tester) async {
+      final pendingVoice = _message(
+        type: 'audio',
+        status: 'sent',
+        mediaUrl: '',
+        audioDurationMs: 3000,
+      );
+
+      await tester.pumpWidget(_wrapBubble(message: pendingVoice));
+      await tester.pump();
+
+      expect(find.byType(VoiceMessageBubble), findsOneWidget);
+      expect(find.text(UITextConstants.chatVoiceSending), findsOneWidget);
     });
   });
 
@@ -183,6 +251,8 @@ ChatMessageDisplayItem _message({
   String content = '',
   String status = 'sent',
   String mediaUrl = '',
+  String imageUrl = '',
+  String thumbnailUrl = '',
   int audioDurationMs = 0,
 }) {
   return ChatMessageDisplayItem(
@@ -202,8 +272,8 @@ ChatMessageDisplayItem _message({
     isSelf: senderId == 'user_001',
     isRead: true,
     mediaUrl: mediaUrl,
-    imageUrl: '',
-    thumbnailUrl: '',
+    imageUrl: imageUrl,
+    thumbnailUrl: thumbnailUrl,
     audioDurationMs: audioDurationMs,
     audioWaveform: const <double>[0.1, 0.4, 0.2, 0.8],
     tasks: const <ChatTaskCardEntry>[],

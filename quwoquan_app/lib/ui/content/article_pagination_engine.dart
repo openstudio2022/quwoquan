@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/painting.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/platform/app_font_families.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 
@@ -153,33 +154,14 @@ class ArticlePaginationEngine {
     FontWeight weight = FontWeight.normal,
     double height = 1.6,
   }) {
-    final fallback = switch (fontPreset) {
-      ArticleFontPreset.classic => const <String>[
-        'Times New Roman',
-        'STSong',
-        'Songti SC',
-      ],
-      ArticleFontPreset.handwritten => const <String>['Kaiti SC', 'STKaiti'],
-      ArticleFontPreset.rounded => const <String>[
-        'PingFang SC',
-        'SF Pro Rounded',
-      ],
-      ArticleFontPreset.mono => const <String>['Menlo', 'Monaco'],
-      ArticleFontPreset.clean => const <String>['PingFang SC'],
-    };
+    final stack = resolveArticleFontStack(fontPreset);
     return TextStyle(
       fontSize: size,
       fontWeight: weight,
       height: height,
       letterSpacing: fontPreset == ArticleFontPreset.mono ? 0.15 : 0.05,
-      fontFamily: switch (fontPreset) {
-        ArticleFontPreset.classic => 'Times New Roman',
-        ArticleFontPreset.handwritten => 'Kaiti SC',
-        ArticleFontPreset.rounded => 'SF Pro Rounded',
-        ArticleFontPreset.mono => 'Menlo',
-        ArticleFontPreset.clean => null,
-      },
-      fontFamilyFallback: fallback,
+      fontFamily: stack.fontFamily,
+      fontFamilyFallback: stack.fontFamilyFallback,
     );
   }
 

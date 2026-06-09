@@ -9,6 +9,10 @@ class ConversationDto {
   final String? groupAvatarSourceHash;
   final String creatorId;
   final String? circleId;
+  final String? circleGroupId;
+  final String originType;
+  final String bindingType;
+  final String lifecyclePolicy;
   final int maxSeq;
   final int memberCount;
   final int maxGroupSize;
@@ -33,6 +37,10 @@ class ConversationDto {
     this.groupAvatarSourceHash,
     required this.creatorId,
     this.circleId,
+    this.circleGroupId,
+    this.originType = 'direct_init',
+    this.bindingType = 'none',
+    this.lifecyclePolicy = 'persistent',
     required this.maxSeq,
     required this.memberCount,
     required this.maxGroupSize,
@@ -57,6 +65,10 @@ class ConversationDto {
       groupAvatarSourceHash: _optionalString(map['groupAvatarSourceHash']),
       creatorId: (map['creatorId'] ?? '') as String,
       circleId: map['circleId'] as String?,
+      circleGroupId: _optionalString(map['circleGroupId']),
+      originType: (map['originType'] ?? 'direct_init') as String,
+      bindingType: (map['bindingType'] ?? 'none') as String,
+      lifecyclePolicy: (map['lifecyclePolicy'] ?? 'persistent') as String,
       maxSeq: (map['maxSeq'] as num?)?.toInt() ?? 0,
       memberCount: (map['memberCount'] as num?)?.toInt() ?? 0,
       maxGroupSize: (map['maxGroupSize'] as num?)?.toInt() ?? 1000,
@@ -89,6 +101,10 @@ class ConversationDto {
       'groupAvatarSourceHash': groupAvatarSourceHash,
     'creatorId': creatorId,
     if (circleId != null) 'circleId': circleId,
+    if (circleGroupId != null) 'circleGroupId': circleGroupId,
+    'originType': originType,
+    'bindingType': bindingType,
+    'lifecyclePolicy': lifecyclePolicy,
     'maxSeq': maxSeq,
     'memberCount': memberCount,
     'maxGroupSize': maxGroupSize,

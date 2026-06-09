@@ -1,0 +1,9 @@
+{
+  "label": "婚姻家庭",
+  "labelEn": "Marital & Family",
+  "description": "用户婚姻状态与家庭结构",
+  "maxDepth": 2,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

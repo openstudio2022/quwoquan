@@ -65,9 +65,11 @@ L3_story: <story>
 - `/explore`：定位 AppRoot Journey/Scenario 与三层目录归属，识别 metadata、测试、CR、风险。
 - `/prd`：冻结 `spec.md` 与 `acceptance.yaml`，必要时更新 registry 和 CR。
 - `/design`：只冻结应用根、领域服务、业务能力 `design.md`。
+- `/plan-review`：冻结/开发前，用设计、产品、架构、代码评审、测试质量、运维运营、工程自动化多角色交叉检视规格/任务清单/验收的完备性，对标微信·小红书·Apple HIG 刷新规划。
 - `/baseline`：需求稳定且方案收敛时，一次冻结 spec / acceptance / 必要 design / CR。
 - `/dev`：从 Story acceptance 和当前会话计划派生 todo，执行 Red → Green → Refactor。
 - `/verify`：检查 UAT/SIT/GWT/contract 与 `T1~T4` 证据。
+- `/plan-next`：功能或计划完成后，多角色自检完成度与证据，回填未达成项后生成下一轮规划（目标 / 规格 / 任务清单 / 验收标准）。
 - `/commit`：只提交已闭环 Story、相关文档、metadata/codegen、测试和 CR。
 - `/deploy`：以 release batch / CR 范围发布，必须完成 `T3/T4`、SLO、观测和回滚演练。
 

@@ -5,7 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
@@ -26,15 +25,19 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
+import 'package:quwoquan_app/ui/discovery/services/discovery_share_template.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_layout_policy.dart';
 import 'package:quwoquan_app/ui/discovery/providers/channel_intersection_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -56,9 +59,6 @@ const ArticleDistributionProfileConfig _followingArticleDistributionProfile =
       summaryLineLimit: 2,
     );
 
-/// 首页多形态信息流：按频道 layout policy 渲染单列关系流、双列发现流与交集模块。
-///
-/// `moment` 仅作为内容 identity / feed query 枚举保留；首页架构不再以 Moment 命名。
 class HomeMultiFormFeed extends ConsumerWidget {
   const HomeMultiFormFeed({
     super.key,
@@ -76,7 +76,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
   final bool isDark;
   final String channelId;
 
-  /// 频道模板（来自 homeChannels.template；旧字段，仅作为 layout policy 缺省兼容）。
   final String template;
   final bool inlineImageCarousel;
   final bool disableImageViewerOnTap;
@@ -88,7 +87,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
   })
   onUserTap;
 
-  /// 点击图片/视频时打开侵入式浏览器；若仅需埋点可传 (post, i) => _trackBehavior('click', post)
   final void Function(
     PostBaseDto post,
     int index, {
@@ -97,13 +95,11 @@ class HomeMultiFormFeed extends ConsumerWidget {
   onPostTap;
   final void Function(PostBaseDto post)? onMoreTap;
 
-  /// 发现交集对象卡卡体点击：跳转对应对象/聚合页（路由由宿主按 metadata 解析）。
   final void Function(IntersectionReason reason)? onIntersectionObjectOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(postInteractionStateProvider);
-    // 交集曝光归因：频道交集就绪即上报曝光（驱动推荐冷却窗口）+ 漏斗 impression。
     ref.listen<AsyncValue<List<IntersectionReason>>>(
       channelIntersectionReasonsProvider(channelId),
       (previous, next) => _reportIntersectionExposure(ref, previous, next),
@@ -145,58 +141,31 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final feedPosts = shouldShowFollowingArticles
         ? <PostBaseDto>[...moments, ...articles]
         : dtos;
-    final hasError = feedAsync.value?.error != null;
+    final blockingError = feedAsync.value?.blockingError;
+    final appendError = feedAsync.value?.appendError;
+    final staleDataError = feedAsync.value?.staleDataError;
+    final hasBlockingError = blockingError != null;
 
-    if (feedAsync.isLoading && feedPosts.isEmpty && !hasError) {
+    if (feedAsync.isLoading && feedPosts.isEmpty && !hasBlockingError) {
       return const Center(child: CupertinoActivityIndicator());
     }
 
-    if (hasError && feedPosts.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.interGroupLg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                context.l10n.loadFailed,
-                style: TextStyle(
-                  color: AppColors.error,
-                  fontSize: AppTypography.iosBody,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: AppSpacing.interGroupMd),
-              CupertinoButton(
-                onPressed: () =>
-                    ref.read(discoveryFeedMapProvider.notifier).load(channelId),
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerMd,
-                  vertical: AppSpacing.intraGroupSm,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      CupertinoIcons.arrow_clockwise,
-                      size: AppSpacing.iconSmall,
-                      color: AppColors.iosAccent(context),
-                    ),
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    Text(
-                      context.l10n.retry,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
-                        color: AppColors.iosAccent(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+    if (hasBlockingError && feedPosts.isEmpty) {
+      return AppPageErrorState(
+        semantic: runtimeErrorSemantic(
+          context,
+          error: blockingError,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
         ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await ref
+                .read(discoveryFeedMapProvider.notifier)
+                .load(channelId, force: true);
+          }
+        },
       );
     }
 
@@ -381,11 +350,16 @@ class HomeMultiFormFeed extends ConsumerWidget {
             );
           });
         },
-        onMoreTap: () {
+        onMoreTap: (cardWidth) {
           if (onMoreTap != null) {
             onMoreTap!(dto);
           } else {
-            _showMoreActions(context, ref, dto);
+            _showMoreActions(
+              context,
+              ref,
+              dto,
+              panelMaxWidth: cardWidth,
+            );
           }
         },
       );
@@ -395,9 +369,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
         MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight;
 
     final todayReasons = layoutPolicy.hasIntersectionSpotlight
-        ? (ref
-                  .watch(channelIntersectionReasonsProvider(channelId))
-                  .value ??
+        ? (ref.watch(channelIntersectionReasonsProvider(channelId)).value ??
               const <IntersectionReason>[])
         : const <IntersectionReason>[];
     final shouldShowFollowingSubjects =
@@ -409,6 +381,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
         : IntersectionSpotlightModule(
             reasons: todayReasons,
             isDark: isDark,
+            title: _intersectionSpotlightTitle(),
             onReasonTap: onIntersectionObjectOpen,
           );
 
@@ -433,13 +406,18 @@ class HomeMultiFormFeed extends ConsumerWidget {
                   .skip(segmentIndex + 1)
                   .toList(growable: false),
               isDark: isDark,
-              title: UITextConstants.homeTodayIntersection,
+              title: _intersectionSpotlightTitle(),
               onReasonTap: onIntersectionObjectOpen,
             )
           : null,
       dividerColor: listDividerColor,
       isLoadingMore: feedAsync.value?.isLoading ?? false,
       hasMore: feedAsync.value?.nextCursor?.isNotEmpty ?? false,
+      appendError: appendError,
+      staleDataError: staleDataError,
+      onRetryInitialLoad: () => ref
+          .read(discoveryFeedMapProvider.notifier)
+          .load(channelId, force: true),
       moodCopy: _resolveChannelMoodCopy(),
       headerSliver: headerSliver,
       onReachBottom: () =>
@@ -447,9 +425,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
     );
   }
 
-  /// 交集曝光上报：频道交集 Provider 首次产出非空数据时，
-  /// 上报曝光给推荐冷却窗口（reportExposure）并补漏斗 impression（带 intersectionId/dimension/class）。
-  /// trackImpression 按 objectId session 去重，故重复 build 不会重复上报。
   void _reportIntersectionExposure(
     WidgetRef ref,
     AsyncValue<List<IntersectionReason>>? previous,
@@ -467,9 +442,9 @@ class HomeMultiFormFeed extends ConsumerWidget {
         .map((reason) => reason.actionTargetId.trim())
         .toList(growable: false);
     unawaited(
-      ref.read(intersectionRepositoryProvider).reportExposure(
-            objectIds: objectIds,
-          ),
+      ref
+          .read(intersectionRepositoryProvider)
+          .reportExposure(objectIds: objectIds),
     );
     final tracker = ref.read(contentBehaviorTrackerProvider);
     for (final reason in exposed) {
@@ -484,10 +459,17 @@ class HomeMultiFormFeed extends ConsumerWidget {
     }
   }
 
-  /// 从当前 feed 各帖聚合去重的交集理由，供首页 full-span 交集模块消费。
-  /// 不引入第二套业务列表（数据来自已加载的 feed item），无来源时返回空。
-  /// 频道气质文案：按 channelId 匹配运营下发的 [ContentUIConfig.homeChannels]
-  /// 解析 moodCopyKey（真相源 = ui_config home_channels）；无匹配返回空串。
+  String _intersectionSpotlightTitle() {
+    switch (channelId) {
+      case 'campus':
+        return UITextConstants.intersectionCampusSpotlightTitle;
+      case 'travel':
+        return UITextConstants.intersectionTravelSpotlightTitle;
+      default:
+        return UITextConstants.intersectionRecommendSpotlightTitle;
+    }
+  }
+
   String _resolveChannelMoodCopy() {
     for (final channel in ContentUIConfig.homeChannels) {
       if (channel.id == channelId) {
@@ -513,9 +495,9 @@ class HomeMultiFormFeed extends ConsumerWidget {
     required bool enableIdentityTemplate,
   }) {
     runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
-      final template = _buildShareTemplate(
-        ref: ref,
+      final template = buildDiscoveryShareTemplate(
         post: post,
+        wire: _rawDiscoveryItem(ref, post.id),
         enableIdentityTemplate: enableIdentityTemplate,
       );
       ContentShareSheet.show(
@@ -528,9 +510,15 @@ class HomeMultiFormFeed extends ConsumerWidget {
     });
   }
 
-  void _showMoreActions(BuildContext context, WidgetRef ref, PostBaseDto post) {
+  void _showMoreActions(
+    BuildContext context,
+    WidgetRef ref,
+    PostBaseDto post, {
+    double? panelMaxWidth,
+  }) {
     MoreActionPopup.show(
       context: context,
+      panelMaxWidth: panelMaxWidth,
       config: MediaPostMoreActionConfig(
         showShareAction: false,
         showViewOriginalAction: false,
@@ -592,12 +580,12 @@ class HomeMultiFormFeed extends ConsumerWidget {
   }) async {
     final result = await const DefaultContentShareActionHandler().execute(
       context,
-      _buildShareTemplate(
-        ref: ref,
+      buildDiscoveryShareTemplate(
         post: post,
+        wire: _rawDiscoveryItem(ref, post.id),
         enableIdentityTemplate: enableIdentityTemplate,
       ),
-      const ContentShareAction(
+      ContentShareAction(
         id: 'copy_link',
         label: UITextConstants.copyLink,
       ),
@@ -605,25 +593,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
     if (result.success) {
       await _recordShare(ref, post.id, result.actionId);
     }
-  }
-
-  ContentShareTemplate _buildShareTemplate({
-    required WidgetRef ref,
-    required PostBaseDto post,
-    required bool enableIdentityTemplate,
-  }) {
-    final wire = _rawDiscoveryItem(ref, post.id);
-    final circleName = wire?.circleName ?? '';
-    final surfaceView = ContentSurfaceViewMapper.fromDto(
-      post,
-      wire: wire?.toWireMap(),
-    );
-    return ContentShareTemplateBuilder.build(
-      surfaceView: surfaceView,
-      enableIdentityTemplate: enableIdentityTemplate,
-      visibility: wire?.visibility ?? 'public',
-      circleNames: circleName.isEmpty ? const <String>[] : <String>[circleName],
-    );
   }
 
   Future<void> _recordShare(
@@ -691,6 +660,9 @@ class _HomeFeedScrollView extends StatefulWidget {
     required this.dividerColor,
     required this.isLoadingMore,
     required this.hasMore,
+    required this.appendError,
+    required this.staleDataError,
+    required this.onRetryInitialLoad,
     required this.onReachBottom,
     this.moodCopy = '',
     this.headerSliver,
@@ -711,6 +683,9 @@ class _HomeFeedScrollView extends StatefulWidget {
   final Color dividerColor;
   final bool isLoadingMore;
   final bool hasMore;
+  final Object? appendError;
+  final Object? staleDataError;
+  final VoidCallback onRetryInitialLoad;
   final VoidCallback onReachBottom;
 
   /// 频道气质文案（来自 ContentUIConfig.homeChannels.moodCopyKey 解析，只读）；空则不展示。
@@ -728,21 +703,47 @@ class _HomeFeedScrollView extends StatefulWidget {
 
 class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
   final ScrollController _controller = ScrollController();
+  Timer? _staleNoticeTimer;
+  Object? _visibleStaleDataError;
 
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onScroll);
+    _syncStaleNotice(previous: null);
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeFeedScrollView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncStaleNotice(previous: oldWidget.staleDataError);
   }
 
   @override
   void dispose() {
+    _staleNoticeTimer?.cancel();
     _controller.removeListener(_onScroll);
     _controller.dispose();
     super.dispose();
   }
 
+  void _syncStaleNotice({required Object? previous}) {
+    final next = widget.staleDataError;
+    if (next == null || identical(next, previous)) {
+      return;
+    }
+    _staleNoticeTimer?.cancel();
+    _visibleStaleDataError = next;
+    _staleNoticeTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (!mounted) return;
+      setState(() => _visibleStaleDataError = null);
+    });
+  }
+
   void _onScroll() {
+    if (_visibleStaleDataError != null) {
+      setState(() => _visibleStaleDataError = null);
+    }
     if (!widget.hasMore || widget.isLoadingMore) return;
     if (!_controller.hasClients) return;
     final position = _controller.position;
@@ -770,6 +771,32 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
     }
     if (widget.topPad > 0) {
       slivers.add(SliverToBoxAdapter(child: SizedBox(height: widget.topPad)));
+    }
+    final visibleStaleDataError = _visibleStaleDataError;
+    if (visibleStaleDataError != null) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              widget.horizontalPad,
+              0,
+              widget.horizontalPad,
+              AppSpacing.containerSm,
+            ),
+            child: AppTransientErrorNotice(
+              semantic: runtimeErrorSemantic(
+                context,
+                error: visibleStaleDataError,
+                category: UiErrorCategory.backgroundAction,
+                scope: UiErrorScope.section,
+                allowRetry: false,
+                presentation: UiErrorPresentation.transientNotice,
+              ),
+              margin: EdgeInsets.zero,
+            ),
+          ),
+        ),
+      );
     }
 
     if (widget.isMultiColumn) {
@@ -850,15 +877,17 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
       SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.only(
-            top: widget.isLoadingMore
+            top: widget.isLoadingMore || widget.appendError != null
                 ? AppSpacing.interGroupMd
                 : AppSpacing.zero,
             bottom: widget.bottomPad,
           ),
-          child: widget.isLoadingMore
+          child: widget.isLoadingMore || widget.appendError != null
               ? _LoadMoreFooter(
                   moodCopy: widget.moodCopy,
                   isDark: widget.isDark,
+                  appendError: widget.appendError,
+                  onRetry: widget.onReachBottom,
                 )
               : const SizedBox.shrink(),
         ),
@@ -870,10 +899,17 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
 
 /// 触底加载 footer：加载指示 + 频道气质文案（只读，空文案不展示）。
 class _LoadMoreFooter extends StatelessWidget {
-  const _LoadMoreFooter({required this.moodCopy, required this.isDark});
+  const _LoadMoreFooter({
+    required this.moodCopy,
+    required this.isDark,
+    required this.appendError,
+    required this.onRetry,
+  });
 
   final String moodCopy;
   final bool isDark;
+  final Object? appendError;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -881,11 +917,29 @@ class _LoadMoreFooter extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
+    final hasError = appendError != null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const CupertinoActivityIndicator(),
-        if (moodCopy.isNotEmpty) ...[
+        if (hasError)
+          AppListAppendErrorFooter(
+            semantic: runtimeErrorSemantic(
+              context,
+              error: appendError!,
+              category: UiErrorCategory.listAppend,
+              scope: UiErrorScope.section,
+              presentation: UiErrorPresentation.appendFooter,
+            ),
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry ||
+                  action.type == UiErrorActionType.resubmit) {
+                onRetry();
+              }
+            },
+          )
+        else
+          const CupertinoActivityIndicator(),
+        if (!hasError && moodCopy.isNotEmpty) ...[
           SizedBox(height: AppSpacing.intraGroupSm),
           Text(
             moodCopy,
@@ -939,7 +993,7 @@ class _HomeRelationPostCard extends ConsumerStatefulWidget {
   final VoidCallback onCommentTap;
   final VoidCallback onShareTap;
   final VoidCallback onLikeTap;
-  final VoidCallback onMoreTap;
+  final void Function(double cardWidth) onMoreTap;
 
   @override
   ConsumerState<_HomeRelationPostCard> createState() =>
@@ -970,178 +1024,185 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
-    final isDark = widget.isDark;
-    final fg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final muted = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    final cardBg = SettingsSemanticConstants.conversationSheetCardSurface(
-      isDark,
-    );
-    final cardBorder = widget.wideLayout
-        ? SettingsSemanticConstants.conversationSheetCardBorderColor(isDark)
-        : AppColors.transparent;
-    final borderRadius = widget.wideLayout
-        ? BorderRadius.circular(AppSpacing.contentPreviewCornerRadius)
-        : BorderRadius.zero;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final item = widget.item;
+        final isDark = widget.isDark;
+        final cardWidth = constraints.hasBoundedWidth && constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final fg = AppColorsFunctional.getColor(
+          isDark,
+          ColorType.foregroundPrimary,
+        );
+        final muted = AppColorsFunctional.getColor(
+          isDark,
+          ColorType.foregroundSecondary,
+        );
+        final cardBg = SettingsSemanticConstants.conversationSheetCardSurface(
+          isDark,
+        );
+        final cardBorder = widget.wideLayout
+            ? SettingsSemanticConstants.conversationSheetCardBorderColor(isDark)
+            : AppColors.transparent;
+        final borderRadius = widget.wideLayout
+            ? BorderRadius.circular(AppSpacing.contentPreviewCornerRadius)
+            : BorderRadius.zero;
 
-    return DecoratedBox(
-      key: widget.cardContainerKey,
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: borderRadius,
-        border: Border.all(color: cardBorder, width: AppSpacing.hairline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.containerMd,
-          _feedCardVerticalPadding,
-          AppSpacing.containerMd,
-          _feedCardVerticalPadding,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        return DecoratedBox(
+          key: widget.cardContainerKey,
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: borderRadius,
+            border: Border.all(color: cardBorder, width: AppSpacing.hairline),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              _feedCardVerticalPadding,
+              AppSpacing.containerMd,
+              _feedCardVerticalPadding,
+            ),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  onPressed: () => widget.onUserTap(item.authorId),
-                  child: RoundedSquareAvatar(
-                    size: AppSpacing.avatarUserSm,
-                    imageUrl: item.avatarUrl,
-                    name: item.displayName,
-                    borderRadius: AppSpacing.avatarUserSm / 2,
-                    backgroundColor: AppColors.iosSecondaryFill(context),
-                    fallbackIcon: CupertinoIcons.person_crop_circle_fill,
-                  ),
-                ),
-                SizedBox(width: AppSpacing.intraGroupMd),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      onPressed: () => widget.onUserTap(item.authorId),
+                      child: RoundedSquareAvatar(
+                        size: AppSpacing.avatarUserSm,
+                        imageUrl: item.avatarUrl,
+                        name: item.displayName,
+                        borderRadius: AppSpacing.avatarUserSm / 2,
+                        backgroundColor: AppColors.iosSecondaryFill(context),
+                        fallbackIcon: CupertinoIcons.person_crop_circle_fill,
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.intraGroupMd),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              item.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize:
-                                    AppTypography.feedAuthorNameResponsive(
-                                      context,
-                                    ),
-                                fontWeight: AppTypography.medium,
-                                color: fg,
-                                letterSpacing: -0.08,
-                                height: AppSpacing.textLineHeightDense,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.displayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize:
+                                        AppTypography.feedAuthorNameResponsive(
+                                          context,
+                                        ),
+                                    fontWeight: AppTypography.medium,
+                                    color: fg,
+                                    letterSpacing: -0.08,
+                                    height: AppSpacing.textLineHeightDense,
+                                  ),
+                                ),
                               ),
-                            ),
+                              SizedBox(width: AppSpacing.intraGroupXs),
+                              _HomeFeedMoreButton(
+                                key: widget.moreButtonKey,
+                                isDark: isDark,
+                                color: muted,
+                                onPressed: () => widget.onMoreTap(cardWidth),
+                              ),
+                            ],
                           ),
-                          SizedBox(width: AppSpacing.intraGroupXs),
-                          _HomeFeedMoreButton(
-                            key: widget.moreButtonKey,
-                            isDark: isDark,
-                            color: muted,
-                            onPressed: widget.onMoreTap,
+                          const SizedBox(height: AppSpacing.two),
+                          Text(
+                            _buildMetaLine(context),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppTypography.iosCaption1,
+                              color: muted,
+                              letterSpacing: -0.04,
+                              height: AppSpacing.one,
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: AppSpacing.two),
-                      Text(
-                        _buildMetaLine(context),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosCaption1,
-                          color: muted,
-                          letterSpacing: -0.04,
-                          height: AppSpacing.one,
-                        ),
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+
+                // 交集理由位（一行 displayText，只读；无来源不展示）
+                if (_intersectionReasonText != null) ...[
+                  const SizedBox(height: _feedCardSectionGap),
+                  IntersectionReasonChip(
+                    text: _intersectionReasonText!,
+                    isDark: isDark,
                   ),
+                ],
+
+                // 正文（5 行截断 + 就地展开）
+                if (item.normalizedBody.isNotEmpty) ...[
+                  const SizedBox(height: _feedCardSectionGap),
+                  _ExpandableText(
+                    text: item.normalizedBody,
+                    maxLines: _maxLines,
+                    isDark: isDark,
+                    expanded: _isExpanded,
+                    onToggle: () => setState(() => _isExpanded = !_isExpanded),
+                  ),
+                ],
+
+                // 图片区域（自适应宫格）
+                if (item.hasImages) ...[
+                  const SizedBox(height: _feedCardSectionGap),
+                  widget.inlineImageCarousel
+                      ? _HomeFeedImageCarousel(
+                          urls: item.imageUrls,
+                          isDark: isDark,
+                          onTap: widget.onImageTap,
+                        )
+                      : _HomeFeedImageGrid(
+                          urls: item.imageUrls,
+                          isDark: isDark,
+                          onTap: widget.onImageTap,
+                        ),
+                ],
+
+                // 视频卡片
+                if (item.hasVideo && !item.hasImages) ...[
+                  const SizedBox(height: _feedCardSectionGap),
+                  _HomeFeedVideoCard(
+                    dto: item,
+                    isDark: isDark,
+                    onTap: () => widget.onImageTap(0),
+                  ),
+                ],
+
+                // 互动栏
+                const SizedBox(height: _feedCardSectionGap),
+                _ActionRow(
+                  item: item,
+                  isDark: isDark,
+                  isLiked: widget.isLiked,
+                  likeCount: widget.likeCount,
+                  likeCtrl: _likeCtrl,
+                  onLike: () {
+                    HapticFeedback.lightImpact();
+                    _likeCtrl.forward(from: 0);
+                    widget.onLikeTap();
+                  },
+                  onComment: widget.onCommentTap,
+                  onShare: widget.onShareTap,
                 ),
               ],
             ),
-
-            // 交集理由位（一行 displayText，只读；无来源不展示）
-            if (_intersectionReasonText != null) ...[
-              const SizedBox(height: _feedCardSectionGap),
-              IntersectionReasonChip(
-                text: _intersectionReasonText!,
-                isDark: isDark,
-              ),
-            ],
-
-            // 正文（5 行截断 + 就地展开）
-            if (item.normalizedBody.isNotEmpty) ...[
-              const SizedBox(height: _feedCardSectionGap),
-              _ExpandableText(
-                text: item.normalizedBody,
-                maxLines: _maxLines,
-                isDark: isDark,
-                expanded: _isExpanded,
-                onToggle: () => setState(() => _isExpanded = !_isExpanded),
-              ),
-            ],
-
-            // 图片区域（自适应宫格）
-            if (item.hasImages) ...[
-              const SizedBox(height: _feedCardSectionGap),
-              widget.inlineImageCarousel
-                  ? _HomeFeedImageCarousel(
-                      urls: item.imageUrls,
-                      isDark: isDark,
-                      onTap: widget.onImageTap,
-                    )
-                  : _HomeFeedImageGrid(
-                      urls: item.imageUrls,
-                      isDark: isDark,
-                      onTap: widget.onImageTap,
-                    ),
-            ],
-
-            // 视频卡片
-            if (item.hasVideo && !item.hasImages) ...[
-              const SizedBox(height: _feedCardSectionGap),
-              _HomeFeedVideoCard(
-                dto: item,
-                isDark: isDark,
-                onTap: () => widget.onImageTap(0),
-              ),
-            ],
-
-            // 互动栏
-            const SizedBox(height: _feedCardSectionGap),
-            _ActionRow(
-              item: item,
-              isDark: isDark,
-              isLiked: widget.isLiked,
-              likeCount: widget.likeCount,
-              likeCtrl: _likeCtrl,
-              onLike: () {
-                HapticFeedback.lightImpact();
-                _likeCtrl.forward(from: 0);
-                widget.onLikeTap();
-              },
-              onComment: widget.onCommentTap,
-              onShare: widget.onShareTap,
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -1429,11 +1490,11 @@ class _HomeFeedImageGrid extends StatelessWidget {
     if (url.isEmpty) {
       return _placeholder();
     }
-    return CachedNetworkImage(
+    return AppCachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
-      placeholder: (context, url) => _placeholder(),
-      errorWidget: (context, url, err) => _placeholder(),
+      placeholder: _placeholder(),
+      errorWidget: _placeholder(),
     );
   }
 
@@ -1500,11 +1561,11 @@ class _HomeFeedImageCarouselState extends State<_HomeFeedImageCarousel> {
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => widget.onTap(index),
-                  child: CachedNetworkImage(
+                  child: AppCachedNetworkImage(
                     imageUrl: urls[index],
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => _placeholder(),
-                    errorWidget: (context, url, err) => _placeholder(),
+                    placeholder: _placeholder(),
+                    errorWidget: _placeholder(),
                   ),
                 );
               },

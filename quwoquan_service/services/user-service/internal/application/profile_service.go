@@ -12,6 +12,7 @@ import (
 	event "quwoquan_service/services/user-service/internal/domain/user/event"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
+	"quwoquan_service/services/user-service/internal/generated"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 )
 
@@ -89,13 +90,13 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 		return nil, err
 	}
 	if profile == nil {
-		return nil, fmt.Errorf("user not found: %s", userID)
+		return nil, generated.AppErrorFromUserNotFound("user not found: " + userID)
 	}
 
 	if v, ok := data["nickname"].(string); ok && v != "" {
 		existing, _ := s.profiles.FindByNickname(ctx, v)
 		if existing != nil && existing.UserID != userID {
-			return nil, fmt.Errorf("nickname_taken: %s", v)
+			return nil, generated.AppErrorFromNicknameTaken("nickname_taken: " + v)
 		}
 		profile.Nickname = v
 	}

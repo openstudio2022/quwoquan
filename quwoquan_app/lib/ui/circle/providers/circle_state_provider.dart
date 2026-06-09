@@ -22,6 +22,7 @@ class CircleState {
   const CircleState({
     required this.circleId,
     this.circleData,
+    this.defaultPublicGroup,
     this.role = CircleRole.visitor,
     this.joinStatus = 'none',
     this.isFollowed = false,
@@ -37,6 +38,7 @@ class CircleState {
 
   final String circleId;
   final CircleDto? circleData;
+  final CircleGroupDto? defaultPublicGroup;
   final CircleRole role;
   final String joinStatus;
   final bool isFollowed;
@@ -51,6 +53,7 @@ class CircleState {
 
   CircleState copyWith({
     CircleDto? circleData,
+    CircleGroupDto? defaultPublicGroup,
     CircleRole? role,
     String? joinStatus,
     bool? isFollowed,
@@ -66,6 +69,7 @@ class CircleState {
     return CircleState(
       circleId: circleId,
       circleData: circleData ?? this.circleData,
+      defaultPublicGroup: defaultPublicGroup ?? this.defaultPublicGroup,
       role: role ?? this.role,
       joinStatus: joinStatus ?? this.joinStatus,
       isFollowed: isFollowed ?? this.isFollowed,
@@ -99,8 +103,18 @@ class CircleStateNotifier extends Notifier<CircleState> {
       final detail = await repo.getCircle(_circleId);
       final statsWire = await repo.getCircleStats(_circleId);
       final dto = detail.circle;
+      CircleGroupDto? defaultGroup;
+      final defaultGroupId = dto.defaultPublicGroupId?.trim() ?? '';
+      if (defaultGroupId.isNotEmpty) {
+        try {
+          defaultGroup = await repo.getCircleGroup(_circleId, defaultGroupId);
+        } catch (_) {
+          defaultGroup = null;
+        }
+      }
       state = state.copyWith(
         circleData: dto,
+        defaultPublicGroup: defaultGroup,
         role: _circleRoleFromRaw(detail.viewerRole),
         joinStatus: detail.joinStatusIfPresent ?? state.joinStatus,
         isFollowed: detail.isFollowedIfPresent ?? state.isFollowed,

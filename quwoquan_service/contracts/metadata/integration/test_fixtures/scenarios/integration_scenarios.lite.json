@@ -72,6 +72,80 @@
           "requiresSeedReset": true
         }
       }
+    },
+    {
+      "id": "integration_external_interaction_sms_otp_async",
+      "title": "短信验证码可靠异步发送契约种子",
+      "type": "external_interaction",
+      "domainId": "integration",
+      "seedRefs": [
+        "external_interaction_core"
+      ],
+      "remoteExpectations": {
+        "requestIds": [
+          "fixture_ext_sms_otp_001"
+        ],
+        "operations": [
+          "sms_otp.send"
+        ],
+        "acceptedStatus": 202,
+        "callbackEvents": [
+          "SmsOtpDeliverySucceeded"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    },
+    {
+      "id": "integration_push_delivery_async",
+      "title": "手机推送可靠异步发送契约种子",
+      "type": "push_delivery",
+      "domainId": "integration",
+      "seedRefs": [
+        "external_interaction_core"
+      ],
+      "remoteExpectations": {
+        "requestIds": [
+          "fixture_ext_push_001"
+        ],
+        "operations": [
+          "push_delivery.send"
+        ],
+        "acceptedStatus": 202,
+        "callbackEvents": [
+          "PushDeliverySucceeded"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
     }
   ]
 }

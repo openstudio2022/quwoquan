@@ -30,7 +30,7 @@ coverImage: asset://cover
 		"articleMarkdownVersion": "qwq-rich-md/1",
 		"articleAssetManifest": map[string]any{
 			"assets": []map[string]any{
-				{"assetId": "cover", "scope": "draft", "objectKey": "media/draft/cover.jpg", "sha256": "dev"},
+				{"assetId": "cover", "scope": "draft", "objectKey": "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 			},
 		},
 		"articleRenderProfile": map[string]any{"template": "journal", "fontPreset": "clean"},

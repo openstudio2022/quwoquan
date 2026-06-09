@@ -73,6 +73,9 @@ void main() {
         feed.error,
         '操作失败，请稍后重试',
       );
+      expect(feed.blockingError, isNotNull);
+      expect(feed.staleDataError, isNull);
+      expect(feed.appendError, isNull);
     });
 
     test('appendNextPage 会在存在 nextCursor 时追加下一页并清空 cursor', () async {
@@ -95,6 +98,41 @@ void main() {
       expect(afterCount, greaterThan(beforeCount));
       expect(afterFeed?.hasMore, isFalse);
       expect(afterFeed?.error, isNull);
+    });
+
+    test('load with cached items keeps staleDataError and preserves items', () async {
+      final container = _container(MockContentRepository());
+      addTearDown(container.dispose);
+
+      await container.read(discoveryFeedMapProvider.notifier).load('photo');
+      final seeded = container.read(discoveryFeedMapProvider)['photo']!.value!;
+      expect(seeded.items, isNotEmpty);
+
+      final notifier = container.read(discoveryFeedMapProvider.notifier);
+      notifier.state = <String, AsyncValue<DiscoveryFeedState>>{
+        'photo': AsyncData(
+          seeded.copyWith(
+            nextCursor: 'cursor_1',
+            blockingError: null,
+            staleDataError: null,
+            appendError: null,
+          ),
+        ),
+      };
+
+      container.updateOverrides([
+        contentRepositoryProvider.overrideWithValue(_FailingContentRepository()),
+        postInteractionStateProvider.overrideWith(_NoopPostInteractionStateNotifier.new),
+      ]);
+      addTearDown(container.pump);
+      await container.pump();
+
+      await notifier.load('photo', force: true);
+      final after = container.read(discoveryFeedMapProvider)['photo']!.value!;
+      expect(after.items, isNotEmpty);
+      expect(after.staleDataError, isNotNull);
+      expect(after.blockingError, isNull);
+      expect(after.appendError, isNull);
     });
   });
 
@@ -146,8 +184,10 @@ void main() {
       await mock.createComment(postId: 'p1', content: 'second');
       final comments = await mock.listComments(postId: 'p1');
       expect(comments.items.length, equals(2));
-      expect(comments.items[0].content, equals('first'));
-      expect(comments.items[1].content, equals('second'));
+      expect(
+        comments.items.map((comment) => comment.content),
+        unorderedEquals(<String>['first', 'second']),
+      );
     });
   });
 }

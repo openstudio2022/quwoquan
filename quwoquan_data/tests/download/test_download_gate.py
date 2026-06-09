@@ -1,0 +1,84 @@
+"""download gate 契约测试（对象优先）。"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(SCRIPTS_ROOT))
+
+os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp()
+
+from _common.paths import batch_entity_object_dir, batch_root, ensure_task_layout  # noqa: E402
+from _common.source_unit import write_source_unit  # noqa: E402
+from download.gate import gate_download  # noqa: E402
+
+TASK = "旅行/地域/四川省/景区/景区全覆盖"
+
+
+def test_gate_download_passes_object_first_sources():
+    batch = "download_gate_pass"
+    ensure_task_layout(TASK)
+    entity_dir = batch_entity_object_dir(TASK, batch, "地点", "景区", "峨眉山")
+    write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="overview_baike",
+        source_md="# 峨眉山\n\n概述",
+        platform="baike",
+        source_category="overview_baike",
+        url="https://example.com/1",
+        title="峨眉山（百科）",
+        target_ref="/entity/地点/景区/峨眉山",
+    )
+    write_source_unit(
+        entity_dir,
+        ordinal=2,
+        source_id="travel_notes",
+        source_md="# 峨眉山\n\n游记",
+        platform="travelogue",
+        source_category="travelogue",
+        url="https://example.com/2",
+        title="峨眉山（游记）",
+        target_ref="/entity/地点/景区/峨眉山",
+    )
+    issues = gate_download(TASK, batch)
+    assert issues == [], issues
+    assert (batch_root(TASK, batch) / "entities").is_dir()
+
+
+def test_gate_download_blocks_single_source_unit():
+    batch = "download_gate_block"
+    ensure_task_layout(TASK)
+    entity_dir = batch_entity_object_dir(TASK, batch, "地点", "景区", "乐山大佛")
+    write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="overview_baike",
+        source_md="# 乐山大佛\n\n概述",
+        platform="baike",
+        source_category="overview_baike",
+        url="https://example.com/3",
+        title="乐山大佛（百科）",
+        target_ref="/entity/地点/景区/乐山大佛",
+    )
+    issues = gate_download(TASK, batch)
+    assert any("only 1 sources" in issue for issue in issues), issues
+
+
+if __name__ == "__main__":
+    for fn in [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]:
+        fn()
+        print(f"PASS {fn.__name__}")
+    print("download gate tests passed")

@@ -224,7 +224,6 @@
 - `quwoquan_app/lib/ui/chat/widgets/message/regenerate_options_popup.dart`
 - `quwoquan_app/lib/ui/chat/widgets/message/voice_message_bubble.dart`
 - `quwoquan_app/lib/ui/chat/widgets/message/voice_waveform_painter.dart`
-- `quwoquan_app/lib/ui/chat/widgets/voice/voice_record_overlay.dart`
 - `quwoquan_app/lib/ui/chat/widgets/voice/voice_recorder.dart`
 - `quwoquan_app/lib/ui/circle/models/circle_tab.dart`
 - `quwoquan_app/lib/ui/circle/pages/circles_hub_page.dart`

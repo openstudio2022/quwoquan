@@ -7,30 +7,69 @@ node:
   parent_domain_service: chat-conversation
   parent_business_capability: realtime-call
 scope:
-  summary: group call 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 2~32 人多人通话：选人发起、加入/离开、通话中邀请、链接入会、信任两态。
+  in_scope:
+    - 多人选人规则（≤8 全选、>8 空选）
+    - Join/Leave/Invite 与 32 人上限
+    - 通话中加人与链接入会、信任两态提示
+  out_of_scope:
+    - 1v1 状态机（见 one-to-one-call）
 gwt_acceptance:
-  GWT1:
-    title: group call GWT
+  GWT1_join_leave_limit:
+    title: 多人加入、离开与 32 人上限
     given:
-    - 前置条件明确。
+    - 已存在一个进行中的多人通话。
     when:
-    - 用户或系统动作发生。
+    - 被邀请人加入、某成员离开、第 33 人尝试加入。
     then:
-    - 可观察结果符合预期。
+    - 参与者数实时更新；第 33 人加入返回 call_full；最后一人离开结束房间。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 多人房间加入/离开/上限路径闭环。
+    edge_cases:
+    - 重复加入幂等；离开后再被邀请可重新加入。
+    contract_refs:
+    - rtc/call_session service.yaml JoinCall
+    - rtc/call_session service.yaml LeaveCall
+    performance_points:
+    - 参与者加入可见延迟 ≤2s。
     evidence:
       primary:
-      - T1_contract
       - T2_module_interaction
-      supporting: []
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
     tests:
-      planned: []
+      planned:
+      - quwoquan_service/services/rtc-service/tests/multi_party_room_contract_test.go
+      recorded: []
+    status: pending
+  GWT2_invite_trust:
+    title: 通话中加人与信任两态提示
+    given:
+    - 当前在多人通话中，可邀请当前会话/互相关注/其他群成员或分享链接。
+    when:
+    - 邀请一名“可能不认识”的成员加入。
+    then:
+    - 被邀请人来电页显示来源与信任态；加入后在会成员收到“可能不认识 TA”轻量横幅。
+    done_when:
+    - 加人链路与信任两态提示可达。
+    edge_cases:
+    - 被拉黑/房间满/链接过期时拒绝入会并显示结构化错误。
+    contract_refs:
+    - rtc/call_session service.yaml InviteToCall
+    - rtc/call_session fields.yaml trustRelation
+    performance_points:
+    - 邀请结果反馈 ≤2s。
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned:
+      - quwoquan_app/test/ui/rtc/widgets/participant_trust_badge_test.dart
+      - quwoquan_service/services/rtc-service/tests/multi_party_room_contract_test.go
       recorded: []
     status: pending
 execution:

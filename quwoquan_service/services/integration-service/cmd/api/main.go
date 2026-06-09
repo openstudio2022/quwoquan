@@ -13,12 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/yaml.v3"
 	rtgov "quwoquan_service/runtime/governance"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	"quwoquan_service/runtime/reliabletask"
 	httpadapter "quwoquan_service/services/integration-service/internal/adapters/http"
 	"quwoquan_service/services/integration-service/internal/application"
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
@@ -112,6 +114,17 @@ func main() {
 		clients,
 		log.Default(),
 	)
+	reliableStore := reliabletask.NewMemoryStore()
+	_ = prometheus.Register(reliabletask.NewMetricsCollector(reliableStore))
+	externalService := application.NewExternalInteractionService(
+		reliableStore,
+		map[string]reliabletask.ExternalProvider{
+			"mock_sms":  application.MockSMSProvider{},
+			"mock_push": application.MockPushProvider{},
+		},
+		application.HTTPCallbackSender{Client: observedClient},
+	)
+	go runExternalInteractionLoop(ctx, externalService)
 	handler := httpadapter.NewHandler(
 		locationService,
 		cfg.Integration.Location.NearbyDefaultRadiusMeters,
@@ -119,6 +132,7 @@ func main() {
 		cfg.Integration.Location.SearchDefaultLimit,
 		cfg.Integration.Location.DefaultLatitude,
 		cfg.Integration.Location.DefaultLongitude,
+		externalService,
 	).Routes()
 
 	rootMux := http.NewServeMux()
@@ -161,6 +175,32 @@ func main() {
 	)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("integration-service: %v", err)
+	}
+}
+
+func runExternalInteractionLoop(ctx context.Context, service *application.ExternalInteractionService) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := service.DispatchDue(ctx, 20); err != nil {
+				log.Printf("external interaction dispatch failed: %v", err)
+				continue
+			}
+			for i := 0; i < 20; i++ {
+				processed, err := service.ProcessOne(ctx)
+				if err != nil {
+					log.Printf("external interaction worker failed: %v", err)
+					break
+				}
+				if !processed {
+					break
+				}
+			}
+		}
 	}
 }
 

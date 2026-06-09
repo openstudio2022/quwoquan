@@ -8,3 +8,12 @@ redis:
     mode: cluster
     addrs: []
     tls: true
+
+integration:
+  external_interaction_base_url: "https://integration-service.prod"
+  sms_otp:
+    pass_through_enabled: false
+    pass_through_debt_id: ""
+    pass_through_owner: ""
+    pass_through_expires_at: ""
+    debug_reveal_enabled: false

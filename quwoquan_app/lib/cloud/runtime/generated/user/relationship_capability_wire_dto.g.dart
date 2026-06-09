@@ -5,15 +5,15 @@ class RelationshipCapabilityWireDto {
   final String viewerSubAccountId;
   final String targetSubAccountId;
   final String? relationState;
-  final String? relationTier;
   final bool? canFollow;
   final bool? canUnfollow;
-  final bool? canMessage;
+  final bool canCreateDirectConversation;
+  final bool canSendMessage;
   final bool? canFollowBack;
   final bool canGreet;
   final bool? canOpenConversation;
-  final bool canAddSameInterest;
-  final bool canSetCloseFriend;
+  final bool hasPendingGreeting;
+  final bool hasFormalConversation;
   final bool canStartVoiceCall;
   final bool canStartVideoCall;
   final bool isBlocked;
@@ -23,15 +23,15 @@ class RelationshipCapabilityWireDto {
     this.viewerSubAccountId = '',
     this.targetSubAccountId = '',
     this.relationState,
-    this.relationTier,
     this.canFollow,
     this.canUnfollow,
-    this.canMessage,
+    this.canCreateDirectConversation = false,
+    this.canSendMessage = false,
     this.canFollowBack,
     this.canGreet = false,
     this.canOpenConversation,
-    this.canAddSameInterest = false,
-    this.canSetCloseFriend = false,
+    this.hasPendingGreeting = false,
+    this.hasFormalConversation = false,
     this.canStartVoiceCall = false,
     this.canStartVideoCall = false,
     this.isBlocked = false,
@@ -43,15 +43,15 @@ class RelationshipCapabilityWireDto {
       viewerSubAccountId: m['viewerSubAccountId']?.toString() ?? '',
       targetSubAccountId: m['targetSubAccountId']?.toString() ?? '',
       relationState: m['relationState']?.toString() ?? null,
-      relationTier: m['relationTier']?.toString() ?? null,
       canFollow: m['canFollow'] as bool? ?? null,
       canUnfollow: m['canUnfollow'] as bool? ?? null,
-      canMessage: m['canMessage'] as bool? ?? null,
+      canCreateDirectConversation: m['canCreateDirectConversation'] as bool? ?? false,
+      canSendMessage: m['canSendMessage'] as bool? ?? false,
       canFollowBack: m['canFollowBack'] as bool? ?? null,
       canGreet: m['canGreet'] as bool? ?? false,
       canOpenConversation: m['canOpenConversation'] as bool? ?? null,
-      canAddSameInterest: m['canAddSameInterest'] as bool? ?? false,
-      canSetCloseFriend: m['canSetCloseFriend'] as bool? ?? false,
+      hasPendingGreeting: m['hasPendingGreeting'] as bool? ?? false,
+      hasFormalConversation: m['hasFormalConversation'] as bool? ?? false,
       canStartVoiceCall: m['canStartVoiceCall'] as bool? ?? false,
       canStartVideoCall: m['canStartVideoCall'] as bool? ?? false,
       isBlocked: m['isBlocked'] as bool? ?? false,
@@ -64,15 +64,15 @@ class RelationshipCapabilityWireDto {
       'viewerSubAccountId': viewerSubAccountId,
       'targetSubAccountId': targetSubAccountId,
       'relationState': relationState,
-      'relationTier': relationTier,
       'canFollow': canFollow,
       'canUnfollow': canUnfollow,
-      'canMessage': canMessage,
+      'canCreateDirectConversation': canCreateDirectConversation,
+      'canSendMessage': canSendMessage,
       'canFollowBack': canFollowBack,
       'canGreet': canGreet,
       'canOpenConversation': canOpenConversation,
-      'canAddSameInterest': canAddSameInterest,
-      'canSetCloseFriend': canSetCloseFriend,
+      'hasPendingGreeting': hasPendingGreeting,
+      'hasFormalConversation': hasFormalConversation,
       'canStartVoiceCall': canStartVoiceCall,
       'canStartVideoCall': canStartVideoCall,
       'isBlocked': isBlocked,
@@ -84,15 +84,15 @@ class RelationshipCapabilityWireDto {
     String? viewerSubAccountId,
     String? targetSubAccountId,
     String? relationState,
-    String? relationTier,
     bool? canFollow,
     bool? canUnfollow,
-    bool? canMessage,
+    bool? canCreateDirectConversation,
+    bool? canSendMessage,
     bool? canFollowBack,
     bool? canGreet,
     bool? canOpenConversation,
-    bool? canAddSameInterest,
-    bool? canSetCloseFriend,
+    bool? hasPendingGreeting,
+    bool? hasFormalConversation,
     bool? canStartVoiceCall,
     bool? canStartVideoCall,
     bool? isBlocked,
@@ -102,15 +102,15 @@ class RelationshipCapabilityWireDto {
       viewerSubAccountId: viewerSubAccountId ?? this.viewerSubAccountId,
       targetSubAccountId: targetSubAccountId ?? this.targetSubAccountId,
       relationState: relationState ?? this.relationState,
-      relationTier: relationTier ?? this.relationTier,
       canFollow: canFollow ?? this.canFollow,
       canUnfollow: canUnfollow ?? this.canUnfollow,
-      canMessage: canMessage ?? this.canMessage,
+      canCreateDirectConversation: canCreateDirectConversation ?? this.canCreateDirectConversation,
+      canSendMessage: canSendMessage ?? this.canSendMessage,
       canFollowBack: canFollowBack ?? this.canFollowBack,
       canGreet: canGreet ?? this.canGreet,
       canOpenConversation: canOpenConversation ?? this.canOpenConversation,
-      canAddSameInterest: canAddSameInterest ?? this.canAddSameInterest,
-      canSetCloseFriend: canSetCloseFriend ?? this.canSetCloseFriend,
+      hasPendingGreeting: hasPendingGreeting ?? this.hasPendingGreeting,
+      hasFormalConversation: hasFormalConversation ?? this.hasFormalConversation,
       canStartVoiceCall: canStartVoiceCall ?? this.canStartVoiceCall,
       canStartVideoCall: canStartVideoCall ?? this.canStartVideoCall,
       isBlocked: isBlocked ?? this.isBlocked,

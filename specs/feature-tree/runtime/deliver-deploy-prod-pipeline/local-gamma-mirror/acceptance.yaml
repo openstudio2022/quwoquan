@@ -7,30 +7,89 @@ node:
   parent_domain_service: runtime
   parent_business_capability: deliver-deploy-prod-pipeline
 scope:
-  summary: local gamma mirror 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: gamma-local 作为开发与提交前左移主验证链；gamma-hosted 仅云侧手动/夜间/发布前复验。
+  in_scope:
+  - 本地 gamma 语义镜像栈（DB/Redis/核心服务/media/TLS 反代）启停与健康前置检查
+  - 本地 T1->T4 左移：真实 HTTP API、存储副作用、错误码、RemoteRepository 解码与模拟器/真机 Patrol 核心旅程
+  - 提交前报告 artifacts/local-gamma/report.json，指向 deploy/shared/gamma_validation_suites.json
+  - 与 prod 同构的工作负载图谱解释（同 Service 名、路由前缀、数据面 Service 名/DSN 变量）
+  out_of_scope:
+  - 替代云侧 gamma 的 K8s/Ingress/Secret/云观测/多云 overlay
+  - 替代云侧 prod 灰度流量、SLO 卡点、审批与回滚演练
+  - 新增 local-gamma 环境枚举、APP_ENV 枚举或第四份 seed manifest
+  - 在生产包引入 test fixture / seed reset / 本地 mirror URL
 gwt_acceptance:
   GWT1:
-    title: local gamma mirror GWT
+    title: gamma-local 提交前左移主验证链
     given:
-    - 前置条件明确。
+    - 开发机具备 Docker mirror 栈与至少一台模拟器/浏览器 runner。
+    - 服务以 APP_ENV=gamma 启动，端侧以 APP_RUNTIME_ENV=gamma、APP_DATA_SOURCE=remote 接入本地 mirror endpoint。
+    - 测试数据仅来自 app_gamma_seed_manifest.json 与 metadata fixtures。
     when:
-    - 用户或系统动作发生。
+    - 提交前运行 make gate-local-gamma。
     then:
-    - 可观察结果符合预期。
+    - 启动 gamma 语义镜像栈并完成 CONFIG_VERSION/依赖/health/DNS/TLS/media 前置检查。
+    - 依次执行 T1->T4 并生成 artifacts/local-gamma/report.json；缺 DNS/TLS/设备/服务依赖时状态为 GATE_BLOCK。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
+    - gamma-local 通过仅证明提交前左移质量，不替代也不成为 main required check。
+    - 不新增运行环境枚举或第二套 seed manifest。
+    - gamma-local 服务名册与 prod workload_topology_inventory 一致；recommendation 各环境统一以 recommendation-service:8000 调用。
+    - edge-media（realtime-gateway/rtc-service/livekit-sfu/coturn）统一在本 compose 以 profile 按需组装；realtime-gateway 实现未就绪以 edge-media-pending 显式占位收敛。
+    edge_cases:
+    - 缺设备/DNS/TLS 时必须 GATE_BLOCK 而非静默跳过。
+    - dry-run 模式仅产出 dry-run 报告，不得伪装为真实左移通过。
+    contract_refs:
+    - deploy/shared/gamma_validation_suites.json
+    - quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py
+    - quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json
+    - quwoquan_service/docker-compose.gamma-local.yaml
+    - deploy/shared/workload_topology_inventory.yaml
+    - quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py
+    performance_points:
+    - gamma-local 为提交前左移链，不计入 main 阻断关键路径预算。
     evidence:
       primary:
+      - T3_app_api_integration
+      - T4_end_to_end_journey
+      supporting:
       - T1_contract
       - T2_module_interaction
-      supporting: []
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh 启动与 prod 同构工作负载图谱。
+      - quwoquan_app/scripts/gamma/run_local_gamma_t3.py 用 app_gamma_seed_manifest.json 验证真实 API/存储副作用/错误码。
+      - quwoquan_app/scripts/gamma/run_local_gamma_t4.sh 在模拟器/真机完成 Patrol 核心旅程。
+      - quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py 汇总 T1->T4 写 artifacts/local-gamma/report.json。
+      - quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py 校验 gamma-local 服务名册/命名与 prod inventory 一致。
+      recorded: []
+    status: pending
+  GWT2:
+    title: gamma-hosted 仅作云侧复验定位
+    given:
+    - gamma-local 已作为提交前主验证链。
+    when:
+    - 需要云侧手动复验、nightly 或发布前高置信度回归时触发 gamma-hosted。
+    then:
+    - gamma-hosted 执行 hosted deploy、readiness、T3 API contract、assistant/chat-avatar probe。
+    - gamma-hosted 不承担提交前左移职责，也不与 gamma-local 重复维护第二套验证逻辑。
+    done_when:
+    - gamma-hosted 仅保留为云侧手动/夜间/发布前复验，定位与 gamma-local 不重叠。
+    edge_cases:
+    - gamma-hosted 不可见设备/平台时不得默认通过，但已发现平台必须全部成功。
+    contract_refs:
+    - deploy/shared/gamma_validation_suites.json
+    - deploy/shared/environment_topology_manifest.yaml
+    performance_points:
+    - gamma-hosted 复验置信度优先，不计入提交前左移时延预算。
+    evidence:
+      primary:
+      - T3_app_api_integration
+      supporting:
+      - T4_end_to_end_journey
+    tests:
+      planned:
+      - gamma-ecs-pre-hosted-core.yml 复用为云侧复验链路。
       recorded: []
     status: pending
 execution:

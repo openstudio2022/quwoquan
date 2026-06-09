@@ -2,6 +2,8 @@ package runtimemedia
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -14,7 +16,8 @@ import (
 // enabling swap between S3/OSS/MinIO/R2 without changing business logic.
 type PresignClient interface {
 	PresignPutObject(ctx context.Context, bucket, key, contentType string, ttl time.Duration) (string, error)
-	HeadObject(ctx context.Context, bucket, key string) (bool, error)
+	StatObject(ctx context.Context, bucket, key string) (*ObjectInfo, error)
+	PromoteObject(ctx context.Context, bucket, sourceKey, targetKey string, metadata map[string]string) error
 }
 
 // S3PresignClient implements PresignClient using AWS SDK v2 (S3-compatible).
@@ -53,15 +56,49 @@ func (c *S3PresignClient) PresignPutObject(ctx context.Context, bucket, key, con
 	return result.URL, nil
 }
 
-func (c *S3PresignClient) HeadObject(ctx context.Context, bucket, key string) (bool, error) {
-	_, err := c.client.HeadObject(ctx, &s3.HeadObjectInput{
+func (c *S3PresignClient) StatObject(ctx context.Context, bucket, key string) (*ObjectInfo, error) {
+	resp, err := c.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		return false, nil
+		return &ObjectInfo{Exists: false}, nil
 	}
-	return true, nil
+	sha256Hex := ""
+	if resp.ChecksumSHA256 != nil && *resp.ChecksumSHA256 != "" {
+		if decoded, decodeErr := base64.StdEncoding.DecodeString(*resp.ChecksumSHA256); decodeErr == nil {
+			sha256Hex = "sha256:" + hex.EncodeToString(decoded)
+		}
+	}
+	if sha256Hex == "" && resp.Metadata != nil {
+		if v, ok := resp.Metadata["sha256"]; ok && v != "" {
+			sha256Hex = v
+		}
+	}
+	return &ObjectInfo{
+		Exists:      true,
+		Sha256:      sha256Hex,
+		ContentType: aws.ToString(resp.ContentType),
+		Size:        aws.ToInt64(resp.ContentLength),
+		Metadata:    resp.Metadata,
+	}, nil
+}
+
+func (c *S3PresignClient) PromoteObject(ctx context.Context, bucket, sourceKey, targetKey string, metadata map[string]string) error {
+	input := &s3.CopyObjectInput{
+		Bucket:            aws.String(bucket),
+		Key:               aws.String(targetKey),
+		CopySource:        aws.String(bucket + "/" + sourceKey),
+		MetadataDirective: "REPLACE",
+	}
+	if len(metadata) > 0 {
+		input.Metadata = metadata
+	}
+	_, err := c.client.CopyObject(ctx, input)
+	if err != nil {
+		return fmt.Errorf("s3 copy object: %w", err)
+	}
+	return nil
 }
 
 // StubPresignClient is the URL-concatenation fallback for dev without S3.
@@ -74,6 +111,13 @@ func (StubPresignClient) PresignPutObject(_ context.Context, bucket, key, conten
 	return url, nil
 }
 
-func (StubPresignClient) HeadObject(_ context.Context, _, _ string) (bool, error) {
-	return true, nil
+func (StubPresignClient) StatObject(_ context.Context, _, key string) (*ObjectInfo, error) {
+	return &ObjectInfo{
+		Exists: true,
+		Sha256: "sha256:" + fmt.Sprintf("%064x", len(key)),
+	}, nil
+}
+
+func (StubPresignClient) PromoteObject(_ context.Context, _, _, _ string, _ map[string]string) error {
+	return nil
 }

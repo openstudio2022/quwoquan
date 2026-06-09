@@ -29,15 +29,46 @@
     "citedSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文创作时引用的 source 证据路径" },
     "reviewDecision": { "type": "string", "enum": ["approved", "revision_needed", "rejected"] },
     "articleMarkdownVersion": { "type": "string" },
-    "articleMarkdownDigest": { "type": "string" },
-    "articleAssetManifest": { "type": "object" },
     "articleRenderProfile": { "type": "object" },
     "publishLayout": { "type": "string" },
     "publishAngle": { "type": "string" },
     "publishTitle": { "type": "string" },
     "publishSeq": { "type": "integer" },
     "sourceTaskId": { "type": ["string", "null"], "description": "溯源：生成此内容的任务 id（task trace/hydrate）" },
-    "sourceBatchId": { "type": ["string", "null"], "description": "溯源：生成此内容的批次 id" }
+    "sourceBatchId": { "type": ["string", "null"], "description": "溯源：生成此内容的批次 id" },
+    "writingIntent": {
+      "type": "string",
+      "enum": ["planning_consultation", "decision_experience", "post_trip_journal"],
+      "description": "写作主线：计划前咨询/攻略 | 决策体验 | 游后过程记录。单篇唯一，门禁校验正文结构与之匹配"
+    },
+    "baseSourceRef": { "type": ["string", "null"], "description": "主底稿来源 ref（风格与事实锚点）；其它来源只能补事实" },
+    "imageBindings": {
+      "type": "array",
+      "description": "图文绑定：每条把一张 asset 绑定到正文锚点/节点，确保图片服务段落而非仅做封面",
+      "items": {
+        "type": "object",
+        "properties": {
+          "assetId": { "type": "string" },
+          "figureId": { "type": "string" },
+          "sectionAnchor": { "type": "string", "description": "绑定到的章节标题或路线节点实体名" },
+          "layout": { "type": "string", "enum": ["fullWidth", "wrapLeft", "wrapRight", "gallery"] }
+        },
+        "required": ["assetId"]
+      }
+    },
+    "videoBindings": {
+      "type": "array",
+      "description": "视频绑定：把视频资产绑定到正文锚点/路线节点，声明适合载体",
+      "items": {
+        "type": "object",
+        "properties": {
+          "assetId": { "type": "string" },
+          "sectionAnchor": { "type": "string" },
+          "role": { "type": "string", "enum": ["cover", "embedded", "node", "shortVideo"] }
+        },
+        "required": ["assetId"]
+      }
+    }
   },
   "required": ["topicId", "contentType", "entityRefs", "tagRefs", "sourceUrls", "generator"]
 }

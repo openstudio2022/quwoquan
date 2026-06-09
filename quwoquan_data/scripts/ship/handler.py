@@ -17,13 +17,26 @@ sample bundle 是端云桥契约：服务侧 content/entity importer 消费它�
 """
 from __future__ import annotations
 
+
+import sys
+from pathlib import Path
+
+DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 from _common.io import read_json, write_json
+from _common.media_asset_url import materialize_release_media
 from _common.paths import NOW_ISO, PUBLISH_ROOT, publish_meta_path
 from ship.sampler import (
     build_sample_bundle,
@@ -31,10 +44,19 @@ from ship.sampler import (
     load_sampling_manifest,
     write_sample_bundle,
 )
+from ship.consistency import report_to_text, scan_release_contract, write_consistency_report
+from ship.release_contract import (
+    DEFAULT_DELETE_POLICY,
+    DEFAULT_MODE,
+    DEFAULT_SOURCE_OWNER,
+    build_release_contract,
+    normalize_release_id,
+    write_release_contract,
+)
 
 
 def _promote(args: argparse.Namespace) -> int:
-    from promote_to_publish import (
+    from publish_ops.promote_to_publish import (
         promote_release,
         promote_task_batch,
         promote_task_entities,
@@ -51,7 +73,7 @@ def _promote(args: argparse.Namespace) -> int:
 
 
 def _rebuild_index() -> None:
-    from build_publish_lookup_indexes import build_publish_lookup_indexes
+    from publish_ops.build_publish_lookup_indexes import build_publish_lookup_indexes
 
     counts = build_publish_lookup_indexes()
     print(f"[ship] indexes: entities={counts['entities']} posts={counts['posts']}")
@@ -68,18 +90,35 @@ def _resolve_envs(args_env: str | None, manifest: dict) -> list[str]:
     return envs
 
 
-def _run_importer(mongo_uri: str, bundles: list[Path]) -> None:
+def _run_importer(
+    mongo_uri: str,
+    bundles: list[Path],
+    *,
+    release_id: str,
+    mode: str,
+    delete_policy: str,
+    source_owner: str,
+    dry_run: bool,
+) -> None:
     """调用服务侧 content/entity importer 把 sample bundle 灌进运行库。"""
     service_root = PUBLISH_ROOT.parent.parent / "quwoquan_service"
     for bundle in bundles:
         env = bundle.stem
+        report_path = PUBLISH_ROOT / "env_releases" / release_id / f"import-{env}.json"
         cmd = [
             "go", "run", "./services/content-service/cmd/import",
             "--publish-root", str(PUBLISH_ROOT),
             "--sample-bundle", str(bundle),
             "--mongo-uri", mongo_uri,
             "--env", env,
+            "--release-id", release_id,
+            "--mode", mode,
+            "--delete-policy", delete_policy,
+            "--source-owner", source_owner,
+            "--report", str(report_path),
         ]
+        if dry_run:
+            cmd.append("--dry-run")
         print(f"[ship] importing {env}: {' '.join(cmd)}")
         subprocess.run(cmd, cwd=str(service_root), check=True)
 
@@ -102,18 +141,61 @@ def handle_ship(args: argparse.Namespace) -> None:
     manifest = load_sampling_manifest()
     envs = _resolve_envs(args.env, manifest)
     posts, entities = load_publish_records()
+    mode = getattr(args, "mode", DEFAULT_MODE)
+    delete_policy = getattr(args, "delete_policy", DEFAULT_DELETE_POLICY)
+    source_owner = getattr(args, "source_owner", DEFAULT_SOURCE_OWNER)
+    approved_by = getattr(args, "approved_by", None)
+    release_id = normalize_release_id(getattr(args, "data_release_id", None), env="-".join(envs))
 
     bundles: list[Path] = []
     summary: list[dict] = []
     for env in envs:
         bundle = build_sample_bundle(env, manifest, posts, entities)
         path = write_sample_bundle(bundle)
+        media_manifest = materialize_release_media(
+            env=env,
+            release_id=release_id,
+            post_refs=list(bundle.get("posts") or []),
+            entity_refs=list(bundle.get("entities") or []),
+            publish_root=PUBLISH_ROOT,
+            source_owner=source_owner,
+            image_cdn_base_url=os.environ.get("QWQ_MEDIA_IMAGE_CDN_BASE_URL", ""),
+            video_cdn_base_url=os.environ.get("QWQ_MEDIA_VIDEO_CDN_BASE_URL", ""),
+        )
+        contract = build_release_contract(
+            env=env,
+            bundle=bundle,
+            posts=posts,
+            entities=entities,
+            release_id=release_id,
+            mode=mode,
+            delete_policy=delete_policy,
+            source_owner=source_owner,
+            approved_by=approved_by,
+            media_manifest=media_manifest,
+        )
+        release_path = write_release_contract(contract, publish_root=PUBLISH_ROOT)
+        report = scan_release_contract(contract, publish_root=PUBLISH_ROOT, phase="preflight")
+        report_path = release_path.parent / f"consistency-preflight-{env}.json"
+        write_consistency_report(report, report_path)
+        print(report_to_text(report))
+        if report["status"] != "passed":
+            raise SystemExit(f"[ship] consistency preflight failed for {env}: {report_path}")
         bundles.append(path)
-        summary.append({"env": env, "posts": bundle["counts"]["posts"], "entities": bundle["counts"]["entities"]})
+        summary.append({
+            "env": env,
+            "releaseId": release_id,
+            "posts": bundle["counts"]["posts"],
+            "entities": bundle["counts"]["entities"],
+            "releaseContract": str(release_path),
+            "consistencyReport": str(report_path),
+        })
         print(f"[ship] sampled {env}: posts={bundle['counts']['posts']} entities={bundle['counts']['entities']} -> {path}")
+        print(f"[ship] release contract {env}: {release_path}")
 
     meta = read_json(publish_meta_path()) if publish_meta_path().exists() else {"schemaVersion": "quwoquan.publish.meta"}
     meta["lastShip"] = NOW_ISO
+    meta["lastDataReleaseId"] = release_id
     meta["shipSummary"] = summary
     write_json(publish_meta_path(), meta)
 
@@ -121,11 +203,23 @@ def handle_ship(args: argparse.Namespace) -> None:
         if not args.mongo_uri:
             print("[ship] ERROR: --import 需要 --mongo-uri", file=sys.stderr)
             raise SystemExit(2)
-        _run_importer(args.mongo_uri, bundles)
+        if "prod" in envs and not bool(getattr(args, "dry_run", False)) and not bool(getattr(args, "confirm_prod_apply", False)):
+            print("[ship] ERROR: prod apply 需要 --confirm-prod-apply；请先执行 --dry-run 并归档一致性报告", file=sys.stderr)
+            raise SystemExit(2)
+        _run_importer(
+            args.mongo_uri,
+            bundles,
+            release_id=release_id,
+            mode=mode,
+            delete_policy=delete_policy,
+            source_owner=source_owner,
+            dry_run=bool(getattr(args, "dry_run", False)),
+        )
     else:
         print("[ship] 灌库（按需）：")
         print("       go run ./services/content-service/cmd/import \\")
-        print(f"         --publish-root {PUBLISH_ROOT} --sample-bundle <bundle> --mongo-uri <uri> --env <env>")
+        print(f"         --publish-root {PUBLISH_ROOT} --sample-bundle <bundle> --mongo-uri <uri> --env <env> \\")
+        print(f"         --release-id {release_id} --mode {mode} --delete-policy {delete_policy}")
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -140,4 +234,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--skip-index", action="store_true", help="跳过 lookup 索引重建")
     p.add_argument("--import", dest="import_to_db", action="store_true", help="采样后直接调用服务侧 importer 灌库")
     p.add_argument("--mongo-uri", help="importer 目标 mongo uri（与 --import 同用）")
+    p.add_argument("--data-release-id", help="环境数据发布 releaseId（默认按环境与时间生成）")
+    p.add_argument("--mode", choices=["upsert", "sync", "reset-source"], default=DEFAULT_MODE, help="环境 apply 模式")
+    p.add_argument("--delete-policy", choices=["none", "tombstone", "hard-delete"], default=DEFAULT_DELETE_POLICY, help="缺失对象处理策略")
+    p.add_argument("--source-owner", default=DEFAULT_SOURCE_OWNER, help="本次发布管理的数据所有者")
+    p.add_argument("--approved-by", help="生产硬删除审批人/审批 id")
+    p.add_argument("--dry-run", action="store_true", help="生成 release artifact 并让 importer 只报告不写入")
+    p.add_argument("--confirm-prod-apply", action="store_true", help="确认对 prod 执行真实写入（dry-run 不需要）")
     p.set_defaults(handler=handle_ship)

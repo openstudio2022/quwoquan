@@ -112,6 +112,62 @@ func TestTickSkillSubscriptionCronCreatesProactiveTurnAndAppMessage(t *testing.T
 	}
 }
 
+func TestTickSkillSubscriptionCronDeliversToConversationDestination(t *testing.T) {
+	chat := &fakeChatGroundingClient{}
+	service := NewAssistantService(
+		persistence.NewMemoryEventStore(),
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
+		WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		WithChatGroundingClient(chat),
+	)
+	service.now = func() time.Time { return time.Date(2026, 4, 29, 8, 0, 0, 0, time.UTC) }
+
+	created, err := service.CreateSkillSubscription(context.Background(), "user_1", assistant.CreateSkillSubscriptionInput{
+		SkillID:  "news_briefing",
+		DomainID: "content",
+		SearchQueryPlan: assistant.SkillSubscriptionSearchQueryPlan{
+			RawText: "每天早上 8 点给群里发科技新闻摘要",
+			Queries: []string{"科技新闻"},
+		},
+		Trigger: assistant.SkillSubscriptionTrigger{Type: "cron", Cron: "0 8 * * *"},
+		Destination: assistant.SkillSubscriptionDestination{
+			DestinationType: "conversation",
+			DestinationID:   "conv_group_1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateSkillSubscription error: %v", err)
+	}
+	if created.Destination.DestinationType != "conversation" || created.Destination.DestinationID != "conv_group_1" {
+		t.Fatalf("destination=%+v", created.Destination)
+	}
+
+	result, err := service.TickSkillSubscriptionCron(context.Background(), assistant.SkillSubscriptionCronTickInput{
+		Now: "2026-04-29T08:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("TickSkillSubscriptionCron error: %v", err)
+	}
+	if result.ProcessedCount != 1 || len(result.CreatedTurnIDs) != 1 || len(result.CreatedMessageIDs) != 1 {
+		t.Fatalf("tick result=%+v", result)
+	}
+	if len(chat.sent) != 1 {
+		t.Fatalf("chat sent=%d, want 1", len(chat.sent))
+	}
+	if chat.sent[0].ConversationID != "conv_group_1" || !strings.HasPrefix(chat.sent[0].ClientMsgID, "assistant-proactive-") {
+		t.Fatalf("chat message=%+v", chat.sent[0])
+	}
+	messages, err := service.ListAppMessages(context.Background(), "user_1", 20, "")
+	if err != nil {
+		t.Fatalf("ListAppMessages error: %v", err)
+	}
+	if len(messages.Items) != 0 {
+		t.Fatalf("user app messages=%d, want 0 for conversation destination", len(messages.Items))
+	}
+}
+
 func TestTickSkillSubscriptionCronCreatesM9P0SkillMessages(t *testing.T) {
 	service := NewAssistantService(
 		persistence.NewMemoryEventStore(),

@@ -11,6 +11,7 @@ import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.d
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -21,6 +22,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
@@ -28,13 +30,14 @@ import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_page_visit_recorder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 
-/// 趣信页
-///
-/// 1:1 复制自 趣我圈2026/src MessagePage.tsx + MessagesList.tsx
-/// 一级 Tab 消息/联系人；二级 Tab subTabsMap（消息→全部/@我/未读/密信，联系人→全部/圈子/同好/趣群）；
-/// 滚动时二级 Tab 显隐；私人助理会话置顶，onAssistantClick→助理主页。
+final chatGreetingInboxProvider = FutureProvider.autoDispose
+    .family<List<GreetingRequestDto>, int>((ref, limit) async {
+      return ref.read(greetingRepositoryProvider).listInbox(limit: limit);
+    });
+
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
 
@@ -44,69 +47,49 @@ class ChatPage extends ConsumerStatefulWidget {
 
 class _ChatPageState extends ConsumerState<ChatPage>
     with AutomaticKeepAliveClientMixin {
-  int _mainTabIndex = 0; // 0=趣聊 1=同好
+  int _mainTabIndex = 0;
   int _subTabIndex = 0;
   bool _hideSecondaryTab = false;
   final ScrollController _scrollController = ScrollController();
   double _lastScrollY = 0;
-
   @override
   bool get wantKeepAlive => true;
-
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => mounted ? recordChatPageVisit(ref, _mainTabIndex, _subTabIndex) : null,
+    );
+  }
   @override
   void dispose() {
     _scrollController.dispose();
-    _secretPasswordController.dispose();
     super.dispose();
   }
-
-  void _secretUnlock() {
-    final pwd = _secretPasswordController.text.trim();
-    if (pwd == '123456' || pwd == 'password') {
-      setState(() {
-        _secretUnlocked = true;
-        _secretAuthError = '';
-        _secretPasswordController.clear();
-      });
-    } else {
-      setState(() => _secretAuthError = UITextConstants.secretPasswordError);
-    }
-  }
-
-  /// 与 MessagePage subTabsMap 一致
   static const List<String> _messageSubTabs = [
     UITextConstants.contactsTabAll,
     UITextConstants.atMe,
     UITextConstants.atXiaoqu,
     UITextConstants.unread,
     UITextConstants.reminders,
-    UITextConstants.secretMessage,
   ];
   static const List<String> _contactsSubTabs = [
     UITextConstants.contactsTabAll,
     UITextConstants.contactsTabCircles,
-    UITextConstants.contactsTabSameInterest,
+    UITextConstants.contactsTabMutualFollow,
     UITextConstants.contactsTabFunGroup,
   ];
-
-  /// 密信解锁状态（仅密信 Tab 使用）
-  bool _secretUnlocked = false;
-  final TextEditingController _secretPasswordController =
-      TextEditingController();
-  String _secretAuthError = '';
-  bool _secretShowPassword = false;
-
   void _onScroll() {
     final y = _scrollController.hasClients ? _scrollController.offset : 0.0;
     if (y > 50) {
       final diff = y - _lastScrollY;
-      if (diff > 5) {
-        if (!_hideSecondaryTab) setState(() => _hideSecondaryTab = true);
-      } else if (diff < -5) {
-        if (_hideSecondaryTab) setState(() => _hideSecondaryTab = false);
+      if (diff > 5 && !_hideSecondaryTab) {
+        setState(() => _hideSecondaryTab = true);
+      } else if (diff < -5 && _hideSecondaryTab) {
+        setState(() => _hideSecondaryTab = false);
       }
-    } else {
-      if (_hideSecondaryTab) setState(() => _hideSecondaryTab = false);
+    } else if (_hideSecondaryTab) {
+      setState(() => _hideSecondaryTab = false);
     }
     _lastScrollY = y;
   }
@@ -132,6 +115,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
       _subTabIndex = 0;
       _hideSecondaryTab = false;
     });
+    recordChatPageVisit(ref, _mainTabIndex, _subTabIndex);
   }
 
   bool _trySwitchSecondaryTab(TabSwipeDirection direction) {
@@ -146,6 +130,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     setState(() {
       _subTabIndex = nextSubIndex;
     });
+    recordChatPageVisit(ref, _mainTabIndex, _subTabIndex);
     return true;
   }
 
@@ -239,17 +224,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
         listDividerColor,
       );
     }
-    final subTab = _messageSubTabs[_subTabIndex];
-    if (subTab == UITextConstants.secretMessage) {
-      return _buildSecretMessageContent(
-        context,
-        fgPrimary,
-        fgSecondary,
-        borderColor,
-        listItemBackground,
-        listDividerColor,
-      );
-    }
     return _buildInboxMessagesContent(
       context,
       fgPrimary,
@@ -288,6 +262,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                   _mainTabIndex = id == 'messages' ? 0 : 1;
                   _subTabIndex = 0;
                 });
+                recordChatPageVisit(ref, _mainTabIndex, _subTabIndex);
               },
               onHorizontalDragEnd: _handleTabSwipeDragEnd,
               leadingActions: const [],
@@ -320,15 +295,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
     if (_mainTabIndex == 0) {
       int atMeCount = 0;
       int unreadCount = 0;
-      bool hasSecretUnread = false;
 
       final inboxItems = ref.watch(chatInboxListProvider).items;
       for (final item in inboxItems) {
         final isSecret = item.type == 'encrypted';
         if (isSecret) {
-          if (item.hasUnread || item.hasMention) {
-            hasSecretUnread = true;
-          }
           continue;
         }
         atMeCount += item.mentionUnreadCount;
@@ -348,12 +319,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
         numberBadges[unreadIndex] = unreadCount;
       }
 
-      final secretIndex = _messageSubTabs.indexOf(
-        UITextConstants.secretMessage,
-      );
-      if (secretIndex != -1 && hasSecretUnread) {
-        dotBadges[secretIndex] = true;
-      }
     }
 
     return SecondaryCapsuleTabBar(
@@ -361,224 +326,14 @@ class _ChatPageState extends ConsumerState<ChatPage>
       isDark: ref.read(isDarkProvider),
       tabs: subTabs,
       activeIndex: _subTabIndex,
-      onTap: (index) => setState(() => _subTabIndex = index),
+      onTap: (index) {
+        setState(() => _subTabIndex = index);
+        recordChatPageVisit(ref, _mainTabIndex, _subTabIndex);
+      },
       onHorizontalDragEnd: _handleTabSwipeDragEnd,
       horizontalPadding: AppSpacing.feedContentHorizontal(context),
       numberBadges: numberBadges,
       dotBadges: dotBadges,
-    );
-  }
-
-  Widget _buildSecretMessageContent(
-    BuildContext context,
-    Color fgPrimary,
-    Color fgSecondary,
-    Color borderColor,
-    Color listItemBackground,
-    Color listDividerColor,
-  ) {
-    if (!_secretUnlocked) {
-      return _buildSecretLockScreen(context, fgPrimary, fgSecondary);
-    }
-    final encrypted = ref
-        .read(appContentRepositoryProvider)
-        .chatEncryptedConversations;
-
-    if (encrypted.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              CupertinoIcons.lock,
-              size: AppSpacing.iconButtonMinSizeMd,
-              color: fgSecondary,
-            ),
-            SizedBox(height: AppSpacing.md),
-            Text(
-              UITextConstants.noSecretConversations,
-              style: TextStyle(
-                fontSize: AppTypography.iosTitle3,
-                color: fgSecondary,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      controller: _scrollController,
-      itemCount: encrypted.length,
-      itemBuilder: (context, i) {
-        final c = encrypted[i];
-        return _ConversationTile(
-          conversation: c,
-          isSpecial: false,
-          onTap: () => context.push(AppRoutePaths.chatDetail(id: c.id)),
-          fgPrimary: fgPrimary,
-          fgSecondary: fgSecondary,
-          backgroundColor: listItemBackground,
-          dividerColor: listDividerColor,
-          showEncryptedBadge: false, // Do not show lock icon
-        );
-      },
-    );
-  }
-
-  Widget _buildSecretLockScreen(
-    BuildContext context,
-    Color fgPrimary,
-    Color fgSecondary,
-  ) {
-    final isDark = ref.read(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
-    final fieldBg = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.surfaceMuted,
-    );
-    final panelBorder = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.separatorSubtle,
-    );
-    return Container(
-      width: double.infinity,
-      color: bg,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(height: AppSpacing.forty * 1.5),
-            Icon(
-              CupertinoIcons.lock_fill,
-              size: AppSpacing.avatarUserLg,
-              color: fgSecondary.withValues(alpha: 0.5),
-            ),
-            SizedBox(height: AppSpacing.lg),
-            Text(
-              UITextConstants.secretLockedTitle,
-              style: TextStyle(
-                fontSize: AppTypography.iosTitle3,
-                fontWeight: AppTypography.semiBold,
-                color: fgPrimary,
-              ),
-            ),
-            SizedBox(height: AppSpacing.xs),
-            Text(
-              UITextConstants.secretPasswordPrompt,
-              style: TextStyle(
-                fontSize: AppTypography.iosFootnote,
-                color: fgSecondary,
-              ),
-            ),
-            SizedBox(height: AppSpacing.xl * 1.5),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.surfaceElevated,
-                  ),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-                  border: Border.all(color: panelBorder),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.lg),
-                  child: Column(
-                    children: [
-                      CupertinoTextField(
-                        controller: _secretPasswordController,
-                        obscureText: !_secretShowPassword,
-                        onChanged: (_) => setState(() => _secretAuthError = ''),
-                        onSubmitted: (_) => _secretUnlock(),
-                        placeholder: UITextConstants.secretPasswordHint,
-                        placeholderStyle: TextStyle(
-                          color: fgSecondary.withValues(alpha: 0.6),
-                          fontSize: AppTypography.iosSubheadline,
-                        ),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                          vertical: AppSpacing.md,
-                        ),
-                        decoration: BoxDecoration(
-                          color: fieldBg,
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.fullBorderRadius,
-                          ),
-                        ),
-                        suffix: CupertinoButton(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                          ),
-                          minimumSize: const Size(
-                            AppSpacing.minInteractiveSize,
-                            AppSpacing.minInteractiveSize,
-                          ),
-                          onPressed: () => setState(
-                            () => _secretShowPassword = !_secretShowPassword,
-                          ),
-                          child: Icon(
-                            _secretShowPassword
-                                ? CupertinoIcons.eye_slash_fill
-                                : CupertinoIcons.eye_fill,
-                            color: fgSecondary.withValues(alpha: 0.6),
-                            size: AppSpacing.iconMedium,
-                          ),
-                        ),
-                        style: TextStyle(
-                          color: fgPrimary,
-                          fontSize: AppTypography.iosBody,
-                        ),
-                      ),
-                      if (_secretAuthError.isNotEmpty) ...[
-                        SizedBox(height: AppSpacing.md),
-                        Text(
-                          _secretAuthError,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosFootnote,
-                            color: AppColors.error,
-                          ),
-                        ),
-                      ],
-                      SizedBox(height: AppSpacing.xl),
-                      SizedBox(
-                        width: double.infinity,
-                        height: AppSpacing.buttonHeight,
-                        child: CupertinoButton(
-                          onPressed: () {
-                            if (_secretPasswordController.text.trim().isEmpty) {
-                              return;
-                            }
-                            _secretUnlock();
-                          },
-                          padding: EdgeInsets.zero,
-                          color: AppColors.primaryColor,
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.fullBorderRadius,
-                          ),
-                          child: Text(
-                            UITextConstants.secretUnlockButton,
-                            style: TextStyle(
-                              color: AppColorsFunctional.getColor(
-                                isDark,
-                                ColorType.badgeForeground,
-                              ),
-                              fontWeight: AppTypography.semiBold,
-                              fontSize: AppTypography.iosSubheadline,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -590,13 +345,23 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color listDividerColor,
   ) {
     final inboxState = ref.watch(chatInboxListProvider);
+    final greetingInbox = ref.watch(chatGreetingInboxProvider(20));
+    final pendingGreetings = greetingInbox.maybeWhen(
+      data: (items) => items
+          .where((greeting) => greeting.isPending)
+          .toList(growable: false),
+      orElse: () => const <GreetingRequestDto>[],
+    );
+    final shouldShowGreetingInbox = _subTabIndex == 0 && pendingGreetings.isNotEmpty;
     final items = _filterInboxListForSubTab(
       inboxState.items
           .map(ChatListItemViewModel.fromDto)
           .toList(growable: false),
     );
 
-    if (inboxState.isLoading && inboxState.items.isEmpty) {
+    if (inboxState.isLoading &&
+        inboxState.items.isEmpty &&
+        greetingInbox.isLoading) {
       return Center(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.lg),
@@ -605,7 +370,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
       );
     }
 
-    if (items.isEmpty) {
+    if (items.isEmpty && !shouldShowGreetingInbox) {
       return _buildConversationEmptyState(
         fgSecondary: fgSecondary,
         subTab: _messageSubTabs[_subTabIndex],
@@ -619,9 +384,21 @@ class _ChatPageState extends ConsumerState<ChatPage>
             MediaQuery.viewPaddingOf(context).bottom +
             AppSpacing.bottomNavBarHeight(context),
       ),
-      itemCount: items.length,
+      itemCount: items.length + (shouldShowGreetingInbox ? 1 : 0),
       itemBuilder: (context, index) {
-        final item = items[index];
+        if (shouldShowGreetingInbox && index == 0) {
+          return _GreetingInboxTile(
+            pendingCount: pendingGreetings.length,
+            latest: pendingGreetings.first,
+            fgPrimary: fgPrimary,
+            fgSecondary: fgSecondary,
+            backgroundColor: listItemBackground,
+            dividerColor: listDividerColor,
+            onTap: () => _showGreetingInboxSheet(context, pendingGreetings),
+          );
+        }
+        final itemIndex = shouldShowGreetingInbox ? index - 1 : index;
+        final item = items[itemIndex];
         return _InboxConversationTile(
           item: item,
           fgPrimary: fgPrimary,
@@ -631,6 +408,39 @@ class _ChatPageState extends ConsumerState<ChatPage>
           onTap: () => context.push(AppRoutePaths.chatDetail(id: item.id)),
         );
       },
+    );
+  }
+
+  void _showGreetingInboxSheet(
+    BuildContext context,
+    List<GreetingRequestDto> greetings,
+  ) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetContext) => _GreetingInboxSheet(
+        greetings: greetings,
+        onReply: (request) async {
+          final result = await ref
+              .read(greetingRepositoryProvider)
+              .replyGreeting(request.id);
+          ref.invalidate(chatGreetingInboxProvider);
+          if (!context.mounted) {
+            return;
+          }
+          Navigator.of(sheetContext).pop();
+          final conversationId = result.conversationId.trim();
+          if (conversationId.isNotEmpty) {
+            context.push(AppRoutePaths.chatDetail(id: conversationId));
+          }
+        },
+        onIgnore: (request) async {
+          await ref.read(greetingRepositoryProvider).ignoreGreeting(request.id);
+          ref.invalidate(chatGreetingInboxProvider);
+          if (sheetContext.mounted) {
+            Navigator.of(sheetContext).pop();
+          }
+        },
+      ),
     );
   }
 
@@ -770,7 +580,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
           );
         }
         if (sub == UITextConstants.contactsTabAll ||
-            sub == UITextConstants.contactsTabSameInterest) {
+            sub == UITextConstants.contactsTabMutualFollow) {
           return _ContactsListWithIndex(
             items: list,
             fgPrimary: fgPrimary,
@@ -879,52 +689,23 @@ class _ChatPageState extends ConsumerState<ChatPage>
         );
       },
       loading: () => const Center(child: CupertinoActivityIndicator()),
-      error: (error, _) => Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                CupertinoIcons.exclamationmark_circle,
-                size: AppSpacing.iconButtonMinSizeMd,
-                color: fgSecondary,
-              ),
-              SizedBox(height: AppSpacing.md),
-              Text(
-                runtimeErrorDisplayMessage(error),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: AppTypography.iosTitle3,
-                  color: fgSecondary,
-                ),
-              ),
-              SizedBox(height: AppSpacing.sm),
-              CupertinoButton(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.xs,
-                ),
-                onPressed: () {
-                  ref.invalidate(chatContactsRowsForSubTabProvider(sub));
-                },
-                child: Text(
-                  UITextConstants.retry,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosBody,
-                    color: fgPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
+      error: (error, _) => AppPageErrorState(
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
         ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            ref.invalidate(chatContactsRowsForSubTabProvider(sub));
+          }
+        },
       ),
     );
   }
 }
-
-/// 同好列表带右侧字母索引（1:1 ContactsList.tsx ContactsContent）
 class _ContactsListWithIndex extends StatefulWidget {
   const _ContactsListWithIndex({
     required this.items,
@@ -1746,6 +1527,239 @@ class _InboxConversationTile extends StatelessWidget {
                 height: AppSpacing.one,
                 thickness: AppSpacing.hairline,
                 color: dividerColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GreetingInboxTile extends StatelessWidget {
+  const _GreetingInboxTile({
+    required this.pendingCount,
+    required this.latest,
+    required this.fgPrimary,
+    required this.fgSecondary,
+    required this.backgroundColor,
+    required this.dividerColor,
+    required this.onTap,
+  });
+
+  final int pendingCount;
+  final GreetingRequestDto latest;
+  final Color fgPrimary;
+  final Color fgSecondary;
+  final Color backgroundColor;
+  final Color dividerColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = latest.requestMessage?.trim();
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Container(
+        color: backgroundColor,
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(
+                vertical: AppSpacing.sm + AppSpacing.xs,
+              ),
+              child: Row(
+                children: [
+                  RoundedSquareAvatar(
+                    size: ChatConversationAvatarTokens.listSize,
+                    imageUrl: '',
+                    name: UITextConstants.chatGreetingInboxTitle,
+                    backgroundColor: AppColors.primaryColor.withValues(
+                      alpha: 0.12,
+                    ),
+                  ),
+                  SizedBox(width: ChatConversationAvatarTokens.leadingGap),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          pendingCount > 1
+                              ? '${UITextConstants.chatGreetingInboxTitle}（$pendingCount）'
+                              : UITextConstants.chatGreetingInboxTitle,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosBody,
+                            fontWeight: AppTypography.semiBold,
+                            color: fgPrimary,
+                          ),
+                        ),
+                        SizedBox(height: AppSpacing.xs),
+                        Text(
+                          message != null && message.isNotEmpty
+                              ? message
+                              : '有人想和你建立正式会话',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: fgSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    CupertinoIcons.chevron_forward,
+                    size: AppSpacing.iconSmall,
+                    color: fgSecondary,
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.only(
+                left: ChatConversationAvatarTokens.dividerInset(
+                  ChatConversationAvatarTokens.listSize,
+                ),
+              ),
+              child: Divider(
+                height: AppSpacing.one,
+                thickness: AppSpacing.hairline,
+                color: dividerColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GreetingInboxSheet extends StatelessWidget {
+  const _GreetingInboxSheet({
+    required this.greetings,
+    required this.onReply,
+    required this.onIgnore,
+  });
+
+  final List<GreetingRequestDto> greetings;
+  final Future<void> Function(GreetingRequestDto request) onReply;
+  final Future<void> Function(GreetingRequestDto request) onIgnore;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: MediaQuery.sizeOf(context).height * 0.72,
+        decoration: BoxDecoration(
+          color: SettingsSemanticConstants.pageBackground(isDark),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppSpacing.radiusTwenty),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerMd,
+                AppSpacing.lg,
+                AppSpacing.containerMd,
+                AppSpacing.sm,
+              ),
+              child: Text(
+                UITextConstants.chatGreetingInboxTitle,
+                style: TextStyle(
+                  color: fgPrimary,
+                  fontSize: AppTypography.iosTitle3,
+                  fontWeight: AppTypography.semiBold,
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.all(AppSpacing.containerMd),
+                itemCount: greetings.length,
+                separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
+                itemBuilder: (context, index) {
+                  final request = greetings[index];
+                  final message = request.requestMessage?.trim();
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: SettingsSemanticConstants.blockBackground(isDark),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusTwenty,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(AppSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            request.requesterSubAccountId,
+                            style: TextStyle(
+                              color: fgPrimary,
+                              fontSize: AppTypography.iosBody,
+                              fontWeight: AppTypography.semiBold,
+                            ),
+                          ),
+                          if (message != null && message.isNotEmpty) ...[
+                            SizedBox(height: AppSpacing.xs),
+                            Text(
+                              message,
+                              style: TextStyle(
+                                color: fgSecondary,
+                                fontSize: AppTypography.iosFootnote,
+                              ),
+                            ),
+                          ],
+                          SizedBox(height: AppSpacing.md),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: CupertinoButton(
+                                  padding: EdgeInsets.symmetric(
+                                    vertical: AppSpacing.sm,
+                                  ),
+                                  color: AppColors.primaryColor,
+                                  onPressed: () => onReply(request),
+                                  child: Text(
+                                    UITextConstants.chatGreetingInboxReply,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: AppSpacing.sm),
+                              CupertinoButton(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.md,
+                                  vertical: AppSpacing.sm,
+                                ),
+                                onPressed: () => onIgnore(request),
+                                child: Text(
+                                  UITextConstants.chatGreetingInboxIgnore,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],

@@ -11,33 +11,69 @@ api_routes:
     operation: SendGreetingRequest
     description: 发起打招呼（创建请求箱条目，未回复前不进入聊天列表）
     writable_fields: [targetSubAccountId, requestMessage, source]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/greeting-request/inbox
     operation: ListGreetingInbox
     description: 收件箱（我收到的待处理请求）
     query_params: [status, cursor, limit]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/greeting-request/outbox
     operation: ListGreetingOutbox
     description: 发件箱（我发出的请求）
     query_params: [status, cursor, limit]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/user/greeting-request/{requestId}/reply
     operation: ReplyGreetingRequest
-    description: 回复打招呼（触发升级为正式会话，由 GreetingRequestReplied 事件创建 Conversation）
+    description: 回复打招呼（同步创建或复用正式 1v1 会话，写入 promotedConversationId 后发布 GreetingRequestReplied）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/user/greeting-request/{requestId}/ignore
     operation: IgnoreGreetingRequest
     description: 忽略打招呼
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: DELETE
     path: /v1/user/greeting-request/{requestId}
     operation: CancelGreetingRequest
     description: 撤回打招呼（仅发起方可操作，仅 pending 状态可撤回）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
 consumers:
   - name: app
@@ -63,6 +99,11 @@ contract_test:
           route: POST /v1/user/greeting-request
           seed: [existing_pending_greeting]
           assertions: [status_409, error_code_USER.GREETING.duplicate_pending]
+
+        - name: mutual_contact_greeting_rejected
+          route: POST /v1/user/greeting-request
+          seed: [mutual_follow_edge]
+          assertions: [status_409, error_code_USER.GREETING.already_contact]
 
         - name: reply_upgrades_conversation
           route: POST /v1/user/greeting-request/{requestId}/reply
@@ -92,12 +133,13 @@ contract_test:
             - "greeting.status == replied"
             - "eventSpy.AssertPublished('GreetingRequestReplied', {promotedConversationId})"
 
-        - name: blocked_user_gets_silent_rejection
+        - name: blocked_user_gets_rejected
           command: SendGreetingRequest to blocked user
           seed: [block_edge(target → requester)]
           assertions:
-            - "response same as success (no info leak)"
-            - "greeting.status == blocked (internal only)"
+            - "status_403"
+            - "error_code_USER.GREETING.target_blocked_sender"
+            - "no greeting row created"
 
   coverage_requirements:
     - status_machine_transitions_covered

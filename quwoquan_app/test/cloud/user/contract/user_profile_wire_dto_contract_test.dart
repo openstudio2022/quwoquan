@@ -391,7 +391,7 @@ void main() {
         'relationState': 'following',
         'canFollow': false,
         'canUnfollow': true,
-        'canMessage': true,
+        'canOpenConversation': true,
         'canFollowBack': false,
         'isBlocked': false,
         'isBlockedBy': false,

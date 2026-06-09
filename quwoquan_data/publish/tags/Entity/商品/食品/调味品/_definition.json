@@ -1,0 +1,10 @@
+{
+  "label": "调味品",
+  "labelEn": "Condiment",
+  "description": "调料酱料类型",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "aliases": [
+    "酱料"
+  ]
+}

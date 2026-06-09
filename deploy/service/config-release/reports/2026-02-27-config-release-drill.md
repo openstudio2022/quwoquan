@@ -46,7 +46,7 @@ agent_ops/deploy/prod/config_release_apply_stage.sh \
 - Stage state updated successfully.
 - SLO gate returned `continue` for healthy metrics.
 - Rollback command proved idempotent when target version already active.
-- Audit logs created under `.release-state/content-service.audit.log`.
+- Audit logs created under `state/release/content-service.audit.log`.
 
 ## Conclusion
 

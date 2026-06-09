@@ -5,7 +5,7 @@
 ## 执行
 
 ```bash
-python3 quwoquan_data/scripts/verify_tag_tree.py
+python3 quwoquan_data/scripts/verify/verify_tag_tree.py
 ```
 
 ## 检查项
@@ -22,5 +22,5 @@ python3 quwoquan_data/scripts/verify_tag_tree.py
 ## 自定义阈值
 
 ```bash
-python3 quwoquan_data/scripts/verify_tag_tree.py --min-total 2000 --min-non-geo 1600
+python3 quwoquan_data/scripts/verify/verify_tag_tree.py --min-total 2000 --min-non-geo 1600
 ```

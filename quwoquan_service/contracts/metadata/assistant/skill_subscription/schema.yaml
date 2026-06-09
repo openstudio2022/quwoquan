@@ -36,5 +36,8 @@ subcontracts:
   subscription_destination:
     class_name: SkillSubscriptionDestinationWire
     fields:
-      - { name: destinationType, type: string, default: user }
+      - { name: destinationType, type: string, default: user, description: "user | conversation | group" }
       - { name: destinationId, type: string, default: '' }
+      - { name: maxPerDay, type: int, default: 0 }
+      - { name: cooldownMinutes, type: int, default: 0 }
+      - { name: quietHoursPolicy, type: string, default: inherit_user_setting }

@@ -123,12 +123,12 @@ stages:
 
 **Job 顺序**（单步）：
 
-1. **validate**：校验 `step` 与 `.release-state/<service>.state` 中上一步是否衔接；校验 `releases/config/<service>/<to_config>.yaml` 存在。
+1. **validate**：校验 `step` 与 `state/release/<service>.state` 中上一步是否衔接；校验 `releases/config/<service>/<to_config>.yaml` 存在。
 2. **deploy-prod-step**（可选，dry_run=false 时执行）：
    - 使用 `to_image` / `to_config` 构建 `deploy/kustomization/<cloud_provider>-prod`（通过 env 或 kustomize replacements 注入版本）。
    - `kubectl apply -f -` 到 prod 集群（使用 PROD_KUBECONFIG）。
    - 等待 rollout：`kubectl rollout status deployment/... -n seed-box-prod --timeout=5m`。
-3. **gray-rollout-state**：执行 `make config-gray-rollout SERVICE=... FROM_IMAGE=... TO_IMAGE=... FROM_CONFIG=... TO_CONFIG=... STEP=...`，更新 `.release-state`。
+3. **gray-rollout-state**：执行 `make config-gray-rollout SERVICE=... FROM_IMAGE=... TO_IMAGE=... FROM_CONFIG=... TO_CONFIG=... STEP=...`，更新 `state/release`。
 4. **slo-gate**：执行 `make config-slo-gate ERROR_RATE=... P95_MS=... REDIS_ERROR_RATE=...`。
    - continue：job 成功，输出「本步通过，可进行下一步」。
    - pause：job 失败或 warning，输出「建议暂停，检查监控后再决定是否下一步」。
@@ -136,7 +136,7 @@ stages:
 
 **产出**：
 
-- 更新 `.release-state/<service>.state` 与 audit log。
+- 更新 `state/release/<service>.state` 与 audit log。
 - 可选：将 state 文件作为 artifact 上传，或提交回仓库（需 token 与谨慎使用）。
 
 ### 2.4 使用方式（运维）
@@ -187,7 +187,7 @@ v*-rc* tag push / main merge
 **版本来源**：
 
 - 由 pre-release tag 解析出 `TO_IMAGE` / `TO_CONFIG`（如从 `v1.0.0-rc.1` 得到 `v1.0.0.rc1`），或从 release 元数据/环境变量读取。
-- `FROM_IMAGE` / `FROM_CONFIG`：从当前 prod 状态读取（如从 `.release-state` 的 last 或从集群 annotation/label 拉取），或由 workflow 输入/缓存提供。
+- `FROM_IMAGE` / `FROM_CONFIG`：从当前 prod 状态读取（如从 `state/release` 的 last 或从集群 annotation/label 拉取），或由 workflow 输入/缓存提供。
 - 对 prod 而言，所有版本输入都绑定 `APP_ENV=prod`，不允许通过 `prod-gray` 目录/镜像标签/环境变量表达灰度。
 
 **SLO 指标获取**：

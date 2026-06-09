@@ -208,7 +208,9 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
                   final count = sectionData[i].length;
                   final rows = (count / crossCount).ceil();
                   final gridHeight = rows * (cellSize + spacing) - (rows > 0 ? spacing : 0);
-                  offset += (i > 0 ? sectionGap : 0) + titleHeight + gridHeight;
+                  // 首个分区标题被省略（与 Tab 重复），偏移计算同步不计 titleHeight。
+                  final sectionTitleHeight = i > 0 ? titleHeight : 0;
+                  offset += (i > 0 ? sectionGap : 0) + sectionTitleHeight + gridHeight;
                 }
 
                 return ListView.builder(
@@ -221,26 +223,29 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
                   itemCount: sectionCount,
                   itemBuilder: (context, sectionIndex) {
                     final entries = sectionData[sectionIndex];
+                    // 首个分区的标题与顶部 Tab 当前项重复，省略以免出现两行同名标签。
+                    final showSectionTitle = sectionIndex > 0;
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (sectionIndex > 0) SizedBox(height: sectionGap),
-                        SizedBox(
-                          height: titleHeight,
-                          child: Align(
-                            alignment: Alignment.topLeft,
-                            child: Text(
-                              effectiveLabels[sectionIndex],
-                              style: TextStyle(
-                                fontSize: AppTypography.iosCaption2,
-                                fontWeight: FontWeight.w600,
-                                color: fgSecondary,
-                                height: AppSpacing.textLineHeightSingle,
+                        if (showSectionTitle)
+                          SizedBox(
+                            height: titleHeight,
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: Text(
+                                effectiveLabels[sectionIndex],
+                                style: TextStyle(
+                                  fontSize: AppTypography.iosCaption2,
+                                  fontWeight: FontWeight.w600,
+                                  color: fgSecondary,
+                                  height: AppSpacing.textLineHeightSingle,
+                                ),
                               ),
                             ),
                           ),
-                        ),
                         GridView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),

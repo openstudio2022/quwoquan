@@ -7,9 +7,11 @@ import 'package:quwoquan_app/cloud/rtc/livekit_room_service.dart';
 import 'package:quwoquan_app/cloud/rtc/models/call_session_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
+import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
@@ -22,6 +24,9 @@ class CallSessionState {
   final bool isRecording;
   final bool isScreenSharing;
   final bool isLoading;
+
+  /// LiveKit 媒体重连中（连接质量中断后自动重连）；用于过程态派生。
+  final bool isReconnecting;
   final String? error;
 
   const CallSessionState({
@@ -33,6 +38,7 @@ class CallSessionState {
     this.isRecording = false,
     this.isScreenSharing = false,
     this.isLoading = false,
+    this.isReconnecting = false,
     this.error,
   });
 
@@ -45,6 +51,7 @@ class CallSessionState {
     bool? isRecording,
     bool? isScreenSharing,
     bool? isLoading,
+    bool? isReconnecting,
     String? error,
   }) {
     return CallSessionState(
@@ -56,6 +63,7 @@ class CallSessionState {
       isRecording: isRecording ?? this.isRecording,
       isScreenSharing: isScreenSharing ?? this.isScreenSharing,
       isLoading: isLoading ?? this.isLoading,
+      isReconnecting: isReconnecting ?? this.isReconnecting,
       error: error,
     );
   }
@@ -72,6 +80,7 @@ class CallSessionState {
           isRecording == other.isRecording &&
           isScreenSharing == other.isScreenSharing &&
           isLoading == other.isLoading &&
+          isReconnecting == other.isReconnecting &&
           error == other.error;
 
   @override
@@ -83,6 +92,7 @@ class CallSessionState {
     isRecording,
     isScreenSharing,
     isLoading,
+    isReconnecting,
     error,
   );
 }
@@ -97,6 +107,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   Timer? _timeoutTimer;
   StreamSubscription<void>? _participantsSub;
   StreamSubscription<lk.DisconnectReason?>? _disconnectSub;
+  LiveKitRoomService? _connectionListenerRoom;
 
   @override
   CallSessionState build() => const CallSessionState();
@@ -174,7 +185,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       if (session == null) {
         state = state.copyWith(
           isLoading: false,
-          error: 'answerCall: empty session',
+          error: UITextConstants.callAnswerFailed,
         );
         return;
       }
@@ -486,6 +497,10 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     String token, {
     bool enableVideo = false,
   }) async {
+    // 建连阶段进入「连接中」过程态：振铃/接听后到媒体连通前的可见反馈。
+    if (state.status != CallStatus.inCall) {
+      state = state.copyWith(status: CallStatus.connecting);
+    }
     try {
       await _lkRoom.connect(
         url: _livekitUrl,
@@ -494,11 +509,21 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         enableAudio: true,
       );
 
-      _lkRoom.connectionQuality.addListener(_onQualityChanged);
+      // 媒体连通：进入通话态并清除重连标记。
+      state = state.copyWith(
+        status: CallStatus.inCall,
+        isReconnecting: false,
+      );
 
-      _participantsSub = _lkRoom.onParticipantsChanged.listen((_) {
-        // Trigger UI rebuild by notifying participant providers
-      });
+      _lkRoom.connectionState.addListener(_onConnectionStateChanged);
+      _connectionListenerRoom = _lkRoom;
+      _lkRoom.connectionQuality.addListener(_onQualityChanged);
+      _lkRoom.activeSpeaker.addListener(_onParticipantsChanged);
+
+      // Initial sync once connected, then on every room participant/track event.
+      _onParticipantsChanged();
+      _participantsSub =
+          _lkRoom.onParticipantsChanged.listen((_) => _onParticipantsChanged());
 
       _disconnectSub = _lkRoom.onDisconnected.listen((reason) {
         if (reason != null) {
@@ -506,7 +531,15 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         }
       });
     } catch (e) {
-      state = state.copyWith(error: 'LiveKit 连接失败: $e');
+      state = state.copyWith(error: UITextConstants.callConnectFailed);
+    }
+  }
+
+  void _onConnectionStateChanged() {
+    final connState = _lkRoom.connectionState.value;
+    final reconnecting = connState == RtcConnectionState.reconnecting;
+    if (reconnecting != state.isReconnecting) {
+      state = state.copyWith(isReconnecting: reconnecting);
     }
   }
 
@@ -515,14 +548,27 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     ref.read(callQualityProvider.notifier).update(q.toNetworkQuality());
   }
 
+  void _onParticipantsChanged() {
+    final dtos = state.session?.participants ?? const <CallParticipantDto>[];
+    ref.read(callParticipantsProvider.notifier).syncFromLiveKit(_lkRoom, dtos);
+  }
+
   void _endCallState() {
     _cancelTimeoutTimer();
     _participantsSub?.cancel();
     _disconnectSub?.cancel();
+    _connectionListenerRoom?.connectionState
+        .removeListener(_onConnectionStateChanged);
+    _connectionListenerRoom = null;
     _lkRoom.connectionQuality.removeListener(_onQualityChanged);
+    _lkRoom.activeSpeaker.removeListener(_onParticipantsChanged);
     _lkRoom.disconnect();
     ref.read(activeCallProvider.notifier).endCall();
-    state = state.copyWith(status: CallStatus.ended, isLoading: false);
+    state = state.copyWith(
+      status: CallStatus.ended,
+      isLoading: false,
+      isReconnecting: false,
+    );
   }
 
   void _startTimeoutTimer() {

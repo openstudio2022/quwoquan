@@ -45,12 +45,18 @@ class CreatePage extends ConsumerStatefulWidget {
     this.initialAction,
     this.initialTabKey,
     this.initialHomepage,
+    this.initialCircleId,
+    this.initialCircleName,
     this.initialDraftId,
   });
 
   final EditorStartAction? initialAction;
   final String? initialTabKey;
   final HomepageCanonicalReference? initialHomepage;
+
+  /// 上下文化创作锚点：从圈子页「向圈子投稿」进入时预填，注入 PublishSettings.circleIds。
+  final String? initialCircleId;
+  final String? initialCircleName;
 
   /// 从全局「从草稿继续」进入时由路由 query 注入，与本地清单 id 对齐。
   final String? initialDraftId;
@@ -77,6 +83,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
   double _heroCollapseProgress = 0;
   String? _draggingMediaPath;
   String? _pressedMediaPath;
+  UiErrorSemantic? _publishErrorSemantic;
 
   /// 图片拖动过程中最后一次指针全局坐标（用于松手时按重叠面积落点）。
   Offset? _imageDragLastGlobal;
@@ -145,13 +152,31 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         if (widget.initialAction != null) {
           notifier.setStartAction(widget.initialAction);
         }
-        if (widget.initialHomepage != null) {
-          notifier.setSettings(
-            ref
-                .read(createEditorProvider)
-                .settings
-                .copyWith(homepage: widget.initialHomepage),
-          );
+        final anchorCircleId = widget.initialCircleId?.trim();
+        if (widget.initialHomepage != null ||
+            (anchorCircleId != null && anchorCircleId.isNotEmpty)) {
+          var nextSettings = ref.read(createEditorProvider).settings;
+          if (widget.initialHomepage != null) {
+            nextSettings = nextSettings.copyWith(
+              homepage: widget.initialHomepage,
+            );
+          }
+          if (anchorCircleId != null && anchorCircleId.isNotEmpty) {
+            final anchorCircleName = widget.initialCircleName?.trim();
+            nextSettings = nextSettings.copyWith(
+              isPublic: true,
+              circleIds: <String>{
+                ...nextSettings.circleIds,
+                anchorCircleId,
+              }.toList(growable: false),
+              circleNames: <String>[
+                ...nextSettings.circleNames,
+                if (anchorCircleName != null && anchorCircleName.isNotEmpty)
+                  anchorCircleName,
+              ],
+            );
+          }
+          notifier.setSettings(nextSettings);
         }
         _syncControllersFromState(ref.read(createEditorProvider));
         await _runAfterOverlayDismissed(_applyInitialActionIfNeeded);
@@ -1168,6 +1193,7 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     if (_isPublishing) {
       return;
     }
+    _publishErrorSemantic = null;
     if (!_canPublish(state)) {
       AppToast.show(context, '先写点内容');
       return;
@@ -1224,11 +1250,34 @@ class _CreatePageState extends ConsumerState<CreatePage> {
     } catch (error) {
       await reportCreateEditorSurfaceEvent(ref, 'create_publish_failure');
       if (mounted) {
-        AppToast.show(
+        final semantic = '$error'.contains('active persona context')
+            ? UiErrorSemantic(
+                category: UiErrorCategory.submit,
+                scope: UiErrorScope.global,
+                title: '发布未完成',
+                message: '当前分身上下文还没准备好，稍后可以再试一次。',
+                primaryAction: const UiErrorAction(
+                  type: UiErrorActionType.retry,
+                  label: UITextConstants.tryAgain,
+                ),
+                dismissible: true,
+              )
+            : runtimeErrorSemantic(
+                context,
+                error: error,
+                category: UiErrorCategory.submit,
+                scope: UiErrorScope.global,
+              );
+        _publishErrorSemantic = semantic;
+        await AppActionErrorFeedback.show(
           context,
-          '$error'.contains('active persona context')
-              ? '当前分身上下文未就绪，请稍后重试'
-              : context.l10n.loadFailed,
+          semantic: semantic,
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _publish();
+            }
+          },
         );
       }
     } finally {

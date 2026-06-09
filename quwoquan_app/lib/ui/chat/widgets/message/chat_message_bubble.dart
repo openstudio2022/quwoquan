@@ -193,6 +193,180 @@ class ChatMessageBubble extends StatelessWidget {
         isRead: isRead,
         messageStatus: message.status,
       );
+    } else if (type == 'file') {
+      final title = content.isNotEmpty
+          ? content
+          : UITextConstants.chatPreviewFile;
+      contentWidget = _BubbleWithTail(
+        isRight: isRight,
+        color: bubbleColor.withValues(alpha: 0.92),
+        tailShadowColor: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.dropShadow,
+        ),
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: effectiveMaxWidth * 0.82,
+            minWidth: 180,
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupMd,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.insert_drive_file_rounded,
+                color: textColor.withValues(alpha: 0.92),
+                size: AppSpacing.iconMedium,
+              ),
+              SizedBox(width: AppSpacing.intraGroupSm),
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosBody,
+                        color: textColor,
+                        height: AppTypography.lineHeightCompact,
+                      ),
+                    ),
+                    SizedBox(height: AppSpacing.xs),
+                    Text(
+                      UITextConstants.chatPreviewFile,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosFootnote,
+                        color: textColor.withValues(alpha: 0.72),
+                        height: AppTypography.lineHeightCompact,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (type == 'video') {
+      final previewUrl = message.thumbnailUrl.isNotEmpty
+          ? message.thumbnailUrl
+          : message.imageUrl;
+      final title = content.isNotEmpty
+          ? content
+          : UITextConstants.chatPreviewVideo;
+      contentWidget = _BubbleWithTail(
+        isRight: isRight,
+        color: bubbleColor.withValues(alpha: 0.92),
+        tailShadowColor: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.dropShadow,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: effectiveMaxWidth * 0.86,
+            minWidth: AppSpacing.twoHundredTwenty,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (previewUrl.isNotEmpty)
+                  Image.network(
+                    previewUrl,
+                    width: effectiveMaxWidth * 0.86,
+                    height: AppSpacing.twoHundredTwenty,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: effectiveMaxWidth * 0.86,
+                      height: AppSpacing.twoHundredTwenty,
+                      color: bubbleColor.withValues(alpha: 0.24),
+                      child: Icon(
+                        Icons.video_file_rounded,
+                        color: textColor.withValues(alpha: 0.92),
+                        size: AppSpacing.iconLarge,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: effectiveMaxWidth * 0.86,
+                    height: AppSpacing.twoHundredTwenty,
+                    color: bubbleColor.withValues(alpha: 0.24),
+                    child: Icon(
+                      Icons.video_file_rounded,
+                      color: textColor.withValues(alpha: 0.92),
+                      size: AppSpacing.iconLarge,
+                    ),
+                  ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppColors.transparent,
+                          AppColors.black.withValues(alpha: 0.06),
+                          AppColors.black.withValues(alpha: 0.44),
+                        ],
+                        stops: const [0, 0.58, 1],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: AppSpacing.containerSm,
+                  top: AppSpacing.containerSm,
+                  child: Icon(
+                    Icons.play_circle_fill_rounded,
+                    color: AppColors.white.withValues(alpha: 0.94),
+                    size: AppSpacing.iconLarge,
+                  ),
+                ),
+                Positioned(
+                  left: AppSpacing.containerSm,
+                  right: AppSpacing.containerSm,
+                  bottom: AppSpacing.containerSm,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosBody,
+                          color: AppColors.white,
+                          height: AppTypography.lineHeightCompact,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.xs),
+                      Text(
+                        UITextConstants.chatPreviewVideo,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosFootnote,
+                          color: AppColors.white.withValues(alpha: 0.84),
+                          height: AppTypography.lineHeightCompact,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     } else if (renderPlainSelfText) {
       contentWidget = Align(
         alignment: Alignment.centerRight,
@@ -491,8 +665,8 @@ class _ReceiptStatusIndicator extends StatelessWidget {
       icon = Icons.access_time;
       color = textColor.withValues(alpha: 0.5);
     } else if (messageStatus == 'failed') {
-      icon = Icons.error_outline;
-      color = AppColors.error;
+      icon = Icons.info_outline;
+      color = textColor.withValues(alpha: 0.58);
     } else if (receiptEnabled && memberCount <= 2 && isRead) {
       icon = Icons.done_all;
       color = AppColors.primaryColor;

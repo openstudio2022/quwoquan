@@ -16,6 +16,7 @@ class MoreActionPopup extends StatelessWidget {
   static Future<void> show({
     required BuildContext context,
     required dynamic config,
+    double? panelMaxWidth,
     bool showDragHandle = true,
     bool isScrollControlled = true,
   }) async {
@@ -23,7 +24,10 @@ class MoreActionPopup extends StatelessWidget {
       await showCupertinoModalPopup(
         context: context,
         barrierColor: AppColors.transparent,
-        builder: (context) => _MediaPostMoreActionSheet(config: config),
+        builder: (context) => _MediaPostMoreActionSheet(
+          config: config,
+          panelMaxWidth: panelMaxWidth,
+        ),
       );
     }
   }
@@ -69,8 +73,12 @@ class _BottomAction {
 /// 媒体帖子更多操作底部弹窗
 class _MediaPostMoreActionSheet extends ConsumerStatefulWidget {
   final MediaPostMoreActionConfig config;
+  final double? panelMaxWidth;
 
-  const _MediaPostMoreActionSheet({required this.config});
+  const _MediaPostMoreActionSheet({
+    required this.config,
+    this.panelMaxWidth,
+  });
 
   @override
   ConsumerState<_MediaPostMoreActionSheet> createState() =>
@@ -255,6 +263,7 @@ class _MediaPostMoreActionSheetState
       onDismiss: () => Navigator.pop(context),
       backgroundColor: panelBackground,
       panelKey: TestKeys.modalBottomSheetPanel,
+      panelMaxWidth: widget.panelMaxWidth,
       contentPadding: EdgeInsets.fromLTRB(
         SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
         0,

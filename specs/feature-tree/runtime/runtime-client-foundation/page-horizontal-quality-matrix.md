@@ -14,15 +14,18 @@
 
 **挂靠面（不单独占行，验收结论记在父行备注）**：`publish_location_selector_page.dart` 内 `PublishLocationSearchPage`（Navigator.push 全屏）与父行共用 P1–P8；`app_router.dart` 内 `_CreateEntryRoutePage`（`CreateEntrySheet`）从属于创作入口链，与 `create_page.dart` / 路由 `create` 一并审计。
 
+**对外引流（CR-20260606-030，规格冻结，暂不占行）**：`outbound-share-distribution` 的统一分享面板为 overlay/sheet（非 `*_page.dart`）、`external-inbound-deeplink-routing` 的 `DeepLinkResolver` 为非页面 runtime 能力，二者均不进入页面扫描基线、不新增矩阵行；落地实现引入新 `*_page.dart`（如未来公开 Web 对象页/分享详情页）时再按基线补行。Web 安装转化扩展落在既有 `lib/app/shell/web_app_install_banner.dart` 与 `lib/app/shell/web_main_app_shell.dart` 行（见 `public-content-web-entry` 多对象 SEO/中转页扩展），实现时在对应父行备注登记，不新增行。
+
 ---
 
 ## app / shell
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/app/shell/main_app_shell.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏 `IndexedStack`+状态栏；小趣退出底栏；未登录点击创作/聊天进入登录门禁；`isDarkProvider` / `AppColorsFunctional`；2026-05-17 收口底部安全区与底栏背景一体化，避免 home indicator 机型下缘留白过厚；regular 档底栏高度同步降到紧凑基线 |
+| `lib/app/shell/main_app_shell.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏 `IndexedStack`+状态栏；小趣退出底栏；移动端未登录点击消息/我的进入登录门禁，PC Web 不弹独立登录覆盖层；`isDarkProvider` / `AppColorsFunctional`；2026-05-17 收口底部安全区与底栏背景一体化，避免 home indicator 机型下缘留白过厚；regular 档底栏高度同步降到紧凑基线 |
 | `lib/app/shell/bottom_navigation.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏底栏；C 位创作触发 `/create-entry`；底栏背景 / `forceDark` 与壳一致；2026-05-17 底栏内容改为占满含底部安全区总高、顶部留白与底部安全区对称，并在有圆角/indicator 机型增加左右保护量；2026-05-19 图标/label/阴影接入 chrome 语义 token，视觉基线不变 |
 | `lib/app/shell/web_app_install_banner.dart` | T1 | ✓ | — | — | — | — | ✓ | ✓ | ✓ | Web 顶部 App 安装提示；由 `PlatformCapabilities.promotesAppInstall` 控制，手机/Pad 提供下载与分享安装页，PC 提供 iOS/Android(鸿蒙)安装包入口；P7 走 `AppSpacing.wideBreakpoint`/`webContentMaxWidth`，P8 走 `UITextConstants`/`AppColors`/`AppTypography` |
+| `lib/app/shell/web_main_app_shell.dart` | T1 | ✓ | — | ✓ | ✓ | — | ✓ | ✓ | ✓ | PC Web 独立宽屏壳；顶部短欢迎区复用移动端 `WelcomeFlowerMark` 花瓣动效并居中展示品牌簇，不放登录/下载提示，内容页在欢迎区下方并随滚动推入/拉回，工具栏吸顶后再出现 `趣我圈` 花瓣图标/名称且左侧 tab 槽位稳定；Web 启动欢迎已改为 `QuWoQuanAppRoot` 上的 intro overlay（`WelcomeScreen.deferSequenceStart`），shell 仅承载内容首屏 hero，不再作为独立欢迎/登录主流程；右侧五个一级操作仅显示同尺寸图标并保留语义 label；**2026-06-06 商用收口**：首页/精品内容区改为复用移动端 `HomeMultiFormFeed`（多列瀑布 + 四态 + `referralSource: organicFeed`/`feedRequestId` 同源埋点），post 点击经统一 `openHomeFeedPost` → `MediaViewerExtra(dtoPosts)` 进沉浸 viewer（P3 端云一体复用 `discoveryFeed`/`PostBaseDto`，不另起 Web 数据/埋点链）；精品移除「精品队列」改干净多列墙；添加页复用分组模型分「内容创作/社交关系」两组（含发起群聊/加同好/创建圈子）并去掉「小趣创作助手」；消息右栏「消息助手」→「消息中心」且去掉「小趣」助手 tab；「我的」右栏去掉「多端同步」；字号/列宽/最大宽度走 Web PC 专用语义 token；P7 走 `PlatformCapabilities.wideScreenLayout`/`AppSpacing.wideBreakpoint`，P8 走既有 `AppColors`/`AppTypography`/`AppSpacing` token |
 
 ---
 
@@ -30,7 +33,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/welcome/pages/welcome_screen.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | **P1**：启动 fast path 先以 `MaterialApp.home` 直出 `AppScaffold` 欢迎页，首帧已有品牌花瓣与文案；`DefaultTextStyle.merge` 收口调试黄下划线。P6 与双色矩阵 `welcome_screen` full 对齐；2026-05-19 登记为品牌屏 chrome 豁免，无传统 toolbar |
+| `lib/ui/welcome/pages/welcome_screen.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | **P1**：启动 fast path 先以 `MaterialApp.home` 直出 `AppScaffold` 欢迎页，首帧已有品牌花瓣与文案；`DefaultTextStyle.merge` 收口调试黄下划线。P6 与双色矩阵 `welcome_screen` full 对齐；2026-06 Web intro overlay 改用 `deferSequenceStart`，让动效在内容页首帧后再启动；启动登录 prompt 不再进入 Web 主流程；2026-05-19 登记为品牌屏 chrome 豁免，无传统 toolbar |
 
 ---
 
@@ -61,7 +64,7 @@
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/ui/chat/pages/chat_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Tab 根；消息 capsule 增加 `@小趣` 与 `提醒`；P2 联系人 `ChatContactsRow`+`listContacts` DTO；P6 on-accent 字色走 `badgeForeground`；会话列表头像统一走共享 token，群头像优先预渲染 URL，组合头像仅兜底；2026-05-17 顶部工具栏改为与搜索壳同源的 safeTop 基线，并复用收紧后的 regular 档主顶栏高度；2026-05-19 切换为 appChrome 顶栏别名与主底栏真实高度留白 |
 | `lib/ui/chat/pages/chat_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 委托 `ChatConversationPage`；P2 消息链 `ChatMessageDto` + Repository 强类型 |
-| `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`；P2 消息列表 `ChatMessageDto` + `ChatMessageDisplayItem` 强类型展示链；2026-05-19 三点入口、选择态文字操作与默认单行输入栏统一到 appChrome/chatInput token；2026-05-30 语音消息接入 `VoiceRecorder`/`voiceSendProvider`，compact 输入栏收敛 `@小趣` 防挤压，语音发送沿 metadata `audio` 契约 |
+| `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`；P2 消息列表 `ChatMessageDto` + `ChatMessageDisplayItem` 强类型展示链；2026-05-19 三点入口、选择态文字操作与默认单行输入栏统一到 appChrome/chatInput token；2026-05-30 语音消息接入 `VoiceRecorder`/`voiceSendProvider`，compact 输入栏收敛 `@小趣` 防挤压，语音发送沿 metadata `audio` 契约；2026-06-06 body 外包统一 `WebPageMaxWidthFrame`（宽屏内容区限宽居中、左右用 page background 区分阅读区，移动端透传），时间分隔按 `sentAtIso` 间隔（≥5min）降噪 |
 | `lib/ui/chat/pages/chat_settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `ChatGroupSettingsDto`；聊天信息；`AppScaffold`；P7 成员网格按头像与文字高度计算；2026-05-19 登记为三点入口链路设置 Inset chrome |
 | `lib/ui/chat/pages/start_group_chat_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `ChatInboxDto`/`CircleDto`/`ChatConversationCreatedDto` + 向导 ViewModel；模态建群；选择群聊页与主列表共享会话头像 token / 占位视觉 |
 | `lib/ui/chat/pages/transfer_ownership_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 成员 DTO 过滤/展示；`SettingsInsetMemberPickerPageScaffold` |
@@ -145,8 +148,8 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/settings/pages/settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `AppScaffold`；P5 设置列表模板；登录态显示切换账号/退出登录，未登录显示登录入口 |
-| `lib/ui/settings/pages/developer_settings_page.dart` | T2 | ✓ | — | — | ✓ | ✓ | ✓ | ✓ | ✓ | 开发者页 P2/P3 — |
+| `lib/ui/settings/pages/settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `AppScaffold`；P5 设置列表模板；登录态显示切换账号/退出登录，未登录显示登录入口；2026-06-06 body 外包统一 `WebPageMaxWidthFrame`，宽屏内容区限宽居中 |
+| `lib/ui/settings/pages/developer_settings_page.dart` | T2 | ✓ | — | — | ✓ | ✓ | ✓ | ✓ | ✓ | 开发者页 P2/P3 —；2026-06-06 body 外包统一 `WebPageMaxWidthFrame`，宽屏内容区限宽居中 |
 
 ---
 
@@ -155,7 +158,7 @@
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：对象页网络 Tab 显示口径收敛为 `看点/作品/圈子/互动`（底层仍由 codegen `UserProfileUIConfig.profileTabs` 驱动）；创作/生活强类型 DTO 不变；首屏接 `ObjectPageContext` 小趣行动 dock。**V5 埋点**：进入曝光 + dispose 停留（`contentBehaviorTracker`，contentType=user，referralSource=authorProfile）；other 模式交集卡 `onReasonTap` → `BehaviorEvent.intersectionDimension/intersectionTagRefs` 归因 |
-| `lib/ui/user/pages/login_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap` + `AuthLoginResultDto`；P3 Mock/Remote 由 `authRepositoryProvider` 切换；协议勾选前不调用一键登录 SDK |
+| `lib/ui/user/pages/login_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap/loginWechat/loginApple/loginPasskey` + `AuthLoginResultDto`；P3 Mock/Remote 由 `authRepositoryProvider` 切换；微信 / Apple / Credential Manager / passkey 入口由 `PlatformCapabilities + NativeAuthBridge` 预留并降级，协议勾选前不调用原生登录 SDK |
 | `lib/ui/user/pages/legal_document_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 远端 WebView 展示用户协议/隐私政策；P2/P3 —，内容来自配置 URL；禁用 JS，保留返回与失败重试 |
 | `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：同 my_profile；other 模式展示真实交集卡 |
 | `lib/ui/user/pages/my_intersection_inbox_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：我的交集分维度列表，消费 `GET /v1/content/intersections`（list）+ `POST /v1/content/intersections/visit`（打开即推进已读水位清零）；强类型 `IntersectionReason`；统一原子 `IntersectionEntity`（头像+名字+维度chip，概率标「推荐」）；P3 Mock/Remote 经 `intersectionRepositoryProvider` 切换；空/错误兜底；点条目带 `relationKind` 进对象页 |
@@ -185,10 +188,10 @@
 | `ui/**/pages/*_page.dart`（含 T0 一行） | 58 |
 | `welcome_screen.dart`（额外入口） | 1 |
 | `components/**/*_page.dart` | 5 |
-| `app/shell/*.dart`（主壳 + 底栏 + Web 安装提示） | 3 |
-| **矩阵数据行（含 T0 + shell）** | **66** |
-| **需验收的独立页面行（排除 T0）** | **62** |
-| **P6 = ✓（full）** | **53** |
+| `app/shell/*.dart`（主壳 + 底栏 + Web 安装提示 + PC Web 宽屏壳） | 4 |
+| **矩阵数据行（含 T0 + shell）** | **67** |
+| **需验收的独立页面行（排除 T0）** | **63** |
+| **P6 = ✓（full）** | **54** |
 | **P6 = ○（partial，待收敛 S6）** | **8** |
 | **P6 = —（exempt 或整行 —）** | **3**（`circles_hub` T0 全列 — + `unified_media_viewer` + `one_tap_movie_preview`） |
 | **P2 = ✓（compliant）** | **52**（含帖子全链路 17 页/面，2026-04-11 收口） |
@@ -230,3 +233,4 @@
 | 2026-03-30 | **S7/P7 默认 B** + **`search_embedded`**：`GroupMemberSearchPage` 纳入 `settings_canonical_manifest`；`verify_settings_canonical` 校验 `EmbeddedMemberSearchPageShell`；§4.3 增 C 类；`page-horizontal-quality-spec` / `nine-session-rollout-plan` 写明 P7 默认策略 B |
 | 2026-03-30 | **S8/P8**：`verify_dart_semantic` 全仓无命中；`.verify_dart_semantic_baseline.txt` 清空（仅注释）；增补 `AppSpacing.zero`/`textLineHeightSingle`、`AppColors.networkCallQualityWeak`、HSL 八色 token；见 `s8-p8-semantic-token/树内计划文档` 各 slice 已实施 |
 | 2026-04-11 | **元数据驱动分波（续）**：`MediaPostCard`/`RecentSearchReadPresentation`/`ContentBehaviorBatchEventDto` 等；同日本仓完成帖子全链 P2 ✓（见上行） |
+| 2026-06-06 | **Web 商用体验系统收口**：`web_main_app_shell` 首页/精品复用移动端 `HomeMultiFormFeed`（多列瀑布 + 四态 + `referralSource`/`feedRequestId` 同源埋点），post 经统一 `openHomeFeedPost`(`home_feed_post_open_action.dart`)→`MediaViewerExtra(dtoPosts)` 进沉浸 viewer；精品移除「精品队列」；添加页分「内容创作/社交关系」两组（发起群聊/加同好/创建圈子）去「小趣创作助手」；消息右栏「消息助手」→「消息中心」并去「小趣」助手 tab；新增单一抽象 `WebPageMaxWidthFrame` 收口消息/设置/开发者页宽屏最大宽度，会话页时间分隔按 `sentAtIso` 间隔降噪；「我的」右栏去「多端同步」；新增 T2：`web_page_max_width_frame_test`/`web_create_groups_test`/`web_featured_no_queue_test`/`web_feed_post_tap_viewer_test`/`web_chat_frame_test` + 扩展 `main_app_shell_widget_test`（feed 同源断言） |

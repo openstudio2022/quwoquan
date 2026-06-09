@@ -6,6 +6,7 @@ class ContentRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AbortMediaUpload': 'content.media.abort',
+    'BindMediaAssetsToComment': 'content.bind.media.assets.to.comment',
     'BindMediaAssetsToPost': 'content.bind.media.assets.to.post',
     'CompleteMediaUpload': 'content.media.complete',
     'CreateComment': 'content.comment.create',
@@ -16,19 +17,21 @@ class ContentRequestPageIds {
     'FavoritePost': 'content.post.favorite',
     'GenerateArticleSummary': 'content.article.summary',
     'GetAppConfig': 'content.get.app.config',
+    'GetAuthorImpact': 'content.get.author.impact',
     'GetCounters': 'content.post.counters',
     'GetFeed': 'content.feed.list',
     'GetFeedIntersections': 'content.get.feed.intersections',
     'GetHelperRead': 'content.get.helper.read',
     'GetMediaAsset': 'content.media.get',
     'GetMyIntersectionSummary': 'content.get.my.intersection.summary',
+    'GetObjectIntersections': 'content.get.object.intersections',
     'GetPost': 'content.post.get',
     'GetReactionState': 'content.post.reactions',
     'GetRecommendation': 'content.recommend',
     'GetReport': 'content.get.report',
     'InitMediaUpload': 'content.media.init',
-    'LikeComment': 'content.like.comment',
     'LikePost': 'content.post.like',
+    'ListCommentReplies': 'content.list.comment.replies',
     'ListComments': 'content.comment.list',
     'ListCommentsByAuthor': 'content.list.comments.by.author',
     'ListCommentsForPostAuthor': 'content.list.comments.for.post.author',
@@ -40,6 +43,7 @@ class ContentRequestPageIds {
     'PromotePostToWork': 'content.post.promote',
     'PublishPost': 'content.post.publish',
     'QuoteToCircle': 'content.post.quote',
+    'ReactToComment': 'content.react.to.comment',
     'ReportBehaviors': 'content.behaviors.report',
     'ReportIntersectionExposure': 'content.report.intersection.exposure',
     'RepostToCircle': 'content.post.repost',
@@ -50,7 +54,6 @@ class ContentRequestPageIds {
     'SelectManualVideoCover': 'content.media.cover.manual',
     'SharePost': 'content.share.post',
     'UnfavoritePost': 'content.post.unfavorite',
-    'UnlikeComment': 'content.unlike.comment',
     'UnlikePost': 'content.post.unlike',
     'UnsharePost': 'content.unshare.post',
     'UpdatePost': 'content.post.update',
@@ -59,6 +62,7 @@ class ContentRequestPageIds {
   };
 
   static const String abortMediaUpload = 'content.media.abort';
+  static const String bindMediaAssetsToComment = 'content.bind.media.assets.to.comment';
   static const String bindMediaAssetsToPost = 'content.bind.media.assets.to.post';
   static const String completeMediaUpload = 'content.media.complete';
   static const String createComment = 'content.comment.create';
@@ -69,19 +73,21 @@ class ContentRequestPageIds {
   static const String favoritePost = 'content.post.favorite';
   static const String generateArticleSummary = 'content.article.summary';
   static const String getAppConfig = 'content.get.app.config';
+  static const String getAuthorImpact = 'content.get.author.impact';
   static const String getCounters = 'content.post.counters';
   static const String getFeed = 'content.feed.list';
   static const String getFeedIntersections = 'content.get.feed.intersections';
   static const String getHelperRead = 'content.get.helper.read';
   static const String getMediaAsset = 'content.media.get';
   static const String getMyIntersectionSummary = 'content.get.my.intersection.summary';
+  static const String getObjectIntersections = 'content.get.object.intersections';
   static const String getPost = 'content.post.get';
   static const String getReactionState = 'content.post.reactions';
   static const String getRecommendation = 'content.recommend';
   static const String getReport = 'content.get.report';
   static const String initMediaUpload = 'content.media.init';
-  static const String likeComment = 'content.like.comment';
   static const String likePost = 'content.post.like';
+  static const String listCommentReplies = 'content.list.comment.replies';
   static const String listComments = 'content.comment.list';
   static const String listCommentsByAuthor = 'content.list.comments.by.author';
   static const String listCommentsForPostAuthor = 'content.list.comments.for.post.author';
@@ -93,6 +99,7 @@ class ContentRequestPageIds {
   static const String promotePostToWork = 'content.post.promote';
   static const String publishPost = 'content.post.publish';
   static const String quoteToCircle = 'content.post.quote';
+  static const String reactToComment = 'content.react.to.comment';
   static const String reportBehaviors = 'content.behaviors.report';
   static const String reportIntersectionExposure = 'content.report.intersection.exposure';
   static const String repostToCircle = 'content.post.repost';
@@ -103,7 +110,6 @@ class ContentRequestPageIds {
   static const String selectManualVideoCover = 'content.media.cover.manual';
   static const String sharePost = 'content.share.post';
   static const String unfavoritePost = 'content.post.unfavorite';
-  static const String unlikeComment = 'content.unlike.comment';
   static const String unlikePost = 'content.post.unlike';
   static const String unsharePost = 'content.unshare.post';
   static const String updatePost = 'content.post.update';

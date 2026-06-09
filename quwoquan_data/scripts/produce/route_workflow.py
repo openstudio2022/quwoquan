@@ -2,7 +2,7 @@
 
 正文不再由脚本拼接：
   - prepare 阶段（build_route_writing_pack）只准备证据/选图/写作契约 + prompt.md，并写占位草稿。
-  - 会话模型据 prompt.md 创作正文写回 drafts/{ref}.article.md（generator=agent）。
+  - 会话模型据 prompt.md 创作正文写回对象 `4.draft/draft.article.md`（generator=agent）。
   - review 阶段（review_route_draft）读取 agent 草稿，过模板指纹/事实可回溯/出处三道门 + 既有质量门。
 """
 from __future__ import annotations
@@ -11,7 +11,8 @@ from pathlib import Path
 import re
 from typing import Any, Mapping, Sequence
 
-from _common.article_package import asset_id_from_object_key
+from _common.batch_asset_registry import BatchAssetRegistry, allocate_post_asset_id, load_batch_asset_registry
+from _common.batch_manifest import load_batch_manifest
 from _common.content_evidence import (
     build_related_search_plan,
     build_route_evidence_bundle,
@@ -20,6 +21,7 @@ from _common.content_evidence import (
     load_source_records,
     public_byline_label,
 )
+from _common.evidence_contract import quality_payload_contract_issues
 from _common.content_review import (
     check_narrative_quality,
     check_provenance,
@@ -30,7 +32,8 @@ from _common.content_review import (
 from _common.draft_io import (
     GENERATOR_AGENT,
     PLACEHOLDER_MARKER,
-    drafts_dir,
+    draft_asset_reference_issues,
+    iter_draft_articles,
     is_placeholder,
     read_draft_article,
     read_draft_meta,
@@ -43,8 +46,6 @@ from _common.entity_extract import build_entities_sidecar, normalize_entity_refs
 from _common.entity_annotation import merge_entity_refs
 from _common.fact_coverage import fact_covered
 from _common.image_safety import assess_image, assess_asset_sources, is_near_duplicate, STATUS_UNSAFE
-from _common.io import read_json
-from _common.paths import batch_inputs_dir, batch_sources_dir
 from _common.review_ledger import (
     ReviewItem,
     ReviewLedger,
@@ -73,12 +74,44 @@ ROUTE_TEMPLATE_IDS = {
 }
 PROVENANCE_TERMS = ("马蜂窝", "携程", "小红书", "知乎", "大众点评", "来源平台", "游记里还提到")
 TRANSITION_TERMS = ("先", "再", "随后", "最后", "一路", "转场", "返程")
-# 游记感密度标记
-MOTIVATION_MARKERS = ("出发前", "动身", "想去", "为什么走", "出门前", "临出发", "犹豫", "期待", "决定走")
 LIKE_FEELING_MARKERS = ("愿意", "放松", "松弛", "值得慢", "喜欢", "心动", "治愈", "踏实", "舍不得")
 DISLIKE_FEELING_MARKERS = ("怕", "劝退", "累", "疲惫", "拖", "后悔", "别硬撑", "受不了", "难受", "硬撑")
 DECISION_MARKERS = ("我会", "我更愿意", "建议把", "如果你", "可以跟团", "宁可", "就该", "值不值得", "优先看", "我不会")
 STANDALONE_TIPS_MARKERS = ("实用信息", "实用攻略信息", "来源平台", "信息卡", "小贴士：", "tips：", "贴士：")
+
+# 修辞/结构骨架门：仅出建议与降分，不阻断（底稿轻改范式：结构跟随底稿，不强套骨架）。
+# 硬门保留：真实性(generatorProvenance/factTraceability/baseDraftFidelity)、反抄袭/去版权
+# (provenanceRewrite)、反雷同(crossArticleSimilarity)、证据/图片/联系方式/语域/载体/路线覆盖。
+SOFT_CHECKS = {
+    "travelogueDensity",
+    "mechanicalHeading",
+    "proseStyle",
+    "narrativeContinuity",
+    "sectionShape",
+}
+
+
+def aggregate_checks(
+    checks: Mapping[str, Mapping[str, Any]],
+) -> tuple[list[str], list[str], int]:
+    """聚合评审 checks：HARD 失败计入 blocking；SOFT 失败仅出建议+降分。
+
+    返回 (blocking, suggestions, soft_failed_count)。
+    """
+    blocking: list[str] = []
+    suggestions: list[str] = []
+    soft_failed = 0
+    for name, result in checks.items():
+        if result.get("passed", True):
+            continue
+        issues = list(result.get("issues") or [])
+        if name in SOFT_CHECKS:
+            soft_failed += 1
+            suggestions.extend(f"[建议] {name}: {issue}" for issue in issues)
+        else:
+            blocking.extend(f"{name}: {issue}" for issue in issues)
+        suggestions.extend(result.get("suggestions") or [])
+    return blocking, suggestions, soft_failed
 
 
 def is_route_brief(brief: Mapping[str, Any]) -> bool:
@@ -92,27 +125,26 @@ def is_route_brief(brief: Mapping[str, Any]) -> bool:
 
 
 def load_compose_brief(task_id: str, batch_id: str, ref: str) -> dict[str, Any]:
-    path = batch_inputs_dir(task_id, batch_id, "produce", "compose") / f"{ref}.json"
-    return read_json(path)
+    from _common.content_object import read_brief_object
+
+    return read_brief_object(task_id, batch_id, ref) or {}
 
 
 def iter_route_briefs(task_id: str, batch_id: str, refs: Sequence[str] | None = None) -> list[tuple[str, dict[str, Any]]]:
+    from _common.content_object import iter_briefs
+
     wanted = {ref for ref in (refs or []) if ref}
-    input_dir = batch_inputs_dir(task_id, batch_id, "produce", "compose")
-    rows: list[tuple[str, dict[str, Any]]] = []
-    if not input_dir.exists():
-        return rows
-    for brief_file in sorted(input_dir.glob("*.json")):
-        ref = brief_file.stem
-        if wanted and ref not in wanted:
-            continue
-        brief = read_json(brief_file)
-        if is_route_brief(brief):
-            rows.append((ref, brief))
-    return rows
+    return [
+        (ref, brief)
+        for ref, brief in iter_briefs(task_id, batch_id)
+        if (not wanted or ref in wanted) and is_route_brief(brief)
+    ]
 
 
 def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str, Any]) -> dict[str, Any]:
+    from _common.content_object import register_from_brief
+
+    register_from_brief(task_id, batch_id, ref, brief, content_type="article")
     entity_refs = [str(item) for item in brief.get("entityRefs") or [] if item]
     entity_names = entity_names_from_refs(entity_refs)
     source_records = load_source_records(task_id, batch_id, entity_names)
@@ -124,8 +156,12 @@ def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str,
         title=str(brief.get("titleHint") or ref),
     )
     source_quality = evidence_bundle.get("storySpine", {}).get("sourceQuality", [])
-    related_search_plan = build_related_search_plan({"ref": ref, "entityRefs": entity_refs}, evidence_bundle["storySpine"])
     issues = gate_route_evidence_bundle(brief, evidence_bundle)
+    related_search_plan = (
+        build_related_search_plan({"ref": ref, "entityRefs": entity_refs}, evidence_bundle["storySpine"])
+        if issues
+        else None
+    )
     retained_scores = [int(row.get("score") or 0) for row in source_quality if row.get("quality") != "Reject"]
     retained_avg = sum(retained_scores) / max(len(retained_scores), 1) if retained_scores else 0
     coverage = evidence_bundle.get("coverage") or {}
@@ -148,12 +184,14 @@ def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str,
         "templateId": brief.get("templateId"),
         "title": brief.get("titleHint") or ref,
         "evidenceBundle": evidence_bundle,
-        "storySpine": evidence_bundle.get("storySpine"),
-        "sourceQuality": source_quality,
-        "relatedSearchPlan": related_search_plan,
         "sourceUrls": _unique_strings(str(row.get("url") or "") for row in source_records),
         "sourcePaths": _unique_strings(str(row.get("sourcePath") or "") for row in source_records),
     }
+    contract_issues = quality_payload_contract_issues(payload)
+    if contract_issues:
+        issues = [*issues, *contract_issues]
+        recommendation = "skip" if coverage_ratio == 0 else "needs_improvement"
+        payload["recommendation"] = recommendation
     write_stage_result(task_id, batch_id, "produce", "quality_analysis", ref, payload)
     write_gate_report(
         task_id=task_id,
@@ -167,6 +205,7 @@ def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str,
             "coveredEntityCount": coverage.get("coveredEntityCount"),
             "expectedEntityCount": coverage.get("expectedEntityCount"),
             "retainedSourceCount": len(retained_scores),
+            "relatedSearchPlan": related_search_plan,
         },
         next_step="compose-brief",
         fallback_stage="download" if issues else None,
@@ -180,6 +219,7 @@ def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str,
             failed_stage="quality_analysis",
             failed_gate="routeEvidence",
             issues=issues,
+            evidence_summary={"relatedSearchPlan": related_search_plan},
             fallback_stage="download",
             rerun_chain=["download", "quality_analysis", "compose-brief", "review", "materialize"],
         )
@@ -192,13 +232,13 @@ def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str,
 
 
 def _route_section_intents(brief: Mapping[str, Any], evidence_bundle: Mapping[str, Any]) -> list[str]:
+    """章节意图：跟随底稿自身结构，仅给最小推进建议（不再下发固定骨架）。"""
     nodes = [str(n.get("entityName") or "") for n in (evidence_bundle.get("routeNodes") or []) if n.get("entityName")]
-    intents = ["开篇：写出发动机与心情铺垫（为什么想走这条线、出发前的犹豫或期待），不要先罗列行程。"]
-    for i, name in enumerate(nodes, start=1):
-        intents.append(f"第{i}站「{name}」：写这一站真实的体验与至少一处取舍判断，按主线顺序推进。")
-    intents.append("出发前真正要确认的事：把交通/住宿/体力/退路等关键事实就地融入叙述，禁止另起清单块。")
-    intents.append("这条线适合谁：用取舍收尾，而不是堆景点。")
-    return intents
+    order = "、".join(nodes) if nodes else "线路各节点"
+    return [
+        "结构跟随底稿：保留底稿自身的小标题与叙述顺序，只做轻量编辑（去语病/补证据/去平台痕迹）。",
+        f"若底稿未按主线推进，可按 {order} 的真实顺序理顺，但不要套用固定模板小标题。",
+    ]
 
 
 def build_route_writing_pack(
@@ -208,6 +248,9 @@ def build_route_writing_pack(
     brief: Mapping[str, Any],
     quality_payload: Mapping[str, Any],
 ) -> dict[str, Any]:
+    from _common.content_object import register_from_brief
+
+    register_from_brief(task_id, batch_id, ref, brief, content_type="article")
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
     assets = _build_route_assets(task_id, batch_id, ref, brief, evidence_bundle)
     carrier = resolve_carrier(brief, evidence_bundle, assets)
@@ -226,6 +269,7 @@ def build_route_writing_pack(
         source_urls=quality_payload.get("sourceUrls") or [],
         source_paths=quality_payload.get("sourcePaths") or [],
     )
+    _attach_base_draft_text(task_id, batch_id, pack)
     write_writing_pack(task_id, batch_id, ref, pack)
     write_prompt(task_id, batch_id, ref, render_prompt_md(pack))
     # 仅当尚无 agent 草稿时写占位，避免覆盖会话模型已创作的正文。
@@ -287,7 +331,7 @@ def _compose_payload_from_pack(
     draft_meta: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
-    story_spine = quality_payload.get("storySpine") or {}
+    story_spine = (evidence_bundle.get("storySpine") or {}) if isinstance(evidence_bundle, Mapping) else {}
     carrier = str(pack.get("carrier") or "article")
     template = (brief.get("render") or {}).get("articleTemplate") or "journal"
     meta = draft_meta or {}
@@ -303,17 +347,13 @@ def _compose_payload_from_pack(
         "sourcePaths": list(quality_payload.get("sourcePaths") or []),
         "template": template,
         "assets": list(pack.get("assets") or []),
-        "publishLayout": pack.get("publishLayout") or ("gallery" if carrier == "gallery" else "travel"),
+        "publishLayout": "gallery" if carrier == "gallery" else "travel",
         "publishAngle": _publish_angle(brief),
         "publishTitle": brief.get("titleHint") or ref,
         "publishSeq": 1,
         "conditionContext": brief.get("conditionContext"),
-        "recommendation": brief.get("recommendation"),
         "composeBriefRef": ref,
-        "sourceQuality": story_spine.get("sourceQuality", []),
         "storySpine": story_spine,
-        "relatedSearchPlan": quality_payload.get("relatedSearchPlan"),
-        "evidenceBundle": evidence_bundle,
         "generator": str(meta.get("generator") or "pending"),
         "generatorModel": meta.get("model"),
         "citedSourceRefs": list(meta.get("citedSourcePaths") or []),
@@ -325,6 +365,18 @@ def _compose_payload_from_pack(
     if carrier == "gallery":
         payload["galleryMarkdown"] = article
     return payload
+
+
+def _attach_base_draft_text(task_id: str, batch_id: str, pack: dict[str, Any]) -> None:
+    """把底稿正文内联进 writing pack，供 prompt 渲染「在此基础上适度加工」。"""
+    from _common.base_draft import load_base_draft_text
+
+    base_ref = str(pack.get("baseSourceRef") or "")
+    if not base_ref:
+        return
+    text = load_base_draft_text(task_id, batch_id, base_ref).strip()
+    if text:
+        pack["baseDraftText"] = text[:4000]
 
 
 def _load_source_texts(source_paths: Sequence[str]) -> list[str]:
@@ -358,6 +410,7 @@ def review_route_draft(
     authenticity_issues.extend(generator_provenance_issues(draft_meta))
     body = "" if is_placeholder(article) else str(article)
     authenticity_issues.extend(template_fingerprint_issues(body))
+    authenticity_issues.extend(draft_asset_reference_issues(body, pack))
     source_texts = _load_source_texts(quality_payload.get("sourcePaths") or [])
     traceability = fact_traceability_issues(body, dict(brief), source_texts)
 
@@ -378,23 +431,58 @@ def review_route_draft(
     route_checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
-        "suggestions": ["按 prompt.md 由会话模型创作正文并写回 drafts/{ref}.article.md（generator=agent）。"] if authenticity_issues else [],
+        "suggestions": ["按 prompt.md 由会话模型创作正文并写回对象 `4.draft/draft.article.md`（generator=agent）。"] if authenticity_issues else [],
     }
     route_checks["factTraceability"] = {
         "passed": not traceability,
         "issues": traceability,
         "suggestions": ["补齐 mustIncludeFacts，并确保票价/海拔/时长等数字能在 source 证据中找到。"] if traceability else [],
     }
+    from _common.base_draft import base_draft_fidelity_issues, load_base_draft_text
 
-    blocking: list[str] = []
-    suggestions: list[str] = []
-    for name, result in route_checks.items():
-        if not result["passed"]:
-            blocking.extend(f"{name}: {issue}" for issue in result["issues"])
-            suggestions.extend(result.get("suggestions") or [])
+    base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
+    fidelity = base_draft_fidelity_issues(body, base_text)
+    route_checks["baseDraftFidelity"] = {
+        "passed": not fidelity,
+        "issues": fidelity,
+        "suggestions": ["以底稿为基础适度加工：相似度过低则贴回底稿叙事；过高则进一步改写表达、去版权痕迹。"] if fidelity else [],
+    }
+    from _common import quality_gates as qg
+
+    wi_issues = qg.writing_intent_consistency_issues(body, brief.get("writingIntent"))
+    route_checks["writingIntentConsistency"] = {
+        "passed": not wi_issues,
+        "issues": wi_issues,
+        "suggestions": ["按 writingIntent 主线补齐结构（路线攻略=节点顺序/转场/票务/取舍；体验=过程/取舍；游记=时间线/复盘）。"] if wi_issues else [],
+    }
+    banned_terms = [str(b) for b in (pack.get("bannedRegisterTerms") or brief.get("bannedRegisterTerms") or [])]
+    reg_issues = qg.register_lexicon_issues(body, banned_terms)
+    route_checks["registerMismatch"] = {
+        "passed": not reg_issues,
+        "issues": reg_issues,
+        "suggestions": ["改用该垂类合适的语域（如户外景区禁'看展/展厅/展陈'），由 SOP 词表约束。"] if reg_issues else [],
+    }
+    from _common import public_contacts as pc
+
+    allowed_contacts = [str(n) for n in (pack.get("allowedContactNumbers") or brief.get("allowedContactNumbers") or [])]
+    contact_issues = qg.contact_info_issues(body, allowed_numbers=pc.allowed_numbers(allowed_contacts))
+    route_checks["contactInfo"] = {
+        "passed": not contact_issues,
+        "issues": contact_issues,
+        "suggestions": ["删除私人电话/微信/QQ；仅保留紧急/公共服务短号或 source 核实的景区官方接待电话。"] if contact_issues else [],
+    }
+    heading_extra = [str(t) for t in (pack.get("mechanicalHeadingTerms") or brief.get("mechanicalHeadingTerms") or [])]
+    heading_issues = qg.mechanical_heading_issues(body, extra_terms=heading_extra)
+    route_checks["mechanicalHeading"] = {
+        "passed": not heading_issues,
+        "issues": heading_issues,
+        "suggestions": ["把纯清单式小标题改写得自然、有视角；优先沿用底稿已有小标题，不要套统一模板。"] if heading_issues else [],
+    }
+
+    blocking, suggestions, soft_failed = aggregate_checks(route_checks)
     human_review_required = bool(route_checks.get("imageGate", {}).get("humanReview"))
     decision = "approved" if not blocking else "revision_needed"
-    quality_score = max(0.0, 92.0 - len(blocking) * 8.0)
+    quality_score = max(0.0, 92.0 - len(blocking) * 8.0 - soft_failed * 3.0)
     payload = {
         "topicId": ref,
         "decision": decision,
@@ -405,7 +493,7 @@ def review_route_draft(
         "humanReviewRequired": human_review_required,
         "generator": compose_payload.get("generator"),
     }
-    write_stage_result(task_id, batch_id, "produce", "review", ref, payload)
+    write_stage_result(task_id, batch_id, "produce", "review", ref, _persisted_review_payload(payload))
     _persist_review_ledger(
         task_id, batch_id, ref, brief, compose_payload, route_checks, traceability, draft_meta, quality_score
     )
@@ -425,8 +513,6 @@ def review_route_draft(
         fallback = _review_fallback_stage(route_checks)
         if fallback == "download":
             rerun_chain = ["download", "quality_analysis", "compose-brief", "review", "materialize"]
-        elif fallback == "manual":
-            rerun_chain = ["manual_image_review", "review", "materialize"]
         elif fallback == "agent_compose":
             rerun_chain = ["agent_compose", "review", "materialize"]
         else:
@@ -443,6 +529,18 @@ def review_route_draft(
             rerun_chain=rerun_chain,
         )
     return payload
+
+
+def _persisted_review_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    checks = payload.get("checks") or {}
+    return {
+        "topicId": payload.get("topicId"),
+        "decision": payload.get("decision"),
+        "issues": list(payload.get("issues") or []),
+        "humanReviewRequired": bool(payload.get("humanReviewRequired")),
+        "generator": payload.get("generator"),
+        "checks": {name: {"passed": bool(result.get("passed"))} for name, result in checks.items()},
+    }
 
 
 def _score_from_quality(quality_score: float) -> int:
@@ -561,9 +659,22 @@ def _route_review_checks(
         "crossArticleSimilarity": _check_cross_article_similarity(task_id, batch_id, ref, article),
         "carrierConsistency": _check_carrier_consistency(compose_payload),
         "mixedLayout": _check_mixed_layout(article),
+        "proseStyle": _check_prose_style(article),
         "imageGate": _check_image_gate(compose_payload),
     }
     return checks
+
+
+def _check_prose_style(article: str) -> dict[str, Any]:
+    """文风门：禁止机械化固定收尾小标题（它到底适合谁 等）。"""
+    from _common.prose_style import mechanical_ending_title_issues
+
+    issues = mechanical_ending_title_issues(article)
+    return {
+        "passed": not issues,
+        "issues": issues,
+        "suggestions": ["把取舍判断自然融入叙述收尾，删除『适合谁』之类固定小标题。"] if issues else [],
+    }
 
 
 def _check_mixed_layout(article: str) -> dict[str, Any]:
@@ -704,7 +815,7 @@ def _check_travelogue_density(
 
     开篇不再强制单一"出发动机"：按 styleFamily 的 allowedOpenings 用 detect_opening_strategy 语义化校验，
     开篇须真正落地该体裁允许的任一开篇策略；若 draft_meta 声明了 openingStrategy，正文开篇须与之一致（诚信）。
-    无 styleFamily 时回退原 MOTIVATION_MARKERS，向后兼容。
+    无 styleFamily 时使用默认 allowedOpenings 规则。
     """
     issues: list[str] = []
     opening_required = bool((brief.get("openingTension") or {}).get("required", True))
@@ -769,26 +880,22 @@ def _check_cross_article_similarity(
     if not opening:
         return {"passed": True, "issues": [], "suggestions": []}
     issues: list[str] = []
-    directory = drafts_dir(task_id, batch_id)
-    suffix = ".article.md"
-    if directory.is_dir():
-        for other in sorted(directory.glob(f"*{suffix}")):
-            other_ref = other.name[: -len(suffix)]
-            if other_ref == ref:
-                continue
-            try:
-                other_text = other.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            if PLACEHOLDER_MARKER in other_text:
-                continue
-            other_opening = _opening_paragraph(other_text)
-            if not other_opening:
-                continue
-            sim = _jaccard(opening, other_opening)
-            if sim > threshold:
-                issues.append(f"opening too similar to sibling '{other_ref}' (jaccard={sim:.2f})")
-                break
+    for other_ref, other in iter_draft_articles(task_id, batch_id):
+        if other_ref == ref:
+            continue
+        try:
+            other_text = other.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if PLACEHOLDER_MARKER in other_text:
+            continue
+        other_opening = _opening_paragraph(other_text)
+        if not other_opening:
+            continue
+        sim = _jaccard(opening, other_opening)
+        if sim > threshold:
+            issues.append(f"opening too similar to sibling '{other_ref}' (jaccard={sim:.2f})")
+            break
     return {
         "passed": not issues,
         "issues": issues,
@@ -897,7 +1004,7 @@ def _check_evidence_quality(
     return {
         "passed": not issues,
         "issues": issues,
-        "suggestions": ["回退 download/source_screen 补强线路证据，再重新创作。"] if issues else [],
+        "suggestions": ["返回 download/source_screen 补强线路证据，再重新创作。"] if issues else [],
     }
 
 
@@ -908,9 +1015,11 @@ def _review_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
         return "download"
     if not checks.get("factTraceability", {"passed": True})["passed"]:
         return "agent_compose"
+    if not checks.get("baseDraftFidelity", {"passed": True})["passed"]:
+        return "agent_compose"
     if not checks["provenanceRewrite"]["passed"]:
         return "agent_compose"
-    if not checks["routeCoverage"]["passed"] or not checks["narrativeContinuity"]["passed"]:
+    if not checks["routeCoverage"]["passed"]:
         return "agent_compose"
     if not checks.get("travelogueDensity", {"passed": True})["passed"]:
         return "agent_compose"
@@ -920,13 +1029,14 @@ def _review_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
         return "agent_compose"
     image_gate = checks.get("imageGate", {"passed": True})
     if not image_gate["passed"]:
-        return "manual" if image_gate.get("humanReview") and len(image_gate.get("issues") or []) == 1 else "agent_compose"
+        return "agent_compose"
     if not checks.get("carrierConsistency", {"passed": True})["passed"]:
         return "agent_compose"
     return "review"
 
 
 def _publish_angle(brief: Mapping[str, Any]) -> str:
+    """由 templateId 确定性映射 publish 目录 angle（与 tagRefs Format/内容角度 对齐）。"""
     template_id = str(brief.get("templateId") or "")
     if "跟团" in template_id:
         return "跟团攻略"
@@ -938,30 +1048,48 @@ def _publish_angle(brief: Mapping[str, Any]) -> str:
         return "枢纽到达"
     if "省钱" in template_id:
         return "省钱攻略"
-    return "环线攻略"
+    if "周末短途" in template_id or "银发" in template_id or "补给" in template_id:
+        # 一日游/周边/短线：落「攻略」层（见 test_post_dir_layout 都江堰一日游）
+        return "攻略"
+    if "环线" in template_id:
+        return "环线攻略"
+    return "攻略"
 
 
-# ---------------------------------------------------------------------------
-# 选图（cover/node/closing），供 writing pack 与 review 共用
-# ---------------------------------------------------------------------------
+def _entity_image_candidates(
+    task_id: str, batch_id: str, name: str, entity_ref: str = ""
+) -> list[dict[str, Any]]:
+    """实体可选图候选（新布局：来源单元 assets/）。
 
-_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+    每项 {path, sourceRef, sourceAssetRef}（后两者为相对 batch 根路径，构成证据链）。
+    """
+    from _common.source_unit import (
+        find_entity_object_dirs,
+        object_image_candidates,
+        resolve_entity_object_dir,
+    )
+
+    cands: list[dict[str, Any]] = []
+    if entity_ref:
+        cands = object_image_candidates(
+            resolve_entity_object_dir(task_id, batch_id, entity_ref), task_id, batch_id
+        )
+    if not cands:
+        for obj in find_entity_object_dirs(task_id, batch_id, name):
+            cands.extend(object_image_candidates(obj, task_id, batch_id))
+    if cands:
+        return cands
+    return []
 
 
-def _entity_image_candidates(task_id: str, batch_id: str, name: str) -> list[Path]:
-    images_dir = batch_sources_dir(task_id, batch_id, name) / "images"
-    if not images_dir.is_dir():
-        return []
-    return [c for c in sorted(images_dir.iterdir()) if c.is_file() and c.suffix.lower() in _IMAGE_EXTS]
-
-
-def _pick_safe_image(candidates: Sequence[Path], chosen: Sequence[Path]):
-    """挑出 safe（非 unsafe）且与已选不近重复的第一张，杜绝同源复用。返回 (path, verdict)。"""
+def _pick_safe_image(candidates: Sequence[Mapping[str, Any]], chosen: Sequence[Path]):
+    """挑出 safe（非 unsafe）且与已选不近重复的第一张，杜绝同源复用。返回 (candidate, verdict)。"""
     fallback = None
     for cand in candidates:
-        if any(is_near_duplicate(cand, picked) for picked in chosen):
+        path = cand["path"]
+        if any(is_near_duplicate(path, picked) for picked in chosen):
             continue
-        verdict = assess_image(cand)
+        verdict = assess_image(path)
         if verdict.status == STATUS_UNSAFE:
             continue
         if fallback is None:
@@ -989,19 +1117,41 @@ def _node_layout(layouts: Sequence[str], position: int) -> str:
     return ("wrapRight", "wrapLeft", "gallery")[position % 3]
 
 
-def _make_asset(ref: str, *, role: str, position: int, path: Path, layout: str, caption: str, entity_name: str, verdict=None) -> dict[str, Any]:
-    suffix = "cover" if role == "cover" else (f"detail_{position}" if role == "node" else "closing")
-    object_key = f"media/image/post/{ref}/{suffix}.jpg"
+def _make_asset(
+    ref: str,
+    *,
+    role: str,
+    candidate: Mapping[str, Any],
+    layout: str,
+    caption: str,
+    entity_name: str,
+    global_batch_seq: int,
+    asset_registry: BatchAssetRegistry,
+    verdict=None,
+) -> dict[str, Any]:
+    path = candidate["path"]
+    # 成品资产文件名即 assetId（可由 article.md 的 asset:// 直查文件，无需翻 manifest）。
+    asset_id = allocate_post_asset_id(
+        entity_name=entity_name,
+        role=role,
+        ref=ref,
+        global_batch_seq=global_batch_seq,
+        registry=asset_registry,
+    )
+    ext = path.suffix.lower() or ".jpg"
     asset = {
-        "assetId": asset_id_from_object_key(object_key),
-        "fileName": path.name,
+        "assetId": asset_id,
+        "fileName": f"{asset_id}{ext}",
         "caption": caption,
         "kind": "image",
         "scope": "cold_start",
         "role": role,
         "entityName": entity_name,
-        "objectKey": object_key,
+        "objectKey": "",
         "sourcePath": str(path),
+        # 证据链：source 原图 + 原文（相对 batch 根；materialize 直接写入 manifest）。
+        "sourceAssetRef": str(candidate.get("sourceAssetRef") or ""),
+        "sourceRef": str(candidate.get("sourceRef") or ""),
         "imageLayout": layout,
     }
     if verdict is not None:
@@ -1020,13 +1170,22 @@ def _build_route_assets(
 ) -> list[dict[str, Any]]:
     """选图：cover/node/closing 三类职责，节点图绑定各自实体，跨实体感知去重，跳过 unsafe。"""
     image_plan = list(brief.get("imagePlan") or [])
+    manifest = load_batch_manifest(task_id, batch_id)
+    global_batch_seq = int(brief.get("globalBatchSeq") or manifest.get("globalBatchSeq") or 0)
+    if global_batch_seq <= 0:
+        raise RuntimeError(f"missing globalBatchSeq for task={task_id} batch={batch_id}")
+    asset_registry = load_batch_asset_registry(task_id, batch_id, global_batch_seq)
     layouts = _image_plan_layouts(image_plan)
     route_nodes = [node for node in (evidence_bundle.get("routeNodes") or []) if node.get("entityName")]
     entity_names = [str(node["entityName"]) for node in route_nodes]
     if not entity_names:
         return []
+    ref_by_name = {str(node["entityName"]): str(node.get("entityRef") or "") for node in route_nodes}
 
-    per_entity = {name: _entity_image_candidates(task_id, batch_id, name) for name in dict.fromkeys(entity_names)}
+    per_entity = {
+        name: _entity_image_candidates(task_id, batch_id, name, ref_by_name.get(name, ""))
+        for name in dict.fromkeys(entity_names)
+    }
 
     assets: list[dict[str, Any]] = []
     chosen: list[Path] = []
@@ -1035,23 +1194,36 @@ def _build_route_assets(
     cover_pool = per_entity.get(entity_names[0]) or []
     cover = _pick_safe_image(cover_pool, chosen)
     if cover is not None:
-        chosen.append(cover[0])
-        assets.append(_make_asset(ref, role="cover", position=1, path=cover[0], layout=cover_layout, caption=entity_names[0], entity_name=entity_names[0], verdict=cover[1]))
+        chosen.append(cover[0]["path"])
+        assets.append(
+            _make_asset(
+                ref,
+                role="cover",
+                candidate=cover[0],
+                layout=cover_layout,
+                caption=entity_names[0],
+                entity_name=entity_names[0],
+                global_batch_seq=global_batch_seq,
+                asset_registry=asset_registry,
+                verdict=cover[1],
+            )
+        )
 
     for position, name in enumerate(entity_names):
         node_image = _pick_safe_image(per_entity.get(name) or [], chosen)
         if node_image is None:
             continue
-        chosen.append(node_image[0])
+        chosen.append(node_image[0]["path"])
         assets.append(
             _make_asset(
                 ref,
                 role="node",
-                position=position + 1,
-                path=node_image[0],
+                candidate=node_image[0],
                 layout=_node_layout(layouts, position),
                 caption=name,
                 entity_name=name,
+                global_batch_seq=global_batch_seq,
+                asset_registry=asset_registry,
                 verdict=node_image[1],
             )
         )
@@ -1059,8 +1231,20 @@ def _build_route_assets(
     closing_pool = per_entity.get(entity_names[-1]) or []
     closing = _pick_safe_image(closing_pool, chosen)
     if closing is not None:
-        chosen.append(closing[0])
-        assets.append(_make_asset(ref, role="closing", position=len(entity_names) + 1, path=closing[0], layout="fullWidth", caption=f"{entity_names[-1]}·回望", entity_name=entity_names[-1], verdict=closing[1]))
+        chosen.append(closing[0]["path"])
+        assets.append(
+            _make_asset(
+                ref,
+                role="closing",
+                candidate=closing[0],
+                layout="fullWidth",
+                caption=f"{entity_names[-1]}·回望",
+                entity_name=entity_names[-1],
+                global_batch_seq=global_batch_seq,
+                asset_registry=asset_registry,
+                verdict=closing[1],
+            )
+        )
 
     return assets
 

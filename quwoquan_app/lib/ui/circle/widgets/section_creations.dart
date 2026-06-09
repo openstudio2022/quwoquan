@@ -44,7 +44,7 @@ class SectionCreations extends ConsumerStatefulWidget {
 
 class _SectionCreationsState extends ConsumerState<SectionCreations> {
   bool _isLoading = true;
-  String? _error;
+  UiErrorSemantic? _errorSemantic;
   List<CircleHubFeedPostEntry> _feedEntries = const [];
   String? _circleCategoryId;
 
@@ -79,13 +79,21 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   Future<void> _loadFeed() async {
     setState(() {
       _isLoading = true;
-      _error = null;
+      _errorSemantic = null;
     });
     try {
       final circleState = ref.read(circleStateProvider(widget.circleId));
       final repo = ref.read(circleRepositoryProvider);
       final query = _feedQueryForState(circleState);
-      final circleDetail = await repo.getCircle(widget.circleId);
+      String? circleCategoryId;
+      try {
+        final circleDetail = await repo.getCircle(widget.circleId);
+        circleCategoryId = circleDetail.categoryId;
+      } catch (_) {
+        // 频道推荐标签只是增强信息；未知圈子或详情缺失不应阻断作品区本体，
+        // 否则空态场景会被误打成错误态。
+        circleCategoryId = null;
+      }
       final items = await repo.getCircleFeed(
         widget.circleId,
         identity: query.identity,
@@ -97,7 +105,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
           _feedEntries = items
               .map(CircleHubFeedPostEntry.fromPostDto)
               .toList(growable: false);
-          _circleCategoryId = circleDetail.categoryId;
+          _circleCategoryId = circleCategoryId;
           _isLoading = false;
         });
       }
@@ -105,7 +113,12 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = runtimeErrorDisplayMessage(e);
+          _errorSemantic = runtimeErrorSemantic(
+            context,
+            error: e,
+            category: UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+          );
         });
       }
     }
@@ -198,57 +211,110 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       child: _buildContent(circleState, fgSecondary),
     );
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
-        AppSpacing.containerSm,
-        AppSpacing.containerMd,
-        AppSpacing.containerLg,
-      ),
-      child: Column(
-        children: [
-          _buildSurface(
-            backgroundColor: bgSecondary,
-            borderColor: borderColor,
-            child: Column(
-              children: [
-                _buildIdentityFilterRow(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compactHeight = constraints.maxHeight < 320;
+        final compactEmptyState =
+            compactHeight &&
+            !_isLoading &&
+            _errorSemantic == null &&
+            _feedEntries.isEmpty;
+        final outerHorizontal = compactHeight
+            ? AppSpacing.containerSm
+            : AppSpacing.containerMd;
+        final outerTop = compactHeight
+            ? (compactEmptyState ? AppSpacing.zero : AppSpacing.intraGroupXs)
+            : AppSpacing.containerSm;
+        final outerBottom = compactHeight
+            ? (compactEmptyState ? AppSpacing.intraGroupXs : AppSpacing.containerSm)
+            : AppSpacing.containerLg;
+        final sectionGap = compactHeight
+            ? AppSpacing.intraGroupXs
+            : AppSpacing.sm;
+        final filterGap = compactHeight ? AppSpacing.xs : AppSpacing.sm;
+
+        final filterSurface = _buildSurface(
+          backgroundColor: bgSecondary,
+          borderColor: borderColor,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildIdentityFilterRow(
+                circleState,
+                circleCtrl,
+                fg,
+                fgSecondary,
+              ),
+              if (_isWorkLikeSubTab(circleState.activeSubTab)) ...[
+                SizedBox(height: filterGap),
+                _buildWorkFormatFilterRow(
                   circleState,
                   circleCtrl,
                   fg,
                   fgSecondary,
                 ),
-                if (_isWorkLikeSubTab(circleState.activeSubTab)) ...[
-                  SizedBox(height: AppSpacing.sm),
-                  _buildWorkFormatFilterRow(
-                    circleState,
-                    circleCtrl,
-                    fg,
-                    fgSecondary,
-                  ),
-                ],
-                if (_isAdminOrOwner) ...[
-                  SizedBox(height: AppSpacing.sm),
-                  _buildSortControls(circleState, circleCtrl, fg, fgSecondary),
-                  SizedBox(height: AppSpacing.xs),
-                  _buildViewModeToggle(
-                    circleState,
-                    circleCtrl,
-                    fgSecondary: fgSecondary,
-                    borderColor: borderColor,
-                    backgroundColor: bgTertiary,
-                  ),
-                ],
               ],
-            ),
+              if (_isAdminOrOwner && !compactHeight) ...[
+                SizedBox(height: filterGap),
+                _buildSortControls(circleState, circleCtrl, fg, fgSecondary),
+                SizedBox(height: compactHeight ? AppSpacing.intraGroupXs : AppSpacing.xs),
+                _buildViewModeToggle(
+                  circleState,
+                  circleCtrl,
+                  fgSecondary: fgSecondary,
+                  borderColor: borderColor,
+                  backgroundColor: bgTertiary,
+                ),
+              ],
+            ],
           ),
-          SizedBox(height: AppSpacing.sm),
-          if (widget.inlineScroll)
-            contentSurface
-          else
-            Expanded(child: contentSurface),
-        ],
-      ),
+        );
+
+        if (compactEmptyState) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              outerHorizontal,
+              outerTop,
+              outerHorizontal,
+              outerBottom,
+            ),
+            child: contentSurface,
+          );
+        }
+
+        final child = Column(
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            if (!compactEmptyState && compactHeight)
+              Flexible(
+                fit: FlexFit.loose,
+                child: SingleChildScrollView(
+                  child: filterSurface,
+                ),
+              )
+            else if (!compactEmptyState)
+              filterSurface,
+            if (!compactEmptyState) SizedBox(height: sectionGap),
+            if (widget.inlineScroll)
+              contentSurface
+            else
+              Flexible(
+                fit: FlexFit.tight,
+                child: contentSurface,
+              ),
+          ],
+        );
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            outerHorizontal,
+            outerTop,
+            outerHorizontal,
+            outerBottom,
+          ),
+          child: child,
+        );
+      },
     );
   }
 
@@ -690,8 +756,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     if (_isLoading) {
       return const Center(child: CupertinoActivityIndicator());
     }
-    if (_error != null) {
-      return _buildErrorCard(fgSecondary);
+    if (_errorSemantic != null) {
+      return _buildErrorCard();
     }
 
     final activeSubTab = circleState.activeSubTab;
@@ -1204,8 +1270,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final ultraCompact =
-            constraints.maxHeight < AppSpacing.minInteractiveSize;
-        final compact = !ultraCompact && constraints.maxHeight < 132;
+            constraints.maxHeight < AppSpacing.buttonHeight;
+        final compact = !ultraCompact && constraints.maxHeight < 220;
         final horizontalPadding = compact
             ? AppSpacing.containerSm
             : AppSpacing.containerMd;
@@ -1271,7 +1337,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
                   children: [
                     iconBubble,
                     SizedBox(width: AppSpacing.sm),
-                    Expanded(child: text),
+                    Flexible(child: text),
                   ],
                 ),
               ),
@@ -1300,104 +1366,15 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     );
   }
 
-  Widget _buildErrorCard(Color fgSecondary) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final ultraCompact = constraints.maxHeight < AppSpacing.buttonHeightXs;
-        final compact = !ultraCompact && constraints.maxHeight < 120;
-        final horizontalPadding = compact
-            ? AppSpacing.containerSm
-            : AppSpacing.containerMd;
-        final verticalPadding = ultraCompact
-            ? 0.0
-            : compact
-            ? AppSpacing.containerSm
-            : AppSpacing.containerMd;
-        final iconSize = compact ? AppSpacing.iconMedium : AppSpacing.iconLarge;
-        final text = Text(
-          UITextConstants.loadFailed,
-          style: TextStyle(
-            color: fgSecondary,
-            fontSize: compact ? AppTypography.sm : AppTypography.base,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-        );
-
-        if (ultraCompact) {
-          return Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-              child: text,
-            ),
-          );
+  Widget _buildErrorCard() {
+    return AppSectionErrorCard(
+      semantic: _errorSemantic!,
+      margin: EdgeInsets.zero,
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry ||
+            action.type == UiErrorActionType.resubmit) {
+          await _loadFeed();
         }
-
-        if (compact) {
-          final compactContentWidth =
-              (constraints.maxWidth - (horizontalPadding * 2))
-                  .clamp(0.0, double.infinity)
-                  .toDouble();
-          return Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: horizontalPadding,
-                vertical: verticalPadding,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: compactContentWidth),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      CupertinoIcons.exclamationmark_circle,
-                      color: AppColors.error,
-                      size: iconSize,
-                    ),
-                    SizedBox(width: AppSpacing.sm),
-                    Expanded(child: text),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-
-        return Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: horizontalPadding,
-              vertical: verticalPadding,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  CupertinoIcons.exclamationmark_circle,
-                  color: AppColors.error,
-                  size: iconSize,
-                ),
-                SizedBox(height: AppSpacing.sm),
-                text,
-                SizedBox(height: AppSpacing.sm),
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  onPressed: _loadFeed,
-                  child: Text(
-                    UITextConstants.retry,
-                    style: TextStyle(
-                      color: AppColors.primaryColor,
-                      fontSize: AppTypography.base,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
       },
     );
   }

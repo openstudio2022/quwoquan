@@ -5,18 +5,40 @@ import (
 
 	"github.com/google/uuid"
 
+	blockevent "quwoquan_service/services/user-service/internal/domain/block/event"
 	blockmodel "quwoquan_service/services/user-service/internal/domain/block/model"
 	blockrepo "quwoquan_service/services/user-service/internal/domain/block/repository"
+	followrepo "quwoquan_service/services/user-service/internal/domain/follow/repository"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 )
 
 type BlockService struct {
-	blocks blockrepo.BlockRepository
-	bcache *cache.BlockCache
+	blocks    blockrepo.BlockRepository
+	follows   followrepo.FollowRepository
+	greetings GreetingBlockCascade
+	bcache    *cache.BlockCache
+	events    UserEventPublisher
 }
 
-func NewBlockService(blocks blockrepo.BlockRepository, bcache *cache.BlockCache) *BlockService {
-	return &BlockService{blocks: blocks, bcache: bcache}
+type GreetingBlockCascade interface {
+	MarkPendingBlockedBetween(ctx context.Context, subAccountA, subAccountB string) error
+}
+
+func NewBlockService(
+	blocks blockrepo.BlockRepository,
+	follows followrepo.FollowRepository,
+	bcache *cache.BlockCache,
+	events UserEventPublisher,
+	greetings ...GreetingBlockCascade,
+) *BlockService {
+	if events == nil {
+		events = NoopUserEventPublisher()
+	}
+	svc := &BlockService{blocks: blocks, follows: follows, bcache: bcache, events: events}
+	if len(greetings) > 0 {
+		svc.greetings = greetings[0]
+	}
+	return svc
 }
 
 func (s *BlockService) Block(ctx context.Context, blockerID, blockedID string) error {
@@ -30,7 +52,18 @@ func (s *BlockService) Block(ctx context.Context, blockerID, blockedID string) e
 		return err
 	}
 	if created {
+		if hasFollowRepository(s.follows) {
+			_, _ = s.follows.Delete(ctx, blockerID, blockedID)
+			_, _ = s.follows.Delete(ctx, blockedID, blockerID)
+		}
+		if s.greetings != nil {
+			_ = s.greetings.MarkPendingBlockedBetween(ctx, blockerID, blockedID)
+		}
 		_ = s.bcache.Add(ctx, blockerID, blockedID)
+		_ = s.events.PublishUserEvent(ctx, blockevent.UserBlocked, blockedID, blockerID, map[string]any{
+			"blockerId": blockerID,
+			"blockedId": blockedID,
+		})
 	}
 	return nil
 }
@@ -42,6 +75,10 @@ func (s *BlockService) Unblock(ctx context.Context, blockerID, blockedID string)
 	}
 	if deleted {
 		_ = s.bcache.Remove(ctx, blockerID, blockedID)
+		_ = s.events.PublishUserEvent(ctx, blockevent.UserUnblocked, blockedID, blockerID, map[string]any{
+			"blockerId": blockerID,
+			"blockedId": blockedID,
+		})
 	}
 	return nil
 }

@@ -559,14 +559,20 @@ Widget _buildImageErrorPlaceholder(BuildContext context, bool isDark) {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: AppSpacing.largeButtonSize,
-            color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
+          Container(
+            width: AppSpacing.sm,
+            height: AppSpacing.sm,
+            decoration: BoxDecoration(
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundTertiary,
+              ).withValues(alpha: 0.65),
+              shape: BoxShape.circle,
+            ),
           ),
           SizedBox(height: AppSpacing.sm),
           Text(
-            UITextConstants.loadFailed,
+            UITextConstants.contentNotLoadedYet,
             style: TextStyle(
               fontSize: AppTypography.sm,
               color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),

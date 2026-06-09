@@ -10,10 +10,8 @@ import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
-import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
-import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
@@ -21,12 +19,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
-import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
-import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show BehaviorAction, ReferralSource;
+    show ReferralSource;
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
-import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
+import 'package:quwoquan_app/ui/discovery/services/home_feed_post_open_action.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
@@ -114,18 +110,47 @@ class _HomePageState extends ConsumerState<HomePage>
     // 保持当前频道不变（不切到空白的关注流）。
     if (id == HomePrimaryTabStrip.followingChannelId &&
         !AuthGate.isAuthenticated(ref)) {
+      ref
+          .read(authContinuationProvider.notifier)
+          .set(
+            const OpenHomeChannelContinuation(
+              channelId: HomePrimaryTabStrip.followingChannelId,
+            ),
+          );
       unawaited(
         requireLogin(
           ref,
           context,
           AuthGateReason.followingFeed,
+          redirect: AppRoutePaths.home,
           dismissFallback: AppRoutePaths.home,
+          allowGuestDismissPop: false,
         ),
       );
       return;
     }
     setState(() => _activeChannelId = id);
     _syncShellRouteForTab(id);
+  }
+
+  void _resumeHomeChannelContinuation() {
+    final pending = ref
+        .read(authContinuationProvider.notifier)
+        .take<OpenHomeChannelContinuation>();
+    if (pending == null ||
+        pending.channelId != HomePrimaryTabStrip.followingChannelId ||
+        !mounted) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      if (_activeChannelId != pending.channelId) {
+        setState(() => _activeChannelId = pending.channelId);
+      }
+      _syncShellRouteForTab(pending.channelId);
+    });
   }
 
   void _handleTabSwipeDragEnd(DragEndDetails details) {
@@ -152,6 +177,24 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      AuthSessionState? previous,
+      AuthSessionState next,
+    ) {
+      final justLoggedIn =
+          next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated);
+      if (justLoggedIn) {
+        _resumeHomeChannelContinuation();
+      }
+    });
+    if (ref.watch(authSessionControllerProvider).isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _resumeHomeChannelContinuation();
+        }
+      });
+    }
     final safeTop = MediaQuery.viewPaddingOf(context).top;
     final effectiveTopInset = safeTop + AppSpacing.intraGroupXs;
 
@@ -277,12 +320,15 @@ class _HomePageState extends ConsumerState<HomePage>
     if (targetId.isEmpty) return;
     // 交集漏斗归因（点击）：携带 intersectionId/dimension/class，闭合曝光→点击→转化。
     if (reason.intersectionId.isNotEmpty) {
-      ref.read(contentBehaviorTrackerProvider).trackClick(
+      ref
+          .read(contentBehaviorTrackerProvider)
+          .trackClick(
             targetId,
             referralSource: ReferralSource.organicFeed,
             intersectionId: reason.intersectionId,
             intersectionDimension: reason.dimension,
             intersectionClass: reason.intersectionClass,
+            intersectionTagRefs: reason.tagRefs,
           );
     }
     final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);
@@ -318,80 +364,16 @@ class _HomePageState extends ConsumerState<HomePage>
     PostBaseDto post,
     int mediaIndex, {
     List<PostBaseDto>? feedPosts,
-  }) async {
-    final viewerPosts = (feedPosts ?? const <PostBaseDto>[])
-        .where(_supportsUnifiedViewer)
-        .toList(growable: false);
-    if (viewerPosts.isEmpty) {
-      return;
-    }
-
-    final navFeedRequestId = ref
-        .read(feedSessionProvider.notifier)
-        .newFeedRequestId();
-    // 入口 post 在 feed 中的位置（推荐归因；-1 → null 不上报）。
-    final feedPosition = (feedPosts ?? const <PostBaseDto>[]).indexWhere(
-      (item) => item.id == post.id,
+  }) {
+    // post → 沉浸 viewer 的统一动作（移动端 / Web 壳共用），保证归因链与
+    // MediaViewerExtra 构造同源。
+    return openHomeFeedPost(
+      context,
+      ref,
+      post: post,
+      mediaIndex: mediaIndex,
+      feedPosts: feedPosts,
     );
-    ref
-        .read(behaviorRepositoryProvider)
-        .reportSingle(
-          contentId: post.id,
-          action: BehaviorAction.click,
-          authorId: post.authorId,
-          referralSource: ReferralSource.organicFeed,
-          feedRequestId: navFeedRequestId,
-          position: feedPosition >= 0 ? feedPosition : null,
-        );
-
-    final rawPostsById = homeFollowingMediaViewerRaws(
-      content: ref.read(contentRepositoryProvider),
-      viewerPosts: viewerPosts,
-    );
-    final postViews = viewerPosts
-        .map(
-          (dto) => ContentSurfaceViewMapper.fromDto(
-            dto,
-            wire: rawPostsById[dto.id]!.toDynamicMap(),
-          ),
-        )
-        .toList(growable: false);
-    final initialIndex = viewerPosts.isNotEmpty
-        ? viewerPosts
-              .indexWhere((item) => item.id == post.id)
-              .clamp(0, viewerPosts.length - 1)
-        : mediaIndex;
-    final interactionSnapshot = buildMediaViewerInteractionSnapshot(
-      posts: viewerPosts,
-      discoveryState: ref.read(discoveryStateProvider),
-      relationshipState: ref.read(userRelationshipStateProvider),
-      postInteractionState: ref.read(postInteractionStateProvider),
-    );
-    primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
-    final result = await context.push<Object?>(
-      post.isVideoLike
-          ? '/video-viewer/$initialIndex'
-          : '/media-viewer/photo/$initialIndex',
-      extra: MediaViewerExtra(
-        posts: postViews,
-        dtoPosts: viewerPosts,
-        initialIndex: initialIndex,
-        category: 'following',
-        source: 'following',
-        initialImageIndex: mediaIndex,
-        rawPostsById: rawPostsById,
-        interactionSnapshot: interactionSnapshot,
-        feedRequestId: navFeedRequestId,
-        position: feedPosition >= 0 ? feedPosition : null,
-      ),
-    );
-    if (result is MediaViewerResult) {
-      applyMediaViewerResultToInteractionState(ref, result);
-    }
-  }
-
-  bool _supportsUnifiedViewer(PostBaseDto post) {
-    return post.supportsUnifiedViewer;
   }
 }
 

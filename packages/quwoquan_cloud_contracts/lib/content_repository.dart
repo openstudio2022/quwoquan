@@ -139,13 +139,21 @@ abstract class ContentCommentRepository {
   Future<CommentPage> listComments({
     required String postId,
     String? cursor,
-    String sort = 'latest',
+    String sort = 'recommended',
     int limit = CloudApiDefaults.pageLimit,
+  });
+  Future<CommentPage> listCommentReplies({
+    required String postId,
+    required String commentId,
+    String? cursor,
+    int limit = 10,
   });
   Future<CommentDto> createComment({
     required String postId,
     required String content,
     String? replyToCommentId,
+    List<String> attachmentMediaIds = const <String>[],
+    List<Map<String, dynamic>> mentions = const <Map<String, dynamic>>[],
     String? subAccountId,
     String? personaContextVersion,
   });
@@ -153,8 +161,10 @@ abstract class ContentCommentRepository {
     required String postId,
     required String commentId,
   });
-  Future<void> likeComment({required String commentId});
-  Future<void> unlikeComment({required String commentId});
+  Future<CommentDto> reactToComment({
+    required String commentId,
+    required String reaction,
+  });
   Future<CommentPage> listCommentsByAuthor({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,

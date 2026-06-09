@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_paths.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 
 class AppLogWriter {
   AppLogWriter({AppLogPaths? paths, this.keepDays = 7})
@@ -22,7 +23,7 @@ class AppLogWriter {
     required Map<String, dynamic> payload,
     DateTime? at,
   }) async {
-    if (kIsWeb) {
+    if (currentAppPlatform == AppPlatform.web) {
       return 'web://app-log/$subDirectory/$fileName';
     }
     final time = at ?? DateTime.now();
@@ -48,7 +49,7 @@ class AppLogWriter {
     required Map<String, dynamic> payload,
     DateTime? at,
   }) async {
-    if (kIsWeb) {
+    if (currentAppPlatform == AppPlatform.web) {
       return 'web://app-log/$subDirectory/$fileName';
     }
     final time = at ?? DateTime.now();

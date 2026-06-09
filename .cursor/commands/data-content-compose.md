@@ -2,6 +2,8 @@
 
 用途：根据 `compose_brief.json` 生成单篇内容。这里是唯一允许写用户正文的步骤。
 
+> fanout 模式下，这是 **per-ref worker 的创作内核**：worker 把租到的单 ref lease packet 交给一个 cloud agent / Subagent，仅创作该 ref 正文并满足 `ref_review_gate.passed`，严格 single-ref 隔离（禁读同批其它文章正文作底稿）。
+
 ## 输入
 
 - `compose_brief.json`

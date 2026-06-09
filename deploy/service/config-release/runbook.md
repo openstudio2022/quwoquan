@@ -32,4 +32,4 @@ agent_ops/deploy/prod/config_release_rollback.sh \
   --to-config-version v2026.02.27.1
 ```
 
-Rollback is idempotent and writes an audit line to `.release-state/<service>.audit.log`.
+Rollback is idempotent and writes an audit line to `state/release/<service>.audit.log`.

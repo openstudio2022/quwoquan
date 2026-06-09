@@ -4,8 +4,10 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
 const String loginDismissFallbackQueryParam = 'dismiss_fallback';
@@ -21,6 +23,7 @@ enum AuthGateReason {
   createPost,
   openChat,
   sendMessage,
+  greet,
   comment,
   like,
   favorite,
@@ -92,7 +95,7 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
       ),
       // 点赞已下放为「游客设备态可写」：LikePost 鉴权为 optional + anonymous_policy=allow，
       // 游客按 deviceActorId 维度真实写入、登录用户按账号维度写入，互不并账。
-      // 因此点赞不再触发登录门，requiredOperations 留空（保留 reason 以兼容历史调用）。
+      // 因此点赞不再触发登录门，requiredOperations 留空（保留 reason 以兼容既往调用）。
       AuthGateReason.like: AuthGateEntry(
         reason: AuthGateReason.like,
         title: UITextConstants.authGateTitleLike,
@@ -110,6 +113,19 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
         title: UITextConstants.authGateTitleFollow,
         prompt: UITextConstants.authGatePromptFollow,
         requiredOperations: <String>['FollowUser'],
+      ),
+      AuthGateReason.greet: AuthGateEntry(
+        reason: AuthGateReason.greet,
+        title: UITextConstants.authGateTitleGreet,
+        prompt: UITextConstants.authGatePromptGreet,
+        requiredOperations: <String>[
+          'SendGreetingRequest',
+          'ReplyGreetingRequest',
+          'IgnoreGreetingRequest',
+          'CancelGreetingRequest',
+          'ListGreetingInbox',
+          'ListGreetingOutbox',
+        ],
       ),
       // 关注频道展示「关注的人」的内容流，游客无关注关系，需登录后查看。
       // 关注流走 GetFeed（鉴权快照为 optional），故此处不声明 requiredOperations，
@@ -159,7 +175,7 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
         prompt: UITextConstants.authGatePromptJoinCircle,
         requiredOperations: <String>['JoinCircle'],
       ),
-      // 加好友 / 发起群聊 / 建圈子 属「先开面板、动作再登录」的产品级动作门，
+      // 添加联系人 / 发起群聊 / 建圈子 属「先开面板、动作再登录」的产品级动作门，
       // 登录约束是产品决策而非单一 required API，故 requiredOperations 留空。
       AuthGateReason.addContact: AuthGateEntry(
         reason: AuthGateReason.addContact,
@@ -188,7 +204,8 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
     };
 
 extension AuthGateReasonX on AuthGateReason {
-  AuthGateEntry get entry => authGateMatrix[this] ?? authGateMatrix[AuthGateReason.generic]!;
+  AuthGateEntry get entry =>
+      authGateMatrix[this] ?? authGateMatrix[AuthGateReason.generic]!;
   String get title => entry.title;
   String get prompt => entry.prompt;
   List<String> get requiredOperations => entry.requiredOperations;
@@ -211,7 +228,10 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
   if (loc.startsWith('/profile/')) {
     return AuthGateReason.personaManage;
   }
-  if (loc == AppRoutePaths.createEntry || loc.startsWith('/create')) {
+  // createEntry 是「添加入口动作面板」，游客必须能先看到面板；真正的发布/
+  // 图片/视频编辑页仍在 /create 下由路由守卫保护，登录成功按 redirect 回目标态。
+  if (loc == AppRoutePaths.createPathTemplate ||
+      loc.startsWith('${AppRoutePaths.createPathTemplate}/')) {
     return AuthGateReason.createPost;
   }
   if (loc == AppRoutePaths.chat || loc.startsWith('/chat/')) {
@@ -226,11 +246,13 @@ String buildLoginRouteLocation({
   String? dismissFallback,
   bool allowGuestDismissPop = true,
 }) {
+  final reason = _trimmedOrNull(reasonName);
+  final redirectLocation = _trimmedOrNull(redirect);
+  final fallbackLocation = _trimmedOrNull(dismissFallback);
   final query = <String, String>{
-    if (_trimmedOrNull(reasonName) case final value?) 'reason': value,
-    if (_trimmedOrNull(redirect) case final value?) 'redirect': value,
-    if (_trimmedOrNull(dismissFallback) case final value?)
-      loginDismissFallbackQueryParam: value,
+    if (reason != null) 'reason': reason,
+    if (redirectLocation != null) 'redirect': redirectLocation,
+    if (fallbackLocation != null) loginDismissFallbackQueryParam: fallbackLocation,
     loginGuestDismissPopQueryParam: allowGuestDismissPop ? '1' : '0',
   };
   return Uri(
@@ -250,10 +272,7 @@ String currentLoginDismissFallback(BuildContext context) {
   }
 }
 
-String safeLoginDismissFallback({
-  String? redirect,
-  String? dismissFallback,
-}) {
+String safeLoginDismissFallback({String? redirect, String? dismissFallback}) {
   if (_trimmedOrNull(dismissFallback) case final explicit?) {
     return _normalizedGuestDismissFallback(explicit);
   }
@@ -286,15 +305,34 @@ void openLoginPage(
 
 /// 解析登录页标题：优先用 AuthGateReason，其次回退到 [AuthPromptReason]。
 String? authGateTitleForReasonName(String? name) {
+  final reason = authGateReasonForName(name);
+  return reason?.title;
+}
+
+AuthGateReason? authGateReasonForName(String? name) {
   if (name == null || name.isEmpty) {
     return null;
   }
   for (final reason in AuthGateReason.values) {
     if (reason.name == name) {
-      return reason.title;
+      return reason;
     }
   }
   return null;
+}
+
+UiErrorSemantic authGateSemantic(
+  BuildContext context, {
+  required AuthGateReason reason,
+  AuthContinuation? continuation,
+  UiErrorScope scope = UiErrorScope.global,
+}) {
+  return UiErrorSemanticResolver.authRequired(
+    context,
+    reason: reason,
+    continuation: continuation,
+    scope: scope,
+  );
 }
 
 /// 统一登录拦截器：所有受限入口都应调用本方法，不要各自拼 login 路由与提示语。
@@ -361,7 +399,16 @@ Future<bool> requireLogin(
   if (AuthGate._isDebounced(reason)) {
     return false;
   }
-  AppToast.show(context, reason.prompt);
+  final pending = ref.read(authContinuationProvider);
+  final semantic = authGateSemantic(
+    context,
+    reason: reason,
+    continuation: pending,
+  );
+  final toastMessage = (semantic.secondaryMessage ?? '').trim().isNotEmpty
+      ? semantic.secondaryMessage!.trim()
+      : semantic.message;
+  AppToast.show(context, toastMessage);
   if (!context.mounted) {
     return false;
   }

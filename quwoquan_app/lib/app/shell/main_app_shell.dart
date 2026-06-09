@@ -7,10 +7,15 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
+import 'package:quwoquan_app/cloud/rtc/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/web_app_install_banner.dart';
+import 'package:quwoquan_app/app/shell/web_main_app_shell.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/active_call_bar.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/pip_call_overlay.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
@@ -49,6 +54,49 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   String _pageAccessCurrentUserId = '';
   String _pageAccessExperimentBucket = '';
 
+  /// 全局来电协调器当前绑定的登录用户；空串表示未启动。
+  /// 用作幂等守卫，避免重复 start / 漏 stop。
+  String _incomingCallBoundUserId = '';
+
+  /// 依据登录态唯一地启动/停止全局来电协调器。
+  /// 登录用户切换时先停旧再启新；登出时停止并解绑。
+  void _syncIncomingCallCoordinator() {
+    final auth = ref.read(authSessionControllerProvider);
+    final userId = auth.isAuthenticated ? ref.read(currentUserIdProvider) : '';
+    final decision = resolveIncomingCallSync(
+      boundUserId: _incomingCallBoundUserId,
+      nextUserId: userId,
+    );
+    if (!decision.shouldStop && !decision.shouldStart) {
+      return;
+    }
+    final coordinator = ref.read(incomingCallCoordinatorProvider);
+    if (decision.shouldStop) {
+      coordinator.stop();
+    }
+    if (decision.shouldStart) {
+      coordinator.start(userId);
+    }
+    _incomingCallBoundUserId = decision.boundUserId;
+  }
+
+  void _returnToActiveCall() {
+    final call = ref.read(activeCallProvider);
+    final callId = call.callId;
+    if (callId == null || callId.isEmpty) {
+      return;
+    }
+    ref.read(activeCallProvider.notifier).exitPipMode();
+    final path = call.callType == 'video'
+        ? AppRoutePaths.rtcVideo(callId: callId)
+        : AppRoutePaths.rtcVoice(callId: callId);
+    context.push(path);
+  }
+
+  void _hangupActiveCall() {
+    ref.read(activeCallProvider.notifier).endCall();
+  }
+
   void _cachePageAccessDependencies() {
     _pageAccessOpsRepository = ref.read(opsEventRepositoryProvider);
     _pageAccessCurrentUserId = ref.read(currentUserIdProvider);
@@ -65,6 +113,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     _currentPageVisitId = AppTraceContextStore.instance.newPageVisitId();
     _currentPageEnterAt = DateTime.now();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
       writeAppPageAccessOpen(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
@@ -75,6 +126,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
             .read(contentRuntimeConfigProvider)
             .experimentBucket,
       );
+      _syncIncomingCallCoordinator();
     });
   }
 
@@ -125,15 +177,18 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   @override
   Widget build(BuildContext context) {
     _cachePageAccessDependencies();
-    // 登录后续接：底栏加号里「加好友/发起群聊/建圈子」被拦截时登记了
+    // 登录后续接：底栏加号里「添加联系人/发起群聊/建圈子」被拦截时登记了
     // OpenSheetContinuation；登录成功（auth 翻转为已认证）时由始终在场的外壳
     // 自动续接打开对应面板，避免「登录回来动作丢失」。
     ref.listen<AuthSessionState>(authSessionControllerProvider, (
       AuthSessionState? previous,
       AuthSessionState next,
     ) {
+      // 登录态翻转时同步全局来电协调器：登录启动来电监听，登出停止解绑。
+      _syncIncomingCallCoordinator();
       final justLoggedIn =
-          next.isAuthenticated && (previous == null || !previous.isAuthenticated);
+          next.isAuthenticated &&
+          (previous == null || !previous.isAuthenticated);
       if (!justLoggedIn) {
         return;
       }
@@ -165,7 +220,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         widget.currentLocation == AppRoutePaths.createEntry ||
         widget.currentLocation.startsWith(AppRoutePaths.createPathTemplate);
     final capabilities = ref.watch(platformCapabilitiesProvider);
-    final showInstallBanner = capabilities.promotesAppInstall;
+    final useWebWideShell =
+        capabilities.wideScreenLayout && AppSpacing.isWideLayout(context);
+    final showInstallBanner =
+        capabilities.promotesAppInstall && !useWebWideShell;
 
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -179,45 +237,67 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: statusBarStyle,
-      child: ColoredBox(
+      child: Stack(
+        children: [
+          ColoredBox(
         color: shellBackground,
         child: Column(
           children: [
             if (showInstallBanner) const WebAppInstallBanner(),
+            ActiveCallBar(onTap: _returnToActiveCall),
             Expanded(
-              child: _ShellContentFrame(
-                constrained: capabilities.wideScreenLayout,
-                child: Stack(
-                  children: [
-                    IndexedStack(
-                      index: _currentIndex,
+              child: useWebWideShell
+                  ? Stack(
                       children: [
-                        HomePage(routeLocation: _currentLocation),
-                        HomeFeaturedImmersivePage(
-                          onExitToHome: () =>
-                              _selectMainTab(MainTabDestination.home),
+                        WebMainAppShell(
+                          currentDestination: mainTabFromBottomNavIndex(
+                            _currentIndex,
+                          ),
+                          currentLocation: _currentLocation,
+                          backgroundColor: shellBackground,
+                          onPrimarySelected: _handleWebPrimaryTap,
                         ),
-                        const SizedBox.shrink(),
-                        const ChatPage(),
-                        const MyProfilePage(),
                       ],
-                    ),
-                    if (!bottomNavHidden)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: BottomNavigationWidget(
-                          currentIndex: _currentIndex,
-                          onTap: _handleBottomNavTap,
-                        ),
+                    )
+                  : _ShellContentFrame(
+                      constrained: capabilities.wideScreenLayout,
+                      child: Stack(
+                        children: [
+                          IndexedStack(
+                            index: _currentIndex,
+                            children: [
+                              HomePage(routeLocation: _currentLocation),
+                              HomeFeaturedImmersivePage(
+                                onExitToHome: () =>
+                                    _selectMainTab(MainTabDestination.home),
+                              ),
+                              const SizedBox.shrink(),
+                              const ChatPage(),
+                              const MyProfilePage(),
+                            ],
+                          ),
+                          if (!bottomNavHidden)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: BottomNavigationWidget(
+                                currentIndex: _currentIndex,
+                                onTap: _handleBottomNavTap,
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
-              ),
+                    ),
             ),
           ],
         ),
+      ),
+          PipCallOverlay(
+            onReturnToCall: _returnToActiveCall,
+            onHangup: _hangupActiveCall,
+          ),
+        ],
       ),
     );
   }
@@ -234,7 +314,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     );
     if (nextTab == MainTabDestination.create) {
       // 加号入口后置登录：先无条件打开动作面板，登录拦截下沉到具体动作
-      // （写文章/发图片/发视频走 /create 路由门，加好友/群聊/建圈子在动作上拦截）。
+      // （写文章/发图片/发视频走 /create 路由门，添加联系人/群聊/建圈子在动作上拦截）。
       unawaited(GlobalQuickActionSheet.show(context));
       return;
     }
@@ -259,6 +339,50 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     }
 
     _selectMainTab(nextTab);
+  }
+
+  void _handleWebPrimaryTap(MainTabDestination nextTab) {
+    final previousIndex = _currentIndex;
+    _logBrowseEvent(
+      action: 'web_primary_tap',
+      bottomNavTap: AppLogBottomNavTapMeta(
+        fromIndex: previousIndex,
+        toIndex: nextTab.bottomNavIndex,
+      ),
+    );
+
+    if (nextTab == MainTabDestination.create) {
+      // Web/宽屏 create 主入口与移动端加号一致：先进入创建工作台/动作面板，
+      // 登录拦截下沉到具体写作、发图、发视频或草稿等账号态动作。
+      _selectWebCreateTab();
+      return;
+    }
+
+    if (nextTab == MainTabDestination.chat &&
+        !ref.read(authSessionControllerProvider).isAuthenticated) {
+      setState(() {
+        _currentIndex = nextTab.bottomNavIndex;
+      });
+      return;
+    }
+
+    if (nextTab == MainTabDestination.profile &&
+        !ref.read(authSessionControllerProvider).isAuthenticated) {
+      setState(() {
+        _currentIndex = nextTab.bottomNavIndex;
+      });
+      return;
+    }
+
+    _selectMainTab(nextTab);
+  }
+
+  void _selectWebCreateTab() {
+    setState(() {
+      _currentIndex = MainTabDestination.create.bottomNavIndex;
+    });
+    ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+    ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
   }
 
   void _selectMainTab(MainTabDestination nextTab) {
@@ -357,7 +481,9 @@ class _ShellContentFrame extends StatelessWidget {
     }
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: AppSpacing.webContentMaxWidth),
+        constraints: const BoxConstraints(
+          maxWidth: AppSpacing.webContentMaxWidth,
+        ),
         child: child,
       ),
     );

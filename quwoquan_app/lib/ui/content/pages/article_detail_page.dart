@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/components/comment_system/inline_article_comment_section.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
@@ -46,7 +46,9 @@ class ArticleDetailPage extends ConsumerStatefulWidget {
 class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   ContentSurfaceView? _surface;
   bool _isLoading = true;
-  Object? _loadError;
+  UiErrorSemantic? _pageErrorSemantic;
+  final ScrollController _articleScrollController = ScrollController();
+  final GlobalKey _commentSectionKey = GlobalKey();
 
   /// 交集理由首条 displayText（与 feed/沉浸同口径）；无来源 → null 不展示。
   String? _intersectionReasonText;
@@ -55,6 +57,12 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadArticle());
+  }
+
+  @override
+  void dispose() {
+    _articleScrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -91,7 +99,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       setState(() {
         _surface = surface;
         _isLoading = false;
-        _loadError = null;
+        _pageErrorSemantic = null;
         _intersectionReasonText = IntersectionReasonChip.primaryText(
           detail.post.intersectionReasons,
         );
@@ -111,7 +119,12 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       setState(() {
         _surface = null;
         _isLoading = false;
-        _loadError = e;
+        _pageErrorSemantic = runtimeErrorSemantic(
+          context,
+          error: e,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
       });
     }
   }
@@ -135,6 +148,17 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
 
   String _formatArticleDate(DateTime date) {
     return '${date.year}年${context.l10n.monthDayTemplate(date.month, date.day)}';
+  }
+
+  Future<void> _scrollToComments() async {
+    final context = _commentSectionKey.currentContext;
+    if (context == null) return;
+    await Scrollable.ensureVisible(
+      context,
+      duration: AppSpacing.webPcScrollToContentDuration,
+      curve: Curves.easeOutCubic,
+      alignment: 0.02,
+    );
   }
 
   @override
@@ -166,14 +190,25 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                 : context.go(AppRoutePaths.home),
           ),
         ),
-        child: Center(
-          child: Text(
-            _loadError?.toString() ?? context.l10n.articleNotFound,
-            style: TextStyle(
-              color: CupertinoColors.secondaryLabel.resolveFrom(context),
-              fontSize: AppTypography.base,
-            ),
-          ),
+        child: AppPageErrorState(
+          semantic:
+              _pageErrorSemantic ??
+              UiErrorSemantic(
+                category: UiErrorCategory.pageLoad,
+                scope: UiErrorScope.page,
+                title: UITextConstants.contentNotLoadedYet,
+                message: context.l10n.articleNotFound,
+                primaryAction: const UiErrorAction(
+                  type: UiErrorActionType.retry,
+                  label: UITextConstants.tryAgain,
+                ),
+              ),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _loadArticle();
+            }
+          },
         ),
       );
     }
@@ -240,6 +275,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                 return false;
               },
               child: SingleChildScrollView(
+                controller: _articleScrollController,
                 padding: EdgeInsets.fromLTRB(
                   AppSpacing.containerMd,
                   AppSpacing.containerMd,
@@ -307,6 +343,11 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                           ),
                         );
                       },
+                    ),
+                    SizedBox(height: AppSpacing.interGroupLg),
+                    InlineArticleCommentSection(
+                      key: _commentSectionKey,
+                      postId: widget.articleId,
                     ),
                   ],
                 ),
@@ -400,12 +441,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                         icon: CupertinoIcons.chat_bubble,
                         label: _formatCount(commentsCount),
                         color: CupertinoColors.label.resolveFrom(context),
-                        onTap: () {
-                          CommentViewer.showModal(
-                            context: context,
-                            postId: widget.articleId,
-                          );
-                        },
+                        onTap: _scrollToComments,
                       ),
                       _BottomAction(
                         icon: CupertinoIcons.arrowshape_turn_up_right,

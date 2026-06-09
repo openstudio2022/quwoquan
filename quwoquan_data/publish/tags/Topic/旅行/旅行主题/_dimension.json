@@ -1,0 +1,10 @@
+{
+  "label": "旅行主题",
+  "labelEn": "Travel Theme",
+  "description": "本次旅行的整体定位与气质，宏观体验视角；与玩法正交：主题=旅行定位（1-2个），玩法=具体子活动（可多个）",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 14
+}

@@ -40,6 +40,8 @@ run_service() {
   python3 quwoquan_service/scripts/recommendation/verify_reliable_task_migration.py
   # topology 由 delivery-gate topology job / make gate 负责，避免重复
   bash quwoquan_service/scripts/deploy/verify_deploy_kustomization.sh
+  python3 quwoquan_service/scripts/deploy/verify_workload_topology_inventory.py
+  python3 quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py
   bash quwoquan_service/scripts/recommendation/verify_recommendation_service_contract.sh
   python3 quwoquan_service/scripts/recommendation/verify_daily_metrics_dimension_consistency.py
   bash quwoquan_service/scripts/deploy/verify_config_gray_parallel_binding.sh
@@ -47,6 +49,8 @@ run_service() {
   # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)
   bash quwoquan_service/scripts/runtime/verify_service_config_layout.sh
   bash quwoquan_service/scripts/runtime/verify_service_env_contract.sh
+  python3 quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
+  python3 quwoquan_service/scripts/verify/verify_relationship_error_code_gate.py
   python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
   bash quwoquan_service/scripts/deploy/verify_config_release_version_mapping.sh
   bash quwoquan_service/scripts/deploy/verify_config_image_compat.sh
@@ -72,11 +76,14 @@ run_app() {
   # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
   if command -v python3 >/dev/null 2>&1; then
     python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_cloud_tag_strict_typing.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_unified_error_semantics_ratchet.py || exit 1
     python3 quwoquan_app/scripts/settings/verify_settings_canonical.py || exit 1
     python3 quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_error_code_semantic.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_cloud_services_semantic.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_route_and_context_semantic.py || exit 1
     python3 agent_ops/assistant/verify_no_personal_assistant_imports.py || exit 1
     python3 agent_ops/assistant/verify_assistant_old_stack_retired.py || exit 1
@@ -130,15 +137,21 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py || exit 1
     python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py || exit 1
+    python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_metadata_service_entities_vs_fields.py || exit 1
+    python3 quwoquan_service/scripts/contract/verify_assistant_context_contract.py || exit 1
+    python3 quwoquan_service/scripts/contract/verify_assistant_security_contract.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py || exit 1
     python3 quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_app_no_integration_test_dir.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_remote_realtime_no_mock_import.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_platform_check_isolation.py || exit 1
+    python3 quwoquan_app/scripts/cli.py fonts verify || exit 1
+    python3 quwoquan_app/scripts/cli.py web verify-offline || exit 1
     python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py || exit 1
     python3 quwoquan_app/scripts/env/verify_business_env_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py || exit 1
@@ -149,7 +162,7 @@ run_app() {
     # R02 Repository 接口方法数预算（ratchet；伞组合接口免登记）
     python3 quwoquan_app/scripts/runtime/verify_repository_interface_method_budget.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_native_edge_navigation, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_lib_dart_io_budget, verify_lib_platform_check_isolation, verify_app_seed_manifests, verify_business_env_data_inventory, verify_pageflip_backward_mainline"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_native_edge_navigation, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_assistant_context_contract, verify_assistant_security_contract, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_lib_dart_io_budget, verify_lib_platform_check_isolation, verify_app_seed_manifests, verify_business_env_data_inventory, verify_pageflip_backward_mainline"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
@@ -159,7 +172,7 @@ run_app() {
   local flutter_status=0
   set +e
   set -o pipefail
-  (cd quwoquan_app && flutter test test/cloud/ test/components/ test/core/ test/ui/ test/smoke/ 2>&1 | tee "$flutter_log")
+  python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/core/services/visit_recorder_service_test.dart test/cloud/ test/components/ test/core/ test/ui/ test/smoke/ 2>&1 | tee "$flutter_log"
   flutter_status=${PIPESTATUS[0]:-1}
   set +o pipefail
   set -e

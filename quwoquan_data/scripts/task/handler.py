@@ -1,7 +1,8 @@
-"""qwq-data task — 任务工程子命令（薄编排壳，复用现有 explore/build/produce/promote/ship）。
+"""qwq-data task — 任务工程子命令（薄编排壳，复用现有 explore/build/produce/promote/publish）。
 
 子命令：
   new        从层级参数脚手架 committed task.yaml + progress.json + notes.md
+  run        无人值守 workflow 编排：按 DAG 跑 download→build→produce→publish（Agent checkpoint 暂停/resume）
   list       扫描全部 committed 任务总览（--tree 树状，--vertical 过滤）
   show       打印单任务 spec+progress+lock
   lint       校验任务规格（路径↔id、archetype scope、实体类型真相源、重复）
@@ -14,13 +15,27 @@
 """
 from __future__ import annotations
 
+
+import sys
+from pathlib import Path
+
+DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
 import argparse
 import json
 import sys
 
 from task import lint as lint_mod
 from task import ops
+from task import queue
 from task import store
+from task.decompose import register_decompose_parser
+from task.run import register_run_parser
 
 
 def _split(arg: str | None) -> list[str]:
@@ -197,7 +212,7 @@ def handle_adopt(args: argparse.Namespace) -> None:
         store.save_progress(prog)
         print(f"[task adopt] progress synced: entities={len(adopted)} posts+={result['posts']}")
     if args.reindex:
-        from build_publish_lookup_indexes import build_publish_lookup_indexes
+        from publish_ops.build_publish_lookup_indexes import build_publish_lookup_indexes
         counts = build_publish_lookup_indexes()
         print(f"[task adopt] reindex: entities={counts['entities']} posts={counts['posts']}")
 
@@ -208,9 +223,24 @@ def handle_prune_publish(args: argparse.Namespace) -> None:
         raise SystemExit(2)
     result = ops.prune_publish(orphans_only=True)
     if args.reindex:
-        from build_publish_lookup_indexes import build_publish_lookup_indexes
+        from publish_ops.build_publish_lookup_indexes import build_publish_lookup_indexes
         counts = build_publish_lookup_indexes()
         print(f"[task prune-publish] reindex: entities={counts['entities']} posts={counts['posts']}")
+
+
+def handle_cleanup_runtime(args: argparse.Namespace) -> None:
+    ops.cleanup_runtime(args.task_id)
+
+
+def handle_rollup(args: argparse.Namespace) -> None:
+    from task import fanout_rollup
+
+    try:
+        report = fanout_rollup.rollup(args.plan)
+    except ValueError as exc:
+        print(f"[task rollup] ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -312,6 +342,21 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pp.add_argument("--orphans", action="store_true", help="清除 sourceTaskId 为空的孤儿内容（必填确认）")
     pp.add_argument("--reindex", action="store_true", help="清除后重建 publish lookup 索引")
     pp.set_defaults(handler=handle_prune_publish)
+
+    pcr = sub.add_parser(
+        "cleanup-runtime",
+        help="迁移 task/_shared 账本并清理 task 根历史镜像位",
+    )
+    pcr.add_argument("task_id")
+    pcr.set_defaults(handler=handle_cleanup_runtime)
+
+    prl = sub.add_parser("rollup", help="fanout 归并治理：分区 reducer + 全局进度/SLO + dead/spillover 巡检")
+    prl.add_argument("--plan", required=True, help="冻结计划 planId")
+    prl.set_defaults(handler=handle_rollup)
+
+    register_run_parser(sub)
+    register_decompose_parser(sub)
+    queue.register_queue_parser(sub)
 
     def _dispatch(args: argparse.Namespace) -> None:
         if not getattr(args, "task_command", None):

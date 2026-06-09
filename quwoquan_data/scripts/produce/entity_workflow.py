@@ -15,6 +15,7 @@ from _common.entity_annotation import merge_entity_refs
 from _common.content_review import fact_traceability_issues, generator_provenance_issues
 from _common.draft_io import (
     GENERATOR_AGENT,
+    draft_asset_reference_issues,
     is_placeholder,
     read_draft_article,
     read_draft_meta,
@@ -23,25 +24,27 @@ from _common.draft_io import (
     write_prompt,
     write_writing_pack,
 )
-from _common.io import read_json
-from _common.paths import batch_inputs_dir
 from _common.stage_reports import write_gate_report, write_repair_report, write_stage_result
 from _common.template_fingerprints import template_fingerprint_issues
 from _common.writing_pack import build_writing_pack, render_prompt_md
 from produce.route_workflow import (
+    aggregate_checks,
     analyze_route_ref,
     is_route_brief,
     resolve_carrier,
+    _attach_base_draft_text,
     _build_route_assets,
     _build_summary,
     _check_carrier_consistency,
     _check_cross_article_similarity,
     _check_evidence_quality,
     _check_image_gate,
+    _check_prose_style,
     _check_provenance_rewrite,
     _check_travelogue_density,
     _jaccard,
     _load_source_texts,
+    _persisted_review_payload,
     _publish_angle,
     _resolve_style_opening,
     _section_bodies,
@@ -57,19 +60,14 @@ def is_entity_brief(brief: Mapping[str, Any]) -> bool:
 
 
 def iter_entity_briefs(task_id: str, batch_id: str, refs: Sequence[str] | None = None) -> list[tuple[str, dict[str, Any]]]:
+    from _common.content_object import iter_briefs
+
     wanted = {ref for ref in (refs or []) if ref}
-    input_dir = batch_inputs_dir(task_id, batch_id, "produce", "compose")
-    rows: list[tuple[str, dict[str, Any]]] = []
-    if not input_dir.exists():
-        return rows
-    for brief_file in sorted(input_dir.glob("*.json")):
-        ref = brief_file.stem
-        if wanted and ref not in wanted:
-            continue
-        brief = read_json(brief_file)
-        if is_entity_brief(brief):
-            rows.append((ref, brief))
-    return rows
+    return [
+        (ref, brief)
+        for ref, brief in iter_briefs(task_id, batch_id)
+        if (not wanted or ref in wanted) and is_entity_brief(brief)
+    ]
 
 
 def _entity_name(evidence_bundle: Mapping[str, Any], brief: Mapping[str, Any]) -> str:
@@ -110,14 +108,11 @@ def _kind_word(brief: Mapping[str, Any]) -> str:
 
 
 def _entity_section_intents(brief: Mapping[str, Any], name: str) -> list[str]:
+    """章节意图：跟随底稿自身结构，仅给最小建议（不再下发固定 6 段骨架）。"""
     kind = _kind_word(brief)
     return [
-        f"开篇：写为什么想去 {name}、出发前的犹豫或期待（{kind} 是否值得专门跑一趟），别先罗列信息。",
-        f"初见 {name}：第一眼的真实感受与节奏，而不是名气介绍。",
-        f"最打动我的：具体写一处让你愿意为 {name} 慢下来的细节（来自素材）。",
-        f"也得说说不足：诚实写一处劝退/扫兴点（来自素材），并给出心理准备建议。",
-        "去之前要知道的：把开放/门票/到达/时段等关键事实就地融入叙述，禁止另起清单块。",
-        f"{name} 适合谁：用取舍收尾，给出时间有限时的优先建议。",
+        f"结构跟随底稿：保留底稿（关于 {name} 的那篇）自身的小标题与叙述顺序，只做轻量编辑。",
+        f"轻改重点：去语病/纠错别字/理顺语句/补全可回溯证据/去平台与版权痕迹；不要从零另写，也不要套用固定模板小标题（如「它到底适合谁」）。",
     ]
 
 
@@ -128,6 +123,9 @@ def build_entity_writing_pack(
     brief: Mapping[str, Any],
     quality_payload: Mapping[str, Any],
 ) -> dict[str, Any]:
+    from _common.content_object import register_from_brief
+
+    register_from_brief(task_id, batch_id, ref, brief, content_type="article")
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
     name = _entity_name(evidence_bundle, brief)
     assets = _build_route_assets(task_id, batch_id, ref, brief, evidence_bundle)
@@ -147,7 +145,7 @@ def build_entity_writing_pack(
         source_urls=quality_payload.get("sourceUrls") or [],
         source_paths=quality_payload.get("sourcePaths") or [],
     )
-    pack["primaryEntity"] = name
+    _attach_base_draft_text(task_id, batch_id, pack)
     write_writing_pack(task_id, batch_id, ref, pack)
     write_prompt(task_id, batch_id, ref, render_prompt_md(pack))
     existing = read_draft_meta(task_id, batch_id, ref)
@@ -199,7 +197,7 @@ def _compose_payload_from_pack(
     draft_meta: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
-    story_spine = quality_payload.get("storySpine") or {}
+    story_spine = (evidence_bundle.get("storySpine") or {}) if isinstance(evidence_bundle, Mapping) else {}
     carrier = str(pack.get("carrier") or "article")
     template = (brief.get("render") or {}).get("articleTemplate") or "journal"
     meta = draft_meta or {}
@@ -215,17 +213,13 @@ def _compose_payload_from_pack(
         "sourcePaths": list(quality_payload.get("sourcePaths") or []),
         "template": template,
         "assets": list(pack.get("assets") or []),
-        "publishLayout": pack.get("publishLayout") or ("gallery" if carrier == "gallery" else "entity"),
+        "publishLayout": "gallery" if carrier == "gallery" else "entity",
         "publishAngle": _publish_angle(brief),
         "publishTitle": brief.get("titleHint") or ref,
         "publishSeq": 1,
         "conditionContext": brief.get("conditionContext"),
-        "recommendation": brief.get("recommendation"),
         "composeBriefRef": ref,
-        "sourceQuality": story_spine.get("sourceQuality", []),
         "storySpine": story_spine,
-        "relatedSearchPlan": quality_payload.get("relatedSearchPlan"),
-        "evidenceBundle": evidence_bundle,
         "generator": str(meta.get("generator") or "pending"),
         "generatorModel": meta.get("model"),
         "citedSourceRefs": list(meta.get("citedSourcePaths") or []),
@@ -257,6 +251,7 @@ def review_entity_draft(
     authenticity_issues.extend(generator_provenance_issues(draft_meta))
     body = "" if is_placeholder(article) else str(article)
     authenticity_issues.extend(template_fingerprint_issues(body))
+    authenticity_issues.extend(draft_asset_reference_issues(body, pack))
     source_texts = _load_source_texts(quality_payload.get("sourcePaths") or [])
     traceability = fact_traceability_issues(body, dict(brief), source_texts)
 
@@ -277,23 +272,58 @@ def review_entity_draft(
     checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
-        "suggestions": ["按 prompt.md 由会话模型创作正文并写回 drafts/{ref}.article.md（generator=agent）。"] if authenticity_issues else [],
+        "suggestions": ["按 prompt.md 由会话模型创作正文并写回对象 `4.draft/draft.article.md`（generator=agent）。"] if authenticity_issues else [],
     }
     checks["factTraceability"] = {
         "passed": not traceability,
         "issues": traceability,
         "suggestions": ["补齐 mustIncludeFacts，并确保门票/开放时间/海拔等数字能在 source 证据中找到。"] if traceability else [],
     }
+    from _common.base_draft import base_draft_fidelity_issues, load_base_draft_text
 
-    blocking: list[str] = []
-    suggestions: list[str] = []
-    for cname, result in checks.items():
-        if not result["passed"]:
-            blocking.extend(f"{cname}: {issue}" for issue in result["issues"])
-            suggestions.extend(result.get("suggestions") or [])
+    base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
+    fidelity = base_draft_fidelity_issues(body, base_text)
+    checks["baseDraftFidelity"] = {
+        "passed": not fidelity,
+        "issues": fidelity,
+        "suggestions": ["以底稿为基础适度加工：相似度过低则贴回底稿叙事；过高则进一步改写表达、去版权痕迹。"] if fidelity else [],
+    }
+    from _common import quality_gates as qg
+
+    wi_issues = qg.writing_intent_consistency_issues(body, brief.get("writingIntent"))
+    checks["writingIntentConsistency"] = {
+        "passed": not wi_issues,
+        "issues": wi_issues,
+        "suggestions": ["按 writingIntent 主线补齐结构（攻略=步骤/交通/票务/取舍；体验=适合人群/价值/取舍；游记=时间线/现场/复盘）。"] if wi_issues else [],
+    }
+    banned_terms = [str(b) for b in (pack.get("bannedRegisterTerms") or brief.get("bannedRegisterTerms") or [])]
+    reg_issues = qg.register_lexicon_issues(body, banned_terms)
+    checks["registerMismatch"] = {
+        "passed": not reg_issues,
+        "issues": reg_issues,
+        "suggestions": ["改用该垂类合适的语域（如户外景区禁'看展/展厅/展陈'），由 SOP 词表约束。"] if reg_issues else [],
+    }
+    from _common import public_contacts as pc
+
+    allowed_contacts = [str(n) for n in (pack.get("allowedContactNumbers") or brief.get("allowedContactNumbers") or [])]
+    contact_issues = qg.contact_info_issues(body, allowed_numbers=pc.allowed_numbers(allowed_contacts))
+    checks["contactInfo"] = {
+        "passed": not contact_issues,
+        "issues": contact_issues,
+        "suggestions": ["删除私人电话/微信/QQ；仅保留紧急/公共服务短号或 source 核实的景区官方接待电话。"] if contact_issues else [],
+    }
+    heading_extra = [str(t) for t in (pack.get("mechanicalHeadingTerms") or brief.get("mechanicalHeadingTerms") or [])]
+    heading_issues = qg.mechanical_heading_issues(body, extra_terms=heading_extra)
+    checks["mechanicalHeading"] = {
+        "passed": not heading_issues,
+        "issues": heading_issues,
+        "suggestions": ["把纯清单式小标题改写得自然、有视角；优先沿用底稿已有小标题，不要套统一模板。"] if heading_issues else [],
+    }
+
+    blocking, suggestions, soft_failed = aggregate_checks(checks)
     human_review_required = bool(checks.get("imageGate", {}).get("humanReview"))
     decision = "approved" if not blocking else "revision_needed"
-    quality_score = max(0.0, 92.0 - len(blocking) * 8.0)
+    quality_score = max(0.0, 92.0 - len(blocking) * 8.0 - soft_failed * 3.0)
     payload = {
         "topicId": ref,
         "decision": decision,
@@ -304,7 +334,7 @@ def review_entity_draft(
         "humanReviewRequired": human_review_required,
         "generator": compose_payload.get("generator"),
     }
-    write_stage_result(task_id, batch_id, "produce", "review", ref, payload)
+    write_stage_result(task_id, batch_id, "produce", "review", ref, _persisted_review_payload(payload))
     write_gate_report(
         task_id=task_id,
         batch_id=batch_id,
@@ -321,8 +351,6 @@ def review_entity_draft(
         fallback = _entity_fallback_stage(checks)
         if fallback == "download":
             rerun_chain = ["download", "quality_analysis", "compose-brief", "review", "materialize"]
-        elif fallback == "manual":
-            rerun_chain = ["manual_image_review", "review", "materialize"]
         elif fallback == "agent_compose":
             rerun_chain = ["agent_compose", "review", "materialize"]
         else:
@@ -358,6 +386,7 @@ def _entity_review_checks(
         "provenanceRewrite": _check_provenance_rewrite(article, brief, quality_payload),
         "evidenceQuality": _check_evidence_quality(article, brief, quality_payload, compose_payload),
         "carrierConsistency": _check_carrier_consistency(compose_payload),
+        "proseStyle": _check_prose_style(article),
         "imageGate": _check_image_gate(compose_payload),
     }
     if str(compose_payload.get("carrier") or "article") != "gallery":
@@ -366,17 +395,29 @@ def _entity_review_checks(
             article, brief, style_family=style_family, opening_strategy=opening_strategy
         )
         checks["crossArticleSimilarity"] = _check_cross_article_similarity(task_id, batch_id, ref, article)
+        checks["sectionShape"] = _check_section_shape(article)
     return checks
 
 
 def _check_entity_coverage(article: str, brief: Mapping[str, Any], evidence_bundle: Mapping[str, Any]) -> dict[str, Any]:
+    """HARD：实体必须在正文出现（事实完整性）。结构形态另由软门 sectionShape 评估。"""
     name = _entity_name(evidence_bundle, brief)
     issues: list[str] = []
     if name and name not in article:
         issues.append(f"entity '{name}' not mentioned in article")
+    return {
+        "passed": not issues,
+        "issues": issues,
+        "suggestions": ["正文须真正写到该实体，而非只在标题出现。"] if issues else [],
+    }
+
+
+def _check_section_shape(article: str) -> dict[str, Any]:
+    """SOFT：分节形态建议（章节过少/雷同）——不阻断，结构以底稿为准。"""
+    issues: list[str] = []
     headings = re.findall(r"(?m)^##\s", article)
-    if len(headings) < 3:
-        issues.append(f"too few sections ({len(headings)} < 3)")
+    if len(headings) < 2:
+        issues.append(f"too few sections ({len(headings)} < 2)")
     bodies = _section_bodies(article)
     for i in range(len(bodies)):
         for j in range(i + 1, len(bodies)):
@@ -386,7 +427,7 @@ def _check_entity_coverage(article: str, brief: Mapping[str, Any], evidence_bund
     return {
         "passed": not issues,
         "issues": issues,
-        "suggestions": ["围绕单实体补足初见/亮点/不足/实用提醒等差异化分节。"] if issues else [],
+        "suggestions": ["如底稿本身分节较细，可保留；过少或雷同时适度补足差异化分节。"] if issues else [],
     }
 
 
@@ -396,6 +437,8 @@ def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks["evidenceQuality"]["passed"]:
         return "download"
     if not checks.get("factTraceability", {"passed": True})["passed"]:
+        return "agent_compose"
+    if not checks.get("baseDraftFidelity", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks["provenanceRewrite"]["passed"]:
         return "agent_compose"
@@ -407,7 +450,7 @@ def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
         return "agent_compose"
     image_gate = checks.get("imageGate", {"passed": True})
     if not image_gate["passed"]:
-        return "manual" if image_gate.get("humanReview") and len(image_gate.get("issues") or []) == 1 else "agent_compose"
+        return "agent_compose"
     if not checks.get("carrierConsistency", {"passed": True})["passed"]:
         return "agent_compose"
     return "review"

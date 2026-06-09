@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -47,7 +46,7 @@ func main() {
 	repoRoot := resolveRepoRoot()
 	service := &platformService{
 		repoRoot: repoRoot,
-		store:    controlplane.NewFileStore(filepath.Join(repoRoot, ".control-plane-state", "platform-ops-service.json")),
+		store:    controlplane.NewFileStore(filepath.Join(repoRoot, "state", "control-plane", "platform-ops-service.json")),
 	}
 	if err := service.seed(); err != nil {
 		log.Fatalf("seed platform ops service: %v", err)
@@ -329,6 +328,13 @@ func newServerMux(service *platformService) *http.ServeMux {
 		}
 		service.handleProjectionSummary(w, r)
 	})
+	mux.HandleFunc("/v1/control-plane/platform/triage/summary", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleGetTriageSummary(w, r)
+	})
 	mux.HandleFunc("/v1/control-plane/platform/releases", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeError(w, r, http.StatusMethodNotAllowed, "请求处理失败", "only GET")
@@ -350,7 +356,7 @@ func newServerMux(service *platformService) *http.ServeMux {
 }
 
 func (s *platformService) seed() error {
-	schemaPath := filepath.Join(s.repoRoot, "contracts", "metadata", "_control_plane", "platform", "config_schema.yaml")
+	schemaPath := resolveConfigSchemaPath(s.repoRoot)
 	schemaKeys, schemaErr := controlplane.LoadConfigKeysFromSchema(schemaPath)
 	if schemaErr != nil {
 		log.Printf("WARN: platform-ops-service: load config_schema.yaml failed, using empty keys: %v", schemaErr)
@@ -501,8 +507,9 @@ func (s *platformService) seed() error {
 			{"id": "config-latency-p95", "service": "gateway-orchestrator", "objective": "p95<900ms", "window": "15m", "status": "success"},
 		},
 		"alert_templates": {
-			{"id": "mongo-replica-delay", "title": "Mongo 副本延迟", "severity": "warning", "status": "warning"},
-			{"id": "llm-latency", "title": "LLM 上游延迟", "severity": "warning", "status": "warning"},
+			{"id": "HighP95Latency", "title": "服务 P95 延迟过高", "severity": "warning", "status": "warning", "owner": "platform-ops", "runbookId": "cfg-rollback-drill", "runbookRoute": "/platform/runbook", "repairEntry": "/platform/rollout", "alertId": "HighP95Latency", "auditRoute": "/audit"},
+			{"id": "config_release_error_rate", "title": "配置发布错误率门禁", "severity": "critical", "status": "warning", "owner": "platform-ops", "runbookId": "cfg-rollback-drill", "runbookRoute": "/platform/runbook", "repairEntry": "/platform/rollout", "alertId": "config_release_error_rate", "auditRoute": "/audit"},
+			{"id": "rollback_readiness", "title": "回滚准备度检查", "severity": "warning", "status": "neutral", "owner": "platform-ops", "runbookId": "cfg-rollback-drill", "runbookRoute": "/platform/runbook", "repairEntry": "/platform/rollout", "alertId": "rollback_readiness", "auditRoute": "/audit"},
 		},
 		"dashboard_cards": {
 			{"id": "release_health", "title": "配置灰度健康", "summary": "success_rate / latency / rollback readiness"},
@@ -696,39 +703,6 @@ func (s *platformService) handleListConfigKeys(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (s *platformService) handleResolveConfig(w http.ResponseWriter, r *http.Request) {
-	scope := controlplane.ConfigResolutionScope{
-		Environment: strings.TrimSpace(r.URL.Query().Get("env")),
-		Cluster:     strings.TrimSpace(r.URL.Query().Get("cluster")),
-		Service:     strings.TrimSpace(r.URL.Query().Get("service")),
-	}
-	configLayers, err := s.store.ListDocuments("config_layers")
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	configKeys, err := s.store.ListDocuments("config_keys")
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	values := controlplane.ResolveEffectiveConfig(configLayers, configKeys, scope)
-	hash := controlplane.EffectiveConfigHash(values)
-	desiredHash, err := s.lookupConfigPackageDesiredHash(scope, hash)
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"scope":         scope,
-		"resolvedAt":    nowRFC3339(),
-		"effectiveHash": hash,
-		"desiredHash":   desiredHash,
-		"values":        values,
-		"source":        "control-plane",
-	})
-}
-
 func (s *platformService) handleGetEffectiveConfig(w http.ResponseWriter, r *http.Request) {
 	layerID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/configs/", ":effective")
 	layer, ok, err := s.store.GetDocument("config_layers", layerID)
@@ -741,50 +715,6 @@ func (s *platformService) handleGetEffectiveConfig(w http.ResponseWriter, r *htt
 		return
 	}
 	writeJSON(w, http.StatusOK, layer)
-}
-
-func (s *platformService) handleListConfigInstanceReports(w http.ResponseWriter, r *http.Request) {
-	items, err := s.store.ListDocuments("config_instance_reports")
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	summary := controlplane.SummarizeConfigDrift(items)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items":   items,
-		"summary": summary,
-	})
-}
-
-func (s *platformService) handleReportConfigInstance(w http.ResponseWriter, r *http.Request) {
-	instanceID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/configs/instances/", ":report")
-	current, _, _ := s.store.GetDocument("config_instance_reports", instanceID)
-	before := cloneMap(current)
-	var body map[string]any
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	if body == nil {
-		body = map[string]any{}
-	}
-	body["id"] = instanceID
-	body["instanceId"] = instanceID
-	body["updatedAt"] = nowRFC3339()
-	if stringifyDocumentValue(body["desiredHash"]) == "" {
-		desiredHash, err := s.lookupConfigPackageDesiredHash(controlplane.ConfigResolutionScope{
-			Environment: stringifyDocumentValue(body["environment"]),
-			Cluster:     stringifyDocumentValue(body["cluster"]),
-			Service:     stringifyDocumentValue(body["service"]),
-		}, "")
-		if err == nil && desiredHash != "" {
-			body["desiredHash"] = desiredHash
-		}
-	}
-	body["inSync"] = body["desiredHash"] == body["effectiveHash"]
-	if err := s.store.PutDocument("config_instance_reports", instanceID, body); err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	_ = s.appendAudit("config_instance_report", instanceID, "config_instance_reported", before, body, r)
-	writeJSON(w, http.StatusOK, body)
 }
 
 func (s *platformService) handleListNamespace(w http.ResponseWriter, r *http.Request, namespace string) {
@@ -949,120 +879,6 @@ func (s *platformService) handleRunDrill(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, current)
 }
 
-func (s *platformService) handleListReleases(w http.ResponseWriter, service string) {
-	base := filepath.Join(s.repoRoot, "releases", "config")
-	items := make([]map[string]any, 0)
-	services := []string{}
-	if strings.TrimSpace(service) != "" {
-		services = append(services, strings.TrimSpace(service))
-	} else {
-		entries, _ := os.ReadDir(base)
-		for _, entry := range entries {
-			if entry.IsDir() {
-				services = append(services, entry.Name())
-			}
-		}
-	}
-	sort.Strings(services)
-	for _, svc := range services {
-		pattern := filepath.Join(base, svc, "v*.yaml")
-		files, _ := filepath.Glob(pattern)
-		sort.Strings(files)
-		for _, file := range files {
-			items = append(items, map[string]any{
-				"releaseId":    strings.TrimSuffix(filepath.Base(file), ".yaml"),
-				"service":      svc,
-				"configPath":   file,
-				"grayStages":   []int{5, 25, 50, 100},
-				"releaseState": readReleaseState(s.repoRoot, svc),
-			})
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
-}
-
-func (s *platformService) handleApplyRelease(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Service        string  `json:"service"`
-		FromImage      string  `json:"fromImage"`
-		ToImage        string  `json:"toImage"`
-		FromConfig     string  `json:"fromConfig"`
-		ToConfig       string  `json:"toConfig"`
-		Step           int     `json:"step"`
-		ErrorRate      float64 `json:"errorRate"`
-		P95Ms          int     `json:"p95Ms"`
-		RedisErrorRate float64 `json:"redisErrorRate"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", err.Error())
-		return
-	}
-	output, err := runScript(s.repoRoot, "agent_ops/deploy/prod/config_release_apply_stage.sh",
-		"--service", body.Service,
-		"--from-image", body.FromImage,
-		"--to-image", body.ToImage,
-		"--from-config", body.FromConfig,
-		"--to-config", body.ToConfig,
-		"--step", itoa(body.Step),
-		"--error-rate", formatFloat(body.ErrorRate),
-		"--p95-ms", itoa(body.P95Ms),
-		"--redis-error-rate", formatFloat(body.RedisErrorRate),
-	)
-	status := http.StatusOK
-	if err != nil {
-		status = http.StatusBadGateway
-	}
-	_ = s.store.AppendApproval(controlplane.ApprovalDecision{
-		ObjectType: "config_release",
-		ObjectID:   body.Service,
-		Mode:       "dual",
-		Actor:      actorFromRequest(r),
-		Decision:   "apply",
-	})
-	_ = s.appendAudit("config_release", body.Service, "config_release_applied", map[string]any{"state": readReleaseState(s.repoRoot, body.Service)}, map[string]any{"state": readReleaseState(s.repoRoot, body.Service)}, r)
-	writeJSON(w, status, map[string]any{
-		"releaseId":    segmentBetween(r.URL.Path, "/v1/control-plane/platform/releases/", ":apply"),
-		"service":      body.Service,
-		"scriptOutput": output,
-		"error":        errorString(err),
-		"releaseState": readReleaseState(s.repoRoot, body.Service),
-	})
-}
-
-func (s *platformService) handleRollbackRelease(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Service             string `json:"service"`
-		TargetConfigVersion string `json:"targetConfigVersion"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", err.Error())
-		return
-	}
-	output, err := runScript(s.repoRoot, "agent_ops/deploy/prod/config_release_rollback.sh",
-		"--service", body.Service,
-		"--to-config-version", body.TargetConfigVersion,
-	)
-	status := http.StatusOK
-	if err != nil {
-		status = http.StatusBadGateway
-	}
-	_ = s.store.AppendApproval(controlplane.ApprovalDecision{
-		ObjectType: "config_release",
-		ObjectID:   body.Service,
-		Mode:       "dual",
-		Actor:      actorFromRequest(r),
-		Decision:   "rollback",
-	})
-	_ = s.appendAudit("config_release", body.Service, "config_release_rolled_back", nil, map[string]any{"state": readReleaseState(s.repoRoot, body.Service)}, r)
-	writeJSON(w, status, map[string]any{
-		"releaseId":    segmentBetween(r.URL.Path, "/v1/control-plane/platform/releases/", ":rollback"),
-		"service":      body.Service,
-		"scriptOutput": output,
-		"error":        errorString(err),
-		"releaseState": readReleaseState(s.repoRoot, body.Service),
-	})
-}
-
 func (s *platformService) appendAudit(objectType, objectID, action string, before, after map[string]any, r *http.Request) error {
 	return s.store.AppendAudit(controlplane.AuditEvent{
 		AuditID:     action,
@@ -1131,15 +947,8 @@ func (s *platformService) readOnboardingDomains() ([]map[string]any, error) {
 	return items, nil
 }
 
-func runScript(repoRoot string, script string, args ...string) (string, error) {
-	cmd := exec.Command("bash", append([]string{filepath.Join(repoRoot, script)}, args...)...)
-	cmd.Dir = repoRoot
-	output, err := cmd.CombinedOutput()
-	return string(output), err
-}
-
 func readReleaseState(repoRoot, service string) string {
-	stateFile := filepath.Join(repoRoot, ".release-state", service+".state")
+	stateFile := filepath.Join(repoRoot, "state", "release", service+".state")
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		return ""
@@ -1166,6 +975,19 @@ func resolveRepoRoot() string {
 		}
 		current = parent
 	}
+}
+
+func resolveConfigSchemaPath(repoRoot string) string {
+	candidates := []string{
+		filepath.Join(repoRoot, "quwoquan_service", "contracts", "metadata", "_control_plane", "platform", "config_schema.yaml"),
+		filepath.Join(repoRoot, "contracts", "metadata", "_control_plane", "platform", "config_schema.yaml"),
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return candidates[0]
 }
 
 func healthFromBlockers(blockers []string) string {

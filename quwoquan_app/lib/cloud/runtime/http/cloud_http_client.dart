@@ -27,16 +27,19 @@ class CloudHttpClient {
   CloudHttpClient({
     http.Client? client,
     CloudAuthTokenProvider? authTokenProvider,
+    Future<bool> Function()? onUnauthorizedRefresh,
     Duration? timeout,
     ApiLatencyObserver? latencyObserver,
   }) : _client = client ?? RetryHttpClient(),
        _authTokenProvider =
            authTokenProvider ?? const StubCloudAuthTokenProvider(),
+       _onUnauthorizedRefresh = onUnauthorizedRefresh,
        _timeout = timeout ?? const Duration(seconds: 12),
        _latencyObserver = latencyObserver;
 
   final http.Client _client;
   final CloudAuthTokenProvider _authTokenProvider;
+  final Future<bool> Function()? _onUnauthorizedRefresh;
   final Duration _timeout;
   final ApiLatencyObserver? _latencyObserver;
 
@@ -47,11 +50,16 @@ class CloudHttpClient {
     Uri url, {
     Map<String, String>? headers,
   }) async {
-    final merged = await _mergeHeaders(headers ?? const {});
-    return _guardRequest(
-      () => _client.get(url, headers: merged).timeout(_timeout),
+    return _requestWithRefreshRetry(
       requestPath: url.path,
       method: 'GET',
+      headers: headers ?? const <String, String>{},
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) => _guardRequest(
+        () => _client.get(url, headers: mergedHeaders).timeout(_timeout),
+        requestPath: url.path,
+        method: 'GET',
+      ),
     );
   }
 
@@ -61,13 +69,18 @@ class CloudHttpClient {
     Object? body,
     Encoding? encoding,
   }) async {
-    final merged = await _mergeHeaders(headers ?? const {});
-    return _guardRequest(
-      () => _client
-          .post(url, headers: merged, body: body, encoding: encoding)
-          .timeout(_timeout),
+    return _requestWithRefreshRetry(
       requestPath: url.path,
       method: 'POST',
+      headers: headers ?? const <String, String>{},
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) => _guardRequest(
+        () => _client
+            .post(url, headers: mergedHeaders, body: body, encoding: encoding)
+            .timeout(_timeout),
+        requestPath: url.path,
+        method: 'POST',
+      ),
     );
   }
 
@@ -77,13 +90,18 @@ class CloudHttpClient {
     Object? body,
     Encoding? encoding,
   }) async {
-    final merged = await _mergeHeaders(headers ?? const {});
-    return _guardRequest(
-      () => _client
-          .patch(url, headers: merged, body: body, encoding: encoding)
-          .timeout(_timeout),
+    return _requestWithRefreshRetry(
       requestPath: url.path,
       method: 'PATCH',
+      headers: headers ?? const <String, String>{},
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) => _guardRequest(
+        () => _client
+            .patch(url, headers: mergedHeaders, body: body, encoding: encoding)
+            .timeout(_timeout),
+        requestPath: url.path,
+        method: 'PATCH',
+      ),
     );
   }
 
@@ -93,13 +111,18 @@ class CloudHttpClient {
     Object? body,
     Encoding? encoding,
   }) async {
-    final merged = await _mergeHeaders(headers ?? const {});
-    return _guardRequest(
-      () => _client
-          .put(url, headers: merged, body: body, encoding: encoding)
-          .timeout(_timeout),
+    return _requestWithRefreshRetry(
       requestPath: url.path,
       method: 'PUT',
+      headers: headers ?? const <String, String>{},
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) => _guardRequest(
+        () => _client
+            .put(url, headers: mergedHeaders, body: body, encoding: encoding)
+            .timeout(_timeout),
+        requestPath: url.path,
+        method: 'PUT',
+      ),
     );
   }
 
@@ -109,13 +132,23 @@ class CloudHttpClient {
     Object? body,
     Encoding? encoding,
   }) async {
-    final merged = await _mergeHeaders(headers ?? const {});
-    return _guardRequest(
-      () => _client
-          .delete(url, headers: merged, body: body, encoding: encoding)
-          .timeout(_timeout),
+    return _requestWithRefreshRetry(
       requestPath: url.path,
       method: 'DELETE',
+      headers: headers ?? const <String, String>{},
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) => _guardRequest(
+        () => _client
+            .delete(
+              url,
+              headers: mergedHeaders,
+              body: body,
+              encoding: encoding,
+            )
+            .timeout(_timeout),
+        requestPath: url.path,
+        method: 'DELETE',
+      ),
     );
   }
 
@@ -183,11 +216,16 @@ class CloudHttpClient {
     Uri uri, {
     required Map<String, String> headers,
   }) async {
-    final merged = await _mergeHeaders(headers);
-    final res = await _guardRequest(
-      () => _client.get(uri, headers: merged).timeout(_timeout),
+    final res = await _requestWithRefreshRetry(
       requestPath: uri.path,
       method: 'GET',
+      headers: headers,
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) => _guardRequest(
+        () => _client.get(uri, headers: mergedHeaders).timeout(_timeout),
+        requestPath: uri.path,
+        method: 'GET',
+      ),
     );
     _guardStatus(res, uri.path);
     return _decodeBody(res.body, uri.path);
@@ -199,18 +237,25 @@ class CloudHttpClient {
     required Map<String, String> headers,
     required CloudJsonMap body,
   }) async {
-    final merged = await _mergeHeaders(headers);
     final payload = jsonEncode(body);
-    final requestHeaders = <String, String>{
-      ...merged,
-      'Content-Type': 'application/json',
-    };
-    final res = await _guardRequest(
-      () => _client
-          .post(uri, headers: requestHeaders, body: payload)
-          .timeout(_timeout),
+    final res = await _requestWithRefreshRetry(
       requestPath: uri.path,
       method: 'POST',
+      headers: headers,
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) {
+        final requestHeaders = <String, String>{
+          ...mergedHeaders,
+          'Content-Type': 'application/json',
+        };
+        return _guardRequest(
+          () => _client
+              .post(uri, headers: requestHeaders, body: payload)
+              .timeout(_timeout),
+          requestPath: uri.path,
+          method: 'POST',
+        );
+      },
     );
     _guardStatus(res, uri.path);
     return _decodeBody(res.body, uri.path);
@@ -221,18 +266,25 @@ class CloudHttpClient {
     required Map<String, String> headers,
     required CloudJsonMap body,
   }) async {
-    final merged = await _mergeHeaders(headers);
     final payload = jsonEncode(body);
-    final requestHeaders = <String, String>{
-      ...merged,
-      'Content-Type': 'application/json',
-    };
-    final res = await _guardRequest(
-      () => _client
-          .patch(uri, headers: requestHeaders, body: payload)
-          .timeout(_timeout),
+    final res = await _requestWithRefreshRetry(
       requestPath: uri.path,
       method: 'PATCH',
+      headers: headers,
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) {
+        final requestHeaders = <String, String>{
+          ...mergedHeaders,
+          'Content-Type': 'application/json',
+        };
+        return _guardRequest(
+          () => _client
+              .patch(uri, headers: requestHeaders, body: payload)
+              .timeout(_timeout),
+          requestPath: uri.path,
+          method: 'PATCH',
+        );
+      },
     );
     _guardStatus(res, uri.path);
     return _decodeBody(res.body, uri.path);
@@ -243,18 +295,25 @@ class CloudHttpClient {
     required Map<String, String> headers,
     required CloudJsonMap body,
   }) async {
-    final merged = await _mergeHeaders(headers);
     final payload = jsonEncode(body);
-    final requestHeaders = <String, String>{
-      ...merged,
-      'Content-Type': 'application/json',
-    };
-    final res = await _guardRequest(
-      () => _client
-          .put(uri, headers: requestHeaders, body: payload)
-          .timeout(_timeout),
+    final res = await _requestWithRefreshRetry(
       requestPath: uri.path,
       method: 'PUT',
+      headers: headers,
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) {
+        final requestHeaders = <String, String>{
+          ...mergedHeaders,
+          'Content-Type': 'application/json',
+        };
+        return _guardRequest(
+          () => _client
+              .put(uri, headers: requestHeaders, body: payload)
+              .timeout(_timeout),
+          requestPath: uri.path,
+          method: 'PUT',
+        );
+      },
     );
     _guardStatus(res, uri.path);
     return _decodeBody(res.body, uri.path);
@@ -267,11 +326,18 @@ class CloudHttpClient {
     required Map<String, String> headers,
     required List<int> body,
   }) async {
-    final merged = await _mergeHeaders(headers);
-    return _guardRequest(
-      () => _client.post(uri, headers: merged, body: body).timeout(_timeout),
+    return _requestWithRefreshRetry(
       requestPath: uri.path,
       method: 'POST',
+      headers: headers,
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) => _guardRequest(
+        () => _client
+            .post(uri, headers: mergedHeaders, body: body)
+            .timeout(_timeout),
+        requestPath: uri.path,
+        method: 'POST',
+      ),
     );
   }
 
@@ -279,11 +345,16 @@ class CloudHttpClient {
     Uri uri, {
     required Map<String, String> headers,
   }) async {
-    final merged = await _mergeHeaders(headers);
-    final res = await _guardRequest(
-      () => _client.delete(uri, headers: merged).timeout(_timeout),
+    final res = await _requestWithRefreshRetry(
       requestPath: uri.path,
       method: 'DELETE',
+      headers: headers,
+      shouldAttemptRefresh: true,
+      run: (mergedHeaders) => _guardRequest(
+        () => _client.delete(uri, headers: mergedHeaders).timeout(_timeout),
+        requestPath: uri.path,
+        method: 'DELETE',
+      ),
     );
     _guardStatus(res, uri.path);
     if (res.body.isEmpty) return const <String, dynamic>{};
@@ -344,6 +415,61 @@ class CloudHttpClient {
     final token = await _authTokenProvider.getAccessToken();
     if (token == null || token.isEmpty) return headers;
     return <String, String>{...headers, 'Authorization': 'Bearer $token'};
+  }
+
+  Future<http.Response> _requestWithRefreshRetry({
+    required String requestPath,
+    required String method,
+    required Map<String, String> headers,
+    required bool shouldAttemptRefresh,
+    required Future<http.Response> Function(Map<String, String> mergedHeaders) run,
+  }) async {
+    final initialHeaders = await _mergeHeaders(headers);
+    final first = await run(initialHeaders);
+    if (!_shouldRefreshAfterResponse(
+      response: first,
+      requestPath: requestPath,
+      method: method,
+      shouldAttemptRefresh: shouldAttemptRefresh,
+    )) {
+      return first;
+    }
+    final refreshed = await _attemptUnauthorizedRefresh();
+    if (!refreshed) {
+      return first;
+    }
+    final retryHeaders = await _mergeHeaders(headers);
+    return run(retryHeaders);
+  }
+
+  bool _shouldRefreshAfterResponse({
+    required http.Response response,
+    required String requestPath,
+    required String method,
+    required bool shouldAttemptRefresh,
+  }) {
+    if (!shouldAttemptRefresh) {
+      return false;
+    }
+    if (response.statusCode != 401) {
+      return false;
+    }
+    if (requestPath.endsWith('/auth/token/refresh')) {
+      return false;
+    }
+    return method != 'AUTH_REFRESH';
+  }
+
+  Future<bool> _attemptUnauthorizedRefresh() async {
+    final refresh = _onUnauthorizedRefresh;
+    if (refresh == null) {
+      return false;
+    }
+    try {
+      return await refresh();
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<http.Response> _guardRequest(

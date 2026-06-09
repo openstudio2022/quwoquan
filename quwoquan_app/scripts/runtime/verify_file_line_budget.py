@@ -89,8 +89,8 @@ def reason_for(rel: str) -> str:
     if "pageflip" in rel or rel.endswith("article_read_only_book_deck.dart"):
         return "pageflip-locked (受 11/12 号几何规则严管，专项后置，禁止本轮拆分)"
     if rel.endswith(".go"):
-        return "go-oversized-legacy (同 package 多文件拆分，后续逐步降)"
-    return "oversized-legacy (子 widget / part / extension 拆分，后续逐步降)"
+        return "go-oversized-budget (同 package 多文件拆分，后续逐步降)"
+    return "oversized-budget (子 widget / part / extension 拆分，后续逐步降)"
 
 
 def write_baseline() -> int:

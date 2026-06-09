@@ -341,7 +341,11 @@ class MockChatRepository implements ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final rows = _conversationCache
-        .where((conversation) => conversation.status == 'active')
+        .where(
+          (conversation) =>
+              conversation.status == 'active' ||
+              conversation.status == 'blocked',
+        )
         .map(_effectiveInbox)
         .toList(growable: false);
     return rows.take(limit).toList(growable: false);
@@ -395,9 +399,21 @@ class MockChatRepository implements ChatRepository {
     String? title,
     String? circleId,
     String? circleGroupId,
+    String? originType,
+    String? bindingType,
+    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   }) async {
+    if ((type == 'direct' || type == 'encrypted') &&
+        initialMemberIds != null &&
+        initialMemberIds.length == 1) {
+      final peerId = initialMemberIds.first.trim();
+      final reusedId = _matchDirectConversationId(peerId, ChatMockData.nameFor(peerId));
+      if (reusedId.isNotEmpty) {
+        return ChatConversationCreatedDto(conversationId: reusedId);
+      }
+    }
     final conversationId = 'conv_new_${DateTime.now().millisecondsSinceEpoch}';
     final now = DateTime.now().toUtc().toIso8601String();
     final record = ConversationCacheRecord(
@@ -407,6 +423,12 @@ class MockChatRepository implements ChatRepository {
       creatorId: ChatMockData.currentUserProfileId,
       circleId: circleId ?? '',
       circleGroupId: circleGroupId,
+      originType:
+          originType ?? _defaultOriginType(type, circleId, circleGroupId),
+      bindingType:
+          bindingType ?? _defaultBindingType(circleId, circleGroupId),
+      lifecyclePolicy:
+          lifecyclePolicy ?? _defaultLifecyclePolicy(circleId, circleGroupId),
       maxSeq: 0,
       lastSeq: 0,
       memberCount: (initialMemberIds?.length ?? 0) + 1,
@@ -548,6 +570,10 @@ class MockChatRepository implements ChatRepository {
     String? senderAvatarUrlSnapshot,
     required String clientMsgId,
   }) async {
+    final conversation = _findConversation(conversationId);
+    if (conversation != null && conversation.status == 'blocked') {
+      throw StateError('CHAT.USER.blocked');
+    }
     _seqCounter += 1;
     final now = DateTime.now().toUtc();
     final message = ChatMessageDto(
@@ -747,6 +773,31 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
+  Future<List<ChatContactRowDto>> listGroupCandidates({
+    String? conversationId,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final locked = <String>{ChatMockData.currentUserProfileId};
+    final normalizedConversationId = conversationId?.trim() ?? '';
+    if (normalizedConversationId.isNotEmpty) {
+      locked.addAll(
+        _ensureMembersCache(
+          normalizedConversationId,
+        ).map((member) => member.userId).where((id) => id.isNotEmpty),
+      );
+    }
+    return _contactRows
+        .where(
+          (contact) =>
+              contact.relationState == 'mutual' &&
+              contact.userId.isNotEmpty &&
+              !locked.contains(contact.userId),
+        )
+        .take(limit)
+        .toList(growable: false);
+  }
+
+  @override
   Future<List<ChatContactTabCircleRowDto>> listContactTabCircles({
     int limit = CloudApiDefaults.pageLimit,
   }) async {
@@ -845,7 +896,11 @@ class MockChatRepository implements ChatRepository {
   @override
   Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
     return _conversationCache
-        .where((conversation) => conversation.status == 'active')
+        .where(
+          (conversation) =>
+              conversation.status == 'active' ||
+              conversation.status == 'blocked',
+        )
         .map((conversation) {
           final inbox = _effectiveInbox(conversation);
           return ChatConversationTimestampDto(
@@ -938,6 +993,41 @@ class MockChatRepository implements ChatRepository {
     _inboxOverrides.remove(conversationId);
     _contactGroupConversationIds.remove(conversationId);
   }
+}
+
+String _defaultOriginType(
+  String type,
+  String? circleId,
+  String? circleGroupId,
+) {
+  if (type != 'group') {
+    return 'direct_init';
+  }
+  if ((circleGroupId ?? '').trim().isNotEmpty) {
+    return 'circle_self_built_group';
+  }
+  if ((circleId ?? '').trim().isNotEmpty) {
+    return 'circle_default_group';
+  }
+  return 'ad_hoc_group';
+}
+
+String _defaultBindingType(String? circleId, String? circleGroupId) {
+  if ((circleGroupId ?? '').trim().isNotEmpty) {
+    return 'circle_group';
+  }
+  if ((circleId ?? '').trim().isNotEmpty) {
+    return 'circle';
+  }
+  return 'none';
+}
+
+String _defaultLifecyclePolicy(String? circleId, String? circleGroupId) {
+  if ((circleGroupId ?? '').trim().isNotEmpty ||
+      (circleId ?? '').trim().isNotEmpty) {
+    return 'bound_to_circle';
+  }
+  return 'persistent';
 }
 
 DateTime? _parseIso(String value) {

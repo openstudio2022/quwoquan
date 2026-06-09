@@ -100,3 +100,58 @@ func TestRuntimeOriginFromCurrentKindUsesCanonicalMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestParseCodeAllowsMetadataUserSubKinds(t *testing.T) {
+	cases := []string{
+		"USER.GREETING.already_contact",
+		"USER.AUTH.token_expired",
+		"USER.SUB_ACCOUNT.not_found",
+		"USER.SUB_ACCOUNT.retired_guard",
+		"USER.SUB_ACCOUNT.delete_empty_only",
+		"USER.SUB_ACCOUNT.handle_taken",
+		"USER.CONTACT.rate_limited",
+		"USER.INVITE.expired",
+		"USER.SETTING.invalid_call_ringtone",
+	}
+	for _, raw := range cases {
+		t.Run(raw, func(t *testing.T) {
+			code, err := ParseCode(raw)
+			if err != nil {
+				t.Fatalf("ParseCode(%q) returned error: %v", raw, err)
+			}
+			if code.String() != raw {
+				t.Fatalf("round trip mismatch: got %q want %q", code.String(), raw)
+			}
+		})
+	}
+}
+
+func TestHTTPStatusFromErrorSupportsMetadataUserSubKinds(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want int
+	}{
+		{name: "greeting conflict", raw: "USER.GREETING.already_contact", want: http.StatusConflict},
+		{name: "contact limited", raw: "USER.CONTACT.rate_limited", want: http.StatusTooManyRequests},
+		{name: "invite expired", raw: "USER.INVITE.expired", want: http.StatusGone},
+		{name: "auth expired", raw: "USER.AUTH.token_expired", want: http.StatusUnauthorized},
+		{name: "sub account missing", raw: "USER.SUB_ACCOUNT.not_found", want: http.StatusNotFound},
+		{name: "retired sub account", raw: "USER.SUB_ACCOUNT.retired_guard", want: http.StatusBadRequest},
+		{name: "delete empty only", raw: "USER.SUB_ACCOUNT.delete_empty_only", want: http.StatusBadRequest},
+		{name: "sub account handle taken", raw: "USER.SUB_ACCOUNT.handle_taken", want: http.StatusConflict},
+		{name: "setting invalid", raw: "USER.SETTING.invalid_call_ringtone", want: http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, err := ParseCode(tc.raw)
+			if err != nil {
+				t.Fatalf("ParseCode(%q): %v", tc.raw, err)
+			}
+			got := HTTPStatusFromError(NewAppError(code, "msg", "debug"))
+			if got != tc.want {
+				t.Fatalf("status = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	rterr "quwoquan_service/runtime/errors"
 	runtimegovernance "quwoquan_service/runtime/governance"
 	"quwoquan_service/services/user-service/internal/application"
 	followmodel "quwoquan_service/services/user-service/internal/domain/follow/model"
@@ -20,6 +21,7 @@ type UserHandler struct {
 	search           *application.SearchService
 	follow           *application.FollowService
 	block            *application.BlockService
+	greeting         *application.GreetingService
 	persona          *application.PersonaService
 	work             *application.WorkService
 	lifeItem         *application.LifeItemService
@@ -36,6 +38,7 @@ func NewUserHandler(
 	search *application.SearchService,
 	follow *application.FollowService,
 	block *application.BlockService,
+	greeting *application.GreetingService,
 	persona *application.PersonaService,
 	work *application.WorkService,
 	lifeItem *application.LifeItemService,
@@ -51,6 +54,7 @@ func NewUserHandler(
 		search:           search,
 		follow:           follow,
 		block:            block,
+		greeting:         greeting,
 		persona:          persona,
 		work:             work,
 		lifeItem:         lifeItem,
@@ -58,7 +62,7 @@ func NewUserHandler(
 		auth:             auth,
 		subAccount:       subAccount,
 		contactDiscovery: contactDiscovery,
-		invite:           invite,
+		invite:          invite,
 		interestProfile:  interestProfile,
 	}
 }
@@ -93,6 +97,8 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/user/blocked", h.handleListBlocked)
 	mux.HandleFunc("GET /v1/user/sub-accounts/{targetSubAccountId}/block/check", h.handleCheckBlocked)
 
+	h.registerGreetingRoutes(mux)
+
 	mux.HandleFunc("GET /v1/user/personas", h.handleListPersonas)
 	mux.HandleFunc("GET /v1/user/personas/summary", h.handleGetPersonaManagementSummary)
 	mux.HandleFunc("GET /v1/user/personas/active", h.handleGetActivePersonaContext)
@@ -117,6 +123,7 @@ func (h *UserHandler) Routes() http.Handler {
 	// Auth & Credentials
 	mux.HandleFunc("POST /v1/auth/login", h.handleLogin)
 	mux.HandleFunc("POST /v1/auth/otp/send", h.handleSendOtp)
+	mux.HandleFunc("POST /internal/auth/otp-deliveries:callback", h.handleOtpDeliveryCallback)
 	mux.HandleFunc("POST /v1/auth/login/phone", h.handleLoginWithPhone)
 	mux.HandleFunc("POST /v1/auth/login/wechat", h.handleLoginWithWechat)
 	mux.HandleFunc("POST /v1/auth/login/apple", h.handleLoginWithApple)
@@ -180,12 +187,12 @@ func (h *UserHandler) handleUpdateProfile(w http.ResponseWriter, r *http.Request
 	}
 	profile, err := h.profile.UpdateProfile(r.Context(), userID, data)
 	if err != nil {
-		if strings.Contains(err.Error(), "nickname_taken") {
-			writeHTTPError(w, r, appErrNicknameTaken(err.Error()))
+		if hasUserErrorCode(err, "USER.USER.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.USER.nickname_taken") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -270,7 +277,8 @@ func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http
 		rel, _ := h.follow.GetRelationship(r.Context(), viewerID, relationTargetID)
 		isBlocked, _ := h.block.CheckBlocked(r.Context(), viewerID, relationTargetID)
 		isBlockedBy, _ := h.block.CheckBlocked(r.Context(), relationTargetID, viewerID)
-		capability := buildRelationshipCapabilityView(
+		capability := h.buildRelationshipCapabilityView(
+			r.Context(),
 			viewerID,
 			relationTargetID,
 			rel,
@@ -367,25 +375,6 @@ func (h *UserHandler) handleClearRecentSearches(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
-func appErrNicknameTaken(msg string) error {
-	return appErr("AppErrorFromNicknameTaken", msg)
-}
-
-func appErr(_, msg string) error {
-	return appErrFromMsg(msg)
-}
-
-func appErrFromMsg(msg string) error {
-	if strings.Contains(msg, "nickname_taken") {
-		return appErrNickname(msg)
-	}
-	return nil
-}
-
-func appErrNickname(msg string) error {
-	return (&nickErr{msg: msg})
-}
-
 func anyString(value any) string {
 	if value == nil {
 		return ""
@@ -396,9 +385,19 @@ func anyString(value any) string {
 	return ""
 }
 
-type nickErr struct{ msg string }
+func hasUserErrorCode(err error, want string) bool {
+	if err == nil {
+		return false
+	}
+	return rterr.NormalizeError(err).Code.String() == want
+}
 
-func (e *nickErr) Error() string { return e.msg }
+func userErrorDebugMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	return rterr.NormalizeError(err).DebugMessage
+}
 
 func (h *UserHandler) handleFollow(w http.ResponseWriter, r *http.Request) {
 	body := readOptionalBody(r)
@@ -554,7 +553,7 @@ func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, buildRelationshipCapabilityView(viewerID, targetID, rel, isBlocked, isBlockedBy))
+	writeJSON(w, http.StatusOK, h.buildRelationshipCapabilityView(r.Context(), viewerID, targetID, rel, isBlocked, isBlockedBy))
 }
 
 func (h *UserHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
@@ -859,8 +858,8 @@ func (h *UserHandler) handleCreatePersona(w http.ResponseWriter, r *http.Request
 	}
 	p, err := h.subAccount.CreateSubAccount(r.Context(), userID, data)
 	if err != nil {
-		if strings.Contains(err.Error(), "persona_handle_taken") {
-			writeInvalidArg(w, r, "用户号已被占用")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.handle_taken") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -883,16 +882,16 @@ func (h *UserHandler) handleUpdatePersona(w http.ResponseWriter, r *http.Request
 	}
 	p, err := h.subAccount.UpdatePersona(r.Context(), userID, personaID, data)
 	if err != nil {
-		if strings.Contains(err.Error(), "persona_handle_taken") {
-			writeInvalidArg(w, r, "用户号已被占用")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.handle_taken") {
+			writeHTTPError(w, r, err)
 			return
 		}
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "已退役分身不可继续编辑")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -915,16 +914,16 @@ func (h *UserHandler) handleApplyPersonaProfileSync(w http.ResponseWriter, r *ht
 	}
 	result, err := h.subAccount.ApplyPersonaProfileSync(r.Context(), userID, personaID, data)
 	if err != nil {
-		if strings.Contains(err.Error(), "persona_handle_taken") {
-			writeInvalidArg(w, r, "用户号已被占用")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.handle_taken") {
+			writeHTTPError(w, r, err)
 			return
 		}
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "已退役分身不可继续同步资料")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -957,22 +956,16 @@ func (h *UserHandler) handleDeletePersona(w http.ResponseWriter, r *http.Request
 	personaID := r.PathValue("subAccountId")
 	err := h.subAccount.DeleteSubAccount(r.Context(), userID, personaID)
 	if err != nil {
-		if strings.Contains(err.Error(), "primary") ||
-			strings.Contains(err.Error(), "last") ||
-			strings.Contains(err.Error(), "switch to another persona") {
-			writeForbidden(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.primary_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.last_sub_account") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.active_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retire_required") {
+			writeHTTPError(w, r, err)
 			return
 		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "已退役分身不可删除")
-			return
-		}
-		if strings.Contains(err.Error(), "must be retired") {
-			writeConflict(w, r, "该分身已有记录归因，请使用退役而不是删除", err.Error())
-			return
-		}
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -990,22 +983,16 @@ func (h *UserHandler) handleRetirePersona(w http.ResponseWriter, r *http.Request
 	personaID := r.PathValue("subAccountId")
 	view, err := h.subAccount.RetirePersona(r.Context(), userID, personaID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if strings.Contains(err.Error(), "primary") ||
-			strings.Contains(err.Error(), "last") ||
-			strings.Contains(err.Error(), "switch to another persona") {
-			writeForbidden(w, r, err.Error())
-			return
-		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "该分身已退役")
-			return
-		}
-		if strings.Contains(err.Error(), "empty persona should be deleted directly") {
-			writeInvalidArg(w, r, "空白分身请直接删除，无需退役")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.primary_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.last_sub_account") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.active_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.delete_empty_only") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -1022,22 +1009,16 @@ func (h *UserHandler) handleDeleteEmptyPersona(w http.ResponseWriter, r *http.Re
 	}
 	personaID := r.PathValue("subAccountId")
 	if err := h.subAccount.DeleteEmptyPersona(r.Context(), userID, personaID); err != nil {
-		if strings.Contains(err.Error(), "primary") ||
-			strings.Contains(err.Error(), "last") ||
-			strings.Contains(err.Error(), "switch to another persona") {
-			writeForbidden(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.primary_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.last_sub_account") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.active_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retire_required") {
+			writeHTTPError(w, r, err)
 			return
 		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "已退役分身不可删除")
-			return
-		}
-		if strings.Contains(err.Error(), "must be retired") {
-			writeConflict(w, r, "该分身已有记录归因，请使用退役而不是删除", err.Error())
-			return
-		}
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -1055,12 +1036,12 @@ func (h *UserHandler) handleActivatePersona(w http.ResponseWriter, r *http.Reque
 	}
 	err := h.subAccount.ActivateSubAccount(r.Context(), userID, personaID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "已退役分身不可再激活")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -1223,6 +1204,33 @@ func (h *UserHandler) handleSendOtp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) handleOtpDeliveryCallback(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	requestID := strings.TrimSpace(anyString(body["requestId"]))
+	status := strings.TrimSpace(anyString(body["status"]))
+	normalizedError := strings.TrimSpace(anyString(body["normalizedError"]))
+	if requestID == "" {
+		writeInvalidArg(w, r, "requestId required")
+		return
+	}
+	if status == "" {
+		writeInvalidArg(w, r, "status required")
+		return
+	}
+	if err := h.auth.HandleOtpDeliveryCallback(r.Context(), requestID, status, normalizedError); err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"requestId": requestID,
+		"accepted":  true,
+	})
 }
 
 func (h *UserHandler) handleLoginWithPhone(w http.ResponseWriter, r *http.Request) {
@@ -1500,24 +1508,38 @@ func (h *UserHandler) handleGetSubAccountProfile(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, profile)
 }
 
-func buildRelationshipCapabilityView(viewerID, targetID string, rel *followrepo.Relationship, isBlocked, isBlockedBy bool) map[string]any {
+func (h *UserHandler) buildRelationshipCapabilityView(
+	ctx context.Context,
+	viewerID, targetID string,
+	rel *followrepo.Relationship,
+	isBlocked, isBlockedBy bool,
+) map[string]any {
 	relationState := "not_following"
 	canFollow := true
 	canUnfollow := false
-	canMessage := true
 	canFollowBack := false
+	canGreet := true
+	canCreateDirectConversation := false
+	canSendMessage := false
 	canStartVoiceCall := false
 	canStartVideoCall := false
+	isMutual := false
+	hasPendingGreeting := false
+	hasFormalConversation := false
 
 	switch {
 	case viewerID == targetID:
 		relationState = "self"
 		canFollow = false
-		canMessage = false
+		canGreet = false
 	case rel != nil && rel.IsMutual:
 		relationState = "mutual"
+		isMutual = true
 		canFollow = false
 		canUnfollow = true
+		canGreet = false
+		canCreateDirectConversation = true
+		canSendMessage = true
 		canStartVoiceCall = true
 		canStartVideoCall = true
 	case rel != nil && rel.IsFollowing:
@@ -1529,28 +1551,45 @@ func buildRelationshipCapabilityView(viewerID, targetID string, rel *followrepo.
 		canFollowBack = true
 	}
 
+	if h.greeting != nil && viewerID != targetID {
+		hasPendingGreeting, _ = h.greeting.HasPendingBetween(ctx, viewerID, targetID)
+		hasFormalConversation, _ = h.greeting.HasFormalConversation(ctx, viewerID, targetID)
+	}
+	if hasFormalConversation {
+		canSendMessage = true
+	}
+	if hasPendingGreeting {
+		canGreet = false
+	}
+
 	if isBlocked || isBlockedBy {
-		canMessage = false
+		canFollow = false
+		canFollowBack = false
+		canGreet = false
+		canCreateDirectConversation = false
+		canSendMessage = false
 		canStartVoiceCall = false
 		canStartVideoCall = false
 	}
 
 	return map[string]any{
-		"viewerSubAccountId":  viewerID,
-		"targetSubAccountId":  targetID,
-		"relationState":       relationState,
-		"canFollow":           canFollow,
-		"canUnfollow":         canUnfollow,
-		"canMessage":          canMessage,
-		"canFollowBack":       canFollowBack,
-		"canOpenConversation": canMessage,
-		"canGreet":            false,
-		"canAddSameInterest":  false,
-		"canSetCloseFriend":   false,
-		"canStartVoiceCall":   canStartVoiceCall,
-		"canStartVideoCall":   canStartVideoCall,
-		"isBlocked":           isBlocked,
-		"isBlockedBy":         isBlockedBy,
+		"viewerSubAccountId":          viewerID,
+		"targetSubAccountId":          targetID,
+		"relationState":               relationState,
+		"isMutual":                    isMutual,
+		"canFollow":                   canFollow,
+		"canUnfollow":                 canUnfollow,
+		"canFollowBack":               canFollowBack,
+		"canGreet":                    canGreet,
+		"canOpenConversation":         canCreateDirectConversation || hasFormalConversation,
+		"canCreateDirectConversation": canCreateDirectConversation,
+		"canSendMessage":              canSendMessage,
+		"hasPendingGreeting":          hasPendingGreeting,
+		"hasFormalConversation":       hasFormalConversation,
+		"canStartVoiceCall":           canStartVoiceCall,
+		"canStartVideoCall":           canStartVideoCall,
+		"isBlocked":                   isBlocked,
+		"isBlockedBy":                 isBlockedBy,
 	}
 }
 

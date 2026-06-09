@@ -17,6 +17,7 @@ type MemoryStore struct {
 	taskByDedupe   map[string]string
 	notifications  map[string]NotificationOutboxRecord
 	ledgers        map[string]NotificationDeliveryLedgerRecord
+	attempts       map[string]ProviderAttemptRecord
 	leases         map[string]TaskLease
 }
 
@@ -28,6 +29,7 @@ func NewMemoryStore() *MemoryStore {
 		taskByDedupe:   map[string]string{},
 		notifications:  map[string]NotificationOutboxRecord{},
 		ledgers:        map[string]NotificationDeliveryLedgerRecord{},
+		attempts:       map[string]ProviderAttemptRecord{},
 		leases:         map[string]TaskLease{},
 	}
 }
@@ -380,6 +382,37 @@ func (s *MemoryStore) MarkRecipientFailed(ctx context.Context, notificationID st
 	return nil
 }
 
+func (s *MemoryStore) RecordProviderAttempt(ctx context.Context, record ProviderAttemptRecord) (ProviderAttemptRecord, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if strings.TrimSpace(record.AttemptID) == "" {
+		record.AttemptID = newID("attempt")
+	}
+	if record.CreatedAt.IsZero() {
+		record.CreatedAt = time.Now().UTC()
+	}
+	record.Attributes = clonePayload(record.Attributes)
+	s.attempts[record.AttemptID] = record
+	return record, nil
+}
+
+func (s *MemoryStore) ListProviderAttempts(ctx context.Context, requestID string) ([]ProviderAttemptRecord, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	records := make([]ProviderAttemptRecord, 0)
+	for _, record := range s.attempts {
+		if record.RequestID == strings.TrimSpace(requestID) {
+			records = append(records, record)
+		}
+	}
+	sort.Slice(records, func(i, j int) bool {
+		return records[i].CreatedAt.Before(records[j].CreatedAt)
+	})
+	return records, nil
+}
+
 func (s *MemoryStore) CompleteNotification(ctx context.Context, notificationID string, leaseToken string) error {
 	_ = ctx
 	s.mu.Lock()
@@ -454,6 +487,166 @@ func (s *MemoryStore) ClaimShardLease(ctx context.Context, req ClaimShardLeaseRe
 	}
 	s.leases[id] = next
 	return &next, nil
+}
+
+func (s *MemoryStore) ListDeadTasks(ctx context.Context, taskTypes []string, limit int) ([]DeadTaskRecord, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]DeadTaskRecord, 0)
+	for _, task := range s.tasks {
+		if task.Status != TaskStatusDead || !contains(task.TaskType, taskTypes) {
+			continue
+		}
+		out = append(out, DeadTaskRecord{
+			TaskID:      task.TaskID,
+			TaskType:    task.TaskType,
+			AggregateID: task.AggregateID,
+			Attempts:    task.Attempts,
+			LastFailure: task.LastFailure,
+			Payload:     clonePayload(task.Payload),
+			UpdatedAt:   task.UpdatedAt,
+		})
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (s *MemoryStore) RecoverDeadTask(ctx context.Context, taskID string, now time.Time) error {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[strings.TrimSpace(taskID)]
+	if !ok {
+		return ErrTaskNotFound
+	}
+	if task.Status != TaskStatusDead {
+		return nil
+	}
+	task.Status = TaskStatusReady
+	task.NextAttemptAt = now.UTC()
+	task.LeaseOwner = ""
+	task.LeaseToken = ""
+	task.LeaseUntil = time.Time{}
+	task.UpdatedAt = now.UTC()
+	s.tasks[task.TaskID] = task
+	return nil
+}
+
+func (s *MemoryStore) ListDeadNotifications(ctx context.Context, eventTypes []string, limit int) ([]DeadNotificationRecord, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]DeadNotificationRecord, 0)
+	for _, notification := range s.notifications {
+		if notification.Status != NotificationStatusDead || !contains(notification.EventType, eventTypes) {
+			continue
+		}
+		out = append(out, DeadNotificationRecord{
+			NotificationID: notification.NotificationID,
+			EventType:      notification.EventType,
+			AggregateID:    notification.AggregateID,
+			Attempts:       notification.Attempts,
+			LastFailure:    notification.LastFailure,
+			UpdatedAt:      notification.UpdatedAt,
+		})
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (s *MemoryStore) RecoverDeadNotification(ctx context.Context, notificationID string, now time.Time) error {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	notification, ok := s.notifications[strings.TrimSpace(notificationID)]
+	if !ok {
+		return ErrNotificationNotFound
+	}
+	if notification.Status != NotificationStatusDead {
+		return nil
+	}
+	notification.Status = NotificationStatusPending
+	notification.NextAttemptAt = now.UTC()
+	notification.LeaseOwner = ""
+	notification.LeaseToken = ""
+	notification.LeaseUntil = time.Time{}
+	notification.UpdatedAt = now.UTC()
+	s.notifications[notification.NotificationID] = notification
+	return nil
+}
+
+func (s *MemoryStore) CleanupReliableTaskRetention(ctx context.Context, policy RetentionPolicy, now time.Time) (RetentionCleanupResult, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var result RetentionCleanupResult
+	for id, outbox := range s.outboxes {
+		if policy.Outbox.DispatchedTTL > 0 && outbox.Status == TaskOutboxStatusDispatched && outbox.UpdatedAt.Before(now.Add(-policy.Outbox.DispatchedTTL)) {
+			delete(s.outboxes, id)
+			result.OutboxesDeleted++
+		}
+	}
+	for id, task := range s.tasks {
+		if (policy.Task.DoneTTL > 0 && task.Status == TaskStatusSucceeded && task.UpdatedAt.Before(now.Add(-policy.Task.DoneTTL))) ||
+			(policy.Task.DeadTTL > 0 && task.Status == TaskStatusDead && task.UpdatedAt.Before(now.Add(-policy.Task.DeadTTL))) {
+			delete(s.tasks, id)
+			result.TasksDeleted++
+		}
+	}
+	for id, notification := range s.notifications {
+		if (policy.Notification.DoneTTL > 0 && notification.Status == NotificationStatusSucceeded && notification.UpdatedAt.Before(now.Add(-policy.Notification.DoneTTL))) ||
+			(policy.Notification.DeadTTL > 0 && notification.Status == NotificationStatusDead && notification.UpdatedAt.Before(now.Add(-policy.Notification.DeadTTL))) {
+			delete(s.notifications, id)
+			result.NotificationsDeleted++
+		}
+	}
+	for id, ledger := range s.ledgers {
+		if policy.DeliveryLedger.DeliveredTTL > 0 && ledger.Status == RecipientStatusDelivered && ledger.UpdatedAt.Before(now.Add(-policy.DeliveryLedger.DeliveredTTL)) {
+			delete(s.ledgers, id)
+			result.LedgersDeleted++
+		}
+	}
+	for id, attempt := range s.attempts {
+		if policy.DeliveryLedger.DeliveredTTL > 0 && attempt.CreatedAt.Before(now.Add(-policy.DeliveryLedger.DeliveredTTL)) {
+			delete(s.attempts, id)
+			result.AttemptsDeleted++
+		}
+	}
+	return result, nil
+}
+
+func (s *MemoryStore) ReliableTaskMetrics(ctx context.Context) (MetricsSnapshot, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	snapshot := MetricsSnapshot{
+		TasksByStatus:         map[string]int64{},
+		NotificationsByStatus: map[string]int64{},
+		ProviderAttempts:      map[string]int64{},
+		UpdatedAt:             time.Now().UTC(),
+	}
+	for _, task := range s.tasks {
+		snapshot.TasksByStatus[task.Status]++
+		if task.Status == TaskStatusDead {
+			snapshot.DeadTasks++
+		}
+	}
+	for _, notification := range s.notifications {
+		snapshot.NotificationsByStatus[notification.Status]++
+		if notification.Status == NotificationStatusDead {
+			snapshot.DeadNotifications++
+		}
+	}
+	for _, attempt := range s.attempts {
+		key := attempt.Operation + ":" + attempt.Provider + ":" + attempt.Status
+		snapshot.ProviderAttempts[key]++
+	}
+	return snapshot, nil
 }
 
 func dedupeStrings(values []string) []string {

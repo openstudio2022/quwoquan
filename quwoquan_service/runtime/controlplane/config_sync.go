@@ -1,0 +1,131 @@
+package controlplane
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"strings"
+	"time"
+)
+
+type RateLimitSetter interface {
+	SetRate(ratePerSecond int)
+	Rate() int
+}
+
+type ConfigSyncLoopOptions struct {
+	BaseURL       string
+	ServiceName   string
+	AppEnv        string
+	ClusterName   string
+	ConfigRoot    string
+	ConfigVersion string
+	ImageVersion  string
+	InstanceID    string
+	HotStore      *HotConfigStore
+	RateLimiter   RateLimitSetter
+}
+
+func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
+	baseURL := strings.TrimSpace(opts.BaseURL)
+	if baseURL == "" {
+		return
+	}
+
+	client := NewClient(baseURL, &http.Client{Timeout: 4 * time.Second})
+	snapshotPath := defaultSnapshotPath(opts.ConfigRoot, opts.ServiceName, opts.InstanceID)
+
+	applyRuntimeSettings := func() {
+		if opts.HotStore == nil {
+			return
+		}
+		if opts.RateLimiter != nil {
+			opts.RateLimiter.SetRate(opts.HotStore.GetInt("sys.gateway.rate_limit.per_user_rps", opts.RateLimiter.Rate()))
+		}
+	}
+
+	resolvePollInterval := func() time.Duration {
+		seconds := 30
+		if opts.HotStore != nil {
+			seconds = opts.HotStore.GetInt("sys.config_center.poll_interval_sec", 30)
+		}
+		if seconds < 5 {
+			seconds = 5
+		}
+		return time.Duration(seconds) * time.Second
+	}
+
+	allowDiskFallback := func() bool {
+		if opts.HotStore == nil {
+			return true
+		}
+		return opts.HotStore.GetBool("sys.config_center.disk_fallback_enabled", true)
+	}
+
+	syncOnce := func() {
+		scope := ConfigResolutionScope{
+			Environment: opts.AppEnv,
+			Cluster:     opts.ClusterName,
+			Service:     opts.ServiceName,
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+
+		response, err := client.Resolve(ctx, scope)
+		source := "config-center"
+		if err != nil {
+			if allowDiskFallback() {
+				response, err = LoadResolveSnapshot(snapshotPath)
+				source = "disk-fallback"
+			}
+		} else if saveErr := SaveResolveSnapshot(snapshotPath, response); saveErr != nil {
+			log.Printf("WARN: controlplane save config snapshot: %v", saveErr)
+		}
+		if err != nil {
+			log.Printf("WARN: controlplane config sync unavailable: %v", err)
+			return
+		}
+
+		effectiveHash := response.EffectiveHash
+		if opts.HotStore != nil {
+			effectiveHash = opts.HotStore.Apply(response.Values)
+		}
+		applyRuntimeSettings()
+
+		report := InstanceConfigReport{
+			ID:            opts.InstanceID,
+			Environment:   opts.AppEnv,
+			Cluster:       opts.ClusterName,
+			Service:       opts.ServiceName,
+			InstanceID:    opts.InstanceID,
+			ConfigVersion: opts.ConfigVersion,
+			ImageVersion:  opts.ImageVersion,
+			DesiredHash:   response.DesiredHash,
+			EffectiveHash: effectiveHash,
+			InSync:        response.DesiredHash == effectiveHash,
+			Source:        source,
+		}
+		if report.ID == "" {
+			report.ID = opts.ServiceName
+		}
+		if reportErr := client.ReportInstance(context.Background(), report); reportErr != nil {
+			log.Printf("WARN: controlplane config report failed: %v", reportErr)
+		}
+	}
+
+	syncOnce()
+	for {
+		timer := time.NewTimer(resolvePollInterval())
+		<-timer.C
+		timer.Stop()
+		syncOnce()
+	}
+}
+
+func defaultSnapshotPath(configRoot, serviceName, instanceID string) string {
+	if strings.TrimSpace(configRoot) != "" {
+		return configRoot + "/runtime-cache/" + serviceName + "/" + instanceID + ".json"
+	}
+	return "state/runtime-cache/" + serviceName + "/" + instanceID + ".json"
+}

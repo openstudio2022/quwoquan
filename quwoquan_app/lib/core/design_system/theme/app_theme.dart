@@ -1,32 +1,10 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-
-/// 非 iOS 平台的默认无衬线黑体（思源黑体简体）。
-const String _kDefaultFontFamily = 'Noto Sans SC';
-
-String? _platformFontFamily() {
-  switch (defaultTargetPlatform) {
-    case TargetPlatform.iOS:
-    case TargetPlatform.macOS:
-      return null;
-    default:
-      return _kDefaultFontFamily;
-  }
-}
-
-List<String> _platformFontFallbacks() {
-  return const <String>[
-    '.SF Pro Text',
-    'PingFang SC',
-    'Helvetica Neue',
-    'Noto Sans SC',
-  ];
-}
+import 'package:quwoquan_app/core/platform/app_font_families.dart';
 
 class AppTheme {
   static ThemeData get lightTheme => _buildTheme(Brightness.light);
@@ -120,8 +98,8 @@ class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: scaffoldBackground,
       dividerColor: separatorColor,
-      fontFamily: _platformFontFamily(),
-      fontFamilyFallback: _platformFontFallbacks(),
+      fontFamily: resolveAppThemeFontFamily(),
+      fontFamilyFallback: resolveAppThemeFontFallbacks(),
       textTheme: textTheme,
       canvasColor: surfaceBackground,
       splashFactory: NoSplash.splashFactory,

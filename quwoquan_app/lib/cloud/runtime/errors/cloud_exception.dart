@@ -20,6 +20,7 @@ class CloudException implements Exception {
     this.code,
     this.errorCode,
     this.runtimeFailure,
+    this.userMessage,
     this.cause,
   });
 
@@ -34,6 +35,10 @@ class CloudException implements Exception {
   final ContentErrorCode? errorCode;
 
   final RuntimeFailureBase? runtimeFailure;
+
+  /// User-facing message returned by a structured runtime error response.
+  /// Prefer this over generic fallback text when present.
+  final String? userMessage;
 
   final Object? cause;
 

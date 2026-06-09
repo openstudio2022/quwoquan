@@ -99,8 +99,23 @@ void main() {
       expect(code, isNull);
     });
 
-    test('enum 总数 = 13', () {
-      expect(RtcErrorCode.values.length, 13);
+    test('enum 总数 = 16（含 not_mutual / blocked / invalid_call_action）', () {
+      expect(RtcErrorCode.values.length, 16);
+    });
+
+    test('关系门禁错误码已贯通端侧', () {
+      expect(
+        RtcErrorCode.fromCode('RTC.USER.not_mutual'),
+        RtcErrorCode.notMutual,
+      );
+      expect(
+        RtcErrorCode.fromCode('RTC.USER.blocked'),
+        RtcErrorCode.blocked,
+      );
+      expect(
+        RtcErrorCode.fromCode('RTC.USER.invalid_call_action'),
+        RtcErrorCode.invalidCallAction,
+      );
     });
 
     test('每个 code round-trip：fromCode(code) == self', () {

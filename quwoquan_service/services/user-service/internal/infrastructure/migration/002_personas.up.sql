@@ -42,6 +42,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_primary ON personas (user_id, is_p
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_active ON personas (user_id, is_active) WHERE is_active = true;
 
-ALTER TABLE personas ADD CONSTRAINT uq_personas_sub_account_id UNIQUE (sub_account_id);
+DO $do$ BEGIN
+    ALTER TABLE personas ADD CONSTRAINT uq_personas_sub_account_id UNIQUE (sub_account_id);
+EXCEPTION WHEN duplicate_table THEN NULL; WHEN duplicate_object THEN NULL;
+END $do$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_user_handle ON personas (user_handle) WHERE user_handle IS NOT NULL AND user_handle <> '';

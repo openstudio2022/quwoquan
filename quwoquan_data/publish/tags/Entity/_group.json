@@ -1,0 +1,19 @@
+{
+  "id": "Entity",
+  "label": "实体类型",
+  "labelEn": "Entity",
+  "semantics": "描述具体对象的类型骨架（地点/机构/活动/人物/品牌/作品/商品/生物/交通工具）。注意：此处只有类型标签，具体实例（海底捞/峨眉山/李白等）进入 entities/ 目录，通过 tagRefs 关联到本树的类型节点。",
+  "expectedDimensions": [
+    "Entity/地点",
+    "Entity/机构",
+    "Entity/活动",
+    "Entity/人物",
+    "Entity/品牌",
+    "Entity/作品",
+    "Entity/商品",
+    "Entity/生物",
+    "Entity/交通工具"
+  ],
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

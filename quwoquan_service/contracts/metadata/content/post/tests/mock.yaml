@@ -13,7 +13,7 @@ description: |
     ui_config_scenarios→ L1a contract tests（test/ui/content/post/contract/post_ui_config_contract_test.dart）
     widget_scenarios   → L1b widget tests  (quwoquan_app/test/ui/content/**、test/ui/discovery/**)
     journey_scenarios  → L1c journey tests (quwoquan_app/test/ui/content/entry/journeys/**)
-  执行抽样：flutter test quwoquan_app/test/ui/content/ quwoquan_app/test/cloud/content/ quwoquan_app/test/ui/discovery/
+  执行抽样：python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/ui/content/ test/cloud/content/ test/ui/discovery/
 
 # ── DTO 解析场景 ─────────────────────────────────────────────────────
 dto_scenarios:
@@ -136,6 +136,24 @@ error_scenarios:
     input_status: 409
     expected_dart_const: commentLikeDuplicate
     expected_recovery_action: surface
+
+  - name: parse_comment_reaction_forbidden
+    input_code: "CONTENT.USER.comment_reaction_forbidden"
+    input_status: 403
+    expected_dart_const: commentReactionForbidden
+    expected_recovery_action: surface
+
+  - name: parse_comment_attachment_limit_exceeded
+    input_code: "CONTENT.USER.comment_attachment_limit_exceeded"
+    input_status: 400
+    expected_dart_const: commentAttachmentLimitExceeded
+    expected_recovery_action: surface
+
+  - name: parse_comment_attachment_not_ready
+    input_code: "CONTENT.USER.comment_attachment_not_ready"
+    input_status: 400
+    expected_dart_const: commentAttachmentNotReady
+    expected_recovery_action: retry
 
   - name: parse_comment_forbidden_delete
     input_code: "CONTENT.USER.comment_forbidden_delete"
@@ -292,6 +310,30 @@ widget_scenarios:
     assertions:
       - (widget as ElevatedButton).onPressed != null
 
+  - name: comment_reply_preview_uses_config
+    dart_func: testCommentReplyPreviewUsesConfig
+    description: reply_preview_count=1 时每条一级评论默认只展示 1 条回复
+    fixture: { replyPreviewCount: 1, replyExpandPageSize: 10 }
+    assertions:
+      - only first reply preview is visible
+      - expand replies button shows remaining count
+
+  - name: comment_reaction_three_state_widget
+    dart_func: testCommentReactionThreeStateWidget
+    description: 评论赞踩互斥，viewerReaction 重入恢复
+    fixture: { viewerReaction: like, likeCount: 3, dislikeCount: 1 }
+    assertions:
+      - like button selected
+      - tapping dislike clears like and selects dislike
+
+  - name: comment_composer_mentions_and_attachment
+    dart_func: testCommentComposerMentionsAndAttachment
+    description: 输入面板支持 emoji、图片附件和 @ 候选
+    fixture: { attachmentMaxImages: 1, mentionCandidates: [assistant, mutual, following] }
+    assertions:
+      - mention strip contains @小趣 first
+      - submit payload contains attachmentMediaIds and mentions
+
 # ── L1c Journey 测试场景 ──────────────────────────────────────────────
 # dart_func: 对应 quwoquan_app/test/ui/content/entry/journeys/** 等下的测试函数名
 # mock_config: MockContentRepository 的特殊配置（异常注入等）
@@ -340,3 +382,21 @@ journey_scenarios:
       - mockRepo.createCommentCallCount == 1
       - mockRepo.lastCommentText == "这张图真漂亮"
       - find.text("4") findsOneWidget (commentCount +1)
+
+  - name: article_inline_comment_journey
+    dart_func: testArticleInlineCommentJourney
+    description: 平铺文章点击评论入口滚动到内联评论区
+    mock_config: {}
+    fixture_seed: { contentType: article, id: "post_article_inline_001", commentCount: 12 }
+    assertions:
+      - InlineArticleCommentSection is visible after tapping comment action
+      - no modal route is pushed
+
+  - name: immersive_comment_split_journey
+    dart_func: testImmersiveCommentSplitJourney
+    description: 图片/视频/翻页文章点击评论入口进入内容上压分屏
+    mock_config: {}
+    fixture_seed: { contentType: image, id: "post_immersive_001", commentCount: 12 }
+    assertions:
+      - ImmersiveCommentSplitSheet is visible
+      - content viewport remains mounted after opening comments

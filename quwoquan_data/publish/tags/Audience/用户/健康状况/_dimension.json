@@ -1,0 +1,9 @@
+{
+  "label": "健康状况",
+  "labelEn": "Health Status",
+  "description": "用户健康特殊状态（不含孕期；孕期见生活阶段）",
+  "maxDepth": 2,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

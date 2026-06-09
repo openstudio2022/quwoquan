@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_request_page_ids.g.dart';
@@ -48,7 +47,7 @@ class LongPollTransport {
       try {
         final url =
             Uri.parse(
-              '${CloudRuntimeConfig.gatewayBaseUrl}${RealtimeApiMetadata.longPollPath}',
+              '${config.gatewayBaseUrl}${RealtimeApiMetadata.longPollPath}',
             ).replace(
               queryParameters: <String, String>{
                 'userId': userId,

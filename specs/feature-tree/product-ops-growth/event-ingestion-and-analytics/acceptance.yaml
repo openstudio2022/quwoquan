@@ -24,9 +24,13 @@ sit_acceptance:
       supporting:
       - T1_static_contract
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - quwoquan_service/services/product-ops-service/cmd/api/main_test.go
+      - quwoquan_service/scripts/runtime/observability/test_es_cli.py
+      recorded:
+      - quwoquan_service/services/product-ops-service/cmd/api/main_test.go
+      - quwoquan_service/scripts/runtime/observability/test_es_cli.py
+    status: implemented
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

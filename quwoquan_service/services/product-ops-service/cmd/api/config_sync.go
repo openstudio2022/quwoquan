@@ -88,7 +88,7 @@ func resolveSnapshotPath(configRoot, serviceName, instanceID string) string {
 	if strings.TrimSpace(configRoot) != "" {
 		return filepath.Join(configRoot, "runtime-cache", serviceName, instanceID+".json")
 	}
-	return filepath.Join(".runtime-cache", serviceName, instanceID+".json")
+	return filepath.Join("state", "runtime-cache", serviceName, instanceID+".json")
 }
 
 func defaultClusterName(appEnv string) string {

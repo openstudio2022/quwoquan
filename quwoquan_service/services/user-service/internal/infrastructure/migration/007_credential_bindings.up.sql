@@ -14,6 +14,12 @@ CREATE TABLE IF NOT EXISTS credential_bindings (
 
 CREATE INDEX IF NOT EXISTS idx_credential_bindings_owner_id ON credential_bindings (owner_id);
 
-ALTER TABLE credential_bindings ADD CONSTRAINT uq_credential_type_key UNIQUE (credential_type, credential_key);
+DO $do$ BEGIN
+    ALTER TABLE credential_bindings ADD CONSTRAINT uq_credential_type_key UNIQUE (credential_type, credential_key);
+EXCEPTION WHEN duplicate_table THEN NULL; WHEN duplicate_object THEN NULL;
+END $do$;
 
-ALTER TABLE credential_bindings ADD CONSTRAINT uq_credential_owner_type UNIQUE (owner_id, credential_type);
+DO $do$ BEGIN
+    ALTER TABLE credential_bindings ADD CONSTRAINT uq_credential_owner_type UNIQUE (owner_id, credential_type);
+EXCEPTION WHEN duplicate_table THEN NULL; WHEN duplicate_object THEN NULL;
+END $do$;

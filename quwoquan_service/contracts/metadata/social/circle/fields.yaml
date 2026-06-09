@@ -181,7 +181,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 兼容字段：默认公共群绑定的 Conversation
+        description: 退役兼容字段；商用入口必须通过 defaultPublicGroupId -> CircleGroup.conversationId 承接聊天，前台不得再把 Circle.conversationId 作为会话真相源
 
       - name: autoSyncChat
         type: boolean

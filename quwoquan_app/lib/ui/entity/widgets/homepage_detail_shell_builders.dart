@@ -2,7 +2,7 @@ part of 'homepage_detail_shell.dart';
 
 extension _HomepageBuilders on _HomepageDetailShellState {
   /// 交集卡「你和这里的交集」：tag-service shared-tags 对象对直打（当前用户 × 实体主页）。
-  /// 普通 State 经 Consumer 取 ref；无可解析交集不占位（G2 不造假）。
+  /// bundle 直出优先；否则经统一 section（loading 骨架 / 空收起，G2 不造假）。
   Widget _buildIntersectionCard(bool isDark) {
     final bundleReasons = widget.objectPageBundle?.intersectionReasons;
     if (bundleReasons != null && bundleReasons.isNotEmpty) {
@@ -10,10 +10,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         title: UITextConstants.homepageIntersectionTitle,
         reasons: bundleReasons,
         isDark: isDark,
-        sharedCount: bundleReasons.fold<int>(
-          0,
-          (sum, reason) => sum + reason.sharedCount,
-        ),
+        onReasonTap: widget.onIntersectionReasonTap,
       );
       if (card != null) {
         return Padding(
@@ -31,34 +28,20 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     if (viewerId.isEmpty || entityId.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Consumer(
-      builder: (context, ref, _) {
-        final query = ObjectIntersectionQuery(
+    // 无 bundle 直出数据时：经统一 section（loading 骨架 / data 卡 / error 收起 + 旅程高亮）。
+    return Padding(
+      padding: EdgeInsets.only(top: AppSpacing.containerSm),
+      child: ObjectIntersectionSection(
+        query: ObjectIntersectionQuery(
           objectAId: viewerId,
           objectAType: 'user',
           objectBId: entityId,
           objectBType: 'entity',
-        );
-        if (!query.isResolvable) {
-          return const SizedBox.shrink();
-        }
-        final reasons = ref
-            .watch(objectSharedReasonsProvider(query))
-            .asData
-            ?.value;
-        final card = ObjectIntersectionCard.fromReasons(
-          title: UITextConstants.homepageIntersectionTitle,
-          reasons: reasons,
-          isDark: isDark,
-        );
-        if (card == null) {
-          return const SizedBox.shrink();
-        }
-        return Padding(
-          padding: EdgeInsets.only(top: AppSpacing.containerSm),
-          child: card,
-        );
-      },
+        ),
+        title: UITextConstants.homepageIntersectionTitle,
+        isDark: isDark,
+        onReasonTap: widget.onIntersectionReasonTap,
+      ),
     );
   }
 

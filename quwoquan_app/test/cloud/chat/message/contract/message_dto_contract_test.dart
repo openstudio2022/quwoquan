@@ -34,6 +34,91 @@ void main() {
       expect(dto.media!['codec'], 'aac');
     });
 
+    test('image 类型消息解析 mediaUrl 与缩略图', () {
+      final dto = MessageDto.fromMap({
+        '_id': 'msg_img_001',
+        'conversationId': 'conv_001',
+        'seq': 43,
+        'clientMsgId': 'client_img_001',
+        'senderId': 'user_001',
+        'type': 'image',
+        'content': '契约图片消息',
+        'mediaUrl': 'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
+        'media': {
+          'url': 'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
+          'thumbnailUrl':
+              'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
+          'mimeType': 'image/png',
+          'fileName': 'fixture_photo_001_cover.png',
+          'fileSizeBytes': 128000,
+          'width': 960,
+          'height': 720,
+        },
+        'status': 'sent',
+        'timestamp': '2026-03-08T12:01:00Z',
+      });
+
+      expect(dto.type, 'image');
+      expect(dto.mediaUrl, 'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png');
+      expect(dto.media!['thumbnailUrl'], isNotNull);
+      expect(dto.media!['mimeType'], 'image/png');
+    });
+
+    test('file 类型消息保留 fileName 与 mimeType', () {
+      final dto = MessageDto.fromMap({
+        '_id': 'msg_file_001',
+        'conversationId': 'conv_001',
+        'seq': 44,
+        'clientMsgId': 'client_file_001',
+        'senderId': 'user_001',
+        'type': 'file',
+        'content': '契约说明.pdf',
+        'mediaUrl': 'media/file/s/archived-file/post/fixture_chat_file_001/v1/spec.pdf',
+        'media': {
+          'url': 'media/file/s/archived-file/post/fixture_chat_file_001/v1/spec.pdf',
+          'mimeType': 'application/pdf',
+          'fileName': 'spec.pdf',
+          'fileSizeBytes': 2048,
+        },
+        'status': 'sent',
+        'timestamp': '2026-03-08T12:02:00Z',
+      });
+
+      expect(dto.type, 'file');
+      expect(dto.mediaUrl, 'media/file/s/archived-file/post/fixture_chat_file_001/v1/spec.pdf');
+      expect(dto.media!['fileName'], 'spec.pdf');
+      expect(dto.media!['mimeType'], 'application/pdf');
+    });
+
+    test('video 类型消息解析缩略图和时长', () {
+      final dto = MessageDto.fromMap({
+        '_id': 'msg_video_001',
+        'conversationId': 'conv_001',
+        'seq': 45,
+        'clientMsgId': 'client_video_001',
+        'senderId': 'user_001',
+        'type': 'video',
+        'content': '契约视频消息',
+        'mediaUrl': 'media/video/s/archived-video/post/fixture_video_001/v1/video.mp4',
+        'media': {
+          'url': 'media/video/s/archived-video/post/fixture_video_001/v1/video.mp4',
+          'thumbnailUrl':
+              'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+          'mimeType': 'video/mp4',
+          'fileName': 'fixture_video_001.mp4',
+          'fileSizeBytes': 1048576,
+          'durationMs': 93000,
+        },
+        'status': 'sent',
+        'timestamp': '2026-03-08T12:03:00Z',
+      });
+
+      expect(dto.type, 'video');
+      expect(dto.mediaUrl, 'media/video/s/archived-video/post/fixture_video_001/v1/video.mp4');
+      expect(dto.media!['thumbnailUrl'], isNotNull);
+      expect(dto.media!['durationMs'], 93000);
+    });
+
     test('text 类型消息 media 字段为 null', () {
       final dto = MessageDto.fromMap({
         '_id': 'msg_002',

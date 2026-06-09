@@ -110,13 +110,14 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   }
 
   /// 乐观插入 → 远程发送 → 更新/标记失败。
-  Future<void> sendMessage(
+  Future<bool> sendMessage(
     String type,
     String content, {
     String? mediaUrl,
     Map<String, dynamic>? media,
     String? senderName,
     String? senderAvatar,
+    List<String>? mentions,
   }) async {
     final activeContext = await _resolveActivePersonaContext();
     final clientMsgId = _uuid.v4();
@@ -150,6 +151,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         content: content,
         mediaUrl: mediaUrl,
         media: media,
+        mentions: mentions,
         senderSubAccountId: resolvedSenderSubAccountId.isEmpty
             ? null
             : resolvedSenderSubAccountId,
@@ -168,11 +170,13 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         return m.clientMsgId == clientMsgId ? confirmed : m;
       }).toList();
       state = state.copyWith(messages: _sorted(updated));
+      return true;
     } catch (e) {
       final failed = state.messages.map((m) {
         return m.clientMsgId == clientMsgId ? m.copyWith(status: 'failed') : m;
       }).toList();
       state = state.copyWith(messages: _sorted(failed));
+      return false;
     }
   }
 

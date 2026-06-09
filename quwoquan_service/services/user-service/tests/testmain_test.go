@@ -37,6 +37,19 @@ var (
 	testAccessVerifier = rtauth.NewHS256Verifier(testAccessSecret)
 )
 
+type acceptedExternalClient struct{}
+
+func (acceptedExternalClient) SubmitSMSOTP(
+	ctx context.Context,
+	req application.SMSOTPDispatchRequest,
+) (application.ExternalInteractionAccepted, error) {
+	_ = ctx
+	return application.ExternalInteractionAccepted{
+		RequestID: req.RequestID,
+		Status:    "accepted",
+	}, nil
+}
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
@@ -103,6 +116,7 @@ func TestMain(m *testing.M) {
 	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
 	settingStore := persistence.NewPgSettingStore(pgPool)
 	blockStore := persistence.NewPgBlockStore(pgPool)
+	greetingStore := persistence.NewPgGreetingStore(pgPool)
 	workStore := persistence.NewPgWorkStore(pgPool)
 	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
 	var followStore *persistence.MongoFollowStore
@@ -146,7 +160,15 @@ func TestMain(m *testing.M) {
 		blockStore,
 		userEventPublisher,
 	)
-	blockService := application.NewBlockService(blockStore, blockCache)
+	conversationGateway := application.NewMemoryConversationGateway()
+	greetingService := application.NewGreetingService(
+		greetingStore,
+		followStore,
+		blockStore,
+		conversationGateway,
+		userEventPublisher,
+	)
+	blockService := application.NewBlockService(blockStore, followStore, blockCache, userEventPublisher, greetingStore)
 	personaService := application.NewPersonaService(personaStore, pgPool, profileCache)
 	workService := application.NewWorkService(workStore)
 	lifeItemService := application.NewLifeItemService(lifeItemStore)
@@ -161,6 +183,7 @@ func TestMain(m *testing.M) {
 		application.WithUserAuthRepository(userAuthStore),
 		application.WithOtpCodeStore(cache.NewOtpCodeCache(redisClient)),
 		application.WithOtpDebugReveal(true),
+		application.WithExternalInteractionClient(acceptedExternalClient{}),
 		application.WithAccessTokenSigner(testAccessSigner),
 		application.WithOneTapPhoneResolver(application.StaticOneTapPhoneResolver{
 			"carrier_token_new":      "+8618013813901",
@@ -178,7 +201,7 @@ func TestMain(m *testing.M) {
 
 	// 7. Handler（包裹统一鉴权中间件：Bearer JWT 验签后覆盖 X-Client-User-Id）
 	testHandler = rtauth.Middleware(testAccessVerifier)(httpadapter.NewUserHandler(
-		profileService, searchService, followService, blockService,
+		profileService, searchService, followService, blockService, greetingService,
 		personaService, workService, lifeItemService, settingService,
 		authService, subAccountService, contactDiscoveryService, inviteService,
 		interestProfileService,

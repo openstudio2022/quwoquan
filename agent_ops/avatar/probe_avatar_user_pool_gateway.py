@@ -112,10 +112,10 @@ def main() -> int:
     media_base = f"http://127.0.0.1:{media_port}"
     gateway_base = f"http://127.0.0.1:{gateway_port}"
     processes: list[subprocess.Popen[str]] = []
-    avatar_object_key = first_object_key(pool, "media/avatar/user/")
-    group_avatar_key = first_object_key(pool, "media/avatar/group/")
-    png_cover_key = "media/image/post/fixture_photo_001/v1/cover.png"
-    mixed_cover_key = first_object_key(pool, "media/image/post/", exclude_suffix=".png")
+    avatar_object_key = first_object_key(pool, "media/avatar/s/archived-avatar/user/")
+    group_avatar_key = first_object_key(pool, "media/avatar/s/archived-avatar/group/")
+    png_cover_key = "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+    mixed_cover_key = first_object_key(pool, "media/image/s/archived-image/post/", exclude_suffix=".png")
     try:
         media = subprocess.Popen(
             [sys.executable, "-m", "http.server", str(media_port), "--bind", "127.0.0.1", "--directory", str(MEDIA_ROOT)],
@@ -172,7 +172,7 @@ def main() -> int:
         cover_values = collect_strings(content, "coverUrl") + collect_strings(content, "thumbnailUrl")
         require(cover_values, "expected post cover values from gateway content fixture")
         require(
-            all(value.startswith(f"{media_base}/media/image/post/") for value in cover_values),
+            all(value.startswith(f"{media_base}/media/image/s/archived-image/post/") for value in cover_values),
             f"all cover values must be media image URLs, got {cover_values}",
         )
 

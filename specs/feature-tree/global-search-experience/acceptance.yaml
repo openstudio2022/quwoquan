@@ -21,9 +21,14 @@ domain_acceptance:
       - T3_service_contract
       supporting: []
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - quwoquan_service/services/assistant-service/tests/assistant_search_grounding_integration_test.go
+      recorded:
+      - quwoquan_service/services/assistant-service/internal/application/service_test.go
+      - quwoquan_service/scripts/contract/verify_assistant_context_contract.py
+      - quwoquan_service/scripts/contract/verify_assistant_security_contract.py
+    status: partial
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

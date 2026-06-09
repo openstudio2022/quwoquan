@@ -13,6 +13,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -231,8 +233,143 @@ func TestBehaviorBatchAssistantInterestProjectsTagInteraction(t *testing.T) {
 	}
 }
 
+func TestBehaviorBatchIntersectionConversionsUpdateMetricsAndAuthorImpact(t *testing.T) {
+	ctx := context.Background()
+	authorID := "author_intersection_impact_001"
+	if _, err := mongoDB.Collection("rm_daily_metrics").DeleteMany(ctx, bson.M{}); err != nil {
+		t.Fatalf("clean daily metrics: %v", err)
+	}
+	if _, err := mongoDB.Collection("rm_author_impact").DeleteMany(ctx, bson.M{"authorId": authorID}); err != nil {
+		t.Fatalf("clean author impact: %v", err)
+	}
+	behaviorService := application.NewBehaviorService(
+		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
+		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
+		application.WithDailyMetricsStore(persistence.NewDailyMetricsStore(mongoDB, nilLogger())),
+		application.WithAuthorImpactStore(persistence.NewAuthorImpactStore(mongoDB, nilLogger())),
+	)
+
+	err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+		{
+			UserID:                "viewer_intersection_001",
+			ContentID:             "post_follow_001",
+			Action:                "follow",
+			AuthorID:              authorID,
+			IntersectionDimension: "identity",
+			IntersectionTagRefs:   []string{"Audience/学生"},
+		},
+		{
+			UserID:                "viewer_intersection_001",
+			ContentID:             "circle_intersection_001",
+			Action:                "join_circle",
+			AuthorID:              authorID,
+			IntersectionDimension: "interest",
+			IntersectionTagRefs:   []string{"Topic/旅行"},
+		},
+		{
+			UserID:                "viewer_intersection_001",
+			ContentID:             "post_contact_001",
+			Action:                "add_contact",
+			AuthorID:              authorID,
+			IntersectionDimension: "relationship",
+			IntersectionTagRefs:   []string{"Entity/通讯录"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("process intersection conversions: %v", err)
+	}
+
+	var identityMetric struct {
+		FollowConversions int64 `bson:"followConversions"`
+	}
+	if err := mongoDB.Collection("rm_daily_metrics").FindOne(ctx, bson.M{
+		"dimension":    persistence.DailyMetricDimensionIntersection,
+		"dimensionKey": "identity",
+	}).Decode(&identityMetric); err != nil {
+		t.Fatalf("find identity metric: %v", err)
+	}
+	if identityMetric.FollowConversions != 1 {
+		t.Fatalf("followConversions = %d, want 1", identityMetric.FollowConversions)
+	}
+
+	store := persistence.NewAuthorImpactStore(mongoDB, nilLogger())
+	summary, err := store.GetSummary(ctx, authorID, 10)
+	if err != nil {
+		t.Fatalf("get author impact summary: %v", err)
+	}
+	if summary.Total != 3 {
+		t.Fatalf("author impact total = %d, want 3; items=%+v", summary.Total, summary.Items)
+	}
+	byHelp := map[string]int64{}
+	for _, item := range summary.Items {
+		byHelp[item.HelpType] += item.Count
+	}
+	if byHelp[persistence.AuthorImpactHelpRelationship] != 2 {
+		t.Fatalf("relationship help = %d, want 2; items=%+v", byHelp[persistence.AuthorImpactHelpRelationship], summary.Items)
+	}
+	if byHelp[persistence.AuthorImpactHelpCommunity] != 1 {
+		t.Fatalf("community help = %d, want 1; items=%+v", byHelp[persistence.AuthorImpactHelpCommunity], summary.Items)
+	}
+}
+
+func TestGetAuthorImpactReturnsBehaviorAggregation(t *testing.T) {
+	ctx := context.Background()
+	authorID := "author_impact_http_001"
+	if _, err := mongoDB.Collection("rm_author_impact").DeleteMany(ctx, bson.M{"authorId": authorID}); err != nil {
+		t.Fatalf("clean author impact: %v", err)
+	}
+	payload := fmt.Sprintf(`{
+		"userId": "viewer_impact_http_001",
+		"events": [
+			{
+				"contentId": "post_impact_http_001",
+				"action": "follow",
+				"authorId": %q,
+				"intersectionDimension": "identity",
+				"intersectionTagRefs": ["Audience/学生"]
+			}
+		]
+	}`, authorID)
+	reportReq := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	reportReq.Header.Set("Content-Type", "application/json")
+	reportRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(reportRec, reportReq)
+	if reportRec.Code != http.StatusNoContent {
+		t.Fatalf("report behavior: expected 204, got %d: %s", reportRec.Code, reportRec.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/sub-accounts/"+authorID+"/author-impact", nil)
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get author impact: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		AuthorID string `json:"authorId"`
+		Total    int64  `json:"total"`
+		Items    []struct {
+			HelpType string `json:"helpType"`
+			Action   string `json:"action"`
+			Count    int64  `json:"count"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode author impact: %v", err)
+	}
+	if body.AuthorID != authorID || body.Total != 1 || len(body.Items) == 0 {
+		t.Fatalf("unexpected author impact body: %+v", body)
+	}
+	if body.Items[0].HelpType != persistence.AuthorImpactHelpRelationship || body.Items[0].Action != "follow" || body.Items[0].Count != 1 {
+		t.Fatalf("unexpected author impact item: %+v", body.Items[0])
+	}
+}
+
 type recommendOnlyProjectorAdapter struct {
 	p *recinfra.RecommendFeatureProjector
+}
+
+func nilLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
 func (a *recommendOnlyProjectorAdapter) Project(ctx context.Context, event application.ProjectorEvent) error {

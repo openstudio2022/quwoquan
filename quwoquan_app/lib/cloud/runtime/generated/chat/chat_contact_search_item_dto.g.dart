@@ -7,6 +7,7 @@ class ChatContactSearchItemDto {
   final String? avatarUrl;
   final String? conversationId;
   final String? conversationType;
+  final String? source;
   final String? subtitle;
   final String? highlightText;
   final String? matchedField;
@@ -17,6 +18,7 @@ class ChatContactSearchItemDto {
     this.avatarUrl,
     this.conversationId,
     this.conversationType,
+    this.source,
     this.subtitle,
     this.highlightText,
     this.matchedField,
@@ -29,6 +31,7 @@ class ChatContactSearchItemDto {
       avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? null,
       conversationId: m['conversationId']?.toString() ?? null,
       conversationType: m['conversationType']?.toString() ?? null,
+      source: m['source']?.toString() ?? m['contactSource']?.toString() ?? null,
       subtitle: m['subtitle']?.toString() ?? null,
       highlightText: m['highlightText']?.toString() ?? null,
       matchedField: m['matchedField']?.toString() ?? null,
@@ -42,6 +45,7 @@ class ChatContactSearchItemDto {
       'avatarUrl': avatarUrl,
       'conversationId': conversationId,
       'conversationType': conversationType,
+      'source': source,
       'subtitle': subtitle,
       'highlightText': highlightText,
       'matchedField': matchedField,
@@ -54,6 +58,7 @@ class ChatContactSearchItemDto {
     String? avatarUrl,
     String? conversationId,
     String? conversationType,
+    String? source,
     String? subtitle,
     String? highlightText,
     String? matchedField,
@@ -64,6 +69,7 @@ class ChatContactSearchItemDto {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       conversationId: conversationId ?? this.conversationId,
       conversationType: conversationType ?? this.conversationType,
+      source: source ?? this.source,
       subtitle: subtitle ?? this.subtitle,
       highlightText: highlightText ?? this.highlightText,
       matchedField: matchedField ?? this.matchedField,

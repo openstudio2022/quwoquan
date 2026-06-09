@@ -43,6 +43,56 @@ defaults:
   result_limit: 20
   assistant_limit: 8
 
+# Frozen unified object-retrieval contract for AI tools and the App.
+# Match conditions are ids/names/terms; filters narrow the candidates.
+# Relationships are inferred by the backend; callers never send type/relation.
+retrieve_contract:
+  name: retrieve
+  description: 统一对象检索接口；targets 指定检索的业务对象，ids/names/terms 为主匹配条件，filters(tags,timeRange) 为收窄条件，关系由后端反查推断。
+  match_conditions:
+    - ids
+    - names
+    - terms
+  filter_fields:
+    - tags
+    - timeRange
+  page_fields:
+    - limit
+    - cursor
+  response_fields:
+    - hits
+    - citations
+    - facets
+    - degradeSignals
+    - provenance
+  hit_fields:
+    - target
+    - objectId
+    - title
+    - snippet
+    - score
+    - matchedTerms
+    - matchedTags
+    - evidence
+    - payload
+  # Fields that must NEVER be exposed to AI/App callers on the retrieve contract.
+  forbidden_fields:
+    - type
+    - relation
+    - anchors
+    - kind
+    - mode
+    - strategy
+    - purpose
+    - visibility
+    - fields
+    - where
+    - query
+    - objectTypes
+    - contentTypes
+    - tags
+    - timeRange
+
 tool_contract:
   name: search
   description: 统一检索网页与趣我圈对象的 query-first tool
@@ -56,6 +106,25 @@ tool_contract:
     - contentTypes
     - categoryId
     - subCategory
+    - filters
+    - sortHints
+    - launchContext
   internal_optional_fields:
     - queryVariants
     - searchPlans
+    - acceptedSearchPlans
+  response_fields:
+    - hits
+    - citations
+    - degradeSignals
+    - provenance
+  hit_required_fields:
+    - objectType
+    - objectId
+    - title
+    - snippet
+    - score
+    - sourceDomain
+    - visibility
+    - reasons
+    - evidence

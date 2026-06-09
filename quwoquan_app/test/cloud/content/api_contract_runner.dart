@@ -46,6 +46,8 @@ const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _localGammaT3Scope = String.fromEnvironment('LOCAL_GAMMA_T3_SCOPE');
 const _currentUserId = 'fixture_user_current';
+const _localGammaSeedImageUrl =
+    'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png';
 
 // ─── Shared client & seeded data ───────────────────────────────────────────
 
@@ -69,7 +71,11 @@ Future<String> _seedPhotoPost() async {
           'contentType': 'image',
           'title': 'L3 contract seed post',
           'body': 'automated test fixture - safe to delete',
-          'mediaUrls': ['https://example.com/test.jpg'],
+          'mediaUrls': [
+            _isLocalGammaContentOnly
+                ? _localGammaSeedImageUrl
+                : 'https://example.com/test.jpg',
+          ],
         }),
       )
       .timeout(const Duration(seconds: 10));

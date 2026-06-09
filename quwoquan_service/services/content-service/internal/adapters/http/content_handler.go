@@ -15,6 +15,7 @@ import (
 	rthealth "quwoquan_service/runtime/health"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 type ContentHandler struct {
@@ -24,6 +25,7 @@ type ContentHandler struct {
 	behaviorService     *application.BehaviorService
 	importService       *application.BulkImportService
 	intersectionService *application.IntersectionService
+	authorImpactStore   *persistence.AuthorImpactStore
 	healthChecker       *rthealth.Checker
 }
 
@@ -60,6 +62,10 @@ func WithHealthChecker(c *rthealth.Checker) ContentHandlerOption {
 // WithIntersectionService 注入交集统一体验服务（事实/概率合并、冷却窗口、已读水位）。
 func WithIntersectionService(svc *application.IntersectionService) ContentHandlerOption {
 	return func(h *ContentHandler) { h.intersectionService = svc }
+}
+
+func WithAuthorImpactStore(store *persistence.AuthorImpactStore) ContentHandlerOption {
+	return func(h *ContentHandler) { h.authorImpactStore = store }
 }
 
 func (h *ContentHandler) Routes() http.Handler {
@@ -204,6 +210,50 @@ func (h *ContentHandler) handleSearchPosts(w http.ResponseWriter, r *http.Reques
 		"items":  items,
 		"cursor": nextCursor,
 	})
+}
+
+func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
+		return
+	}
+	if h.authorImpactStore == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"authorId": "",
+			"total":    0,
+			"items":    []any{},
+		})
+		return
+	}
+	authorID := strings.TrimSpace(r.PathValue("subAccountId"))
+	if authorID == "" {
+		authorID = authorImpactPathSubAccountID(r.URL.Path)
+	}
+	if authorID == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid author id", "missing subAccountId path segment"))
+		return
+	}
+	limit := int64(12)
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.ParseInt(raw, 10, 64); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	summary, err := h.authorImpactStore.GetSummary(r.Context(), authorID, limit)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
+}
+
+func authorImpactPathSubAccountID(path string) string {
+	const prefix = "/v1/content/sub-accounts/"
+	const suffix = "/author-impact"
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix))
 }
 
 func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
@@ -858,9 +908,11 @@ func (h *ContentHandler) handleGetReactionState(w http.ResponseWriter, r *http.R
 
 func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Request, postID string) {
 	var body struct {
-		Content               string `json:"content"`
-		ReplyToCommentID      string `json:"replyToCommentId"`
-		PersonaContextVersion string `json:"personaContextVersion"`
+		Content               string           `json:"content"`
+		ReplyToCommentID      string           `json:"replyToCommentId"`
+		PersonaContextVersion string           `json:"personaContextVersion"`
+		AttachmentMediaIDs    []string         `json:"attachmentMediaIds"`
+		Mentions              []map[string]any `json:"mentions"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
@@ -886,6 +938,8 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 		body.ReplyToCommentID,
 		subAccountID,
 		body.PersonaContextVersion,
+		body.AttachmentMediaIDs,
+		body.Mentions,
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -906,7 +960,41 @@ func (h *ContentHandler) handleListComments(w http.ResponseWriter, r *http.Reque
 			limit = n
 		}
 	}
-	comments, nextCursor, err := h.postService.ListComments(r.Context(), postID, cursor, sort, limit)
+	comments, nextCursor, err := h.postService.ListComments(r.Context(), postID, resolveUserID(r), cursor, sort, limit)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	resp := map[string]any{"items": comments}
+	if nextCursor != "" {
+		resp["nextCursor"] = nextCursor
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ContentHandler) handleListCommentReplies(w http.ResponseWriter, r *http.Request) {
+	path := strings.Trim(r.URL.Path, "/")
+	parts := strings.Split(path, "/")
+	// /v1/content/posts/{postId}/comments/{commentId}/replies
+	if len(parts) < 7 {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid path", "missing postId/commentId"))
+		return
+	}
+	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	limit := 10
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	comments, nextCursor, err := h.postService.ListCommentReplies(
+		r.Context(),
+		parts[3],
+		parts[5],
+		resolveUserID(r),
+		cursor,
+		limit,
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -935,32 +1023,46 @@ func (h *ContentHandler) handleDeleteComment(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *ContentHandler) handleLikeComment(w http.ResponseWriter, r *http.Request, commentID string) {
-	likeCount, changed, err := h.postService.LikeComment(r.Context(), commentID, resolveUserID(r))
+func (h *ContentHandler) handleReactToComment(w http.ResponseWriter, r *http.Request, commentID string) {
+	var body struct {
+		Reaction       string `json:"reaction"`
+		ViewerReaction string `json:"viewerReaction"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	reaction := strings.TrimSpace(body.Reaction)
+	if reaction == "" {
+		reaction = strings.TrimSpace(body.ViewerReaction)
+	}
+	comment, err := h.postService.ReactToComment(r.Context(), commentID, resolveUserID(r), reaction)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"commentId": commentID,
-		"liked":     true,
-		"changed":   changed,
-		"likeCount": likeCount,
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"comment": comment})
 }
 
-func (h *ContentHandler) handleUnlikeComment(w http.ResponseWriter, r *http.Request, commentID string) {
-	likeCount, changed, err := h.postService.UnlikeComment(r.Context(), commentID, resolveUserID(r))
+func (h *ContentHandler) handleBindMediaAssetsToComment(w http.ResponseWriter, r *http.Request, commentID string) {
+	var body struct {
+		AssetIDs []string `json:"assetIds"`
+		MediaIDs []string `json:"mediaIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	assetIDs := body.AssetIDs
+	if len(assetIDs) == 0 {
+		assetIDs = body.MediaIDs
+	}
+	result, err := h.postService.BindMediaAssetsToComment(r.Context(), commentID, resolveUserID(r), assetIDs)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"commentId": commentID,
-		"liked":     false,
-		"changed":   changed,
-		"likeCount": likeCount,
-	})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *ContentHandler) handleListCommentsByAuthor(w http.ResponseWriter, r *http.Request) {
@@ -1031,8 +1133,17 @@ func (h *ContentHandler) handleListProfileInteractionActivities(w http.ResponseW
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (h *ContentHandler) handleGetAppConfig(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, h.postService.GetAppConfig())
+func (h *ContentHandler) handleGetAppConfig(w http.ResponseWriter, r *http.Request) {
+	payload := h.postService.GetAppConfig()
+	hash, _ := payload["configHash"].(string)
+	if hash != "" {
+		w.Header().Set("ETag", hash)
+		if strings.TrimSpace(r.Header.Get("If-None-Match")) == hash {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func commentIDFromPath(path string) string {
@@ -1207,6 +1318,15 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 	case "ListComments":
 		h.handleListComments(w, r, postIDFromPath(r.URL.Path))
 		return
+	case "ListCommentReplies":
+		h.handleListCommentReplies(w, r)
+		return
+	case "ReactToComment":
+		h.handleReactToComment(w, r, commentIDFromPath(r.URL.Path))
+		return
+	case "BindMediaAssetsToComment":
+		h.handleBindMediaAssetsToComment(w, r, commentIDFromPath(r.URL.Path))
+		return
 	case "DeleteComment":
 		h.handleDeleteComment(w, r)
 		return
@@ -1218,12 +1338,6 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		return
 	case "ListUserPosts":
 		h.handleListUserPosts(w, r)
-		return
-	case "LikeComment":
-		h.handleLikeComment(w, r, commentIDFromPath(r.URL.Path))
-		return
-	case "UnlikeComment":
-		h.handleUnlikeComment(w, r, commentIDFromPath(r.URL.Path))
 		return
 	case "ListCommentsByAuthor":
 		h.handleListCommentsByAuthor(w, r)

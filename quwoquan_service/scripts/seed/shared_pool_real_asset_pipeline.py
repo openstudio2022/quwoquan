@@ -28,7 +28,7 @@ CONTENT_SCENARIOS = METADATA / "content" / "test_fixtures" / "scenarios" / "cont
 CIRCLE_SCENARIOS = METADATA / "social" / "circle" / "test_fixtures" / "scenarios" / "circle_scenarios.json"
 CHAT_SCENARIOS = METADATA / "messages" / "chat" / "test_fixtures" / "scenarios" / "chat_scenarios.json"
 GROUP_RENDER_PACKAGE = "./cmd/render-group-avatar"
-BETA_VIDEO_OBJECT_KEY = "media/video/beta-sample.mp4"
+BETA_VIDEO_OBJECT_KEY = "media/video/s/archived-video/beta-sample.mp4"
 
 ROLE_ORDER = [
     "leadAuthor",
@@ -88,7 +88,7 @@ CORE_USER_PRESETS = {
         "role": "currentUserVariant",
         "displayName": "契约当前用户",
         "bio": "用于 alpha/beta/gamma 的当前用户主页。",
-        "avatarSourceId": "portrait_legacy_lifestyle_01",
+        "avatarSourceId": "portrait_archived_lifestyle_01",
         "backgroundSourceId": "scene_lifestyle_home_01",
         "subAccountRefs": ["fixture_persona_daily", "fixture_persona_work"],
         "tags": ["current", "author", "contact"],
@@ -99,7 +99,7 @@ CORE_USER_PRESETS = {
         "role": "leadAuthor",
         "displayName": "契约摄影师",
         "bio": "作者主页契约数据。",
-        "avatarSourceId": "portrait_legacy_photography_01",
+        "avatarSourceId": "portrait_archived_photography_01",
         "backgroundSourceId": "scene_photo_architecture_01",
         "tags": ["author", "photo", "contact"],
         "format": "png",
@@ -109,7 +109,7 @@ CORE_USER_PRESETS = {
         "role": "leadAuthor",
         "displayName": "契约旅行家",
         "bio": "旅行、天气和行程记录作者。",
-        "avatarSourceId": "portrait_legacy_travel_01",
+        "avatarSourceId": "portrait_archived_travel_01",
         "backgroundSourceId": "landscape_travel_01",
         "tags": ["author", "travel", "contact"],
         "format": "png",
@@ -119,7 +119,7 @@ CORE_USER_PRESETS = {
         "role": "groupOrganizer",
         "displayName": "契约剪辑师",
         "bio": "视频剪辑与城市影像作者。",
-        "avatarSourceId": "portrait_legacy_city_01",
+        "avatarSourceId": "portrait_archived_city_01",
         "backgroundSourceId": "scene_city_01",
         "tags": ["author", "video"],
         "format": "png",
@@ -139,7 +139,7 @@ CORE_USER_PRESETS = {
         "role": "friendContact",
         "displayName": "契约好友",
         "bio": "与当前用户互关的同好。",
-        "avatarSourceId": "portrait_legacy_food_01",
+        "avatarSourceId": "portrait_archived_food_01",
         "backgroundSourceId": "scene_coffee_night_01",
         "tags": ["contact", "direct-chat"],
         "format": "png",
@@ -149,7 +149,7 @@ CORE_USER_PRESETS = {
         "role": "groupOrganizer",
         "displayName": "契约同伴一",
         "bio": "周末群成员，也是联系人同好。",
-        "avatarSourceId": "portrait_legacy_design_01",
+        "avatarSourceId": "portrait_archived_design_01",
         "backgroundSourceId": "scene_lifestyle_home_01",
         "tags": ["contact", "group-member"],
         "format": "png",
@@ -222,6 +222,10 @@ def user_suffix(user_id: str) -> str:
 
 def circle_suffix(circle_id: str) -> str:
     return circle_id.replace("fixture_circle_", "").replace("fixture_", "")
+
+
+def canonical_media_object_key(object_key: str) -> str:
+    return object_key.strip().lstrip("/")
 
 
 def stable_unique(values: list[str]) -> list[str]:
@@ -425,6 +429,7 @@ def fetch_source(entry: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
 
 
 def derive_image(source_path: Path, object_key: str, width: int, height: int, out_format: str) -> dict[str, Any]:
+    object_key = canonical_media_object_key(object_key)
     dst = MEDIA_ROOT / object_key
     dst.parent.mkdir(parents=True, exist_ok=True)
     src_w, src_h = sips_dimensions(source_path)
@@ -457,6 +462,7 @@ def derive_image(source_path: Path, object_key: str, width: int, height: int, ou
 
 
 def render_group_composite(output_key: str, input_paths: list[Path]) -> dict[str, Any]:
+    output_key = canonical_media_object_key(output_key)
     dst = MEDIA_ROOT / output_key
     dst.parent.mkdir(parents=True, exist_ok=True)
     run_checked(
@@ -468,7 +474,7 @@ def render_group_composite(output_key: str, input_paths: list[Path]) -> dict[str
 
 
 def ensure_beta_sample_video() -> None:
-    path = MEDIA_ROOT / BETA_VIDEO_OBJECT_KEY
+    path = MEDIA_ROOT / canonical_media_object_key(BETA_VIDEO_OBJECT_KEY)
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
         path.write_bytes(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
@@ -499,7 +505,15 @@ def iso_at(offset_hours: int) -> str:
 
 
 def media_spec(post_id: str, variant: str, source_id: str, width: int, height: int, format_ext: str) -> dict[str, Any]:
-    return {"sourceId": source_id, "objectKey": f"media/image/post/{post_id}/v1/{variant}.{format_ext}", "width": width, "height": height, "format": format_ext}
+    return {
+        "sourceId": source_id,
+        "objectKey": canonical_media_object_key(
+            f"media/image/s/archived-image/post/{post_id}/v1/{variant}.{format_ext}"
+        ),
+        "width": width,
+        "height": height,
+        "format": format_ext,
+    }
 
 
 def build_users(source_catalog: dict[str, Any], theme_catalog: dict[str, Any], rules: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, dict[str, Any]], list[dict[str, Any]]]:
@@ -518,7 +532,11 @@ def build_users(source_catalog: dict[str, Any], theme_catalog: dict[str, Any], r
         width, height = sips_dimensions(path)
         download["originalWidth"] = width
         download["originalHeight"] = height
-        source_updates.append({**entry, "download": download})
+        entry_copy = dict(entry)
+        source_ref_values = entry_copy.pop("sourceRefs", None)
+        if source_ref_values is not None and "sourceRefs" not in entry_copy:
+            entry_copy["sourceRefs"] = source_ref_values
+        source_updates.append({**entry_copy, "download": download})
 
     source_index = {entry["sourceId"]: entry for entry in source_updates}
 
@@ -526,14 +544,14 @@ def build_users(source_catalog: dict[str, Any], theme_catalog: dict[str, Any], r
         avatar_format = preset.get("format", "png")
         avatar = derive_image(
             SHARED / source_index[preset["avatarSourceId"]]["download"]["storedRelativePath"],
-            f"media/avatar/user/{preset_id}/v1/avatar.{avatar_format}",
+            f"media/avatar/s/archived-avatar/user/{preset_id}/v1/avatar.{avatar_format}",
             512,
             512,
             avatar_format,
         )
         background = derive_image(
             SHARED / source_index[preset["backgroundSourceId"]]["download"]["storedRelativePath"],
-            f"media/background/user/{preset_id}/v1/background.{avatar_format}",
+            f"media/background/s/archived-avatar/user/{preset_id}/v1/background.{avatar_format}",
             1600,
             900,
             avatar_format,
@@ -578,14 +596,14 @@ def build_users(source_catalog: dict[str, Any], theme_catalog: dict[str, Any], r
             background_format = "jpg" if role_idx % 4 else "png"
             avatar = derive_image(
                 SHARED / source_index[avatar_source_id]["download"]["storedRelativePath"],
-                f"media/avatar/user/{user_id}/v1/avatar.{avatar_format}",
+                f"media/avatar/s/archived-avatar/user/{user_id}/v1/avatar.{avatar_format}",
                 512,
                 512,
                 avatar_format,
             )
             background = derive_image(
                 SHARED / source_index[background_source_id]["download"]["storedRelativePath"],
-                f"media/background/user/{user_id}/v1/background.{background_format}",
+                f"media/background/s/archived-avatar/user/{user_id}/v1/background.{background_format}",
                 1600,
                 900,
                 background_format,
@@ -649,14 +667,14 @@ def build_circles(users: list[dict[str, Any]], user_assets: dict[str, dict[str, 
             avatar_format = "jpg" if index % 3 else "png"
             cover = derive_image(
                 SHARED / source_index[source_id]["download"]["storedRelativePath"],
-                f"media/image/circle/{circle_id}/v1/cover.{cover_format}",
+                f"media/image/s/archived-image/circle/{circle_id}/v1/cover.{cover_format}",
                 1440,
                 900,
                 cover_format,
             )
             avatar = derive_image(
                 SHARED / source_index[source_id]["download"]["storedRelativePath"],
-                f"media/avatar/circle/{circle_id}/v1/avatar.{avatar_format}",
+                f"media/avatar/s/archived-avatar/circle/{circle_id}/v1/avatar.{avatar_format}",
                 512,
                 512,
                 avatar_format,
@@ -695,14 +713,14 @@ def build_circles(users: list[dict[str, Any]], user_assets: dict[str, dict[str, 
         source_id = choose_source(theme, "circleSourceIds", 0)
         cover = derive_image(
             SHARED / source_index[source_id]["download"]["storedRelativePath"],
-            f"media/image/circle/{preset['circleId']}/v1/cover.{preset['format']}",
+            f"media/image/s/archived-image/circle/{preset['circleId']}/v1/cover.{preset['format']}",
             1440,
             900,
             preset['format'],
         )
         avatar = derive_image(
             SHARED / source_index[source_id]["download"]["storedRelativePath"],
-            f"media/avatar/circle/{preset['circleId']}/v1/avatar.{preset['format']}",
+            f"media/avatar/s/archived-avatar/circle/{preset['circleId']}/v1/avatar.{preset['format']}",
             512,
             512,
             preset['format'],
@@ -829,7 +847,7 @@ def build_posts(users: list[dict[str, Any]], circles: list[dict[str, Any]], sour
             post_id = f"fixture_post_cross_{slug(left_theme)}_{slug(right_theme)}_{index + 1:03d}"
             cover = derive_image(
                 SHARED / source_index[source_id]["download"]["storedRelativePath"],
-                f"media/image/post/{post_id}/v1/cover.jpg",
+                f"media/image/s/archived-image/post/{post_id}/v1/cover.jpg",
                 1280,
                 720,
                 "jpg",
@@ -927,7 +945,7 @@ def build_conversations(users: list[dict[str, Any]], circles: list[dict[str, Any
         members = circle["memberUserIds"][: min(9, len(circle["memberUserIds"]))]
         conv_id = circle["groupConversationId"]
         composite = render_group_composite(
-            f"media/avatar/group/{conv_id}/v1/composite.png",
+            f"media/avatar/s/archived-avatar/group/{conv_id}/v1/composite.png",
             [MEDIA_ROOT / user_assets[user_id]["objectKey"] for user_id in members],
         )
         conversation_members[conv_id] = members
@@ -1055,7 +1073,7 @@ def ensure_core_posts(posts: list[dict[str, Any]], post_assets: dict[str, list[d
         cover_height = 960 if spec["postType"] == "galleryPost" else 720
         cover = derive_image(
             SHARED / sources[source_id]["download"]["storedRelativePath"],
-            f"media/image/post/{spec['postId']}/v1/cover.png",
+            f"media/image/s/archived-image/post/{spec['postId']}/v1/cover.png",
             1280,
             cover_height,
             "png",
@@ -1065,7 +1083,7 @@ def ensure_core_posts(posts: list[dict[str, Any]], post_assets: dict[str, list[d
             extra_source_id = choose_source(theme, "postSourceIds", spec["sourceIndex"] + extra_idx + 1)
             detail = derive_image(
                 SHARED / sources[extra_source_id]["download"]["storedRelativePath"],
-                f"media/image/post/{spec['postId']}/v1/image-{extra_idx + 2}.png",
+                f"media/image/s/archived-image/post/{spec['postId']}/v1/image-{extra_idx + 2}.png",
                 1280,
                 720,
                 "png",
@@ -1121,7 +1139,7 @@ def ensure_core_conversations(conversations: list[dict[str, Any]], conversation_
         group_avatar = None
         if spec["type"] != "directConversation":
             group_avatar = render_group_composite(
-                f"media/avatar/group/{spec['conversationId']}/v1/composite.png",
+                f"media/avatar/s/archived-avatar/group/{spec['conversationId']}/v1/composite.png",
                 [MEDIA_ROOT / user_assets[user_id]["objectKey"] for user_id in spec["members"]],
             )
             avatar = group_avatar
@@ -1355,8 +1373,9 @@ def content_row(post: dict[str, Any], circles_by_id: dict[str, dict[str, Any]]) 
     return row
 
 
-def build_content_doc(posts: list[dict[str, Any]], circles: list[dict[str, Any]]) -> dict[str, Any]:
+def build_content_doc(posts: list[dict[str, Any]], circles: list[dict[str, Any]], users: list[dict[str, Any]]) -> dict[str, Any]:
     circles_by_id = circle_index(circles)
+    users_by_id = user_index(users)
     post_rows = [content_row(post, circles_by_id) for post in posts]
     post_ids = [row["id"] for row in post_rows]
     current_posts = [row["id"] for row in post_rows if row["authorId"] == "fixture_user_current"]
@@ -1371,9 +1390,9 @@ def build_content_doc(posts: list[dict[str, Any]], circles: list[dict[str, Any]]
             "_id": comment_id,
             "postId": row["id"],
             "authorId": author_id,
-            "authorDisplayNameSnapshot": "契约评论者" if author_id == "fixture_user_commenter" else row["displayName"],
-            "authorAvatarObjectKeySnapshot": f"media/avatar/user/{author_id}/v1/avatar.png",
-            "authorAvatarUrlSnapshot": f"media/avatar/user/{author_id}/v1/avatar.png",
+            "authorDisplayNameSnapshot": users_by_id[author_id]["displayName"],
+            "authorAvatarObjectKeySnapshot": users_by_id[author_id]["profile"]["avatar"]["objectKey"],
+            "authorAvatarUrlSnapshot": users_by_id[author_id]["profile"]["avatar"]["objectKey"],
             "content": f"共享池评论样本 #{idx + 1}",
             "createdAt": iso_at(900 + idx),
         })
@@ -1385,6 +1404,7 @@ def build_content_doc(posts: list[dict[str, Any]], circles: list[dict[str, Any]]
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
             "content_discovery_core": {"description": "发现流、详情与搜索共享真实图片主样本。", "posts": post_rows, "reactions": reactions, "comments": comments},
+            "comment_thread_v2_core": {"description": "评论线程与回复测试种子。", "comments": [{"commentId": "fixture_comment_v2_parent_001", "_id": "fixture_comment_v2_parent_001", "postId": "fixture_photo_001", "authorId": "fixture_user_current", "authorDisplayNameSnapshot": "契约当前用户", "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png", "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png", "content": "主评论示例", "replyCount": 1, "createdAt": "2026-06-05T12:00:00Z"}, {"commentId": "fixture_comment_v2_reply_001", "_id": "fixture_comment_v2_reply_001", "postId": "fixture_photo_001", "authorId": "fixture_user_commenter", "authorDisplayNameSnapshot": "契约评论者", "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png", "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png", "content": "回复示例", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_current", "replyToDisplayName": "契约当前用户", "createdAt": "2026-06-05T12:05:00Z"}]},
             "home_feed_core": {"description": "首页关注、精选与群组三个入口的组合内容种子。", "followingFeedPostIds": current_posts[:24] or post_ids[:24], "featuredFeedPostIds": post_ids[:40], "groupFeedPostIds": [row["id"] for row in post_rows if row["circleId"] == "fixture_circle_photo"][:12]},
             "content_detail_core": {"description": "内容详情、评论、reaction 与分享主样本。", "postIds": ["fixture_photo_001", "fixture_article_001", "fixture_video_001"], "commentIds": ["fixture_comment_photo_001"], "reactionPostIds": ["fixture_photo_001"], "shareTargets": [{"id": "fixture_share_chat_group", "type": "chat_conversation", "title": "契约周末群"}]},
             "search_core": {"description": "全局搜索与网络结果页可打开的内容种子。", "history": ["西湖晨光", "契约旅行", "城市漫步"], "resultPostIds": ["fixture_photo_001", "fixture_article_001", "fixture_video_001", "fixture_moment_001"], "networkResults": [{"id": "fixture_search_web_001", "title": "契约搜索网络结果", "url": "https://example.com"}]},
@@ -1428,6 +1448,7 @@ def build_user_doc(users: list[dict[str, Any]], posts: list[dict[str, Any]]) -> 
             "persona_core": {"description": "当前 sub-account、候选 sub-account 与 active context。", "activeSubAccountId": "fixture_persona_daily", "personas": [{"subAccountId": "fixture_persona_daily", "name": "日常我", "description": "默认日常 sub-account"}, {"subAccountId": "fixture_persona_work", "name": "工作我", "description": "工作场景 sub-account"}]},
             "profile_feed_core": {"description": "我的作品、作者作品、生活记录与评论。", "myPostIds": my_posts or ["fixture_moment_001", "fixture_photo_001"], "authorPostIds": author_posts or ["fixture_photo_001", "fixture_photo_002"], "commentIds": ["fixture_comment_photo_001"]},
             "relationship_core": {"description": "关注、互关、拉黑、可聊天、可通话能力矩阵。", "relationships": [{"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_photo", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}, {"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_friend", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}, {"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_weekend_1", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}]},
+            "following_subject_core": {"description": "关注对象动态 strip 种子。", "items": [{"subjectId": "user_travel_photographer", "subjectType": "user", "displayName": "旅行摄影师", "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png", "coverUrl": "", "subtitle": "刚更新了川西路线", "targetRouteId": "user_profile", "targetObjectId": "user_travel_photographer", "followedAt": "2026-05-20T08:00:00Z", "lastVisitedAt": "2026-06-01T08:00:00Z", "latestChangedAt": "2026-06-02T00:30:00Z", "unreadChangeCount": 2, "hasUnreadChanges": True, "latestChangeReason": "发布了新内容"}, {"subjectId": "circle_sichuan_travel", "subjectType": "circle", "displayName": "四川旅行圈", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_003/v1/cover.png", "subtitle": "圈内有新攻略", "targetRouteId": "circle_detail", "targetObjectId": "circle_sichuan_travel", "followedAt": "2026-05-22T08:00:00Z", "lastVisitedAt": "2026-06-02T01:00:00Z", "latestChangedAt": "2026-06-02T01:00:00Z", "unreadChangeCount": 0, "hasUnreadChanges": False, "latestChangeReason": ""}, {"subjectId": "homepage_jiuzhaigou", "subjectType": "homepage", "displayName": "九寨沟", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png", "subtitle": "地点动态有更新", "targetRouteId": "homepage_detail", "targetObjectId": "homepage_jiuzhaigou", "followedAt": "2026-05-24T08:00:00Z", "lastVisitedAt": "2026-05-30T08:00:00Z", "latestChangedAt": "2026-06-01T12:20:00Z", "unreadChangeCount": 1, "hasUnreadChanges": True, "latestChangeReason": "新增问答和口碑"}]},
             "settings_core": {"description": "外观、通话设置与开发者诊断最小数据。", "appearance": {"themeMode": "system", "fontScale": 1.0}, "callSettings": {"allowVoiceCall": True, "allowVideoCall": True}, "diagnostics": [{"id": "fixture_ops_event_settings", "message": "契约设置诊断事件"}]},
         },
         "scenarios": [{"id": "user_profile_basic", "title": "用户主页与关系能力契约种子", "type": "user_profile", "domainId": "user", "seedRefs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "settings_core"], "uiExpectations": {"userIds": ["fixture_user_current", "fixture_user_photo"], "textFragments": ["契约当前用户", "契约摄影师", "日常我"]}, "remoteExpectations": {"profileUserIds": ["fixture_user_current", "fixture_user_photo"], "subAccountIds": ["fixture_persona_daily", "fixture_persona_work"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],
@@ -1552,6 +1573,9 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
             shared_post_id = post_ids[(idx * 5 + seq) % len(post_ids)] if seq in {2, 5} else None
             text = f"{sender['displayName']} 在 {conversation['displayName']} 中发送的共享池消息 #{seq + 1}。"
             message_id = f"{conv_id}_msg_{seq + 1:02d}"
+            sender_display_name_snapshot: str | None = sender["displayName"]
+            message_type = "text"
+            media_payload: dict[str, Any] | None = None
             if conv_id == "fixture_conv_direct" and seq == 1:
                 text = "契约消息已送达"
             if conv_id == "fixture_conv_direct" and seq == 0:
@@ -1559,6 +1583,43 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
                 message_id = "fixture_msg_direct_1"
             if conv_id == "fixture_conv_direct" and seq == 1:
                 message_id = "fixture_msg_direct_2"
+            if conv_id == "fixture_conv_direct" and seq == 2:
+                text = "契约图片消息"
+                message_id = "fixture_msg_direct_image_1"
+                message_type = "image"
+                media_payload = {
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "mimeType": "image/png",
+                    "fileName": "fixture_photo_001_cover.png",
+                    "fileSizeBytes": 128000,
+                    "width": 960,
+                    "height": 720,
+                }
+            if conv_id == "fixture_conv_direct" and seq == 3:
+                text = "契约视频消息"
+                message_id = "fixture_msg_direct_video_1"
+                message_type = "video"
+                media_payload = {
+                    "url": "media/video/s/archived-video/post/fixture_video_001/v1/video.mp4",
+                    "thumbnailUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+                    "mimeType": "video/mp4",
+                    "fileName": "fixture_video_001.mp4",
+                    "fileSizeBytes": 1048576,
+                    "durationMs": 93000,
+                    "width": 1280,
+                    "height": 720,
+                }
+            if conv_id == "fixture_conv_direct" and seq == 4:
+                text = "契约文件消息"
+                message_id = "fixture_msg_direct_file_1"
+                message_type = "file"
+                media_payload = {
+                    "url": "media/file/s/archived-file/post/fixture_chat_file_001/v1/spec.pdf",
+                    "mimeType": "application/pdf",
+                    "fileName": "spec.pdf",
+                    "fileSizeBytes": 2048,
+                }
             if conv_id == "fixture_conv_group" and seq == 0:
                 text = "周末集合时间已确认"
                 message_id = "fixture_msg_group_1"
@@ -1577,17 +1638,21 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
             if conv_id == "fixture_conv_article_direct" and seq == 0:
                 text = "文章配图已经补齐。"
                 message_id = "fixture_msg_article_direct_1"
+            if conv_id == "fixture_conv_direct" and sender_id == "fixture_user_friend":
+                sender_display_name_snapshot = None
             messages.append({
                 "messageId": message_id,
                 "_id": message_id,
                 "conversationId": conv_id,
                 "senderId": sender_id,
                 "content": text,
-                "type": "text",
-                "messageType": "text",
+                "type": message_type,
+                "messageType": message_type,
+                **({"mediaUrl": media_payload["url"]} if media_payload else {}),
+                **({"media": media_payload} if media_payload else {}),
                 "seq": seq + 1,
                 "createdAt": iso_at(1000 + idx * 2 + seq),
-                "senderDisplayNameSnapshot": sender["displayName"],
+                "senderDisplayNameSnapshot": sender_display_name_snapshot,
                 "senderAvatarObjectKeySnapshot": sender["profile"]["avatar"]["objectKey"],
                 "senderAvatarUrlSnapshot": sender["profile"]["avatar"]["objectKey"],
                 "senderAvatar": sender["profile"]["avatar"]["objectKey"],
@@ -1630,7 +1695,10 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
         members_rows[conv_id] = [
             {
                 "userId": member_id,
-                "displayName": users_by_id[member_id]["displayName"],
+                "displayName": "契约联系人"
+                if conv_id == "fixture_conv_direct"
+                and member_id == "fixture_user_friend"
+                else users_by_id[member_id]["displayName"],
                 "avatarUrl": users_by_id[member_id]["profile"]["avatar"]["objectKey"],
                 "avatarObjectKey": users_by_id[member_id]["profile"]["avatar"]["objectKey"],
                 "role": "owner" if member_id == (conversation.get("creatorId") or conversation["memberUserIds"][0]) else "member",
@@ -1646,13 +1714,39 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
             continue
         seen.add(user_id)
         user = users_by_id[user_id]
-        contacts.append({"userId": user_id, "displayName": user["displayName"], "avatarUrl": user["profile"]["avatar"]["objectKey"], "relationship": "mutual_follow" if "contact" in user["roleTags"] else "circle_member", "isFriend": True, "bio": user["bio"], "avatarObjectKey": user["profile"]["avatar"]["objectKey"]})
+        contacts.append({"userId": user_id, "displayName": user["displayName"], "avatarUrl": user["profile"]["avatar"]["objectKey"], "relationState": "mutual" if "contact" in user["roleTags"] else "following", "source": "follow" if "contact" in user["roleTags"] else "circle", "bio": user["bio"], "avatarObjectKey": user["profile"]["avatar"]["objectKey"]})
+    realtime_events = {
+        "conv_001": [
+            {
+                "type": "MessageSent",
+                "conversationId": "conv_001",
+                "payload": {
+                    "id": "fixture_rt_conv_001_msg_13",
+                    "_id": "fixture_rt_conv_001_msg_13",
+                    "messageId": "fixture_rt_conv_001_msg_13",
+                    "conversationId": "conv_001",
+                    "seq": 13,
+                    "clientMsgId": "fixture_rt_conv_001_msg_13_client",
+                    "senderId": "fixture_user_friend",
+                    "senderDisplayNameSnapshot": "契约联系人",
+                    "senderAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+                    "senderAvatar": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+                    "type": "text",
+                    "messageType": "text",
+                    "content": "Fixture Realtime 新消息：咖啡馆门口见。",
+                    "status": "sent",
+                    "timestamp": iso_at(1010),
+                },
+            }
+        ],
+    }
     return {
         "schemaVersion": "chat.scenario-fixtures",
         "description": "聊天域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.conversations/messages/members 初始化 MockChatRepository。",
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
             "chat_core": {"description": "聊天 inbox、详情、成员与消息共享真实图片种子。", "currentUserId": "fixture_user_current", "conversations": conversation_rows, "messages": message_rows, "members": members_rows, "userStates": user_states},
+            "chat_realtime_mock_core": {"description": "聊天实时回放 mock 种子。", "currentUserId": "fixture_user_current", "conversations": conversation_rows, "messages": message_rows, "members": members_rows, "userStates": user_states, "realtimeEvents": realtime_events},
             "chat_settings_core": {"description": "会话设置、免打扰、置顶、公告、管理员与转让候选人。", "settings": [{"conversationId": "fixture_conv_group", "muted": False, "pinned": False, "announcement": "契约群公告：周末集合时间已确认", "adminUserIds": ["fixture_user_current"], "transferCandidateUserIds": ["fixture_user_weekend_1", "fixture_user_weekend_2"]}]},
             "chat_contacts_core": {"description": "联系人 tab、圈子联系人与趣群联系人。", "contacts": contacts, "circleIds": ["fixture_circle_photo", "fixture_circle_travel", "fixture_circle_city", "fixture_circle_life"], "groupConversationIds": ["fixture_conv_group", "fixture_conv_photo_group", "fixture_conv_travel_group"]},
             "chat_group_flow_core": {"description": "建群、加人、管理页所需成员候选。", "candidateUserIds": ["fixture_user_friend", "fixture_user_weekend_1", "fixture_user_weekend_2"], "defaultGroupTitle": "契约新建群"},
@@ -1676,7 +1770,7 @@ def main() -> int:
     write_json(SOURCE_CATALOG_PATH, source_catalog)
     write_json(USER_POOL_PATH, build_user_pool_doc(users, posts, circles, conversations, source_catalog, theme_catalog, rules))
     write_json(USER_SCENARIOS, build_user_doc(users, posts))
-    write_json(CONTENT_SCENARIOS, build_content_doc(posts, circles))
+    write_json(CONTENT_SCENARIOS, build_content_doc(posts, circles, users))
     write_json(CIRCLE_SCENARIOS, build_circle_doc(circles, memberships, users, posts))
     write_json(CHAT_SCENARIOS, build_chat_doc(conversations, conversation_members, users, posts))
     print(f"shared real asset pipeline synced: {USER_POOL_PATH.relative_to(ROOT)}")

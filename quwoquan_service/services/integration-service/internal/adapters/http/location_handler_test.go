@@ -1,6 +1,7 @@
 package httpadapter
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/integration-service/internal/application"
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
 	"quwoquan_service/services/integration-service/internal/generated"
@@ -27,6 +29,59 @@ func (f *fakeProviderClient) Nearby(_ context.Context, q model.NearbyQuery) ([]m
 
 func (f *fakeProviderClient) Search(_ context.Context, q model.SearchQuery) ([]model.POI, error) {
 	return f.searchFn(q)
+}
+
+func TestSubmitExternalInteractionReturnsAcceptedAndRecordsAttempt(t *testing.T) {
+	store := reliabletask.NewMemoryStore()
+	external := application.NewExternalInteractionService(
+		store,
+		map[string]reliabletask.ExternalProvider{
+			"mock_sms": application.MockSMSProvider{},
+		},
+		nil,
+	)
+	svc := application.NewService(
+		model.ProviderBaidu,
+		model.ProviderAMap,
+		map[model.Provider]model.ProviderClient{},
+		nil,
+	)
+	handler := NewHandler(svc, 3000, 20, 20, 30.1, 104.2, external).Routes()
+	body := []byte(`{
+		"requestId":"req-sms-1",
+		"operation":"sms_otp.send",
+		"tenant":"quwoquan",
+		"env":"gamma",
+		"idempotencyKey":"otp:fixture",
+		"payloadRef":"otp_challenge:ch-1",
+		"payloadDigest":"digest",
+		"sensitivity":"secret",
+		"expiresAt":"2030-01-01T00:00:00Z",
+		"payload":{"challengeId":"ch-1","phoneHash":"hash","maskedRecipient":"180****3909"}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, externalRequestsPath, bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("status=%d, want=202 body=%s", rr.Code, rr.Body.String())
+	}
+	if err := external.DispatchDue(context.Background(), 10); err != nil {
+		t.Fatalf("dispatch due: %v", err)
+	}
+	processed, err := external.ProcessOne(context.Background())
+	if err != nil {
+		t.Fatalf("process one: %v", err)
+	}
+	if !processed {
+		t.Fatal("expected external worker to process one task")
+	}
+	attempts, err := store.ListProviderAttempts(context.Background(), "req-sms-1")
+	if err != nil {
+		t.Fatalf("list attempts: %v", err)
+	}
+	if len(attempts) != 1 || attempts[0].Provider != "mock_sms" {
+		t.Fatalf("unexpected attempts: %#v", attempts)
+	}
 }
 
 func TestNearbyUsesDefaultCenterWhenLatLngMissing(t *testing.T) {

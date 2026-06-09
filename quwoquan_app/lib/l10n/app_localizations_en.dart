@@ -482,7 +482,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contactsTabCircles => 'TODO: translate';
 
   @override
-  String get contactsTabSameInterest => 'TODO: translate';
+  String get contactsTabMutualFollow => 'TODO: translate';
 
   @override
   String get contactsTabFunGroup => 'TODO: translate';

@@ -1,0 +1,10 @@
+{
+  "label": "国籍",
+  "labelEn": "Nationality",
+  "description": "用户国籍；国家/地区节点与 Topic/地理/行政区 对齐，避免重复维护国家列表",
+  "maxDepth": 2,
+  "pathPolicy": "leaf-only",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "refHint": "Topic/地理/行政区"
+}

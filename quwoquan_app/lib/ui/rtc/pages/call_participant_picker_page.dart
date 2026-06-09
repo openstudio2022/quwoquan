@@ -12,6 +12,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_picker_participant_row.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 
@@ -47,6 +48,7 @@ class _CallParticipantPickerPageState
   List<CallPickerParticipantRow> _contacts = [];
   List<ChatInboxDto> _availableGroups = [];
   bool _isLoading = true;
+  UiErrorSemantic? _pageErrorSemantic;
   _ParticipantSource _source = _ParticipantSource.currentConversation;
   String? _selectedGroupId;
 
@@ -57,6 +59,12 @@ class _CallParticipantPickerPageState
   }
 
   Future<void> _loadContacts() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _pageErrorSemantic = null;
+      });
+    }
     try {
       final chatRepo = ref.read(chatRepositoryProvider);
       final contacts = await _loadContactsForSource(chatRepo, _source);
@@ -69,12 +77,21 @@ class _CallParticipantPickerPageState
             _selectedGroupId = groups.first.id;
           }
           _isLoading = false;
+          _pageErrorSemantic = null;
           _applyDefaultSelectionIfNeeded(contacts);
         });
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _pageErrorSemantic = runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+          );
+        });
       }
     }
   }
@@ -150,37 +167,101 @@ class _CallParticipantPickerPageState
 
   Future<void> _switchSource(_ParticipantSource next) async {
     final chatRepo = ref.read(chatRepositoryProvider);
+    final previousSource = _source;
     setState(() {
       _source = next;
       _isLoading = true;
+      _pageErrorSemantic = null;
     });
-    final contacts = await _loadContactsForSource(chatRepo, next);
-    if (!mounted) return;
-    setState(() {
-      _contacts = contacts;
-      _isLoading = false;
-      if (next == _ParticipantSource.currentConversation) {
-        _selectedIds.clear();
-        _applyDefaultSelectionIfNeeded(contacts);
-      }
-    });
+    try {
+      final contacts = await _loadContactsForSource(chatRepo, next);
+      if (!mounted) return;
+      setState(() {
+        _contacts = contacts;
+        _isLoading = false;
+        if (next == _ParticipantSource.currentConversation) {
+          _selectedIds.clear();
+          _applyDefaultSelectionIfNeeded(contacts);
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _source = previousSource;
+        _isLoading = false;
+      });
+      await _showActionFailure(
+        error,
+        title: UITextConstants.callSwitchInviteSourceFailed,
+      );
+    }
   }
 
   Future<void> _switchOtherGroup(String groupId) async {
     final chatRepo = ref.read(chatRepositoryProvider);
+    final previousGroupId = _selectedGroupId;
     setState(() {
       _selectedGroupId = groupId;
       _isLoading = true;
+      _pageErrorSemantic = null;
     });
-    final contacts = await _loadContactsForSource(
-      chatRepo,
-      _ParticipantSource.otherGroups,
+    try {
+      final contacts = await _loadContactsForSource(
+        chatRepo,
+        _ParticipantSource.otherGroups,
+      );
+      if (!mounted) return;
+      setState(() {
+        _contacts = contacts;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _selectedGroupId = previousGroupId;
+        _isLoading = false;
+      });
+      await _showActionFailure(
+        error,
+        title: UITextConstants.callSwitchGroupMembersFailed,
+      );
+    }
+  }
+
+  Future<void> _showActionFailure(
+    Object error, {
+    required String title,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.submit,
+      scope: UiErrorScope.global,
     );
-    if (!mounted) return;
-    setState(() {
-      _contacts = contacts;
-      _isLoading = false;
-    });
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: UiErrorSemantic(
+        category: resolved.category,
+        scope: resolved.scope,
+        title: title,
+        message: resolved.message,
+        secondaryMessage: resolved.secondaryMessage,
+        primaryAction:
+            resolved.primaryAction ??
+            const UiErrorAction(
+              type: UiErrorActionType.dismiss,
+              label: UITextConstants.confirm,
+            ),
+        secondaryAction: resolved.secondaryAction,
+        dismissible: true,
+        sourceCode: resolved.sourceCode,
+        failureKind: resolved.failureKind,
+        recoveryAction: resolved.recoveryAction,
+      ),
+    );
   }
 
   List<CallPickerParticipantRow> get _filteredContacts {
@@ -237,116 +318,127 @@ class _CallParticipantPickerPageState
         ),
       ),
       child: SafeArea(
-        child: Column(
-            children: [
-              _buildSourceTabs(),
-              if (_source == _ParticipantSource.otherGroups)
-                _buildGroupSelector(),
-              Padding(
-                padding: EdgeInsets.all(AppSpacing.md),
-                child: AppSearchField(
-                  placeholder: '搜索联系人',
-                  onChanged: (value) {
-                    setState(() => _searchQuery = value);
-                  },
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                child: Row(
-                  children: [
-                    Text(
-                      '最多 ${widget.maxParticipants} 人',
-                      style: TextStyle(
-                        color: AppColors.overlayMedium,
-                        fontSize: AppTypography.sm,
-                      ),
-                    ),
-                    const Spacer(),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () {
-                        setState(_selectedIds.clear);
+        child: _pageErrorSemantic != null && !_isLoading
+            ? AppPageErrorState(
+                semantic: _pageErrorSemantic!,
+                onAction: (action) async {
+                  if (action.type == UiErrorActionType.retry ||
+                      action.type == UiErrorActionType.resubmit) {
+                    await _loadContacts();
+                  }
+                },
+              )
+            : Column(
+                children: [
+                  _buildSourceTabs(),
+                  if (_source == _ParticipantSource.otherGroups)
+                    _buildGroupSelector(),
+                  Padding(
+                    padding: EdgeInsets.all(AppSpacing.md),
+                    child: AppSearchField(
+                      placeholder: '搜索联系人',
+                      onChanged: (value) {
+                        setState(() => _searchQuery = value);
                       },
-                      child: Text(
-                        UITextConstants.callClearSelection,
-                        style: TextStyle(
-                          color: AppColors.overlayMedium,
-                          fontSize: AppTypography.sm,
-                        ),
-                      ),
                     ),
-                    SizedBox(width: AppSpacing.sm),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () {
-                        setState(() {
-                          _selectedIds.clear();
-                          _applyDefaultSelectionIfNeeded(_contacts);
-                        });
-                      },
-                      child: Text(
-                        UITextConstants.callRestoreDefaultSelection,
-                        style: TextStyle(
-                          color: AppColors.primaryColor,
-                          fontSize: AppTypography.sm,
-                          fontWeight: AppTypography.medium,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: AppSpacing.sm),
-                    if (_selectedIds.isNotEmpty)
-                      Text(
-                        '已选 ${_selectedIds.length}',
-                        style: TextStyle(
-                          color: AppColors.primaryColor,
-                          fontSize: AppTypography.sm,
-                          fontWeight: AppTypography.medium,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              SizedBox(height: AppSpacing.sm),
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CupertinoActivityIndicator())
-                    : filtered.isEmpty
-                    ? Center(
-                        child: Text(
-                          _searchQuery.isEmpty ? '暂无联系人' : '未找到匹配的联系人',
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                    child: Row(
+                      children: [
+                        Text(
+                          '最多 ${widget.maxParticipants} 人',
                           style: TextStyle(
                             color: AppColors.overlayMedium,
-                            fontSize: AppTypography.md,
+                            fontSize: AppTypography.sm,
                           ),
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          final contact = filtered[index];
-                          return _ContactRow(
-                            contact: contact,
-                            isSelected: _selectedIds.contains(contact.userId),
-                            isDisabled:
-                                _selectedIds.length >= widget.maxParticipants &&
-                                !_selectedIds.contains(contact.userId),
-                            onToggle: (userId) {
-                              setState(() {
-                                if (_selectedIds.contains(userId)) {
-                                  _selectedIds.remove(userId);
-                                } else if (_selectedIds.length <
-                                    widget.maxParticipants) {
-                                  _selectedIds.add(userId);
-                                }
-                              });
+                        const Spacer(),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () {
+                            setState(_selectedIds.clear);
+                          },
+                          child: Text(
+                            UITextConstants.callClearSelection,
+                            style: TextStyle(
+                              color: AppColors.overlayMedium,
+                              fontSize: AppTypography.sm,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.sm),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () {
+                            setState(() {
+                              _selectedIds.clear();
+                              _applyDefaultSelectionIfNeeded(_contacts);
+                            });
+                          },
+                          child: Text(
+                            UITextConstants.callRestoreDefaultSelection,
+                            style: TextStyle(
+                              color: AppColors.primaryColor,
+                              fontSize: AppTypography.sm,
+                              fontWeight: AppTypography.medium,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.sm),
+                        if (_selectedIds.isNotEmpty)
+                          Text(
+                            '已选 ${_selectedIds.length}',
+                            style: TextStyle(
+                              color: AppColors.primaryColor,
+                              fontSize: AppTypography.sm,
+                              fontWeight: AppTypography.medium,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.sm),
+                  Expanded(
+                    child: _isLoading
+                        ? const Center(child: CupertinoActivityIndicator())
+                        : filtered.isEmpty
+                        ? Center(
+                            child: Text(
+                              _searchQuery.isEmpty ? '暂无联系人' : '未找到匹配的联系人',
+                              style: TextStyle(
+                                color: AppColors.overlayMedium,
+                                fontSize: AppTypography.md,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: filtered.length,
+                            itemBuilder: (context, index) {
+                              final contact = filtered[index];
+                              return _ContactRow(
+                                contact: contact,
+                                isSelected: _selectedIds.contains(contact.userId),
+                                isDisabled:
+                                    _selectedIds.length >=
+                                        widget.maxParticipants &&
+                                    !_selectedIds.contains(contact.userId),
+                                onToggle: (userId) {
+                                  setState(() {
+                                    if (_selectedIds.contains(userId)) {
+                                      _selectedIds.remove(userId);
+                                    } else if (_selectedIds.length <
+                                        widget.maxParticipants) {
+                                      _selectedIds.add(userId);
+                                    }
+                                  });
+                                },
+                              );
                             },
-                          );
-                        },
-                      ),
+                          ),
+                  ),
+                ],
               ),
-            ],
-          ),
         ),
     );
   }
@@ -368,7 +460,7 @@ class _CallParticipantPickerPageState
           ),
           _ParticipantSource.sameInterest: Padding(
             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Text(UITextConstants.callSourceSameInterest),
+            child: Text(UITextConstants.callSourceMutualFollow),
           ),
           _ParticipantSource.otherGroups: Padding(
             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),

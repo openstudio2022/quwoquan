@@ -380,9 +380,9 @@ components:
           type: object
           description: |
             内容域远程配置。除 comment 外，App 运行时消费（SSOT：post/projections/content_app_config_client.yaml）：
-            feature_flags 或 featureFlags（bool 映射，与本地 ContentUIConfig 合并）；
-            gray_release 或 grayRelease（experiment_bucket/current_stage/canary_matrix）；
-            client_state_sync 或 clientStateSync（JSON 对象，由 ClientStateSyncConfig 解析）。
+            feature_flags（bool 映射，与本地 ContentUIConfig 合并）；
+            gray_release（experiment_bucket/current_stage/canary_matrix）；
+            client_state_sync（JSON 对象，由 ClientStateSyncConfig 解析）。
           properties:
             comment:
               type: object
@@ -393,27 +393,17 @@ components:
             feature_flags:
               type: object
               additionalProperties: { type: boolean }
-            featureFlags:
-              type: object
-              additionalProperties: { type: boolean }
             gray_release:
-              $ref: "#/components/schemas/AppConfigGrayRelease"
-            grayRelease:
               $ref: "#/components/schemas/AppConfigGrayRelease"
             client_state_sync:
               type: object
               additionalProperties: true
-            clientStateSync:
-              type: object
-              additionalProperties: true
     AppConfigGrayRelease:
       type: object
-      description: 灰度桶与阶段矩阵（snake_case 与 camelCase 别名并存）。
+      description: 灰度桶与阶段矩阵（snake_case only）。
       properties:
         experiment_bucket: { type: string }
-        experimentBucket: { type: string }
         current_stage: { type: string }
-        currentStage: { type: string }
         canary_matrix:
           type: array
           items:
@@ -421,11 +411,6 @@ components:
             properties:
               stage: { type: string }
               rolloutPercent: { type: integer }
-        canaryMatrix:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
     ReactionState:
       type: object
       properties:

@@ -68,6 +68,61 @@ journeys:
       - UAT_EDGE_SWIPE
     status: specified
 
+  - id: message-social-connection
+    title: 消息社交连接
+    user_goal: 用户能从主页、联系人、搜索、圈子、组织节点、相关群组和会话内小趣入口，清晰进入 1v1、请求箱、群聊与助手参与的消息路径。
+    scenario_refs:
+      - message-direct-and-greeting-upgrade
+      - message-group-entry-matrix
+      - message-assistant-in-conversation
+    domain_services:
+      - chat-conversation
+      - user-identity-profile-relationship
+      - circle-community
+      - shared-homepage-network
+      - assistant-run-learning
+      - global-search-experience
+    uat_refs:
+      - UAT_MESSAGE_SOCIAL_CONNECTION
+    status: specified
+
+  - id: assistant-omnipresent-private-assistant
+    title: 无处不在的小趣私人助理
+    user_goal: 用户在首页、内容页、搜索页、个人页和群聊中都能唤起同一个小趣；小趣理解当前对象、最近会话、站内搜索、社交关系、画像与标签，并能在授权后主动把有价值的信息投递给用户或会话。
+    scenario_refs:
+      - assistant-context-grounded-answering
+      - assistant-chat-topic-understanding
+      - assistant-search-handoff-and-grounding
+      - assistant-proactive-subscription-delivery
+    domain_services:
+      - assistant-run-learning
+      - runtime
+      - global-search-experience
+      - chat-conversation
+      - user-identity-profile-relationship
+      - notification
+      - discovery-content
+      - circle-community
+    uat_refs:
+      - UAT_ASSISTANT_OMNIPRESENT_PRIVATE_ASSISTANT
+    status: specified
+
+  - id: external-acquisition-and-deeplink
+    title: 对外引流与深链回流
+    user_goal: 用户在站外（微信朋友圈/聊天群、小红书/今日头条等 UGC 平台、浏览器、搜索引擎）看到内容或主页的卡片/海报/口令/链接，点击后可靠回流到 App 对应页面；未安装时被引导下载并在安装后还原原始目标。
+    scenario_refs:
+      - outbound-object-share-distribution
+      - external-inbound-deeplink-return
+      - public-web-seo-install-conversion
+    domain_services:
+      - product-ops-growth
+      - runtime
+      - discovery-content
+      - user-identity-profile-relationship
+    uat_refs:
+      - UAT_EXTERNAL_ACQUISITION
+    status: draft
+
 scenarios:
   - id: global-route-edge-pop-contract
     title: 全局无底栏页面边缘返回
@@ -142,6 +197,164 @@ scenarios:
       - global-search-experience 负责入口、路由和聚合体验；各领域服务负责本域结果契约。
     status: draft
 
+  - id: message-direct-and-greeting-upgrade
+    title: 1v1 私信与打招呼升级
+    parent_journey: message-social-connection
+    domain_services:
+      - chat-conversation
+      - user-identity-profile-relationship
+    business_capabilities:
+      - chat-conversation/contact-and-session-governance
+      - chat-conversation/list-detail-message-delivery
+      - user-identity-profile-relationship/persona-follow-graph
+    stories:
+      - chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade
+      - chat-conversation/contact-and-session-governance/conversation-entry-matrix
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_MESSAGE_SOCIAL_CONNECTION
+      - specs/feature-tree/chat-conversation/contact-and-session-governance/acceptance.yaml
+    boundary_notes:
+      - 关注/互关/拉黑与打招呼状态归 user-identity-profile-relationship；正式会话、消息收发和只读态归 chat-conversation。
+      - 非互关用户必须先走打招呼请求箱；回复后升级为正式 direct conversation，未回复不得污染普通会话列表。
+    status: specified
+
+  - id: message-group-entry-matrix
+    title: 私建群、圈子群、组织节点群与主页相关群入口
+    parent_journey: message-social-connection
+    domain_services:
+      - chat-conversation
+      - circle-community
+      - shared-homepage-network
+    business_capabilities:
+      - chat-conversation/group-creation-member-management
+      - circle-community/circle-collaboration-tools
+      - shared-homepage-network/homepage-review-and-content-journey
+    stories:
+      - chat-conversation/group-creation-member-management/group-create-flow
+      - chat-conversation/group-creation-member-management/group-candidate-source-orchestration
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_MESSAGE_SOCIAL_CONNECTION
+      - specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/acceptance.yaml
+    boundary_notes:
+      - 圈子与组织型关系主页负责群单元和成员治理；chat-conversation 只负责 group conversation 与消息链路。
+      - 共享主页只输出 related groups 摘要；不得直接拥有 conversation 创建语义。
+      - 学校下的班级群是组织节点 CircleGroup 绑定 group conversation，不是新的会话类型。
+    status: specified
+
+  - id: message-assistant-in-conversation
+    title: 小趣作为会话成员参与消息
+    parent_journey: message-social-connection
+    domain_services:
+      - chat-conversation
+      - assistant-run-learning
+    business_capabilities:
+      - chat-conversation/list-detail-message-delivery
+      - assistant-run-learning/assistant-runtime-foundation
+    stories:
+      - chat-conversation/list-detail-message-delivery/assistant-in-conversation
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_MESSAGE_SOCIAL_CONNECTION
+      - specs/feature-tree/chat-conversation/acceptance.yaml
+    boundary_notes:
+      - 小趣以 ConversationMember.memberType=assistant 参与 direct/group conversation；assistant-service 负责回复生成，chat-conversation 负责成员、消息、同步和审计。
+      - 个人助手全屏会话与会话内 @小趣 共享助手 runtime，不维护第二套助手逻辑。
+    status: specified
+
+  - id: assistant-context-grounded-answering
+    title: 内容与页面上下文感知问答
+    parent_journey: assistant-omnipresent-private-assistant
+    domain_services:
+      - assistant-run-learning
+      - runtime
+      - discovery-content
+      - user-identity-profile-relationship
+      - global-search-experience
+    business_capabilities:
+      - assistant-run-learning/assistant-runtime-foundation
+      - runtime/runtime-assistant
+      - global-search-experience/cross-domain-search-journey
+    stories:
+      - assistant-run-learning/run-stream-policy/run-sync-contract
+      - runtime/runtime-assistant/context-grounded-answering
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_ASSISTANT_OMNIPRESENT_PRIVATE_ASSISTANT
+      - specs/feature-tree/runtime/runtime-assistant/acceptance.yaml
+    boundary_notes:
+      - 页面只上报结构化 context snapshot；小趣 grounding、检索与回答归 assistant-run-learning/runtime-assistant。
+      - 内容、主页、关系和标签对象归各自领域服务，小趣不得维护第二套对象真相源。
+    status: specified
+
+  - id: assistant-chat-topic-understanding
+    title: 群聊话题理解与会话内回复
+    parent_journey: assistant-omnipresent-private-assistant
+    domain_services:
+      - assistant-run-learning
+      - chat-conversation
+      - runtime
+    business_capabilities:
+      - chat-conversation/list-detail-message-delivery
+      - assistant-run-learning/assistant-runtime-foundation
+      - runtime/runtime-assistant
+    stories:
+      - chat-conversation/list-detail-message-delivery/assistant-in-conversation
+      - runtime/runtime-assistant/assistant-mentioned-consumer
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_ASSISTANT_OMNIPRESENT_PRIVATE_ASSISTANT
+      - specs/feature-tree/acceptance.yaml#UAT_MESSAGE_SOCIAL_CONNECTION
+      - specs/feature-tree/chat-conversation/acceptance.yaml
+      - specs/feature-tree/runtime/runtime-assistant/acceptance.yaml
+    boundary_notes:
+      - chat-conversation 负责 mentions、AssistantMentioned 事件、成员与消息窗口；assistant-service 负责 grounding 和回复生成。
+      - AssistantMentioned 必须进入可靠事件流，不能只依赖 realtime Pub/Sub。
+    status: specified
+
+  - id: assistant-search-handoff-and-grounding
+    title: 搜索 handoff 与统一 grounding
+    parent_journey: assistant-omnipresent-private-assistant
+    domain_services:
+      - assistant-run-learning
+      - global-search-experience
+      - discovery-content
+      - chat-conversation
+      - shared-homepage-network
+    business_capabilities:
+      - global-search-experience/cross-domain-search-journey
+      - global-search-experience/search-provider-routing-and-storage-topology
+      - assistant-run-learning/assistant-runtime-foundation
+    stories:
+      - global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff
+      - global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_ASSISTANT_OMNIPRESENT_PRIVATE_ASSISTANT
+      - specs/feature-tree/global-search-experience/acceptance.yaml
+    boundary_notes:
+      - 搜索服务提供 canonical search(request) 与 citations；小趣消费检索结果并声明站内/站外引用边界。
+      - SearchXiaoquResults 不得保留固定 citations 占位。
+    status: specified
+
+  - id: assistant-proactive-subscription-delivery
+    title: 小趣主动订阅与用户/会话投递
+    parent_journey: assistant-omnipresent-private-assistant
+    domain_services:
+      - assistant-run-learning
+      - notification
+      - chat-conversation
+      - runtime
+      - user-identity-profile-relationship
+    business_capabilities:
+      - assistant-run-learning/assistant-runtime-foundation
+      - runtime/runtime-assistant
+      - chat-conversation/list-detail-message-delivery
+    stories:
+      - runtime/runtime-assistant/proactive-subscription-delivery
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_ASSISTANT_OMNIPRESENT_PRIVATE_ASSISTANT
+      - specs/feature-tree/runtime/runtime-assistant/acceptance.yaml
+    boundary_notes:
+      - MVP 采用 inviter opt-in：邀请小趣入群的人授权投递；投递前必须校验小趣仍是会话成员、订阅 active、频控/静默/去重通过。
+      - 用户收件箱走 AppMessage；会话/群投递复用 chat-service SendMessage，不新增第二消息通道。
+    status: specified
+
   - id: immersive-media-edge-swipe-back
     title: 沉浸式媒体浏览器边缘滑动返回
     parent_journey: app-root-navigation-safety
@@ -172,3 +385,56 @@ scenarios:
     boundary_notes:
       - 根页退出保护归 runtime/app shell；具体业务 tab 不拥有退出决策。
     status: specified
+
+  - id: outbound-object-share-distribution
+    title: 对象对外分享分发
+    parent_journey: external-acquisition-and-deeplink
+    domain_services:
+      - product-ops-growth
+      - discovery-content
+      - user-identity-profile-relationship
+      - circle-community
+      - shared-homepage-network
+    business_capabilities:
+      - product-ops-growth/outbound-share-distribution
+    stories:
+      - product-ops-growth/outbound-share-distribution/object-share-cards
+      - product-ops-growth/outbound-share-distribution/share-channel-panel
+      - product-ops-growth/outbound-share-distribution/share-attribution-and-token
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_EXTERNAL_ACQUISITION
+    boundary_notes:
+      - 分享面板、渠道编排、卡片视觉与归因口令归 product-ops-growth；各对象的可分享字段与分享落库计数归各自领域（content/circle/user/entity）。
+    status: draft
+
+  - id: external-inbound-deeplink-return
+    title: 外链深链回流到 App 目标页
+    parent_journey: external-acquisition-and-deeplink
+    domain_services:
+      - runtime
+    business_capabilities:
+      - runtime/runtime-client-foundation
+    stories:
+      - runtime/runtime-client-foundation/external-inbound-deeplink-routing
+      - runtime/runtime-client-foundation/entity-link-templates-metadata
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_EXTERNAL_ACQUISITION
+    boundary_notes:
+      - 链接结构与导航锚点真相源归 entity-link-templates-metadata；入站解析、原生注册、微信唤起与延迟深链归 external-inbound-deeplink-routing。
+    status: draft
+
+  - id: public-web-seo-install-conversion
+    title: 公开 Web SEO 与安装转化
+    parent_journey: external-acquisition-and-deeplink
+    domain_services:
+      - runtime
+      - discovery-content
+    business_capabilities:
+      - runtime/runtime-client-foundation
+    stories:
+      - runtime/runtime-client-foundation/public-content-web-entry
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_EXTERNAL_ACQUISITION
+    boundary_notes:
+      - 公开 HTML/SEO/中转页/安装转化归 public-content-web-entry；内容正文真相源仍归 discovery-content。
+    status: draft

@@ -1,18 +1,29 @@
 """Materialize approved compose results into post packages."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+TESTS_ROOT = DATA_ROOT / "tests"
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
 from pathlib import Path
 import shutil
 
 from _common.article_package import (
     MARKDOWN_VERSION,
-    build_article_asset_manifest,
     build_gallery_markdown,
+    compute_document_sha256,
     copy_asset_files,
-    sha256_text,
 )
-from _common.paths import batch_command_root, batch_sources_dir
-from _common.io import read_json, write_json
+from _common.batch_asset_registry import allocate_post_asset_id, load_batch_asset_registry
+from _common.batch_manifest import load_batch_manifest
+from _common.paths import batch_root, relative_batch_ref
+from _common.io import write_json
 from _common.draft_io import read_draft_meta, read_writing_pack
 from _common.provenance import build_provenance
 from _common.intersection_signal import build_intersection_hints
@@ -24,44 +35,54 @@ def _resolve_entity_download_dir(
     batch_id: str,
     entity_refs: list[str],
 ) -> Path | None:
+    from _common.source_unit import find_entity_object_dirs, iter_source_units
+
     for ref in entity_refs:
         name = ref.strip("/").split("/")[-1]
         if not name:
             continue
-        images_dir = batch_sources_dir(task_id, batch_id, name) / "images"
-        if images_dir.is_dir():
-            return images_dir
+        for obj in find_entity_object_dirs(task_id, batch_id, name):
+            for unit in iter_source_units(obj):
+                assets_dir = unit / "assets"
+                if assets_dir.is_dir():
+                    return assets_dir
     return None
 
 
-def _build_title_seq_index(review_dir: Path, compose_dir: Path) -> dict[str, int]:
-    """approved+agent 的 ref → 该发布标题下的稳定序号。
+def _relativize_ref(value: str, task_id: str, batch_id: str) -> str:
+    """batch 内绝对路径 → 相对 batch 根；batch 外或已相对则原样返回（禁绝对路径进发布契约）。"""
 
-    seq 默认 1；同一 publishTitle 下多篇按 ref 排序依次 1,2,3…（支持标题重复）；
-    同一 ref 重跑映射到同一 seq（稳定，不会无限累加）。
-    """
-    from collections import defaultdict
+    s = str(value or "")
+    if not s:
+        return s
+    batch_prefix = f"batches/{batch_id}/"
+    if s.startswith(batch_prefix):
+        return s[len(batch_prefix) :]
+    p = Path(s)
+    if not p.is_absolute():
+        return s
+    try:
+        base = batch_root(task_id, batch_id).resolve()
+        p.resolve().relative_to(base)
+    except (ValueError, OSError):
+        return s
+    return relative_batch_ref(p, task_id, batch_id)
 
-    title_refs: dict[str, list[str]] = defaultdict(list)
-    for review_file in sorted(review_dir.glob("*.json")):
-        review = read_json(review_file)
-        payload = review.get("payload", review)
-        ref = review.get("ref", review_file.stem)
-        if payload.get("decision") != "approved":
-            continue
-        compose_file = compose_dir / f"{ref}.json"
-        if not compose_file.exists():
-            continue
-        compose_payload = read_json(compose_file).get("payload", {})
-        if str(compose_payload.get("generator") or "") != "agent":
-            continue
-        title = compose_payload.get("publishTitle") or compose_payload.get("title") or ref
-        title_refs[title].append(ref)
-    seq_index: dict[str, int] = {}
-    for refs in title_refs.values():
-        for index, ref in enumerate(sorted(refs), start=1):
-            seq_index[ref] = index
-    return seq_index
+
+def _publication_condition_context(raw: object) -> object:
+    """发布契约字段投影：保留 entityProfile，同时提供顶层 region/season 授权字段。"""
+    if not isinstance(raw, dict):
+        return raw
+    context = dict(raw)
+    profile = context.get("entityProfile")
+    if isinstance(profile, dict):
+        regions = [str(v) for v in (profile.get("regions") or []) if v]
+        seasons = [str(v) for v in (profile.get("seasons") or []) if v]
+        if regions and not context.get("region"):
+            context["region"] = regions[0]
+        if seasons and not context.get("season"):
+            context["season"] = seasons[0]
+    return context
 
 
 def _annotate_manifest_entities(article_md: str, entity_refs: list[str]) -> str:
@@ -78,37 +99,59 @@ def _annotate_manifest_entities(article_md: str, entity_refs: list[str]) -> str:
     return annotated_article
 
 
+def _publication_story_spine(compose_payload: dict) -> dict | list:
+    """发布包只保留运行需要的叙事摘要，质量证据留在 provenance/review。"""
+    raw = (
+        compose_payload.get("storySpine")
+        or compose_payload.get("progression")
+        or compose_payload.get("sectionIntents")
+        or []
+    )
+    if not isinstance(raw, dict):
+        return raw
+    return {
+        key: raw[key]
+        for key in (
+            "primaryEntity",
+            "routeEntities",
+            "beats",
+            "sourceNote",
+            "relatedTopics",
+            "mustIncludeFacts",
+        )
+        if key in raw
+    }
+
+
 def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Path]:
-    """Convert approved compose+review results into final post packages."""
-    produce_root = batch_command_root(task_id, batch_id, "produce")
-    review_dir = produce_root / "results" / "review"
-    compose_dir = produce_root / "results" / "compose"
-    posts_dir = produce_root / "posts" / content_type
+    """把 approved+agent 的 compose/review 成品落到**内容对象根**（§2.4）。
+
+    成品（article.md/manifest.json/assets/ + _object.json）与过程
+    阶段（2.quality/3.compose/4.draft/5.review）同处对象根 `posts/{type}/{angle}/{title}/{seq}/`；
+    对象坐标（angle/title/seq）以 `_shared/content_object_index.json` 路由为唯一真相，不再自算序号。
+    """
+    from _common import content_object
+    from _common.stage_reports import iter_stage_envelopes, read_stage_envelope
 
     materialized: list[Path] = []
 
-    if not review_dir.exists():
+    review_envelopes = iter_stage_envelopes(task_id, batch_id, "produce", "review")
+    if not review_envelopes:
         return materialized
 
-    # 全量重建该 content_type 的 posts：只保留本轮 approved+agent 结果，并按"发布标题→序号"稳定布局。
-    if posts_dir.exists():
-        shutil.rmtree(posts_dir)
-    # 预扫描：approved 且 generator=agent 的 ref → 序号，落地为 posts/<type>/<标题>/<seq>/
-    # （seq 默认 1，同标题多篇按 ref 稳定递增，支持标题重复；与 promote 发布面 <标题>/<seq> 对齐）。
-    seq_index = _build_title_seq_index(review_dir, compose_dir)
-
-    for review_file in sorted(review_dir.glob("*.json")):
-        review = read_json(review_file)
+    for ref, review in review_envelopes:
         payload = review.get("payload", review)
-        ref = review.get("ref", review_file.stem)
         if payload.get("decision") != "approved":
             continue
 
-        compose_file = compose_dir / f"{ref}.json"
-        if not compose_file.exists():
+        coords = content_object.content_coords(task_id, batch_id, ref)
+        if not coords or coords.get("contentType") != content_type:
             continue
 
-        compose = read_json(compose_file)
+        compose = read_stage_envelope(task_id, batch_id, "produce", "compose", ref)
+        if compose is None:
+            continue
+
         compose_payload = compose.get("payload", compose)
 
         # 出处门：只有 generator=agent 的正文允许进入交付面，脚本/占位一律拒绝落地。
@@ -118,11 +161,16 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
         article_md = compose_payload.get("articleMarkdown", "")
         title = compose_payload.get("title") or ref
         template = compose_payload.get("template") or "journal"
-        publish_title = compose_payload.get("publishTitle") or title
-        seq = seq_index.get(ref, 1)
-        post_dir = posts_dir / publish_title / str(seq)
+        # 对象坐标（angle/title/seq）= 路由真相，与 promote/publish 发布面同名。
+        angle = str(coords.get("angle") or "")
+        publish_title = str(coords.get("title") or compose_payload.get("publishTitle") or title)
+        seq = int(coords.get("seq") or 1)
+        post_dir = content_object.content_object_dir(task_id, batch_id, ref)
         post_dir.mkdir(parents=True, exist_ok=True)
         assets_dir = post_dir / "assets"
+        # 成品 assets 全量重建（仅清成品，过程阶段证据保留）。
+        if assets_dir.exists():
+            shutil.rmtree(assets_dir)
         entity_refs = compose_payload.get("entityRefs", [])
         tag_refs = compose_payload.get("tagRefs", [])
         source_urls = compose_payload.get("sourceUrls", [])
@@ -132,7 +180,21 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
 
         raw_assets = compose_payload.get("assets") or []
         if not raw_assets and compose_payload.get("coverAssetRef"):
-            cover_id = compose_payload["coverAssetRef"].replace("asset://", "")
+            manifest = load_batch_manifest(task_id, batch_id)
+            global_batch_seq = int(manifest.get("globalBatchSeq") or 0)
+            if global_batch_seq <= 0:
+                raise RuntimeError(f"missing globalBatchSeq for task={task_id} batch={batch_id}")
+            asset_registry = load_batch_asset_registry(task_id, batch_id, global_batch_seq)
+            first_entity = ""
+            if isinstance(entity_refs, list) and entity_refs:
+                first_entity = str(entity_refs[0]).strip("/").split("/")[-1]
+            cover_id = allocate_post_asset_id(
+                entity_name=first_entity or ref,
+                role="cover",
+                ref=ref,
+                global_batch_seq=global_batch_seq,
+                registry=asset_registry,
+            )
             raw_assets = [
                 {
                     "assetId": cover_id,
@@ -147,11 +209,12 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
         download_images = _resolve_entity_download_dir(task_id, batch_id, entity_refs)
         assets = copy_asset_files(raw_assets, assets_dir, download_images)
 
-        if assets:
-            gallery_md = compose_payload.get("galleryMarkdown") or build_gallery_markdown(
-                title, assets
-            )
-            (post_dir / "gallery.md").write_text(gallery_md, encoding="utf-8")
+        gallery_path = post_dir / "gallery.md"
+        if str(compose_payload.get("carrier") or "article") == "gallery" and assets:
+            gallery_md = compose_payload.get("galleryMarkdown") or build_gallery_markdown(title, assets)
+            gallery_path.write_text(gallery_md, encoding="utf-8")
+        elif gallery_path.exists():
+            gallery_path.unlink()
 
         if article_md and "articleMarkdownVersion" not in article_md[:200]:
             if not article_md.lstrip().startswith("---"):
@@ -168,7 +231,15 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
 
         (post_dir / "article.md").write_text(article_md, encoding="utf-8")
 
-        article_asset_manifest = build_article_asset_manifest(article_md, assets)
+        render_profile = compose_payload.get("articleRenderProfile") or {
+            "template": template,
+            "fontPreset": "clean",
+            "layoutPolicy": {
+                "wrapDowngrade": "compactWidthToFullWidth",
+                "galleryDowngrade": "singleColumn",
+            },
+        }
+        document_sha256 = compute_document_sha256(article_md)
         # 最小发布契约：只保留发布/渲染/出处必需字段。
         manifest = {
             "schemaVersion": "quwoquan_data.post_manifest",
@@ -176,7 +247,7 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
             "contentType": content_type,
             "entityRefs": entity_refs,
             "tagRefs": tag_refs,
-            "conditionContext": compose_payload.get("conditionContext"),
+            "conditionContext": _publication_condition_context(compose_payload.get("conditionContext")),
             "sourceUrls": source_urls,
             "assets": [
                 {
@@ -184,6 +255,12 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
                     "fileName": a.get("fileName", ""),
                     "caption": a.get("caption", ""),
                     "imageLayout": a.get("imageLayout", "fullWidth"),
+                    "sha256": a.get("sha256", ""),
+                    # 资产证据链（相对 batch 根）：source 原图 + 原文，禁绝对路径。
+                    "sourceAssetRef": _relativize_ref(
+                        a.get("sourceAssetRef") or a.get("sourcePath") or "", task_id, batch_id
+                    ),
+                    "sourceRef": _relativize_ref(a.get("sourceRef") or "", task_id, batch_id),
                 }
                 for a in assets
             ],
@@ -191,24 +268,20 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
             "carrier": compose_payload.get("carrier", "article"),
             "generator": compose_payload.get("generator", "agent"),
             "generatorModel": compose_payload.get("generatorModel"),
-            "citedSourceRefs": compose_payload.get("citedSourceRefs") or source_paths,
+            "citedSourceRefs": [
+                _relativize_ref(r, task_id, batch_id)
+                for r in (compose_payload.get("citedSourceRefs") or source_paths)
+            ],
             "reviewDecision": "approved",
             "articleMarkdownVersion": MARKDOWN_VERSION,
-            "articleMarkdownDigest": sha256_text(article_md),
-            "articleAssetManifest": article_asset_manifest,
-            "articleRenderProfile": compose_payload.get("articleRenderProfile")
-            or {
-                "template": template,
-                "fontPreset": "clean",
-                "layoutPolicy": {
-                    "wrapDowngrade": "compactWidthToFullWidth",
-                    "galleryDowngrade": "singleColumn",
-                },
-            },
+            "articleRenderProfile": render_profile,
             "publishLayout": compose_payload.get("publishLayout", "travel"),
-            "publishAngle": compose_payload.get("publishAngle", ""),
+            "publishAngle": angle,
             "publishTitle": publish_title,
             "publishSeq": seq,
+            # 叙事骨架：发布门 storySpine 真相源。优先 compose 显式 storySpine，
+            # 回退到 progression（叙事主线）/ sectionIntents（章节意图），保证发布契约闭合。
+            "storySpine": _publication_story_spine(compose_payload),
             # 溯源：内容来自哪个任务/批次（task trace/hydrate、推荐归因消费）
             "sourceTaskId": task_id,
             "sourceBatchId": batch_id,
@@ -216,37 +289,43 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
         # 「明」：预生成内容侧交集锚点（对齐 IntersectionReason 闭集口径），runtime 据此 + 用户补全文案。
         manifest["intersectionHints"] = build_intersection_hints(manifest)
         write_json(post_dir / "manifest.json", manifest)
+        from verify.verify_content_quality import asset_closure_issues
 
-        # 结构化出处：把「给 agent 的输入摘要 / 最终结果 / 原始源 / 补全证据源 / 门结果」汇成
-        # 单一回查入口，明确区分最终结果（final）与中间过程（intermediate），取代分散的 produce_trace.json。
+        closure_issues = asset_closure_issues(post_dir, manifest)
+        if closure_issues:
+            raise RuntimeError("post asset closure failed:\n  - " + "\n  - ".join(closure_issues))
+
+        # 结构化出处：只保留发布追责必需字段，取代分散的 produce_trace.json。
+        # 出处路径全部相对 batch 根（禁绝对路径进发布契约）。
+        provenance_compose = {
+            **compose_payload,
+            "sourcePaths": [_relativize_ref(p, task_id, batch_id) for p in source_paths],
+            "citedSourceRefs": manifest["citedSourceRefs"],
+            "articleMarkdownDigest": document_sha256,
+        }
+        draft_meta = read_draft_meta(task_id, batch_id, ref) or {}
+        draft_meta = {
+            **draft_meta,
+            "citedSourcePaths": [
+                _relativize_ref(p, task_id, batch_id)
+                for p in (draft_meta.get("citedSourcePaths") or [])
+            ],
+        }
         provenance = build_provenance(
             ref,
             writing_pack=read_writing_pack(task_id, batch_id, ref),
-            draft_meta=read_draft_meta(task_id, batch_id, ref),
+            draft_meta=draft_meta,
             review_payload=payload,
-            compose_payload=compose_payload,
+            compose_payload=provenance_compose,
             manifest=manifest,
         )
-        write_json(post_dir / "provenance.json", provenance)
+        review_dir = post_dir / "5.review"
+        review_dir.mkdir(parents=True, exist_ok=True)
+        write_json(review_dir / "provenance.json", provenance)
 
-        # human-in-loop 账本与实体 sidecar 随 post 流转，供 promote 发布门消费。
-        _copy_review_sidecars(task_id, batch_id, ref, post_dir)
+        # 对象索引：publish 目标相对路径 + 成品相对路径 + 各阶段状态（§14.3）。
+        content_object.write_content_object_index(task_id, batch_id, ref)
 
         materialized.append(post_dir)
 
     return materialized
-
-
-def _copy_review_sidecars(task_id: str, batch_id: str, ref: str, post_dir: Path) -> None:
-    """把 produce/review/ledger/{ref}.json 与 entities/{ref}.json 拷进 post review/。"""
-    from _common.review_ledger import ledger_path, entities_path
-
-    review_out = post_dir / "review"
-    src_ledger = ledger_path(task_id, batch_id, ref)
-    if src_ledger.is_file():
-        review_out.mkdir(parents=True, exist_ok=True)
-        write_json(review_out / "ledger.json", read_json(src_ledger))
-    src_entities = entities_path(task_id, batch_id, ref)
-    if src_entities.is_file():
-        review_out.mkdir(parents=True, exist_ok=True)
-        write_json(review_out / "entities.json", read_json(src_entities))

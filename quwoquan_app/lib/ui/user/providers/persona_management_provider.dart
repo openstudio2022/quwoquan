@@ -13,7 +13,7 @@ class PersonaManagementState {
     this.activeContext,
     this.isLoading = false,
     this.isMutating = false,
-    this.error,
+    this.rawError,
     this.pendingSyncSuggestion,
   });
 
@@ -22,8 +22,11 @@ class PersonaManagementState {
   final ActivePersonaContextViewData? activeContext;
   final bool isLoading;
   final bool isMutating;
-  final String? error;
+  final Object? rawError;
   final PersonaSyncSuggestionViewData? pendingSyncSuggestion;
+
+  String? get error =>
+      rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
 
   PersonaManagementState copyWith({
     List<PersonaManagementItemViewData>? items,
@@ -31,7 +34,7 @@ class PersonaManagementState {
     ActivePersonaContextViewData? activeContext,
     bool? isLoading,
     bool? isMutating,
-    String? Function()? error,
+    Object? Function()? rawError,
     PersonaSyncSuggestionViewData? Function()? pendingSyncSuggestion,
   }) {
     return PersonaManagementState(
@@ -40,7 +43,7 @@ class PersonaManagementState {
       activeContext: activeContext ?? this.activeContext,
       isLoading: isLoading ?? this.isLoading,
       isMutating: isMutating ?? this.isMutating,
-      error: error != null ? error() : this.error,
+      rawError: rawError != null ? rawError() : this.rawError,
       pendingSyncSuggestion: pendingSyncSuggestion != null
           ? pendingSyncSuggestion()
           : this.pendingSyncSuggestion,
@@ -65,7 +68,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     if (state.isLoading) {
       return;
     }
-    state = state.copyWith(isLoading: true, error: () => null);
+    state = state.copyWith(isLoading: true, rawError: () => null);
     try {
       final summary = await _repo.getPersonaManagementSummary();
       state = state.copyWith(
@@ -77,7 +80,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: () => runtimeErrorDisplayMessage(e),
+        rawError: () => e,
       );
     }
   }
@@ -88,7 +91,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     String isolationLevel = 'open',
     String? purposeHint,
   }) async {
-    state = state.copyWith(isMutating: true, error: () => null);
+    state = state.copyWith(isMutating: true, rawError: () => null);
     try {
       final created = await _repo.createPersona(
         displayName: displayName,
@@ -107,14 +110,14 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       });
       state = state.copyWith(
         isMutating: false,
-        error: () => runtimeErrorDisplayMessage(e),
+        rawError: () => e,
       );
       rethrow;
     }
   }
 
   Future<void> activatePersona(String subAccountId) async {
-    state = state.copyWith(isMutating: true, error: () => null);
+    state = state.copyWith(isMutating: true, rawError: () => null);
     try {
       await _repo.activatePersona(subAccountId);
       await ref
@@ -130,7 +133,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       });
       state = state.copyWith(
         isMutating: false,
-        error: () => runtimeErrorDisplayMessage(e),
+        rawError: () => e,
       );
       rethrow;
     }
@@ -145,7 +148,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     String? isolationLevel,
     String? purposeHint,
   }) async {
-    state = state.copyWith(isMutating: true, error: () => null);
+    state = state.copyWith(isMutating: true, rawError: () => null);
     final changedFields = <String>[
       if (displayName != null) 'displayName',
       if (userHandle != null) 'userHandle',
@@ -170,7 +173,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     } catch (e) {
       state = state.copyWith(
         isMutating: false,
-        error: () => runtimeErrorDisplayMessage(e),
+        rawError: () => e,
       );
       rethrow;
     }
@@ -181,7 +184,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
   }
 
   Future<void> deletePersona(String subAccountId) async {
-    state = state.copyWith(isMutating: true, error: () => null);
+    state = state.copyWith(isMutating: true, rawError: () => null);
     try {
       await _repo.deleteEmptyPersona(subAccountId);
       await _reloadAfterMutation();
@@ -191,14 +194,14 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       });
       state = state.copyWith(
         isMutating: false,
-        error: () => runtimeErrorDisplayMessage(e),
+        rawError: () => e,
       );
       rethrow;
     }
   }
 
   Future<void> retirePersona(String subAccountId) async {
-    state = state.copyWith(isMutating: true, error: () => null);
+    state = state.copyWith(isMutating: true, rawError: () => null);
     try {
       await _repo.retirePersona(subAccountId);
       await _track('retired_count', <String, dynamic>{'retiredCount': 1});
@@ -209,7 +212,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     } catch (e) {
       state = state.copyWith(
         isMutating: false,
-        error: () => runtimeErrorDisplayMessage(e),
+        rawError: () => e,
       );
       rethrow;
     }
@@ -219,7 +222,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     required PersonaSyncSuggestionViewData suggestion,
     List<String>? targetPersonaIds,
   }) async {
-    state = state.copyWith(isMutating: true, error: () => null);
+    state = state.copyWith(isMutating: true, rawError: () => null);
     try {
       final appliedCount = await _repo.applyPersonaProfileSync(
         suggestion.sourcePersonaId,
@@ -240,7 +243,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     } catch (e) {
       state = state.copyWith(
         isMutating: false,
-        error: () => runtimeErrorDisplayMessage(e),
+        rawError: () => e,
       );
       rethrow;
     }
@@ -268,7 +271,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       activeContext: summary.activeContext,
       isLoading: false,
       isMutating: false,
-      error: () => null,
+      rawError: () => null,
     );
   }
 

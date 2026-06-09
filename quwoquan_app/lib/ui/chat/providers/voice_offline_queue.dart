@@ -11,21 +11,22 @@ import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
 class VoiceOfflineQueue {
   VoiceOfflineQueue({
     required this.maxQueueSize,
+    required this.sendQueuedVoice,
   });
 
   final int maxQueueSize;
+  final Future<VoiceSendStatus> Function(
+    String conversationId,
+    VoiceRecordResult result,
+  )
+  sendQueuedVoice;
   static const String _boxName = 'voice_offline_queue';
 
   Box<String>? _box;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
-  VoiceSendNotifier? _sendNotifier;
 
   Future<void> init() async {
     _box = await Hive.openBox<String>(_boxName);
-  }
-
-  void bindSendNotifier(VoiceSendNotifier notifier) {
-    _sendNotifier = notifier;
   }
 
   /// Enqueue a voice recording for later upload+send.
@@ -48,6 +49,7 @@ class VoiceOfflineQueue {
     });
 
     await box.add(entry);
+    startMonitor();
     return true;
   }
 
@@ -64,8 +66,7 @@ class VoiceOfflineQueue {
   /// Attempts to send all queued voice recordings.
   Future<void> drainQueue() async {
     final box = _box;
-    final notifier = _sendNotifier;
-    if (box == null || notifier == null) return;
+    if (box == null) return;
 
     final keys = box.keys.toList();
     for (final key in keys) {
@@ -74,6 +75,11 @@ class VoiceOfflineQueue {
 
       try {
         final data = jsonDecode(raw) as Map<String, dynamic>;
+        final conversationId = (data['conversationId'] as String?)?.trim();
+        if (conversationId == null || conversationId.isEmpty) {
+          await box.delete(key);
+          continue;
+        }
         final result = VoiceRecordResult(
           filePath: data['filePath'] as String,
           durationMs: (data['durationMs'] as num).toInt(),
@@ -83,7 +89,10 @@ class VoiceOfflineQueue {
               .toList(),
         );
 
-        await notifier.sendVoice(result);
+        final sendStatus = await sendQueuedVoice(conversationId, result);
+        if (sendStatus != VoiceSendStatus.completed) {
+          break;
+        }
         await box.delete(key);
       } catch (_) {
         break;
@@ -104,20 +113,22 @@ class VoiceOfflineQueueNotifier extends Notifier<int> {
 
   final String conversationId;
   VoiceOfflineQueue? _queue;
+  Future<void>? _ready;
 
   @override
   int build() {
-    final sendNotifier = ref.watch(voiceSendProvider(conversationId).notifier);
-    final queue = VoiceOfflineQueue(maxQueueSize: 50);
+    final sender = ref.read(voiceQueuedSenderProvider);
+    final queue = VoiceOfflineQueue(maxQueueSize: 50, sendQueuedVoice: sender);
     _queue = queue;
     ref.onDispose(() {
       queue.dispose();
     });
-    Future<void>.microtask(() async {
+    _ready = Future<void>.microtask(() async {
       await queue.init();
-      queue.bindSendNotifier(sendNotifier);
-      queue.startMonitor();
       state = queue.queueLength;
+      if (state > 0) {
+        queue.startMonitor();
+      }
     });
     return 0;
   }
@@ -125,16 +136,15 @@ class VoiceOfflineQueueNotifier extends Notifier<int> {
   Future<void> enqueue(VoiceRecordResult result) async {
     final q = _queue;
     if (q == null) return;
-    await q.enqueue(
-      conversationId: conversationId,
-      result: result,
-    );
+    await _ready;
+    await q.enqueue(conversationId: conversationId, result: result);
     state = q.queueLength;
   }
 
   Future<void> drain() async {
     final q = _queue;
     if (q == null) return;
+    await _ready;
     await q.drainQueue();
     state = q.queueLength;
   }
@@ -143,5 +153,20 @@ class VoiceOfflineQueueNotifier extends Notifier<int> {
 /// Provider for the offline voice queue (per conversation).
 final voiceOfflineQueueProvider =
     NotifierProvider.family<VoiceOfflineQueueNotifier, int, String>(
-  VoiceOfflineQueueNotifier.new,
-);
+      VoiceOfflineQueueNotifier.new,
+    );
+
+final voiceQueuedSenderProvider =
+    Provider<
+      Future<VoiceSendStatus> Function(
+        String conversationId,
+        VoiceRecordResult result,
+      )
+    >((ref) {
+      return (conversationId, result) async {
+        await ref
+            .read(voiceSendProvider(conversationId).notifier)
+            .sendVoice(result);
+        return ref.read(voiceSendProvider(conversationId)).status;
+      };
+    });

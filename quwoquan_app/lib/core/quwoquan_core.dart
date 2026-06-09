@@ -33,7 +33,9 @@ export 'widgets/app_action_sheet.dart';
 export 'widgets/conversation_sheet.dart';
 export 'widgets/app_modal_surface.dart';
 export 'widgets/app_search_field.dart';
+export 'widgets/error_states/app_error_states.dart';
 export 'widgets/ios_selection_page_components.dart';
+export 'widgets/web_page_max_width_frame.dart';
 
 // Providers
 export 'design_system/providers/theme_provider.dart';
@@ -56,6 +58,9 @@ export 'auth/auth_gate.dart';
 export 'auth/auth_continuation.dart';
 export 'auth/auth_legal_config.dart';
 export 'auth/one_tap_login_channel.dart';
+export 'errors/ui_error_semantics.dart';
+export 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart'
+    show runtimeErrorDisplayMessage, runtimeErrorSemantic;
 export 'services/app_content_repository.dart';
 export 'services/assistant_chat_store.dart';
 

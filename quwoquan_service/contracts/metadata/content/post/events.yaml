@@ -77,16 +77,25 @@ events:
     consumers: [notification-service, recommendation-engine, assistant-service]
     channel: event_store
     payload_entity: Comment
-    payload_fields: [_id, postId, authorId, content, replyToUserId]
+    payload_fields: [_id, postId, authorId, content, commentLength, replyDepth, replyToCommentId, parentCommentId, replyToUserId, targetAuthorId, attachmentMediaIds, attachmentTypes, mentions, tagRefs, entityRefs, sentimentLabel, intentLabel, moderationLabels, intersectionDimension]
     recommend_impact: engagement_signal
 
-  - name: CommentLiked
-    description: 评论被点赞
+  - name: CommentReacted
+    description: 评论赞踩状态变更
     producer: content-service
-    consumers: [notification-service]
+    consumers: [notification-service, recommendation-engine]
     channel: event_store
     payload_entity: Comment
-    payload_fields: [_id, postId, authorId, likeCount]
+    payload_fields: [_id, postId, authorId, targetAuthorId, viewerReaction, reactionStrength, likeCount, dislikeCount, recommendedScore, tagRefs, entityRefs, moderationLabels, intersectionDimension]
+    recommend_impact: engagement_signal
+
+  - name: CommentDeleted
+    description: 评论删除或隐藏
+    producer: content-service
+    consumers: [notification-service, recommendation-engine, assistant-service]
+    channel: event_store
+    payload_entity: Comment
+    payload_fields: [_id, postId, authorId, parentCommentId, status]
     recommend_impact: engagement_signal
 
   - name: ContentReacted

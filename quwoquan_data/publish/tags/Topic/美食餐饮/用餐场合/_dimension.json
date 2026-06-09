@@ -1,0 +1,10 @@
+{
+  "label": "用餐场合",
+  "labelEn": "Dining Occasion",
+  "description": "用餐的社交与事务场合；限定为餐饮维度的场景细化",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 9
+}

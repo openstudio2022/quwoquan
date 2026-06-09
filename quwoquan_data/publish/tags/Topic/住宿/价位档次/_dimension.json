@@ -1,0 +1,10 @@
+{
+  "label": "价位档次",
+  "labelEn": "Price Tier",
+  "description": "住宿价格区间分级",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 5
+}

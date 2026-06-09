@@ -17,11 +17,17 @@ sealed class AuthContinuation {
 class SubmitCommentContinuation extends AuthContinuation {
   const SubmitCommentContinuation({
     required this.content,
+    this.postId,
     this.replyToCommentId,
+    this.attachmentMediaIds = const <String>[],
+    this.mentions = const <Map<String, dynamic>>[],
   });
 
   final String content;
+  final String? postId;
   final String? replyToCommentId;
+  final List<String> attachmentMediaIds;
+  final List<Map<String, dynamic>> mentions;
 }
 
 /// 续接「关注用户主页」。
@@ -31,6 +37,31 @@ class FollowProfileContinuation extends AuthContinuation {
   final String subAccountId;
 }
 
+/// 续接「向用户主页打招呼」。
+class GreetProfileContinuation extends AuthContinuation {
+  const GreetProfileContinuation({required this.subAccountId});
+
+  final String subAccountId;
+}
+
+/// 续接「打开或创建与用户的正式私信会话」。
+class OpenDirectConversationContinuation extends AuthContinuation {
+  const OpenDirectConversationContinuation({required this.subAccountId});
+
+  final String subAccountId;
+}
+
+/// 续接「从用户主页发起 1v1 通话」。
+class StartDirectCallContinuation extends AuthContinuation {
+  const StartDirectCallContinuation({
+    required this.targetUserId,
+    required this.callType,
+  });
+
+  final String targetUserId;
+  final String callType;
+}
+
 /// 续接「加入/关注圈子」。
 class JoinCircleContinuation extends AuthContinuation {
   const JoinCircleContinuation({required this.circleId});
@@ -38,13 +69,21 @@ class JoinCircleContinuation extends AuthContinuation {
   final String circleId;
 }
 
-/// 续接「打开某个动作面板/流程」（加好友、发起群聊、建圈子等非路由动作）。
+/// 续接「打开某个动作面板/流程」（添加联系人、发起群聊、建圈子等非路由动作）。
 enum AuthContinuationSheet { addContact, startGroupChat, createCircle }
 
 class OpenSheetContinuation extends AuthContinuation {
   const OpenSheetContinuation(this.sheet);
 
   final AuthContinuationSheet sheet;
+}
+
+/// 续接「打开首页内部频道」。用于关注频道这类不是独立稳定路由的内部状态：
+/// 关闭登录页回安全首页，登录成功后再明确切到目标频道，避免 pop 回原触发点形成回环。
+class OpenHomeChannelContinuation extends AuthContinuation {
+  const OpenHomeChannelContinuation({required this.channelId});
+
+  final String channelId;
 }
 
 /// 单槽位续接控制器：set 登记、take 按类型取出并清空。

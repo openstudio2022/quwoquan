@@ -113,6 +113,38 @@ func (h *ContentHandler) handleGetFeedIntersections(w http.ResponseWriter, r *ht
 	})
 }
 
+// handleGetObjectIntersections 对象页「我与该对象」关系类交集（§2 证据组闭集）。
+func (h *ContentHandler) handleGetObjectIntersections(w http.ResponseWriter, r *http.Request) {
+	userID := resolveUserID(r)
+	if strings.TrimSpace(userID) == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "需要登录", "missing user"))
+		return
+	}
+	q := r.URL.Query()
+	objectID := strings.TrimSpace(q.Get("objectId"))
+	objectType := strings.TrimSpace(q.Get("objectType"))
+	if objectID == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "缺少对象", "missing objectId"))
+		return
+	}
+	limit := 8
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		if parsed, perr := strconv.Atoi(raw); perr == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	items, err := h.intersectionService.ObjectIntersections(r.Context(), userID, objectID, objectType, limit)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":      items,
+		"objectId":   objectID,
+		"objectType": objectType,
+	})
+}
+
 // handleReportIntersectionExposure 曝光上报（写跨会话冷却集）。
 func (h *ContentHandler) handleReportIntersectionExposure(w http.ResponseWriter, r *http.Request) {
 	if h.intersectionService == nil {

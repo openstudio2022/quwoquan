@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'
     show Icons, TextDirection, TextPainter, TextSpan, TextStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/core/platform/app_font_families.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
@@ -1678,13 +1679,7 @@ class _FontPresetSelector extends StatelessWidget {
       itemBuilder: (context, index) {
         final preset = ArticleFontPreset.values[index];
         final isSelected = preset == selected;
-        final fontFamily = switch (preset) {
-          ArticleFontPreset.classic => 'Songti SC',
-          ArticleFontPreset.handwritten => 'Kaiti SC',
-          ArticleFontPreset.rounded => 'SF Pro Rounded',
-          ArticleFontPreset.mono => 'Menlo',
-          ArticleFontPreset.clean => null,
-        };
+        final stack = resolveArticleFontStack(preset);
         return GestureDetector(
           onTap: () => onSelected(preset),
           child: AnimatedContainer(
@@ -1715,8 +1710,8 @@ class _FontPresetSelector extends StatelessWidget {
                   '春江',
                   style: TextStyle(
                     fontSize: AppTypography.base,
-                    fontFamily: fontFamily,
-                    fontFamilyFallback: const <String>['PingFang SC'],
+                    fontFamily: stack.fontFamily,
+                    fontFamilyFallback: stack.fontFamilyFallback,
                     color: CupertinoColors.label.resolveFrom(context),
                   ),
                 ),

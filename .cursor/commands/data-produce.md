@@ -7,6 +7,8 @@ description: 数据工程 · 内容润色生成阶段
 
 # data-produce
 
+> fanout 模式下，本命令降为 **per-ref worker 步骤**：一个 Subagent 消费 `qwq-data object-queue lease-next` 返回的单 ref lease packet（含执行合约 + Ralph 出口门），只处理自己租到的 ref，完成后 `object-queue complete`。单模式仍按下文整批走。
+
 ## 命令目的
 基于下载源润色生成可发布内容。单命令完成 compose + review。
 

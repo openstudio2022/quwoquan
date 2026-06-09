@@ -12,6 +12,9 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
+import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
@@ -23,6 +26,7 @@ import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
+import 'package:quwoquan_app/ui/discovery/services/discovery_share_template.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
@@ -36,6 +40,7 @@ import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -548,6 +553,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           _trackBehavior(BehaviorAction.click, post);
           _onPostTap(post, index, feedPosts: feedPosts, category: 'moment');
         },
+        onIntersectionObjectOpen: _openIntersectionObject,
         onMoreTap: (post) => _onMomentMoreTap(context, post),
       );
     }
@@ -646,8 +652,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 item: dto,
                 isDark: isDark,
                 isFirst: isFirst,
-                sourceCircleName: _sourceCircleNameForPost(dto),
+                sourceCircleName: discoverySourceCircleName(ref, dto.id),
                 onUserTap: (id) {
+                  _primeIntersectionHighlight(id, dto.intersectionReasons);
                   context.push(
                     AppRoutePaths.userProfile(username: id),
                     extra: <String, String?>{
@@ -661,7 +668,8 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                     _onPostTap(post, i, feedPosts: moments, category: tabId),
                 onCommentTap: (post) => _onMomentCommentTap(context, post),
                 onShareTap: (post) => _onMomentShareTap(context, post),
-                onMoreTap: (post) => _onMomentMoreTap(context, post),
+                onMoreTap: (post, cardWidth) =>
+                    _onMomentMoreTap(context, post, cardWidth),
                 onBehavior: (action, post) => _trackBehavior(
                   BehaviorAction.values.cast<BehaviorAction?>().firstWhere(
                         (a) => a!.wireValue == action,
@@ -972,19 +980,62 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
   }
 
+  /// post 作者 → 作者主页（§7.3 旅程无断点）：把该 post 的最强证据组 kind
+  /// 写入高亮意图，作者主页交集卡据此自动展开并高亮同一证据组。
+  void _primeIntersectionHighlight(
+    String authorId,
+    List<IntersectionReason>? reasons,
+  ) {
+    ref
+        .read(intersectionHighlightIntentProvider.notifier)
+        .primeFromReasons(authorId, reasons);
+  }
+
+  void _openIntersectionObject(IntersectionReason reason) {
+    final targetId = reason.actionTargetId.trim();
+    if (targetId.isEmpty) return;
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackClick(
+          targetId,
+          referralSource: ReferralSource.organicFeed,
+          intersectionId: reason.intersectionId,
+          intersectionDimension: reason.dimension,
+          intersectionClass: reason.intersectionClass,
+          intersectionTagRefs: reason.tagRefs,
+        );
+    final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);
+    switch (kind) {
+      case UnifiedObjectKind.person:
+        context.push(AppRoutePaths.userProfile(username: targetId));
+      case UnifiedObjectKind.circle:
+        context.push(AppRoutePaths.circleDetail(id: targetId));
+      case UnifiedObjectKind.place:
+      case UnifiedObjectKind.org:
+        context.push(AppRoutePaths.homepageDetail(id: targetId));
+    }
+  }
+
   void _onMomentCommentTap(BuildContext context, PostBaseDto post) {
     final postId = post.id;
     CommentViewer.showModal(
       context: context,
       postId: postId,
-      initialComments: [],
       config: const CommentConfig(enabled: true),
     );
   }
 
   void _onMomentShareTap(BuildContext context, PostBaseDto post) {
     runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
-      final template = _buildShareTemplate(post);
+      final template = buildDiscoveryShareTemplate(
+        post: post,
+        wire: ref
+            .read(contentRepositoryProvider)
+            .discoveryPresentationWireForPost(post.id),
+        enableIdentityTemplate: ref.read(
+          contentFeatureFlagProvider('enable_identity_share_template'),
+        ),
+      );
       ContentShareSheet.show(
         context,
         template: template,
@@ -995,9 +1046,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     });
   }
 
-  void _onMomentMoreTap(BuildContext context, PostBaseDto post) {
+  void _onMomentMoreTap(
+    BuildContext context,
+    PostBaseDto post, [
+    double? cardWidth,
+  ]) {
     MoreActionPopup.show(
       context: context,
+      panelMaxWidth: cardWidth ?? MediaQuery.sizeOf(context).width,
       config: MediaPostMoreActionConfig(
         onCopyLink: () => _copyLinkFromMore(context, post),
         onShare: () => _onMomentShareTap(context, post),
@@ -1008,43 +1064,20 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   Future<void> _copyLinkFromMore(BuildContext context, PostBaseDto dto) async {
     final result = await const DefaultContentShareActionHandler().execute(
       context,
-      _buildShareTemplate(dto),
-      const ContentShareAction(
-        id: 'copy_link',
-        label: UITextConstants.copyLink,
+      buildDiscoveryShareTemplate(
+        post: dto,
+        wire: ref
+            .read(contentRepositoryProvider)
+            .discoveryPresentationWireForPost(dto.id),
+        enableIdentityTemplate: ref.read(
+          contentFeatureFlagProvider('enable_identity_share_template'),
+        ),
       ),
+      ContentShareAction(id: 'copy_link', label: UITextConstants.copyLink),
     );
     if (result.success) {
       await _trackShareAction(dto, result.actionId);
     }
-  }
-
-  ContentShareTemplate _buildShareTemplate(PostBaseDto post) {
-    final wire = ref
-        .read(contentRepositoryProvider)
-        .discoveryPresentationWireForPost(post.id);
-    final circleName = wire?.circleName ?? '';
-    final enableIdentityTemplate = ref.read(
-      contentFeatureFlagProvider('enable_identity_share_template'),
-    );
-    final surfaceView = ContentSurfaceViewMapper.fromDto(
-      post,
-      wire: wire?.toWireMap(),
-    );
-    return ContentShareTemplateBuilder.build(
-      surfaceView: surfaceView,
-      enableIdentityTemplate: enableIdentityTemplate,
-      visibility: wire?.visibility ?? 'public',
-      circleNames: circleName.isEmpty ? const <String>[] : <String>[circleName],
-    );
-  }
-
-  String _sourceCircleNameForPost(PostBaseDto post) {
-    return ref
-            .read(contentRepositoryProvider)
-            .discoveryPresentationWireForPost(post.id)
-            ?.circleName ??
-        '';
   }
 
   Future<void> _trackShareAction(PostBaseDto post, String actionId) async {
@@ -1089,7 +1122,7 @@ class _DiscoveryMicroPostCard extends StatefulWidget {
   final void Function(PostBaseDto, int) onPostTap;
   final void Function(PostBaseDto)? onCommentTap;
   final void Function(PostBaseDto)? onShareTap;
-  final void Function(PostBaseDto)? onMoreTap;
+  final void Function(PostBaseDto, double cardWidth)? onMoreTap;
   final void Function(String action, PostBaseDto post)? onBehavior;
 
   const _DiscoveryMicroPostCard({
@@ -1135,6 +1168,9 @@ class _DiscoveryMicroPostCardState extends State<_DiscoveryMicroPostCard>
     final item = widget.item;
     final isDark = widget.isDark;
     final isFirst = widget.isFirst;
+    final cardWidth =
+        MediaQuery.sizeOf(context).width -
+        AppSpacing.feedContentHorizontal(context) * 2;
     final fg = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -1208,7 +1244,7 @@ class _DiscoveryMicroPostCardState extends State<_DiscoveryMicroPostCard>
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-                  onPressed: () => widget.onMoreTap!(item),
+                  onPressed: () => widget.onMoreTap!(item, cardWidth),
                   child: Icon(
                     CupertinoIcons.ellipsis,
                     size: AppSpacing.iconMedium,

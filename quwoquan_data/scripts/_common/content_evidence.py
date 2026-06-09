@@ -7,7 +7,6 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from _common.io import read_json
-from _common.paths import batch_command_root
 
 
 @dataclass(frozen=True)
@@ -305,13 +304,22 @@ def extract_source_evidence(text: str, *, entity_name: str | None = None) -> dic
     }
 
 
+def _source_dirs_for_entity(task_id: str, batch_id: str, entity_name: str) -> list[Path]:
+    """优先对象同构来源单元（entities/**/{name}/1.download/sources/*）。"""
+    from _common.source_unit import find_entity_object_dirs, iter_source_units
+
+    dirs: list[Path] = []
+    for obj in find_entity_object_dirs(task_id, batch_id, entity_name):
+        dirs.extend(iter_source_units(obj))
+    if dirs:
+        return dirs
+    return []
+
+
 def load_source_records(task_id: str, batch_id: str, entity_names: Sequence[str]) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for entity_name in entity_names:
-        source_root = batch_command_root(task_id, batch_id, "download") / "sources" / entity_name
-        if not source_root.is_dir():
-            continue
-        for source_dir in sorted(source_root.iterdir()):
+        for source_dir in _source_dirs_for_entity(task_id, batch_id, entity_name):
             if not source_dir.is_dir():
                 continue
             source_md = source_dir / "source.md"
@@ -344,68 +352,6 @@ def load_source_records(task_id: str, batch_id: str, entity_names: Sequence[str]
                 }
             )
     return records
-
-
-def build_story_spine(
-    spec_or_meta: Any,
-    brief: Mapping[str, Any],
-    source_texts: Iterable[str],
-    assessments: Iterable[SourceAssessment],
-) -> dict[str, Any]:
-    """兼容旧调用，输出可供 compose 消费的主线摘要。"""
-    entity_refs = [str(item) for item in (_value(spec_or_meta, "entity_refs") or _value(spec_or_meta, "entityRefs") or [])]
-    ref = str(_value(spec_or_meta, "ref") or brief.get("titleHint") or "")
-    entity_names = entity_names_from_refs(entity_refs)
-    if not entity_names and ref:
-        entity_names = [ref.split("_")[0]]
-    entity_name = entity_names[0] if entity_names else "未知实体"
-    assessment_rows = list(assessments)
-    cleaned_sources = [anonymize_source_markdown(text) for text in source_texts if text]
-    evidence = [extract_source_evidence(text, entity_name=entity_name) for text in cleaned_sources]
-
-    source_note = ""
-    for assessment in assessment_rows:
-        if assessment.quality != "Reject" and assessment.excerpt:
-            source_note = assessment.excerpt
-            break
-    if not source_note and cleaned_sources:
-        first = re.sub(r"\s+", " ", cleaned_sources[0]).strip()
-        source_note = first[:120].rstrip("。") + ("。" if first else "")
-
-    beats = _unique_strings(
-        [
-            *(item for ev in evidence for item in ev.get("mainlineEvidence", [])),
-            *(item.get("sentence", "") for ev in evidence for item in ev.get("emotionEvidence", [])),
-            *(item.get("sentence", "") for ev in evidence for item in ev.get("factEvidence", [])),
-        ],
-        limit=3,
-    )
-    if not beats:
-        beats = [
-            f"先确认 {entity_name} 的进入方式与时间成本。",
-            f"把 {entity_name} 的核心停留时段留给最值得的一段。",
-            "最后再决定是否继续拉长行程。",
-        ]
-
-    related_topics = _unique_strings(
-        [
-            *entity_names,
-            *(str(item) for item in brief.get("mustIncludeFacts") or []),
-            *(item.get("category", "") for ev in evidence for item in ev.get("factEvidence", [])),
-        ],
-        limit=12,
-    )
-
-    return {
-        "primaryEntity": entity_name,
-        "routeEntities": entity_names,
-        "progression": _unique_strings((item for ev in evidence for item in ev.get("mainlineEvidence", [])), limit=6),
-        "beats": beats,
-        "sourceNote": source_note,
-        "relatedTopics": related_topics,
-        "mustIncludeFacts": [str(item) for item in brief.get("mustIncludeFacts") or [] if item],
-        "sourceQuality": [asdict(assessment) for assessment in assessment_rows],
-    }
 
 
 def build_route_evidence_bundle(
@@ -672,7 +618,6 @@ __all__ = [
     "anonymize_source_markdown",
     "build_related_search_plan",
     "build_route_evidence_bundle",
-    "build_story_spine",
     "entity_names_from_refs",
     "extract_source_evidence",
     "gate_route_evidence_bundle",

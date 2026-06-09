@@ -116,7 +116,7 @@ func TestSubAccountView_FeatureFlagOffFallsBackToPersonaID(t *testing.T) {
 
 	personaRec := doRequest(t, http.MethodGet, "/v1/user/sa_flag_profile", "", authHeaders("viewer_subject"))
 	if personaRec.Code != http.StatusOK {
-		t.Fatalf("flag-off legacy sub-account fallback should stay available, got %d: %s", personaRec.Code, personaRec.Body.String())
+		t.Fatalf("flag-off sub-account fallback should stay available, got %d: %s", personaRec.Code, personaRec.Body.String())
 	}
 }
 
@@ -235,8 +235,11 @@ func TestRelationshipCapabilityView_States(t *testing.T) {
 	if body["relationState"] != "not_following" {
 		t.Fatalf("expected relationState=not_following, got %v", body["relationState"])
 	}
-	if body["canMessage"] != true {
-		t.Fatalf("expected canMessage=true for stranger state, got %v", body["canMessage"])
+	if body["canGreet"] != true {
+		t.Fatalf("expected canGreet=true for stranger state, got %v", body["canGreet"])
+	}
+	if body["canCreateDirectConversation"] == true || body["canSendMessage"] == true {
+		t.Fatalf("expected stranger state to block direct conversation/send, got %#v", body)
 	}
 
 	followRec := doRequest(
@@ -263,6 +266,9 @@ func TestRelationshipCapabilityView_States(t *testing.T) {
 	if body["canUnfollow"] != true {
 		t.Fatalf("expected canUnfollow=true, got %v", body["canUnfollow"])
 	}
+	if body["canCreateDirectConversation"] == true || body["canSendMessage"] == true {
+		t.Fatalf("expected one-way following to block direct conversation/send, got %#v", body)
+	}
 
 	followBackRec := doRequest(
 		t,
@@ -287,5 +293,8 @@ func TestRelationshipCapabilityView_States(t *testing.T) {
 	}
 	if body["canStartVoiceCall"] != true || body["canStartVideoCall"] != true {
 		t.Fatalf("expected mutual state to enable voice/video, got %#v", body)
+	}
+	if body["canCreateDirectConversation"] != true || body["canSendMessage"] != true {
+		t.Fatalf("expected mutual state to enable direct conversation/send, got %#v", body)
 	}
 }

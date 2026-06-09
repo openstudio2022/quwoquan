@@ -17,6 +17,7 @@ class AssistantApiMetadata {
     'CreateSkillSubscription': '/v1/assistant/skill-subscriptions',
     'GetAssistantConversation': '/v1/assistant/conversations/{conversationId}',
     'GetAssistantTurn': '/v1/assistant/turns/{turnId}',
+    'GetEntryPersonalization': '/v1/assistant/personalization',
     'GetLearningOpsSummary': '/v1/assistant/ops/learning-summary',
     'GetPolicy': '/v1/assistant/policy',
     'GetSkillSubscription': '/v1/assistant/skill-subscriptions/{subscriptionId}',
@@ -43,6 +44,7 @@ class AssistantApiMetadata {
     'CreateSkillSubscription': 'POST',
     'GetAssistantConversation': 'GET',
     'GetAssistantTurn': 'GET',
+    'GetEntryPersonalization': 'GET',
     'GetLearningOpsSummary': 'GET',
     'GetPolicy': 'GET',
     'GetSkillSubscription': 'GET',
@@ -65,29 +67,30 @@ class AssistantApiMetadata {
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'CreateAssistantConversation': 'public',
-    'CreateAssistantTurn': 'public',
-    'CreateSkillSubscription': 'public',
-    'GetAssistantConversation': 'public',
-    'GetAssistantTurn': 'public',
-    'GetLearningOpsSummary': 'public',
+    'CreateAssistantConversation': 'required',
+    'CreateAssistantTurn': 'required',
+    'CreateSkillSubscription': 'required',
+    'GetAssistantConversation': 'required',
+    'GetAssistantTurn': 'required',
+    'GetEntryPersonalization': 'required',
+    'GetLearningOpsSummary': 'required',
     'GetPolicy': 'public',
-    'GetSkillSubscription': 'public',
-    'GetSuggestedActions': 'public',
-    'GrantSkillConsent': 'public',
-    'ListAssistantMemories': 'public',
-    'ListAssistantTasks': 'public',
+    'GetSkillSubscription': 'required',
+    'GetSuggestedActions': 'required',
+    'GrantSkillConsent': 'required',
+    'ListAssistantMemories': 'required',
+    'ListAssistantTasks': 'required',
     'ListConsents': 'public',
-    'ListSkillSubscriptions': 'public',
+    'ListSkillSubscriptions': 'required',
     'ListSkills': 'public',
-    'ReportInteractionEvent': 'public',
-    'ReportPageContext': 'public',
-    'ReportScorecard': 'public',
-    'RevokeSkillConsent': 'public',
-    'SearchXiaoquResults': 'public',
-    'StreamAssistantTurn': 'public',
-    'TickSkillSubscriptionCron': 'public',
-    'UpdateSkillSubscriptionStatus': 'public',
+    'ReportInteractionEvent': 'required',
+    'ReportPageContext': 'required',
+    'ReportScorecard': 'required',
+    'RevokeSkillConsent': 'required',
+    'SearchXiaoquResults': 'required',
+    'StreamAssistantTurn': 'required',
+    'TickSkillSubscriptionCron': 'required',
+    'UpdateSkillSubscriptionStatus': 'required',
   };
 
   static const String createAssistantConversationOperation = 'CreateAssistantConversation';
@@ -95,6 +98,7 @@ class AssistantApiMetadata {
   static const String createSkillSubscriptionOperation = 'CreateSkillSubscription';
   static const String getAssistantConversationOperation = 'GetAssistantConversation';
   static const String getAssistantTurnOperation = 'GetAssistantTurn';
+  static const String getEntryPersonalizationOperation = 'GetEntryPersonalization';
   static const String getLearningOpsSummaryOperation = 'GetLearningOpsSummary';
   static const String getPolicyOperation = 'GetPolicy';
   static const String getSkillSubscriptionOperation = 'GetSkillSubscription';
@@ -134,6 +138,7 @@ class AssistantApiMetadata {
       'turnId': turnId,
     });
   }
+  static const String getEntryPersonalizationPath = '/v1/assistant/personalization';
   static const String getLearningOpsSummaryPath = '/v1/assistant/ops/learning-summary';
   static const String getPolicyPath = '/v1/assistant/policy';
   static const String getSkillSubscriptionPathTemplate = '/v1/assistant/skill-subscriptions/{subscriptionId}';

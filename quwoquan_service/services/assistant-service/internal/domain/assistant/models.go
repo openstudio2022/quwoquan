@@ -97,6 +97,23 @@ type AssistantPolicyView struct {
 	UpdatedAt *time.Time     `json:"updatedAt,omitempty"`
 }
 
+type AssistantEntryPersonalizationChipView struct {
+	ChipID     string `json:"chipId"`
+	Label      string `json:"label"`
+	ActionType string `json:"actionType"`
+	Value      string `json:"value,omitempty"`
+}
+
+type AssistantEntryPersonalizationView struct {
+	WelcomeMessage     string                                 `json:"welcomeMessage"`
+	SuggestionLines    []string                               `json:"suggestionLines"`
+	Chips              []AssistantEntryPersonalizationChipView `json:"chips"`
+	Personalized       bool                                   `json:"personalized"`
+	MatchedInterestTags []string                              `json:"matchedInterestTags,omitempty"`
+	MatchedSegments    []string                               `json:"matchedSegments,omitempty"`
+	LifecycleStage     string                                 `json:"lifecycleStage,omitempty"`
+}
+
 type SuggestedAction struct {
 	ActionID string         `json:"actionId"`
 	Type     string         `json:"type"`
@@ -185,6 +202,11 @@ type AssistantSearchCitationView struct {
 	CoverURL     string `json:"coverUrl,omitempty"`
 	BadgeLabel   string `json:"badgeLabel,omitempty"`
 	SourceDomain string `json:"sourceDomain,omitempty"`
+	URL          string  `json:"url,omitempty"`
+	DeepLink     string  `json:"deepLink,omitempty"`
+	Score        float64 `json:"score,omitempty"`
+	RecallSource string  `json:"recallSource,omitempty"`
+	ObjectTypeRef string `json:"objectTypeRef,omitempty"`
 }
 
 type AssistantSearchResultView struct {
@@ -210,4 +232,5 @@ type SearchRequest struct {
 	PersonaContextVersion string `json:"personaContextVersion,omitempty"`
 	SourceSurfaceID       string `json:"sourceSurfaceId,omitempty"`
 	FromGlobalSearch      bool   `json:"fromGlobalSearch,omitempty"`
+	ContextSnapshot       map[string]any `json:"contextSnapshot,omitempty"`
 }

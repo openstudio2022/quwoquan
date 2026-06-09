@@ -25,6 +25,7 @@ class ChatApiMetadata {
     'ListContacts': '/v1/chat/contacts',
     'ListConversationTimestamps': '/v1/chat/conversations/timestamps',
     'ListConversations': '/v1/chat/conversations',
+    'ListGroupCandidates': '/v1/chat/group-candidates',
     'ListInbox': '/v1/chat/inbox',
     'ListMembers': '/v1/chat/conversations/{conversationId}/members',
     'ListMessages': '/v1/chat/conversations/{conversationId}/messages',
@@ -56,6 +57,7 @@ class ChatApiMetadata {
     'ListContacts': 'GET',
     'ListConversationTimestamps': 'GET',
     'ListConversations': 'GET',
+    'ListGroupCandidates': 'GET',
     'ListInbox': 'GET',
     'ListMembers': 'GET',
     'ListMessages': 'GET',
@@ -88,6 +90,7 @@ class ChatApiMetadata {
     'ListContacts': 'public',
     'ListConversationTimestamps': 'public',
     'ListConversations': 'required',
+    'ListGroupCandidates': 'required',
     'ListInbox': 'required',
     'ListMembers': 'public',
     'ListMessages': 'public',
@@ -118,6 +121,7 @@ class ChatApiMetadata {
   static const String listContactsOperation = 'ListContacts';
   static const String listConversationTimestampsOperation = 'ListConversationTimestamps';
   static const String listConversationsOperation = 'ListConversations';
+  static const String listGroupCandidatesOperation = 'ListGroupCandidates';
   static const String listInboxOperation = 'ListInbox';
   static const String listMembersOperation = 'ListMembers';
   static const String listMessagesOperation = 'ListMessages';
@@ -173,6 +177,7 @@ class ChatApiMetadata {
   static const String listContactsPath = '/v1/chat/contacts';
   static const String listConversationTimestampsPath = '/v1/chat/conversations/timestamps';
   static const String listConversationsPath = '/v1/chat/conversations';
+  static const String listGroupCandidatesPath = '/v1/chat/group-candidates';
   static const String listInboxPath = '/v1/chat/inbox';
   static const String listMembersPathTemplate = '/v1/chat/conversations/{conversationId}/members';
   static String listMembersPath({required String conversationId}) {

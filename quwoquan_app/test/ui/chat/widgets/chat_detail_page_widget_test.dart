@@ -1,9 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
@@ -17,7 +23,10 @@ Widget _scopedApp({
     overrides: [
       chatRepositoryProvider.overrideWithValue(repo),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
-        capabilityRepository ?? _SameInterestCapabilityRepository(),
+        capabilityRepository ?? _MutualCapabilityRepository(),
+      ),
+      realtimeConnectionManagerProvider.overrideWith(
+        _NoopRealtimeConnectionNotifier.new,
       ),
     ],
     child: MaterialApp(
@@ -31,29 +40,51 @@ Widget _scopedApp({
   );
 }
 
+Future<void> _disposeChatDetailWidget(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(minutes: 2));
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    Hive.init(
+      '${Directory.systemTemp.path}/qwq_chat_detail_page_test_${DateTime.now().microsecondsSinceEpoch}',
+    );
+  });
+
+  tearDown(() async {
+    await Hive.deleteFromDisk();
+  });
+
   // ──────────────────────────────────────────────────────────────────
   // 渲染契约
   // ──────────────────────────────────────────────────────────────────
   group('ChatDetailPage — 渲染契约', () {
     testWidgets('消息列表渲染至少 1 条消息可见', (tester) async {
+      addTearDown(() => _disposeChatDetailWidget(tester));
       await tester.pumpWidget(_scopedApp());
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(ChatDetailPage), findsOneWidget);
+      await _disposeChatDetailWidget(tester);
     });
 
     testWidgets('页面包含输入区域', (tester) async {
+      addTearDown(() => _disposeChatDetailWidget(tester));
       await tester.pumpWidget(_scopedApp());
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(ChatDetailPage), findsOneWidget);
       expect(find.byType(Scaffold), findsWidgets);
+      await _disposeChatDetailWidget(tester);
     });
 
-    testWidgets('非同好显示加同好关系条且不展示通话入口', (tester) async {
+    testWidgets('非互相关注显示关系提示条且不展示通话入口', (tester) async {
+      addTearDown(() => _disposeChatDetailWidget(tester));
       await tester.pumpWidget(
         _scopedApp(
           capabilityRepository: _FollowingOnlyCapabilityRepository(),
@@ -62,8 +93,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('成为同好后可直接发起语音和视频通话'), findsOneWidget);
-      expect(find.text('加同好'), findsOneWidget);
+      expect(find.text(UITextConstants.chatMutualFollowRtcHint), findsOneWidget);
 
       await tester.tap(find.byKey(TestKeys.chatInputMoreButton));
       await tester.pump();
@@ -71,6 +101,7 @@ void main() {
 
       expect(find.text('语音通话'), findsNothing);
       expect(find.text('视频通话'), findsNothing);
+      await _disposeChatDetailWidget(tester);
     });
   });
 
@@ -79,14 +110,17 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('ChatDetailPage — 交互契约', () {
     testWidgets('页面正常加载不崩溃', (tester) async {
+      addTearDown(() => _disposeChatDetailWidget(tester));
       await tester.pumpWidget(_scopedApp());
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(ChatDetailPage), findsOneWidget);
+      await _disposeChatDetailWidget(tester);
     });
 
     testWidgets('返回按钮回调正确触发', (tester) async {
+      addTearDown(() => _disposeChatDetailWidget(tester));
       var backCalled = false;
       await tester.pumpWidget(
         ProviderScope(
@@ -114,9 +148,11 @@ void main() {
       } else {
         expect(find.byType(ChatDetailPage), findsOneWidget);
       }
+      await _disposeChatDetailWidget(tester);
     });
 
-    testWidgets('同好打开更多面板后展示语音和视频通话入口', (tester) async {
+    testWidgets('互相关注打开更多面板后展示语音和视频通话入口', (tester) async {
+      addTearDown(() => _disposeChatDetailWidget(tester));
       await tester.pumpWidget(_scopedApp());
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
@@ -127,6 +163,7 @@ void main() {
 
       expect(find.text('语音通话'), findsOneWidget);
       expect(find.text('视频通话'), findsOneWidget);
+      await _disposeChatDetailWidget(tester);
     });
   });
 
@@ -135,6 +172,7 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('ChatDetailPage — 错误态渲染', () {
     testWidgets('加载失败时页面不崩溃', (tester) async {
+      addTearDown(() => _disposeChatDetailWidget(tester));
       await tester.pumpWidget(
         _scopedApp(mock: _ErrorChatRepository()),
       );
@@ -142,9 +180,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(ChatDetailPage), findsOneWidget);
+      await _disposeChatDetailWidget(tester);
     });
 
     testWidgets('空消息列表安全渲染', (tester) async {
+      addTearDown(() => _disposeChatDetailWidget(tester));
       await tester.pumpWidget(
         _scopedApp(mock: _EmptyMessagesChatRepository()),
       );
@@ -152,6 +192,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(ChatDetailPage), findsOneWidget);
+      await _disposeChatDetailWidget(tester);
     });
   });
 }
@@ -178,7 +219,24 @@ class _EmptyMessagesChatRepository extends MockChatRepository {
   }
 }
 
-class _SameInterestCapabilityRepository extends RelationshipCapabilityRepository {
+class _NoopRealtimeConnectionNotifier extends RealtimeConnectionNotifier {
+  @override
+  TransportState build() => TransportState.idle;
+
+  @override
+  void onAppForeground() {}
+
+  @override
+  void onAppBackground() {}
+
+  @override
+  void onEnterChatDetail(String conversationId) {}
+
+  @override
+  void onLeaveChatDetail() {}
+}
+
+class _MutualCapabilityRepository extends RelationshipCapabilityRepository {
   @override
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
@@ -187,11 +245,11 @@ class _SameInterestCapabilityRepository extends RelationshipCapabilityRepository
     return RelationshipCapabilityDto.fromMap(<String, dynamic>{
       'viewerSubAccountId': 'user_001',
       'targetSubAccountId': targetUserId,
-      'relationTier': 'same_interest',
+      'relationState': 'mutual',
       'canGreet': false,
+      'canCreateDirectConversation': true,
+      'canSendMessage': true,
       'canOpenConversation': true,
-      'canAddSameInterest': true,
-      'canSetCloseFriend': true,
       'canStartVoiceCall': true,
       'canStartVideoCall': true,
       'isBlocked': false,
@@ -209,11 +267,11 @@ class _FollowingOnlyCapabilityRepository extends RelationshipCapabilityRepositor
     return RelationshipCapabilityDto.fromMap(<String, dynamic>{
       'viewerSubAccountId': 'user_001',
       'targetSubAccountId': targetUserId,
-      'relationTier': 'following_only',
+      'relationState': 'following',
       'canGreet': true,
+      'canCreateDirectConversation': false,
+      'canSendMessage': false,
       'canOpenConversation': false,
-      'canAddSameInterest': false,
-      'canSetCloseFriend': false,
       'canStartVoiceCall': false,
       'canStartVideoCall': false,
       'isBlocked': false,

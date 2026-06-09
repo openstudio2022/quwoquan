@@ -139,6 +139,49 @@ flowchart TB
 - Snapshot 覆盖 heading、paragraph、figure、gallery、callout、HTML escape、权限过滤。
 - 规格与 `cross-platform-portability` 保持一致。
 
+## 多对象公开 Web 扩展（external-acquisition-and-deeplink，本次新增）
+
+公开 Web 从「仅内容」扩展到 **4 类对象**，作为搜索引擎与站外引流的统一落地面。「我」对外等同 user 公开视角，不单独建页。
+
+### 对象 → 公开 path → SEO 类型映射
+
+| 对象 | public path（来自 link_templates） | schema.org JSON-LD | 首屏可读字段 |
+|------|-----------------------------------|--------------------|--------------|
+| 内容/post | `post/{postId}` | Article（文章）/ ImageObject（图文）/ VideoObject（视频）/ SocialMediaPosting（动态） | 标题、摘要、封面/首帧、作者、时间、正文前几段 |
+| 圈子/circle | `circle/{circleId}` | Organization | 名称、封面、简介、成员数、精选内容预览 |
+| 用户/user | `u/{username}` | ProfilePage | 昵称、头像、简介、作品数、代表作预览 |
+| 实体主页/entity_homepage | `homepages/{homepageId}` | Place / LocalBusiness | 名称、品类、评分、地址、封面、内容预览 |
+
+### SEO 输出合同（落地）
+
+- `canonical`：`PUBLIC_WEB_BASE_URL + 对象 web.path_template`，与 App 详情同一身份。
+- `OG / Twitter card`：每类对象输出 `og:title/og:description/og:image/og:type` 与 `twitter:card`，图片走 CDN 资产，比例适配（内容 1.91:1，主页 1:1 头图）。
+- `JSON-LD`：按上表类型输出结构化数据。
+- `robots.txt` + 分类型 `sitemap.xml`（content/circle/user/homepages 各一组 sitemap index）。
+- 权限过滤：public 完整可索引；circle_visible 受控预览 + 不进 sitemap；private/审核未过 `noindex` 且不渲染正文，与 App 详情同一 visibility 判断。
+
+### 智能中转落地页（universal landing，协同 external-inbound-deeplink-routing）
+
+- path：`open?target_entity&target_id&token` 与短链 `s/{token}`（来自 `link_templates.yaml` 的 `transfer_pages`）。
+- 服务端按 UA 分流：
+  - 微信 Android/鸿蒙 → 内嵌 `wx-open-launch-app`（extinfo 透传 target+归因）。
+  - 微信 iOS → Universal Link 唤起。
+  - 系统浏览器 → UL/App Links/scheme 唤起。
+  - PC → 渲染对象公开 HTML 预览 + 下载 App CTA + 扫码安装。
+- 唤起失败按 external-inbound-deeplink-routing 的确定性降级阶梯兜底。
+- 中转页**只做解析与分流**，对象正文真相源仍是各领域；本节点不复制业务字段。
+
+### 安装转化（扩展到 4 类对象）
+
+- 手机/Pad Web：直接下载 + 分享安装页；唤起失败兜底下载。
+- PC Web：iPhone/iPad、Android/鸿蒙安装入口 + 扫码安装 + 分享到手机/微信。
+- 下载地址走 `CloudRuntimeConfig` + `--dart-define`，禁止组件硬编码（rule R28）。
+
+### 与口令/海报引流协同
+
+- 海报二维码默认指向短链 `s/{token}`，扫码进入中转页分流。
+- UGC 平台口令（`share_token`）经短链表解析回 `target_entity/target_id`，与中转页同源。
+
 ## 设计文档
 
 - [公开 HTML 服务 / 静态层设计](./public-html-service-design.md)

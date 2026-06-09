@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -70,6 +71,7 @@ type routeDef struct {
 	WritableFields []string      `yaml:"writable_fields"`
 	RequestFields  []string      `yaml:"request_fields"`
 	ResponseFields []string      `yaml:"response_fields"`
+	RequestEntity  string        `yaml:"request_entity"`
 	ResponseEntity string        `yaml:"response_entity"`
 	Security       routeSecurity `yaml:"security"`
 	// Back-compat: 旧写法 auth: required / auth_required: bool。统一收敛到 security.auth_mode。
@@ -221,17 +223,17 @@ type discoveryTabDef struct {
 
 // homeChannelDef：首页频道运营可配置项（端 meta 默认 + /v1/config/app 远程覆盖）。
 type homeChannelDef struct {
-	ID                      string            `yaml:"id"`
-	LabelKey                string            `yaml:"label_key"`
-	Template                string            `yaml:"template"`
-	LayoutTemplate          string            `yaml:"layout_template"`
-	PhoneColumns            int               `yaml:"phone_columns"`
-	SupportsFullSpanModules bool              `yaml:"supports_full_span_modules"`
-	IntersectionModulePolicy string           `yaml:"intersection_module_policy"`
-	ContentCardPolicy       string            `yaml:"content_card_policy"`
-	FeedQuery               map[string]string `yaml:"feed_query"`
-	MoodCopyKey             string            `yaml:"mood_copy_key"`
-	Order                   int               `yaml:"order"`
+	ID                       string            `yaml:"id"`
+	LabelKey                 string            `yaml:"label_key"`
+	Template                 string            `yaml:"template"`
+	LayoutTemplate           string            `yaml:"layout_template"`
+	PhoneColumns             int               `yaml:"phone_columns"`
+	SupportsFullSpanModules  bool              `yaml:"supports_full_span_modules"`
+	IntersectionModulePolicy string            `yaml:"intersection_module_policy"`
+	ContentCardPolicy        string            `yaml:"content_card_policy"`
+	FeedQuery                map[string]string `yaml:"feed_query"`
+	MoodCopyKey              string            `yaml:"mood_copy_key"`
+	Order                    int               `yaml:"order"`
 }
 
 type discoveryRailDef struct {
@@ -411,6 +413,17 @@ type searchToolContractDef struct {
 	InternalOptionalFields []string `yaml:"internal_optional_fields"`
 }
 
+type retrieveContractDef struct {
+	Name            string   `yaml:"name"`
+	Description     string   `yaml:"description"`
+	MatchConditions []string `yaml:"match_conditions"`
+	FilterFields    []string `yaml:"filter_fields"`
+	PageFields      []string `yaml:"page_fields"`
+	ResponseFields  []string `yaml:"response_fields"`
+	HitFields       []string `yaml:"hit_fields"`
+	ForbiddenFields []string `yaml:"forbidden_fields"`
+}
+
 type searchContractFile struct {
 	Version             int                       `yaml:"version"`
 	Modes               []searchNamedValueDef     `yaml:"modes"`
@@ -420,6 +433,7 @@ type searchContractFile struct {
 	ContentTypeFilters  []searchNamedValueDef     `yaml:"content_type_filters"`
 	Defaults            searchContractDefaultsDef `yaml:"defaults"`
 	ToolContract        searchToolContractDef     `yaml:"tool_contract"`
+	RetrieveContract    retrieveContractDef       `yaml:"retrieve_contract"`
 }
 
 type searchObjectTypeDef struct {
@@ -436,9 +450,18 @@ type searchSectionKindDef struct {
 	DefaultObjectTypes []string `yaml:"default_object_types"`
 }
 
+type aiTargetDef struct {
+	ID          string `yaml:"id"`
+	Label       string `yaml:"label"`
+	ObjectType  string `yaml:"object_type"`
+	ContentType string `yaml:"content_type"`
+	Description string `yaml:"description"`
+}
+
 type searchObjectsFile struct {
 	Version      int                    `yaml:"version"`
 	ObjectTypes  []searchObjectTypeDef  `yaml:"object_types"`
+	AITargets    []aiTargetDef          `yaml:"ai_targets"`
 	SectionKinds []searchSectionKindDef `yaml:"section_kinds"`
 }
 
@@ -448,9 +471,15 @@ func main() {
 	var metadataDir string
 	var appDir string
 	var integrationServiceDir string
+	var rtcServiceDir string
+	var chatServiceDir string
+	var userServiceDir string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&appDir, "app-dir", "../quwoquan_app", "app root directory")
 	flag.StringVar(&integrationServiceDir, "integration-service-dir", "", "integration-service root (optional, generates Go location_metadata.go)")
+	flag.StringVar(&rtcServiceDir, "rtc-service-dir", "", "rtc-service root (optional, generates Go rtc errors.go)")
+	flag.StringVar(&chatServiceDir, "chat-service-dir", "", "chat-service root (optional, generates Go chat errors.go)")
+	flag.StringVar(&userServiceDir, "user-service-dir", "", "user-service root (optional, generates Go user greeting errors.go)")
 	flag.Parse()
 
 	shared, err := readShared(filepath.Join(metadataDir, "_shared", "types.yaml"))
@@ -568,6 +597,19 @@ func main() {
 		writeFile(filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_errors.g.dart"), out)
 	}
 
+	// 3a2. 生成 chat_errors.g.dart（ChatErrorCode enum + messages）
+	chatConversationDir := filepath.Join(metadataDir, "messages", "conversation")
+	if chatErrsDef, err := readErrors(filepath.Join(chatConversationDir, "errors.yaml")); err == nil {
+		out := renderChatErrorsDart(chatErrsDef)
+		writeFile(filepath.Join(appDir, "lib", "cloud", "chat", "generated", "chat_errors.g.dart"), out)
+		if chatServiceDir != "" {
+			writeFile(
+				filepath.Join(chatServiceDir, "internal", "generated", "errors.go"),
+				renderChatErrorsGo(chatErrsDef),
+			)
+		}
+	}
+
 	// 3b. 生成 content_behaviors.g.dart（ContentBehaviorTracker）
 	if behDef, err := readBehaviors(filepath.Join(postDir, "behaviors.yaml")); err == nil {
 		out := renderContentBehaviorsDart(behDef)
@@ -598,6 +640,18 @@ func main() {
 	if userUIDef != nil {
 		out := renderUserProfileUIConfigDart(userUIDef)
 		writeFile(filepath.Join(appDir, "lib", "cloud", "user", "generated", "user_profile_ui_config.g.dart"), out)
+	}
+	if userErrsDef, err := readUserDomainErrors(metadataDir); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "user", "user_errors.g.dart"),
+			renderUserErrorsDart(userErrsDef),
+		)
+		if userServiceDir != "" {
+			writeFile(
+				filepath.Join(userServiceDir, "internal", "generated", "errors.go"),
+				renderUserErrorsGo(userErrsDef),
+			)
+		}
 	}
 
 	// 2b. 生成 integration/location 元数据（路径、response key）
@@ -760,6 +814,19 @@ func main() {
 	}
 	if err := writeRtcRequestWires(appDir, metadataDir); err != nil {
 		exitErr(err)
+	}
+	// rtc errors（RtcErrorCode Dart enum + rtc-service Go errors.go），唯一真相源 errors.yaml
+	if rtcErrs, err := readErrors(filepath.Join(metadataDir, "rtc", "call_session", "errors.yaml")); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "rtc", "generated", "rtc_errors.g.dart"),
+			renderRtcErrorsDart(rtcErrs),
+		)
+		if rtcServiceDir != "" {
+			writeFile(
+				filepath.Join(rtcServiceDir, "internal", "generated", "errors.go"),
+				renderRtcErrorsGo(rtcErrs),
+			)
+		}
 	}
 	writeFile(
 		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "app_request_page_ids.g.dart"),
@@ -1509,6 +1576,20 @@ func renderSearchContractDart(contract *searchContractFile) string {
 	b.WriteString("    ...optionalFields,\n")
 	b.WriteString("    ...internalOptionalFields,\n")
 	b.WriteString("  ];\n")
+	b.WriteString("}\n\n")
+
+	rc := contract.RetrieveContract
+	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
+	b.WriteString("class RetrieveToolContract {\n")
+	b.WriteString("  const RetrieveToolContract._();\n\n")
+	b.WriteString(fmt.Sprintf("  static const String name = '%s';\n", escapeDartString(rc.Name)))
+	b.WriteString(fmt.Sprintf("  static const String description = '%s';\n", escapeDartString(rc.Description)))
+	b.WriteString(fmt.Sprintf("  static const List<String> matchConditions = %s;\n", renderStringListLiteral(rc.MatchConditions)))
+	b.WriteString(fmt.Sprintf("  static const List<String> filterFields = %s;\n", renderStringListLiteral(rc.FilterFields)))
+	b.WriteString(fmt.Sprintf("  static const List<String> pageFields = %s;\n", renderStringListLiteral(rc.PageFields)))
+	b.WriteString(fmt.Sprintf("  static const List<String> responseFields = %s;\n", renderStringListLiteral(rc.ResponseFields)))
+	b.WriteString(fmt.Sprintf("  static const List<String> hitFields = %s;\n", renderStringListLiteral(rc.HitFields)))
+	b.WriteString(fmt.Sprintf("  static const List<String> forbiddenFields = %s;\n", renderStringListLiteral(rc.ForbiddenFields)))
 	b.WriteString("}\n")
 	return b.String()
 }
@@ -1605,6 +1686,67 @@ func renderSearchRegistryDart(objects *searchObjectsFile) string {
 	b.WriteString("    return null;\n")
 	b.WriteString("  }\n")
 	b.WriteString("}\n")
+
+	if len(objects.AITargets) > 0 {
+		b.WriteString("\n")
+		b.WriteString("// AI/App-facing retrieve target taxonomy. Only these object names are\n")
+		b.WriteString("// exposed on the retrieve contract; internal object types stay private.\n")
+		b.WriteString("enum RetrieveTarget {\n")
+		for _, item := range objects.AITargets {
+			b.WriteString(fmt.Sprintf("  %s('%s'),\n", toDartValueName(item.ID), item.ID))
+		}
+		b.WriteString("  ;\n\n")
+		b.WriteString("  const RetrieveTarget(this.wireValue);\n\n")
+		b.WriteString("  final String wireValue;\n\n")
+		b.WriteString("  static RetrieveTarget? fromWire(String? value) {\n")
+		b.WriteString("    switch ((value ?? '').trim()) {\n")
+		for _, item := range objects.AITargets {
+			b.WriteString(fmt.Sprintf("      case '%s':\n", item.ID))
+			b.WriteString(fmt.Sprintf("        return RetrieveTarget.%s;\n", toDartValueName(item.ID)))
+		}
+		b.WriteString("      default:\n")
+		b.WriteString("        return null;\n")
+		b.WriteString("    }\n")
+		b.WriteString("  }\n")
+		b.WriteString("}\n\n")
+
+		b.WriteString("class RetrieveTargetEntry {\n")
+		b.WriteString("  const RetrieveTargetEntry({\n")
+		b.WriteString("    required this.target,\n")
+		b.WriteString("    required this.label,\n")
+		b.WriteString("    required this.objectType,\n")
+		b.WriteString("    required this.contentType,\n")
+		b.WriteString("  });\n\n")
+		b.WriteString("  final RetrieveTarget target;\n")
+		b.WriteString("  final String label;\n")
+		b.WriteString("  final SearchObjectType objectType;\n")
+		b.WriteString("  final String contentType;\n")
+		b.WriteString("}\n\n")
+
+		b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
+		b.WriteString("class RetrieveTargetRegistry {\n")
+		b.WriteString("  const RetrieveTargetRegistry._();\n\n")
+		b.WriteString("  static const List<RetrieveTargetEntry> targets = <RetrieveTargetEntry>[\n")
+		for _, item := range objects.AITargets {
+			b.WriteString("    RetrieveTargetEntry(\n")
+			b.WriteString(fmt.Sprintf("      target: RetrieveTarget.%s,\n", toDartValueName(item.ID)))
+			b.WriteString(fmt.Sprintf("      label: '%s',\n", escapeDartString(item.Label)))
+			b.WriteString(fmt.Sprintf("      objectType: SearchObjectType.%s,\n", toDartValueName(item.ObjectType)))
+			b.WriteString(fmt.Sprintf("      contentType: '%s',\n", escapeDartString(item.ContentType)))
+			b.WriteString("    ),\n")
+		}
+		b.WriteString("  ];\n\n")
+		b.WriteString("  static RetrieveTargetEntry? entryFor(RetrieveTarget target) {\n")
+		b.WriteString("    for (final entry in targets) {\n")
+		b.WriteString("      if (entry.target == target) {\n")
+		b.WriteString("        return entry;\n")
+		b.WriteString("      }\n")
+		b.WriteString("    }\n")
+		b.WriteString("    return null;\n")
+		b.WriteString("  }\n")
+		b.WriteString("}\n")
+	}
+
 	return b.String()
 }
 
@@ -2857,6 +2999,45 @@ func readErrors(path string) (*errorsFile, error) {
 	return &parsed, yaml.Unmarshal(data, &parsed)
 }
 
+func readMergedErrors(paths []string) (*errorsFile, error) {
+	merged := &errorsFile{}
+	for _, path := range paths {
+		ef, err := readErrors(path)
+		if err != nil {
+			return nil, err
+		}
+		if merged.Domain == "" {
+			merged.Domain = ef.Domain
+		}
+		merged.Errors = append(merged.Errors, ef.Errors...)
+	}
+	return merged, nil
+}
+
+func readUserDomainErrors(metadataDir string) (*errorsFile, error) {
+	root := filepath.Join(metadataDir, "user")
+	var paths []string
+	if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if filepath.Base(path) == "errors.yaml" {
+			paths = append(paths, path)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	sort.Strings(paths)
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no user errors metadata found under %s", root)
+	}
+	return readMergedErrors(paths)
+}
+
 func readBehaviors(path string) (*behaviorsFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -2981,6 +3162,168 @@ func renderContentErrorsDart(ef *errorsFile) string {
 	return b.String()
 }
 
+func renderChatErrorsDart(ef *errorsFile) string {
+	var b strings.Builder
+	b.WriteString("// Code generated by tools/codegen_app_metadata from messages/conversation/errors.yaml. DO NOT EDIT.\n")
+	b.WriteString("// ignore_for_file: constant_identifier_names\n\n")
+
+	b.WriteString("enum ChatErrorCode {\n")
+	for _, e := range ef.Errors {
+		b.WriteString(fmt.Sprintf("  %s('%s', '%s', %d),\n", e.DartConst, e.Code, strings.ReplaceAll(e.UserMessage["zh"], "'", "\\'"), e.HTTPStatus))
+	}
+	b.WriteString("  unknown('', '消息服务异常，请稍后重试', 500);\n\n")
+
+	b.WriteString("  final String code;\n")
+	b.WriteString("  final String defaultMessage;\n")
+	b.WriteString("  final int httpStatus;\n\n")
+	b.WriteString("  const ChatErrorCode(this.code, this.defaultMessage, this.httpStatus);\n\n")
+	b.WriteString("  static ChatErrorCode fromCode(String code) {\n")
+	b.WriteString("    for (final value in values) {\n")
+	b.WriteString("      if (value.code == code) return value;\n")
+	b.WriteString("    }\n")
+	b.WriteString("    return ChatErrorCode.unknown;\n")
+	b.WriteString("  }\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
+	b.WriteString("class ChatErrorMessages {\n")
+	b.WriteString("  const ChatErrorMessages._();\n\n")
+	b.WriteString("  static const Map<ChatErrorCode, String> zh = <ChatErrorCode, String>{\n")
+	for _, e := range ef.Errors {
+		if msg, ok := e.UserMessage["zh"]; ok {
+			b.WriteString(fmt.Sprintf("    ChatErrorCode.%s: '%s',\n", e.DartConst, strings.ReplaceAll(msg, "'", "\\'")))
+		}
+	}
+	b.WriteString("  };\n\n")
+	b.WriteString("  static const Map<ChatErrorCode, String> en = <ChatErrorCode, String>{\n")
+	for _, e := range ef.Errors {
+		if msg, ok := e.UserMessage["en"]; ok {
+			b.WriteString(fmt.Sprintf("    ChatErrorCode.%s: '%s',\n", e.DartConst, strings.ReplaceAll(msg, "'", "\\'")))
+		}
+	}
+	b.WriteString("  };\n")
+	b.WriteString("}\n")
+
+	return b.String()
+}
+
+func renderUserErrorsDart(ef *errorsFile) string {
+	var b strings.Builder
+	b.WriteString("// Code generated by tools/codegen_app_metadata from user/**/errors.yaml. DO NOT EDIT.\n")
+	b.WriteString("// ignore_for_file: constant_identifier_names\n\n")
+	b.WriteString("enum UserErrorCode {\n")
+	for _, e := range ef.Errors {
+		if e.DartConst == "" {
+			continue
+		}
+		msg := strings.ReplaceAll(goErrorUserMessage(e), "\\", "\\\\")
+		msg = strings.ReplaceAll(msg, "'", "\\'")
+		b.WriteString(fmt.Sprintf("  %s('%s', '%s', %d),\n", e.DartConst, e.Code, msg, e.HTTPStatus))
+	}
+	b.WriteString(";\n\n")
+	b.WriteString("  final String code;\n")
+	b.WriteString("  final String defaultMessage;\n")
+	b.WriteString("  final int httpStatus;\n\n")
+	b.WriteString("  const UserErrorCode(this.code, this.defaultMessage, this.httpStatus);\n\n")
+	b.WriteString("  static UserErrorCode? fromCode(String code) {\n")
+	b.WriteString("    for (final e in values) {\n")
+	b.WriteString("      if (e.code == code) return e;\n")
+	b.WriteString("    }\n")
+	b.WriteString("    return null;\n")
+	b.WriteString("  }\n")
+	b.WriteString("}\n")
+	return b.String()
+}
+
+type goErrorsFileOptions struct {
+	sourcePath   string
+	commentLines []string
+	extraImports []string
+	trailer      string
+}
+
+func goErrorHelperName(goConst string) string {
+	if strings.HasPrefix(goConst, "Err") {
+		return "AppErrorFrom" + goConst[3:]
+	}
+	return "AppErrorFrom" + goConst
+}
+
+func goErrorUserMessage(e errorDef) string {
+	msg := e.UserMessage["zh"]
+	if msg == "" {
+		msg = e.UserMessage["en"]
+	}
+	if msg == "" {
+		msg = "请稍后重试"
+	}
+	return msg
+}
+
+func renderGoErrorsFile(ef *errorsFile, opts goErrorsFileOptions) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("// Code generated by tools/codegen_app_metadata from %s. DO NOT EDIT.\n", opts.sourcePath))
+	b.WriteString("package generated\n\n")
+	b.WriteString("import (\n")
+	for _, imp := range opts.extraImports {
+		b.WriteString(fmt.Sprintf("\t%q\n", imp))
+	}
+	b.WriteString("\t\"errors\"\n\n")
+	b.WriteString("\trerrors \"quwoquan_service/runtime/errors\"\n")
+	b.WriteString(")\n\n")
+	for _, line := range opts.commentLines {
+		b.WriteString("// " + line + "\n")
+	}
+	b.WriteString("//\n//nolint:gochecknoglobals\n")
+	b.WriteString("var (\n")
+	for _, e := range ef.Errors {
+		if e.GoConst == "" {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("\t%s = errors.New(%q)\n", e.GoConst, e.Code))
+	}
+	b.WriteString(")\n\n")
+	for _, e := range ef.Errors {
+		if e.GoConst == "" {
+			continue
+		}
+		funcName := goErrorHelperName(e.GoConst)
+		b.WriteString(fmt.Sprintf("// %s returns *AppError for %s (user_message from errors.yaml).\n", funcName, e.Code))
+		b.WriteString(fmt.Sprintf("func %s(debugMessage string) *rerrors.AppError {\n", funcName))
+		b.WriteString(fmt.Sprintf("\tcode, _ := rerrors.ParseCode(string(%s.Error()))\n", e.GoConst))
+		b.WriteString(fmt.Sprintf("\treturn rerrors.NewAppError(code, %q, debugMessage)\n", goErrorUserMessage(e)))
+		b.WriteString("}\n\n")
+	}
+	if opts.trailer != "" {
+		b.WriteString(opts.trailer)
+		if !strings.HasSuffix(opts.trailer, "\n") {
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
+
+func renderChatErrorsGo(ef *errorsFile) string {
+	return renderGoErrorsFile(ef, goErrorsFileOptions{
+		sourcePath:   "messages/conversation/errors.yaml",
+		commentLines: []string{"Chat error sentinels and helpers. user_message from errors.yaml user_message.zh."},
+	})
+}
+
+func renderUserGreetingErrorsGo(ef *errorsFile) string {
+	return renderGoErrorsFile(ef, goErrorsFileOptions{
+		sourcePath:   "user/greeting_request/errors.yaml",
+		commentLines: []string{"Greeting request error sentinels and helpers. user_message from errors.yaml user_message.zh."},
+	})
+}
+
+func renderUserErrorsGo(ef *errorsFile) string {
+	return renderGoErrorsFile(ef, goErrorsFileOptions{
+		sourcePath:   "user/**/errors.yaml",
+		commentLines: []string{"User domain error sentinels and helpers. user_message from errors.yaml user_message.zh."},
+	})
+}
+
 // renderIntegrationLocationErrorsDart 生成 IntegrationLocationErrorCode + IntegrationLocationErrorMessages
 // code 与 enum 双向可转换，toDisplayMessage 使用 l10n_key 映射到 AppLocalizations
 func renderIntegrationLocationErrorsDart(ef *errorsFile) string {
@@ -3056,56 +3399,63 @@ func renderIntegrationLocationErrorsDart(ef *errorsFile) string {
 // renderIntegrationLocationErrorsGo 从 errors.yaml 生成 integration-service errors.go
 // Err* 哨兵 + AppErrorFrom*(debugMessage)，user_message 取 user_message.zh，code 与 message 均来自 metadata
 func renderIntegrationLocationErrorsGo(ef *errorsFile) string {
+	return renderGoErrorsFile(ef, goErrorsFileOptions{
+		sourcePath:   "integration/location/errors.yaml",
+		commentLines: []string{"Integration location error sentinels and helpers.", "user_message from errors.yaml user_message.zh"},
+		extraImports: []string{"context"},
+		trailer: `// IsTimeout returns true if err is context.DeadlineExceeded or contains upstream timeout semantics.
+func IsTimeout(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded)
+}
+`,
+	})
+}
+
+// renderRtcErrorsDart 从 rtc/call_session/errors.yaml 生成 RtcErrorCode enum。
+// 形状与既有手维护产物对齐（code/defaultMessage/httpStatus + fromCode + isUser/isSystem），
+// 但改为唯一真相源驱动，杜绝旧关系门禁 / blocked 等漂移。
+func renderRtcErrorsDart(ef *errorsFile) string {
 	var b strings.Builder
-	b.WriteString("// Code generated by tools/codegen_app_metadata from integration/location/errors.yaml. DO NOT EDIT.\n")
-	b.WriteString("package generated\n\n")
-	b.WriteString("import (\n")
-	b.WriteString("\t\"context\"\n")
-	b.WriteString("\t\"errors\"\n\n")
-	b.WriteString("\trerrors \"quwoquan_service/runtime/errors\"\n")
-	b.WriteString(")\n\n")
-	b.WriteString("// Integration location error sentinels and helpers.\n")
-	b.WriteString("// user_message from errors.yaml user_message.zh\n")
-	b.WriteString("//\n//nolint:gochecknoglobals\n")
-	b.WriteString("var (\n")
-	for _, e := range ef.Errors {
-		if e.GoConst == "" {
+	b.WriteString("// Code generated by tools/codegen_app_metadata from rtc/call_session/errors.yaml. DO NOT EDIT.\n")
+	b.WriteString("// ignore_for_file: constant_identifier_names\n\n")
+	b.WriteString("enum RtcErrorCode {\n")
+	last := len(ef.Errors) - 1
+	for i, e := range ef.Errors {
+		if e.DartConst == "" {
 			continue
 		}
-		b.WriteString(fmt.Sprintf("\t%s = errors.New(%q)\n", e.GoConst, e.Code))
+		msg := strings.ReplaceAll(e.UserMessage["zh"], "\\", "\\\\")
+		msg = strings.ReplaceAll(msg, "'", "\\'")
+		sep := ","
+		if i == last {
+			sep = ";"
+		}
+		b.WriteString(fmt.Sprintf("  %s('%s', '%s', %d)%s\n", e.DartConst, e.Code, msg, e.HTTPStatus, sep))
 	}
-	b.WriteString(")\n\n")
-	for _, e := range ef.Errors {
-		if e.GoConst == "" {
-			continue
-		}
-		msgZh := e.UserMessage["zh"]
-		if msgZh == "" {
-			msgZh = e.UserMessage["en"]
-		}
-		if msgZh == "" {
-			msgZh = "请稍后重试"
-		}
-		msgZh = strings.ReplaceAll(msgZh, "\\", "\\\\")
-		msgZh = strings.ReplaceAll(msgZh, "\"", "\\\"")
-		// AppErrorFrom + go_const[3:] e.g. ErrLocationUnavailable -> AppErrorFromLocationUnavailable
-		funcName := "AppErrorFrom"
-		if len(e.GoConst) > 3 && e.GoConst[:3] == "Err" {
-			funcName += e.GoConst[3:]
-		} else {
-			funcName += e.GoConst
-		}
-		b.WriteString(fmt.Sprintf("// %s returns *AppError for %s (user_message from errors.yaml).\n", funcName, e.Code))
-		b.WriteString(fmt.Sprintf("func %s(debugMessage string) *rerrors.AppError {\n", funcName))
-		b.WriteString(fmt.Sprintf("\tcode, _ := rerrors.ParseCode(string(%s.Error()))\n", e.GoConst))
-		b.WriteString(fmt.Sprintf("\treturn rerrors.NewAppError(code, %q, debugMessage)\n", msgZh))
-		b.WriteString("}\n\n")
-	}
-	b.WriteString("// IsTimeout returns true if err is context.DeadlineExceeded or contains upstream timeout semantics.\n")
-	b.WriteString("func IsTimeout(err error) bool {\n")
-	b.WriteString("\treturn errors.Is(err, context.DeadlineExceeded)\n")
+	b.WriteString("\n  final String code;\n")
+	b.WriteString("  final String defaultMessage;\n")
+	b.WriteString("  final int httpStatus;\n\n")
+	b.WriteString("  const RtcErrorCode(this.code, this.defaultMessage, this.httpStatus);\n\n")
+	b.WriteString("  static RtcErrorCode? fromCode(String code) {\n")
+	b.WriteString("    for (final v in values) {\n")
+	b.WriteString("      if (v.code == code) return v;\n")
+	b.WriteString("    }\n")
+	b.WriteString("    return null;\n")
+	b.WriteString("  }\n\n")
+	b.WriteString("  bool get isUserError => code.startsWith('RTC.USER.');\n\n")
+	b.WriteString("  bool get isSystemError => code.startsWith('RTC.SYSTEM.');\n")
 	b.WriteString("}\n")
 	return b.String()
+}
+
+// renderRtcErrorsGo 从 rtc/call_session/errors.yaml 生成 rtc-service errors.go
+// （Err* 哨兵 + AppErrorFrom*(debugMessage)），code/message 均来自 metadata，
+// 取代 orchestrator 里手写的 rterr.NewCode(...,"中文") 旁路。
+func renderRtcErrorsGo(ef *errorsFile) string {
+	return renderGoErrorsFile(ef, goErrorsFileOptions{
+		sourcePath:   "rtc/call_session/errors.yaml",
+		commentLines: []string{"RTC error sentinels and helpers. user_message from errors.yaml user_message.zh."},
+	})
 }
 
 func renderContentBehaviorsDart(bf *behaviorsFile) string {

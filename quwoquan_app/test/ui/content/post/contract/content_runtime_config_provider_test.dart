@@ -19,6 +19,11 @@ class _RuntimeConfigRepository extends MockContentRepository {
       ContentAppConfigWire.fromResponseObject(_config);
 }
 
+ContentRuntimeConfigState _effectiveState(ProviderContainer container) {
+  return container.read(appRemoteConfigProvider).pending ??
+      container.read(contentRuntimeConfigProvider);
+}
+
 void main() {
   test('mock mode 会刷新出文章阅读相关 runtime flags', () async {
     final container = ProviderContainer();
@@ -27,7 +32,7 @@ void main() {
     container.read(contentRuntimeConfigProvider);
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
-    final state = container.read(contentRuntimeConfigProvider);
+    final state = _effectiveState(container);
 
     expect(state.isEnabled('enable_create_action_entry'), isTrue);
     expect(state.isEnabled('enable_unified_create_editor'), isTrue);
@@ -77,7 +82,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
 
-    final state = container.read(contentRuntimeConfigProvider);
+    final state = _effectiveState(container);
 
     expect(state.isEnabled('enable_create_action_entry'), isFalse);
     expect(state.isEnabled('enable_unified_create_editor'), isTrue);
@@ -147,8 +152,8 @@ void main() {
       },
     });
 
-    await container.read(contentRuntimeConfigProvider.notifier).refresh();
-    final state = container.read(contentRuntimeConfigProvider);
+    await container.read(appRemoteConfigProvider.notifier).refresh();
+    final state = _effectiveState(container);
 
     expect(state.isEnabled('enable_identity_share_template'), isFalse);
     expect(state.isEnabled('enable_assistant_content_identity_index'), isFalse);
@@ -189,7 +194,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
 
-    final state = container.read(contentRuntimeConfigProvider);
+    final state = _effectiveState(container);
 
     expect(state.clientStateSync.flushDelay, const Duration(seconds: 15));
     expect(state.clientStateSync.retryDelay, const Duration(seconds: 90));
@@ -235,7 +240,8 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
 
-    expect(container.read(personaManagementFeatureFlagProvider), isFalse);
-    expect(container.read(personaProfileSyncFeatureFlagProvider), isFalse);
+    final pending = container.read(appRemoteConfigProvider).pending;
+    expect(pending?.isEnabled('ops.user.persona_management_v1'), isFalse);
+    expect(pending?.isEnabled('ops.user.persona_profile_sync_v1'), isFalse);
   });
 }

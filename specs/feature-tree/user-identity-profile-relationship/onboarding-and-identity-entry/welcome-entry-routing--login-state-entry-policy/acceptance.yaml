@@ -7,30 +7,48 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: onboarding-and-identity-entry
 scope:
-  summary: welcome entry routing  login state entry policy 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 欢迎页、登录页与强入口登录门的落点策略验收；冻结“关闭回安全态、成功到目标态”的无死循环契约。
+  in_scope:
+  - welcome_screen.dart 的首次打开、手动退出、会话过期三种提示语义
+  - auth_gate.dart / app_router.dart / main_app_shell.dart 的强入口守卫与安全回退
+  - 游客关闭登录、登录成功 redirect、AuthContinuation 自动续接
+  out_of_scope:
+  - 微信 / Apple 第三方登录 SDK 接入细节
+  - 账号注销、恢复申诉、数据导出等设置域生命周期动作
 gwt_acceptance:
   GWT1:
-    title: welcome entry routing  login state entry policy GWT
+    title: 强入口登录门关闭回安全态、成功到目标态
     given:
-    - 前置条件明确。
+    - 游客从消息、创作、分身管理等强入口进入登录页，或欢迎页主动触发登录引导。
     when:
-    - 用户或系统动作发生。
+    - 用户选择“稍后登录”关闭登录页，或完成登录返回原目标态。
     then:
-    - 可观察结果符合预期。
+    - 关闭登录页后落到 home / profile 游客态等安全页面，不会回到受限状态再次弹登录。
+    - 登录成功后优先回 redirect，其次执行 AuthContinuation，再次打开原动作时不要求用户手动重做。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 欢迎页、首页底栏、/create、/chat、/profile 相关登录门统一复用 safeLoginDismissFallback 与 AuthGateReason 契约。
+    edge_cases:
+    - /profile 本体允许游客浏览占位态，不得整页拦截形成“关闭登录 -> 再弹登录”回环。
+    - 会话过期触发重新登录时，关闭仍回安全态，成功仍回原目标态。
+    - following 频道等内部 UI 状态不得冒充真实路由参与强入口守卫。
+    contract_refs:
+    - quwoquan_app/lib/core/auth/auth_gate.dart
+    - quwoquan_app/lib/core/auth/auth_continuation.dart
+    - quwoquan_app/lib/app/navigation/app_router.dart
+    - quwoquan_app/lib/app/shell/main_app_shell.dart
+    performance_points:
+    - 登录门触发后的重定向决策不得引入额外异步等待；关闭或成功跳转在一次导航内完成。
     evidence:
       primary:
-      - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T1_contract
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/test/core/auth/required_route_gate_test.dart
+      - quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
+      - quwoquan_app/test/app/shell/main_app_shell_widget_test.dart
+      - quwoquan_app/test/ui/user/login_page_widget_test.dart
       recorded: []
     status: pending
 execution:

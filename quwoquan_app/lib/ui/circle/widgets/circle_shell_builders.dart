@@ -49,7 +49,9 @@ extension _CircleShellBuilders on _CircleShellState {
     required String? coverUrl,
   }) {
     final circle = state.circleData;
-    final hasConversation = (circle?.conversationId ?? '').trim().isNotEmpty;
+    final defaultGroupConversationId =
+        state.defaultPublicGroup?.conversationId?.trim() ?? '';
+    final hasConversation = defaultGroupConversationId.isNotEmpty;
     final summarySurface = AppColors.iosProfileSurface(context);
     final summaryBorder = AppColors.iosSeparator(
       context,
@@ -115,7 +117,7 @@ extension _CircleShellBuilders on _CircleShellState {
               stats: state.circleStats.forDetailRow(circle),
             ),
             SizedBox(height: AppSpacing.sm),
-            _buildIntersectionCard(isDark, circle?.tags ?? const <String>[]),
+            _buildIntersectionCard(isDark),
             CircleActionBar(
               isDark: isDark,
               role: state.role,
@@ -139,41 +141,29 @@ extension _CircleShellBuilders on _CircleShellState {
                   ? null
                   : () => _gatedJoinCircle(context, notifier),
               onOpenChat: hasConversation
-                  ? () => _openChat(context, circle!.conversationId!)
+                  ? () => _openChat(context, defaultGroupConversationId)
                   : null,
             ),
             if (state.error != null && state.error!.trim().isNotEmpty) ...[
               SizedBox(height: AppSpacing.sm),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerSm,
-                  vertical: AppSpacing.containerSm,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.largeBorderRadius,
+              AppSectionErrorCard(
+                semantic: UiErrorSemantic(
+                  category: UiErrorCategory.sectionLoad,
+                  scope: UiErrorScope.section,
+                  title: '圈子信息暂不可用',
+                  message: state.error!,
+                  primaryAction: const UiErrorAction(
+                    type: UiErrorActionType.retry,
+                    label: UITextConstants.tryAgain,
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      CupertinoIcons.exclamationmark_triangle_fill,
-                      size: AppSpacing.iconSmall,
-                      color: AppColors.error,
-                    ),
-                    SizedBox(width: AppSpacing.intraGroupSm),
-                    Expanded(
-                      child: Text(
-                        UITextConstants.loadFailed,
-                        style: TextStyle(
-                          fontSize: AppTypography.sm,
-                          color: AppColors.iosSecondaryLabel(context),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                margin: EdgeInsets.zero,
+                onAction: (action) async {
+                  if (action.type == UiErrorActionType.retry ||
+                      action.type == UiErrorActionType.resubmit) {
+                    await notifier.loadCircle();
+                  }
+                },
               ),
             ],
           ],
@@ -184,28 +174,18 @@ extension _CircleShellBuilders on _CircleShellState {
 
   /// 圈子交集卡「你认识的人在这」：当前用户 × 圈子的事实交集（relationship/identity 优先）。
   /// 无可解析交集（空/异步未就绪）则不占位（G2 不造假）。
-  Widget _buildIntersectionCard(bool isDark, List<String> tags) {
+  Widget _buildIntersectionCard(bool isDark) {
     final query = ObjectIntersectionQuery(
       objectAId: ref.watch(currentUserIdProvider),
       objectAType: 'user',
       objectBId: widget.circleId,
       objectBType: 'circle',
     );
-    if (!query.isResolvable) {
-      return const SizedBox.shrink();
-    }
-    final reasons = ref.watch(objectSharedReasonsProvider(query)).asData?.value;
-    final card = ObjectIntersectionCard.fromReasons(
+    return ObjectIntersectionSection(
+      query: query,
       title: UITextConstants.circleIntersectionTitle,
-      reasons: reasons,
       isDark: isDark,
-    );
-    if (card == null) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.sm),
-      child: card,
+      bottomPadding: AppSpacing.sm,
     );
   }
 
@@ -219,11 +199,10 @@ extension _CircleShellBuilders on _CircleShellState {
           top: 0,
           bottom: -_CircleShellState._surfaceBridge,
           child: coverUrl != null && coverUrl.isNotEmpty
-              ? Image.network(
-                  coverUrl,
+              ? AppCachedNetworkImage(
+                  imageUrl: coverUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      ColoredBox(color: bg),
+                  errorWidget: ColoredBox(color: bg),
                 )
               : ColoredBox(color: bg.withValues(alpha: 0.75)),
         ),
@@ -346,20 +325,34 @@ extension _CircleShellBuilders on _CircleShellState {
                               mainAxisAlignment: MainAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                CircleAvatar(
-                                  radius: AppSpacing.avatarUserSm / 2,
-                                  backgroundColor: actionBackground,
-                                  backgroundImage:
-                                      avatarUrl != null && avatarUrl.isNotEmpty
-                                      ? NetworkImage(avatarUrl)
-                                      : null,
-                                  child: avatarUrl == null || avatarUrl.isEmpty
-                                      ? Icon(
-                                          CupertinoIcons.person_3_fill,
-                                          size: AppSpacing.iconMedium,
-                                          color: compactForeground,
-                                        )
-                                      : null,
+                                ClipOval(
+                                  child: SizedBox(
+                                    width: AppSpacing.avatarUserSm,
+                                    height: AppSpacing.avatarUserSm,
+                                    child:
+                                        avatarUrl != null &&
+                                            avatarUrl.isNotEmpty
+                                        ? AppCachedNetworkImage(
+                                            imageUrl: avatarUrl,
+                                            fit: BoxFit.cover,
+                                            errorWidget: ColoredBox(
+                                              color: actionBackground,
+                                              child: Icon(
+                                                CupertinoIcons.person_3_fill,
+                                                size: AppSpacing.iconMedium,
+                                                color: compactForeground,
+                                              ),
+                                            ),
+                                          )
+                                        : ColoredBox(
+                                            color: actionBackground,
+                                            child: Icon(
+                                              CupertinoIcons.person_3_fill,
+                                              size: AppSpacing.iconMedium,
+                                              color: compactForeground,
+                                            ),
+                                          ),
+                                  ),
                                 ),
                                 SizedBox(width: AppSpacing.containerSm),
                                 Flexible(
@@ -508,7 +501,8 @@ extension _CircleShellBuilders on _CircleShellState {
                       isDark: isDark,
                       child: SectionChat(
                         circleId: widget.circleId,
-                        conversationId: circle?.conversationId,
+                        conversationId:
+                            state.defaultPublicGroup?.conversationId,
                         isDark: isDark,
                       ),
                     ),

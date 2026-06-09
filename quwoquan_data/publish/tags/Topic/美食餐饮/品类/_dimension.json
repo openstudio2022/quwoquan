@@ -1,0 +1,10 @@
+{
+  "label": "品类",
+  "labelEn": "Food Category",
+  "description": "按食物形态分类；与菜系（文化流派）正交——同一菜系可出现多种品类",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 18
+}

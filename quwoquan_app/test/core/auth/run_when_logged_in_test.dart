@@ -23,13 +23,26 @@ class _TestAuthSessionStore implements AuthSessionStore {
       accountState: authenticated ? 'active' : '',
       identityOrigin: authenticated ? 'phone' : '',
       installId: 'install-id',
+      lastRefreshAtEpochMs: 0,
+      lastForegroundAuthCheckAtEpochMs: 0,
       manualLoggedOut: false,
       launchPromptDismissed: true,
     );
   }
 
   @override
-  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+  Future<void> saveLoginResult(
+    AuthLoginResultDto result, {
+    AuthRememberedLoginMethod rememberedLoginMethod =
+        AuthRememberedLoginMethod.unknown,
+    String? rememberedLoginMaskedIdentifier,
+  }) async {}
+
+  @override
+  Future<void> saveRefreshedTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
@@ -39,6 +52,9 @@ class _TestAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> markLaunchPromptDismissed() async {}
+
+  @override
+  Future<void> markForegroundAuthCheckNow() async {}
 }
 
 void main() {

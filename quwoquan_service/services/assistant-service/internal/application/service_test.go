@@ -102,6 +102,57 @@ func TestListSkillsIncludesP0CloudManagedSkills(t *testing.T) {
 	}
 }
 
+func TestSearchXiaoquResultsUsesCanonicalCitations(t *testing.T) {
+	service := NewAssistantService(
+		persistence.NewMemoryEventStore(),
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+	)
+
+	result, err := service.SearchXiaoquResults(context.Background(), assistant.SearchRequest{
+		UserQuery:       "四川露营攻略",
+		SearchIntensity: "balanced",
+	})
+	if err != nil {
+		t.Fatalf("SearchXiaoquResults error: %v", err)
+	}
+	if len(result.Citations) < 2 {
+		t.Fatalf("expected canonical citations, got %#v", result.Citations)
+	}
+	seen := map[string]bool{}
+	for _, citation := range result.Citations {
+		if citation.ObjectType == "spec" || citation.ObjectType == "knowledge" {
+			t.Fatalf("placeholder citation must not be returned: %#v", citation)
+		}
+		// Retrieve contract exposes AI targets / web supplement, never internal
+		// object types like content.post or entity.homepage.
+		for _, forbidden := range []string{"content.post", "entity.homepage", "circle.group", "user.profile", "web.document"} {
+			if citation.ObjectType == forbidden {
+				t.Fatalf("internal object type leaked to AI citation: %q", citation.ObjectType)
+			}
+		}
+		seen[citation.ObjectType] = true
+		if citation.SourceDomain == "" || citation.ObjectID == "" || citation.Snippet == "" {
+			t.Fatalf("citation missing provenance fields: %#v", citation)
+		}
+		if citation.ObjectTypeRef != citation.ObjectType {
+			t.Fatalf("citation objectTypeRef must mirror target: %#v", citation)
+		}
+		if citation.RecallSource == "" {
+			t.Fatalf("citation recallSource must be set: %#v", citation)
+		}
+		if citation.Score <= 0 {
+			t.Fatalf("citation score must be positive: %#v", citation)
+		}
+	}
+	// Retrieve exposes AI targets plus a web supplement.
+	for _, target := range []string{"article", "entity", "web"} {
+		if !seen[target] {
+			t.Fatalf("missing citation target %q in %#v", target, result.Citations)
+		}
+	}
+}
+
 func TestDefaultSkillRuntimeRoutesDomainSkills(t *testing.T) {
 	cases := []struct {
 		name  string

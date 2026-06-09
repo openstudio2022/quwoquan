@@ -63,7 +63,8 @@ class CloudRequestHeaders {
     return <String, String>{
       'X-Client-Page-Id': pageId,
       'X-Client-Session-Id': sessionId,
-      'X-Client-Device-Actor-Id': ?deviceActorId,
+      if (deviceActorId != null && deviceActorId!.isNotEmpty)
+        'X-Client-Device-Actor-Id': deviceActorId!,
       'X-Client-Sent-At': nowIso,
       'X-Client-Device-Platform': platform(),
       'X-Client-App-Version': appVersion,
@@ -112,7 +113,8 @@ class CloudRequestHeaders {
       'X-Client-Operation-Id': operationId,
       if (routeId != null && routeId.isNotEmpty) 'X-Client-Route-Id': routeId,
       'X-Client-Session-Id': sessionId,
-      'X-Client-Device-Actor-Id': ?deviceActorId,
+      if (deviceActorId != null && deviceActorId!.isNotEmpty)
+        'X-Client-Device-Actor-Id': deviceActorId!,
       'X-Client-Sent-At': nowIso,
       'X-Client-Device-Platform': platform(),
       'X-Client-App-Version': appVersion,

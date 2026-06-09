@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-STATE_DIR="$ROOT_DIR/tmp/alpha_stack"
+STATE_DIR="$ROOT_DIR/state/local/alpha_stack"
 MEDIA_DIR="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
 
 eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile alpha-local --format shell-defaults)"
@@ -34,7 +34,7 @@ log_path = Path(sys.argv[3])
 argv = sys.argv[4:]
 
 log_path.parent.mkdir(parents=True, exist_ok=True)
-with log_path.open("ab", buffering=0) as log:
+with log_path.open("wb", buffering=0) as log:
     proc = subprocess.Popen(
         argv,
         stdout=log,
@@ -122,15 +122,21 @@ case "$ACTION" in
     stop_bg media-edge
     stop_bg media-origin
     start_bg media-origin \
-      python3 -m http.server "$MEDIA_ORIGIN_PORT" --bind 127.0.0.1 --directory "$MEDIA_DIR"
-    wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/image/post/fixture_photo_001/v1/cover.png" 30
+      python3 "$ROOT_DIR/agent_ops/deploy/lib/alpha_media_origin.py" \
+        --listen-host 127.0.0.1 \
+        --listen-port "$MEDIA_ORIGIN_PORT" \
+        --root-dir "$MEDIA_DIR"
+    wait_http_ok "$MEDIA_ORIGIN_BASE_URL/healthz" 30
+    wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
+    wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
     start_bg media-edge \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/http_reverse_proxy.py" \
         --listen-host 127.0.0.1 \
         --listen-port "$MEDIA_EDGE_PORT" \
         --target-base-url "$MEDIA_ORIGIN_BASE_URL"
     wait_http_ok "$MEDIA_BASE_URL/healthz" 30
-    wait_http_ok "$MEDIA_BASE_URL/media/image/post/fixture_photo_001/v1/cover.png" 30
+    wait_http_ok "$MEDIA_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
+    wait_http_ok "$MEDIA_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
     start_bg api-edge \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/mock_public_plane.py" \
         --listen-host 127.0.0.1 \
@@ -169,7 +175,7 @@ case "$ACTION" in
     status_one api-edge "$API_BASE_URL/healthz"
     status_one product-ops "$PRODUCT_OPS_BASE_URL/healthz"
     status_one media-edge "$MEDIA_BASE_URL/healthz"
-    status_one media-origin "$MEDIA_ORIGIN_BASE_URL/media/image/post/fixture_photo_001/v1/cover.png"
+    status_one media-origin "$MEDIA_ORIGIN_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
     ;;
   *)
     echo "Unknown action: $ACTION" >&2

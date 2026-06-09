@@ -1,10 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/trackers/voice_message_observability.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// Orchestrates: record result → upload → send voice message.
 enum VoiceSendStatus { idle, uploading, sending, completed, failed }
@@ -33,6 +36,38 @@ class VoiceSendState {
   }
 }
 
+class VoiceMessageMediaPayload {
+  const VoiceMessageMediaPayload({
+    required this.url,
+    required this.mediaId,
+    required this.mimeType,
+    required this.fileSizeBytes,
+    required this.durationMs,
+    required this.waveform,
+    required this.codec,
+  });
+
+  final String url;
+  final String mediaId;
+  final String mimeType;
+  final int fileSizeBytes;
+  final int durationMs;
+  final List<double> waveform;
+  final String codec;
+
+  CloudJsonMap toWireJson() {
+    return <String, dynamic>{
+      'url': url,
+      'mediaId': mediaId,
+      'mimeType': mimeType,
+      'fileSizeBytes': fileSizeBytes,
+      'durationMs': durationMs,
+      'waveform': waveform,
+      'codec': codec,
+    };
+  }
+}
+
 class VoiceSendNotifier extends Notifier<VoiceSendState> {
   VoiceSendNotifier(this.conversationId);
 
@@ -41,6 +76,8 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
   MediaUploadManager get _uploadManager => ref.read(mediaUploadManagerProvider);
   ChatMessageNotifier get _messageNotifier =>
       ref.read(chatMessageProvider(conversationId).notifier);
+  VoiceMessageObservability get _observability =>
+      ref.read(voiceMessageObservabilityProvider);
 
   @override
   VoiceSendState build() => const VoiceSendState();
@@ -48,8 +85,30 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
   /// Takes a recording result, uploads to OSS, then sends a voice message.
   Future<void> sendVoice(VoiceRecordResult result) async {
     state = state.copyWith(status: VoiceSendStatus.uploading, error: null);
+    _observability.trackAction(
+      eventName: VoiceMessageEventNames.uploadStarted,
+      conversationId: conversationId,
+      durationMs: result.durationMs,
+      fileSizeBytes: result.fileSize,
+      waveformSamples: result.waveform.length,
+    );
 
     try {
+      if (result.fileSize <= 0 || result.filePath.trim().isEmpty) {
+        _observability.trackAction(
+          eventName: VoiceMessageEventNames.recordInvalid,
+          conversationId: conversationId,
+          durationMs: result.durationMs,
+          fileSizeBytes: result.fileSize,
+          waveformSamples: result.waveform.length,
+          failureKind: 'invalid_recording',
+        );
+        state = state.copyWith(
+          status: VoiceSendStatus.failed,
+          error: UITextConstants.chatVoiceRecordUnavailable,
+        );
+        return;
+      }
       final ownerId = ref.read(currentUserIdProvider).trim();
       final task = UploadTask(
         localPath: result.filePath,
@@ -63,9 +122,10 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
 
       final enqueued = await _uploadManager.enqueue(task);
       if (enqueued.status == UploadStatus.failed) {
+        _trackUploadFailed(enqueued.error);
         state = state.copyWith(
           status: VoiceSendStatus.failed,
-          error: enqueued.error ?? '上传失败',
+          error: _uploadFailureMessage(enqueued.error),
         );
         return;
       }
@@ -76,6 +136,9 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
 
       await for (final update in _uploadManager.onTaskUpdate) {
         if (update.localPath != enqueued.localPath) continue;
+        if (update.status == UploadStatus.uploading) {
+          state = state.copyWith(uploadProgress: 0.5);
+        }
 
         if (update.status == UploadStatus.completed) {
           await _sendUploadedVoice(update, result);
@@ -83,14 +146,23 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
         }
 
         if (update.status == UploadStatus.failed) {
+          _trackUploadFailed(update.error);
           state = state.copyWith(
             status: VoiceSendStatus.failed,
-            error: update.error ?? '上传失败',
+            error: _uploadFailureMessage(update.error),
           );
           return;
         }
       }
     } catch (e) {
+      _observability.trackAction(
+        eventName: VoiceMessageEventNames.sendFailed,
+        conversationId: conversationId,
+        durationMs: result.durationMs,
+        fileSizeBytes: result.fileSize,
+        waveformSamples: result.waveform.length,
+        failureKind: e.runtimeType.toString(),
+      );
       state = state.copyWith(
         status: VoiceSendStatus.failed,
         error: runtimeErrorDisplayMessage(e),
@@ -103,29 +175,116 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
     VoiceRecordResult result,
   ) async {
     state = state.copyWith(status: VoiceSendStatus.sending);
+    _observability.trackAction(
+      eventName: VoiceMessageEventNames.uploadSucceeded,
+      conversationId: conversationId,
+      durationMs: result.durationMs,
+      fileSizeBytes: result.fileSize,
+      waveformSamples: result.waveform.length,
+    );
+    final cdnUrl = update.cdnUrl?.trim() ?? '';
+    if (cdnUrl.isEmpty) {
+      _trackUploadFailed('empty_cdn_url');
+      state = state.copyWith(
+        status: VoiceSendStatus.failed,
+        error: UITextConstants.chatVoiceUploadFailed,
+      );
+      return;
+    }
 
-    final mediaPayload = <String, dynamic>{
-      'url': update.cdnUrl ?? '',
-      'mediaId': update.assetId,
-      'mimeType': 'audio/mp4',
-      'fileSizeBytes': result.fileSize,
-      'durationMs': result.durationMs,
-      'waveform': result.waveform,
-      'codec': 'aac',
-    };
-
-    await _messageNotifier.sendMessage(
-      'audio',
-      '',
-      mediaUrl: update.cdnUrl,
-      media: mediaPayload,
+    final mediaPayload = VoiceMessageMediaPayload(
+      url: cdnUrl,
+      mediaId: update.assetId ?? '',
+      mimeType: 'audio/mp4',
+      fileSizeBytes: result.fileSize,
+      durationMs: result.durationMs,
+      waveform: _compactWaveform(result.waveform),
+      codec: 'aac',
     );
 
+    _observability.trackAction(
+      eventName: VoiceMessageEventNames.sendStarted,
+      conversationId: conversationId,
+      durationMs: result.durationMs,
+      fileSizeBytes: result.fileSize,
+      waveformSamples: mediaPayload.waveform.length,
+    );
+    final sent = await _messageNotifier.sendMessage(
+      'audio',
+      '',
+      mediaUrl: cdnUrl,
+      media: mediaPayload.toWireJson(),
+    );
+    if (!sent) {
+      _observability.trackAction(
+        eventName: VoiceMessageEventNames.sendFailed,
+        conversationId: conversationId,
+        durationMs: result.durationMs,
+        fileSizeBytes: result.fileSize,
+        waveformSamples: mediaPayload.waveform.length,
+        failureKind: 'send_message_failed',
+      );
+      state = state.copyWith(
+        status: VoiceSendStatus.failed,
+        error: UITextConstants.chatVoiceSendFailed,
+      );
+      return;
+    }
+
+    _observability.trackAction(
+      eventName: VoiceMessageEventNames.sendSucceeded,
+      conversationId: conversationId,
+      durationMs: result.durationMs,
+      fileSizeBytes: result.fileSize,
+      waveformSamples: mediaPayload.waveform.length,
+    );
     state = state.copyWith(status: VoiceSendStatus.completed);
   }
 
   void reset() {
     state = const VoiceSendState();
+  }
+
+  String _uploadFailureMessage(String? raw) {
+    final message = raw?.trim() ?? '';
+    if (message.isEmpty) {
+      return UITextConstants.chatVoiceUploadFailed;
+    }
+    if (message.contains('文件大小') || message.contains('文件类型')) {
+      return message;
+    }
+    return UITextConstants.chatVoiceUploadFailed;
+  }
+
+  void _trackUploadFailed(String? raw) {
+    _observability.trackAction(
+      eventName: VoiceMessageEventNames.uploadFailed,
+      conversationId: conversationId,
+      failureKind: (raw ?? '').trim().isEmpty ? 'unknown' : raw!.trim(),
+    );
+  }
+
+  List<double> _compactWaveform(List<double> waveform) {
+    const targetCount = 80;
+    if (waveform.length <= targetCount) {
+      return waveform.map((value) => value.clamp(0.0, 1.0)).toList();
+    }
+    final result = <double>[];
+    final ratio = waveform.length / targetCount;
+    for (var i = 0; i < targetCount; i++) {
+      final start = (i * ratio).floor();
+      final end = ((i + 1) * ratio).ceil().clamp(0, waveform.length);
+      if (start >= end) {
+        result.add(0.0);
+        continue;
+      }
+      var sum = 0.0;
+      for (var j = start; j < end; j++) {
+        sum += waveform[j].clamp(0.0, 1.0).toDouble();
+      }
+      result.add(sum / (end - start));
+    }
+    return result;
   }
 }
 

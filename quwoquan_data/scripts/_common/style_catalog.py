@@ -26,7 +26,7 @@ STYLE_CATALOG_PATH = (
     / "style_profile_catalog.yaml"
 )
 
-# 未声明 allowedOpenings 的旧族 / 未知族的宽松兜底集合（保证向后兼容，不阻断旧 blueprint）。
+# 未声明 allowedOpenings 的族 / 未知族的宽松兜底集合，避免把开篇门卡死。
 _DEFAULT_OPENINGS = ("personal_motivation", "scene_immersion", "question_hook", "conclusion_first")
 
 
@@ -58,7 +58,7 @@ def known_style_families() -> set[str]:
 
 
 def family_allowed_openings(family: str) -> list[str]:
-    """该体裁允许的开篇策略 id 列表；过滤掉 catalog 未定义的 id；缺失/未知族回退宽松兜底集。"""
+    """该体裁允许的开篇策略 id 列表；过滤掉 catalog 未定义的 id；缺失/未知族使用宽松兜底集。"""
     strategies = known_opening_strategy_ids()
     fam = _style_families().get(str(family or "")) or {}
     allowed = [str(s) for s in (fam.get("allowedOpenings") or []) if str(s) in strategies]

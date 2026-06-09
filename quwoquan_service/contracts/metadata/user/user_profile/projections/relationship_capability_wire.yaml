@@ -36,13 +36,6 @@ client_projection:
       aliases: [relationState]
       default: "null"
 
-    - name: relationTier
-      dart_type: String
-      nullable: true
-      source: relationTier
-      aliases: [relationTier]
-      default: "null"
-
     - name: canFollow
       dart_type: bool
       nullable: true
@@ -57,12 +50,19 @@ client_projection:
       aliases: [canUnfollow]
       default: "null"
 
-    - name: canMessage
+    - name: canCreateDirectConversation
       dart_type: bool
-      nullable: true
-      source: canMessage
-      aliases: [canMessage]
-      default: "null"
+      nullable: false
+      source: canCreateDirectConversation
+      aliases: [canCreateDirectConversation]
+      default: "false"
+
+    - name: canSendMessage
+      dart_type: bool
+      nullable: false
+      source: canSendMessage
+      aliases: [canSendMessage]
+      default: "false"
 
     - name: canFollowBack
       dart_type: bool
@@ -85,18 +85,18 @@ client_projection:
       aliases: [canOpenConversation]
       default: "null"
 
-    - name: canAddSameInterest
+    - name: hasPendingGreeting
       dart_type: bool
       nullable: false
-      source: canAddSameInterest
-      aliases: [canAddSameInterest]
+      source: hasPendingGreeting
+      aliases: [hasPendingGreeting]
       default: "false"
 
-    - name: canSetCloseFriend
+    - name: hasFormalConversation
       dart_type: bool
       nullable: false
-      source: canSetCloseFriend
-      aliases: [canSetCloseFriend]
+      source: hasFormalConversation
+      aliases: [hasFormalConversation]
       default: "false"
 
     - name: canStartVoiceCall

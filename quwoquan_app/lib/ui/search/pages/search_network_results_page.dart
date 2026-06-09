@@ -18,6 +18,7 @@ import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
@@ -66,13 +67,14 @@ class _SearchNetworkResultsPageState
   Timer? _debounceTimer;
   int _requestToken = 0;
   bool _isLoading = false;
-  String? _errorText;
+  UiErrorSemantic? _errorSemantic;
   AssistantSearchResultView? _xiaoquResult;
   List<PostSearchItemView> _contentResults = const <PostSearchItemView>[];
   List<HomepageSummary> _homepageResults = const <HomepageSummary>[];
   List<SearchHit> _groupResults = const <SearchHit>[];
   List<SearchHit> _messageResults = const <SearchHit>[];
   List<SearchHit> _contactResults = const <SearchHit>[];
+  List<SearchDegradeSignal> _degradeSignals = const <SearchDegradeSignal>[];
 
   @override
   void initState() {
@@ -136,23 +138,33 @@ class _SearchNetworkResultsPageState
           ),
           SizedBox(height: AppSpacing.containerSm),
           Expanded(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.containerMd,
-                0,
-                AppSpacing.containerMd,
-                AppSpacing.containerLg,
-              ),
-              child: ListView(
-                key: ValueKey<String>('network_results_$_activeTabId'),
-                padding: EdgeInsets.zero,
-                children: _buildResultChildren(
-                  isDark: isDark,
-                  fgSecondary: fgSecondary,
-                  activeTab: activeTab,
-                ),
-              ),
-            ),
+            child: _errorSemantic != null && !_isLoading
+                ? AppPageErrorState(
+                    semantic: _errorSemantic!,
+                    onAction: (action) async {
+                      if (action.type == UiErrorActionType.retry ||
+                          action.type == UiErrorActionType.resubmit) {
+                        await _loadResults();
+                      }
+                    },
+                  )
+                : Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.containerMd,
+                      0,
+                      AppSpacing.containerMd,
+                      AppSpacing.containerLg,
+                    ),
+                    child: ListView(
+                      key: ValueKey<String>('network_results_$_activeTabId'),
+                      padding: EdgeInsets.zero,
+                      children: _buildResultChildren(
+                        isDark: isDark,
+                        fgSecondary: fgSecondary,
+                        activeTab: activeTab,
+                      ),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -277,11 +289,11 @@ class _SearchNetworkResultsPageState
     if (normalized == null || normalized.isEmpty) {
       return null;
     }
-    if (normalized == _tabXiaoqu) {
-      return _tabAll;
-    }
     if (normalized == 'humanity') {
       return 'photography';
+    }
+    if (normalized == 'locations') {
+      return _tabAll;
     }
     return normalized;
   }
@@ -344,6 +356,18 @@ class _SearchNetworkResultsPageState
     required Color fgSecondary,
     required _SearchNetworkTab activeTab,
   }) {
+    List<Widget> withDegradeBanner(List<Widget> children) {
+      final banner = _buildDegradeBanner(isDark: isDark);
+      if (banner == null) {
+        return children;
+      }
+      return <Widget>[
+        banner,
+        SizedBox(height: AppSpacing.containerMd),
+        ...children,
+      ];
+    }
+
     if (_activeTabId == _tabXiaoqu) {
       return <Widget>[
         _XiaoquSummaryCard(
@@ -354,8 +378,6 @@ class _SearchNetworkResultsPageState
         SizedBox(height: AppSpacing.containerMd),
         if (_isLoading)
           _StatusMessage(text: '小趣正在整理综合结果', isDark: isDark, loading: true)
-        else if (_errorText != null)
-          _StatusMessage(text: _errorText!, isDark: isDark)
         else if ((_xiaoquResult?.citations?.length ?? 0) == 0)
           _StatusMessage(text: '暂时没有找到可引用的网络结果', isDark: isDark)
         else
@@ -367,15 +389,17 @@ class _SearchNetworkResultsPageState
     }
 
     if (_activeTabId == _tabAll) {
-      return _buildAllResultChildren(
-        isDark: isDark,
-        fgSecondary: fgSecondary,
-        activeTab: activeTab,
+      return withDegradeBanner(
+        _buildAllResultChildren(
+          isDark: isDark,
+          fgSecondary: fgSecondary,
+          activeTab: activeTab,
+        ),
       );
     }
 
     if (_activeTabId == _tabHomepages) {
-      return <Widget>[
+      return withDegradeBanner(<Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
           description: activeTab.description,
@@ -384,17 +408,15 @@ class _SearchNetworkResultsPageState
         ),
         if (_isLoading)
           _StatusMessage(text: '正在加载共享主页', isDark: isDark, loading: true)
-        else if (_errorText != null)
-          _StatusMessage(text: _errorText!, isDark: isDark)
         else if (_homepageResults.isEmpty)
           _StatusMessage(text: '没有找到相关主页', isDark: isDark)
         else
           ..._buildHomepageResultTiles(),
-      ];
+      ]);
     }
 
     if (_activeTabId == _tabGroups) {
-      return <Widget>[
+      return withDegradeBanner(<Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
           description: activeTab.description,
@@ -403,17 +425,15 @@ class _SearchNetworkResultsPageState
         ),
         if (_isLoading)
           _StatusMessage(text: '正在加载群组结果', isDark: isDark, loading: true)
-        else if (_errorText != null)
-          _StatusMessage(text: _errorText!, isDark: isDark)
         else if (_groupResults.isEmpty)
           _StatusMessage(text: '没有找到相关群组', isDark: isDark)
         else
           ..._buildGroupResultTiles(isDark: isDark, fgSecondary: fgSecondary),
-      ];
+      ]);
     }
 
     if (_activeTabId == _tabMessages) {
-      return <Widget>[
+      return withDegradeBanner(<Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
           description: activeTab.description,
@@ -422,8 +442,6 @@ class _SearchNetworkResultsPageState
         ),
         if (_isLoading)
           _StatusMessage(text: '正在加载消息结果', isDark: isDark, loading: true)
-        else if (_errorText != null)
-          _StatusMessage(text: _errorText!, isDark: isDark)
         else if (_messageResults.isEmpty)
           _StatusMessage(text: '没有找到相关消息', isDark: isDark)
         else
@@ -433,11 +451,11 @@ class _SearchNetworkResultsPageState
             isDark: isDark,
             fgSecondary: fgSecondary,
           ),
-      ];
+      ]);
     }
 
     if (_activeTabId == _tabContacts) {
-      return <Widget>[
+      return withDegradeBanner(<Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
           description: activeTab.description,
@@ -446,8 +464,6 @@ class _SearchNetworkResultsPageState
         ),
         if (_isLoading)
           _StatusMessage(text: '正在加载联系人结果', isDark: isDark, loading: true)
-        else if (_errorText != null)
-          _StatusMessage(text: _errorText!, isDark: isDark)
         else if (_contactResults.isEmpty)
           _StatusMessage(text: '没有找到相关联系人', isDark: isDark)
         else
@@ -457,10 +473,10 @@ class _SearchNetworkResultsPageState
             isDark: isDark,
             fgSecondary: fgSecondary,
           ),
-      ];
+      ]);
     }
 
-    return <Widget>[
+    return withDegradeBanner(<Widget>[
       _CategorySummaryCard(
         title: activeTab.label,
         description: activeTab.description,
@@ -469,13 +485,19 @@ class _SearchNetworkResultsPageState
       ),
       if (_isLoading)
         _StatusMessage(text: '正在加载网络结果', isDark: isDark, loading: true)
-      else if (_errorText != null)
-        _StatusMessage(text: _errorText!, isDark: isDark)
       else if (_contentResults.isEmpty)
         _StatusMessage(text: '没有找到相关网络结果', isDark: isDark)
       else
         ..._buildContentResultTiles(isDark: isDark, fgSecondary: fgSecondary),
-    ];
+    ]);
+  }
+
+  Widget? _buildDegradeBanner({required bool isDark}) {
+    if (_degradeSignals.isEmpty) {
+      return null;
+    }
+    final first = _degradeSignals.first;
+    return _StatusMessage(text: '部分结果已降级：${first.message}', isDark: isDark);
   }
 
   List<Widget> _buildAllResultChildren({
@@ -487,9 +509,6 @@ class _SearchNetworkResultsPageState
       return <Widget>[
         _StatusMessage(text: '正在加载应用内结果', isDark: isDark, loading: true),
       ];
-    }
-    if (_errorText != null) {
-      return <Widget>[_StatusMessage(text: _errorText!, isDark: isDark)];
     }
 
     final sections = <Widget>[];
@@ -755,7 +774,7 @@ class _SearchNetworkResultsPageState
     final trimmedQuery = _query.trim();
     setState(() {
       _isLoading = true;
-      _errorText = null;
+      _errorSemantic = null;
       if (_activeTabId == _tabXiaoqu) {
         _xiaoquResult = null;
       } else if (_activeTabId == _tabAll) {
@@ -764,16 +783,22 @@ class _SearchNetworkResultsPageState
         _messageResults = const <SearchHit>[];
         _contactResults = const <SearchHit>[];
         _contentResults = const <PostSearchItemView>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       } else if (_activeTabId == _tabHomepages) {
         _homepageResults = const <HomepageSummary>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       } else if (_activeTabId == _tabGroups) {
         _groupResults = const <SearchHit>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       } else if (_activeTabId == _tabMessages) {
         _messageResults = const <SearchHit>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       } else if (_activeTabId == _tabContacts) {
         _contactResults = const <SearchHit>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       } else {
         _contentResults = const <PostSearchItemView>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       }
     });
     try {
@@ -801,103 +826,144 @@ class _SearchNetworkResultsPageState
           });
           return;
         }
-        final homepageItems = await _loadHomepageResults(trimmedQuery);
-        final groupItems = await _loadGroupResults(trimmedQuery);
-        final messageItems = await _loadMessageResults(trimmedQuery);
-        final contactItems = await _loadContactResults(trimmedQuery);
-        final contentItems = await _loadContentResults(trimmedQuery);
+        final homepageResponse = await _loadHomepageResponse(trimmedQuery);
+        final groupResponse = await _loadGroupResponse(trimmedQuery);
+        final messageResponse = await _loadMessageResponse(trimmedQuery);
+        final contactResponse = await _loadContactResponse(trimmedQuery);
+        final contentResponse = await _loadContentResponse(trimmedQuery);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
-          _homepageResults = homepageItems;
-          _groupResults = groupItems;
-          _messageResults = messageItems;
-          _contactResults = contactItems;
-          _contentResults = contentItems;
+          _homepageResults = _homepageItemsFromResponse(homepageResponse);
+          _groupResults = _groupHitsFromResponse(groupResponse);
+          _messageResults = _messageHitsFromResponse(messageResponse);
+          _contactResults = _contactHitsFromResponse(contactResponse);
+          _contentResults = _contentItemsFromResponse(contentResponse);
+          _degradeSignals = <SearchDegradeSignal>[
+            ...homepageResponse.degradeSignals,
+            ...groupResponse.degradeSignals,
+            ...messageResponse.degradeSignals,
+            ...contactResponse.degradeSignals,
+            ...contentResponse.degradeSignals,
+          ];
           _isLoading = false;
         });
         return;
       }
 
       if (_activeTabId == _tabHomepages) {
-        final items = trimmedQuery.isEmpty
+        final response = trimmedQuery.isEmpty
+            ? null
+            : await _loadHomepageResponse(trimmedQuery);
+        final items = response == null
             ? const <HomepageSummary>[]
-            : await _loadHomepageResults(trimmedQuery);
+            : _homepageItemsFromResponse(response);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
           _homepageResults = items;
+          _degradeSignals =
+              response?.degradeSignals ?? const <SearchDegradeSignal>[];
           _isLoading = false;
         });
         return;
       }
 
       if (_activeTabId == _tabGroups) {
-        final items = trimmedQuery.isEmpty
+        final response = trimmedQuery.isEmpty
+            ? null
+            : await _loadGroupResponse(trimmedQuery);
+        final items = response == null
             ? const <SearchHit>[]
-            : await _loadGroupResults(trimmedQuery);
+            : _groupHitsFromResponse(response);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
           _groupResults = items;
+          _degradeSignals =
+              response?.degradeSignals ?? const <SearchDegradeSignal>[];
           _isLoading = false;
         });
         return;
       }
 
       if (_activeTabId == _tabMessages) {
-        final items = trimmedQuery.isEmpty
+        final response = trimmedQuery.isEmpty
+            ? null
+            : await _loadMessageResponse(trimmedQuery);
+        final items = response == null
             ? const <SearchHit>[]
-            : await _loadMessageResults(trimmedQuery);
+            : _messageHitsFromResponse(response);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
           _messageResults = items;
+          _degradeSignals =
+              response?.degradeSignals ?? const <SearchDegradeSignal>[];
           _isLoading = false;
         });
         return;
       }
 
       if (_activeTabId == _tabContacts) {
-        final items = trimmedQuery.isEmpty
+        final response = trimmedQuery.isEmpty
+            ? null
+            : await _loadContactResponse(trimmedQuery);
+        final items = response == null
             ? const <SearchHit>[]
-            : await _loadContactResults(trimmedQuery);
+            : _contactHitsFromResponse(response);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
           _contactResults = items;
+          _degradeSignals =
+              response?.degradeSignals ?? const <SearchDegradeSignal>[];
           _isLoading = false;
         });
         return;
       }
 
-      final items = trimmedQuery.isEmpty
+      final response = trimmedQuery.isEmpty
+          ? null
+          : await _loadContentResponse(trimmedQuery);
+      final items = response == null
           ? const <PostSearchItemView>[]
-          : await _loadContentResults(trimmedQuery);
+          : _contentItemsFromResponse(response);
       if (!mounted || token != _requestToken) {
         return;
       }
       setState(() {
         _contentResults = items;
+        _degradeSignals =
+            response?.degradeSignals ?? const <SearchDegradeSignal>[];
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || token != _requestToken) {
         return;
       }
       setState(() {
-        _errorText = '网络结果暂时不可用，请稍后重试';
+        _errorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
         _isLoading = false;
       });
     }
   }
 
   Future<List<PostSearchItemView>> _loadContentResults(String query) async {
+    return _contentItemsFromResponse(await _loadContentResponse(query));
+  }
+
+  Future<SearchResponse> _loadContentResponse(String query) async {
     final categoryId =
         _activeTabId == _tabVideo ||
             _activeTabId == _tabImage ||
@@ -921,7 +987,7 @@ class _SearchNetworkResultsPageState
       _tabContent => const <SearchContentTypeFilter>{},
       _ => selection.contentTypes,
     };
-    final response = await ref
+    return ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -933,6 +999,9 @@ class _SearchNetworkResultsPageState
             contentTypes: contentTypes,
           ),
         );
+  }
+
+  List<PostSearchItemView> _contentItemsFromResponse(SearchResponse response) {
     final results = response.hits
         .where((hit) => hit.objectType == SearchObjectType.contentPost)
         .map(
@@ -959,7 +1028,11 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<HomepageSummary>> _loadHomepageResults(String query) async {
-    final response = await ref
+    return _homepageItemsFromResponse(await _loadHomepageResponse(query));
+  }
+
+  Future<SearchResponse> _loadHomepageResponse(String query) {
+    return ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -971,6 +1044,9 @@ class _SearchNetworkResultsPageState
             limit: 12,
           ),
         );
+  }
+
+  List<HomepageSummary> _homepageItemsFromResponse(SearchResponse response) {
     return response.hits
         .where((hit) => hit.objectType == SearchObjectType.entityHomepage)
         .map((hit) => HomepageSummary.fromMap(hit.payload.toWireMap()))
@@ -978,7 +1054,11 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<SearchHit>> _loadGroupResults(String query) async {
-    final response = await ref
+    return _groupHitsFromResponse(await _loadGroupResponse(query));
+  }
+
+  Future<SearchResponse> _loadGroupResponse(String query) {
+    return ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -991,6 +1071,9 @@ class _SearchNetworkResultsPageState
             limit: 12,
           ),
         );
+  }
+
+  List<SearchHit> _groupHitsFromResponse(SearchResponse response) {
     return response.hits
         .where(
           (hit) =>
@@ -1001,7 +1084,11 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<SearchHit>> _loadMessageResults(String query) async {
-    final response = await ref
+    return _messageHitsFromResponse(await _loadMessageResponse(query));
+  }
+
+  Future<SearchResponse> _loadMessageResponse(String query) {
+    return ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -1014,6 +1101,9 @@ class _SearchNetworkResultsPageState
             limit: 12,
           ),
         );
+  }
+
+  List<SearchHit> _messageHitsFromResponse(SearchResponse response) {
     return response.hits
         .where(
           (hit) =>
@@ -1024,7 +1114,11 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<SearchHit>> _loadContactResults(String query) async {
-    final response = await ref
+    return _contactHitsFromResponse(await _loadContactResponse(query));
+  }
+
+  Future<SearchResponse> _loadContactResponse(String query) {
+    return ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -1034,6 +1128,9 @@ class _SearchNetworkResultsPageState
             limit: 12,
           ),
         );
+  }
+
+  List<SearchHit> _contactHitsFromResponse(SearchResponse response) {
     return response.hits
         .where((hit) => hit.objectType == SearchObjectType.chatContact)
         .toList(growable: false);
@@ -1079,10 +1176,7 @@ class _SearchNetworkResultsPageState
         route,
         extra: MediaViewerExtra(
           posts: <ContentSurfaceView>[
-            ContentSurfaceViewMapper.fromDto(
-              dto,
-              wire: raw,
-            ),
+            ContentSurfaceViewMapper.fromDto(dto, wire: raw),
           ],
           dtoPosts: <PostBaseDto>[dto],
           initialIndex: 0,
@@ -1099,9 +1193,42 @@ class _SearchNetworkResultsPageState
       if (result is MediaViewerResult) {
         applyMediaViewerResultToInteractionState(ref, result);
       }
-    } catch (_) {
+    } catch (error) {
+      await _showOpenPostFailure(error);
+    }
+  }
+
+  Future<void> _showOpenPostFailure(Object error) async {
+    if (!mounted) {
       return;
     }
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.submit,
+      scope: UiErrorScope.global,
+    );
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: UiErrorSemantic(
+        category: resolved.category,
+        scope: resolved.scope,
+        title: '内容暂时打不开',
+        message: resolved.message,
+        secondaryMessage: resolved.secondaryMessage,
+        primaryAction:
+            resolved.primaryAction ??
+            const UiErrorAction(
+              type: UiErrorActionType.dismiss,
+              label: UITextConstants.confirm,
+            ),
+        secondaryAction: resolved.secondaryAction,
+        dismissible: true,
+        sourceCode: resolved.sourceCode,
+        failureKind: resolved.failureKind,
+        recoveryAction: resolved.recoveryAction,
+      ),
+    );
   }
 
   void _openHomepage(String homepageId) {

@@ -6,12 +6,14 @@ class IntersectionDimensionTally {
   final String label;
   final int count;
   final int newCount;
+  final String briefText;
 
   IntersectionDimensionTally({
     this.dimension = '',
     this.label = '',
     this.count = 0,
     this.newCount = 0,
+    this.briefText = '',
   });
 
   factory IntersectionDimensionTally.fromMap(Map<String, dynamic> m) {
@@ -20,6 +22,7 @@ class IntersectionDimensionTally {
       label: m['label']?.toString() ?? '',
       count: (m['count'] as num?)?.toInt() ?? 0,
       newCount: (m['newCount'] as num?)?.toInt() ?? 0,
+      briefText: m['briefText']?.toString() ?? '',
     );
   }
 
@@ -29,6 +32,7 @@ class IntersectionDimensionTally {
       'label': label,
       'count': count,
       'newCount': newCount,
+      'briefText': briefText,
     };
   }
 
@@ -37,12 +41,14 @@ class IntersectionDimensionTally {
     String? label,
     int? count,
     int? newCount,
+    String? briefText,
   }) {
     return IntersectionDimensionTally(
       dimension: dimension ?? this.dimension,
       label: label ?? this.label,
       count: count ?? this.count,
       newCount: newCount ?? this.newCount,
+      briefText: briefText ?? this.briefText,
     );
   }
 }

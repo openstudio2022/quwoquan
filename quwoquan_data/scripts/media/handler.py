@@ -13,34 +13,37 @@ import sys
 
 from _common.image_safety import assess_asset_sources
 from _common.io import read_json
-from _common.paths import batch_command_root, batch_results_dir
-from _common.stage_reports import write_gate_report, write_stage_result
+from _common.stage_reports import (
+    iter_stage_envelopes,
+    read_stage_envelope,
+    write_gate_report,
+    write_stage_result,
+)
 from media.gate import gate_media_check
 
 
 def _collect_assets_for_ref(task_id: str, batch_id: str, ref: str) -> list[dict]:
     """优先取 compose 结果里的 assets（含 sourcePath），回退到 materialized manifest。"""
-    compose_file = batch_results_dir(task_id, batch_id, "produce", "compose") / f"{ref}.json"
-    if compose_file.exists():
-        payload = read_json(compose_file).get("payload") or {}
+    envelope = read_stage_envelope(task_id, batch_id, "produce", "compose", ref)
+    if envelope:
+        payload = envelope.get("payload") or {}
         assets = payload.get("assets") or []
         if assets:
             return list(assets)
-    posts_root = batch_command_root(task_id, batch_id, "produce") / "posts"
-    for manifest in posts_root.rglob("manifest.json"):
-        if manifest.parent.name == ref:
-            data = read_json(manifest)
-            return list(data.get("assets") or [])
+    # 回退：经路由定位内容对象成品 manifest（对象根 posts/{type}/{angle}/{title}/{seq}）。
+    from _common import content_object
+
+    if content_object.content_coords(task_id, batch_id, ref):
+        manifest = content_object.content_object_dir(task_id, batch_id, ref) / "manifest.json"
+        if manifest.is_file():
+            return list(read_json(manifest).get("assets") or [])
     return []
 
 
 def _iter_refs(task_id: str, batch_id: str, refs: list[str]) -> list[str]:
     if refs:
         return refs
-    compose_dir = batch_results_dir(task_id, batch_id, "produce", "compose")
-    if compose_dir.exists():
-        return sorted(f.stem for f in compose_dir.glob("*.json"))
-    return []
+    return [ref for ref, _ in iter_stage_envelopes(task_id, batch_id, "produce", "compose")]
 
 
 def check_images(task_id: str, batch_id: str, refs: list[str], *, allow_needs_review: bool = False) -> list[dict]:

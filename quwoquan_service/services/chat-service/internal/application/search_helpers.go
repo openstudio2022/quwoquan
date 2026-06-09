@@ -20,11 +20,17 @@ type ContactSearchHit struct {
 	ContactID        string
 	DisplayName      string
 	AvatarURL        string
+	Bio              string
+	MetFrom          string
+	LastInteraction  string
+	RelationState    string
 	ConversationID   string
 	ConversationType string
+	Source           string
 	Subtitle         string
 	HighlightText    string
 	MatchedField     string
+	IsStarred        bool
 }
 
 func listUserConversations(

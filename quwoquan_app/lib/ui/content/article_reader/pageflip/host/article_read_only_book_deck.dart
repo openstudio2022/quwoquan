@@ -785,6 +785,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         widget.fontPreset != oldWidget.fontPreset ||
         widget.metrics != oldWidget.metrics ||
         widget.coverUrl != oldWidget.coverUrl ||
+        widget.enablePageCurl != oldWidget.enablePageCurl ||
+        widget.forceDegradedPager != oldWidget.forceDegradedPager ||
         widget.showFooterPageLabel != oldWidget.showFooterPageLabel ||
         widget.paperTexture != oldWidget.paperTexture ||
         widget.presentationStyle != oldWidget.presentationStyle) {

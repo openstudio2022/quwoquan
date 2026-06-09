@@ -56,6 +56,36 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         self.assertIn("portal=false", result.stdout)
         self.assertIn("topology=false", result.stdout)
 
+    def test_acceptance_change_triggers_scopes_by_feature_ownership(self) -> None:
+        result = run_detect(
+            "specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/acceptance.yaml"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("service=false", result.stdout)
+        self.assertIn("app=true", result.stdout)
+        self.assertIn("portal=false", result.stdout)
+        self.assertIn("topology=false", result.stdout)
+
+    def test_product_ops_acceptance_change_triggers_service_and_portal(self) -> None:
+        result = run_detect(
+            "specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/acceptance.yaml"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("service=true", result.stdout)
+        self.assertIn("app=true", result.stdout)
+        self.assertIn("portal=true", result.stdout)
+        self.assertIn("topology=false", result.stdout)
+
+    def test_platform_acceptance_change_triggers_service_and_portal(self) -> None:
+        result = run_detect(
+            "specs/feature-tree/platform-ops-governance/config-and-reliability-governance/acceptance.yaml"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("service=true", result.stdout)
+        self.assertIn("app=false", result.stdout)
+        self.assertIn("portal=true", result.stdout)
+        self.assertIn("topology=false", result.stdout)
+
     def test_missing_diff_defaults_to_all_impacted(self) -> None:
         result = run_detect()
         self.assertEqual(result.returncode, 0, result.stderr)

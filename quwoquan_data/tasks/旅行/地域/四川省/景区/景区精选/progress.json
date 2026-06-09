@@ -1,0 +1,20 @@
+{
+  "taskId": "旅行/地域/四川省/景区/景区精选",
+  "counts": {
+    "entities": 0,
+    "articles": 0
+  },
+  "remaining": [
+    "Phase D（阻塞：需 CURSOR_API_KEY + pip install cursor-sdk）：python3 agent_ops/runners/fanout_runner.py --plan sichuan_100e_400c_20260608 --strategy by-partition --concurrency 6 --spend-limit-usd <N>",
+    "Phase E：qwq-data ship --copy-entities 聚合为单一 release；verify + sample-drift + goldenset；回填真实 SLO"
+  ],
+  "staged": {
+    "planFrozen": true,
+    "partitions": 21,
+    "leavesEnqueued": 100,
+    "batchId": "fanout_sichuan_100e_400c_20260608",
+    "orchestratorReady": true
+  },
+  "updatedAt": "2026-06-09T01:05:00+08:00",
+  "note": "A/B/C 完成：伪造产物已清理、blueprint 目录与标签系统同构、fanout_runner 已补齐云端 orchestrator 角色（download_plan/build_homepage/content_plan 三 checkpoint + 真实 CC 图链路校验通过）；100 叶子已入队，待提供 CURSOR_API_KEY 后由云端 subagent 真实创作"
+}

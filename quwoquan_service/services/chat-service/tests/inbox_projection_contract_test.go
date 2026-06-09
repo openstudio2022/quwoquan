@@ -66,8 +66,22 @@ func newInboxTestEnv(t *testing.T) (
 	_ = groupAvatarScheduler.Start(context.Background())
 
 	inboxSvc := application.NewInboxService(chatStore)
-	convSvc := application.NewConversationService(chatStore, convCache, nil, nil, groupAvatarMedia, userSyncService, groupAvatarScheduler)
-	msgSvc := application.NewMessageService(chatStore, convCache, nil)
+	convSvc := application.NewConversationService(
+		chatStore,
+		convCache,
+		nil,
+		nil,
+		application.AllowRelationshipGateForTest(),
+		groupAvatarMedia,
+		userSyncService,
+		groupAvatarScheduler,
+	)
+	msgSvc := application.NewMessageService(
+		chatStore,
+		convCache,
+		nil,
+		application.AllowRelationshipGateForTest(),
+	)
 	memberSvc := application.NewMemberService(chatStore, convCache, nil, nil, groupAvatarMedia, userSyncService, groupAvatarScheduler)
 
 	return inboxSvc, convSvc, msgSvc, memberSvc

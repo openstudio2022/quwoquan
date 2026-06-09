@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
 import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
 
@@ -26,6 +28,35 @@ class MyIntersectionInboxPage extends ConsumerStatefulWidget {
 
 class _MyIntersectionInboxPageState
     extends ConsumerState<MyIntersectionInboxPage> {
+  UiErrorSemantic _resolvePageErrorSemantic(Object error) {
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+    return UiErrorSemantic(
+      category: resolved.category,
+      scope: resolved.scope,
+      title: '我的交集暂不可用',
+      message: resolved.message,
+      secondaryMessage: resolved.secondaryMessage,
+      primaryAction:
+          resolved.primaryAction ??
+          const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: UITextConstants.tryAgain,
+          ),
+      secondaryAction: resolved.secondaryAction,
+      dismissible: resolved.dismissible,
+      sourceCode: resolved.sourceCode,
+      failureKind: resolved.failureKind,
+      recoveryAction: resolved.recoveryAction,
+      presentation: resolved.presentation,
+      tone: resolved.tone,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +77,16 @@ class _MyIntersectionInboxPageState
   void _openObject(IntersectionReason reason) {
     final id = reason.actionTargetId.trim();
     if (id.isEmpty) return;
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackClick(
+          id,
+          referralSource: ReferralSource.organicFeed,
+          intersectionId: reason.intersectionId,
+          intersectionDimension: reason.dimension,
+          intersectionClass: reason.intersectionClass,
+          intersectionTagRefs: reason.tagRefs,
+        );
     final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);
     switch (kind) {
       case UnifiedObjectKind.person:
@@ -88,19 +129,17 @@ class _MyIntersectionInboxPageState
     if (state.isLoading && state.items.isEmpty) {
       return const Center(child: CupertinoActivityIndicator());
     }
-    if (state.error != null) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.lg),
-          child: Text(
-            state.error!,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: AppTypography.iosSubheadline,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-          ),
-        ),
+    if (state.rawError != null) {
+      return AppPageErrorState(
+        semantic: _resolvePageErrorSemantic(state.rawError!),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await ref
+                .read(myIntersectionListProvider.notifier)
+                .loadAndMarkVisited(dimension: widget.dimension);
+          }
+        },
       );
     }
     if (state.items.isEmpty) {
@@ -129,6 +168,7 @@ class _MyIntersectionInboxPageState
         itemBuilder: (_, index) => IntersectionEntity(
           reason: state.items[index],
           isDark: isDark,
+          density: IntersectionEntityDensity.inboxList,
           onTap: () => _openObject(state.items[index]),
         ),
       );
@@ -176,6 +216,7 @@ class _MyIntersectionInboxPageState
               IntersectionEntity(
                 reason: reason,
                 isDark: isDark,
+                density: IntersectionEntityDensity.inboxList,
                 onTap: () => _openObject(reason),
               ),
               _divider(context),

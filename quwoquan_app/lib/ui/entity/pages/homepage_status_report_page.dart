@@ -32,7 +32,8 @@ class _HomepageStatusReportPageState
   HomepageDetail? _detail;
   bool _isLoading = true;
   bool _isSubmitting = false;
-  String? _errorText;
+  UiErrorSemantic? _pageErrorSemantic;
+  UiErrorSemantic? _submitErrorSemantic;
   String _reason = 'offline';
 
   bool get _hasUnsavedChanges =>
@@ -57,6 +58,18 @@ class _HomepageStatusReportPageState
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    if (_pageErrorSemantic != null && !_isLoading) {
+      return IosSelectionPageScaffold(
+        title: '状态上报',
+        onBack: _handleCloseRequest,
+        leadingStyle: IosSelectionHeaderLeadingStyle.close,
+        backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
+        body: AppPageErrorState(
+          semantic: _pageErrorSemantic!,
+          onAction: _handlePageErrorAction,
+        ),
+      );
+    }
     final canSubmit =
         !_isLoading && !_isSubmitting && (_detail?.status ?? '') != 'offline';
     return IosSelectionPageScaffold(
@@ -98,11 +111,12 @@ class _HomepageStatusReportPageState
                       ),
                     ),
                   ),
-                  if (_errorText != null) ...<Widget>[
+                  if (_submitErrorSemantic != null) ...<Widget>[
                     SizedBox(height: AppSpacing.containerSm),
-                    Text(
-                      _errorText!,
-                      style: const TextStyle(color: AppColors.error),
+                    AppSectionErrorCard(
+                      semantic: _submitErrorSemantic!,
+                      onAction: _handleSubmitErrorAction,
+                      margin: EdgeInsets.zero,
                     ),
                   ],
                 ],
@@ -246,13 +260,18 @@ class _HomepageStatusReportPageState
         _detail = detail;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
         _isLoading = false;
-        _errorText = '主页详情加载失败，请稍后重试';
+        _pageErrorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
       });
     }
   }
@@ -260,7 +279,7 @@ class _HomepageStatusReportPageState
   Future<void> _submit() async {
     setState(() {
       _isSubmitting = true;
-      _errorText = null;
+      _submitErrorSemantic = null;
     });
     try {
       await ref
@@ -282,7 +301,12 @@ class _HomepageStatusReportPageState
         return;
       }
       setState(() {
-        _errorText = runtimeErrorDisplayMessage(error);
+        _submitErrorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.section,
+        );
       });
     } finally {
       if (mounted) {
@@ -290,6 +314,42 @@ class _HomepageStatusReportPageState
           _isSubmitting = false;
         });
       }
+    }
+  }
+
+  Future<void> _handleSubmitErrorAction(UiErrorAction action) async {
+    switch (action.type) {
+      case UiErrorActionType.retry:
+      case UiErrorActionType.resubmit:
+        await _submit();
+        return;
+      case UiErrorActionType.dismiss:
+        if (mounted) {
+          setState(() => _submitErrorSemantic = null);
+        }
+        return;
+      case UiErrorActionType.openSettings:
+      case UiErrorActionType.login:
+      case UiErrorActionType.back:
+        return;
+    }
+  }
+
+  Future<void> _handlePageErrorAction(UiErrorAction action) async {
+    switch (action.type) {
+      case UiErrorActionType.retry:
+      case UiErrorActionType.resubmit:
+        await _load();
+        return;
+      case UiErrorActionType.dismiss:
+      case UiErrorActionType.back:
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+        return;
+      case UiErrorActionType.openSettings:
+      case UiErrorActionType.login:
+        return;
     }
   }
 }

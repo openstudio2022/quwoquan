@@ -5,6 +5,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
@@ -32,7 +34,7 @@ class _PickerChatRepository extends MockChatRepository {
   static final ChatInboxDto _inbox003 = ChatInboxDto(
     id: 'conv_003',
     type: 'group',
-    title: '摄影同好群',
+    title: '摄影群',
     avatarUrl: '',
     lastMessagePreview: '',
     lastMessageType: 'text',
@@ -120,25 +122,51 @@ class _PickerChatRepository extends MockChatRepository {
     return [
       ChatContactRowDto(
         userId: 'user_006',
-        displayName: '同好小雨',
+          displayName: '联系人小雨',
         avatarUrl: '',
         bio: '',
         metFrom: '',
         lastInteraction: '',
-        isFriend: true,
+        relationState: 'mutual',
         isStarred: false,
       ),
       ChatContactRowDto(
         userId: 'user_007',
-        displayName: '同好阿青',
+          displayName: '联系人阿青',
         avatarUrl: '',
         bio: '',
         metFrom: '',
         lastInteraction: '',
-        isFriend: true,
+        relationState: 'mutual',
         isStarred: false,
       ),
     ];
+  }
+}
+
+class _FailingPickerChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    throw StateError('inbox unavailable');
+  }
+
+  @override
+  Future<List<ChatContactRowDto>> listContacts({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    throw StateError('contacts unavailable');
+  }
+
+  @override
+  Future<List<ChatConversationMemberDto>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+    String? sort,
+  }) async {
+    throw StateError('members unavailable');
   }
 }
 
@@ -156,7 +184,7 @@ void _suppressImageErrors() {
 
 void main() {
   group('CallParticipantPickerPage — 渲染契约', () {
-    testWidgets('群聊场景显示来源切换：当前会话 / 同好 / 其他群', (tester) async {
+    testWidgets('群聊场景显示来源切换：当前会话 / 互相关注 / 其他群', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
@@ -174,7 +202,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('当前会话'), findsOneWidget);
-      expect(find.text('同好'), findsOneWidget);
+      expect(find.text(UITextConstants.callSourceMutualFollow), findsOneWidget);
       expect(find.text('其他群'), findsOneWidget);
     });
 
@@ -198,15 +226,15 @@ void main() {
       await tester.tap(find.text('其他群'));
       await tester.pumpAndSettle();
 
-      expect(find.text('摄影同好群'), findsOneWidget);
-      await tester.tap(find.text('摄影同好群'));
+      expect(find.text('摄影群'), findsOneWidget);
+      await tester.tap(find.text('摄影群'));
       await tester.pumpAndSettle();
       expect(find.text('跨群成员 A'), findsOneWidget);
     });
   });
 
   group('CallParticipantPickerPage — 交互契约', () {
-    testWidgets('切换到同好来源后展示同好成员', (tester) async {
+    testWidgets('切换到互相关注来源后展示联系人成员', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
@@ -223,11 +251,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('同好'));
+      await tester.tap(find.text(UITextConstants.callSourceMutualFollow));
       await tester.pumpAndSettle();
 
-      expect(find.text('同好小雨'), findsOneWidget);
-      expect(find.text('同好阿青'), findsOneWidget);
+      expect(find.text('联系人小雨'), findsOneWidget);
+      expect(find.text('联系人阿青'), findsOneWidget);
     });
   });
 
@@ -250,6 +278,27 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('邀请参与者'), findsOneWidget);
+    });
+
+    testWidgets('主数据加载失败时展示统一页态', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appDataSourceModeProvider.overrideWith(
+              _MockAppDataSourceModeNotifier.new,
+            ),
+            chatRepositoryProvider.overrideWithValue(_FailingPickerChatRepository()),
+          ],
+          child: const CupertinoApp(
+            home: CallParticipantPickerPage(conversationId: 'conv_002'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppPageErrorState), findsOneWidget);
+      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
     });
   });
 }

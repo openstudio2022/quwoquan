@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -19,6 +20,7 @@ import 'package:quwoquan_app/ui/rtc/providers/call_timer_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_controls_bar.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_duration_badge.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/call_stage_banner.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/participant_list_sheet.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/speaker_highlight_layout.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/video_grid_layout.dart';
@@ -122,9 +124,22 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
             children: [
               _buildVideoArea(participants, participantsState),
               _buildOverlayControls(session),
+              _buildStageBanner(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStageBanner() {
+    return Positioned(
+      top: MediaQuery.paddingOf(context).top + AppSpacing.xl * 3,
+      left: AppSpacing.md,
+      right: AppSpacing.md,
+      child: const Align(
+        alignment: Alignment.topCenter,
+        child: CallStageBanner(),
       ),
     );
   }
@@ -212,7 +227,7 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
                             ),
                             SizedBox(width: AppSpacing.xs),
                             Text(
-                              'REC',
+                              UITextConstants.callRecordingBadge,
                               style: TextStyle(
                                 color: AppColors.welcomeForeground,
                                 fontSize: AppTypography.xs,

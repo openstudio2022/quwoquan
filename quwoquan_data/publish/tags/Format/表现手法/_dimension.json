@@ -1,0 +1,10 @@
+{
+  "label": "表现手法",
+  "labelEn": "Production Technique",
+  "description": "视频/直播/图文的表演形态与剪辑手法，与内容角度正交",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 60
+}

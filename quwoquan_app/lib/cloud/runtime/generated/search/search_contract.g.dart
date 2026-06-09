@@ -138,8 +138,12 @@ class SearchToolFieldNames {
   static const String contentTypes = 'contentTypes';
   static const String categoryId = 'categoryId';
   static const String subCategory = 'subCategory';
+  static const String filters = 'filters';
+  static const String sortHints = 'sortHints';
+  static const String launchContext = 'launchContext';
   static const String queryVariants = 'queryVariants';
   static const String searchPlans = 'searchPlans';
+  static const String acceptedSearchPlans = 'acceptedSearchPlans';
 }
 
 // ignore: avoid_classes_with_only_static_members
@@ -149,8 +153,8 @@ class SearchToolContract {
   static const String name = 'search';
   static const String description = '统一检索网页与趣我圈对象的 query-first tool';
   static const List<String> requiredFields = <String>['query'];
-  static const List<String> optionalFields = <String>['mode', 'objectTypes', 'limit', 'conversationType', 'contentTypes', 'categoryId', 'subCategory'];
-  static const List<String> internalOptionalFields = <String>['queryVariants', 'searchPlans'];
+  static const List<String> optionalFields = <String>['mode', 'objectTypes', 'limit', 'conversationType', 'contentTypes', 'categoryId', 'subCategory', 'filters', 'sortHints', 'launchContext'];
+  static const List<String> internalOptionalFields = <String>['queryVariants', 'searchPlans', 'acceptedSearchPlans'];
   static const List<String> conversationTypes = <String>['direct', 'group'];
   static const List<String> contentTypes = <String>['article', 'image', 'video', 'micro'];
   static const List<String> allFields = <String>[
@@ -158,4 +162,18 @@ class SearchToolContract {
     ...optionalFields,
     ...internalOptionalFields,
   ];
+}
+
+// ignore: avoid_classes_with_only_static_members
+class RetrieveToolContract {
+  const RetrieveToolContract._();
+
+  static const String name = 'retrieve';
+  static const String description = '统一对象检索接口；targets 指定检索的业务对象，ids/names/terms 为主匹配条件，filters(tags,timeRange) 为收窄条件，关系由后端反查推断。';
+  static const List<String> matchConditions = <String>['ids', 'names', 'terms'];
+  static const List<String> filterFields = <String>['tags', 'timeRange'];
+  static const List<String> pageFields = <String>['limit', 'cursor'];
+  static const List<String> responseFields = <String>['hits', 'citations', 'facets', 'degradeSignals', 'provenance'];
+  static const List<String> hitFields = <String>['target', 'objectId', 'title', 'snippet', 'score', 'matchedTerms', 'matchedTags', 'evidence', 'payload'];
+  static const List<String> forbiddenFields = <String>['type', 'relation', 'anchors', 'kind', 'mode', 'strategy', 'purpose', 'visibility', 'fields', 'where', 'query', 'objectTypes', 'contentTypes', 'tags', 'timeRange'];
 }

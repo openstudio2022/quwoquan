@@ -18,28 +18,28 @@ class CloudRuntimeConfig {
   /// 通过 `--dart-define=CLOUD_GATEWAY_BASE_URL=...` 注入。
   static const String gatewayBaseUrl = String.fromEnvironment(
     'CLOUD_GATEWAY_BASE_URL',
-    defaultValue: 'http://127.0.0.1:17000',
+    defaultValue: 'https://127.0.0.1:17000',
   );
 
   /// 头像 CDN Base URL。展示 URL 由服务端返回，App 仅用于环境包审计与 beta 联调报告。
   static const String mediaAvatarCdnBaseUrl = String.fromEnvironment(
     'MEDIA_AVATAR_CDN_BASE_URL',
-    defaultValue: 'http://127.0.0.1:17100',
+    defaultValue: 'https://127.0.0.1:17100',
   );
 
   static const String mediaImageCdnBaseUrl = String.fromEnvironment(
     'MEDIA_IMAGE_CDN_BASE_URL',
-    defaultValue: 'http://127.0.0.1:17100',
+    defaultValue: 'https://127.0.0.1:17100',
   );
 
   static const String mediaVideoCdnBaseUrl = String.fromEnvironment(
     'MEDIA_VIDEO_CDN_BASE_URL',
-    defaultValue: 'http://127.0.0.1:17100',
+    defaultValue: 'https://127.0.0.1:17100',
   );
 
   static const String mediaUploadBaseUrl = String.fromEnvironment(
     'MEDIA_UPLOAD_BASE_URL',
-    defaultValue: 'http://127.0.0.1:17100',
+    defaultValue: 'https://127.0.0.1:17100',
   );
 
   /// Web 顶部安装提示：移动/Pad 端直接下载 App 或打开商店落地页。
@@ -57,7 +57,7 @@ class CloudRuntimeConfig {
     defaultValue: '/download/desktop',
   );
 
-  /// Web 顶部安装提示：分享给微信/好友的安装落地页。
+  /// Web 顶部安装提示：分享给微信/联系人的安装落地页。
   static const String webAppShareInstallUrl = String.fromEnvironment(
     'WEB_APP_SHARE_INSTALL_URL',
     defaultValue: '/download',

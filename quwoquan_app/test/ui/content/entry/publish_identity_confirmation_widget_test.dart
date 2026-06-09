@@ -30,9 +30,7 @@ class _TrackingContentRepository extends MockContentRepository {
   Map<String, dynamic>? lastPublishPayload;
 
   @override
-  Future<PostBaseDto> createPost({
-    required CreatePostRequestWire body,
-  }) async {
+  Future<PostBaseDto> createPost({required CreatePostRequestWire body}) async {
     createCallCount += 1;
     lastCreatePayload = Map<String, dynamic>.from(body.toWire());
     const postId = 'post_test_1';
@@ -80,12 +78,25 @@ class _AuthedSessionStore implements AuthSessionStore {
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
+    lastRefreshAtEpochMs: 0,
+    lastForegroundAuthCheckAtEpochMs: 0,
     manualLoggedOut: false,
     launchPromptDismissed: true,
   );
 
   @override
-  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+  Future<void> saveLoginResult(
+    AuthLoginResultDto result, {
+    AuthRememberedLoginMethod rememberedLoginMethod =
+        AuthRememberedLoginMethod.unknown,
+    String? rememberedLoginMaskedIdentifier,
+  }) async {}
+
+  @override
+  Future<void> saveRefreshedTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
@@ -95,6 +106,9 @@ class _AuthedSessionStore implements AuthSessionStore {
 
   @override
   Future<void> markLaunchPromptDismissed() async {}
+
+  @override
+  Future<void> markForegroundAuthCheckNow() async {}
 }
 
 /// 在 pump 期间主动 watch 登录态，让创作页发布/选图的 requireLogin 在已登录态放行。
@@ -278,11 +292,11 @@ void main() {
       repository.lastCreatePayload?.containsKey('articleFontPreset'),
       isFalse,
     );
+    expect(repository.lastCreatePayload?['articleMarkdown'], isA<String>());
     expect(
-      repository.lastCreatePayload?['articleMarkdown'],
-      isA<String>(),
+      repository.lastCreatePayload?['articleMarkdownVersion'],
+      'qwq-rich-md/1',
     );
-    expect(repository.lastCreatePayload?['articleMarkdownVersion'], 'qwq-rich-md/1');
     expect(
       repository.lastCreatePayload?['articleAssetManifest'],
       isA<Map<String, dynamic>>(),
@@ -293,10 +307,7 @@ void main() {
     );
     final articleMarkdown =
         repository.lastCreatePayload?['articleMarkdown'] as String;
-    expect(
-      articleMarkdown.contains(longText),
-      isTrue,
-    );
+    expect(articleMarkdown.contains(longText), isTrue);
     final renderProfile =
         repository.lastCreatePayload?['articleRenderProfile']
             as Map<String, dynamic>;

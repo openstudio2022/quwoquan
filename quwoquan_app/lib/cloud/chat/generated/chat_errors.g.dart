@@ -2,61 +2,53 @@
 // ignore_for_file: constant_identifier_names
 
 enum ChatErrorCode {
-  conversationNotFound,
-  unauthorized,
-  messageTooLong,
-  rateLimited,
-  internalError,
-  unknown;
+  conversationNotFound('CHAT.USER.conversation_not_found', '会话不存在', 404),
+  unauthorized('CHAT.USER.unauthorized', '请先登录', 401),
+  messageTooLong('CHAT.USER.message_too_long', '消息内容超出长度限制', 400),
+  rateLimited('CHAT.USER.rate_limited', '发送太频繁，请稍后重试', 429),
+  notMutual('CHAT.USER.not_mutual', '互相关注后可进入正式私信', 403),
+  greetingRequired('CHAT.USER.greeting_required', '请先打招呼，等对方回复后再进入正式私信', 403),
+  blocked('CHAT.USER.blocked', '当前状态不能继续发送消息', 403),
+  internalError('CHAT.SYSTEM.internal_error', '消息服务异常，请稍后重试', 500),
+  unknown('', '消息服务异常，请稍后重试', 500);
+
+  final String code;
+  final String defaultMessage;
+  final int httpStatus;
+
+  const ChatErrorCode(this.code, this.defaultMessage, this.httpStatus);
 
   static ChatErrorCode fromCode(String code) {
-    switch (code) {
-      case 'CHAT.USER.conversation_not_found':
-        return ChatErrorCode.conversationNotFound;
-      case 'CHAT.USER.unauthorized':
-        return ChatErrorCode.unauthorized;
-      case 'CHAT.USER.message_too_long':
-        return ChatErrorCode.messageTooLong;
-      case 'CHAT.USER.rate_limited':
-        return ChatErrorCode.rateLimited;
-      case 'CHAT.SYSTEM.internal_error':
-        return ChatErrorCode.internalError;
-      default:
-        return ChatErrorCode.unknown;
+    for (final value in values) {
+      if (value.code == code) return value;
     }
+    return ChatErrorCode.unknown;
   }
+}
 
-  String get code {
-    switch (this) {
-      case ChatErrorCode.conversationNotFound:
-        return 'CHAT.USER.conversation_not_found';
-      case ChatErrorCode.unauthorized:
-        return 'CHAT.USER.unauthorized';
-      case ChatErrorCode.messageTooLong:
-        return 'CHAT.USER.message_too_long';
-      case ChatErrorCode.rateLimited:
-        return 'CHAT.USER.rate_limited';
-      case ChatErrorCode.internalError:
-        return 'CHAT.SYSTEM.internal_error';
-      case ChatErrorCode.unknown:
-        return 'CHAT.SYSTEM.unknown';
-    }
-  }
+// ignore: avoid_classes_with_only_static_members
+class ChatErrorMessages {
+  const ChatErrorMessages._();
 
-  int get httpStatus {
-    switch (this) {
-      case ChatErrorCode.conversationNotFound:
-        return 404;
-      case ChatErrorCode.unauthorized:
-        return 401;
-      case ChatErrorCode.messageTooLong:
-        return 400;
-      case ChatErrorCode.rateLimited:
-        return 429;
-      case ChatErrorCode.internalError:
-        return 500;
-      case ChatErrorCode.unknown:
-        return 500;
-    }
-  }
+  static const Map<ChatErrorCode, String> zh = <ChatErrorCode, String>{
+    ChatErrorCode.conversationNotFound: '会话不存在',
+    ChatErrorCode.unauthorized: '请先登录',
+    ChatErrorCode.messageTooLong: '消息内容超出长度限制',
+    ChatErrorCode.rateLimited: '发送太频繁，请稍后重试',
+    ChatErrorCode.notMutual: '互相关注后可进入正式私信',
+    ChatErrorCode.greetingRequired: '请先打招呼，等对方回复后再进入正式私信',
+    ChatErrorCode.blocked: '当前状态不能继续发送消息',
+    ChatErrorCode.internalError: '消息服务异常，请稍后重试',
+  };
+
+  static const Map<ChatErrorCode, String> en = <ChatErrorCode, String>{
+    ChatErrorCode.conversationNotFound: 'Conversation not found',
+    ChatErrorCode.unauthorized: 'Please sign in',
+    ChatErrorCode.messageTooLong: 'Message exceeds length limit',
+    ChatErrorCode.rateLimited: 'Sending too frequently, please wait',
+    ChatErrorCode.notMutual: 'Mutual follow is required to enter a formal direct conversation',
+    ChatErrorCode.greetingRequired: 'Send a greeting first and wait for a reply before entering formal direct conversation',
+    ChatErrorCode.blocked: 'Current relationship does not allow messaging',
+    ChatErrorCode.internalError: 'Chat service error, please try again',
+  };
 }

@@ -16,6 +16,7 @@ type ChatRepository interface {
 	FindConversationByID(ctx context.Context, id string) (*model.Conversation, error)
 	UpdateConversation(ctx context.Context, id string, conv *model.Conversation) error
 	ListConversationsByUser(ctx context.Context, userId string, limit int, cursor string) ([]model.Conversation, error)
+	FindDirectConversationBetween(ctx context.Context, memberA, memberB string) (*model.Conversation, error)
 	ListGroupConversationsNeedingAvatar(ctx context.Context, limit int) ([]model.Conversation, error)
 
 	// Message CRUD

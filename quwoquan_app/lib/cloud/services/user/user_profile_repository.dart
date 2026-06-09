@@ -66,6 +66,7 @@ abstract class ProfileReadRepository {
     int limit = CloudApiDefaults.userCirclesLimit,
   });
   Future<UserProfileStatsViewData> getUserStats(String userId);
+  Future<CreatorImpactReadModel> getCreatorImpact(String userId);
 
   Future<List<SocialRelationSearchItemView>> searchSocialRelations({
     required String query,
@@ -200,7 +201,6 @@ abstract class UserProfileRepository
   }) async {
     return listUserInteractionSent(userId, cursor: cursor, limit: limit);
   }
-
 }
 
 /// 预置用户档案 JSON：`jsonDecode` 后与远程 `getUserProfile` 同形进入 [SubAccountProfileWireDto]。
@@ -426,6 +426,41 @@ class MockUserProfileRepository extends UserProfileRepository {
   }
 
   @override
+  Future<CreatorImpactReadModel> getCreatorImpact(String userId) async {
+    final stats = await getUserStats(userId);
+    return CreatorImpactReadModel.fromMap(<String, dynamic>{
+      'authorId': userId,
+      'total': stats.followerCount + stats.likeCount + stats.circleCount,
+      'items': <Map<String, dynamic>>[
+        if (stats.followerCount > 0)
+          <String, dynamic>{
+            'helpType': 'relationship_help',
+            'action': 'follow',
+            'intersectionDimension': 'relationship',
+            'count': stats.followerCount,
+            'source': 'mock',
+          },
+        if (stats.circleCount > 0)
+          <String, dynamic>{
+            'helpType': 'community_help',
+            'action': 'join_circle',
+            'intersectionDimension': 'interest',
+            'count': stats.circleCount,
+            'source': 'mock',
+          },
+        if (stats.likeCount > 0)
+          <String, dynamic>{
+            'helpType': 'decision_help',
+            'action': 'like',
+            'intersectionDimension': 'content',
+            'count': stats.likeCount,
+            'source': 'mock',
+          },
+      ],
+    });
+  }
+
+  @override
   Future<List<SocialRelationSearchItemView>> searchSocialRelations({
     required String query,
     int limit = CloudApiDefaults.pageLimit,
@@ -454,6 +489,9 @@ class MockUserProfileRepository extends UserProfileRepository {
           final isFollowing = UserProfileMockData.viewerFollowsTarget(
             subAccountId,
           );
+          final hasFormalConversation =
+              UserProfileMockData.viewerFollowsTarget(subAccountId) &&
+              !UserProfileMockData.targetFollowsViewer(subAccountId);
           final wire = SocialRelationSearchItemWireDto(
             subAccountId: subAccountId,
             username: (user['username'] ?? user['nickname'] ?? '').toString(),
@@ -466,7 +504,9 @@ class MockUserProfileRepository extends UserProfileRepository {
               'relationState': relationState,
               'canFollow': !isFollowing,
               'canUnfollow': isFollowing,
-              'canOpenConversation': relationState == 'mutual',
+              'hasFormalConversation': hasFormalConversation,
+              'canOpenConversation':
+                  relationState == 'mutual' || hasFormalConversation,
             },
           );
           return SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
@@ -896,7 +936,6 @@ class MockUserProfileRepository extends UserProfileRepository {
       'isMutual': relationState == 'mutual',
     };
   }
-
 }
 
 // ─── Remote 实现（调用云侧 API）───────────────────────────────────────────────
@@ -945,20 +984,8 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   static String _normalizeRelationshipState(Map<String, dynamic> map) {
-    final state =
-        map['relationState']?.toString() ??
-        map['relationTier']?.toString() ??
-        '';
+    final state = map['relationState']?.toString() ?? '';
     if (state.isNotEmpty) {
-      switch (state) {
-        case 'same_interest':
-        case 'close_friend':
-          return 'mutual';
-        case 'following_only':
-          return 'following';
-        case 'none':
-          return 'not_following';
-      }
       return state;
     }
     final isFollowing = map['isFollowing'] == true;
@@ -1163,6 +1190,26 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   Future<UserProfileStatsViewData> getUserStats(String userId) async {
     final profile = await getUserProfile(userId);
     return UserProfileStatsViewData.fromProfile(profile);
+  }
+
+  @override
+  Future<CreatorImpactReadModel> getCreatorImpact(String userId) async {
+    final url = _uri(
+      ContentApiMetadata.getAuthorImpactPath(subAccountId: userId),
+      queryParameters: const <String, String>{'limit': '12'},
+    );
+    final resp = await _httpClient.get(
+      url,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.getAuthorImpact,
+      ),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception('getCreatorImpact failed: ${resp.statusCode}');
+    }
+    return CreatorImpactReadModel.fromMap(
+      _decodeObject(resp, ContentRequestPageIds.getAuthorImpact),
+    );
   }
 
   @override

@@ -74,16 +74,16 @@ errors:
       zh: "你不是该通话的参与者"
       en: "You are not a participant of this call"
 
-  - code: RTC.USER.not_same_interest
+  - code: RTC.USER.not_mutual
     kind: USER
     reason: forbidden
     http_status: 403
     recovery_action: surface
-    dart_const: notSameInterest
-    go_const: ErrNotSameInterest
+    dart_const: notMutual
+    go_const: ErrNotMutual
     user_message:
-      zh: "只有同好才能发起 1 对 1 实时通话"
-      en: "Only same-interest users can start a 1-on-1 realtime call"
+      zh: "互相关注后可发起 1 对 1 实时通话"
+      en: "Mutual follow is required to start a 1-on-1 realtime call"
 
   - code: RTC.USER.blocked
     kind: USER
@@ -106,6 +106,17 @@ errors:
     user_message:
       zh: "无法接听，通话状态异常"
       en: "Cannot answer, invalid call state"
+
+  - code: RTC.USER.invalid_call_action
+    kind: USER
+    reason: invalid_state
+    http_status: 409
+    recovery_action: surface
+    dart_const: invalidCallAction
+    go_const: ErrInvalidCallAction
+    user_message:
+      zh: "当前通话状态无法执行该操作"
+      en: "This action is not allowed in the current call state"
 
   - code: RTC.USER.screen_share_conflict
     kind: USER

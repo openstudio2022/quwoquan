@@ -162,8 +162,13 @@ func (s *AssistantService) normalizeSkillSubscriptionInput(userID string, input 
 	if destination.DestinationID == "" {
 		destination.DestinationID = userID
 	}
-	if destination.DestinationType != "user" {
-		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "M8 仅支持 user destination", "unsupported destination type")
+	if destination.QuietHoursPolicy == "" {
+		destination.QuietHoursPolicy = "inherit_user_setting"
+	}
+	switch destination.DestinationType {
+	case "user", "conversation", "group":
+	default:
+		return assistant.SkillSubscription{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "destinationType 无效", "unsupported destination type")
 	}
 	searchPlan := input.SearchQueryPlan
 	searchPlan.RawText = strings.TrimSpace(searchPlan.RawText)
@@ -218,20 +223,42 @@ func (s *AssistantService) createProactiveTurnMessage(ctx context.Context, subsc
 	if _, err := s.BuildFakeTurnStream(ctx, subscription.Owner.OwnerID, turn.TurnID); err != nil {
 		return assistant.AssistantTurn{}, assistant.AppMessage{}, err
 	}
-	message, err := s.CreateAppMessage(ctx, assistant.CreateAppMessageInput{
-		UserID:      subscription.Owner.OwnerID,
-		MessageType: "assistant",
-		Source:      "assistant_turn",
-		SourceID:    turn.TurnID,
-		Destination: assistant.AppMessageDestination{Type: "user", ID: subscription.Owner.OwnerID},
-		Title:       proactive.Title,
-		Summary:     proactive.Summary,
-		Target:      assistant.AppMessageTarget{TargetType: "assistant_turn", TargetID: turn.TurnID},
-	})
-	if err != nil {
-		return assistant.AssistantTurn{}, assistant.AppMessage{}, err
+	switch subscription.Destination.DestinationType {
+	case "conversation", "group":
+		if s.chatGrounding == nil {
+			return assistant.AssistantTurn{}, assistant.AppMessage{}, rterr.NewUnavailable(rterr.ModuleAssistant, "会话投递通道不可用", "chat grounding client is not configured")
+		}
+		clientMsgID := "assistant-proactive-" + turn.TurnID
+		if err := s.chatGrounding.SendMessage(ctx, ChatGroundingSendMessageRequest{
+			ConversationID: subscription.Destination.DestinationID,
+			SenderID:       "assistant",
+			Type:           "text",
+			Content:        proactive.Title + "\n" + proactive.Summary,
+			ClientMsgID:    clientMsgID,
+		}); err != nil {
+			return assistant.AssistantTurn{}, assistant.AppMessage{}, err
+		}
+		return turn, assistant.AppMessage{MessageID: clientMsgID}, nil
+	default:
+		message, err := s.CreateAppMessage(ctx, assistant.CreateAppMessageInput{
+			UserID:          subscription.Owner.OwnerID,
+			MessageType:     "assistant",
+			Source:          "assistant_turn",
+			SourceID:        turn.TurnID,
+			Destination:     assistant.AppMessageDestination{Type: "user", ID: subscription.Owner.OwnerID},
+			Title:           proactive.Title,
+			Summary:         proactive.Summary,
+			Target:          assistant.AppMessageTarget{TargetType: "assistant_turn", TargetID: turn.TurnID},
+			Personalized:    proactive.Personalized,
+			InterestTags:    proactive.InterestTags,
+			MatchedSegments: proactive.MatchedSegments,
+			LifecycleStage:  proactive.LifecycleStage,
+		})
+		if err != nil {
+			return assistant.AssistantTurn{}, assistant.AppMessage{}, err
+		}
+		return turn, message, nil
 	}
-	return turn, message, nil
 }
 
 // loadProactiveInterestProfile reads the user's derived interest profile for

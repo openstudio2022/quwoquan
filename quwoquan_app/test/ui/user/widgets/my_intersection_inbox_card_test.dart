@@ -32,6 +32,13 @@ class _EmptyIntersectionRepository implements IntersectionRepository {
 
   @override
   Future<void> reportExposure({required List<String> objectIds}) async {}
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 8,
+  }) async => const <IntersectionReason>[];
 }
 
 Widget _scope(ProviderContainer container) {
@@ -60,6 +67,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text(UITextConstants.myIntersectionsTitle), findsOneWidget);
+    // 我的主页是统计卡：突出云侧 summary.totalCount，不渲染对象列表项。
+    expect(find.text('6'), findsWidgets);
+    expect(find.text('林清越'), findsNothing);
     // mock 含 5 维度，折叠态显示 3 + 「展开更多」。
     expect(find.text(UITextConstants.intersectionExpandMore), findsOneWidget);
 

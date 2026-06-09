@@ -14,13 +14,13 @@ ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_BUNDLE = ROOT / "deploy" / "shared" / "gamma_curated_media_bundle.json"
 DEFAULT_REPORT = ROOT / "artifacts" / "local-gamma" / "gamma_curated_media_routes.json"
 PRIORITY_KEYS = [
-    "media/avatar/user/fixture_user_current/v1/avatar.png",
-    "media/avatar/group/fixture_conv_group/v1/composite.png",
-    "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
-    "media/image/circle/fixture_circle_photo/v1/cover.png",
-    "media/image/post/fixture_photo_001/v1/cover.png",
-    "media/image/post/fixture_article_001/v1/cover.png",
-    "media/image/post/fixture_video_001/v1/cover.png",
+    "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+    "media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png",
+    "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+    "media/image/s/archived-image/circle/fixture_circle_photo/v1/cover.png",
+    "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+    "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+    "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
 ]
 
 

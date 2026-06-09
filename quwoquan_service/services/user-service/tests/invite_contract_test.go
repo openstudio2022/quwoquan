@@ -163,15 +163,15 @@ func TestInvite_ListByInviter(t *testing.T) {
 	}
 }
 
-func TestInvite_LegacyIdentityFieldRejected(t *testing.T) {
+func TestInvite_UnknownIdentityFieldRejected(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "alias_owner", "alias_user")
 	createTestPersonaFull(t, "alias_persona", "alias_owner", "sa_alias", "AliasSub", "open", true)
 
 	rec := doRequest(t, http.MethodPost, "/v1/user/invites",
-		`{"legacyIdentityId":"sa_alias","channel":"direct"}`,
+		`{"identityId":"sa_alias","channel":"direct"}`,
 		authHeaders("alias_owner"))
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("generate with legacy identity field: expected 400, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("generate with unknown identity field: expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

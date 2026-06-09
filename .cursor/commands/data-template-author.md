@@ -32,6 +32,10 @@ python3 quwoquan_data/scripts/cli.py template new --from 景区_攻略 --to 新�
    - `imagePlan`
    - `recommendation`
 
+   **目录与标签系统同构（`template lint` 阻断）**：蓝图文件路径由内容确定性推导，不得另起一套目录。
+   - entity 蓝图：`blueprints/Entity/{subject.type}/{角度}.tmpl.yaml`（如 `Entity/地点/景区/攻略.tmpl.yaml`，与 `publish/tags/Entity/{domain}/{type}` 同构，角度=`templateId` 下划线后段）。
+   - topic 蓝图：`blueprints/Format/内容角度/{subject.type 末段}/{角度}.tmpl.yaml`（如 `Format/内容角度/线路/环线攻略.tmpl.yaml`，与 `publish/tags/Format/内容角度` 同构）。
+
 4. 新增作者画像时编辑 `quwoquan_data/templates/creator_profiles/system_builtin/*.creator.yaml`，必须使用系统可消费的 `authorId/subAccountId`。
 
 5. 准出门禁：
