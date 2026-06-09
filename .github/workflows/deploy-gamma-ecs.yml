@@ -145,6 +145,7 @@ jobs:
           GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS: ${{ vars.GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS }}
       - name: Upload ECS deploy report（prod）
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: ecs-onebox-deploy-report-prod
@@ -204,6 +205,7 @@ jobs:
             --report artifacts/avatar-e2e/cloud-gamma-prod-smoke/avatar_e2e_report.json
       - name: Upload chat avatar API probe report（prod）
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: chat-avatar-api-probe-prod

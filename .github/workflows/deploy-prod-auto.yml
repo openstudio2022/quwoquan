@@ -111,6 +111,7 @@ jobs:
           echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
       - name: Download mainline release artifact
         if: ${{ steps.context.outputs.release_run_id != '' }}
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: mainline-release-artifact
@@ -153,6 +154,7 @@ jobs:
           fi
       - name: Upload resolved release artifact
         if: ${{ steps.artifact.outputs.has_release_artifact == 'true' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: resolved-mainline-release-artifact
@@ -294,6 +296,7 @@ jobs:
             --report-dir artifacts/stackctl/alpha/mainline-inspect
       - name: Upload alpha stackctl artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: mainline-auto-prod-alpha
@@ -343,6 +346,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Download resolved release artifact
         if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: resolved-mainline-release-artifact
@@ -389,6 +393,7 @@ jobs:
             --redis-error-rate "${{ needs.prepare.outputs.redis_error_rate }}"
       - name: Upload prod initial artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: mainline-auto-prod-prod-initial
@@ -417,6 +422,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Download resolved release artifact
         if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: resolved-mainline-release-artifact
@@ -463,6 +469,7 @@ jobs:
             --redis-error-rate "${{ needs.prepare.outputs.redis_error_rate }}"
       - name: Upload prod full artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: mainline-auto-prod-prod-full
@@ -628,6 +635,7 @@ jobs:
             --emit-annotations
       - name: Upload mainline timing summaries
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: mainline-auto-prod-timing-summaries
