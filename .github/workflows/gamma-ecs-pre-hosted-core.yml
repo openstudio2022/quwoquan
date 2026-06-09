@@ -202,8 +202,11 @@ jobs:
           name: gamma-ecs-bundle
           path: bundle
       - name: Recreate bundle locally when artifact missing
-        if: ${{ hashFiles('bundle/gamma-ecs-bundle.tgz') == '' }}
         run: |
+          if [ -f "bundle/gamma-ecs-bundle.tgz" ]; then
+            echo "bundle already present"
+            exit 0
+          fi
           mkdir -p bundle
           if [ "${{ inputs.skip_upload }}" = "true" ] || [ -n "${{ inputs.release_artifact_name }}" ]; then
             mkdir -p .gamma-minimal-bundle

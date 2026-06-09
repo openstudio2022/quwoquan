@@ -128,6 +128,18 @@ jobs:
           run-id: ${{ steps.context.outputs.release_run_id }}
           repository: ${{ github.repository }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Regenerate release artifact locally when download missing
+        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        run: |
+          rm -rf .mainline-release-artifact
+          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
+            --output-dir .mainline-release-artifact \
+            --git-sha "${{ steps.context.outputs.head_sha }}" \
+            --run-number "${{ github.run_number }}" \
+            --repository "${{ github.repository }}" \
+            --registry "${{ env.REGISTRY }}" \
+            --image-version "${{ github.event.inputs.to_image }}" \
+            --config-version "${{ github.event.inputs.to_config }}"
       - name: Unpack generated release snapshots
         if: ${{ hashFiles('.mainline-release-artifact/manifest.json') != '' }}
         run: |
@@ -351,8 +363,20 @@ jobs:
         with:
           name: resolved-mainline-release-artifact
           path: .mainline-release-artifact
+      - name: Regenerate release snapshot locally
+        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        run: |
+          rm -rf .mainline-release-artifact
+          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
+            --output-dir .mainline-release-artifact \
+            --git-sha "${{ needs.prepare.outputs.head_sha }}" \
+            --run-number "${{ github.run_number }}" \
+            --repository "${{ github.repository }}" \
+            --registry "${{ env.REGISTRY }}" \
+            --image-version "${{ needs.prepare.outputs.to_image }}" \
+            --config-version "${{ needs.prepare.outputs.to_config }}"
       - name: Unpack generated release snapshots
-        if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
+        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') != '' }}
         run: |
           python3 - <<'PY'
           import json
@@ -427,8 +451,20 @@ jobs:
         with:
           name: resolved-mainline-release-artifact
           path: .mainline-release-artifact
+      - name: Regenerate release snapshot locally
+        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        run: |
+          rm -rf .mainline-release-artifact
+          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
+            --output-dir .mainline-release-artifact \
+            --git-sha "${{ needs.prepare.outputs.head_sha }}" \
+            --run-number "${{ github.run_number }}" \
+            --repository "${{ github.repository }}" \
+            --registry "${{ env.REGISTRY }}" \
+            --image-version "${{ needs.prepare.outputs.to_image }}" \
+            --config-version "${{ needs.prepare.outputs.to_config }}"
       - name: Unpack generated release snapshots
-        if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
+        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') != '' }}
         run: |
           python3 - <<'PY'
           import json
