@@ -856,6 +856,8 @@ if [[ "$podman_compose" == "1" ]]; then
   }
 
   network_name="quwoquan_service_default"
+  podman pod rm -f quwoquan_service >/dev/null 2>&1 || true
+  podman pod rm -f quwoquan_service_default >/dev/null 2>&1 || true
   for container_name in \
     quwoquan_service_gamma-proxy_1 \
     quwoquan_service_assistant-service_1 \
@@ -870,6 +872,14 @@ if [[ "$podman_compose" == "1" ]]; then
     quwoquan_service_mongodb_1 \
     quwoquan_service_postgres_1; do
     podman rm -f "$container_name" >/dev/null 2>&1 || true
+  done
+  for image_name in \
+    quwoquan_service_content-service \
+    quwoquan_service_chat-service \
+    quwoquan_service_assistant-service \
+    quwoquan_service_rec-model-service; do
+    podman rmi -f "$image_name" >/dev/null 2>&1 || true
+    podman rmi -f "localhost/${image_name}:latest" >/dev/null 2>&1 || true
   done
   podman network exists "$network_name" || podman network create "$network_name" >/dev/null
   # user-service migrations are not idempotent yet; keep gamma startup
@@ -931,7 +941,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_REC_MODEL_PORT:-19240}:8000" \
     --healthcheck-command "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 5 \
-    quwoquan_service_rec-model-service >/dev/null
+    localhost/quwoquan_service_rec-model-service:latest >/dev/null
   wait_healthy quwoquan_service_rec-model-service_1
 
   podman run --pull=never --name quwoquan_service_product-ops-service_1 -d \
@@ -967,7 +977,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_CONTENT_PORT:-19220}:18080" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    quwoquan_service_content-service >/dev/null
+    localhost/quwoquan_service_content-service:latest >/dev/null
   wait_healthy quwoquan_service_content-service_1
 
   podman run --pull=never --name quwoquan_service_chat-service_1 -d \
@@ -990,7 +1000,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_CHAT_PORT:-19200}:18081" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    quwoquan_service_chat-service >/dev/null
+    localhost/quwoquan_service_chat-service:latest >/dev/null
   wait_healthy quwoquan_service_chat-service_1
 
   podman run --pull=never --name quwoquan_service_user-service_1 -d \
@@ -1029,7 +1039,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_ASSISTANT_PORT:-19230}:18087" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    quwoquan_service_assistant-service >/dev/null
+    localhost/quwoquan_service_assistant-service:latest >/dev/null
   wait_healthy quwoquan_service_assistant-service_1
 
   podman run --pull=never --name quwoquan_service_tag-service_1 -d \
