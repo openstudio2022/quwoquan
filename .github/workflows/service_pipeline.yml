@@ -70,6 +70,7 @@ jobs:
             --image-version "${{ steps.versions.outputs.image_version }}" \
             --config-version "${{ steps.versions.outputs.config_version }}"
       - name: Upload mainline release artifact
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: mainline-release-artifact
@@ -137,10 +138,23 @@ jobs:
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
       - name: Download mainline release artifact
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: mainline-release-artifact
           path: .mainline-release-artifact
+      - name: Regenerate release snapshot locally
+        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        run: |
+          rm -rf .mainline-release-artifact
+          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
+            --output-dir .mainline-release-artifact \
+            --git-sha "${GITHUB_SHA}" \
+            --run-number "${{ github.run_number }}" \
+            --repository "${{ github.repository }}" \
+            --registry "${{ env.REGISTRY }}" \
+            --image-version "${{ needs.prepare-release.outputs.image_version }}" \
+            --config-version "${{ needs.prepare-release.outputs.config_version }}"
       - name: Unpack generated release snapshots
         run: |
           python3 - <<'PY'
@@ -196,10 +210,23 @@ jobs:
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
       - name: Download mainline release artifact
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: mainline-release-artifact
           path: .mainline-release-artifact
+      - name: Regenerate release snapshot locally
+        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        run: |
+          rm -rf .mainline-release-artifact
+          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
+            --output-dir .mainline-release-artifact \
+            --git-sha "${GITHUB_SHA}" \
+            --run-number "${{ github.run_number }}" \
+            --repository "${{ github.repository }}" \
+            --registry "${{ env.REGISTRY }}" \
+            --image-version "${{ needs.prepare-release.outputs.image_version }}" \
+            --config-version "${{ needs.prepare-release.outputs.config_version }}"
       - name: Unpack generated release snapshots
         run: |
           python3 - <<'PY'
@@ -259,10 +286,23 @@ jobs:
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
       - name: Download mainline release artifact
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: mainline-release-artifact
           path: .mainline-release-artifact
+      - name: Regenerate release snapshot locally
+        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        run: |
+          rm -rf .mainline-release-artifact
+          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
+            --output-dir .mainline-release-artifact \
+            --git-sha "${GITHUB_SHA}" \
+            --run-number "${{ github.run_number }}" \
+            --repository "${{ github.repository }}" \
+            --registry "${{ env.REGISTRY }}" \
+            --image-version "${{ needs.prepare-release.outputs.image_version }}" \
+            --config-version "${{ needs.prepare-release.outputs.config_version }}"
       - name: Unpack generated release snapshots
         run: |
           python3 - <<'PY'
@@ -374,6 +414,7 @@ jobs:
           echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
       - name: Upload service pipeline timing summary
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: service-pipeline-timing-summary
