@@ -203,11 +203,16 @@ jobs:
           path: bundle
       - name: Recreate bundle locally when artifact missing
         run: |
-          if [ -f "bundle/gamma-ecs-bundle.tgz" ]; then
+          if [ -f "bundle/gamma-ecs-bundle.tgz" ] || [ -f "bundle/gamma-ecs-bundle/gamma-ecs-bundle.tgz" ]; then
+            if [ ! -f "bundle/gamma-ecs-bundle.tgz" ] && [ -f "bundle/gamma-ecs-bundle/gamma-ecs-bundle.tgz" ]; then
+              cp "bundle/gamma-ecs-bundle/gamma-ecs-bundle.tgz" "bundle/gamma-ecs-bundle.tgz"
+            fi
             echo "bundle already present"
             exit 0
           fi
           mkdir -p bundle
+          TMP_BUNDLE="${RUNNER_TEMP:-/tmp}/gamma-ecs-bundle.tgz"
+          rm -f "${TMP_BUNDLE}"
           if [ "${{ inputs.skip_upload }}" = "true" ] || [ -n "${{ inputs.release_artifact_name }}" ]; then
             mkdir -p .gamma-minimal-bundle
             mkdir -p .gamma-minimal-bundle/quwoquan_app
@@ -230,7 +235,7 @@ jobs:
               --exclude='quwoquan_app/build' \
               --exclude='apps/ops-portal/node_modules' \
               -C ".gamma-minimal-bundle" \
-              -czf "bundle/gamma-ecs-bundle.tgz" .
+              -czf "${TMP_BUNDLE}" .
           else
             tar \
               --exclude='.git' \
@@ -244,8 +249,9 @@ jobs:
               --exclude='quwoquan_app/.dart_tool' \
               --exclude='quwoquan_app/build' \
               --exclude='apps/ops-portal/node_modules' \
-              -czf "bundle/gamma-ecs-bundle.tgz" .
+              -czf "${TMP_BUNDLE}" .
           fi
+          cp "${TMP_BUNDLE}" "bundle/gamma-ecs-bundle.tgz"
       - name: Resolve gamma URLs
         id: urls
         run: |

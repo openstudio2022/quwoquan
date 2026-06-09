@@ -12,7 +12,9 @@ ENV GOPROXY=${GOPROXY}
 ENV GOSUMDB=${GOSUMDB}
 WORKDIR /build/quwoquan_service
 COPY quwoquan_service/go.mod quwoquan_service/go.sum ./
-RUN go mod download
+COPY quwoquan_service/services/integration-service/go.mod quwoquan_service/services/integration-service/go.sum ./services/integration-service/
+RUN go mod download && \
+    cd services/integration-service && go mod download
 COPY quwoquan_service/ ./
 RUN mkdir -p /out/bin && \
     CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
@@ -21,8 +23,9 @@ RUN mkdir -p /out/bin && \
       go build ${GO_BUILD_FLAGS} -o /out/bin/chat-service ./services/chat-service/cmd/api && \
     CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
       go build ${GO_BUILD_FLAGS} -o /out/bin/user-service ./services/user-service/cmd/api && \
-    CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-      go build ${GO_BUILD_FLAGS} -o /out/bin/integration-service ./services/integration-service/cmd/api && \
+    (cd services/integration-service && \
+      CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+        go build ${GO_BUILD_FLAGS} -o /out/bin/integration-service ./cmd/api) && \
     CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
       go build ${GO_BUILD_FLAGS} -o /out/bin/circle-service ./services/circle-service/cmd/api
 
