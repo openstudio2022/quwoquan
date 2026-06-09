@@ -45,9 +45,15 @@ def main() -> int:
     issues: list[str] = []
 
     env_public_bases: dict[str, dict[str, str]] = {}
+    env_allowed_host_tokens: dict[str, set[str]] = {}
     for env_name in ENVIRONMENTS:
         env_cfg = manifest["environments"][env_name]
         env_public_bases[env_name] = dict(env_cfg["publicBases"])
+        env_allowed_host_tokens[env_name] = {
+            str(item).strip()
+            for item in env_cfg.get("hostAllowlist", [])
+            if str(item).strip()
+        }
 
         runtime_path = ROOT / "quwoquan_app" / "configs" / env_name / "app_runtime.yaml"
         runtime_values = parse_runtime_yaml(runtime_path)
@@ -68,20 +74,25 @@ def main() -> int:
         if env_name not in ENVIRONMENTS:
             continue
         text = cfg.read_text(encoding="utf-8")
-        for other_env, public_bases in env_public_bases.items():
-            for key, value in public_bases.items():
-                if not value:
+
+        for key, value in env_public_bases[env_name].items():
+            if not value or value not in text:
+                continue
+            if key not in ALLOWED_SERVICE_PUBLIC_KEYS:
+                issues.append(
+                    f"{cfg.relative_to(ROOT)} references service-forbidden public base {key}={value}"
+                )
+
+        current_allowed_tokens = env_allowed_host_tokens.get(env_name, set())
+        for other_env in ENVIRONMENTS:
+            if other_env == env_name:
+                continue
+            for token in env_allowed_host_tokens.get(other_env, set()):
+                if not token or token in current_allowed_tokens:
                     continue
-                if value not in text:
-                    continue
-                if other_env != env_name:
+                if token in text:
                     issues.append(
-                        f"{cfg.relative_to(ROOT)} references {other_env} public base {value}"
-                    )
-                    continue
-                if key not in ALLOWED_SERVICE_PUBLIC_KEYS:
-                    issues.append(
-                        f"{cfg.relative_to(ROOT)} references service-forbidden public base {key}={value}"
+                        f"{cfg.relative_to(ROOT)} references {other_env} host token {token}"
                     )
 
         if env_name == "prod":

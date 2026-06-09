@@ -7,6 +7,9 @@ cd "$ROOT"
 echo "[verify] recommendation-service contract"
 
 DEPLOY_FILE="$ROOT/deploy/service/recommendation-service/deployment.yaml"
+if [[ ! -f "$DEPLOY_FILE" ]]; then
+  DEPLOY_FILE="$ROOT/deploy/service/recommendation-service/kustomize/base/deployment.yaml"
+fi
 RUNTIME_CONTRACT="$ROOT/quwoquan_service/services/rec-model-service/runtime_contract.py"
 
 if [[ ! -f "$DEPLOY_FILE" ]]; then
@@ -19,7 +22,7 @@ if [[ ! -f "$RUNTIME_CONTRACT" ]]; then
   exit 1
 fi
 
-for kw in "name: recommendation-service" "app: recommendation-service" "SERVICE_NAME" "value: recommendation-service" "APP_ENV" "CONFIG_VERSION" "IMAGE_VERSION" "CONFIG_ROOT"; do
+for kw in "name: recommendation-service" "app.kubernetes.io/name: recommendation-service" "SERVICE_NAME" "value: recommendation-service" "APP_ENV" "CONFIG_VERSION" "IMAGE_VERSION" "CONFIG_ROOT"; do
   if ! grep -n "$kw" "$DEPLOY_FILE" >/dev/null 2>&1; then
     echo "[verify] FAIL: deploy manifest missing keyword: $kw" >&2
     exit 1

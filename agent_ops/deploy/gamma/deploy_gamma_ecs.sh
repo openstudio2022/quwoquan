@@ -418,11 +418,19 @@ fi
 docker compose -f quwoquan_service/docker-compose.gamma-local.yaml ps
 
 GW_LOCAL_PORT="${LOCAL_GAMMA_HTTP_PORT:-19000}"
-python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py \
-  --base-url "http://127.0.0.1:${GW_LOCAL_PORT}" \
-  --product-ops-base-url "http://127.0.0.1:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}" \
-  --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}" \
-  --skip-flutter-contracts
+if python3 - <<'PY' >/dev/null 2>&1
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
+PY
+then
+  python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py \
+    --base-url "http://127.0.0.1:${GW_LOCAL_PORT}" \
+    --product-ops-base-url "http://127.0.0.1:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}" \
+    --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}" \
+    --skip-flutter-contracts
+else
+  echo "[gamma-ecs] WARN: skip run_local_gamma_t3.py because python3 < 3.10 on remote host" >&2
+fi
 REMOTE_SCRIPT
 
 FAILURE_STAGE="public_health"

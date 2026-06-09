@@ -3,7 +3,24 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 COMPOSE_FILE="$ROOT/quwoquan_service/docker-compose.gamma-local.yaml"
-eval "$(python3 "$ROOT/agent_ops/deploy/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
+if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
+   || -z "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-}" \
+   || -z "${LOCAL_GAMMA_PLATFORM_OPS_PORT:-}" \
+   || -z "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-}" \
+   || -z "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT:-}" \
+   || -z "${LOCAL_GAMMA_CONTENT_PORT:-}" \
+   || -z "${LOCAL_GAMMA_CHAT_PORT:-}" \
+   || -z "${LOCAL_GAMMA_USER_PORT:-}" \
+   || -z "${LOCAL_GAMMA_ASSISTANT_PORT:-}" \
+   || -z "${LOCAL_GAMMA_REC_MODEL_PORT:-}" \
+   || -z "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-}" \
+   || -z "${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-}" \
+   || -z "${LOCAL_GAMMA_TAG_PORT:-}" \
+   || -z "${LOCAL_GAMMA_POSTGRES_PORT:-}" \
+   || -z "${LOCAL_GAMMA_MONGO_PORT:-}" \
+   || -z "${LOCAL_GAMMA_REDIS_PORT:-}" ]]; then
+  eval "$(python3 "$ROOT/agent_ops/deploy/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
+fi
 # docker compose 只读取导出的环境变量；这里把 canonical local-gamma 端口全部导出，
 # 避免直接运行脚本/Makefile 时回退到 compose 文件里的旧默认端口。
 export \
@@ -1213,6 +1230,13 @@ seed_tag_service_data
 
 seed_gamma_content_data() {
   echo "[local-gamma] seeding content posts (gamma curated manifest) ..."
+  if ! python3 - <<'PY' >/dev/null 2>&1; then
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
+PY
+    echo "[local-gamma] WARN: skip content seed because python3 < 3.10 on this host" >&2
+    return 0
+  fi
   if ! python3 "$ROOT/quwoquan_app/scripts/gamma/run_local_gamma_t3.py" --seed-only --report "${LOCAL_GAMMA_ARTIFACT_ROOT}/content-seed-report.json"; then
     echo "[local-gamma] WARN: content seed failed; home/discovery feeds may be empty until seed succeeds" >&2
     return 0

@@ -91,6 +91,7 @@ jobs:
           echo "::warning::gamma environment readiness probe failed; shared gamma infrastructure drift is recorded but does not block PR merge. Authoritative gamma validation remains in 08/09."
       - name: Upload gamma readiness report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: gamma-readiness-pr
@@ -132,6 +133,7 @@ jobs:
           GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       - name: Upload assistant protocol smoke report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: assistant-runtime-smoke-gamma-pr
@@ -176,6 +178,7 @@ jobs:
           GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       - name: Upload chat avatar API probe report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: chat-avatar-api-probe-gamma-pr
