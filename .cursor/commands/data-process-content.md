@@ -5,46 +5,41 @@ category: Workflow
 description: 应用数据生成工作流 · 图文加工阶段（含编程助手内容生成）
 ---
 
+> **真相源对齐**：旧入口 `quwoquan_data/tools/cli.py data process-content` 已废弃。统一真相源为 `qwq-data`（=`python3 quwoquan_data/scripts/cli.py <command>`）。本页保留 phase→动词映射，供加工阶段查阅。
+
 ## 目标
 
-对已下载来源完成内容加工，支持以下 `--phase` 阶段：
+对已下载来源完成内容加工。旧 `--phase` 概念映射到当前 `qwq-data` 动词：
 
-| phase | 说明 |
+| 旧 phase | 当前 `qwq-data` 动词 |
 |-------|------|
-| `all`（默认） | review + compose + review-generated 一步完成 |
-| `review` | 仅执行 content-review |
-| `compose` | 执行 compose-post + review-generated |
-| `quality-analysis` | 生成内容质量分析编程助手任务清单 |
-| `generate` | 生成润色/创作编程助手任务清单 |
-| `backfill` | 生成实体/标签反向补全编程助手任务清单 |
+| `all` | `produce review --materialize`（compose 由 Agent 在 CHECKPOINT 创作后 review 一并出门） |
+| `review` / `quality-analysis` | `produce review`（三门 + 事实门 + 质量归因，不通过先回退） |
+| `compose` / `generate` | CHECKPOINT 处会话 Agent 创作正文（见 `/data-content-compose`）→ `produce review --materialize` |
+| `backfill` | `verify`（实体/标签引用一致性）+ `annotate`（人审补全） |
 
 ## 工作流位置
 
-`data download` → normalize 阶段 → **data process-content** → `data publish`
+`download` → CHECKPOINT(会话 Agent 创作) → `produce review[--materialize]` → `media check-images` → `annotate` → `verify` → `ship`
 
-## 常用调用
+> fanout 模式下，以上每个动词都是 **per-ref worker 步骤**：worker 经 `qwq-data object-queue lease-next [--ref <ref>]` 租到单 ref，仅加工该 ref，完成 `object-queue complete`；归并用 `qwq-data task rollup --plan <planId>`。
+
+## 常用调用（qwq-data 真相源）
 
 ```bash
-# 标准全量加工
-python3 quwoquan_data/tools/cli.py data process-content \
-  --spec "<spec.yaml>" --topics "<topic_ids>" --targets "alpha,gamma"
+# 内容润色生成 + 质量门 + 物料化（替代旧 all/compose/generate）
+python3 quwoquan_data/scripts/cli.py produce review --task <taskId> --batch <batchId> --materialize
 
-# 编程助手内容质量分析
-python3 quwoquan_data/tools/cli.py data process-content \
-  --phase quality-analysis --spec "<spec.yaml>" --topics "<topic_ids>" --batch-label "<batch>"
+# 仅质量复核（替代旧 review/quality-analysis），可 per-ref
+python3 quwoquan_data/scripts/cli.py produce review --task <taskId> --batch <batchId> --refs "<ref1>,<ref2>"
 
-# 编程助手内容生成
-python3 quwoquan_data/tools/cli.py data process-content \
-  --phase generate --spec "<spec.yaml>" --topics "<topic_ids>" --batch-label "<batch>"
+# 图片安全/版式校验
+python3 quwoquan_data/scripts/cli.py media check-images --task <taskId> --batch <batchId> --refs "<ref...>"
+
+# 人审与实体/标签补全（替代旧 backfill 人审段），可 per-ref
+python3 quwoquan_data/scripts/cli.py annotate --task <taskId> --batch <batchId> --list --refs "<ref...>"
+python3 quwoquan_data/scripts/cli.py verify --scope current
 ```
-
-## 编程助手内容加工流程
-
-1. `--phase quality-analysis` 生成质量分析任务清单
-2. 编程助手分析内容质量，标记需润色段落
-3. `--phase generate` 生成润色/创作任务清单
-4. 编程助手执行润色/创作
-5. `--phase backfill` 补全实体/标签关联
 
 ## 门禁
 

@@ -37,6 +37,19 @@ var (
 	testAccessVerifier = rtauth.NewHS256Verifier(testAccessSecret)
 )
 
+type acceptedExternalClient struct{}
+
+func (acceptedExternalClient) SubmitSMSOTP(
+	ctx context.Context,
+	req application.SMSOTPDispatchRequest,
+) (application.ExternalInteractionAccepted, error) {
+	_ = ctx
+	return application.ExternalInteractionAccepted{
+		RequestID: req.RequestID,
+		Status:    "accepted",
+	}, nil
+}
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
@@ -170,6 +183,7 @@ func TestMain(m *testing.M) {
 		application.WithUserAuthRepository(userAuthStore),
 		application.WithOtpCodeStore(cache.NewOtpCodeCache(redisClient)),
 		application.WithOtpDebugReveal(true),
+		application.WithExternalInteractionClient(acceptedExternalClient{}),
 		application.WithAccessTokenSigner(testAccessSigner),
 		application.WithOneTapPhoneResolver(application.StaticOneTapPhoneResolver{
 			"carrier_token_new":      "+8618013813901",

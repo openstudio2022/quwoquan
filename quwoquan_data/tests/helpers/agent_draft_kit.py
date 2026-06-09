@@ -45,6 +45,11 @@ def route_article(title: str, byline: str, nodes: Sequence[str], must_facts: Seq
             "我更愿意多问一句，也不想到现场才被动应付，因为它们直接决定这趟走得舒不舒服。"
         )
         paras.append("这些不是为了凑清单，而是每一条都和当天的节奏、体力和退路绑在一起。")
+    paras.append("## 怎么到、怎么订")
+    paras.append(
+        "这条线怎么去：先飞到成都再换乘班车或自驾接驳，交通衔接直接决定全程节奏；"
+        "各景区门票和观光车建议提前在官方渠道预约，留意开放时间，旺季排队要多留缓冲。"
+    )
     paras.append("## 走完这条线的取舍")
     paras.append(
         "如果你愿意为节奏让路、能接受偶尔的疲惫，这条线值得慢慢走；"

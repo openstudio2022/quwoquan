@@ -37,6 +37,31 @@ class FollowProfileContinuation extends AuthContinuation {
   final String subAccountId;
 }
 
+/// 续接「向用户主页打招呼」。
+class GreetProfileContinuation extends AuthContinuation {
+  const GreetProfileContinuation({required this.subAccountId});
+
+  final String subAccountId;
+}
+
+/// 续接「打开或创建与用户的正式私信会话」。
+class OpenDirectConversationContinuation extends AuthContinuation {
+  const OpenDirectConversationContinuation({required this.subAccountId});
+
+  final String subAccountId;
+}
+
+/// 续接「从用户主页发起 1v1 通话」。
+class StartDirectCallContinuation extends AuthContinuation {
+  const StartDirectCallContinuation({
+    required this.targetUserId,
+    required this.callType,
+  });
+
+  final String targetUserId;
+  final String callType;
+}
+
 /// 续接「加入/关注圈子」。
 class JoinCircleContinuation extends AuthContinuation {
   const JoinCircleContinuation({required this.circleId});

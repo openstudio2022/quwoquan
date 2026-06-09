@@ -252,3 +252,36 @@ flowchart LR
 3. **编程助手自检告警**
 
 编程助手自检只作为告警，不替代门禁。
+
+## 6. 任务级产线（`data workflow run` / `task run`）
+
+对象优先批次产线与 §2 省级 crawl 阶段互补：实体/内容成品落在 `runtime/tasks/{taskId}/batches/{batchId}/`。
+
+### 6.1 DAG（含 `content_plan`）
+
+```text
+download_plan (checkpoint) → download_fetch
+→ build_prepare → build_homepage (checkpoint)
+→ content_plan (checkpoint)     # 证据驱动篇目，见 content_pipeline_spec §1.2.1
+→ produce_plan → produce_compose
+→ produce_author (checkpoint) → produce_annotate → produce_review → publish
+```
+
+### 6.2 `content_plan` checkpoint
+
+**输入**：各实体 `1.download/sources/**`、`source.quality.json`、任务级实体主页、`task.yaml` 的 `content.quotas`。
+
+**输出**：`batches/{batch}/_shared/content_plan_packet.json`（每条含 `kind`/`title`/`entityRefs`/`evidenceRefs`/`mustIncludeFacts`/`rationale`）；注册 `content_object`；写入各篇 `3.compose/brief.json`。
+
+**stop-if**
+
+- 条目缺少可解析 `evidenceRefs`
+- B 组线路无联游互证却硬凑实体
+- 使用未下载证据或 placeholder URL
+- 篇目在 download 前以营销 ref 预置
+
+**准出**：配额满足（默认 10 单实体 + 10 线路）；Ralph hook-check 通过后方可 `produce_compose`。
+
+### 6.3 运行反馈
+
+批次内阻断写入 `batches/{batch}/_shared/run_journal.md`（`stage` / `issue` / `fix` / `spec_gap`）；批次结束后回写 `content_pipeline_spec` / 本 workflow / `command-matrix` / task `notes.md`。

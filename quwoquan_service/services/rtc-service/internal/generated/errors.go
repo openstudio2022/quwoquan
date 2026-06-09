@@ -124,3 +124,4 @@ func AppErrorFromTokenGenerationFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrTokenGenerationFailed.Error()))
 	return rerrors.NewAppError(code, "连接通话服务失败，请重试", debugMessage)
 }
+

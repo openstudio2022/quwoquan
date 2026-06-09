@@ -98,9 +98,39 @@ entities:
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read
+        api_exposure: read_write
         ops_exposure: read
         description: 关联 CircleGroup（默认公共群 / 自建群 / 组织节点）
+
+      - name: originType
+        type: enum
+        enum_ref: ConversationOriginType
+        constraints: [NOT_NULL, DEFAULT_DIRECT_INIT]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 会话创建来源；用于区分直接私信、打招呼升级、临时群、圈子默认群、圈子自建群、组织节点群、主页相关群和助手邀请等来源语义
+
+      - name: bindingType
+        type: enum
+        enum_ref: ConversationBindingType
+        constraints: [NOT_NULL, DEFAULT_NONE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 会话绑定对象类型；主页仅通过 related groups 间接进入群会话，不直接拥有 conversation
+
+      - name: lifecyclePolicy
+        type: enum
+        enum_ref: ConversationLifecyclePolicy
+        constraints: [NOT_NULL, DEFAULT_PERSISTENT]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 会话生命周期策略；临时群、自建群、圈子绑定群和组织节点群通过该字段表达生命周期差异
 
       - name: maxSeq
         type: int64

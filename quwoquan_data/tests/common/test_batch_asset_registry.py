@@ -56,6 +56,21 @@ def test_allocate_post_asset_id_reuses_same_owner_key():
     assert saved.resolve("7|峨眉山_攻略|峨眉山|cover") == aid1
 
 
+def test_allocate_is_idempotent_across_recompose_reload():
+    """recompose 漂移防回归：重跑 compose（重新从磁盘 load registry）必须返回同一 assetId。"""
+    batch = f"{BATCH}_recompose"
+    reg1 = BatchAssetRegistry(task_id=TASK, batch_id=batch, global_batch_seq=9)
+    aid_first = allocate_post_asset_id(
+        entity_name="峨眉山", role="cover", ref="峨眉山_攻略", global_batch_seq=9, registry=reg1,
+    )
+    # 模拟下一轮 compose：全新 registry 从磁盘加载，再次分配同 owner_key
+    reg2 = load_batch_asset_registry(TASK, batch, 9)
+    aid_again = allocate_post_asset_id(
+        entity_name="峨眉山", role="cover", ref="峨眉山_攻略", global_batch_seq=9, registry=reg2,
+    )
+    assert aid_first == aid_again, "recompose 必须复用同一 assetId，禁止漂移"
+
+
 def test_allocate_post_asset_id_retries_on_collision():
     registry = BatchAssetRegistry(task_id=TASK, batch_id=f"{BATCH}_collision", global_batch_seq=8)
     original = asset_identity.compute_post_asset_id

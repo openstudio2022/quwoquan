@@ -20,6 +20,13 @@ export interface ReleaseItem {
   configPath: string;
   grayStages: number[];
   releaseState: string;
+  stageState?: string;
+  fromConfig?: string;
+  toConfig?: string;
+  currentStage?: number;
+  updatedAt?: string;
+  workflowRef?: string;
+  rollbackToken?: string;
 }
 
 export interface ReportItem {
@@ -205,6 +212,12 @@ export interface AlertTemplateItem {
   title: string;
   severity: string;
   status: string;
+  owner?: string;
+  runbookId?: string;
+  runbookRoute?: string;
+  repairEntry?: string;
+  alertId?: string;
+  auditRoute?: string;
 }
 
 export interface DashboardCardItem {
@@ -291,6 +304,73 @@ export interface EffectiveConfigResponse {
   desiredHash: string;
   values: EffectiveConfigValue[];
   source: string;
+  driftSummary: ConfigInstanceReportSummary;
+}
+
+export interface PlatformTriageServiceDriftItem {
+  service: string;
+  totalInstances: number;
+  inSyncInstances: number;
+  outOfSyncInstances: number;
+}
+
+export interface PlatformTriageOutOfSyncInstanceItem {
+  id: string;
+  environment: string;
+  cluster: string;
+  service: string;
+  instanceId: string;
+  desiredHash?: string;
+  effectiveHash?: string;
+  source?: string;
+  lastError?: string;
+  inSync: boolean;
+}
+
+export interface PlatformTriageSummaryResponse {
+  scope: Record<string, string>;
+  projectionSummary: PlatformProjectionSummary;
+  configDrift: ConfigInstanceReportSummary;
+  serviceDrift: PlatformTriageServiceDriftItem[];
+  outOfSyncInstances: PlatformTriageOutOfSyncInstanceItem[];
+  backlogCandidates: ControlPlaneBacklogCandidate[];
+  runtimeReady: boolean;
+  source: string;
+}
+
+export interface PlatformReleaseMutationRequest {
+  service: string;
+  fromImage?: string;
+  toImage?: string;
+  fromConfig?: string;
+  toConfig?: string;
+  step?: number;
+  errorRate?: number;
+  p95Ms?: number;
+  redisErrorRate?: number;
+}
+
+export interface PlatformRollbackMutationRequest {
+  service: string;
+  targetConfigVersion: string;
+  workflowRef?: string;
+  rollbackToken?: string;
+}
+
+export interface PlatformReleaseMutationResponse {
+  releaseId: string;
+  service: string;
+  scriptOutput?: string;
+  error?: string;
+  releaseState: string;
+  approvalState?: string;
+  stageState: string;
+  workflowRef?: string;
+  rollbackToken?: string;
+  observedSlo?: Record<string, unknown>;
+  ackSummary: ConfigInstanceReportSummary;
+  pauseReason?: string;
+  rollbackReason?: string;
 }
 
 export interface ModerationCaseItem {
@@ -393,6 +473,23 @@ export interface ProductEventDrilldown {
   items: ProductEventDrilldownItem[];
 }
 
+export interface ControlPlaneBacklogCandidate {
+  id: string;
+  category: string;
+  severity: string;
+  title: string;
+  summary?: string;
+  owner?: string;
+  nextAction: string;
+  drilldownRoute?: string;
+  runbookId?: string;
+  runbookRoute?: string;
+  repairEntry?: string;
+  alertId?: string;
+  auditRoute?: string;
+  evidence?: Record<string, unknown>;
+}
+
 export interface ProductEventQuery {
   eventType?: string;
   eventName?: string;
@@ -430,11 +527,56 @@ export interface ProductMetricItem {
   status: string;
   trend: string;
   description: string;
+  source?: string;
+}
+
+export interface ProductL1L4AlertState {
+  id: string;
+  level: string;
+  metric: string;
+  state: string;
+  severity: string;
+  summary: string;
+  value: number;
+  threshold: number;
+  source: string;
+  owner?: string;
+  runbookId?: string;
+  runbookRoute?: string;
+  repairEntry?: string;
+  alertId?: string;
+  auditRoute?: string;
+}
+
+export interface ProductL1L4MetricsCoverage {
+  totalMetrics: number;
+  liveMetrics: number;
+  fallbackMetrics: number;
+  eventSignals: number;
 }
 
 export interface ProductL1L4MetricsResponse {
   scope: Record<string, string>;
+  source: string;
+  freshness: string;
+  window: string;
+  coverage: ProductL1L4MetricsCoverage;
+  alerts: ProductL1L4AlertState[];
   items: ProductMetricItem[];
+}
+
+export interface ProductTriageSummaryResponse {
+  projectionSummary: ProductProjectionSummary;
+  eventSummary: ProductEventSummary;
+  visitSummary: {
+    totalVisits: number;
+    items: Array<Record<string, unknown>>;
+  };
+  topEventHotspots: Record<string, Array<{ value: string; count: number }>>;
+  recentEvents: ProductEventDrilldownItem[];
+  backlogCandidates: ControlPlaneBacklogCandidate[];
+  runtimeReady: boolean;
+  source: string;
 }
 
 function envBaseUrl(key: 'VITE_PRODUCT_OPS_BASE_URL' | 'VITE_PLATFORM_OPS_BASE_URL' | 'VITE_CONTENT_SERVICE_BASE_URL') {
@@ -455,6 +597,72 @@ async function fetchJSON<T>(baseUrl: string, path: string): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`);
+  } catch (error) {
+    throw new RuntimeError(
+      fallbackRuntimeErrorResponse({
+        code: "OPS.NETWORK.fetch_failed",
+        requestPath: path,
+        cause: error,
+      }),
+    );
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    let decoded: unknown;
+    try {
+      decoded = text ? JSON.parse(text) : undefined;
+    } catch {
+      decoded = undefined;
+    }
+    throw new RuntimeError(
+      isRuntimeErrorResponse(decoded)
+        ? decoded
+        : fallbackRuntimeErrorResponse({
+            code:
+              response.status >= 500
+                ? "OPS.UNAVAILABLE.control_plane_unavailable"
+                : "OPS.NETWORK.request_failed",
+            statusCode: response.status,
+            requestPath: path,
+            requestId: response.headers.get("X-Request-Id") ?? undefined,
+            traceId: response.headers.get("X-Trace-Id") ?? undefined,
+          }),
+    );
+  }
+  try {
+    return (await response.json()) as T;
+  } catch (error) {
+    throw new RuntimeError(
+      fallbackRuntimeErrorResponse({
+        code: "OPS.CONTRACT.invalid_json_response",
+        statusCode: response.status,
+        requestPath: path,
+        requestId: response.headers.get("X-Request-Id") ?? undefined,
+        traceId: response.headers.get("X-Trace-Id") ?? undefined,
+        cause: error,
+      }),
+    );
+  }
+}
+
+async function postJSON<T>(baseUrl: string, path: string, payload: unknown): Promise<T> {
+  if (!baseUrl) {
+    throw new RuntimeError(
+      fallbackRuntimeErrorResponse({
+        code: "OPS.CONFIG.base_url_missing",
+        requestPath: path,
+      }),
+    );
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
   } catch (error) {
     throw new RuntimeError(
       fallbackRuntimeErrorResponse({
@@ -734,6 +942,35 @@ export async function fetchEffectiveConfig(query: ControlPlaneScopeQuery = {}): 
   );
 }
 
+export async function fetchPlatformTriageSummary(query: ControlPlaneScopeQuery = {}): Promise<PlatformTriageSummaryResponse> {
+  return fetchJSON<PlatformTriageSummaryResponse>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    withQuery('/v1/control-plane/platform/triage/summary', query),
+  );
+}
+
+export async function applyPlatformRelease(
+  releaseId: string,
+  payload: PlatformReleaseMutationRequest,
+): Promise<PlatformReleaseMutationResponse> {
+  return postJSON<PlatformReleaseMutationResponse>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    `/v1/control-plane/platform/releases/${releaseId}:apply`,
+    payload,
+  );
+}
+
+export async function rollbackPlatformRelease(
+  releaseId: string,
+  payload: PlatformRollbackMutationRequest,
+): Promise<PlatformReleaseMutationResponse> {
+  return postJSON<PlatformReleaseMutationResponse>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    `/v1/control-plane/platform/releases/${releaseId}:rollback`,
+    payload,
+  );
+}
+
 export async function fetchModerationCases(): Promise<ModerationCaseItem[]> {
   const payload = await fetchJSON<{ items: ModerationCaseItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
@@ -807,5 +1044,12 @@ export async function fetchProductL1L4Metrics(query: ControlPlaneScopeQuery = {}
   return fetchJSON<ProductL1L4MetricsResponse>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
     withQuery('/v1/control-plane/product/metrics/l1l4', query),
+  );
+}
+
+export async function fetchProductTriageSummary(query: ProductEventQuery = {}): Promise<ProductTriageSummaryResponse> {
+  return fetchJSON<ProductTriageSummaryResponse>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    withQuery('/v1/control-plane/product/triage/summary', query),
   );
 }

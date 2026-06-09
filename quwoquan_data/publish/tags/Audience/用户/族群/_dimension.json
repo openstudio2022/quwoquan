@@ -1,0 +1,9 @@
+{
+  "label": "族群",
+  "labelEn": "Ethnicity",
+  "description": "用户族裔背景，纯客观分类，不做价值判断",
+  "maxDepth": 3,
+  "pathPolicy": "leaf-only",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

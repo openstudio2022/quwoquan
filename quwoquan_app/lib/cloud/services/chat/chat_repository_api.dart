@@ -71,6 +71,9 @@ abstract class ChatConversationRepository {
     String? title,
     String? circleId,
     String? circleGroupId,
+    String? originType,
+    String? bindingType,
+    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   });
@@ -192,6 +195,11 @@ abstract class ChatContactRepository {
   // ── 联系人 ──────────────────────────────────────────────────────────────
   Future<List<ChatContactRowDto>> listContacts({
     String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+
+  Future<List<ChatContactRowDto>> listGroupCandidates({
+    String? conversationId,
     int limit = CloudApiDefaults.pageLimit,
   });
 

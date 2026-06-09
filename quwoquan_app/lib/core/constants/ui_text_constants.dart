@@ -141,7 +141,8 @@ class UITextConstants {
   static const String webPcMessagesRailTitle = '消息中心';
   static const String webPcMessagesRailBody = '在这里查看会话、联系人与群聊，点击任意会话进入对话详情。';
   static const String webPcProfileRailTitle = '我的主页';
-  static const String webPcProfileRailBody = '在 Web 端浏览个人主页、作品与互动数据，保持与移动端一致的展示。';
+  static const String webPcProfileRailBody =
+      '在 Web 端浏览个人主页、作品与互动数据，保持与移动端一致的展示。';
   static const String webPcHomeRailTitle = homeTodayIntersection;
   static const String webPcHomeRailBody = '关注同校、旅行、摄影与科技等兴趣频道，新的交集会在这里持续浮现。';
   static const String webPcHomeFeedTitle = '首页推荐';
@@ -316,6 +317,13 @@ class UITextConstants {
   static const String loginSubtitleFirstRun = '作品、收藏、赞过、消息与分身资料会跟随账号保存。';
   static const String loginSubtitleReturn = '你可以直接浏览，登录后继续同步点赞、收藏、关注和创作记录。';
   static const String loginSubtitleActionRequired = '该操作需要账号身份，用于保存你的记录和权限。';
+  static const String loginRememberedMethodTitle = '继续上次登录方式';
+  static const String loginRememberedMethodPhoneOtp = '上次使用手机号验证码登录';
+  static const String loginRememberedMethodOneTap = '上次使用本机号码一键登录';
+  static const String loginRememberedMethodWechat = '上次使用微信登录';
+  static const String loginRememberedMethodApple = '上次使用 Apple 登录';
+  static const String loginRememberedMethodPasskey = '上次使用 Passkey 登录';
+  static const String loginRememberedMethodAnonymous = '上次以游客身份使用';
   static const String loginAgreementPrefix = '已阅读并同意 ';
   static const String loginAgreementAnd = ' 和 ';
   static const String userAgreement = '用户协议';
@@ -323,10 +331,14 @@ class UITextConstants {
   static const String loginAgreementRequired = '请先阅读并同意用户协议和隐私政策';
   static const String loginOtherMethods = '其他登录方式';
   static const String loginMethodWechat = '微信';
+  static const String loginMethodApple = 'Apple';
+  static const String loginMethodPasskey = 'Passkey';
+  static const String loginMethodCredentialManager = '系统凭据';
   static const String loginMethodWeibo = '微博';
   static const String loginMethodQq = 'QQ';
   static const String loginMethodAlipay = '支付宝';
   static const String loginMethodComingSoon = '即将支持';
+  static const String loginMethodUnavailable = '当前设备暂不可用，请改用手机号登录';
   static const String loginPhoneRequired = '请输入手机号';
   static const String loginOtpRequired = '请输入验证码';
   static const String loginOtpSent = '验证码已发送';
@@ -346,6 +358,7 @@ class UITextConstants {
   static const String authGateTitleLike = '登录后继续点赞';
   static const String authGateTitleFavorite = '登录后同步收藏';
   static const String authGateTitleFollow = '登录后继续关注';
+  static const String authGateTitleGreet = '登录后发送打招呼';
   static const String authGateTitleFollowingFeed = '登录后查看关注';
   static const String authGateTitleShare = '登录后同步分享记录';
   static const String authGateTitlePersona = '登录后管理分身';
@@ -367,6 +380,7 @@ class UITextConstants {
   static const String authGatePromptLike = '登录后即可点赞';
   static const String authGatePromptFavorite = '登录后即可收藏';
   static const String authGatePromptFollow = '登录后即可关注';
+  static const String authGatePromptGreet = '登录后即可发起打招呼';
   static const String authGatePromptFollowingFeed = '登录后查看你关注的人、圈子和地点动态';
   static const String authGatePromptShare = '登录后即可同步分享';
   static const String authGatePromptPersona = '登录后即可管理分身';
@@ -479,6 +493,47 @@ class UITextConstants {
   static const String contentUnavailable = '内容不可用了';
   static const String contentUnavailableReason = '可能已被删除或暂时无法查看。';
   static const String report = '举报';
+  static const String profileBlockUser = '拉黑';
+  static const String profileBlockConfirmTitle = '确认拉黑该用户？';
+  static const String profileBlockConfirmMessage = '拉黑后将不再看到对方内容，也不会收到其消息。';
+  static const String profileBlockSuccess = '已拉黑该用户';
+  static const String profileReportReasonTitle = '选择举报原因';
+  static const String profileReportReasonSpam = '垃圾营销';
+  static const String profileReportReasonMisinformation = '不实信息';
+  static const String profileReportReasonHarassment = '骚扰辱骂';
+  static const String profileReportReasonPornography = '色情低俗';
+  static const String profileReportReasonOther = '其他';
+  // Creator Impact（双向可解释性·生产端 v0：仅用真实聚合总数，无估算）
+  static const String creatorImpactTitle = '你的影响力';
+  static const String creatorImpactSubtitle = '你的内容真实促成的连接';
+  static const String creatorImpactEmpty = '发布内容后，这里会显示你帮到了谁';
+  static const String creatorImpactRelationshipLabel = '关注你的人';
+  static const String creatorImpactAppreciationLabel = '收获的赞同';
+  static const String creatorImpactContributionLabel = '贡献的内容';
+  static const String creatorImpactCommunityLabel = '参与的圈子';
+  static const String creatorImpactCommunityHelpLabel = '促成进圈';
+  static const String creatorImpactDecisionLabel = '帮助决策';
+  static const String creatorImpactKnowledgeLabel = '知识帮助';
+  static const String creatorImpactSpreadLabel = '传播回流';
+  static const String creatorImpactAudienceLabel = '触达同好';
+  static String creatorImpactRelationshipNarrative(int count) =>
+      '$count 人因为你的内容关注了你';
+  static String creatorImpactAppreciationNarrative(int count) =>
+      '你的内容累计获得 $count 次赞同';
+  static String creatorImpactContributionNarrative(int count) =>
+      '你已贡献 $count 篇内容';
+  static String creatorImpactCommunityNarrative(int count) => '你活跃在 $count 个圈子';
+  static String creatorImpactCommunityHelpNarrative(int count) =>
+      '你的内容促成 $count 次进圈或圈内互动';
+  static String creatorImpactDecisionNarrative(int count) =>
+      '你的内容帮助 $count 次查看、收藏或深度消费';
+  static String creatorImpactKnowledgeNarrative(int count) =>
+      '你的内容被用于 $count 次知识回应';
+  static String creatorImpactSpreadNarrative(int count) =>
+      '你的内容带来 $count 次分享或回流';
+  static String creatorImpactAudienceNarrative(int count) =>
+      '你的内容触达 $count 次同维度兴趣人群';
+  static const String shareComingSoon = '分享功能即将上线';
   static const String notInterested = '不感兴趣';
   static const String shareTo = '分享到';
   static const String shareActionSavePoster = '保存海报';
@@ -867,7 +922,10 @@ class UITextConstants {
   static const String privacyShield = '隐私屏障(禁截屏、禁转发)';
   static const String setChatBackground = '设置当前聊天背景';
   static const String clearChatHistory = '清空聊天记录';
+  static const String circleSubmitPost = '向圈子投稿';
   static const String exitGroupChat = '退出群聊';
+  static const String exitGroupChatConfirmMessage = '退出后将不再接收该群聊消息，确定退出吗？';
+  static const String exitGroupChatSuccess = '已退出群聊';
   static const String dissolveGroupChat = '解散该群聊';
   static const String dissolveGroupChatConfirmMessage =
       '解散后所有成员将被移出群聊，此操作不可撤销。';
@@ -899,6 +957,15 @@ class UITextConstants {
   static const String startGroupChat = '发起群聊';
   static const String addContact = '添加';
   static const String chatMutualFollowRtcHint = '互相关注后可发起语音和视频通话';
+  static const String chatBlockedConversationHint = '当前会话已被关系门禁限制，暂时无法继续发送消息';
+  static const String chatBlockedConversationInputHint = '当前会话暂不可发送消息';
+  static const String chatGreetingInboxTitle = '新的打招呼';
+  static const String chatGreetingInboxEmpty = '暂时没有待处理的打招呼';
+  static const String chatGreetingInboxReply = '回复并建会话';
+  static const String chatGreetingInboxIgnore = '忽略';
+  static const String chatGreetingSent = '打招呼已发送';
+  static const String chatGreetingReplySucceeded = '已回复，正式会话已建立';
+  static const String chatGreetingIgnored = '已忽略打招呼';
   static const String addContactSheetTitle = '添加联系人';
   static const String noAddableContacts = '暂无可添加联系人';
   static const String globalActionSheetTitle = '发起';
@@ -1275,12 +1342,9 @@ class UITextConstants {
   static const String circlePublishModeMoment = '点滴';
   static const String circlePublishModeWork = '作品';
   static const String noCirclesAvailable = '加入圈子，发现兴趣相近的人';
-  static String startGroupChatMembersAddedCount(int count) =>
-      '已添加 $count 位联系人';
-  static const String startGroupChatNoMutualContactsInGroup =
-      '该群暂无可添加的互关联系人';
-  static const String startGroupChatNoMutualContactsInCircle =
-      '该圈暂无可添加的互关联系人';
+  static String startGroupChatMembersAddedCount(int count) => '已添加 $count 位联系人';
+  static const String startGroupChatNoMutualContactsInGroup = '该群暂无可添加的互关联系人';
+  static const String startGroupChatNoMutualContactsInCircle = '该圈暂无可添加的互关联系人';
   static const String locationSearchHint = '搜索地点';
   static const String locationNearbyTitle = '附近位置';
   static const String locationSearchingNearby = '正在搜索附近位置';

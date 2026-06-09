@@ -32,6 +32,34 @@ void main() {
     expect(stored.manualLoggedOut, isFalse);
   });
 
+  test(
+    'saveLoginResult persists remembered login method and masked account',
+    () async {
+      final store = AuthSessionStore(
+        secureStorage: const FlutterSecureStorage(),
+      );
+      final result = AuthLoginResultDto.fromMap(<String, dynamic>{
+        'accessToken': 'access-2',
+        'refreshToken': 'refresh-2',
+        'ownerId': 'owner-2',
+        'activeSub': <String, dynamic>{'subAccountId': 'sub-2'},
+        'subAccountCount': 1,
+        'accountState': 'active',
+        'identityOrigin': 'phone',
+      });
+
+      await store.saveLoginResult(
+        result,
+        rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
+        rememberedLoginMaskedIdentifier: '138****3909',
+      );
+      final stored = await store.read();
+
+      expect(stored.rememberedLoginMethod, AuthRememberedLoginMethod.phoneOtp);
+      expect(stored.rememberedLoginMaskedIdentifier, '138****3909');
+    },
+  );
+
   test('clearSession records manual logout prompt state', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
 

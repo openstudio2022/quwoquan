@@ -1,0 +1,13 @@
+{
+  "id": "Audience",
+  "label": "受众画像",
+  "labelEn": "Audience",
+  "semantics": "描述内容受众特征（用户/创作者/圈子）的多维度标签体系，用于内容匹配与推荐",
+  "expectedDimensions": [
+    "Audience/用户",
+    "Audience/创作者",
+    "Audience/圈子"
+  ],
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

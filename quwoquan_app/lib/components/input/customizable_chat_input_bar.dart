@@ -54,10 +54,12 @@ class ChatInputSubmitPayload {
   const ChatInputSubmitPayload({
     required this.text,
     required this.attachments,
+    this.mentions = const <String>[],
   });
 
   final String text;
   final List<ChatInputAttachment> attachments;
+  final List<String> mentions;
 }
 
 enum ChatInputPanelMode { none, emoji, more }
@@ -135,6 +137,7 @@ class CustomizableChatInputBar extends StatefulWidget {
     this.showXiaoquMentionButton = false,
     this.enableVoiceInput = false,
     this.enableExpandedEditor = true,
+    this.disabled = false,
     this.sendButtonKey,
     this.leftBuilder,
     this.rightBuilder,
@@ -165,6 +168,7 @@ class CustomizableChatInputBar extends StatefulWidget {
   final bool showXiaoquMentionButton;
   final bool enableVoiceInput;
   final bool enableExpandedEditor;
+  final bool disabled;
   final Key? sendButtonKey;
   final ChatInputLeftBuilder? leftBuilder;
   final ChatInputRightBuilder? rightBuilder;
@@ -196,6 +200,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   bool _isRecording = false;
   bool _isVoiceCancelling = false;
   bool _voicePointerActive = false;
+  final Set<String> _pendingMentions = <String>{};
   Offset? _voicePointerStartGlobal;
   DateTime? _recordStartAt;
 
@@ -208,7 +213,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   bool get _hasText => _controller.text.trim().isNotEmpty;
   bool get _hasAttachments => _attachments.isNotEmpty;
-  bool get _canSend => _hasText || _hasAttachments;
+  bool get _canSend => !widget.disabled && (_hasText || _hasAttachments);
   bool get _showAddPanel => _panelMode == ChatInputPanelMode.more;
   bool get _showEmojiPanel => _panelMode == ChatInputPanelMode.emoji;
 
@@ -241,6 +246,9 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   void _insertXiaoquMention() {
+    if (widget.disabled) {
+      return;
+    }
     const mention = '${UITextConstants.commentAtXiaoqu} ';
     final text = _controller.text;
     final selection = _controller.selection;
@@ -255,6 +263,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       ..selection = TextSelection.collapsed(
         offset: insertionOffset + mention.length,
       );
+    _pendingMentions.add('assistant');
     _focusNode.requestFocus();
     setState(() => _panelMode = ChatInputPanelMode.none);
   }
@@ -304,8 +313,29 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant CustomizableChatInputBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.disabled || widget.disabled == oldWidget.disabled) {
+      return;
+    }
+    if (_isRecording) {
+      unawaited(_cancelVoiceRecord());
+    }
+    if (_focusNode.hasFocus) {
+      _focusNode.unfocus();
+    }
+    setState(() {
+      _isVoiceMode = false;
+      _panelMode = ChatInputPanelMode.none;
+    });
+  }
+
   void _onTextChanged() {
     if (!mounted) return;
+    if (!_controller.text.contains(UITextConstants.commentAtXiaoqu)) {
+      _pendingMentions.remove('assistant');
+    }
     setState(() {});
   }
 
@@ -338,6 +368,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       math.max(0, widget.maxAttachmentCount - _attachments.length);
 
   Future<void> _addAttachments(List<ChatInputAttachment> attachments) async {
+    if (widget.disabled) return;
     if (attachments.isEmpty) return;
     if (_attachments.length >= widget.maxAttachmentCount) {
       _emitToast(
@@ -370,6 +401,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   Future<void> _pickImages() async {
+    if (widget.disabled) return;
     if (widget.onPickImages == null) return;
     if (!_acceptAttachmentType(ChatInputAttachmentType.image)) return;
     final list = await widget.onPickImages!(_remainingAttachmentCount);
@@ -378,6 +410,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   Future<void> _pickFiles() async {
+    if (widget.disabled) return;
     if (widget.onPickFiles == null) return;
     if (!_acceptAttachmentType(ChatInputAttachmentType.file)) return;
     final list = await widget.onPickFiles!(_remainingAttachmentCount);
@@ -386,6 +419,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   Future<void> _capturePhoto() async {
+    if (widget.disabled) return;
     if (widget.onCapturePhoto == null) return;
     if (!_acceptAttachmentType(ChatInputAttachmentType.image)) return;
     final item = await widget.onCapturePhoto!();
@@ -394,6 +428,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   void _removeAttachment(String id) {
+    if (widget.disabled) return;
     setState(() {
       _attachments.removeWhere((item) => item.id == id);
     });
@@ -403,6 +438,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   void _toggleAddPanel() {
+    if (widget.disabled) return;
     if (!widget.showAddPanel) return;
     setState(() {
       _panelMode = _showAddPanel
@@ -415,6 +451,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   void _toggleEmojiPanel() {
+    if (widget.disabled) return;
     if (!widget.showEmojiButton) return;
     setState(() {
       _panelMode = _showEmojiPanel
@@ -429,6 +466,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
   }
 
   void _toggleVoiceMode() {
+    if (widget.disabled) return;
     setState(() {
       _isVoiceMode = !_isVoiceMode;
       _panelMode = ChatInputPanelMode.none;
@@ -445,11 +483,13 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     final payload = ChatInputSubmitPayload(
       text: _controller.text.trim(),
       attachments: List<ChatInputAttachment>.from(_attachments),
+      mentions: List<String>.unmodifiable(_pendingMentions),
     );
     final hadAttachments = _attachments.isNotEmpty;
     setState(() {
       _controller.clear();
       _attachments.clear();
+      _pendingMentions.clear();
       _panelMode = ChatInputPanelMode.none;
     });
     if (hadAttachments) {
@@ -635,20 +675,24 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   ChatInputDefaultActions _defaultActions() {
     return ChatInputDefaultActions(
-      toggleAddPanel: _toggleAddPanel,
-      toggleVoiceMode: _toggleVoiceMode,
-      toggleEmojiPanel: _toggleEmojiPanel,
+      toggleAddPanel: widget.disabled ? () {} : _toggleAddPanel,
+      toggleVoiceMode: widget.disabled ? () {} : _toggleVoiceMode,
+      toggleEmojiPanel: widget.disabled ? () {} : _toggleEmojiPanel,
       send: () {
-        unawaited(_send());
+        if (!widget.disabled) {
+          unawaited(_send());
+        }
       },
       openExpandedEditor: () {
-        unawaited(_openExpandedEditor());
+        if (!widget.disabled) {
+          unawaited(_openExpandedEditor());
+        }
       },
     );
   }
 
   Future<void> _openExpandedEditor() async {
-    if (!widget.enableExpandedEditor || _isVoiceMode) {
+    if (widget.disabled || !widget.enableExpandedEditor || _isVoiceMode) {
       return;
     }
     final shouldRefocus = _focusNode.hasFocus;
@@ -703,7 +747,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
               AppSpacing.chatInputIconButtonSize,
               AppSpacing.chatInputIconButtonSize,
             ),
-            onPressed: _insertXiaoquMention,
+            onPressed: widget.disabled ? null : _insertXiaoquMention,
             child: Text(
               UITextConstants.commentAtXiaoqu,
               style: TextStyle(
@@ -727,7 +771,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
           icon: _showEmojiPanel
               ? _kChatInputKeyboardCompactIcon
               : _kChatInputEmojiPanelIcon,
-          onTap: _toggleEmojiPanel,
+          onTap: widget.disabled ? null : _toggleEmojiPanel,
           semanticLabel: _showEmojiPanel
               ? UITextConstants.keyboard
               : UITextConstants.emoji,
@@ -747,7 +791,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
           context: context,
           key: TestKeys.chatInputMoreButton,
           icon: CupertinoIcons.add,
-          onTap: _toggleAddPanel,
+          onTap: widget.disabled ? null : _toggleAddPanel,
           semanticLabel: UITextConstants.more,
         ),
       );
@@ -760,11 +804,13 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     required BuildContext context,
     Key? key,
     required IconData icon,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     required String semanticLabel,
     double iconSize = _kChatInputToolbarGlyphSize,
   }) {
-    final fg = _foregroundPrimary(context).withValues(alpha: 0.82);
+    final fg = _foregroundPrimary(
+      context,
+    ).withValues(alpha: onTap == null ? 0.32 : 0.82);
     return Semantics(
       button: true,
       label: semanticLabel,
@@ -782,15 +828,17 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     return Semantics(
       button: true,
       label: UITextConstants.send,
-      onTap: _send,
+      onTap: widget.disabled ? null : _send,
       child: GestureDetector(
         key: widget.sendButtonKey,
-        onTap: _send,
+        onTap: widget.disabled ? null : _send,
         child: Container(
           width: AppSpacing.chatInputSendButtonSize,
           height: AppSpacing.chatInputSendButtonSize,
           decoration: BoxDecoration(
-            color: AppColors.primaryColor,
+            color: widget.disabled
+                ? AppColors.primaryColor.withValues(alpha: 0.35)
+                : AppColors.primaryColor,
             borderRadius: BorderRadius.circular(
               AppSpacing.chatInputSendButtonSize,
             ),
@@ -865,7 +913,9 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
                       ),
                       SizedBox(width: AppSpacing.xs),
                       GestureDetector(
-                        onTap: () => _removeAttachment(item.id),
+                        onTap: widget.disabled
+                            ? null
+                            : () => _removeAttachment(item.id),
                         child: Container(
                           width: AppSpacing.iconButtonMinSizeSm,
                           height: AppSpacing.iconButtonMinSizeSm,
@@ -934,17 +984,28 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
             key: TestKeys.chatInputVoiceHoldButton,
             behavior: HitTestBehavior.opaque,
             onPointerDown: (event) {
+              if (widget.disabled) {
+                return;
+              }
               _voicePointerActive = true;
               _voicePointerStartGlobal = event.position;
               unawaited(_startVoiceRecord());
             },
-            onPointerMove: (event) => _updateVoiceCancelState(event.position),
+            onPointerMove: widget.disabled
+                ? null
+                : (event) => _updateVoiceCancelState(event.position),
             onPointerUp: (_) {
+              if (widget.disabled) {
+                return;
+              }
               _voicePointerActive = false;
               _voicePointerStartGlobal = null;
               unawaited(_stopVoiceRecordAndSend());
             },
             onPointerCancel: (_) {
+              if (widget.disabled) {
+                return;
+              }
               _voicePointerActive = false;
               _voicePointerStartGlobal = null;
               unawaited(_cancelVoiceRecord());
@@ -1176,7 +1237,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
                     controller: _controller,
                     focusNode: _focusNode,
                     scrollController: _textScrollController,
-                    enabled: !_isVoiceMode,
+                    enabled: !widget.disabled && !_isVoiceMode,
                     maxLength: widget.maxTextLength,
                     maxLines: widget.maxVisibleLines,
                     minLines: 1,
@@ -1190,12 +1251,17 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
                       forceStrutHeight: true,
                     ),
                     onTap: () {
+                      if (widget.disabled) {
+                        return;
+                      }
                       if (_panelMode != ChatInputPanelMode.none) {
                         setState(() => _panelMode = ChatInputPanelMode.none);
                       }
                     },
                     decoration: InputDecoration(
-                      hintText: widget.hintText ?? UITextConstants.inputHint,
+                      hintText: widget.disabled
+                          ? UITextConstants.chatBlockedConversationInputHint
+                          : widget.hintText ?? UITextConstants.inputHint,
                       hintStyle: TextStyle(
                         color: secondary,
                         fontSize: fontSize,
@@ -1222,7 +1288,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
                         minimumSize: Size.square(
                           AppSpacing.iconButtonMinSizeSm,
                         ),
-                        onPressed: _openExpandedEditor,
+                        onPressed: widget.disabled ? null : _openExpandedEditor,
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Icon(
@@ -1260,7 +1326,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
                     icon: _isVoiceMode
                         ? _kChatInputKeyboardCompactIcon
                         : CupertinoIcons.mic,
-                    onTap: _toggleVoiceMode,
+                    onTap: widget.disabled ? null : _toggleVoiceMode,
                     semanticLabel: _isVoiceMode
                         ? UITextConstants.keyboard
                         : UITextConstants.voiceInput,
@@ -1296,26 +1362,26 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       _PanelActionItem(
         icon: Icons.photo_library_outlined,
         text: UITextConstants.chatMorePhoto,
-        disabled: disableImage,
+        disabled: widget.disabled || disableImage,
         onTap: _pickImages,
       ),
       _PanelActionItem(
         icon: Icons.camera_alt_outlined,
         text: UITextConstants.chatMoreShoot,
-        disabled: disableImage,
+        disabled: widget.disabled || disableImage,
         onTap: _capturePhoto,
       ),
       _PanelActionItem(
         icon: Icons.insert_drive_file_outlined,
         text: UITextConstants.chatMoreFile,
-        disabled: disableFile,
+        disabled: widget.disabled || disableFile,
         onTap: _pickFiles,
       ),
       ...widget.extraPanelItems.map(
         (item) => _PanelActionItem(
           icon: item.icon,
           text: item.text,
-          disabled: item.disabled,
+          disabled: widget.disabled || item.disabled,
           onTap: item.onTap,
         ),
       ),

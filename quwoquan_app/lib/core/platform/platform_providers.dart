@@ -41,3 +41,17 @@ final assistantLocalContextBridgeProvider =
       return const UnsupportedAssistantLocalContextBridge();
   }
 });
+
+/// Native auth bridge for provider-backed social/system credential entrypoints.
+final nativeAuthBridgeProvider = Provider<NativeAuthBridge>((ref) {
+  final platform = ref.watch(platformTargetProvider);
+  switch (platform) {
+    case AppPlatform.android:
+    case AppPlatform.ios:
+      return MethodChannelNativeAuthBridge();
+    case AppPlatform.web:
+    case AppPlatform.ohos:
+    case AppPlatform.desktop:
+      return const UnsupportedNativeAuthBridge();
+  }
+});

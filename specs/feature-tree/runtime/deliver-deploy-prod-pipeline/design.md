@@ -147,6 +147,104 @@ gamma 阶段输出必须至少包含：
 - 通过 artifact 复用、bundle 复用、self-hosted cache repo、Flutter 依赖缓存、skip upload、镜像预拉取来压缩关键路径。
 - `agent_ops/ci/render_ci_timing_summary.py` 继续作为统一耗时摘要渲染器。
 
+## ACK 集群部署形态设计（modular-monolith-first + split-ready）
+
+> 本节冻结 `prod-hosted` 在阿里云 ACK 上的标准部署形态，对标业界云原生最佳实践，避免“多业务容器共享 Pod / sidecar 承载领域职责”等定制反模式。
+
+### 设计对标
+
+- Modular Monolith / “MonolithFirst”：早期边界不确定时单体起步、内部按 bounded context 模块化，是低成本高演进的标准路径。
+- 共享集群 bin-packing：用调度器与 autoscaler 复用物理资源，是 K8s 原生降本手段，优于把进程塞进一个 Pod。
+- Strangler Fig Pattern：单体到微服务的标准渐进迁移模式，保证拆分可逆、对外无感。
+- 12-Factor App：进程无状态、配置注入、日志即事件流，保证“同一镜像既能合并跑也能拆开跑”。
+- 独立可观测：每域 `service.name` + 指标维度独立，使“逻辑独立”在合并部署时依然成立，并为拆分提供数据依据。
+
+### 三层正交边界
+
+| 边界 | 对象 | 含义 |
+|---|---|---|
+| 逻辑边界 | 领域服务（DDD bounded context） | 第一真相源：路由前缀 `/v1/<domain>/*`、`service.name`、指标/日志/配置段/错误码独立 |
+| 部署单元 | Kubernetes Deployment | 最小发布与伸缩单元；对外稳定标识是 Service（DNS/路由），Deployment 可替换 |
+| 物理资源 | 单 ACK 集群 + 共享节点池 | `requests/limits` + bin-packing + HPA + cluster-autoscaler + namespace `ResourceQuota` 降本 |
+
+逻辑与部署是“多对一 → 一对一”的演进关系：初期多域共享一个 Deployment（modular monolith），拆分后一域一个 Deployment。
+
+### 平面划分与工作负载形态
+
+- 应用平面：
+  - `seed-box`：单一 Deployment，承载 Go Modular Monolith 进程，聚合可聚合的 Go 领域。
+  - `recommendation-service`：Python，同集群独立 Deployment，独立伸缩，不做 co-located sidecar、不并入 Go 二进制。
+- 实时/媒体平面（从第一天即独立 workload，但共享集群）：
+  - `realtime-gateway / rtc-service`：标准 Deployment + HPA + PDB。
+  - `livekit-sfu`：首发用 Deployment + HPA + PDB，UDP（7882）经 NodePort/`LoadBalancer` 暴露；若后续需稳定网络标识可演进为 StatefulSet（拆分不变量不变）。
+  - `coturn`：`hostNetwork` 固定副本 Deployment（UDP/TCP 3478 + TLS 5349），中继按节点容量手动扩，不配 HPA。
+- 数据平面：阿里云托管（ApsaraDB PostgreSQL/Redis + MongoDB），不进集群自建。
+- 入口：共享 Ingress/ALB，按 `/v1/<domain>/*` 路由到对应 Service。
+
+部署形态唯一：所有服务一律独立 Deployment（或有状态用 StatefulSet），sidecar 仅限代理/日志/配置 bootstrap 等辅助进程，不承载领域职责。
+
+### 数据面与应用/实时面的对应关系
+
+- 网络：ACK 集群与托管 DB 处于同一 VPC，应用面/实时面通过 VPC 私网 endpoint 访问，安全组/白名单只放行集群节点网段，不走公网。
+- 服务发现抽象：集群内用 ExternalName Service（如 `pg.data.svc → ApsaraDB 私网域名`）把托管 DB 暴露成“像集群内 Service”，使 `gamma-local`（本地容器 DB）与 `prod-hosted`（托管 DB）用同一 Service 名/同一 DSN 变量切换，两环境同构、业务代码不改。
+- 连接信息：DSN/账号/口令走 K8s Secret（阿里云 RAM/KMS 管理），不硬编码、不打进镜像、不入 git。
+- 存储归属（按领域、存储无关）：每域只连归属存储（`content → MongoDB`、`user/circle → PostgreSQL`、会话/计数/限流/presence `→ Redis`，以各域实际归属为准），走 repository 接口，禁止跨域直连他域库表。
+- 不变量：Strangler 拆分某域后仍连同一托管 DB、同一归属、同一 ExternalName/DSN 抽象，数据面对应关系是拆分的不变量。
+
+### 数据面弹性形态（成本优先 · 固定小规格存算分离单主，非主备冗余/分库分表）
+
+- 起步形态：每个存储以**固定小规格的单写主节点**起步，不预先做主备冗余、不做传统分库分表。固定规格相较 Serverless 费用恒定可预测、无突发扩容抖动，更易守住成本封顶。
+- 弹性方式（存算分离 + 在线变配）：
+  - 关系型用 PolarDB PostgreSQL 标准版入门规格（存算分离）：读性能靠按需增减只读节点扩展，容量靠共享存储自动扩，纵向算力靠在线变配，无需分库分表。
+  - 缓存用 Tair（Redis）固定 1G 小规格：常驻内存延迟可预测，扩容走在线变配。
+  - 文档库用云数据库 MongoDB 单节点实例：单主、去副本冗余，在线扩存储。注意阿里云 MongoDB Serverless（预设容量）已于 2025-12-31 EOS，因此不采用 Serverless 形态。
+- 不采用 Serverless 的理由：Serverless 弹性为反应式，突发尖峰存在秒级至分钟级扩容延迟与瞬时抖动（PolarDB 实测 1→32 PCU ≈87s、缩容≈231s、只读节点回收 15–20min），峰值费用随用量线性上涨且需显式封顶；对“有基本常驻流量 + 硬成本封顶”的初期场景，固定小规格更稳更可控。
+- 高可用演进：放量前再升只读副本/副本集获得读扩展与故障冗余；这是“成本封顶档 → 最小高可用档”的升级动作，不改领域归属与连接抽象。
+- 归档：冷数据按时间分区或转 OSS 冷存储；只有归档库在必要时才做分表，主链路保持单逻辑库。
+- 连接稳定性：纵向变配可能引发短暂连接中断，应用侧（Repository/HTTP/驱动层）必须配连接池 + 重试，避免变配窗口请求失败。
+
+### 成本优化（标准 K8s 能力，非定制）
+
+- 合理 `requests/limits` 让调度器 bin-packing，多个 Deployment 落到同一批节点。
+- 每个 Deployment 配 HPA（CPU/内存或自定义指标）。
+- 集群配 cluster-autoscaler / 弹性节点池，低峰缩容降本。
+- namespace + `ResourceQuota`/`LimitRange` 做软隔离。
+
+### Strangler Fig 拆分机制
+
+拆分触发阈值（满足任一）：
+
+- 域级 CPU/内存长期高占用或与其他域明显争用。
+- 域级请求量/延迟 SLO 需要独立伸缩曲线。
+- 域级发布频率显著高于其他域（独立发布窗口）。
+- 域级故障需要独立故障域隔离。
+- 域级安全/合规需要独立边界。
+
+拆分步骤：
+
+1. 新建独立 Deployment / HPA / PDB / Service，保持原域 Service DNS 名与 `/v1/<domain>/*` 路由不变。
+2. 把 Ingress/gateway upstream 或 Service selector 切到新 Deployment。
+3. 从 `seed-box` 发布单元移除该域模块，rollout/rollback 按域独立。
+
+回滚：从独立包回退到 `seed-box` 内模块；App 端无需改环境注入。
+
+拆分不变量：域级 API / route / Service DNS 名 / 端侧 runtime 注入 / 数据面归属保持不变。
+
+### 反模式禁止（明确写入门禁意图）
+
+- 一个 Pod 塞多个业务容器当常态。
+- 用 sidecar 承载领域服务职责。
+- 把不同技术栈合并成一个超级二进制。
+- 把数据库做成集群内自建 StatefulSet 当默认。
+- 业务代码硬编码 DB 连接串，或跨域直连他域库表。
+- 为“统一”而新增第二套环境名 / 路由真相源。
+
+### 与现有 promotion 链 / 多云 overlay 的关系
+
+- 本形态不改 `alpha-local / beta-local / gamma-hosted / prod-hosted` 主链抽象，也不新增环境名。
+- 复用 `deploy/cloud-providers/aliyun/`、`deploy/kustomization/aliyun-prod/` 与 `CLOUD_PROVIDER` 切换参数。
+- `stackctl` 仍是唯一命令面；prod rollout 仍走 `gray-initial / carry-on / full` stage，拆分后按域独立 rollout。
+
 ## 多云与 overlay 设计
 
 多云 prod overlay 方案保持不变，继续使用：

@@ -12,10 +12,12 @@ scope:
     - 公开内容 Web 入口规格。
     - 站外分享 HTTPS 链同源。
     - Markdown-to-SEO-HTML renderer 骨架。
+    - public HTML 服务最小闭环（post/circle/user/entity_homepage 四类对象的可索引 HTML envelope）。
+    - robots.txt、分类型 sitemap.xml、canonical、OG/Twitter card、JSON-LD、noindex 权限过滤。
+    - open / s/{token} 智能中转页 UA 分流合同与安装转化埋点。
     - PC 内容优先体验与安装转化规格。
   out_of_scope:
     - 完整 PC masonry 首页实现。
-    - 完整 public web SSR/静态服务上线。
     - 创作、私信、RTC 的桌面化实现。
 gwt_acceptance:
   GWT1:
@@ -46,7 +48,9 @@ gwt_acceptance:
       planned:
         - quwoquan_app/test/ui/content/share/content_share_template_public_link_test.dart
       recorded: []
-    status: pending
+      recorded:
+        - quwoquan_app/test/ui/content/share/content_share_template_public_link_test.dart
+    status: implemented
   GWT2:
     title: Markdown 可派生安全 SEO HTML
     given:
@@ -76,7 +80,9 @@ gwt_acceptance:
       planned:
         - quwoquan_app/test/ui/content/seo/markdown_seo_html_renderer_test.dart
       recorded: []
-    status: pending
+      recorded:
+        - quwoquan_app/test/ui/content/seo/markdown_seo_html_renderer_test.dart
+    status: implemented
   GWT3:
     title: 4 类对象公开页输出 SEO 元信息与 JSON-LD
     given:
@@ -106,8 +112,11 @@ gwt_acceptance:
       planned:
         - quwoquan_app/test/ui/web/seo_object_pages_snapshot_test.dart
         - quwoquan_service/services/content-service/tests/public_seo_render_contract_test.go
+        - quwoquan_service/runtime/publicweb/renderer_test.go
       recorded: []
-    status: pending
+      recorded:
+        - quwoquan_service/runtime/publicweb/renderer_test.go
+    status: implemented
   GWT4:
     title: 智能中转页按 UA 分流唤起或下载
     given:
@@ -135,8 +144,11 @@ gwt_acceptance:
     tests:
       planned:
         - quwoquan_service/services/content-service/tests/transfer_page_ua_routing_contract_test.go
+        - quwoquan_service/runtime/publicweb/transfer_test.go
       recorded: []
-    status: pending
+      recorded:
+        - quwoquan_service/runtime/publicweb/transfer_test.go
+    status: implemented
   GWT5:
     title: 安装转化入口对 4 类对象统一可用
     given:
@@ -162,7 +174,10 @@ gwt_acceptance:
       planned:
         - quwoquan_app/test/ui/web/install_conversion_cta_test.dart
       recorded: []
-    status: pending
+      recorded:
+        - quwoquan_service/runtime/publicweb/renderer_test.go
+        - quwoquan_service/runtime/publicweb/transfer_test.go
+    status: implemented
 execution:
   local_gate:
     - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

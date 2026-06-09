@@ -68,6 +68,26 @@ void main() {
       expect(full.status, 'active');
     });
 
+    test('createConversation 保留群家族语义字段', () async {
+      final created = await repo.createConversation(
+        type: 'group',
+        title: '班级群',
+        circleId: 'school_circle_001',
+        circleGroupId: 'classroom_group_001',
+        originType: 'organization_node_group',
+        bindingType: 'organization_node',
+        lifecyclePolicy: 'bound_to_organization_node',
+      );
+
+      final full = await repo.getConversation(created.conversationId);
+      expect(full.type, 'group');
+      expect(full.circleId, 'school_circle_001');
+      expect(full.circleGroupId, 'classroom_group_001');
+      expect(full.originType, 'organization_node_group');
+      expect(full.bindingType, 'organization_node');
+      expect(full.lifecyclePolicy, 'bound_to_organization_node');
+    });
+
     test('getConversation 返回指定会话', () async {
       final conversations = await repo.listConversations();
       final firstId = conversations.first.id;

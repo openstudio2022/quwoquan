@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/泸州市/景区/四川游玩点全集",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/泸州老窖景区",
+        "地点/景区/太平古镇",
+        "地点/景区/黄荆老林",
+        "地点/景区/张坝桂圆林"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

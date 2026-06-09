@@ -87,6 +87,26 @@
 - tool-facing 搜索接口必须保持幂等、只读、可审计与可限流，支持 agent 高并发调用。
 - 同一 agent 回答过程可对 `web.document` 与趣我圈对象执行多轮小查询，接口不得因结构过深而显著增加模型拆解成本。
 
+## 商用化三引擎阻断登记（2026-06）
+
+当前三引擎规划把本能力从“统一搜索壳层”提升为“站内搜索 + 小趣按需检索 + 站外 SEO 引流”的共同基础。本节点登记以下 `GATE_BLOCK`，不得在未回填证据前宣称商用上线：
+
+1. 站内搜索不得继续以 `ListPublished/ListCircles/内存 map + strings.Contains` 作为主路径；本期必须有共享搜索核心、相关性排序、敏感 query 阻断和 provider 统一 envelope。
+2. 小趣不得维护 `web_search/search/app_search` 第二套 fake 搜索真相源；assistant 工具必须桥接 canonical `search(request)`，并返回 typed citation provenance。
+3. `web.document` 不是旁路能力，而是 canonical search 的一个 provider；站内业务对象与网页检索必须进入同一聚合、排序、引用结构。
+4. 标签与实体不能只停留在对象页解释；必须进入 query expansion、召回补充、排序原因、零结果回退与小趣 citation rank。
+5. 公开 SEO 引流必须由 `public-content-web-entry` 提供可索引 HTML、robots/sitemap、canonical/OG/JSON-LD，不能只生成 App 端 HTTPS 分享链接。
+
+## LLM 按需检索接口约束
+
+面向小趣和其他 LLM agent 的检索接口必须符合以下最小合同：
+
+- 唯一工具名为 canonical `search`；`web_search` 与 `app_search` 只能作为兼容 alias 或 provider scope，不得返回独立 fake schema。
+- 请求必须以 `query` 为主输入，可选 `mode`、`objectTypes`、`limit`、`queryVariants`、`searchPlans` 与 allowlist filters。
+- 响应必须包含 `hits/citations/degradeSignals/provenance`，其中每个 hit 至少包含 `objectType/objectId/title/snippet/score/sourceDomain/visibility/reasons/evidence`。
+- provider 注册范围本期至少覆盖 `web.document/content.post/entity.homepage/user.profile/chat.message/circle.group/circle.circle/tag`；未实现 provider 必须返回结构化 degrade signal。
+- 私有对象（如 `chat.message`、private content）只能在授权用户上下文内检索，绝不进入公开 SEO 或跨用户 web 聚合。
+
 ## 迁移、灰度与回滚要求
 
 - 本次 baseline 不要求立刻迁移到统一高性能读库。

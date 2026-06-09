@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from _common.paths import task_catalog
+from _common.paths import resolve_existing_task_shared_path
 from _common.io import read_ndjson
 
 
 def gate_explore(task_id: str, *, expected_topic_ids: Iterable[str] | None = None) -> list[str]:
     """检查 explore 准出条件；返回阻断问题列表。"""
     issues = []
-    catalog_path = task_catalog(task_id)
+    catalog_path = resolve_existing_task_shared_path(task_id, "catalog.ndjson")
 
     if not catalog_path.exists():
         issues.append(f"catalog.ndjson not found: {catalog_path}")

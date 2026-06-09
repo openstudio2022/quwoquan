@@ -102,6 +102,109 @@ uat_acceptance:
       - quwoquan_app/integration_test/external_acquisition_deeplink_e2e_test.dart
       recorded: []
     status: pending
+  UAT_MESSAGE_SOCIAL_CONNECTION:
+    title: 消息社交连接端到端价值闭环
+    journey: 用户从主页、联系人、搜索、圈子、组织节点、主页相关群组与会话内小趣入口进入消息体系，能清晰完成 1v1、请求箱升级、私建群、圈子群、班级群和 @小趣 回复。
+    scenario_refs:
+    - message-social-connection
+    - message-direct-and-greeting-upgrade
+    - message-group-entry-matrix
+    - message-assistant-in-conversation
+    done_when:
+    - 互关用户从 TA 的主页点击消息，可创建或复用 direct conversation 并完成发送/接收。
+    - 非互关用户只能先打招呼；对方回复后升级为正式 direct conversation；未回复前不进入普通会话列表。
+    - 用户可从全局发起群聊入口选择服务端返回的候选来源与成员，建群后进入 group conversation。
+    - 用户可从兴趣圈子进入默认公共群或自建群；从学校组织主页进入院系/班级节点所绑定的班级群会话。
+    - 用户可从共享主页的相关群组卡片进入真实 Circle/CircleGroup 绑定的群会话，主页本身不拥有 conversation。
+    - 用户可在 1v1 或群会话中邀请小趣并 @小趣，收到 assistant_reply，且消息进入同一同步和审计链路。
+    experience_points:
+    - 1v1 建聊规则可见，用户不需要通过报错猜测关系门。
+    - 圈子、组织、群、会话、主页相关群的层级清晰，不混用“实体/圈子/群聊”。
+    - 小趣会话内参与与个人助手入口语义一致但不割裂。
+    performance_points:
+    - 1v1 消息发送到对端收到 p99 <= 200ms。
+    - 群消息发送到在线成员收到 p99 <= 500ms。
+    - 会话内 @小趣 首个可见响应 p95 <= 3s，失败时结构化降级。
+    evidence:
+      primary:
+      - T4_user_journey
+      supporting:
+      - T1_static_contract
+      - T2_module_interaction
+      - T3_cross_service_integration
+    tests:
+      planned: []
+      recorded:
+      - quwoquan_service/services/chat-service/tests/direct_conversation_relationship_gate_test.go
+      - quwoquan_service/services/chat-service/tests/send_message_relationship_gate_test.go
+      - quwoquan_service/services/chat-service/tests/group_lifecycle_contract_test.go
+      - quwoquan_service/services/chat-service/tests/conversation_error_contract_test.go
+      - quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
+      - quwoquan_service/services/chat-service/tests/message_sync_contract_test.go
+      - quwoquan_app/test/cloud/chat/contract/chat_repository_contract_test.dart
+      - quwoquan_app/test/ui/chat/widgets/chat_page_widget_test.dart
+      - quwoquan_app/test/ui/chat/widgets/start_group_chat_page_widget_test.dart
+      - quwoquan_app/test/ui/chat/widgets/chat_settings_page_widget_test.dart
+      - quwoquan_app/test/ui/chat/pages/chat_conversation_page_realtime_journey_test.dart
+      - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+      - quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      - quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
+      - quwoquan_app/test/cloud/circle/contract/circle_group_dto_contract_test.dart
+      - quwoquan_service/services/rtc-service/tests/one_to_one_relationship_gate_test.go
+    status: partial
+  UAT_ASSISTANT_OMNIPRESENT_PRIVATE_ASSISTANT:
+    title: 无处不在的小趣私人助理商用主线
+    journey: 用户可在内容、搜索、群聊、个人页和主动订阅场景中使用同一个小趣；小趣能理解当前上下文、站内外检索、社交关系、画像与标签，并在授权后完成用户或会话级主动服务。
+    scenario_refs:
+    - assistant-omnipresent-private-assistant
+    - assistant-context-grounded-answering
+    - assistant-chat-topic-understanding
+    - assistant-search-handoff-and-grounding
+    - assistant-proactive-subscription-delivery
+    done_when:
+    - 用户从首页、内容页、群聊、搜索页、个人页进入小趣时，入口语义和会话状态一致，不维护第二套助手体验。
+    - 用户在内容页提问时，小趣基于当前对象、内容片段、标签和站内外检索给出有引用边界的回答。
+    - 用户在群聊中 @小趣 时，消息以结构化 mentions 触发 AssistantMentioned，assistant-service 基于最近消息窗口与成员信息回群回复。
+    - 用户可订阅主题并投递到用户或会话；投递前执行 consent、频控、静默、去重与审计。
+    - 小趣回答后的赞/踩、采纳、撤销和引用打开能回流到 InteractionEvent，并携带 referralSource、triggerMessageId、assistantTurnId。
+    experience_points:
+    - 入口无处不在但不打扰，半屏/全屏/群聊内体验一致。
+    - 回答明确区分站内对象、群聊上下文和互联网引用。
+    - 主动服务可暂停、恢复、撤销和审计，避免错投递。
+    performance_points:
+    - 会话内 @小趣 首个可见响应 p95 <= 3s。
+    - grounding success >= 95%，citation 可点击率 100%。
+    - 主动投递 wrong-destination 事故 = 0。
+    evidence:
+      primary:
+      - T4_user_journey
+      supporting:
+      - T1_static_contract
+      - T2_module_interaction
+      - T3_cross_service_integration
+    tests:
+      planned:
+      - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+      - quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart
+      - quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
+      - quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
+      recorded:
+      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - quwoquan_app/test/ui/chat/providers/chat_message_provider_test.dart
+      - quwoquan_app/test/ui/assistant/widgets/assistant_half_sheet_personalization_provider_test.dart
+      - quwoquan_app/test/ui/assistant/personal_content_access_provider_test.dart
+      - quwoquan_service/services/chat-service/tests/event_publish_contract_test.go
+      - quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
+      - quwoquan_service/services/assistant-service/internal/application/chat_mention_service_test.go
+      - quwoquan_service/services/assistant-service/internal/application/service_test.go
+      - quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
+      - quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
+      - quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
+      - quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
+      - quwoquan_service/scripts/contract/verify_assistant_context_contract.py
+      - quwoquan_service/scripts/contract/verify_assistant_security_contract.py
+      - specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
+    status: partial
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

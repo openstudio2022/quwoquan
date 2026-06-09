@@ -1,0 +1,10 @@
+{
+  "label": "星座",
+  "labelEn": "Zodiac Signs",
+  "description": "十二星座性格与运势",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "aliases": [
+    "十二星座"
+  ]
+}

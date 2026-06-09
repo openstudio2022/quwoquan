@@ -15,6 +15,7 @@ import (
 	rthealth "quwoquan_service/runtime/health"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 type ContentHandler struct {
@@ -24,6 +25,7 @@ type ContentHandler struct {
 	behaviorService     *application.BehaviorService
 	importService       *application.BulkImportService
 	intersectionService *application.IntersectionService
+	authorImpactStore   *persistence.AuthorImpactStore
 	healthChecker       *rthealth.Checker
 }
 
@@ -60,6 +62,10 @@ func WithHealthChecker(c *rthealth.Checker) ContentHandlerOption {
 // WithIntersectionService 注入交集统一体验服务（事实/概率合并、冷却窗口、已读水位）。
 func WithIntersectionService(svc *application.IntersectionService) ContentHandlerOption {
 	return func(h *ContentHandler) { h.intersectionService = svc }
+}
+
+func WithAuthorImpactStore(store *persistence.AuthorImpactStore) ContentHandlerOption {
+	return func(h *ContentHandler) { h.authorImpactStore = store }
 }
 
 func (h *ContentHandler) Routes() http.Handler {
@@ -204,6 +210,50 @@ func (h *ContentHandler) handleSearchPosts(w http.ResponseWriter, r *http.Reques
 		"items":  items,
 		"cursor": nextCursor,
 	})
+}
+
+func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
+		return
+	}
+	if h.authorImpactStore == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"authorId": "",
+			"total":    0,
+			"items":    []any{},
+		})
+		return
+	}
+	authorID := strings.TrimSpace(r.PathValue("subAccountId"))
+	if authorID == "" {
+		authorID = authorImpactPathSubAccountID(r.URL.Path)
+	}
+	if authorID == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid author id", "missing subAccountId path segment"))
+		return
+	}
+	limit := int64(12)
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.ParseInt(raw, 10, 64); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	summary, err := h.authorImpactStore.GetSummary(r.Context(), authorID, limit)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
+}
+
+func authorImpactPathSubAccountID(path string) string {
+	const prefix = "/v1/content/sub-accounts/"
+	const suffix = "/author-impact"
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix))
 }
 
 func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {

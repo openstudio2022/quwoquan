@@ -1,0 +1,16 @@
+{
+  "id": "Format",
+  "label": "内容形式",
+  "labelEn": "Format",
+  "semantics": "描述内容的物理载体、创作视角、表现手法等六个互斥子维度。各子维度正交，一篇内容可同时引用多个子维度的标签。",
+  "expectedDimensions": [
+    "Format/内容载体",
+    "Format/内容角度",
+    "Format/表现手法",
+    "Format/视觉风格",
+    "Format/互动玩法",
+    "Format/商业形式"
+  ],
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

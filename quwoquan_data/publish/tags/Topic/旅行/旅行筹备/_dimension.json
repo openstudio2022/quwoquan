@@ -1,0 +1,10 @@
+{
+  "label": "旅行筹备",
+  "labelEn": "Trip Preparation",
+  "description": "旅行筹备相关的话题主题（内容讲什么）；与 Format/内容角度/攻略（内容呈现角度/怎么讲）正交",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 9
+}

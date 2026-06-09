@@ -1,0 +1,9 @@
+{
+  "label": "生活阶段",
+  "labelEn": "Life Stage",
+  "description": "用户当前所处的人生阶段",
+  "maxDepth": 2,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

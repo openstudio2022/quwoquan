@@ -213,6 +213,15 @@
 - `quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py`
 - `python3 quwoquan_data/scripts/cli.py verify --scope current`
 
+### 3.5 `data workflow run`（任务产线）与 `content_plan`
+
+| 阶段 | 输入 | 输出 | stop-if |
+|------|------|------|---------|
+| `content_plan`（checkpoint） | download/build 证据、`content.quotas` | `content_plan_packet.json`、`content_object_index`、各 `brief.json` | 无 evidenceRefs、营销向预置 ref、B 组无互证 |
+| `produce`（compose-brief 起） | **仅** content_plan 已锁定篇目 | writing_pack、draft、review、materialize | citedSource 超出 evidence、generator≠agent、机械模板 |
+
+handoff：`build` → `content_plan` → `produce`；禁止跳过 `content_plan` 直接按搜索词新增篇目。
+
 ## 4. 辅助脚本
 
 | 脚本 | 作用 |

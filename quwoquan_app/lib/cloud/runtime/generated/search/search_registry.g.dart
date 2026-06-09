@@ -11,6 +11,8 @@ enum SearchObjectType {
   circleCircle('circle.circle'),
   contentPost('content.post'),
   entityHomepage('entity.homepage'),
+  userProfile('user.profile'),
+  tag('tag'),
   integrationLocationPoi('integration.location_poi'),
   ;
 
@@ -36,6 +38,10 @@ enum SearchObjectType {
         return SearchObjectType.contentPost;
       case 'entity.homepage':
         return SearchObjectType.entityHomepage;
+      case 'user.profile':
+        return SearchObjectType.userProfile;
+      case 'tag':
+        return SearchObjectType.tag;
       case 'integration.location_poi':
         return SearchObjectType.integrationLocationPoi;
       default:
@@ -134,6 +140,20 @@ class SearchRegistry {
       provider: 'homepage_remote',
     ),
     SearchObjectRegistryEntry(
+      type: SearchObjectType.userProfile,
+      label: '用户',
+      domain: 'user',
+      executionStrategy: SearchExecutionStrategy.remoteOnly,
+      provider: 'user_profile_remote',
+    ),
+    SearchObjectRegistryEntry(
+      type: SearchObjectType.tag,
+      label: '标签',
+      domain: 'tag',
+      executionStrategy: SearchExecutionStrategy.remoteOnly,
+      provider: 'tag_remote',
+    ),
+    SearchObjectRegistryEntry(
       type: SearchObjectType.integrationLocationPoi,
       label: '位置',
       domain: 'integration',
@@ -178,6 +198,16 @@ class SearchRegistry {
       title: '网页',
       defaultObjectTypes: <SearchObjectType>[SearchObjectType.webDocument],
     ),
+    SearchSectionRegistryEntry(
+      id: 'users',
+      title: '用户',
+      defaultObjectTypes: <SearchObjectType>[SearchObjectType.userProfile],
+    ),
+    SearchSectionRegistryEntry(
+      id: 'tags',
+      title: '标签',
+      defaultObjectTypes: <SearchObjectType>[SearchObjectType.tag],
+    ),
   ];
 
   static SearchObjectRegistryEntry? entryFor(SearchObjectType type) {
@@ -193,6 +223,126 @@ class SearchRegistry {
     for (final section in sections) {
       if (section.id == id) {
         return section;
+      }
+    }
+    return null;
+  }
+}
+
+// AI/App-facing retrieve target taxonomy. Only these object names are
+// exposed on the retrieve contract; internal object types stay private.
+enum RetrieveTarget {
+  article('article'),
+  photo('photo'),
+  video('video'),
+  user('user'),
+  entity('entity'),
+  circle('circle'),
+  group('group'),
+  chat('chat'),
+  ;
+
+  const RetrieveTarget(this.wireValue);
+
+  final String wireValue;
+
+  static RetrieveTarget? fromWire(String? value) {
+    switch ((value ?? '').trim()) {
+      case 'article':
+        return RetrieveTarget.article;
+      case 'photo':
+        return RetrieveTarget.photo;
+      case 'video':
+        return RetrieveTarget.video;
+      case 'user':
+        return RetrieveTarget.user;
+      case 'entity':
+        return RetrieveTarget.entity;
+      case 'circle':
+        return RetrieveTarget.circle;
+      case 'group':
+        return RetrieveTarget.group;
+      case 'chat':
+        return RetrieveTarget.chat;
+      default:
+        return null;
+    }
+  }
+}
+
+class RetrieveTargetEntry {
+  const RetrieveTargetEntry({
+    required this.target,
+    required this.label,
+    required this.objectType,
+    required this.contentType,
+  });
+
+  final RetrieveTarget target;
+  final String label;
+  final SearchObjectType objectType;
+  final String contentType;
+}
+
+// ignore: avoid_classes_with_only_static_members
+class RetrieveTargetRegistry {
+  const RetrieveTargetRegistry._();
+
+  static const List<RetrieveTargetEntry> targets = <RetrieveTargetEntry>[
+    RetrieveTargetEntry(
+      target: RetrieveTarget.article,
+      label: '文章',
+      objectType: SearchObjectType.contentPost,
+      contentType: 'article',
+    ),
+    RetrieveTargetEntry(
+      target: RetrieveTarget.photo,
+      label: '图文',
+      objectType: SearchObjectType.contentPost,
+      contentType: 'image',
+    ),
+    RetrieveTargetEntry(
+      target: RetrieveTarget.video,
+      label: '视频',
+      objectType: SearchObjectType.contentPost,
+      contentType: 'video',
+    ),
+    RetrieveTargetEntry(
+      target: RetrieveTarget.user,
+      label: '用户',
+      objectType: SearchObjectType.userProfile,
+      contentType: '',
+    ),
+    RetrieveTargetEntry(
+      target: RetrieveTarget.entity,
+      label: '实体主页',
+      objectType: SearchObjectType.entityHomepage,
+      contentType: '',
+    ),
+    RetrieveTargetEntry(
+      target: RetrieveTarget.circle,
+      label: '圈子',
+      objectType: SearchObjectType.circleCircle,
+      contentType: '',
+    ),
+    RetrieveTargetEntry(
+      target: RetrieveTarget.group,
+      label: '群组',
+      objectType: SearchObjectType.circleGroup,
+      contentType: '',
+    ),
+    RetrieveTargetEntry(
+      target: RetrieveTarget.chat,
+      label: '聊天',
+      objectType: SearchObjectType.chatMessage,
+      contentType: '',
+    ),
+  ];
+
+  static RetrieveTargetEntry? entryFor(RetrieveTarget target) {
+    for (final entry in targets) {
+      if (entry.target == target) {
+        return entry;
       }
     }
     return null;

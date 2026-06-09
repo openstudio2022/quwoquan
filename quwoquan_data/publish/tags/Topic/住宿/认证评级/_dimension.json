@@ -1,0 +1,10 @@
+{
+  "label": "认证评级",
+  "labelEn": "Stay Certification",
+  "description": "住宿权威评级与认证体系",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 12
+}

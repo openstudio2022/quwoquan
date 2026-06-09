@@ -28,6 +28,7 @@ import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_interaction.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
+import 'package:quwoquan_app/ui/content/entry/models/create_entry_arguments.dart';
 
 part 'circle_shell_components.dart';
 part 'circle_shell_builders.dart';
@@ -278,6 +279,15 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         const AppActionSheetSection<_CircleMoreAction>(
           items: [
             AppActionSheetItem<_CircleMoreAction>(
+              value: _CircleMoreAction.submitPost,
+              label: UITextConstants.circleSubmitPost,
+              icon: CupertinoIcons.add_circled,
+            ),
+          ],
+        ),
+        const AppActionSheetSection<_CircleMoreAction>(
+          items: [
+            AppActionSheetItem<_CircleMoreAction>(
               value: _CircleMoreAction.share,
               label: UITextConstants.share,
               icon: CupertinoIcons.share,
@@ -303,6 +313,15 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     );
     if (!context.mounted || action == null) return;
     switch (action) {
+      case _CircleMoreAction.submitPost:
+        // /create 路由门负责未登录拦截；圈子锚点经 extra 注入 PublishSettings.circleIds。
+        context.push(
+          AppRoutePaths.create(),
+          extra: CreateEntryArguments(
+            circleId: widget.circleId,
+            circleName: circleName.isEmpty ? null : circleName,
+          ),
+        );
       case _CircleMoreAction.share:
         AppToast.show(context, UITextConstants.share);
       case _CircleMoreAction.copyLink:

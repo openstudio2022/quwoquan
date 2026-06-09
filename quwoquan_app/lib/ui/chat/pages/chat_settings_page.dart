@@ -62,6 +62,41 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     }
   }
 
+  /// 退出群聊：二次确认 → removeMember(self) 走 Remote → 返回会话列表。
+  Future<void> _confirmExitGroup() async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(UITextConstants.exitGroupChat),
+        content: Text(UITextConstants.exitGroupChatConfirmMessage),
+        actions: [
+          CupertinoDialogAction(
+            child: Text(UITextConstants.cancel),
+            onPressed: () => Navigator.pop(dialogContext, false),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: Text(UITextConstants.exitGroupChat),
+            onPressed: () => Navigator.pop(dialogContext, true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final selfId = ref.read(currentUserIdProvider);
+    try {
+      await ref
+          .read(chatRepositoryProvider)
+          .removeMember(conversationId: widget.conversationId, userId: selfId);
+      if (!mounted) return;
+      AppToast.show(context, UITextConstants.exitGroupChatSuccess);
+      context.go(AppRoutePaths.chat);
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(context, runtimeErrorDisplayMessage(e));
+    }
+  }
+
   void _showEditGroupNameDialog() {
     final controller = TextEditingController(text: _groupName);
     final membersState = ref.read(
@@ -372,29 +407,6 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     ),
                     onTap: _showEditGroupNameDialog,
                   ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.qrCode,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.qr_code_2,
-                          size: AppSpacing.iconMedium,
-                          color: fgPrimary,
-                        ),
-                        SizedBox(width: AppSpacing.containerSm),
-                        Icon(
-                          CupertinoIcons.chevron_forward,
-                          size: AppSpacing.iconMedium,
-                          color: chevronColor,
-                        ),
-                      ],
-                    ),
-                    onTap: () {},
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
                   if (isAdminOrOwner) ...[
                     SettingsInsetFormRow(
                       isDark: isDark,
@@ -408,18 +420,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                         AppRoutePaths.chatManage(id: widget.conversationId),
                       ),
                     ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
                   ],
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.groupAnnouncement,
-                    trailing: Icon(
-                      CupertinoIcons.chevron_forward,
-                      size: AppSpacing.iconMedium,
-                      color: chevronColor,
-                    ),
-                    onTap: () {},
-                  ),
                 ],
               ),
             ),
@@ -488,46 +489,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             SettingsInsetGroupedSection(
               isDark: isDark,
               density: SettingsInsetSectionDensity.compact,
-              child: Column(
-                children: [
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.setChatBackground,
-                    trailing: Icon(
-                      CupertinoIcons.chevron_forward,
-                      size: AppSpacing.iconMedium,
-                      color: chevronColor,
-                    ),
-                    onTap: () {},
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.clearChatHistory,
-                    trailing: Icon(
-                      CupertinoIcons.chevron_forward,
-                      size: AppSpacing.iconMedium,
-                      color: chevronColor,
-                    ),
-                    onTap: () {},
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-            ),
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              density: SettingsInsetSectionDensity.compact,
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
-                onPressed: () {
-                  AppToast.show(
-                    context,
-                    '${UITextConstants.exitGroupChat}（开发中）',
-                  );
-                },
+                onPressed: _confirmExitGroup,
                 child: SizedBox(
                   width: double.infinity,
                   height: AppSpacing.buttonHeight,

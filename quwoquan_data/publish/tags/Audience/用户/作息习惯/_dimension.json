@@ -1,0 +1,9 @@
+{
+  "label": "作息习惯",
+  "labelEn": "Daily Routine",
+  "description": "用户昼夜作息节律",
+  "maxDepth": 2,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

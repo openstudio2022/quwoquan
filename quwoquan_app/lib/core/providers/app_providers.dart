@@ -83,7 +83,8 @@ export 'package:quwoquan_app/core/platform/platform_providers.dart'
         platformTargetProvider,
         platformCapabilitiesProvider,
         fileStorageGatewayProvider,
-        assistantLocalContextBridgeProvider;
+        assistantLocalContextBridgeProvider,
+        nativeAuthBridgeProvider;
 
 /// 主题相关的便捷Provider
 final isDarkProvider = Provider<bool>((ref) {
@@ -308,6 +309,9 @@ final cloudHttpClientProvider = Provider<CloudHttpClient>((ref) {
     authTokenProvider: ProviderBackedCloudAuthTokenProvider(
       () => ref.read(authSessionControllerProvider).accessToken,
     ),
+    onUnauthorizedRefresh: () => ref
+        .read(authSessionControllerProvider.notifier)
+        .refreshSessionIfNeeded(),
     latencyObserver: (method, path, elapsedMs, statusCode) {
       AppLogService.instance.writeEvent(
         logType: AppLogType.perf,

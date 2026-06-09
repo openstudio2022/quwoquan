@@ -41,7 +41,15 @@
     "sourceQuality": { "type": "array" },
     "storySpine": { "type": "object" },
     "relatedSearchPlan": { "type": "object" },
-    "evidenceBundle": { "type": "object" }
+    "evidenceBundle": { "type": "object" },
+    "writingIntent": {
+      "type": "string",
+      "enum": ["planning_consultation", "decision_experience", "post_trip_journal"],
+      "description": "写作主线：单篇唯一；门禁校验正文结构与之匹配"
+    },
+    "baseSourceRef": { "type": ["string", "null"], "description": "主底稿来源 ref（风格与事实锚点）" },
+    "imageBindings": { "type": "array", "items": { "type": "object" } },
+    "videoBindings": { "type": "array", "items": { "type": "object" } }
   },
   "required": ["topicId", "articleMarkdown", "title", "entityRefs", "tagRefs"]
 }

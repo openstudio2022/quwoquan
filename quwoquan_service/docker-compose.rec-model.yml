@@ -3,6 +3,11 @@
 version: "3.8"
 services:
   rec-model-service:
+    networks:
+      default:
+        aliases:
+          - recommendation-service
+          - rec-model-service
     build:
       context: ..
       dockerfile: quwoquan_service/services/rec-model-service/Dockerfile

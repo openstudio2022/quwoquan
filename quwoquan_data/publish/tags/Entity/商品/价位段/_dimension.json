@@ -1,0 +1,9 @@
+{
+  "label": "价位段",
+  "labelEn": "Price Range",
+  "description": "商品价格区间（画像）",
+  "maxDepth": 2,
+  "pathPolicy": "leaf-only",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

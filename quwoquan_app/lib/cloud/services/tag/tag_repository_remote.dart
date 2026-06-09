@@ -3,6 +3,11 @@ part of 'tag_repository.dart';
 /// Remote 实现 — 调用云侧 Tag API。
 /// path / pageId 全部来自 codegen 真相源（TagApiMetadata / TagRequestPageIds），
 /// 不得硬编码 /api/v1/tags/* 路径（军规 R06/R09）。
+///
+/// 解码统一经 [CloudResponseDecoder]，私有泛型中转 `_getList/_getObject/_postList/
+/// _postObject` 直出强类型聚合实体 DTO，不暴露裸 `dynamic`/`Object?` 作业务契约
+/// （StrictTyping，见 cloud_map_typing_audit_anchor.dart）；`Object?` 仅作解码入口
+/// 局部参数，下一跳即转 DTO 或 [CloudJsonMap]。门禁见 verify_cloud_tag_strict_typing.py。
 class RemoteTagRepository implements TagRepository {
   final CloudHttpClient _httpClient;
 
@@ -13,147 +18,181 @@ class RemoteTagRepository implements TagRepository {
     '${CloudRuntimeConfig.gatewayBaseUrl}$path',
   ).replace(queryParameters: params);
 
-  Future<dynamic> _get(
+  Never _fail(int statusCode, String body) =>
+      throw Exception('Tag API error: $statusCode $body');
+
+  List<T> _asEntityList<T>(
+    Object? decoded,
+    T Function(CloudJsonMap) fromJson,
+    String context,
+  ) {
+    if (decoded is! List) {
+      throw Exception('Tag API error: expected list response at $context');
+    }
+    final out = <T>[];
+    for (final e in decoded) {
+      if (e is Map<String, dynamic>) {
+        out.add(fromJson(e));
+      } else if (e is Map) {
+        out.add(fromJson(Map<String, dynamic>.from(e)));
+      }
+    }
+    return out;
+  }
+
+  Future<List<T>> _getList<T>(
     String path,
-    String pageId, [
+    String pageId,
+    T Function(CloudJsonMap) fromJson, [
     Map<String, String>? params,
   ]) async {
     final resp = await _httpClient.get(
       _uri(path, params),
       headers: CloudRequestHeaders.forPage(pageId),
     );
-    if (resp.statusCode != 200) {
-      throw Exception('Tag API error: ${resp.statusCode} ${resp.body}');
-    }
-    return json.decode(resp.body);
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body);
+    return _asEntityList(json.decode(resp.body), fromJson, path);
   }
 
-  Future<dynamic> _post(
+  Future<T> _getObject<T>(
     String path,
     String pageId,
-    Map<String, dynamic> body,
+    T Function(CloudJsonMap) fromJson, [
+    Map<String, String>? params,
+  ]) async {
+    final resp = await _httpClient.get(
+      _uri(path, params),
+      headers: CloudRequestHeaders.forPage(pageId),
+    );
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body);
+    return fromJson(
+      CloudResponseDecoder.asObject(json.decode(resp.body), context: path),
+    );
+  }
+
+  Future<List<T>> _postList<T>(
+    String path,
+    String pageId,
+    CloudJsonMap body,
+    T Function(CloudJsonMap) fromJson,
   ) async {
-    final headers = CloudRequestHeaders.forPage(pageId);
     final resp = await _httpClient.post(
       _uri(path),
-      headers: {...headers, 'Content-Type': 'application/json'},
+      headers: {
+        ...CloudRequestHeaders.forPage(pageId),
+        'Content-Type': 'application/json',
+      },
       body: json.encode(body),
     );
-    if (resp.statusCode != 200) {
-      throw Exception('Tag API error: ${resp.statusCode} ${resp.body}');
-    }
-    return json.decode(resp.body);
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body);
+    return _asEntityList(json.decode(resp.body), fromJson, path);
+  }
+
+  Future<T> _postObject<T>(
+    String path,
+    String pageId,
+    CloudJsonMap body,
+    T Function(CloudJsonMap) fromJson,
+  ) async {
+    final resp = await _httpClient.post(
+      _uri(path),
+      headers: {
+        ...CloudRequestHeaders.forPage(pageId),
+        'Content-Type': 'application/json',
+      },
+      body: json.encode(body),
+    );
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body);
+    return fromJson(
+      CloudResponseDecoder.asObject(json.decode(resp.body), context: path),
+    );
   }
 
   @override
-  Future<List<TagDimension>> listDimensions() async {
-    final data =
-        await _get(
-              TagApiMetadata.listDimensionsPath,
-              TagRequestPageIds.listDimensions,
-            )
-            as List;
-    return data
-        .map((e) => TagDimension.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
+  Future<List<TagDimension>> listDimensions() => _getList(
+    TagApiMetadata.listDimensionsPath,
+    TagRequestPageIds.listDimensions,
+    TagDimension.fromJson,
+  );
 
   @override
   Future<List<TagSuggestion>> suggest(
     String query, {
     String? group,
     int limit = TagApiDefaults.suggestLimit,
-  }) async {
+  }) {
     final params = <String, String>{'q': query, 'limit': '$limit'};
     if (group != null) params['group'] = group;
-    final data =
-        await _get(
-              TagApiMetadata.suggestTagsPath,
-              TagRequestPageIds.suggestTags,
-              params,
-            )
-            as List;
-    return data
-        .map((e) => TagSuggestion.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return _getList(
+      TagApiMetadata.suggestTagsPath,
+      TagRequestPageIds.suggestTags,
+      TagSuggestion.fromJson,
+      params,
+    );
   }
 
   @override
-  Future<TagValidationResult> validateRefs(List<String> tagRefs) async {
-    final data = await _post(
-      TagApiMetadata.validateTagRefsPath,
-      TagRequestPageIds.validateTagRefs,
-      {'tagRefs': tagRefs},
-    );
-    return TagValidationResult.fromJson(data as Map<String, dynamic>);
-  }
+  Future<TagValidationResult> validateRefs(List<String> tagRefs) => _postObject(
+    TagApiMetadata.validateTagRefsPath,
+    TagRequestPageIds.validateTagRefs,
+    <String, dynamic>{'tagRefs': tagRefs},
+    TagValidationResult.fromJson,
+  );
 
   @override
   Future<List<TagSearchResult>> search(
     String query, {
     String? group,
     int limit = TagApiDefaults.searchLimit,
-  }) async {
+  }) {
     final params = <String, String>{'q': query, 'limit': '$limit'};
     if (group != null) params['group'] = group;
-    final data =
-        await _get(
-              TagApiMetadata.searchTagsPath,
-              TagRequestPageIds.searchTags,
-              params,
-            )
-            as List;
-    return data
-        .map((e) => TagSearchResult.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return _getList(
+      TagApiMetadata.searchTagsPath,
+      TagRequestPageIds.searchTags,
+      TagSearchResult.fromJson,
+      params,
+    );
   }
 
   @override
   Future<List<RelatedTag>> related(
     String tagRef, {
     int limit = TagApiDefaults.relatedLimit,
-  }) async {
-    final data =
-        await _get(TagApiMetadata.relatedTagsPath, TagRequestPageIds.relatedTags, {
-              'tagRef': tagRef,
-              'limit': '$limit',
-            })
-            as List;
-    return data
-        .map((e) => RelatedTag.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
+  }) => _getList(
+    TagApiMetadata.relatedTagsPath,
+    TagRequestPageIds.relatedTags,
+    RelatedTag.fromJson,
+    <String, String>{'tagRef': tagRef, 'limit': '$limit'},
+  );
 
   @override
   Future<List<TagObjectMatch>> searchByTags(
     List<String> tagRefs, {
     String? objectType,
     int limit = TagApiDefaults.searchLimit,
-  }) async {
+  }) {
     final body = <String, dynamic>{'tagRefs': tagRefs, 'limit': limit};
     if (objectType != null) body['objectType'] = objectType;
-    final data =
-        await _post(
-              TagApiMetadata.searchByTagsPath,
-              TagRequestPageIds.searchByTags,
-              body,
-            )
-            as List;
-    return data
-        .map((e) => TagObjectMatch.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return _postList(
+      TagApiMetadata.searchByTagsPath,
+      TagRequestPageIds.searchByTags,
+      body,
+      TagObjectMatch.fromJson,
+    );
   }
 
   @override
   Future<bool> feedback(String tagRef, String action, {String? context}) async {
     final body = <String, dynamic>{'tagRef': tagRef, 'action': action};
     if (context != null) body['context'] = context;
-    final data = await _post(
+    final obj = await _postObject<CloudJsonMap>(
       TagApiMetadata.tagFeedbackPath,
       TagRequestPageIds.tagFeedback,
       body,
+      (m) => m,
     );
-    return (data as Map<String, dynamic>)['accepted'] == true;
+    return obj['accepted'] == true;
   }
 
   @override
@@ -161,19 +200,15 @@ class RemoteTagRepository implements TagRepository {
     String? tagRef,
     int minCount = TagApiDefaults.minCooccurCount,
     int limit = TagApiDefaults.graphLimit,
-  }) async {
+  }) {
     final params = <String, String>{'minCount': '$minCount', 'limit': '$limit'};
     if (tagRef != null) params['tagRef'] = tagRef;
-    final data =
-        await _get(
-              TagApiMetadata.tagCooccurrencePath,
-              TagRequestPageIds.tagCooccurrence,
-              params,
-            )
-            as List;
-    return data
-        .map((e) => TagCooccurrence.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return _getList(
+      TagApiMetadata.tagCooccurrencePath,
+      TagRequestPageIds.tagCooccurrence,
+      TagCooccurrence.fromJson,
+      params,
+    );
   }
 
   @override
@@ -181,15 +216,15 @@ class RemoteTagRepository implements TagRepository {
     String tagRef, {
     String? objectType,
     int limit = TagApiDefaults.graphLimit,
-  }) async {
+  }) {
     final params = <String, String>{'tagRef': tagRef, 'limit': '$limit'};
     if (objectType != null) params['objectType'] = objectType;
-    final data = await _get(
+    return _getObject(
       TagApiMetadata.invertedObjectsPath,
       TagRequestPageIds.invertedObjects,
+      TagInvertedResult.fromJson,
       params,
     );
-    return TagInvertedResult.fromJson(data as Map<String, dynamic>);
   }
 
   @override
@@ -197,19 +232,15 @@ class RemoteTagRepository implements TagRepository {
     String objectId, {
     String? objectType,
     int limit = TagApiDefaults.relatedLimit,
-  }) async {
+  }) {
     final params = <String, String>{'objectId': objectId, 'limit': '$limit'};
     if (objectType != null) params['objectType'] = objectType;
-    final data =
-        await _get(
-              TagApiMetadata.relatedObjectsPath,
-              TagRequestPageIds.relatedObjects,
-              params,
-            )
-            as List;
-    return data
-        .map((e) => RelatedObject.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return _getList(
+      TagApiMetadata.relatedObjectsPath,
+      TagRequestPageIds.relatedObjects,
+      RelatedObject.fromJson,
+      params,
+    );
   }
 
   @override
@@ -219,7 +250,7 @@ class RemoteTagRepository implements TagRepository {
     required String objectBId,
     required String objectBType,
     int limit = TagApiDefaults.graphLimit,
-  }) async {
+  }) {
     final params = <String, String>{
       'objectAId': objectAId,
       'objectAType': objectAType,
@@ -227,15 +258,11 @@ class RemoteTagRepository implements TagRepository {
       'objectBType': objectBType,
       'limit': '$limit',
     };
-    final data =
-        await _get(
-              TagApiMetadata.sharedTagsPath,
-              TagRequestPageIds.sharedTags,
-              params,
-            )
-            as List;
-    return data
-        .map((e) => SharedTagView.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return _getList(
+      TagApiMetadata.sharedTagsPath,
+      TagRequestPageIds.sharedTags,
+      SharedTagView.fromJson,
+      params,
+    );
   }
 }

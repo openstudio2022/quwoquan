@@ -59,6 +59,7 @@ type BehaviorService struct {
 	feedback       *rtrec.FeedbackRecorder
 	eventStore     persistence.BehaviorEventStore
 	metricsStore   *persistence.DailyMetricsStore
+	authorImpact   *persistence.AuthorImpactStore
 	sessionInvalid func(userID, sessionID string)
 }
 
@@ -86,6 +87,10 @@ func WithBehaviorEventStore(es persistence.BehaviorEventStore) BehaviorServiceOp
 
 func WithDailyMetricsStore(ms *persistence.DailyMetricsStore) BehaviorServiceOption {
 	return func(s *BehaviorService) { s.metricsStore = ms }
+}
+
+func WithAuthorImpactStore(store *persistence.AuthorImpactStore) BehaviorServiceOption {
+	return func(s *BehaviorService) { s.authorImpact = store }
 }
 
 func NewBehaviorService(hotPath rtrec.SignalProcessor, store persistence.PostRepository, opts ...BehaviorServiceOption) *BehaviorService {
@@ -237,6 +242,13 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			}
 		}
 	}
+	if s.authorImpact != nil {
+		for _, sig := range signals {
+			if event := authorImpactEventFromSignal(sig, occurredAt); event.AuthorID != "" {
+				_ = s.authorImpact.Record(ctx, event)
+			}
+		}
+	}
 	if s.feedback != nil {
 		for _, signal := range signals {
 			_ = s.feedback.RecordEngagement(ctx, signal, 0)
@@ -280,6 +292,33 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 
 func normalizeBehaviorAction(input BehaviorEventInput) string {
 	return strings.TrimSpace(strings.ToLower(firstNonEmptyLocal(input.Action, input.Type)))
+}
+
+func authorImpactEventFromSignal(signal rtrec.BehaviorSignal, occurredAt time.Time) persistence.AuthorImpactEvent {
+	helpType := ""
+	switch signal.Action {
+	case "follow", "add_contact":
+		helpType = persistence.AuthorImpactHelpRelationship
+	case "join_circle":
+		helpType = persistence.AuthorImpactHelpCommunity
+	case "favorite", "author_view", "entity_page_view", "content_depth", "play_progress", "like", "comment":
+		helpType = persistence.AuthorImpactHelpDecision
+	case "share":
+		helpType = persistence.AuthorImpactHelpSpread
+	case "assistant_interest":
+		helpType = persistence.AuthorImpactHelpKnowledge
+	default:
+		return persistence.AuthorImpactEvent{}
+	}
+	return persistence.AuthorImpactEvent{
+		AuthorID:              strings.TrimSpace(signal.AuthorID),
+		Action:                strings.TrimSpace(signal.Action),
+		HelpType:              helpType,
+		IntersectionDimension: strings.TrimSpace(signal.IntersectionDimension),
+		IntersectionTagRefs:   signal.IntersectionTagRefs,
+		Source:                "behavior",
+		OccurredAt:            occurredAt,
+	}
 }
 
 func behaviorTagsFromAny(v any) []string {

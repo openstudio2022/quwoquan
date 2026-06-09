@@ -24,9 +24,17 @@ sit_acceptance:
       supporting:
       - T1_static_contract
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+      - quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart
+      recorded:
+      - quwoquan_app/test/ui/assistant/widgets/assistant_half_sheet_personalization_provider_test.dart
+      - quwoquan_app/test/ui/assistant/personal_content_access_provider_test.dart
+      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - quwoquan_service/services/assistant-service/internal/application/service_test.go
+      - quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
+      - specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
+    status: partial
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

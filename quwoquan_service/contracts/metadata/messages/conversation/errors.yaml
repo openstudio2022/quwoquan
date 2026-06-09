@@ -61,8 +61,8 @@ errors:
     dart_const: notMutual
     go_const: ErrNotMutual
     user_message:
-      zh: "互相关注后可直接私信"
-      en: "Mutual follow is required to start a direct conversation"
+      zh: "互相关注后可进入正式私信"
+      en: "Mutual follow is required to enter a formal direct conversation"
 
   - code: CHAT.USER.greeting_required
     kind: USER
@@ -72,8 +72,8 @@ errors:
     dart_const: greetingRequired
     go_const: ErrGreetingRequired
     user_message:
-      zh: "请先打招呼，等对方回复后再进入私信"
-      en: "Send a greeting first and wait for a reply"
+      zh: "请先打招呼，等对方回复后再进入正式私信"
+      en: "Send a greeting first and wait for a reply before entering formal direct conversation"
 
   - code: CHAT.USER.blocked
     kind: USER

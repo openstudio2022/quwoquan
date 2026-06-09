@@ -1,0 +1,10 @@
+{
+  "label": "主题",
+  "labelEn": "Stay Theme",
+  "description": "住宿的主题与特色定位",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 13
+}

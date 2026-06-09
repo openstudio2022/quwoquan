@@ -7,6 +7,24 @@ cd "$ROOT"
 # CLI-first ratchet：拦截新增直跑业务入口脚本（必须经 qwq-data 暴露给 skill）
 python3 quwoquan_data/scripts/verify/verify_cli_first.py
 python3 quwoquan_data/scripts/verify/verify_no_flat_roots.py
+# 单一门库 quality_gates：writingIntent 契约 + 图文闭环 + 写作主线一致性 + 模板骨架相似度 + 语域 + source reject 阻断
+python3 quwoquan_data/tests/common/test_quality_gates.py
+# 扫描门：禁止 scripts/tasks/runtime 复用测试专用正文骨架 agent_draft_kit（脚本拼正文反模式）
+python3 quwoquan_data/scripts/verify/verify_no_runtime_draft_kit.py
+# object-stage job 队列：幂等/lease/崩溃恢复/同源互斥/失败升级
+python3 quwoquan_data/tests/task/test_object_queue.py
+# Subagent handoff packet 与出口门（single ref gate + batch reducer gate + 执行合约 5 要素）
+python3 quwoquan_data/tests/common/test_handoff.py
+# LLM-as-judge 严格性门：判官元数据 pin / 族分离 / 二元+理由 / 偏差缓解 / jury 多数表决 / kappa
+python3 quwoquan_data/tests/common/test_rubric_judge.py
+# 内容漂移检测 + golden 闭环自增长（sample-drift / promote-golden 幂等）
+python3 quwoquan_data/tests/common/test_content_drift.py
+# Harness sensor 钩子：subagentStart / beforeShellExecution / afterFileEdit（observe-only 始终 allow）
+python3 quwoquan_data/tests/task/test_harness_hooks.py
+# 证据准入门：source_screen=reject 来源不得进入 content_plan
+python3 quwoquan_data/tests/common/test_content_plan_source_reject.py
+# golden set 标定：好稿/坏稿语义门拦截率/误杀率达标
+python3 quwoquan_data/scripts/verify/measure_gate_goldenset.py
 # 契约门：会话 agent = 唯一模型执行者（禁外部 LLM SDK/端点 + 交付正文 agent-only 防线）
 python3 quwoquan_data/tests/common/test_agent_executor_contract.py
 python3 quwoquan_data/scripts/cli.py template lint
@@ -89,5 +107,15 @@ python3 quwoquan_data/tests/common/test_entity_annotation.py
 python3 quwoquan_data/tests/common/test_intersection_signal.py
 # 单会话多实体批处理：批 prompt 打包 N 实体（聚合 writing_pack + 跨篇多样性约束）+ 完整性/完成度
 python3 quwoquan_data/tests/common/test_batch_orchestration.py
+# Fan-out 编排脚手架：计划构建/去重/互斥/覆盖/冻结门
+python3 quwoquan_data/tests/orchestrate/test_fanout_plan.py
+# Fan-out 四策略展开（by-partition / flat-pool / by-leaf / by-batch）确定性 + 不变量
+python3 quwoquan_data/tests/orchestrate/test_fanout_strategies.py
+# Fan-out 调度：冻结门 + 建 task/batch + 入队叶子 + 幂等可重放 + rollup 聚合
+python3 quwoquan_data/tests/orchestrate/test_fanout_dispatch.py
+# Fan-out 退化等价：--mode fanout --concurrency 1 --strategy flat-pool 与 single 同终态
+python3 quwoquan_data/tests/orchestrate/test_mode_single_fanout_equivalence.py
+# Fan-out 外部 runner（mock SDK）：lease→complete 回写、startup vs run 失败分流、用量/预算门
+python3 quwoquan_data/tests/orchestrate/test_fanout_runner.py
 
 echo "[verify-quwoquan-data] PASSED"

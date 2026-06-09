@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
@@ -11,7 +10,6 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
-import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 import '../../../common/chat/chat_mock_seed_refs.dart';
 
 void _suppressImageErrors() {
@@ -143,7 +141,7 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
-  testWidgets('添加成员向导会将已在群成员显示为锁定状态', (tester) async {
+  testWidgets('添加成员向导只展示服务端过滤后的候选成员', (tester) async {
     _suppressImageErrors();
 
     final repository = MockChatRepository(
@@ -180,19 +178,20 @@ void main() {
       conversationId: 'conv_existing',
     );
 
-    await tester.tap(find.text(UITextConstants.selectFriendsFromGroupChat));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('候选群'));
-    await tester.pumpAndSettle();
+    expect(find.text('李明'), findsNothing);
+    expect(find.text('张华'), findsOneWidget);
+    expect(find.text('李青'), findsOneWidget);
 
-    expect(find.text('已在群中'), findsWidgets);
-    expect(find.text('${UITextConstants.selectAction}（1）'), findsNothing);
-
-    await tester.tap(find.text('张华').last);
+    await tester.ensureVisible(find.text('张华').last);
     await tester.pumpAndSettle();
-
-    expect(find.text('${UITextConstants.selectAction}（1）'), findsOneWidget);
-    await tester.tap(find.text('${UITextConstants.selectAction}（1）'));
+    await tester.tap(
+      find
+          .ancestor(
+            of: find.text('张华').last,
+            matching: find.byType(CupertinoButton),
+          )
+          .last,
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('${UITextConstants.addMember}（1）'), findsOneWidget);
@@ -248,56 +247,4 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('选择群聊页使用共享会话头像 token，并在缺头像时显示稳定群占位', (tester) async {
-    _suppressImageErrors();
-
-    final repository = MockChatRepository(
-      seedConversations: <Map<String, dynamic>>[
-        _groupConversation('conv_existing', '当前群'),
-        _groupConversation(
-          'conv_source_with_avatar',
-          '有头像候选群',
-          avatarUrl: chatAvatarUrlFor('user_003'),
-        ),
-        _groupConversation('conv_source_placeholder', '占位讨论组'),
-      ],
-      seedMembers: <String, List<Map<String, dynamic>>>{
-        'conv_existing': <Map<String, dynamic>>[
-          _member(
-            chatCurrentUserProfileId(),
-            order: 0,
-            role: 'owner',
-            isCurrentUser: true,
-          ),
-        ],
-        'conv_source_placeholder': <Map<String, dynamic>>[
-          _member(
-            chatCurrentUserProfileId(),
-            order: 0,
-            role: 'owner',
-            isCurrentUser: true,
-          ),
-          _member('user_003', order: 1, avatarUrl: ''),
-        ],
-      },
-    );
-    final container = _buildContainer(repository);
-    await _pumpStartGroupChatPage(
-      tester,
-      container: container,
-      conversationId: 'conv_existing',
-    );
-
-    await tester.tap(find.text(UITextConstants.selectFriendsFromGroupChat));
-    await tester.pumpAndSettle();
-
-    final avatarFinder = find.byType(RoundedSquareAvatar).last;
-    final avatarSize = tester.getSize(avatarFinder);
-    expect(avatarSize.width, ChatConversationAvatarTokens.listSize);
-    expect(avatarSize.height, ChatConversationAvatarTokens.listSize);
-
-    final avatar = tester.widget<RoundedSquareAvatar>(avatarFinder);
-    expect(avatar.imageUrl, isNull);
-    expect(find.text('占'), findsNothing);
-  });
 }

@@ -2420,6 +2420,7 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
             "stdout": result.stdout,
             "stderr": result.stderr,
             "rolloutDecision": rollout_decision,
+            "wiredWorkloads": _prod_rollout_workloads() if args.target == "prod-hosted" else [],
             "postDeployChecks": post_deploy_checks,
             "postDeployFailures": post_deploy_failures,
             "rollbackPostChecks": rollback_post_checks,
@@ -2454,7 +2455,7 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
         ] + [
             f"rollback-check {item['summary']}"
             for item in rollback_post_checks
-        ] + ([f"rollout decision: {rollout_decision}"] if args.target == "prod-hosted" else []) + ([f"rollback triggered: {rollback_reason}"] if rollback_reason else []) + (["dry-run remained read-only"] if dry_run_requested and args.target == "prod-hosted" else []),
+        ] + ([f"wired workloads: {', '.join(w['rolloutRef'] for w in _prod_rollout_workloads()) or 'none'}"] if args.target == "prod-hosted" else []) + ([f"rollout decision: {rollout_decision}"] if args.target == "prod-hosted" else []) + ([f"rollback triggered: {rollback_reason}"] if rollback_reason else []) + (["dry-run remained read-only"] if dry_run_requested and args.target == "prod-hosted" else []),
         timing=timing,
     )
     _write_stdout_markdown(
@@ -2779,6 +2780,33 @@ def _replicas_for_step(step: str) -> int:
         return total
     replicas = max(1, numeric * total // 100)
     return min(replicas, total)
+
+
+def _prod_rollout_workloads() -> list[dict[str, Any]]:
+    """读三态 inventory 中已 wired 进 prod root 的 workload。
+
+    与 deploy_to_prod.sh 同源（deploy/shared/workload_topology_inventory.yaml），
+    Modular Monolith 单元（seed-box）与按 Strangler Fig 拆分后新增的独立 workload
+    一旦 wired_to_prod_root=true 即自动出现，无需改 stackctl。
+    """
+    try:
+        inv = load_json_yaml(ROOT / "deploy" / "shared" / "workload_topology_inventory.yaml")
+    except Exception:
+        return []
+    out: list[dict[str, Any]] = []
+    for w in (inv or {}).get("workloads", []) or []:
+        if not w.get("wired_to_prod_root"):
+            continue
+        kind = str(w.get("workload_resource", "Deployment")).lower()
+        out.append(
+            {
+                "name": w.get("name"),
+                "deployKind": w.get("deploy_kind"),
+                "workloadResource": w.get("workload_resource", "Deployment"),
+                "rolloutRef": f"{kind}/{w.get('name')}",
+            }
+        )
+    return out
 
 
 def _local_log_report(target_name: str) -> dict[str, Any]:

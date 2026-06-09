@@ -70,6 +70,7 @@ class _FakeAssistantRepository implements AssistantRepository {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
+    Map<String, dynamic>? contextSnapshot,
   }) async {
     return AssistantSearchResultView(
       queryEcho: query,

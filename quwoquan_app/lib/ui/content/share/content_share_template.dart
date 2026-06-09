@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
+import 'package:quwoquan_app/core/links/share_attribution.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 
@@ -19,6 +20,7 @@ class ContentShareTemplate {
     required this.deeplink,
     required this.landingUrl,
     required this.landingPage,
+    required this.shareId,
     required this.title,
     required this.subtitle,
     required this.shareTitle,
@@ -36,6 +38,9 @@ class ContentShareTemplate {
   final String deeplink;
   final String landingUrl;
   final String landingPage;
+
+  /// 单次分享事件归因 id（注入 [landingUrl]，供分享埋点/回流归因同源）。
+  final String shareId;
   final String title;
   final String subtitle;
   final String shareTitle;
@@ -83,6 +88,7 @@ class ContentShareTemplateBuilder {
         deeplink: '',
         landingUrl: '',
         landingPage: 'blocked',
+        shareId: '',
         title: UITextConstants.shareTo,
         subtitle: UITextConstants.sharePrivateBlocked,
         shareTitle: blockedSeed.title,
@@ -101,7 +107,12 @@ class ContentShareTemplateBuilder {
       surfaceView.postId,
       visibilityIsCircleVisible: permission == 'circle_visible',
     );
-    final landingUrl = publicPostUrl(surfaceView.postId);
+    // 注入单次分享归因（share_id + UTM），使站外回流可按 share_id/渠道归因。
+    final attribution = ShareAttribution.forShareEvent(
+      utmSource: ShareAttribution.sourceApp,
+      utmMedium: ShareAttribution.mediumSocial,
+    );
+    final landingUrl = attribution.applyTo(publicPostUrl(surfaceView.postId));
     final summary = _decorateSummary(
       base: shareSeed.summary,
       includeCircleContext: profile.includeCircleContext,
@@ -123,6 +134,7 @@ class ContentShareTemplateBuilder {
       landingPage: surfaceView.contentIdentity == 'moment'
           ? 'moment_landing'
           : 'work_landing',
+      shareId: attribution.shareId,
       title: UITextConstants.contentLabelForKey(profile.titleKey),
       subtitle: UITextConstants.contentLabelForKey(profile.subtitleKey),
       shareTitle: shareSeed.title,

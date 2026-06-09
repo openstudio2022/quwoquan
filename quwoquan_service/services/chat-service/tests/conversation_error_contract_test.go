@@ -54,6 +54,22 @@ func TestListContacts_Empty(t *testing.T) {
 	_ = items
 }
 
+func TestListGroupCandidates_Empty(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	code, result := doGet(t, "/v1/chat/group-candidates?limit=20", "user_test_001")
+	if code != 200 {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	items, ok := result["items"].([]any)
+	if !ok {
+		t.Fatal("response missing items")
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected empty candidates without social source, got %d", len(items))
+	}
+}
+
 func TestSearchContacts_Empty(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 

@@ -47,8 +47,10 @@ def main() -> None:
     from vertical.handler import register_parser as reg_vertical
     from quality.handler import register_parser as reg_quality
     from data.handler import register_parser as reg_data
+    from task.object_queue import register_object_queue_parser as reg_object_queue
 
     reg_data(subparsers)
+    reg_object_queue(subparsers)
     reg_media(subparsers)
     reg_template(subparsers)
     reg_plan(subparsers)

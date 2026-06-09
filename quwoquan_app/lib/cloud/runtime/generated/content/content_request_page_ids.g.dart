@@ -17,6 +17,7 @@ class ContentRequestPageIds {
     'FavoritePost': 'content.post.favorite',
     'GenerateArticleSummary': 'content.article.summary',
     'GetAppConfig': 'content.get.app.config',
+    'GetAuthorImpact': 'content.get.author.impact',
     'GetCounters': 'content.post.counters',
     'GetFeed': 'content.feed.list',
     'GetFeedIntersections': 'content.get.feed.intersections',
@@ -72,6 +73,7 @@ class ContentRequestPageIds {
   static const String favoritePost = 'content.post.favorite';
   static const String generateArticleSummary = 'content.article.summary';
   static const String getAppConfig = 'content.get.app.config';
+  static const String getAuthorImpact = 'content.get.author.impact';
   static const String getCounters = 'content.post.counters';
   static const String getFeed = 'content.feed.list';
   static const String getFeedIntersections = 'content.get.feed.intersections';

@@ -11,33 +11,69 @@ api_routes:
     operation: SendGreetingRequest
     description: 发起打招呼（创建请求箱条目，未回复前不进入聊天列表）
     writable_fields: [targetSubAccountId, requestMessage, source]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/greeting-request/inbox
     operation: ListGreetingInbox
     description: 收件箱（我收到的待处理请求）
     query_params: [status, cursor, limit]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/greeting-request/outbox
     operation: ListGreetingOutbox
     description: 发件箱（我发出的请求）
     query_params: [status, cursor, limit]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/user/greeting-request/{requestId}/reply
     operation: ReplyGreetingRequest
     description: 回复打招呼（同步创建或复用正式 1v1 会话，写入 promotedConversationId 后发布 GreetingRequestReplied）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/user/greeting-request/{requestId}/ignore
     operation: IgnoreGreetingRequest
     description: 忽略打招呼
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: DELETE
     path: /v1/user/greeting-request/{requestId}
     operation: CancelGreetingRequest
     description: 撤回打招呼（仅发起方可操作，仅 pending 状态可撤回）
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
 consumers:
   - name: app

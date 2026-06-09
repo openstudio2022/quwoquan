@@ -1,0 +1,10 @@
+{
+  "label": "商品",
+  "labelEn": "Product",
+  "description": "可购买消费的商品骨架：物理品类 + 画像维度（原 Audience/商品 画像并入）",
+  "maxDepth": 4,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 120
+}

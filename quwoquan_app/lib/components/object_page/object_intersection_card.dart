@@ -130,17 +130,23 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
           }
         }
         final total = rows.fold<int>(0, (sum, r) => sum + r.group.count);
-        final inline = widget.inlineExpandCount <= 0 ? 3 : widget.inlineExpandCount;
+        final inline = widget.inlineExpandCount <= 0
+            ? 3
+            : widget.inlineExpandCount;
         // 旅程高亮（§7.3）：命中 highlightKind 时强制展开，确保该证据组可见。
         final highlight = (widget.highlightKind ?? '').trim();
         final highlightHidden =
             highlight.isNotEmpty &&
             rows.skip(inline).any((r) => r.group.kind == highlight);
         final expanded = _expanded || highlightHidden;
-        final visible = expanded ? rows : rows.take(inline).toList(growable: false);
+        final visible = expanded
+            ? rows
+            : rows.take(inline).toList(growable: false);
+        final primaryReason = rows.isEmpty ? null : rows.first.reason;
         final hiddenCount = rows.length - visible.length;
         final screenWidth = MediaQuery.sizeOf(context).width;
-        final layoutWidth = constraints.hasBoundedWidth && constraints.maxWidth > 0
+        final layoutWidth =
+            constraints.hasBoundedWidth && constraints.maxWidth > 0
             ? constraints.maxWidth
             : screenWidth;
         final isWideLayout =
@@ -231,7 +237,21 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
                 ),
               ),
               if (hiddenCount > 0 || (expanded && rows.length > inline))
-                _buildMore(context, hiddenCount: hiddenCount, expanded: expanded),
+                _buildMore(
+                  context,
+                  hiddenCount: hiddenCount,
+                  expanded: expanded,
+                ),
+              if (primaryReason != null) ...<Widget>[
+                SizedBox(height: AppSpacing.intraGroupSm),
+                _IntersectionCta(
+                  reason: primaryReason,
+                  isDark: widget.isDark,
+                  onTap: widget.onReasonTap == null
+                      ? null
+                      : () => widget.onReasonTap!(primaryReason),
+                ),
+              ],
             ],
           ),
         );
@@ -374,7 +394,11 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          for (var i = 0; i < extraRows.length; i++) ...<Widget>[
+                          for (
+                            var i = 0;
+                            i < extraRows.length;
+                            i++
+                          ) ...<Widget>[
                             if (i > 0) _rowDivider(),
                             _EvidenceRow(
                               row: extraRows[i],
@@ -384,13 +408,23 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
                                   extraRows[i].group.kind == highlight,
                               onTap: widget.onReasonTap == null
                                   ? null
-                                  : () => widget.onReasonTap!(extraRows[i].reason),
+                                  : () => widget.onReasonTap!(
+                                      extraRows[i].reason,
+                                    ),
                             ),
                           ],
                         ],
                       ),
                     ),
                   ],
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  _IntersectionCta(
+                    reason: primaryReason,
+                    isDark: widget.isDark,
+                    onTap: widget.onReasonTap == null
+                        ? null
+                        : () => widget.onReasonTap!(primaryReason),
+                  ),
                 ],
               ),
             ),
@@ -629,6 +663,104 @@ class _IntersectionRow {
   const _IntersectionRow({required this.reason, required this.group});
   final IntersectionReason reason;
   final EvidenceGroup group;
+}
+
+class _IntersectionCta extends StatelessWidget {
+  const _IntersectionCta({
+    required this.reason,
+    required this.isDark,
+    this.onTap,
+  });
+
+  final IntersectionReason reason;
+  final bool isDark;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _ctaLabelFor(reason);
+    final subtitle = _ctaSubtitleFor(reason);
+    final fg = AppColors.iosAccent(context);
+    return GestureDetector(
+      key: const ValueKey<String>('object-intersection-primary-cta'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: fg.withValues(alpha: isDark ? 0.18 : 0.10),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupSm,
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(CupertinoIcons.arrow_right_circle, size: 18, color: fg),
+              SizedBox(width: AppSpacing.intraGroupXs),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosFootnote,
+                        fontWeight: AppTypography.semiBold,
+                        color: fg,
+                      ),
+                    ),
+                    if (subtitle.isNotEmpty) ...<Widget>[
+                      SizedBox(height: AppSpacing.two),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosCaption2,
+                          color: AppColors.iosSecondaryLabel(context),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _ctaLabelFor(IntersectionReason reason) {
+  switch (reason.actionType.trim()) {
+    case 'follow_author':
+      return '关注作者';
+    case 'join_circle':
+      return '加入圈子';
+    case 'add_contact':
+      return '加为联系人';
+    case 'ask_xiaoqu':
+      return '问问小趣';
+    case 'view_object':
+    default:
+      return '查看这个交集';
+  }
+}
+
+String _ctaSubtitleFor(IntersectionReason reason) {
+  final summary = reason.connectionSummary.trim();
+  if (summary.isNotEmpty) return summary;
+  final label = reason.label.trim();
+  if (label.isNotEmpty) return '因为 $label 推荐给你';
+  final displayName = reason.displayName.trim();
+  if (displayName.isNotEmpty) return '继续了解 $displayName';
+  return '';
 }
 
 /// 单行证据组：头像簇 + 短句 + 计数 + 实例 + chevron（≥44 命中区）。

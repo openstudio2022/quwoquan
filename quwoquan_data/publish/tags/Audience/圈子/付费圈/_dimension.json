@@ -1,0 +1,9 @@
+{
+  "label": "付费圈",
+  "labelEn": "Paid Circles",
+  "description": "以付费门槛或订阅维系的社群",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

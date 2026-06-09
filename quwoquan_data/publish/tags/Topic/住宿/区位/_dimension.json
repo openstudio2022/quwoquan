@@ -1,0 +1,10 @@
+{
+  "label": "区位",
+  "labelEn": "Location Type",
+  "description": "住宿的地理区位类型",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 13
+}

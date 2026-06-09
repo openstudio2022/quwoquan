@@ -1,0 +1,10 @@
+{
+  "label": "时间",
+  "labelEn": "Time Dimension",
+  "description": "内容与时间节点的关联，包括节气、节假日、季节与时代标签",
+  "maxDepth": 3,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 100
+}

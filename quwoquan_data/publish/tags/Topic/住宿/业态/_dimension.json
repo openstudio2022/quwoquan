@@ -1,0 +1,10 @@
+{
+  "label": "业态",
+  "labelEn": "Accommodation Type",
+  "description": "住宿经营业态分类",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 25
+}

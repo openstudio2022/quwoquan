@@ -75,6 +75,8 @@ void main() {
 
     testWidgets('群聊输入区可插入 @小趣 上下文 mention', (tester) async {
       final controller = TextEditingController();
+      const sendButtonKey = ValueKey<String>('send_button');
+      ChatInputSubmitPayload? submitted;
       addTearDown(controller.dispose);
 
       await tester.pumpWidget(
@@ -83,7 +85,8 @@ void main() {
             home: Scaffold(
               body: CustomizableChatInputBar(
                 controller: controller,
-                onSend: (_) async {},
+                onSend: (payload) async => submitted = payload,
+                sendButtonKey: sendButtonKey,
                 showXiaoquMentionButton: true,
               ),
             ),
@@ -97,6 +100,10 @@ void main() {
       await tester.pump();
 
       expect(controller.text, startsWith('@小趣 '));
+      await tester.tap(find.byKey(sendButtonKey));
+      await tester.pump();
+
+      expect(submitted?.mentions, contains('assistant'));
     });
 
     testWidgets('超过五行后出现展开入口', (tester) async {

@@ -123,7 +123,7 @@ func (s *MongoChatStore) ListGroupConversationsNeedingAvatar(ctx context.Context
 	}
 	filter := bson.M{
 		"status": bson.M{"$in": bson.A{"", "active"}},
-		"type":   bson.M{"$in": bson.A{"group", "circle"}},
+		"type":   "group",
 		"$or": bson.A{
 			bson.M{"avatarUrl": bson.M{"$exists": false}},
 			bson.M{"avatarUrl": ""},

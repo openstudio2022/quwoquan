@@ -59,11 +59,10 @@ func ResolveGroupAvatarURL(conv model.Conversation) string {
 }
 
 func ResolveConversationAvatarURL(conv model.Conversation) string {
-	t := PublicConversationType(conv.Type, conv.CircleId)
-	if t == conversationTypeDirect {
+	if strings.TrimSpace(conv.Type) == conversationTypeDirect {
 		return resolveConversationAvatarURLValue(conv.AvatarUrl, 0)
 	}
-	if t == conversationTypeGroup {
+	if strings.TrimSpace(conv.Type) == conversationTypeGroup {
 		if u := ResolveGroupAvatarURL(conv); u != "" {
 			return u
 		}
@@ -76,8 +75,7 @@ func ResolveConversationAvatarURLWithMembers(
 	conv model.Conversation,
 	members []model.ConversationMember,
 ) string {
-	t := PublicConversationType(conv.Type, conv.CircleId)
-	if t != conversationTypeGroup {
+	if strings.TrimSpace(conv.Type) != conversationTypeGroup {
 		return ResolveConversationAvatarURL(conv)
 	}
 	if u := ResolveGroupAvatarURL(conv); u != "" {

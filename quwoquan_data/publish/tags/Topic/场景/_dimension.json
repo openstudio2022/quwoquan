@@ -1,0 +1,10 @@
+{
+  "label": "场景",
+  "labelEn": "Scene",
+  "description": "内容所适配的使用场景与氛围，与主题垂类正交",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 50
+}

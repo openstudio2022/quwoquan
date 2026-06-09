@@ -323,7 +323,7 @@ redis:
     db: 1
 rec_model_service:
   enabled: true
-  url: "http://rec-model-service:8000"
+  url: "http://recommendation-service:8000"
   timeout_ms: 100
 YAML
   cat > "$out/releases/config/chat-service/${CONFIG_VERSION}.yaml" <<YAML
@@ -904,7 +904,7 @@ if [[ "$podman_compose" == "1" ]]; then
     '" >/dev/null
 
   podman run --pull=never --name quwoquan_service_rec-model-service_1 -d \
-    --net "$network_name" --network-alias rec-model-service \
+    --net "$network_name" --network-alias rec-model-service --network-alias recommendation-service \
     -e SERVICE_NAME=recommendation-service -e APP_ENV=gamma \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PYTHONUNBUFFERED=1 \
@@ -945,7 +945,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" \
     -e MONGO_URI=mongodb://mongodb:27017 \
     -e CONTENT_REDIS_REC_ADDR=redis:6379 -e CONTENT_REDIS_GENERAL_ADDR=redis:6379 \
-    -e REC_MODEL_SERVICE_ENABLED=true -e REC_MODEL_SERVICE_URL=http://rec-model-service:8000 \
+    -e REC_MODEL_SERVICE_ENABLED=true -e REC_MODEL_SERVICE_URL=http://recommendation-service:8000 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -p "${LOCAL_GAMMA_CONTENT_PORT:-19220}:18080" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1" \

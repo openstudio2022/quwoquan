@@ -11,6 +11,8 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
+import 'package:quwoquan_app/ui/user/models/creator_impact_summary.dart';
+import 'package:quwoquan_app/ui/user/widgets/creator_impact_card.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 
 class ProfileInteractionTab extends ConsumerStatefulWidget {
@@ -41,6 +43,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
       UserProfileUIConfig.interactionSubTabs;
 
   List<ProfileInteractionActivityViewData>? _items;
+  CreatorImpactSummary? _impactSummary;
   bool _loading = true;
   InteractionSubTab? _loadedSubTab;
   InteractionDirection? _loadedDirection;
@@ -66,6 +69,24 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
       final list = direction == InteractionDirection.received
           ? await repo.listProfileInteractionReceivedView(widget.userId)
           : await repo.listProfileInteractionSentView(widget.userId);
+      CreatorImpactSummary? impactSummary;
+      final profile = profileState.profile;
+      if (widget.mode == ProfileMode.mine &&
+          direction == InteractionDirection.received &&
+          profile != null) {
+        try {
+          final impact = await repo.getCreatorImpact(widget.userId);
+          impactSummary = impact.isEmpty
+              ? CreatorImpactSummary.fromStats(
+                  UserProfileStatsViewData.fromProfile(profile),
+                )
+              : CreatorImpactSummary.fromReadModel(impact);
+        } catch (_) {
+          impactSummary = CreatorImpactSummary.fromStats(
+            UserProfileStatsViewData.fromProfile(profile),
+          );
+        }
+      }
 
       final filtered = list.where((item) {
         return item.activityType == _activityTypeForSubTab(subTab);
@@ -74,6 +95,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
       if (mounted) {
         setState(() {
           _items = filtered;
+          _impactSummary = impactSummary;
           _loading = false;
         });
       }
@@ -81,6 +103,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
       if (mounted) {
         setState(() {
           _items = [];
+          _impactSummary = null;
           _loading = false;
         });
       }
@@ -97,6 +120,26 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
       ColorType.foregroundPrimary,
     );
     final fgSecondary = AppColors.iosSecondaryLabel(context);
+    // Creator Impact：仅在「我的·收到」展示真实 rm_author_impact，失败时由 _load 降级到 stats。
+    final showImpact =
+        widget.mode == ProfileMode.mine &&
+        state.interactionDirection == InteractionDirection.received &&
+        _impactSummary != null;
+    final impactSummary = showImpact ? _impactSummary : null;
+    final impactHeader = (impactSummary != null && !impactSummary.isEmpty)
+        ? Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.intraGroupSm,
+              AppSpacing.containerMd,
+              AppSpacing.zero,
+            ),
+            child: CreatorImpactCard(
+              summary: impactSummary,
+              isDark: widget.isDark,
+            ),
+          )
+        : const SizedBox.shrink();
     final activeIndex = _interactionFilters.indexWhere(
       (filter) => _interactionSubTabForId(filter.id) == state.interactionSubTab,
     );
@@ -315,6 +358,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           header,
+          impactHeader,
           SizedBox(height: AppSpacing.intraGroupXs),
           body,
         ],
@@ -324,6 +368,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
     return Column(
       children: [
         header,
+        impactHeader,
         Expanded(child: body),
       ],
     );

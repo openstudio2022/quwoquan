@@ -1,0 +1,11 @@
+{
+  "label": "川菜",
+  "labelEn": "Sichuan Cuisine",
+  "description": "以麻辣著称的四川菜系",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "aliases": [
+    "四川菜",
+    "蜀菜"
+  ]
+}

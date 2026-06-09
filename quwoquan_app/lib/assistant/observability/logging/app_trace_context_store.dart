@@ -22,7 +22,18 @@ class AppTraceContextStore {
     _deviceActorId = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
   }
 
-  String newPageVisitId() => _newId('visit');
+  /// 共享「当前页访问」上下文：每次铸造新的 page visit id 时同步更新，
+  /// 供没有直接持有 visit id 的旁路埋点（如 [JourneyEventTracker]）按当前页归因。
+  String? _currentPageVisitId;
+
+  String? get currentPageVisitId => _currentPageVisitId;
+
+  String newPageVisitId() {
+    final id = _newId('visit');
+    _currentPageVisitId = id;
+    return id;
+  }
+
   String newRequestId() => _newId('req');
 
   String _newId(String prefix) {

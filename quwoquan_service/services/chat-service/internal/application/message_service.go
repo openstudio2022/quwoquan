@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -148,6 +149,25 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 		}); err != nil {
 			slog.Error("publish MessageSent failed", "err", err, "conversationId", req.ConversationId)
 		}
+		if isAssistantGeneratedMessage(req) {
+			return
+		}
+		assistantMember, ok := s.mentionedAssistantMember(context.Background(), req.ConversationId, msg.Mentions)
+		if !ok {
+			return
+		}
+		if err := s.publisher.PublishDomainEvent(context.Background(), event.AssistantMentioned, req.ConversationId, req.SenderId, map[string]any{
+			"conversationId":     req.ConversationId,
+			"messageId":          msg.ID,
+			"seq":                seq,
+			"senderId":           req.SenderId,
+			"content":            msg.Content,
+			"assistantMemberId":  assistantMember.UserId,
+			"assistantSkillId":   assistantMember.AssistantSkillId,
+			"triggerClientMsgId": req.ClientMsgId,
+		}); err != nil {
+			slog.Error("publish AssistantMentioned failed", "err", err, "conversationId", req.ConversationId)
+		}
 	}()
 
 	return &SendMessageResponse{
@@ -155,6 +175,26 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 		Seq:       seq,
 		Timestamp: now.Format(time.RFC3339Nano),
 	}, nil
+}
+
+func (s *MessageService) mentionedAssistantMember(ctx context.Context, conversationID string, mentions []string) (*model.ConversationMember, bool) {
+	if len(mentions) == 0 {
+		return nil, false
+	}
+	assistantMember, err := s.repo.FindAssistantMember(ctx, conversationID)
+	if err != nil || assistantMember == nil {
+		return nil, false
+	}
+	for _, mention := range mentions {
+		if mention == assistantMember.UserId || mention == "assistant" {
+			return assistantMember, true
+		}
+	}
+	return nil, false
+}
+
+func isAssistantGeneratedMessage(req SendMessageRequest) bool {
+	return req.SenderId == "assistant" || strings.HasPrefix(strings.TrimSpace(req.ClientMsgId), "assistant-")
 }
 
 func (s *MessageService) ensureMessageAllowed(ctx context.Context, req SendMessageRequest) error {

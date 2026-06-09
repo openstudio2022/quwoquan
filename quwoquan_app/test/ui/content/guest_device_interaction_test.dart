@@ -20,19 +20,33 @@ class _GuestAuthStore implements AuthSessionStore {
       accountState: '',
       identityOrigin: '',
       installId: 'install-guest-001',
+      lastRefreshAtEpochMs: 0,
+      lastForegroundAuthCheckAtEpochMs: 0,
       manualLoggedOut: false,
       launchPromptDismissed: true,
     );
   }
 
   @override
-  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+  Future<void> saveLoginResult(
+    AuthLoginResultDto result, {
+    AuthRememberedLoginMethod rememberedLoginMethod =
+        AuthRememberedLoginMethod.unknown,
+    String? rememberedLoginMaskedIdentifier,
+  }) async {}
+  @override
+  Future<void> saveRefreshedTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {}
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
   @override
   Future<void> markLaunchPromptDismissed() async {}
+  @override
+  Future<void> markForegroundAuthCheckNow() async {}
 }
 
 void main() {
@@ -110,12 +124,7 @@ void main() {
         reason: '前置：当前为游客态',
       );
 
-      syncPostLikeIntent(
-        ref,
-        postId: 'post_x',
-        isLiked: true,
-        likeCount: 10,
-      );
+      syncPostLikeIntent(ref, postId: 'post_x', isLiked: true, likeCount: 10);
       await tester.pump();
 
       expect(ref.read(postInteractionStateProvider).isLiked('post_x'), isTrue);

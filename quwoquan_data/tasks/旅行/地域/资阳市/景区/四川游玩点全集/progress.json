@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/资阳市/景区/四川游玩点全集",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/安岳石刻",
+        "地点/景区/陈毅故里",
+        "地点/景区/花溪谷",
+        "地点/景区/乐至沙发寺"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

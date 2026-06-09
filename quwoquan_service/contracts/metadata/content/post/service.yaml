@@ -189,6 +189,15 @@ api_routes:
     auth: required
 
   - method: GET
+    path: /v1/content/sub-accounts/{subAccountId}/author-impact
+    operation: GetAuthorImpact
+    description: 创作者影响力真实动作摘要（按 authorId 反向聚合交集转化、关系、进圈、决策、知识与传播帮助）
+    query_params: [limit]
+    response_entity: AuthorImpactSummary
+    response_fields: [authorId, total, items]
+    auth: required
+
+  - method: GET
     path: /v1/config/app
     operation: GetAppConfig
     description: 端侧业务规则配置（评论字数限制、折叠参数等），启动时拉取一次

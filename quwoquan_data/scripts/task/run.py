@@ -19,7 +19,8 @@ DAG（stage 序）：
   -> download_fetch(auto)
   -> build_prepare(auto 下发主页契约) -> build_homepage(checkpoint:Agent 写 page 三件套)
   -> build_validate(auto 采纳门)
-  -> produce_plan(auto 解析 compose brief)
+  -> content_plan(checkpoint:Agent 证据驱动篇目+注册+brief)
+  -> produce_plan(auto 校验 brief 或 legacy 每实体 brief)
   -> produce_compose(auto compose-brief) -> produce_author(checkpoint:Agent 写 article)
   -> produce_annotate(auto) -> produce_review(auto review+media gate --materialize)
   -> publish(auto)
@@ -229,6 +230,14 @@ def _homepages_done(ctx: PipelineContext) -> tuple[bool, list[str]]:
     return (not issues), issues
 
 
+def _content_plan_done(ctx: PipelineContext) -> tuple[bool, list[str]]:
+    """content_plan checkpoint：篇目包+注册+brief 是否就绪。"""
+    from _common.content_plan import validate_content_plan
+
+    issues = validate_content_plan(ctx.task_id, ctx.batch_id, ctx.spec)
+    return (not issues), issues
+
+
 def _drafts_authored(ctx: PipelineContext) -> tuple[bool, list[str]]:
     """produce_author checkpoint：compose 后的 drafts 是否被 Agent 创作（非占位）。"""
     from _common.draft_io import is_placeholder, iter_draft_articles
@@ -320,12 +329,33 @@ def _entity_type_kind(entity_type: str) -> str:
 
 
 def _run_produce_plan(ctx: PipelineContext) -> StageResult:
-    """为每个 coverage 实体解析 compose brief，写入对象树 `posts/.../3.compose/brief.json`。
+    """校验 content_plan 已物化 brief；无 quotas 时 legacy 每实体自动 brief。"""
+    from _common.content_plan import (
+        content_plan_quotas_required,
+        load_content_plan_packet,
+        validate_content_plan,
+    )
 
-    薄编排：复用 plan.resolve_compose_brief（与 `qwq-data plan` 同一真相源），不重写路由。
-    每实体默认取 task.content.angles 首个角度产 1 篇，brief 关联实体主页 entityRef，
-    让 compose-brief 能据此生成 writing_pack + prompt。
-    """
+    if content_plan_quotas_required(ctx.spec):
+        issues = validate_content_plan(ctx.task_id, ctx.batch_id, ctx.spec)
+        if issues:
+            return StageResult(
+                "produce_plan",
+                AUTO,
+                "failed",
+                "content_plan 未就绪:\n  - " + "\n  - ".join(issues[:10]),
+                fallback_stage="content_plan",
+                issues=issues,
+            )
+        packet = load_content_plan_packet(ctx.task_id, ctx.batch_id) or {}
+        n = len(packet.get("items") or [])
+        return StageResult(
+            "produce_plan",
+            AUTO,
+            "done",
+            f"content_plan 已物化 {n} 篇 brief，跳过自动 produce_plan",
+        )
+
     from plan.brief import resolve_compose_brief
     from plan.handler import ENTITY_KIND_MAP
     from template.registry import TemplateRegistry
@@ -440,6 +470,28 @@ def _checkpoint_download_plan(ctx: PipelineContext) -> StageResult:
     return StageResult("download_plan", CHECKPOINT, "waiting", "等待 Agent 写 source_plan", hint)
 
 
+def _checkpoint_content_plan(ctx: PipelineContext) -> StageResult:
+    ok, issues = _content_plan_done(ctx)
+    if ok:
+        return StageResult("content_plan", CHECKPOINT, "done", "证据驱动篇目已就绪")
+    from _common.content_plan import content_plan_quotas_required
+
+    quotas = (ctx.spec.get("content") or {}).get("quotas") or {}
+    entity_q = int(quotas.get("entityArticles") or 0) if content_plan_quotas_required(ctx.spec) else 0
+    route_q = int(quotas.get("routeArticles") or 0) if content_plan_quotas_required(ctx.spec) else 0
+    hint = (
+        f"[CHECKPOINT content_plan] Agent 通读已下载来源，证据驱动规划 {entity_q}+{route_q} 篇：\n"
+        f"  产出: batches/{ctx.batch_id}/_shared/content_plan_packet.json\n"
+        f"  每条: ref, kind(entity|route), title, entityRefs, evidenceRefs(相对batch路径), rationale, mustIncludeFacts,\n"
+        f"        writingIntent(planning_consultation|decision_experience|post_trip_journal 三选一，单篇唯一主线),\n"
+        f"        baseSourceRef(主底稿来源 ref，作为风格与事实锚点；其它来源只能补事实)\n"
+        f"  并 register_content_object + 写 posts/.../3.compose/brief.json（禁止预置营销 ref；brief 写入 writingIntent/baseSourceRef）\n"
+        f"  未过项:\n    - " + "\n    - ".join(issues[:12]) + "\n"
+        f"  完成后: qwq-data data workflow run --task {ctx.task_id} --batch {ctx.batch_id} --resume"
+    )
+    return StageResult("content_plan", CHECKPOINT, "waiting", "等待 Agent 证据驱动篇目规划", hint)
+
+
 def _checkpoint_build_homepage(ctx: PipelineContext) -> StageResult:
     ok, issues = _homepages_done(ctx)
     if ok:
@@ -520,6 +572,7 @@ DAG: list[tuple[str, str, Callable[[PipelineContext], StageResult]]] = [
     ("build_prepare", AUTO, _run_build_prepare),
     ("build_homepage", CHECKPOINT, _checkpoint_build_homepage),
     ("build_validate", AUTO, _run_build_validate),
+    ("content_plan", CHECKPOINT, _checkpoint_content_plan),
     ("produce_plan", AUTO, _run_produce_plan),
     ("produce_compose", AUTO, _run_produce_compose),
     ("produce_author", CHECKPOINT, _checkpoint_produce_author),
@@ -666,8 +719,72 @@ def run_pipeline(ctx: PipelineContext) -> int:
     print(f"[task run] FAILED: ReAct 回退耗尽未收敛 — {ctx.task_id} / {ctx.batch_id}", file=sys.stderr)
     return 1
 
+def _handle_run_fanout(args: argparse.Namespace) -> None:
+    """--mode fanout：走冻结计划建 task/batch + enqueue 叶子 + 展开 assignment（幂等）。
+
+    单模式（--mode single）= 现状 DAG；fanout 把每分区/叶子下沉到 object_queue，
+    由 cursor-sdk 外部 runner 解 CHECKPOINT 接缝。--concurrency 1 即退化等价单模式。
+    """
+    from _common import fanout_plan as fp
+    from task import fanout_dispatch as fd
+
+    if not getattr(args, "plan", None):
+        print("[task run] ERROR: --mode fanout 需要 --plan <planId>", file=sys.stderr)
+        raise SystemExit(2)
+    plan = fp.load_plan(args.plan)
+    if plan is None:
+        print(f"[task run] ERROR: 计划不存在: {args.plan}（先跑 qwq-data task decompose）", file=sys.stderr)
+        raise SystemExit(2)
+    if str(plan.get("status")) != "frozen":
+        print(
+            f"[task run] ERROR: 计划未冻结 (status={plan.get('status')})；"
+            f"先 qwq-data task decompose --plan {args.plan} --freeze --confirm",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    try:
+        report = fd.dispatch(
+            plan,
+            strategy=getattr(args, "strategy", None),
+            concurrency=getattr(args, "concurrency", None),
+            batch_size=getattr(args, "batch_size", None),
+        )
+    except (ValueError, RuntimeError) as exc:
+        print(f"[task run] ERROR: dispatch failed: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+    totals = report["totals"]
+    print(
+        f"[task run --mode fanout] plan={report['planId']} strategy={report['strategy']} "
+        f"concurrency={report['concurrency']}"
+    )
+    for part in report["perPartition"]:
+        print(
+            f"  - {'/'.join(part['partitionPath'])} -> task={part['taskId']} "
+            f"batch={part['batchId']} enqueued={part['enqueued']} created={part['taskCreated']}"
+        )
+    print(
+        f"[task run --mode fanout] partitions={totals['partitions']} tasksCreated={totals['tasksCreated']} "
+        f"leavesEnqueued={totals['leavesEnqueued']} assignments={totals['assignments']}"
+    )
+    print(
+        "[task run --mode fanout] 叶子已入队。外部并行执行（by-partition 默认先跑分区 orchestrator "
+        "推进 download_plan/build_homepage/content_plan 三个 checkpoint，再分发叶子 author）："
+        f"\n  本机多 agent: python3 agent_ops/runners/fanout_runner.py --plan {report['planId']} --strategy {report['strategy']} --runtime local --max-workers {report['concurrency']}"
+        f"\n  云端 VM:     python3 agent_ops/runners/fanout_runner.py --plan {report['planId']} --strategy {report['strategy']} --runtime cloud --max-workers {report['concurrency']}"
+        "\n  （两者都需 export CURSOR_API_KEY；或会话内逐分区 qwq-data data workflow run --task <taskId> --batch <batchId> 解 checkpoint）"
+        " + qwq-data object-queue lease-next --task <taskId> --batch <batchId> --worker <id>（叶子）"
+    )
+
+
 def handle_run(args: argparse.Namespace) -> None:
+    if getattr(args, "mode", "single") == "fanout":
+        _handle_run_fanout(args)
+        return
+
     task_id = args.task
+    if not task_id:
+        print("[task run] ERROR: --mode single 需要 --task <taskId>", file=sys.stderr)
+        raise SystemExit(2)
     batch_id = args.batch
     spec = store.load_spec(task_id)
     entity_ids = _coverage_entity_ids(spec)
@@ -705,9 +822,23 @@ def handle_run(args: argparse.Namespace) -> None:
 
 
 def register_run_parser(sub: argparse._SubParsersAction) -> None:
-    pr = sub.add_parser("run", help="无人值守 workflow 编排：按 DAG 跑 download→build→produce→publish")
-    pr.add_argument("--task", required=True, help="Task ID")
+    pr = sub.add_parser("run", help="无人值守 workflow 编排：单模式 DAG / fanout 分区叶子调度")
+    pr.add_argument(
+        "--mode",
+        choices=["single", "fanout"],
+        default="single",
+        help="single=会话内单 agent 跑 DAG（默认，现状）；fanout=按冻结计划分区/叶子调度",
+    )
+    pr.add_argument("--task", help="Task ID（single 模式必填）")
     pr.add_argument("--batch", default="run_1", help="Batch ID")
+    pr.add_argument("--plan", help="fanout 模式：冻结计划 planId")
+    pr.add_argument(
+        "--strategy",
+        choices=["by-partition", "flat-pool", "by-leaf", "by-batch"],
+        help="fanout 模式：拉起策略（默认取计划 defaults.strategy）",
+    )
+    pr.add_argument("--concurrency", type=int, help="fanout 模式：并发度（设 1 即退化等价 single）")
+    pr.add_argument("--batch-size", dest="batch_size", type=int, help="fanout by-batch 策略：每块叶子数")
     pr.add_argument("--resume", action="store_true",
                     help="从上次 checkpoint 继续（默认即 resume 语义：跳过已完成 stage）")
     pr.add_argument("--reset-state", dest="reset_state", action="store_true",

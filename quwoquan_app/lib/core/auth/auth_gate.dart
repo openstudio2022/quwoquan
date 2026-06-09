@@ -23,6 +23,7 @@ enum AuthGateReason {
   createPost,
   openChat,
   sendMessage,
+  greet,
   comment,
   like,
   favorite,
@@ -112,6 +113,19 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
         title: UITextConstants.authGateTitleFollow,
         prompt: UITextConstants.authGatePromptFollow,
         requiredOperations: <String>['FollowUser'],
+      ),
+      AuthGateReason.greet: AuthGateEntry(
+        reason: AuthGateReason.greet,
+        title: UITextConstants.authGateTitleGreet,
+        prompt: UITextConstants.authGatePromptGreet,
+        requiredOperations: <String>[
+          'SendGreetingRequest',
+          'ReplyGreetingRequest',
+          'IgnoreGreetingRequest',
+          'CancelGreetingRequest',
+          'ListGreetingInbox',
+          'ListGreetingOutbox',
+        ],
       ),
       // 关注频道展示「关注的人」的内容流，游客无关注关系，需登录后查看。
       // 关注流走 GetFeed（鉴权快照为 optional），故此处不声明 requiredOperations，
@@ -236,9 +250,9 @@ String buildLoginRouteLocation({
   final redirectLocation = _trimmedOrNull(redirect);
   final fallbackLocation = _trimmedOrNull(dismissFallback);
   final query = <String, String>{
-    'reason': ?reason,
-    'redirect': ?redirectLocation,
-    loginDismissFallbackQueryParam: ?fallbackLocation,
+    if (reason != null) 'reason': reason,
+    if (redirectLocation != null) 'redirect': redirectLocation,
+    if (fallbackLocation != null) loginDismissFallbackQueryParam: fallbackLocation,
     loginGuestDismissPopQueryParam: allowGuestDismissPop ? '1' : '0',
   };
   return Uri(

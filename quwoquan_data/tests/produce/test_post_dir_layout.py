@@ -123,6 +123,17 @@ def test_object_index_written_per_object():
     assert idx["publishTargetRef"] == "posts/article/攻略/都江堰一日游怎么玩/1", idx["publishTargetRef"]
 
 
+def test_publish_angle_maps_trip_semantics_not_all_loop():
+    from produce.route_workflow import _publish_angle
+
+    assert _publish_angle({"templateId": "线路_周末短途"}) == "攻略"
+    assert _publish_angle({"templateId": "线路_银发慢游"}) == "攻略"
+    assert _publish_angle({"templateId": "线路_补给避险"}) == "攻略"
+    assert _publish_angle({"templateId": "线路_环线攻略"}) == "环线攻略"
+    assert _publish_angle({"templateId": "线路_自驾路书"}) == "自驾路书"
+    assert _publish_angle({"templateId": "线路_枢纽到达"}) == "枢纽到达"
+
+
 def test_promote_rglob_locates_object_layout():
     posts, _ = _materialize()
     # 复刻 promote_from_posts_root 的定位口径：rglob(manifest) + 正文存在性。

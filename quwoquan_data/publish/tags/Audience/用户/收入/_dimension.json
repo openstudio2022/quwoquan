@@ -1,0 +1,9 @@
+{
+  "label": "收入水平",
+  "labelEn": "Income Level",
+  "description": "用户月收入与资产段划分",
+  "maxDepth": 2,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

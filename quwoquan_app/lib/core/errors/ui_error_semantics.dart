@@ -359,8 +359,8 @@ class UiErrorSemanticResolver {
         if (chatError != ChatErrorCode.unknown && l10n != null) {
           return _localizedDefaultMessage(
             l10n,
-            zh: _chatErrorMessage(chatError),
-            en: _chatErrorMessage(chatError),
+            zh: chatError.defaultMessage,
+            en: chatError.defaultMessage,
           );
         }
       }
@@ -486,6 +486,18 @@ class UiErrorSemanticResolver {
     if (continuation is FollowProfileContinuation) {
       return '登录后将继续关注当前对象';
     }
+    if (continuation is GreetProfileContinuation) {
+      return '登录后将继续向当前对象发送打招呼';
+    }
+    if (continuation is OpenDirectConversationContinuation) {
+      return '登录后将继续打开正式私信会话';
+    }
+    if (continuation is StartDirectCallContinuation) {
+      return switch (continuation.callType) {
+        'video' => '登录后将继续发起视频通话',
+        _ => '登录后将继续发起语音通话',
+      };
+    }
     if (continuation is JoinCircleContinuation) {
       return '登录后将继续加入当前圈子';
     }
@@ -569,16 +581,6 @@ class UiErrorSemanticResolver {
       return l10n.loadFailed;
     }
     return _localizedDefaultMessage(l10n, zh: zh, en: en);
-  }
-
-  static String _chatErrorMessage(ChatErrorCode code) {
-    return switch (code) {
-      ChatErrorCode.conversationNotFound => '会话不存在或已失效',
-      ChatErrorCode.unauthorized => '请先登录',
-      ChatErrorCode.messageTooLong => '消息内容过长，请调整后重试',
-      ChatErrorCode.rateLimited => '发送过于频繁，请稍后重试',
-      ChatErrorCode.internalError || ChatErrorCode.unknown => '消息服务异常，请稍后重试',
-    };
   }
 
   static RuntimeFailureBase? _runtimeFailureFromError(Object error) {

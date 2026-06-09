@@ -18,6 +18,7 @@ import re
 import sys
 from pathlib import Path
 
+from _common import quality_gates as qg
 from _common.article_package import sha256_file
 from _common.entity_annotation import annotation_publish_issues
 from _common.intersection_signal import intersection_hint_issues
@@ -42,6 +43,7 @@ def verify_posts(posts_root: Path) -> list[str]:
     issues: list[str] = []
     if not posts_root.exists():
         return issues
+    collected: list[tuple[Path, str]] = []  # (article_path, article) 供跨篇骨架门复跑
     for article_path in sorted(posts_root.rglob("article.md")):
         post_dir = article_path.parent
         manifest_path = post_dir / "manifest.json"
@@ -51,6 +53,7 @@ def verify_posts(posts_root: Path) -> list[str]:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         else:
             issues.append(f"{post_dir}: missing manifest.json")
+        collected.append((article_path, article))
 
         for word in FORBIDDEN:
             if word in article:
@@ -83,7 +86,46 @@ def verify_posts(posts_root: Path) -> list[str]:
         issues.extend(annotation_publish_issues(article, entity_refs if isinstance(entity_refs, list) else []))
         # 「明」交集信号强制门：每个 post 必须有完备的 intersectionHints（对齐 IntersectionReason 闭集）。
         issues.extend(intersection_hint_issues(manifest.get("intersectionHints"), manifest))
+        # 发布面复跑单一门库语义门：不只信 review.json=approved。
+        issues.extend(_semantic_gate_issues(article_path, article, manifest))
+
+    # 跨篇模板骨架门 + SimHash 语义去重双指标：换实体名同骨架在发布面也要拦。
+    all_articles = [art for _, art in collected]
+    for path, art in collected:
+        peers = [other for other in all_articles if other is not art]
+        for msg in qg.skeleton_similarity_issues(art, peers):
+            issues.append(f"{path}: {msg}")
+        for msg in qg.semantic_duplicate_issues(art, peers):
+            issues.append(f"{path}: {msg}")
     return issues
+
+
+def _semantic_gate_issues(article_path: Path, article: str, manifest: dict) -> list[str]:
+    """复用单一 gate library，在发布面复跑图文闭环/主线一致性/语域门。"""
+    out: list[str] = []
+    carrier = str(manifest.get("carrier") or "article")
+    assets = manifest.get("assets") if isinstance(manifest.get("assets"), list) else []
+    route_nodes = manifest.get("routeNodes") or manifest.get("routeNodeRefs") or []
+    route_node_count = len(route_nodes) if isinstance(route_nodes, list) else 0
+    for msg in qg.image_reference_closure_issues(article, assets, carrier=carrier, route_node_count=route_node_count):
+        out.append(f"{article_path}: {msg}")
+    writing_intent = manifest.get("writingIntent")
+    if writing_intent:
+        for msg in qg.writing_intent_consistency_issues(article, writing_intent):
+            out.append(f"{article_path}: {msg}")
+    banned = manifest.get("bannedRegisterTerms")
+    if isinstance(banned, list) and banned:
+        for msg in qg.register_lexicon_issues(article, [str(b) for b in banned]):
+            out.append(f"{article_path}: {msg}")
+    from _common import public_contacts as pc
+
+    allowed_contacts = manifest.get("allowedContactNumbers") if isinstance(manifest.get("allowedContactNumbers"), list) else []
+    for msg in qg.contact_info_issues(article, allowed_numbers=pc.allowed_numbers([str(n) for n in allowed_contacts])):
+        out.append(f"{article_path}: {msg}")
+    heading_extra = manifest.get("mechanicalHeadingTerms") if isinstance(manifest.get("mechanicalHeadingTerms"), list) else []
+    for msg in qg.mechanical_heading_issues(article, extra_terms=[str(t) for t in heading_extra]):
+        out.append(f"{article_path}: {msg}")
+    return out
 
 
 def _asset_index(manifest: dict) -> tuple[dict[str, str], dict[str, str]]:

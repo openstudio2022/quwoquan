@@ -34,6 +34,7 @@ from task import lint as lint_mod
 from task import ops
 from task import queue
 from task import store
+from task.decompose import register_decompose_parser
 from task.run import register_run_parser
 
 
@@ -227,6 +228,21 @@ def handle_prune_publish(args: argparse.Namespace) -> None:
         print(f"[task prune-publish] reindex: entities={counts['entities']} posts={counts['posts']}")
 
 
+def handle_cleanup_runtime(args: argparse.Namespace) -> None:
+    ops.cleanup_runtime(args.task_id)
+
+
+def handle_rollup(args: argparse.Namespace) -> None:
+    from task import fanout_rollup
+
+    try:
+        report = fanout_rollup.rollup(args.plan)
+    except ValueError as exc:
+        print(f"[task rollup] ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("task", help="任务工程：规格/账本/锁/溯源（薄编排壳）")
     sub = p.add_subparsers(dest="task_command")
@@ -327,7 +343,19 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pp.add_argument("--reindex", action="store_true", help="清除后重建 publish lookup 索引")
     pp.set_defaults(handler=handle_prune_publish)
 
+    pcr = sub.add_parser(
+        "cleanup-runtime",
+        help="迁移 task/_shared 账本并清理 task 根历史镜像位",
+    )
+    pcr.add_argument("task_id")
+    pcr.set_defaults(handler=handle_cleanup_runtime)
+
+    prl = sub.add_parser("rollup", help="fanout 归并治理：分区 reducer + 全局进度/SLO + dead/spillover 巡检")
+    prl.add_argument("--plan", required=True, help="冻结计划 planId")
+    prl.set_defaults(handler=handle_rollup)
+
     register_run_parser(sub)
+    register_decompose_parser(sub)
     queue.register_queue_parser(sub)
 
     def _dispatch(args: argparse.Namespace) -> None:

@@ -1,0 +1,9 @@
+{
+  "label": "职业身份",
+  "labelEn": "Occupation",
+  "description": "用户职业与从业领域",
+  "maxDepth": 3,
+  "pathPolicy": "prefer-leaf",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

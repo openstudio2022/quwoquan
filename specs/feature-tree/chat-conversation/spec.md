@@ -65,6 +65,8 @@
 | F10 | 端侧 Domain 迁移 | `features/chat/` → `ui/chat/`，Provider 隔离 |
 | F11 | 4 层测试覆盖 | L1 契约 + L2 集成 + L3 端侧 + L4 灰度 |
 | F12 | 小趣助手会话内参与 | 邀请/移除助手 + @小趣触发 + 助手回复消息（memberType=assistant） |
+| F13 | 商用入口矩阵 | 1v1、请求箱、私建群、圈子群、班级群、主页相关群、搜索/通知回流、小趣进会话均有唯一归属 |
+| F14 | 群家族语义收敛 | 临时群/自建群/圈子群/班级群统一为 group conversation + 来源/绑定/生命周期语义 |
 
 ### 4.2 Out-of-Scope（不在本次）
 
@@ -88,10 +90,44 @@
 | **ChatInbox** | 会话列表读模型 | MongoDB rm_chat_inbox | 改为 per-user 投影，source += MemberJoined |
 | **MessageReceipt** | 消息回执 | MongoDB message_receipts（新，可选） | 仅 ≤50 人群启用 |
 
+### 5.0 商用对象边界
+
+消息域只拥有 `Conversation / Message / ConversationMember / ConversationUserState / MessageReceipt / ChatInbox`。圈子、组织节点、班级和共享主页不是会话对象：
+
+- `Circle` 是关系主页聚合根，兴趣型前台叫“圈子”，组织型前台直接显示学校、院系、班级、公司、部门。
+- `CircleGroup` 是圈子或组织型关系主页下的群单元；班级群是 `CircleGroup(nodeType=classroom)` 绑定 group conversation。
+- `Homepage` 只输出 `relatedGroups` 摘要，不直接创建或拥有 conversation。
+- 小趣不是新的 conversation type，而是 `ConversationMember(memberType=assistant)`。
+
+#### 5.0.1 会话类型冻结
+
+`Conversation.type` 冻结为：
+
+- `direct`：1v1 正式会话。
+- `group`：所有群会话的主类型，包括私建群、临时群、圈子默认公共群、圈子自建群、组织节点群、班级群、主页相关群入口落到的群会话。
+- `encrypted`：保留给加密或密信能力；未接入 chat-service 主链前不得作为首发主推能力。
+
+商用版本不保留 `circle` 会话类型兼容。历史 `circle` 输入与存量记录必须在发布前迁移或清理为 `group`，不得在运行时继续 normalize 旧类型。
+
+#### 5.0.2 群家族语义
+
+本轮新增或冻结三类语义字段，避免为不同群形态新增顶级类型：
+
+- `originType`：`direct_init | greeting_reply | ad_hoc_group | circle_default_group | circle_self_built_group | organization_node_group | homepage_related_group | assistant_invited`。
+- `bindingType`：`none | circle | circle_group | organization_node | homepage_related_group`。
+- `lifecyclePolicy`：`persistent | temporary | dissolvable | bound_to_circle | bound_to_organization_node`。
+
+解释规则：
+
+- 临时群 = `type=group + originType=ad_hoc_group + lifecyclePolicy=temporary/dissolvable`。
+- 圈子群 = `type=group + bindingType=circle/circle_group`，真实群单元由 `circleGroupId` 指向 `CircleGroup`。
+- 班级群 = `type=group + bindingType=organization_node + circleGroupId`，班级层级归 circle-community。
+- 主页相关群 = 主页 `relatedGroups` 指向真实 Circle/CircleGroup，再进入其 group conversation；主页不直接拥有 conversation。
+
 ### 5.1 关键设计约束
 
 - `Conversation.members` 字段废弃 → `ConversationMember` collection，索引 `{ conversationId, userId }` 唯一
-- `ConversationType` 去除 `assistant`（底部导航栏已有独立助手入口），保留 `direct/group/circle/encrypted`
+- `ConversationType` 去除 `assistant/circle`；新增群差异通过 `originType/bindingType/lifecyclePolicy` 表达，商用运行时不再接受 `circle` 类型输入
 - 小趣助手通过 `ConversationMember(memberType=assistant)` 参与任意会话，@小趣 或显式邀请触发
 - `Message.seq` 由 Redis `INCR conversation:{id}:seq` 原子生成，保证严格单调
 - `ConversationUserState` 索引 `{ userId, conversationId }` 唯一，支撑 Inbox 查询

@@ -34,6 +34,7 @@ import (
 	httpadapter "quwoquan_service/services/assistant-service/internal/adapters/http"
 	"quwoquan_service/services/assistant-service/internal/application"
 	"quwoquan_service/services/assistant-service/internal/application/tool"
+	"quwoquan_service/services/assistant-service/internal/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/projection"
@@ -83,11 +84,13 @@ type config struct {
 	Redis struct {
 		Rec     redisSceneCfg `yaml:"rec"`
 		General redisSceneCfg `yaml:"general"`
+		Realtime redisSceneCfg `yaml:"realtime"`
 	} `yaml:"redis"`
 	ModelProvider  providerCfg      `yaml:"model_provider"`
 	SearchProvider providerCfg      `yaml:"search_provider"`
 	ContentSearch  contentSearchCfg `yaml:"content_search"`
 	UserProfile    userProfileCfg   `yaml:"user_profile"`
+	ChatService    serviceEgressCfg `yaml:"chat_service"`
 }
 
 // userProfileCfg configures the egress to user-service's interest-profile read
@@ -95,6 +98,11 @@ type config struct {
 // base_url empty disables personalization (proactive output stays non-personalized);
 // alpha points at the local user-service.
 type userProfileCfg struct {
+	BaseURL   string `yaml:"base_url"`
+	TimeoutMs int    `yaml:"timeout_ms"`
+}
+
+type serviceEgressCfg struct {
 	BaseURL   string `yaml:"base_url"`
 	TimeoutMs int    `yaml:"timeout_ms"`
 }
@@ -255,12 +263,20 @@ func main() {
 		application.WithSkillSubscriptionStore(subscriptionStore),
 		application.WithAgentLoop(buildAgentLoop(cfg, appEnv)),
 	}
+	chatGroundingEnabled := false
 	if userProfileBase := strings.TrimSpace(cfg.UserProfile.BaseURL); userProfileBase != "" {
 		interestReader := userprofile.NewClient(searchHTTPClient(cfg.UserProfile.TimeoutMs), userProfileBase)
 		assistantOpts = append(assistantOpts, application.WithProactiveInterestReader(interestReader))
 		log.Printf("assistant-service proactive interest profile reader enabled base=%s", userProfileBase)
 	} else {
 		log.Printf("assistant-service proactive interest profile reader disabled (no user_profile.base_url)")
+	}
+	if chatBase := strings.TrimSpace(cfg.ChatService.BaseURL); chatBase != "" {
+		assistantOpts = append(assistantOpts, application.WithChatGroundingClient(chatclient.NewClient(searchHTTPClient(cfg.ChatService.TimeoutMs), chatBase)))
+		chatGroundingEnabled = true
+		log.Printf("assistant-service chat grounding client enabled base=%s", chatBase)
+	} else {
+		log.Printf("assistant-service chat grounding client disabled (no chat_service.base_url)")
 	}
 	service := application.NewAssistantService(
 		eventStore,
@@ -277,6 +293,16 @@ func main() {
 			log.Fatalf("assistant-service scenario seed failed: %v", err)
 		}
 		log.Printf("assistant-service scenario seed loaded refs=%s", strings.Join(seedRefs, ","))
+	}
+	if chatGroundingEnabled {
+		consumer := messaging.NewAssistantMentionedConsumer(
+			router.Scene("general"),
+			service,
+			instanceID,
+			slog.Default(),
+		)
+		go consumer.Run(context.Background(), 500*time.Millisecond)
+		log.Printf("assistant-service assistant mentioned consumer enabled stream=%s group=%s", messaging.AssistantMentionedStream, messaging.AssistantMentionedConsumerGroup)
 	}
 	baseHandler := httpadapter.NewHandler(service).Routes()
 	outerMux := http.NewServeMux()
@@ -385,6 +411,9 @@ func applyEnvOverrides(cfg *config) {
 	}
 	if v := strings.TrimSpace(os.Getenv("REDIS_REC_ADDR")); v != "" {
 		cfg.Redis.Rec.Addr = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ASSISTANT_CHAT_BASE_URL")); v != "" {
+		cfg.ChatService.BaseURL = v
 	}
 	applyProviderEnvOverrides(&cfg.ModelProvider, "ASSISTANT_MODEL")
 	applyProviderEnvOverrides(&cfg.SearchProvider, "ASSISTANT_SEARCH")

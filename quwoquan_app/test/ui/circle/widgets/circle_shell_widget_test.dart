@@ -28,12 +28,25 @@ class _AuthedSessionStore implements AuthSessionStore {
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
+    lastRefreshAtEpochMs: 0,
+    lastForegroundAuthCheckAtEpochMs: 0,
     manualLoggedOut: false,
     launchPromptDismissed: true,
   );
 
   @override
-  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+  Future<void> saveLoginResult(
+    AuthLoginResultDto result, {
+    AuthRememberedLoginMethod rememberedLoginMethod =
+        AuthRememberedLoginMethod.unknown,
+    String? rememberedLoginMaskedIdentifier,
+  }) async {}
+
+  @override
+  Future<void> saveRefreshedTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
@@ -43,12 +56,12 @@ class _AuthedSessionStore implements AuthSessionStore {
 
   @override
   Future<void> markLaunchPromptDismissed() async {}
+
+  @override
+  Future<void> markForegroundAuthCheckNow() async {}
 }
 
-Widget _scopedApp({
-  CircleRepository? mock,
-  VoidCallback? onBack,
-}) {
+Widget _scopedApp({CircleRepository? mock, VoidCallback? onBack}) {
   final repo = mock ?? MockCircleRepository();
   return ProviderScope(
     overrides: [
@@ -62,10 +75,7 @@ Widget _scopedApp({
           GoRoute(
             path: '/',
             builder: (_, _) => Scaffold(
-              body: CircleShell(
-                circleId: 'circle_photo_01',
-                onBack: onBack,
-              ),
+              body: CircleShell(circleId: 'circle_photo_01', onBack: onBack),
             ),
           ),
           GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),

@@ -1,0 +1,10 @@
+{
+  "label": "住宿",
+  "labelEn": "Accommodation Topic",
+  "description": "内容围绕住宿的话题角度（讲什么）；与 Entity/地点/住宿（实体是什么）、Format/内容角度（怎么讲）正交",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 15
+}

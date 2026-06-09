@@ -213,6 +213,12 @@ verify-reliable-task-topology:
 	@python3 quwoquan_service/scripts/runtime/verify_module_permission_scope.py
 	@python3 quwoquan_service/scripts/recommendation/verify_reliable_task_migration.py
 
+.PHONY: verify-workload-topology-inventory
+verify-workload-topology-inventory:
+	@python3 quwoquan_service/scripts/deploy/verify_workload_topology_inventory.py
+	@python3 quwoquan_service/scripts/deploy/verify_strangler_contract_invariants.py
+	@python3 quwoquan_service/scripts/deploy/verify_gamma_local_prod_isomorphism.py
+
 build-app-env:
 	@if [ -z "$(ENV)" ]; then \
 		echo "FAIL: ENV is required. Example: make build-app-env ENV=beta"; \
@@ -367,6 +373,10 @@ verify-app-session-b-current:
 verify-retired-terms-zero:
 	@python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py
 
+# 推荐标签链路 StrictTyping：禁裸 Future<dynamic>/Future<Object?> 返回契约（cloud/services/tag）
+verify-app-cloud-tag-strict-typing:
+	@python3 quwoquan_app/scripts/runtime/verify_cloud_tag_strict_typing.py
+
 verify-global-increment-constraints:
 	@bash agent_ops/scaffold/verify_global_increment_constraints.sh
 
@@ -378,6 +388,7 @@ gate:
 	@$(MAKE) verify-global-increment-constraints
 	@bash quwoquan_service/scripts/deploy/verify_deployment_domain_mapping.sh
 	@bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
+	@$(MAKE) verify-workload-topology-inventory
 	@$(MAKE) verify-reliable-task-topology
 	@$(MAKE) verify-avatar-user-pool
 	@$(MAKE) probe-avatar-user-pool-gateway
@@ -444,6 +455,7 @@ verify:
 	@bash quwoquan_service/scripts/deploy/report_deployment_mapping_impact.sh
 	@bash quwoquan_service/scripts/recommendation/verify_recommendation_service_contract.sh
 	@bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
+	@$(MAKE) verify-workload-topology-inventory
 	@bash quwoquan_service/scripts/deploy/verify_config_gray_parallel_binding.sh
 	@$(MAKE) verify-quwoquan-data
 

@@ -25,6 +25,7 @@ class ContentApiMetadata {
     'FavoritePost': '/v1/content/posts/{postId}/favorite',
     'GenerateArticleSummary': '/v1/content/articles/summary:generate',
     'GetAppConfig': '/v1/config/app',
+    'GetAuthorImpact': '/v1/content/sub-accounts/{subAccountId}/author-impact',
     'GetCounters': '/v1/content/posts/{postId}/counters',
     'GetFeed': '/v1/content/feed',
     'GetFeedIntersections': '/v1/content/feed/intersections',
@@ -81,6 +82,7 @@ class ContentApiMetadata {
     'FavoritePost': 'POST',
     'GenerateArticleSummary': 'POST',
     'GetAppConfig': 'GET',
+    'GetAuthorImpact': 'GET',
     'GetCounters': 'GET',
     'GetFeed': 'GET',
     'GetFeedIntersections': 'GET',
@@ -138,6 +140,7 @@ class ContentApiMetadata {
     'FavoritePost': 'required',
     'GenerateArticleSummary': 'required',
     'GetAppConfig': 'public',
+    'GetAuthorImpact': 'required',
     'GetCounters': 'public',
     'GetFeed': 'optional',
     'GetFeedIntersections': 'optional',
@@ -193,6 +196,7 @@ class ContentApiMetadata {
   static const String favoritePostOperation = 'FavoritePost';
   static const String generateArticleSummaryOperation = 'GenerateArticleSummary';
   static const String getAppConfigOperation = 'GetAppConfig';
+  static const String getAuthorImpactOperation = 'GetAuthorImpact';
   static const String getCountersOperation = 'GetCounters';
   static const String getFeedOperation = 'GetFeed';
   static const String getFeedIntersectionsOperation = 'GetFeedIntersections';
@@ -288,6 +292,12 @@ class ContentApiMetadata {
   }
   static const String generateArticleSummaryPath = '/v1/content/articles/summary:generate';
   static const String getAppConfigPath = '/v1/config/app';
+  static const String getAuthorImpactPathTemplate = '/v1/content/sub-accounts/{subAccountId}/author-impact';
+  static String getAuthorImpactPath({required String subAccountId}) {
+    return _fillPath(getAuthorImpactPathTemplate, <String, String>{
+      'subAccountId': subAccountId,
+    });
+  }
   static const String getCountersPathTemplate = '/v1/content/posts/{postId}/counters';
   static String getCountersPath({required String postId}) {
     return _fillPath(getCountersPathTemplate, <String, String>{

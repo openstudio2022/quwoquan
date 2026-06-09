@@ -62,6 +62,10 @@ type CreateConversationRequest struct {
 	Type             string
 	Title            string
 	CircleId         string
+	CircleGroupId    string
+	OriginType       string
+	BindingType      string
+	LifecyclePolicy  string
 	MaxGroupSize     int
 	CreatorId        string
 	InitialMemberIds []string
@@ -78,6 +82,19 @@ func (s *ConversationService) createDirectConversation(
 ) (*model.Conversation, error) {
 	now := time.Now()
 	req.Type = NormalizeConversationType(req.Type, req.CircleId)
+	if req.Type != conversationTypeDirect && req.Type != conversationTypeGroup && req.Type != conversationTypeEncrypted {
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"不支持的会话类型",
+			"unsupported conversation type",
+		)
+	}
+	originType := defaultString(req.OriginType, "direct_init")
+	bindingType := defaultString(req.BindingType, "none")
+	lifecyclePolicy := defaultString(req.LifecyclePolicy, "persistent")
+	if req.Type == conversationTypeGroup {
+		originType, bindingType, lifecyclePolicy = inferGroupConversationSemantics(req, originType, bindingType, lifecyclePolicy)
+	}
 	maxGroupSize := req.MaxGroupSize
 	if maxGroupSize <= 0 {
 		switch req.Type {
@@ -123,16 +140,20 @@ func (s *ConversationService) createDirectConversation(
 	receiptEnabled := maxGroupSize <= 50
 
 	conv := &model.Conversation{
-		ID:             generateID(),
-		Type:           req.Type,
-		Title:          req.Title,
-		CreatorId:      req.CreatorId,
-		CircleId:       req.CircleId,
-		MaxGroupSize:   maxGroupSize,
-		ReceiptEnabled: receiptEnabled,
-		Status:         "active",
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID:              generateID(),
+		Type:            req.Type,
+		Title:           req.Title,
+		CreatorId:       req.CreatorId,
+		CircleId:        req.CircleId,
+		CircleGroupId:   req.CircleGroupId,
+		OriginType:      originType,
+		BindingType:     bindingType,
+		LifecyclePolicy: lifecyclePolicy,
+		MaxGroupSize:    maxGroupSize,
+		ReceiptEnabled:  receiptEnabled,
+		Status:          "active",
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 	profileIDs := append([]string{req.CreatorId}, initialMemberIds...)
 	profMap, _ := s.profiles.ResolveMany(ctx, profileIDs)
@@ -239,12 +260,16 @@ func (s *ConversationService) createDirectConversation(
 
 	go func() {
 		if err := s.publisher.PublishDomainEvent(context.Background(), event.ConversationCreated, conv.ID, req.CreatorId, map[string]any{
-			"type":           conv.Type,
-			"creatorId":      req.CreatorId,
-			"circleId":       conv.CircleId,
-			"maxGroupSize":   conv.MaxGroupSize,
-			"receiptEnabled": conv.ReceiptEnabled,
-			"createdAt":      conv.CreatedAt,
+			"type":            conv.Type,
+			"creatorId":       req.CreatorId,
+			"circleId":        conv.CircleId,
+			"circleGroupId":   conv.CircleGroupId,
+			"originType":      conv.OriginType,
+			"bindingType":     conv.BindingType,
+			"lifecyclePolicy": conv.LifecyclePolicy,
+			"maxGroupSize":    conv.MaxGroupSize,
+			"receiptEnabled":  conv.ReceiptEnabled,
+			"createdAt":       conv.CreatedAt,
 		}); err != nil {
 			slog.Error("publish ConversationCreated failed", "err", err, "conversationId", conv.ID)
 		}
@@ -326,6 +351,52 @@ func dedupeUserIDs(ids []string, exclude ...string) []string {
 		out = append(out, trimmed)
 	}
 	return out
+}
+
+func defaultString(value string, fallback string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fallback
+	}
+	return trimmed
+}
+
+func inferGroupConversationSemantics(
+	req CreateConversationRequest,
+	originType string,
+	bindingType string,
+	lifecyclePolicy string,
+) (string, string, string) {
+	hasCircleGroup := strings.TrimSpace(req.CircleGroupId) != ""
+	hasCircle := strings.TrimSpace(req.CircleId) != ""
+	if hasCircleGroup {
+		if originType == "direct_init" {
+			originType = "circle_self_built_group"
+		}
+		if bindingType == "none" {
+			bindingType = "circle_group"
+		}
+		if lifecyclePolicy == "persistent" {
+			lifecyclePolicy = "bound_to_circle"
+		}
+		return originType, bindingType, lifecyclePolicy
+	}
+	if hasCircle {
+		if originType == "direct_init" {
+			originType = "circle_default_group"
+		}
+		if bindingType == "none" {
+			bindingType = "circle"
+		}
+		if lifecyclePolicy == "persistent" {
+			lifecyclePolicy = "bound_to_circle"
+		}
+		return originType, bindingType, lifecyclePolicy
+	}
+	if originType == "direct_init" {
+		originType = "ad_hoc_group"
+	}
+	return originType, bindingType, lifecyclePolicy
 }
 
 func (s *ConversationService) GetConversation(ctx context.Context, conversationId string) (*model.Conversation, error) {

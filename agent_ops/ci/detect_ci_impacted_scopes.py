@@ -44,6 +44,24 @@ DOC_ONLY_SUFFIXES = {
     ".gif",
     ".svg",
 }
+ACCEPTANCE_SCOPE_RULES: tuple[tuple[str, dict[str, bool]], ...] = (
+    (
+        "specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/",
+        {"service": False, "app": True, "portal": False, "topology": False},
+    ),
+    (
+        "specs/feature-tree/runtime/runtime-client-foundation/",
+        {"service": False, "app": True, "portal": False, "topology": False},
+    ),
+    (
+        "specs/feature-tree/product-ops-growth/",
+        {"service": True, "app": True, "portal": True, "topology": False},
+    ),
+    (
+        "specs/feature-tree/platform-ops-governance/",
+        {"service": True, "app": False, "portal": True, "topology": False},
+    ),
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -81,7 +99,19 @@ def git_changed_files(base_sha: str, head_sha: str) -> list[str]:
 
 def is_doc_only(path: str) -> bool:
     pure = Path(path)
+    if path.startswith("specs/feature-tree/") and pure.name == "acceptance.yaml":
+        return False
     return pure.suffix.lower() in DOC_ONLY_SUFFIXES and path.startswith(DOC_ONLY_PREFIXES)
+
+
+def classify_acceptance_path(path: str) -> dict[str, bool] | None:
+    pure = Path(path)
+    if pure.name != "acceptance.yaml":
+        return None
+    for prefix, scope_flags in ACCEPTANCE_SCOPE_RULES:
+        if path.startswith(prefix):
+            return scope_flags
+    return {"service": True, "app": True, "portal": True, "topology": False}
 
 
 def classify(paths: list[str]) -> dict[str, bool]:
@@ -96,6 +126,11 @@ def classify(paths: list[str]) -> dict[str, bool]:
         if path.startswith("./"):
             path = path[2:]
         if not path or is_doc_only(path):
+            continue
+        acceptance_scope = classify_acceptance_path(path)
+        if acceptance_scope is not None:
+            for key, value in acceptance_scope.items():
+                impacted[key] = impacted[key] or value
             continue
         if path in ROOT_LEVEL_ALL_SCOPE_FILES:
             impacted["service"] = True

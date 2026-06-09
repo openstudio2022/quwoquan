@@ -67,7 +67,9 @@ quwoquan_data/runtime/**
 quwoquan_data/crawl_specs/
 quwoquan_data/trees/
 quwoquan_data/runs/
-quwoquan_data/publish/
+quwoquan_data/publish/**
+!quwoquan_data/publish/tags/
+!quwoquan_data/publish/tags/**
 quwoquan_data/out/
 quwoquan_data/raw/
 quwoquan_data/batch_plans/

@@ -6,7 +6,7 @@
 
 ### 专业编辑视角
 
-- E1 地域写死：`blueprints/topic/travel/线路/补给避险.tmpl.yaml` 把 `高原与医疗`/`高原风险` 写进 `structure.required` 与 `mustIncludeFacts`；`线路/自驾路书.tmpl.yaml` 写死 `海拔`；`_registry/catalogs/evidence_catalog.yaml` 的 `travel_route` 同样固化 `海拔`。这些对沿海、平原、海岛、沙漠、热带不成立。
+- E1 地域写死：`blueprints/Format/内容角度/线路/补给避险.tmpl.yaml` 把 `高原与医疗`/`高原风险` 写进 `structure.required` 与 `mustIncludeFacts`；`Format/内容角度/线路/自驾路书.tmpl.yaml` 写死 `海拔`；`_registry/catalogs/evidence_catalog.yaml` 的 `travel_route` 同样固化 `海拔`。这些对沿海、平原、海岛、沙漠、热带不成立。
 - E2 季节缺位：季节仅以「最佳季节/季节窗口」零散出现，缺四季 × 地区的系统建模（雨季/旱季/旺季/淡季/极端天气），出行四季变换无统一抓手。
 - E3 风格默认死引用：`intent_catalog.yaml` 中 `科普 → defaultStyleFamily: 人文深读风`，但 `style_profile_catalog.yaml` 无该风格族；所有科普模板实际声明 `地理画报风`。需把默认对齐为已存在族。
 - E4 国家地理级版式不足：`地理画报风/地理深读` 已有专题报道体，但缺信息图、图说、分栏画报版式与强图注约束。

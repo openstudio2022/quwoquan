@@ -60,6 +60,12 @@ services:
       retries: 20
 
   rec-model-service:
+    # 对外 DNS 名与 prod K8s Service 统一为 recommendation-service；rec-model-service 仅作工件名/兼容别名。
+    networks:
+      default:
+        aliases:
+          - recommendation-service
+          - rec-model-service
     build:
       context: ..
       dockerfile: quwoquan_service/services/rec-model-service/Dockerfile
@@ -107,7 +113,7 @@ services:
       CONTENT_REDIS_REC_ADDR: redis:6379
       CONTENT_REDIS_GENERAL_ADDR: redis:6379
       REC_MODEL_SERVICE_ENABLED: "true"
-      REC_MODEL_SERVICE_URL: http://rec-model-service:8000
+      REC_MODEL_SERVICE_URL: http://recommendation-service:8000
     depends_on:
       mongodb:
         condition: service_healthy
@@ -360,6 +366,91 @@ services:
       timeout: 3s
       start_period: 5s
       retries: 10
+
+  # ── edge-media 平面（与 prod 同集群独立 workload 对齐；逻辑独立、当前统一在本 compose、按需 profile 组装）──
+  # 默认主栈不启动；`docker compose --profile edge-media up` 在主栈之上叠加实时/媒体面。
+  livekit-sfu:
+    profiles: ["edge-media"]
+    image: "${LOCAL_GAMMA_LIVEKIT_IMAGE:-docker.io/livekit/livekit-server:v1.7.2}"
+    command: ["--dev", "--bind", "0.0.0.0"]
+    ports:
+      - "${LOCAL_GAMMA_LIVEKIT_HTTP_PORT:-19280}:7880"
+      - "${LOCAL_GAMMA_LIVEKIT_RTC_TCP_PORT:-19281}:7881"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7880/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 10
+
+  rtc-service:
+    profiles: ["edge-media"]
+    build:
+      context: .
+      dockerfile: ../deploy/service/rtc-service/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
+        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
+        GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
+    environment:
+      SERVICE_NAME: rtc-service
+      APP_ENV: gamma
+      # rtc-service 自带镜像内 config（/etc/rtc-service），不复用 seed config-root。
+      CONFIG_ROOT: /etc/rtc-service
+      CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
+      IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
+      RTC_SERVICE_ADDR: ":18083"
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DATABASE: quwoquan_rtc
+      REDIS_ADDR: redis:6379
+      LIVEKIT_URL: ws://livekit-sfu:7880
+      LIVEKIT_API_KEY: "${LOCAL_GAMMA_LIVEKIT_API_KEY:-devkey}"
+      LIVEKIT_API_SECRET: "${LOCAL_GAMMA_LIVEKIT_API_SECRET:-secret}"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      livekit-sfu:
+        condition: service_healthy
+    ports:
+      - "${LOCAL_GAMMA_RTC_PORT:-19260}:18083"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18083/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 240s
+      retries: 10
+
+  coturn:
+    profiles: ["edge-media"]
+    image: "${LOCAL_GAMMA_COTURN_IMAGE:-docker.io/coturn/coturn:4.6-alpine}"
+    # 本地用端口映射替代 prod 的 hostNetwork；UDP 在部分本机/虚拟化下能力受限，仅供信令/中继联调。
+    command:
+      - "-n"
+      - "--log-file=stdout"
+      - "--realm=rtc.quwoquan.local"
+      - "--fingerprint"
+      - "--lt-cred-mech"
+      - "--user=quwoquan:${LOCAL_GAMMA_TURN_SECRET:-devsecret}"
+    ports:
+      - "${LOCAL_GAMMA_TURN_TCP_PORT:-19478}:3478/tcp"
+      - "${LOCAL_GAMMA_TURN_UDP_PORT:-19478}:3478/udp"
+
+  realtime-gateway:
+    # 实现未就绪：仅有 K8s 骨架 + 占位镜像，无源码/Dockerfile。
+    # 占位定义保证 gamma-local 与 prod 服务集“名册一致”；实现就绪后补 build/healthcheck，
+    # 并把 profile 从 edge-media-pending 改为 edge-media、纳入主验证链。
+    profiles: ["edge-media-pending"]
+    image: "${LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE:-realtime-gateway/realtime-gateway:latest}"
+    environment:
+      SERVICE_NAME: realtime-gateway
+      APP_ENV: gamma
+      REDIS_ADDR: redis:6379
+    ports:
+      - "${LOCAL_GAMMA_REALTIME_PORT:-19290}:8080"
 
 volumes:
   local-gamma-postgres:

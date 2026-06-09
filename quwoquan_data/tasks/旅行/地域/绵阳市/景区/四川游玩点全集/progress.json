@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/绵阳市/景区/四川游玩点全集",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/北川羌城",
+        "地点/景区/九皇山",
+        "地点/景区/窦圌山",
+        "地点/景区/李白故里",
+        "地点/景区/仙海湖"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

@@ -18,8 +18,9 @@ def _verify_runtime_stage_payloads(task: str, batch: str) -> list[str]:
     issues: list[str] = []
     issues.extend(_verify_quality_analysis(task, batch))
     # 目录与资产证据链静态门（对象同构 + 来源内聚 + 相对路径 + 文风 + 受控来源类目）。
-    from verify.verify_directory_evidence_chain import scan_batch
+    from verify.verify_directory_evidence_chain import scan_batch, scan_task
 
+    issues.extend(scan_task(task))
     issues.extend(scan_batch(task, batch))
     return issues
 

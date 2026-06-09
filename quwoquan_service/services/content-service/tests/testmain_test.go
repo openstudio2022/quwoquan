@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -103,8 +104,21 @@ func TestMain(m *testing.M) {
 	)
 	testPostService = postService
 	reportService := application.NewReportService(reportStore, eventSpy)
-	behaviorService := application.NewBehaviorService(hotPath, postStore)
-	baseHandler := contenhttp.NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
+	dailyMetricsStore := persistence.NewDailyMetricsStore(mongoDB, slog.Default())
+	authorImpactStore := persistence.NewAuthorImpactStore(mongoDB, slog.Default())
+	behaviorService := application.NewBehaviorService(
+		hotPath,
+		postStore,
+		application.WithDailyMetricsStore(dailyMetricsStore),
+		application.WithAuthorImpactStore(authorImpactStore),
+	)
+	baseHandler := contenhttp.NewContentHandler(
+		feedService,
+		postService,
+		reportService,
+		behaviorService,
+		contenhttp.WithAuthorImpactStore(authorImpactStore),
+	).Routes()
 	testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")) == "" {
 			subAccountID := application.AnonymousFallbackSubAccountID

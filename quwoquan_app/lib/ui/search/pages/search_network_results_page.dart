@@ -74,6 +74,7 @@ class _SearchNetworkResultsPageState
   List<SearchHit> _groupResults = const <SearchHit>[];
   List<SearchHit> _messageResults = const <SearchHit>[];
   List<SearchHit> _contactResults = const <SearchHit>[];
+  List<SearchDegradeSignal> _degradeSignals = const <SearchDegradeSignal>[];
 
   @override
   void initState() {
@@ -163,7 +164,7 @@ class _SearchNetworkResultsPageState
                         activeTab: activeTab,
                       ),
                     ),
-                ),
+                  ),
           ),
         ],
       ),
@@ -288,11 +289,11 @@ class _SearchNetworkResultsPageState
     if (normalized == null || normalized.isEmpty) {
       return null;
     }
-    if (normalized == _tabXiaoqu) {
-      return _tabAll;
-    }
     if (normalized == 'humanity') {
       return 'photography';
+    }
+    if (normalized == 'locations') {
+      return _tabAll;
     }
     return normalized;
   }
@@ -355,6 +356,18 @@ class _SearchNetworkResultsPageState
     required Color fgSecondary,
     required _SearchNetworkTab activeTab,
   }) {
+    List<Widget> withDegradeBanner(List<Widget> children) {
+      final banner = _buildDegradeBanner(isDark: isDark);
+      if (banner == null) {
+        return children;
+      }
+      return <Widget>[
+        banner,
+        SizedBox(height: AppSpacing.containerMd),
+        ...children,
+      ];
+    }
+
     if (_activeTabId == _tabXiaoqu) {
       return <Widget>[
         _XiaoquSummaryCard(
@@ -376,15 +389,17 @@ class _SearchNetworkResultsPageState
     }
 
     if (_activeTabId == _tabAll) {
-      return _buildAllResultChildren(
-        isDark: isDark,
-        fgSecondary: fgSecondary,
-        activeTab: activeTab,
+      return withDegradeBanner(
+        _buildAllResultChildren(
+          isDark: isDark,
+          fgSecondary: fgSecondary,
+          activeTab: activeTab,
+        ),
       );
     }
 
     if (_activeTabId == _tabHomepages) {
-      return <Widget>[
+      return withDegradeBanner(<Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
           description: activeTab.description,
@@ -397,11 +412,11 @@ class _SearchNetworkResultsPageState
           _StatusMessage(text: '没有找到相关主页', isDark: isDark)
         else
           ..._buildHomepageResultTiles(),
-      ];
+      ]);
     }
 
     if (_activeTabId == _tabGroups) {
-      return <Widget>[
+      return withDegradeBanner(<Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
           description: activeTab.description,
@@ -414,11 +429,11 @@ class _SearchNetworkResultsPageState
           _StatusMessage(text: '没有找到相关群组', isDark: isDark)
         else
           ..._buildGroupResultTiles(isDark: isDark, fgSecondary: fgSecondary),
-      ];
+      ]);
     }
 
     if (_activeTabId == _tabMessages) {
-      return <Widget>[
+      return withDegradeBanner(<Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
           description: activeTab.description,
@@ -436,11 +451,11 @@ class _SearchNetworkResultsPageState
             isDark: isDark,
             fgSecondary: fgSecondary,
           ),
-      ];
+      ]);
     }
 
     if (_activeTabId == _tabContacts) {
-      return <Widget>[
+      return withDegradeBanner(<Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
           description: activeTab.description,
@@ -458,10 +473,10 @@ class _SearchNetworkResultsPageState
             isDark: isDark,
             fgSecondary: fgSecondary,
           ),
-      ];
+      ]);
     }
 
-    return <Widget>[
+    return withDegradeBanner(<Widget>[
       _CategorySummaryCard(
         title: activeTab.label,
         description: activeTab.description,
@@ -474,7 +489,15 @@ class _SearchNetworkResultsPageState
         _StatusMessage(text: '没有找到相关网络结果', isDark: isDark)
       else
         ..._buildContentResultTiles(isDark: isDark, fgSecondary: fgSecondary),
-    ];
+    ]);
+  }
+
+  Widget? _buildDegradeBanner({required bool isDark}) {
+    if (_degradeSignals.isEmpty) {
+      return null;
+    }
+    final first = _degradeSignals.first;
+    return _StatusMessage(text: '部分结果已降级：${first.message}', isDark: isDark);
   }
 
   List<Widget> _buildAllResultChildren({
@@ -760,16 +783,22 @@ class _SearchNetworkResultsPageState
         _messageResults = const <SearchHit>[];
         _contactResults = const <SearchHit>[];
         _contentResults = const <PostSearchItemView>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       } else if (_activeTabId == _tabHomepages) {
         _homepageResults = const <HomepageSummary>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       } else if (_activeTabId == _tabGroups) {
         _groupResults = const <SearchHit>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       } else if (_activeTabId == _tabMessages) {
         _messageResults = const <SearchHit>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       } else if (_activeTabId == _tabContacts) {
         _contactResults = const <SearchHit>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       } else {
         _contentResults = const <PostSearchItemView>[];
+        _degradeSignals = const <SearchDegradeSignal>[];
       }
     });
     try {
@@ -797,89 +826,121 @@ class _SearchNetworkResultsPageState
           });
           return;
         }
-        final homepageItems = await _loadHomepageResults(trimmedQuery);
-        final groupItems = await _loadGroupResults(trimmedQuery);
-        final messageItems = await _loadMessageResults(trimmedQuery);
-        final contactItems = await _loadContactResults(trimmedQuery);
-        final contentItems = await _loadContentResults(trimmedQuery);
+        final homepageResponse = await _loadHomepageResponse(trimmedQuery);
+        final groupResponse = await _loadGroupResponse(trimmedQuery);
+        final messageResponse = await _loadMessageResponse(trimmedQuery);
+        final contactResponse = await _loadContactResponse(trimmedQuery);
+        final contentResponse = await _loadContentResponse(trimmedQuery);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
-          _homepageResults = homepageItems;
-          _groupResults = groupItems;
-          _messageResults = messageItems;
-          _contactResults = contactItems;
-          _contentResults = contentItems;
+          _homepageResults = _homepageItemsFromResponse(homepageResponse);
+          _groupResults = _groupHitsFromResponse(groupResponse);
+          _messageResults = _messageHitsFromResponse(messageResponse);
+          _contactResults = _contactHitsFromResponse(contactResponse);
+          _contentResults = _contentItemsFromResponse(contentResponse);
+          _degradeSignals = <SearchDegradeSignal>[
+            ...homepageResponse.degradeSignals,
+            ...groupResponse.degradeSignals,
+            ...messageResponse.degradeSignals,
+            ...contactResponse.degradeSignals,
+            ...contentResponse.degradeSignals,
+          ];
           _isLoading = false;
         });
         return;
       }
 
       if (_activeTabId == _tabHomepages) {
-        final items = trimmedQuery.isEmpty
+        final response = trimmedQuery.isEmpty
+            ? null
+            : await _loadHomepageResponse(trimmedQuery);
+        final items = response == null
             ? const <HomepageSummary>[]
-            : await _loadHomepageResults(trimmedQuery);
+            : _homepageItemsFromResponse(response);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
           _homepageResults = items;
+          _degradeSignals =
+              response?.degradeSignals ?? const <SearchDegradeSignal>[];
           _isLoading = false;
         });
         return;
       }
 
       if (_activeTabId == _tabGroups) {
-        final items = trimmedQuery.isEmpty
+        final response = trimmedQuery.isEmpty
+            ? null
+            : await _loadGroupResponse(trimmedQuery);
+        final items = response == null
             ? const <SearchHit>[]
-            : await _loadGroupResults(trimmedQuery);
+            : _groupHitsFromResponse(response);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
           _groupResults = items;
+          _degradeSignals =
+              response?.degradeSignals ?? const <SearchDegradeSignal>[];
           _isLoading = false;
         });
         return;
       }
 
       if (_activeTabId == _tabMessages) {
-        final items = trimmedQuery.isEmpty
+        final response = trimmedQuery.isEmpty
+            ? null
+            : await _loadMessageResponse(trimmedQuery);
+        final items = response == null
             ? const <SearchHit>[]
-            : await _loadMessageResults(trimmedQuery);
+            : _messageHitsFromResponse(response);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
           _messageResults = items;
+          _degradeSignals =
+              response?.degradeSignals ?? const <SearchDegradeSignal>[];
           _isLoading = false;
         });
         return;
       }
 
       if (_activeTabId == _tabContacts) {
-        final items = trimmedQuery.isEmpty
+        final response = trimmedQuery.isEmpty
+            ? null
+            : await _loadContactResponse(trimmedQuery);
+        final items = response == null
             ? const <SearchHit>[]
-            : await _loadContactResults(trimmedQuery);
+            : _contactHitsFromResponse(response);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
           _contactResults = items;
+          _degradeSignals =
+              response?.degradeSignals ?? const <SearchDegradeSignal>[];
           _isLoading = false;
         });
         return;
       }
 
-      final items = trimmedQuery.isEmpty
+      final response = trimmedQuery.isEmpty
+          ? null
+          : await _loadContentResponse(trimmedQuery);
+      final items = response == null
           ? const <PostSearchItemView>[]
-          : await _loadContentResults(trimmedQuery);
+          : _contentItemsFromResponse(response);
       if (!mounted || token != _requestToken) {
         return;
       }
       setState(() {
         _contentResults = items;
+        _degradeSignals =
+            response?.degradeSignals ?? const <SearchDegradeSignal>[];
         _isLoading = false;
       });
     } catch (error) {
@@ -899,6 +960,10 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<PostSearchItemView>> _loadContentResults(String query) async {
+    return _contentItemsFromResponse(await _loadContentResponse(query));
+  }
+
+  Future<SearchResponse> _loadContentResponse(String query) async {
     final categoryId =
         _activeTabId == _tabVideo ||
             _activeTabId == _tabImage ||
@@ -922,7 +987,7 @@ class _SearchNetworkResultsPageState
       _tabContent => const <SearchContentTypeFilter>{},
       _ => selection.contentTypes,
     };
-    final response = await ref
+    return ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -934,6 +999,9 @@ class _SearchNetworkResultsPageState
             contentTypes: contentTypes,
           ),
         );
+  }
+
+  List<PostSearchItemView> _contentItemsFromResponse(SearchResponse response) {
     final results = response.hits
         .where((hit) => hit.objectType == SearchObjectType.contentPost)
         .map(
@@ -960,7 +1028,11 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<HomepageSummary>> _loadHomepageResults(String query) async {
-    final response = await ref
+    return _homepageItemsFromResponse(await _loadHomepageResponse(query));
+  }
+
+  Future<SearchResponse> _loadHomepageResponse(String query) {
+    return ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -972,6 +1044,9 @@ class _SearchNetworkResultsPageState
             limit: 12,
           ),
         );
+  }
+
+  List<HomepageSummary> _homepageItemsFromResponse(SearchResponse response) {
     return response.hits
         .where((hit) => hit.objectType == SearchObjectType.entityHomepage)
         .map((hit) => HomepageSummary.fromMap(hit.payload.toWireMap()))
@@ -979,7 +1054,11 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<SearchHit>> _loadGroupResults(String query) async {
-    final response = await ref
+    return _groupHitsFromResponse(await _loadGroupResponse(query));
+  }
+
+  Future<SearchResponse> _loadGroupResponse(String query) {
+    return ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -992,6 +1071,9 @@ class _SearchNetworkResultsPageState
             limit: 12,
           ),
         );
+  }
+
+  List<SearchHit> _groupHitsFromResponse(SearchResponse response) {
     return response.hits
         .where(
           (hit) =>
@@ -1002,7 +1084,11 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<SearchHit>> _loadMessageResults(String query) async {
-    final response = await ref
+    return _messageHitsFromResponse(await _loadMessageResponse(query));
+  }
+
+  Future<SearchResponse> _loadMessageResponse(String query) {
+    return ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -1015,6 +1101,9 @@ class _SearchNetworkResultsPageState
             limit: 12,
           ),
         );
+  }
+
+  List<SearchHit> _messageHitsFromResponse(SearchResponse response) {
     return response.hits
         .where(
           (hit) =>
@@ -1025,7 +1114,11 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<SearchHit>> _loadContactResults(String query) async {
-    final response = await ref
+    return _contactHitsFromResponse(await _loadContactResponse(query));
+  }
+
+  Future<SearchResponse> _loadContactResponse(String query) {
+    return ref
         .read(searchRepositoryProvider)
         .search(
           SearchRequest(
@@ -1035,6 +1128,9 @@ class _SearchNetworkResultsPageState
             limit: 12,
           ),
         );
+  }
+
+  List<SearchHit> _contactHitsFromResponse(SearchResponse response) {
     return response.hits
         .where((hit) => hit.objectType == SearchObjectType.chatContact)
         .toList(growable: false);
@@ -1080,10 +1176,7 @@ class _SearchNetworkResultsPageState
         route,
         extra: MediaViewerExtra(
           posts: <ContentSurfaceView>[
-            ContentSurfaceViewMapper.fromDto(
-              dto,
-              wire: raw,
-            ),
+            ContentSurfaceViewMapper.fromDto(dto, wire: raw),
           ],
           dtoPosts: <PostBaseDto>[dto],
           initialIndex: 0,

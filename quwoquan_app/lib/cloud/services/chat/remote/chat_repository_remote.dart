@@ -173,6 +173,9 @@ class RemoteChatRepository implements ChatRepository {
     String? title,
     String? circleId,
     String? circleGroupId,
+    String? originType,
+    String? bindingType,
+    String? lifecyclePolicy,
     int? maxGroupSize,
     List<String>? initialMemberIds,
   }) async {
@@ -183,6 +186,11 @@ class RemoteChatRepository implements ChatRepository {
       if (circleId != null && circleId.isNotEmpty) 'circleId': circleId,
       if (circleGroupId != null && circleGroupId.isNotEmpty)
         'circleGroupId': circleGroupId,
+      if (originType != null && originType.isNotEmpty) 'originType': originType,
+      if (bindingType != null && bindingType.isNotEmpty)
+        'bindingType': bindingType,
+      if (lifecyclePolicy != null && lifecyclePolicy.isNotEmpty)
+        'lifecyclePolicy': lifecyclePolicy,
       if (initialMemberIds != null && initialMemberIds.isNotEmpty)
         'initialMemberIds': initialMemberIds,
     };
@@ -645,6 +653,38 @@ class RemoteChatRepository implements ChatRepository {
         .map((item) {
           return ChatContactRowDto.fromMap(Map<String, dynamic>.from(item));
         })
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<ChatContactRowDto>> listGroupCandidates({
+    String? conversationId,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final normalizedConversationId = conversationId?.trim() ?? '';
+    final uri = _uri(
+      ChatApiMetadata.listGroupCandidatesPath,
+      queryParameters: <String, String>{
+        if (normalizedConversationId.isNotEmpty)
+          'conversationId': normalizedConversationId,
+        'limit': '$limit',
+      },
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: await _resolveHeaders(
+        AppUiSurfaces.startGroupChat,
+        operationId: ChatApiMetadata.listGroupCandidatesOperation,
+        clientPageId: ChatRequestPageIds.listGroupCandidates,
+      ),
+    );
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ChatRequestPageIds.listGroupCandidates,
+    );
+    final items = CloudResponseDecoder.mapList(obj, 'items');
+    return items
+        .map((item) => ChatContactRowDto.fromMap(Map<String, dynamic>.from(item)))
         .toList(growable: false);
   }
 

@@ -71,7 +71,7 @@ verify-metadata:
 codegen: codegen-content-service codegen-circle-service codegen-storage codegen-rec-model-python codegen-rec-policy codegen-control-plane-runtime codegen-ops-portal
 
 codegen-app:
-	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service --rtc-service-dir ./services/rtc-service
+	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service --rtc-service-dir ./services/rtc-service --chat-service-dir ./services/chat-service --user-service-dir ./services/user-service
 
 codegen-ops-portal:
 	go run ./tools/codegen_ops_portal_metadata --metadata-dir contracts/metadata --portal-dir ../apps/ops-portal

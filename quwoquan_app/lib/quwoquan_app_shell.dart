@@ -157,8 +157,10 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       state: state,
       refreshAppearance: () =>
           ref.read(appearanceSettingsControllerProvider.notifier).refresh(),
-      onRealtimeForeground: () =>
-          ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground(),
+      onRealtimeForeground: () {
+        ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground();
+        unawaited(_refreshAuthSessionOnForegroundIfNeeded());
+      },
       onRealtimeBackground: () =>
           ref.read(realtimeConnectionManagerProvider.notifier).onAppBackground(),
     );
@@ -356,13 +358,16 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     final reason = auth.promptReason;
     if (auth.status != AuthSessionStatus.guest ||
         reason == null ||
-        reason == AuthPromptReason.actionRequired ||
-        reason == AuthPromptReason.sessionExpired) {
+        reason == AuthPromptReason.actionRequired) {
       return null;
     }
     return WelcomeLoginPromptConfig(
-      title: UITextConstants.welcomeLoginPromptTitle,
-      subtitle: UITextConstants.welcomeLoginPromptSubtitle,
+      title: reason == AuthPromptReason.sessionExpired
+          ? UITextConstants.loginTitleReturn
+          : UITextConstants.welcomeLoginPromptTitle,
+      subtitle: reason == AuthPromptReason.sessionExpired
+          ? UITextConstants.authSessionExpired
+          : UITextConstants.welcomeLoginPromptSubtitle,
       onLogin: () {
         _completeStartupWelcome(loginReason: reason);
       },
@@ -404,6 +409,36 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
           ),
         );
       });
+    }
+  }
+
+  Future<void> _refreshAuthSessionOnForegroundIfNeeded() async {
+    final controller = ref.read(authSessionControllerProvider.notifier);
+    final session = ref.read(authSessionControllerProvider);
+    if (!session.isAuthenticated) {
+      return;
+    }
+    final refreshed = await controller.refreshIfSessionLooksStale();
+    if (!mounted) {
+      return;
+    }
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
+      final router = ref.read(appRouterProvider);
+      final currentLocation = router.routerDelegate.currentConfiguration.uri
+          .toString();
+      router.go(
+        buildLoginRouteLocation(
+          reasonName: AuthPromptReason.sessionExpired.name,
+          redirect: currentLocation,
+          dismissFallback: currentLocation,
+          allowGuestDismissPop: false,
+        ),
+      );
+      return;
+    }
+    if (!refreshed) {
+      await controller.markForegroundAuthCheck();
     }
   }
 }

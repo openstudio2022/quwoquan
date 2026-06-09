@@ -1,7 +1,8 @@
 """路径真相源 — 统一目录结构
 
 核心原则：
-- entities/tags/posts 在 runtime/tasks 和 publish/ 下同构（单一发布主线，无版本目录）
+- publish/ 仍保持 entities/tags/posts 同构；runtime task 只保留实体真相源与批次对象树，
+  内容真相源落 `batches/<batch>/posts/`，task 根 `posts/` 已退役
 - 所有 ID 从目录路径推导，JSON 中不重复存储
 - entities 三层目录：entities/{领域}/{类型}/{名称}/（如 entities/地点/景区/峨眉山/）
 - tags 全目录化，每个标签 = 目录 + _definition.json
@@ -25,6 +26,25 @@ TASKS_ROOT = RUNTIME_ROOT / "tasks"
 COMMITTED_TASKS_ROOT = Path(os.environ.get("QWQ_COMMITTED_TASKS_ROOT", DATA_ROOT / "tasks"))
 COMMANDS = ("explore", "build", "download", "produce", "publish")
 NOW_ISO = "2026-05-15T00:00:00+08:00"
+TASK_SHARED_LEDGER_FILENAMES = (
+    "catalog.ndjson",
+    "dedup_ledger.json",
+    "entities.ndjson",
+    "tags.ndjson",
+)
+TASK_ROOT_ALLOWED_ENTRIES = frozenset({
+    "entities",
+    "batches",
+    "_shared",
+    "task_manifest.json",
+})
+TASK_ROOT_LEGACY_COMPAT_ENTRIES = frozenset({
+    *TASK_SHARED_LEDGER_FILENAMES,
+    "posts",
+    "entity_pages",
+    "graph",
+    "changeset",
+})
 
 WORKSPACE_ROOT_BY_COMMAND = {
     "build": "task_build",
@@ -176,6 +196,39 @@ def task_shared_dir(task_id: str) -> Path:
     return task_root(task_id) / "_shared"
 
 
+def task_root_entry(task_id: str, name: str) -> Path:
+    return task_root(task_id) / name
+
+
+def _task_shared_path(task_id: str, filename: str) -> Path:
+    return task_shared_dir(task_id) / filename
+
+
+def _task_legacy_root_path(task_id: str, filename: str) -> Path:
+    return task_root(task_id) / filename
+
+
+def resolve_existing_task_shared_path(task_id: str, filename: str) -> Path:
+    """读取兼容：优先 `_shared/`，若历史根路径仍存在则回退读取旧位。"""
+    canonical = _task_shared_path(task_id, filename)
+    if canonical.exists():
+        return canonical
+    legacy = _task_legacy_root_path(task_id, filename)
+    if legacy.exists():
+        return legacy
+    return canonical
+
+
+def iter_existing_task_legacy_entries(task_id: str) -> list[Path]:
+    root = task_root(task_id)
+    out: list[Path] = []
+    for name in TASK_ROOT_LEGACY_COMPAT_ENTRIES:
+        path = root / name
+        if path.exists():
+            out.append(path)
+    return sorted(out, key=lambda path: path.name)
+
+
 def task_manifest(task_id: str) -> Path:
     """任务定义快照（§14.1：vertical/organizeBy/scope/content.angles），由 task run 写。"""
     return task_root(task_id) / "task_manifest.json"
@@ -183,11 +236,11 @@ def task_manifest(task_id: str) -> Path:
 
 def dedup_ledger(task_id: str) -> Path:
     """跨批次去重账本（completedEntities/...）；与任务定义快照 task_manifest.json 分离。"""
-    return task_root(task_id) / "dedup_ledger.json"
+    return _task_shared_path(task_id, "dedup_ledger.json")
 
 
 def task_catalog(task_id: str) -> Path:
-    return task_root(task_id) / "catalog.ndjson"
+    return _task_shared_path(task_id, "catalog.ndjson")
 
 
 def task_explore_packet_path(task_id: str) -> Path:
@@ -198,8 +251,28 @@ def task_baseline_freeze_packet_path(task_id: str) -> Path:
     return task_shared_dir(task_id) / "baseline_freeze_packet.json"
 
 
-def task_changeset_dir(task_id: str) -> Path:
-    return task_root(task_id) / "changeset"
+# ─── fan-out 编排（runtime 级共享，不进 publish）──────────────────────
+def orchestrate_root() -> Path:
+    """fan-out 编排计划根（runtime 级，跨 task 共享）。"""
+    return RUNTIME_ROOT / "_shared" / "orchestrate"
+
+
+def fanout_plan_dir(plan_id: str) -> Path:
+    return orchestrate_root() / plan_id
+
+
+def fanout_plan_path(plan_id: str) -> Path:
+    """冻结计划真相源：runtime/_shared/orchestrate/{planId}/fanout_plan.json。"""
+    return fanout_plan_dir(plan_id) / "fanout_plan.json"
+
+
+def fanout_dispatch_state_path(plan_id: str) -> Path:
+    """dispatch 幂等账本：记录已建 task/batch、已 enqueue 分区（可重放）。"""
+    return fanout_plan_dir(plan_id) / "dispatch_state.json"
+
+
+def fanout_rollup_path(plan_id: str) -> Path:
+    return fanout_plan_dir(plan_id) / "rollup.json"
 
 
 # ─── publish 同构（单一主线）─────────────────────────────────────
@@ -218,23 +291,11 @@ def release_manifest(release_id: str) -> Path:
 
 # ─── task 产物快捷路径（assemble 消费）────────────────────────────
 def task_entities(task_id: str) -> Path:
-    return task_root(task_id) / "entities.ndjson"
+    return _task_shared_path(task_id, "entities.ndjson")
 
 
 def task_tags(task_id: str) -> Path:
-    return task_root(task_id) / "tags.ndjson"
-
-
-def task_entity_pages(task_id: str) -> Path:
-    return task_root(task_id) / "entity_pages"
-
-
-def task_graph(task_id: str) -> Path:
-    return task_root(task_id) / "graph"
-
-
-def task_posts(task_id: str) -> Path:
-    return task_root(task_id) / "posts"
+    return _task_shared_path(task_id, "tags.ndjson")
 
 
 # ─── batch 级路径 ─────────────────────────────────────────────────
@@ -285,6 +346,16 @@ OBJECT_STAGES = (
 def batch_shared_dir(task_id: str, batch_id: str) -> Path:
     """批次级公共产物（跨对象共享，不属于任一对象）。"""
     return batch_root(task_id, batch_id) / "_shared"
+
+
+def batch_content_plan_packet_path(task_id: str, batch_id: str) -> Path:
+    """证据驱动篇目规划包（content_plan checkpoint 产出）。"""
+    return batch_shared_dir(task_id, batch_id) / "content_plan_packet.json"
+
+
+def batch_run_journal_path(task_id: str, batch_id: str) -> Path:
+    """批次运行问题→修复→规范缺口日记。"""
+    return batch_shared_dir(task_id, batch_id) / "run_journal.md"
 
 
 def batch_posts_root(task_id: str, batch_id: str) -> Path:
@@ -428,9 +499,6 @@ def ensure_task_layout(task_id: str) -> Path:
     task_shared_dir(task_id).mkdir(parents=True, exist_ok=True)
     d = task_data(task_id)
     d.entities_dir().mkdir(exist_ok=True)
-    d.tags_dir().mkdir(exist_ok=True)
-    d.posts_dir().mkdir(exist_ok=True)
-    task_changeset_dir(task_id).mkdir(exist_ok=True)
     return root
 
 

@@ -204,6 +204,61 @@ void main() {
     expect(find.text('西湖摄影讨论'), findsWidgets);
   });
 
+  testWidgets('小趣 tab 可作为初始 tab 打开', (tester) async {
+    await tester.pumpWidget(
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '露营',
+          initialNetworkTabId: 'xiaoqu',
+        ),
+        repository: _FakeNetworkSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('小趣搜'), findsWidgets);
+    expect(find.textContaining('正在为你整理'), findsWidgets);
+  });
+
+  testWidgets('不存在的 locations tab 归一到综合避免空 tab 漂移', (tester) async {
+    await tester.pumpWidget(
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '西湖',
+          initialNetworkTabId: 'locations',
+        ),
+        repository: _FakeNetworkSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    final tabBar = tester.widget<SecondaryCapsuleTabBar>(
+      find.byType(SecondaryCapsuleTabBar),
+    );
+    expect(tabBar.tabs[tabBar.activeIndex], '综合');
+  });
+
+  testWidgets('degrade signal 可在结果页展示', (tester) async {
+    await tester.pumpWidget(
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '光影',
+          initialNetworkTabId: 'groups',
+        ),
+        repository: _DegradedNetworkSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('部分结果已降级'), findsOneWidget);
+  });
+
   testWidgets('内容类型筛选可驱动网络结果页加载指定内容结果', (tester) async {
     await tester.pumpWidget(
       _buildAppWithSearchRepository(
@@ -338,6 +393,24 @@ class _FakeNetworkSearchRepository implements SearchRepository {
     return const SearchResponse(
       request: SearchRequest(query: ''),
       sections: <SearchSection>[],
+    );
+  }
+}
+
+class _DegradedNetworkSearchRepository extends _FakeNetworkSearchRepository {
+  @override
+  Future<SearchResponse> search(SearchRequest request) async {
+    final base = await super.search(request);
+    return SearchResponse(
+      request: base.request,
+      sections: base.sections,
+      degradeSignals: const <SearchDegradeSignal>[
+        SearchDegradeSignal(
+          code: 'circle_group_remote_empty',
+          message: 'circle.group 远端返回空结果，准备回退本地快照。',
+          objectType: SearchObjectType.circleGroup,
+        ),
+      ],
     );
   }
 }

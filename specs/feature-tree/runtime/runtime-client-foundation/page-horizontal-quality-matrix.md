@@ -158,7 +158,7 @@
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：对象页网络 Tab 显示口径收敛为 `看点/作品/圈子/互动`（底层仍由 codegen `UserProfileUIConfig.profileTabs` 驱动）；创作/生活强类型 DTO 不变；首屏接 `ObjectPageContext` 小趣行动 dock。**V5 埋点**：进入曝光 + dispose 停留（`contentBehaviorTracker`，contentType=user，referralSource=authorProfile）；other 模式交集卡 `onReasonTap` → `BehaviorEvent.intersectionDimension/intersectionTagRefs` 归因 |
-| `lib/ui/user/pages/login_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap` + `AuthLoginResultDto`；P3 Mock/Remote 由 `authRepositoryProvider` 切换；协议勾选前不调用一键登录 SDK |
+| `lib/ui/user/pages/login_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap/loginWechat/loginApple/loginPasskey` + `AuthLoginResultDto`；P3 Mock/Remote 由 `authRepositoryProvider` 切换；微信 / Apple / Credential Manager / passkey 入口由 `PlatformCapabilities + NativeAuthBridge` 预留并降级，协议勾选前不调用原生登录 SDK |
 | `lib/ui/user/pages/legal_document_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 远端 WebView 展示用户协议/隐私政策；P2/P3 —，内容来自配置 URL；禁用 JS，保留返回与失败重试 |
 | `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：同 my_profile；other 模式展示真实交集卡 |
 | `lib/ui/user/pages/my_intersection_inbox_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：我的交集分维度列表，消费 `GET /v1/content/intersections`（list）+ `POST /v1/content/intersections/visit`（打开即推进已读水位清零）；强类型 `IntersectionReason`；统一原子 `IntersectionEntity`（头像+名字+维度chip，概率标「推荐」）；P3 Mock/Remote 经 `intersectionRepositoryProvider` 切换；空/错误兜底；点条目带 `relationKind` 进对象页 |

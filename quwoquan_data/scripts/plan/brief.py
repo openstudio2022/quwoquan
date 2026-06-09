@@ -7,6 +7,7 @@ from typing import Any
 
 from _common.io import read_json
 from _common.paths import PUBLISH_ROOT, TASKS_ROOT
+from _common.quality_gates import normalize_writing_intent
 from template.blueprint import collect_tag_refs
 from template.recommend import build_recommendation_manifest
 from template.registry import TemplateRegistry
@@ -92,7 +93,29 @@ def resolve_compose_brief(
         "tagRefs": tag_refs,
         "recommendation": recommendation,
         "sopExampleRef": blueprint.get("sopExampleRef"),
+        "writingIntent": _resolve_writing_intent(blueprint),
+        "baseSourceRef": blueprint.get("baseSourceRef"),
+        "bannedRegisterTerms": list(blueprint.get("bannedRegisterTerms", [])),
     }
+
+
+def _resolve_writing_intent(blueprint: dict[str, Any]) -> str:
+    """解析写作主线：blueprint 显式声明优先，否则按 intent/editorialIntent/templateId 关键词推断。
+
+    这是确定性默认值；任务层可在 content_plan_packet 覆写每篇 writingIntent。
+    """
+    explicit = normalize_writing_intent(blueprint.get("writingIntent"))
+    if explicit:
+        return explicit
+    hay = " ".join(
+        str(blueprint.get(key) or "")
+        for key in ("intent", "editorialIntent", "templateId", "styleFamily", "carrier")
+    )
+    if any(k in hay for k in ("游记", "日记", "journal", "过程", "记录")):
+        return "post_trip_journal"
+    if any(k in hay for k in ("体验", "评测", "决策", "值不值", "review", "experience")):
+        return "decision_experience"
+    return "planning_consultation"
 
 
 def _dedupe(items: list[Any]) -> list[Any]:

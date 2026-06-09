@@ -1,0 +1,10 @@
+{
+  "label": "用户画像",
+  "labelEn": "User Profile",
+  "description": "用户的人口统计、生活方式与行为特征，16个子维度",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 300
+}

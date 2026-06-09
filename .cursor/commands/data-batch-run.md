@@ -2,7 +2,32 @@
 
 用途：批量编排数据工程内容生产。Skill 只负责调用 CLI、分发 `compose_brief`、触发 compose/review/materialize/promote，不代写正文。
 
-## 标准流程
+## 两种规模 · 一套动词
+
+单/多 agent 共用同一套 `qwq-data` 动词与同一 DAG，差异只在「驱动者 + 并发 + CHECKPOINT 接缝」（见 `quwoquan_data/docs/fanout_scaffold_spec.md`）：
+
+- **单分区/小批（默认，本页「标准流程」）**：会话内单 agent 顺序跑，CHECKPOINT 由会话 Agent 创作后 `--resume`。
+- **大规模分层（多省/区县/多对象）→ 委托 fanout**：先 `qwq-data task decompose` 发现式分片冻结计划，再 `qwq-data task run --mode fanout` 建多 task/batch + 入队叶子，最后外部 `agent_ops/runners/fanout_runner.py` 多 worker 并行（每 worker=独立 cloud agent）。
+
+```bash
+# 阶段 A：发现式分解 + 冻结（agent 联网枚举分区/叶子写回）
+python3 quwoquan_data/scripts/cli.py task decompose init --plan <planId> --goal "全国景点主页" --vertical travel --entity-type "地点/景区" --category 景区 --strategy by-partition --concurrency 8
+python3 quwoquan_data/scripts/cli.py task decompose add-partition --plan <planId> --key 四川省
+python3 quwoquan_data/scripts/cli.py task decompose add-leaves   --plan <planId> --partition 四川省 --leaves "九寨沟,稻城亚丁,峨眉山"
+python3 quwoquan_data/scripts/cli.py task decompose show   --plan <planId>          # 发现门
+python3 quwoquan_data/scripts/cli.py task decompose freeze --plan <planId> --confirm # 人工冻结
+
+# 阶段 B：确定性分层调度（建 task/batch + 入队叶子，幂等可重放）
+python3 quwoquan_data/scripts/cli.py task run --mode fanout --plan <planId> --strategy by-partition --concurrency 8
+
+# 外部多 worker 执行（cursor-sdk；--dry-run 自检连通）+ 归并治理
+python3 agent_ops/runners/fanout_runner.py --plan <planId> --strategy by-partition --concurrency 8
+python3 quwoquan_data/scripts/cli.py task rollup --plan <planId>
+```
+
+`--mode fanout --strategy flat-pool --concurrency 1` 与单模式同终态（退化等价）；策略可一键切 `by-partition / flat-pool / by-leaf / by-batch`。
+
+## 标准流程（单分区/小批）
 
 1. 校验模板库：
 

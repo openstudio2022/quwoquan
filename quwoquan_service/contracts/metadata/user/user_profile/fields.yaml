@@ -37,7 +37,7 @@ entities:
         api_exposure: read
         ops_exposure: read
         recommend_feature: false
-        description: 首次创建来源：anonymous_device | phone | wechat | apple | migrated_seed
+        description: 首次创建来源：anonymous_device | phone | wechat | apple | passkey | migrated_seed
 
       - name: logicalShard
         type: int
@@ -540,7 +540,7 @@ entities:
           strict: 完全不被外部发现，仅受邀可见
 
   CredentialBinding:
-    description: 第三方凭证绑定（phone/wechat/apple 并行，各最多 1 个绑定到同一 OwnerAccount）
+    description: 第三方凭证绑定（phone/wechat/apple/passkey 并行，各最多 1 个绑定到同一 OwnerAccount）
     cache_excluded: true
     fields:
       - name: id
@@ -568,7 +568,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: "凭证类型：phone / wechat / apple"
+        description: "凭证类型：phone / wechat / apple / passkey"
 
       - name: credentialKey
         type: string
@@ -577,7 +577,7 @@ entities:
         log_policy: drop
         api_exposure: drop
         ops_exposure: drop
-        description: 凭证唯一标识（手机号哈希/微信UnionID/Apple SubjectID）
+        description: 凭证唯一标识（手机号哈希/微信UnionID/Apple SubjectID/passkey credentialId）
 
       - name: displayLabel
         type: string
@@ -620,7 +620,7 @@ entities:
 
     enums:
       CredentialType:
-        values: [phone, wechat, apple, anonymous_device]
+        values: [phone, wechat, apple, passkey, anonymous_device]
         description: 支持的第三方凭证类型
 
     business_rules:

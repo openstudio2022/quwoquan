@@ -328,6 +328,7 @@ class _HomePageState extends ConsumerState<HomePage>
             intersectionId: reason.intersectionId,
             intersectionDimension: reason.dimension,
             intersectionClass: reason.intersectionClass,
+            intersectionTagRefs: reason.tagRefs,
           );
     }
     final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);

@@ -17,6 +17,11 @@ bool shouldShowIncomingCallSettings(PlatformCapabilities caps) =>
 
 bool shouldUseWideShell(PlatformCapabilities caps) => caps.wideScreenLayout;
 
+bool shouldShowWechatLogin(PlatformCapabilities caps) => caps.wechatNativeLogin;
+
+bool shouldShowSystemCredentialLogin(PlatformCapabilities caps) =>
+    caps.systemCredentialLogin;
+
 PlatformCapabilities _resolve(PlatformCapabilities profile) {
   final container = ProviderContainer(
     overrides: [
@@ -46,6 +51,11 @@ void main() {
         );
         expect(shouldShowIncomingCallSettings(caps), caps.incomingCallUi);
         expect(shouldUseWideShell(caps), caps.wideScreenLayout);
+        expect(shouldShowWechatLogin(caps), caps.wechatNativeLogin);
+        expect(
+          shouldShowSystemCredentialLogin(caps),
+          caps.systemCredentialLogin,
+        );
       });
     }
 
@@ -60,6 +70,12 @@ void main() {
       expect(shouldUseWideShell(CapabilityProfile.web), isTrue);
       expect(shouldUseWideShell(CapabilityProfile.mobile), isFalse);
       expect(shouldUseWideShell(CapabilityProfile.ohos), isFalse);
+    });
+
+    test('mobile profile exposes credential login while web/ohos degrade', () {
+      expect(shouldShowSystemCredentialLogin(CapabilityProfile.mobile), isTrue);
+      expect(shouldShowSystemCredentialLogin(CapabilityProfile.web), isFalse);
+      expect(shouldShowSystemCredentialLogin(CapabilityProfile.ohos), isFalse);
     });
   });
 }

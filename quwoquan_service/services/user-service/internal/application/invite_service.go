@@ -4,25 +4,18 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
+	"quwoquan_service/services/user-service/internal/generated"
 )
 
 const (
 	inviteDailyLimit  = 1000
 	inviteTTLDays     = 7
-)
-
-var (
-	ErrInviteExpired          = fmt.Errorf("invitation has expired")
-	ErrInviteAlreadyAccepted  = fmt.Errorf("invitation already accepted")
-	ErrInviteNotFound         = fmt.Errorf("invitation not found")
-	ErrInviteDailyLimitExceeded = fmt.Errorf("daily invite limit reached")
 )
 
 // InviteService manages invite lifecycle and attribution.
@@ -44,7 +37,7 @@ func (s *InviteService) Generate(ctx context.Context, inviterSubAccountID, invit
 		return nil, err
 	}
 	if count >= inviteDailyLimit {
-		return nil, ErrInviteDailyLimitExceeded
+		return nil, generated.AppErrorFromInviteDailyLimitExceeded("daily invite limit reached")
 	}
 
 	// Idempotency: if same (sub, channel, phone) in generated state, return existing
@@ -87,10 +80,10 @@ func (s *InviteService) GetByCode(ctx context.Context, linkCode string) (*model.
 		return nil, err
 	}
 	if r == nil {
-		return nil, ErrInviteNotFound
+		return nil, generated.AppErrorFromInviteNotFound("invitation not found")
 	}
 	if r.IsExpired() {
-		return nil, ErrInviteExpired
+		return nil, generated.AppErrorFromInviteExpired("invitation has expired")
 	}
 	// Mark delivered (first view)
 	_ = s.invites.MarkDelivered(ctx, r.ID)
@@ -105,10 +98,10 @@ func (s *InviteService) Accept(ctx context.Context, linkCode string) (*model.Inv
 		return nil, err
 	}
 	if r == nil {
-		return nil, ErrInviteNotFound
+		return nil, generated.AppErrorFromInviteNotFound("invitation not found")
 	}
 	if r.IsExpired() {
-		return nil, ErrInviteExpired
+		return nil, generated.AppErrorFromInviteExpired("invitation has expired")
 	}
 	if r.Status == "accepted" || r.Status == "activated" {
 		return r, nil // idempotent

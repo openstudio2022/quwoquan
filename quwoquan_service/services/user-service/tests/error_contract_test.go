@@ -37,19 +37,19 @@ func TestErrorCode_InvalidArgument(t *testing.T) {
 	}
 }
 
-func TestErrorCode_Forbidden_DeletePrimary(t *testing.T) {
+func TestErrorCode_PrimaryGuard_DeletePrimary(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "err_user_1", "err_user1")
 	createTestPersona(t, "err_pa_primary", "err_user_1", "Primary", true, true)
 
 	createTestPersonaFull(t, "err_pa_other", "err_user_1", "err_pa_other_sa", "Other", "open", false, false)
 	rec := doRequest(t, http.MethodDelete, "/v1/user/personas/err_pa_primary_sa/delete-empty", "", authHeaders("err_user_1"))
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 	result := parseJSON(t, rec)
-	if result["code"] != "USER.USER.forbidden" {
-		t.Errorf("expected code=USER.USER.forbidden, got %v", result["code"])
+	if result["code"] != "USER.SUB_ACCOUNT.primary_guard" {
+		t.Errorf("expected code=USER.SUB_ACCOUNT.primary_guard, got %v", result["code"])
 	}
 }
 

@@ -1,0 +1,11 @@
+{
+  "label": "区域",
+  "labelEn": "Region",
+  "description": "跨国地理与文化聚合区域分类；子项为叶子级聚合标签，国家由 Topic/地理/行政区/ 表达",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 30,
+  "refHint": "Topic/地理/行政区"
+}

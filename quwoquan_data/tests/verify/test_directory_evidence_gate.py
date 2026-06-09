@@ -31,10 +31,13 @@ from _common.paths import (  # noqa: E402
     batch_post_object_dir,
     batch_root,
     ensure_task_layout,
+    task_root,
+    task_shared_dir,
 )
 from _common.prose_style import mechanical_ending_title_issues  # noqa: E402
 from _common.source_unit import write_source_unit  # noqa: E402
-from verify.verify_directory_evidence_chain import scan_batch  # noqa: E402
+from task import ops  # noqa: E402
+from verify.verify_directory_evidence_chain import scan_batch, scan_task  # noqa: E402
 
 TASK = "旅行/地域/四川省/景区/景区全覆盖"
 
@@ -180,6 +183,56 @@ def test_gate_passes_registered_post_object():
     issues = scan_batch(TASK, batch)
     assert not any("未登记内容路由" in i for i in issues), issues
     assert not any("命名违规" in i for i in issues), issues
+
+
+def test_stage_tree_completeness_opt_in():
+    batch = "gate_stage_tree"
+    _seed_batch_manifest(batch)
+    ensure_task_layout(TASK)
+    # 内容对象只有成品但缺过程阶段 → require_stage_tree 下被拦截，默认不拦。
+    ref = "四姑娘山_体验"
+    register_content_object(TASK, batch, ref, content_type="article", angle="攻略", title="四姑娘山两日")
+    post = content_object_dir(TASK, batch, ref)
+    post.mkdir(parents=True, exist_ok=True)
+    (post / "article.md").write_text("# 四姑娘山\n\n正文\n\n## 出发前\n\n值得。", encoding="utf-8")
+    write_json(post / "manifest.json", {"assets": [], "citedSourceRefs": []})
+
+    assert not scan_batch(TASK, batch), "默认（不开 stage-tree）应通过"
+    strict = scan_batch(TASK, batch, require_stage_tree=True)
+    assert any("阶段树不完整" in i for i in strict), strict
+
+    # 补齐 1-5 阶段后通过
+    for stage in ("1.download", "2.quality", "3.compose", "4.draft", "5.review"):
+        (post / stage).mkdir(parents=True, exist_ok=True)
+    strict2 = scan_batch(TASK, batch, require_stage_tree=True)
+    assert not any("阶段树不完整" in i for i in strict2), strict2
+
+
+def test_task_gate_flags_legacy_root_entries():
+    ensure_task_layout(TASK)
+    legacy_posts = task_root(TASK) / "posts"
+    legacy_posts.mkdir(parents=True, exist_ok=True)
+    issues = scan_task(TASK)
+    assert any("历史兼容位仍存在" in i and "task/posts" in i for i in issues), issues
+
+
+def test_cleanup_runtime_migrates_shared_files_and_removes_legacy_entries():
+    ensure_task_layout(TASK)
+    root = task_root(TASK)
+    (root / "catalog.ndjson").write_text('{"x":1}\n', encoding="utf-8")
+    (root / "dedup_ledger.json").write_text('{"schemaVersion":"x"}\n', encoding="utf-8")
+    (root / "entity_pages").mkdir(parents=True, exist_ok=True)
+    (root / "posts").mkdir(parents=True, exist_ok=True)
+    result = ops.cleanup_runtime(TASK)
+    assert "catalog.ndjson" in result["migrated"], result
+    assert "dedup_ledger.json" in result["migrated"], result
+    assert "entity_pages" in result["removed"], result
+    assert "posts" in result["removed"], result
+    assert (task_shared_dir(TASK) / "catalog.ndjson").is_file()
+    assert (task_shared_dir(TASK) / "dedup_ledger.json").is_file()
+    assert not (root / "entity_pages").exists()
+    assert not (root / "posts").exists()
+    assert not scan_task(TASK), scan_task(TASK)
 
 
 def _run_all() -> None:

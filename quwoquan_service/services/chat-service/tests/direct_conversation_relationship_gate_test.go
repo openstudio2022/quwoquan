@@ -2,12 +2,12 @@ package tests
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
 
 	rtredis "quwoquan_service/runtime/redis"
+	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/chat-service/internal/application"
 	chatcache "quwoquan_service/services/chat-service/internal/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
@@ -58,8 +58,12 @@ func TestCreateConversation_Direct_RequiresMutualOrFormal(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected greeting/mutual gate error")
 	}
-	if err.Error() == "" || (!strings.Contains(err.Error(), "greeting") && !strings.Contains(err.Error(), "mutual")) {
-		t.Fatalf("expected structured gate error, got %v", err)
+	appErr, ok := err.(*rterr.AppError)
+	if !ok {
+		t.Fatalf("expected AppError, got %T (%v)", err, err)
+	}
+	if got := appErr.Code.String(); got != "CHAT.USER.greeting_required" {
+		t.Fatalf("code = %q, want CHAT.USER.greeting_required", got)
 	}
 }
 
@@ -102,7 +106,11 @@ func TestCreateConversation_Direct_Blocked(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected blocked gate error")
 	}
-	if !strings.Contains(err.Error(), "blocked") {
-		t.Fatalf("expected blocked error, got %v", err)
+	appErr, ok := err.(*rterr.AppError)
+	if !ok {
+		t.Fatalf("expected AppError, got %T (%v)", err, err)
+	}
+	if got := appErr.Code.String(); got != "CHAT.USER.blocked" {
+		t.Fatalf("code = %q, want CHAT.USER.blocked", got)
 	}
 }

@@ -117,6 +117,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     Map<String, dynamic>? media,
     String? senderName,
     String? senderAvatar,
+    List<String>? mentions,
   }) async {
     final activeContext = await _resolveActivePersonaContext();
     final clientMsgId = _uuid.v4();
@@ -150,6 +151,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         content: content,
         mediaUrl: mediaUrl,
         media: media,
+        mentions: mentions,
         senderSubAccountId: resolvedSenderSubAccountId.isEmpty
             ? null
             : resolvedSenderSubAccountId,

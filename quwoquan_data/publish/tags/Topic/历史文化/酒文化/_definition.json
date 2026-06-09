@@ -1,0 +1,11 @@
+{
+  "label": "酒文化",
+  "labelEn": "Wine & Liquor Culture",
+  "description": "白酒、黄酒、葡萄酒文化",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "aliases": [
+    "白酒",
+    "黄酒"
+  ]
+}

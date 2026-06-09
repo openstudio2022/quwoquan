@@ -11,6 +11,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_memb
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -27,6 +28,7 @@ import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dar
 
 Widget _scopedApp({
   ChatRepository? mock,
+  GreetingRepository? greetingRepository,
   bool isDark = false,
   VisitRecorderService? visitRecorder,
 }) {
@@ -34,6 +36,9 @@ Widget _scopedApp({
   return ProviderScope(
     overrides: [
       chatRepositoryProvider.overrideWithValue(repo),
+      greetingRepositoryProvider.overrideWithValue(
+        greetingRepository ?? MockGreetingRepository(),
+      ),
       visitRecorderServiceProvider.overrideWithValue(
         visitRecorder ?? _NoopVisitRecorderService(),
       ),
@@ -366,6 +371,34 @@ void main() {
       expect(find.text('圈子普通聊天'), findsNothing);
     });
 
+    testWidgets('打招呼请求箱回复后进入正式会话', (tester) async {
+      final greetingRepo = MockGreetingRepository(
+        seedInbox: <GreetingRequestDto>[
+          GreetingRequestDto(
+            id: 'greeting_001',
+            requesterSubAccountId: 'user_requester',
+            targetSubAccountId: 'mock_me',
+            requestMessage: '想和你聊聊川西路线',
+            status: 'pending',
+            source: 'profile',
+            createdAt: DateTime.utc(2026, 1, 1),
+            updatedAt: DateTime.utc(2026, 1, 1),
+          ),
+        ],
+      );
+      await tester.pumpWidget(_scopedApp(greetingRepository: greetingRepo));
+      await tester.pumpAndSettle();
+
+      expect(find.text(UITextConstants.chatGreetingInboxTitle), findsOneWidget);
+      await tester.tap(find.text(UITextConstants.chatGreetingInboxTitle));
+      await tester.pumpAndSettle();
+      expect(find.text('想和你聊聊川西路线'), findsWidgets);
+
+      await tester.tap(find.text(UITextConstants.chatGreetingInboxReply));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('chat-detail-page')), findsOneWidget);
+    });
+
     testWidgets('下拉刷新不崩溃', (tester) async {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
@@ -430,22 +463,23 @@ void main() {
 
       final swipeRegion = find.byType(TabSwipeSwitchRegion).first;
 
-      for (var i = 0; i < 5; i++) {
+      for (var i = 0; i < 4; i++) {
         await tester.fling(swipeRegion, const Offset(-420, 0), 1200);
         await tester.pumpAndSettle();
       }
 
-      expect(find.text(UITextConstants.secretPasswordPrompt), findsOneWidget);
+      expect(find.text(UITextConstants.reminders), findsOneWidget);
+      expect(find.text(UITextConstants.secretMessage), findsNothing);
 
       await tester.fling(
-        find.text(UITextConstants.secretPasswordPrompt),
+        find.byType(TabSwipeSwitchRegion).first,
         const Offset(-420, 0),
         1200,
       );
       await tester.pumpAndSettle();
 
       expect(find.text(UITextConstants.contactsTabFunGroup), findsOneWidget);
-      expect(find.text(UITextConstants.secretPasswordPrompt), findsNothing);
+      expect(find.text(UITextConstants.secretMessage), findsNothing);
     });
   });
 

@@ -346,7 +346,10 @@ class RemoteRtcRepository implements RtcRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final params = <String, String>{'limit': '$limit', 'cursor': ?cursor};
+    final params = <String, String>{
+      'limit': '$limit',
+      if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+    };
     final decoded = await _http.getJson(
       _uri(RtcApiMetadata.listCallsPath, queryParameters: params),
       headers: CloudRequestHeaders.forPage(RtcRequestPageIds.listCalls),

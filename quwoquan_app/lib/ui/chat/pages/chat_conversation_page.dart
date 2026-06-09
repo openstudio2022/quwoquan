@@ -119,7 +119,8 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
 
   @override
   void dispose() {
-    AppToast.dismiss(); unawaited(_voiceRecorder.dispose());
+    AppToast.dismiss();
+    unawaited(_voiceRecorder.dispose());
     _inputController.removeListener(_onInputChanged);
     _inputController.dispose();
     _scrollController.dispose();
@@ -278,6 +279,32 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   bool get _isGroupChat => _conversationDto?.type == 'group';
 
   int get _memberCount => _conversationDto?.memberCount ?? 0;
+
+  bool get _isBlockedConversation => _conversationDto?.status == 'blocked';
+
+  bool get _canInitiateOneToOneCall {
+    if (_isGroupChat) {
+      return true;
+    }
+    return _otherParticipantId != null &&
+        !_isBlockedConversation &&
+        (_relationshipCapability?.canStartVoiceCall == true ||
+            _relationshipCapability?.canStartVideoCall == true);
+  }
+
+  bool get _shouldDisableComposer {
+    if (_isGroupChat) {
+      return false;
+    }
+    if (_isBlockedConversation) {
+      return true;
+    }
+    final capability = _relationshipCapability;
+    if (capability == null) {
+      return false;
+    }
+    return !capability.canSendMessage;
+  }
 
   String get _conversationTitle {
     if (_resolvedTitle != null) return _resolvedTitle!;
@@ -460,7 +487,8 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     MediaUploadManager manager,
     UploadTask task,
   ) async {
-    if (task.status == UploadStatus.completed || task.status == UploadStatus.failed) {
+    if (task.status == UploadStatus.completed ||
+        task.status == UploadStatus.failed) {
       return task;
     }
     final completer = Completer<UploadTask>();
@@ -629,6 +657,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   }
 
   Future<void> _submitChatInput(ChatInputSubmitPayload payload) async {
+    if (_shouldDisableComposer) {
+      return;
+    }
     // 防御性二次拦截：私信发送是需登录写动作。会话页虽已被路由守卫保护，
     // 这里再兜底一次，避免任何绕过路由的发送路径让游客写入。
     if (!await requireLogin(ref, context, AuthGateReason.sendMessage)) {
@@ -645,19 +676,26 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     }
     var text = payload.text.trim();
     if (text.isNotEmpty) {
-      await _sendMessage(draftText: text);
+      await _sendMessage(draftText: text, mentions: payload.mentions);
     }
   }
 
-  Future<void> _sendMessage({String? draftText}) async {
+  Future<void> _sendMessage({String? draftText, List<String>? mentions}) async {
+    if (_shouldDisableComposer) {
+      return;
+    }
     _inputFocusNode.unfocus();
     await Future<void>.delayed(const Duration(milliseconds: 150));
     final text = (draftText ?? _inputController.text).trim();
     if (text.isEmpty) return;
     if (draftText == null) _inputController.clear();
+    final resolvedMentions = _resolveAssistantMentions(
+      text: text,
+      mentions: mentions,
+    );
     ref
         .read(chatMessageProvider(widget.conversationId).notifier)
-        .sendMessage('text', text);
+        .sendMessage('text', text, mentions: resolvedMentions);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -669,12 +707,22 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     });
   }
 
+  List<String>? _resolveAssistantMentions({
+    required String text,
+    List<String>? mentions,
+  }) {
+    if (!_isGroupChat) {
+      return null;
+    }
+    final values = <String>{...?mentions};
+    if (text.contains(UITextConstants.commentAtXiaoqu)) {
+      values.add('assistant');
+    }
+    return values.isEmpty ? null : values.toList(growable: false);
+  }
+
   List<ChatInputExtraPanelItem> _buildCallPanelItems() {
-    final canCall =
-        _isGroupChat ||
-        (_otherParticipantId != null &&
-            (_relationshipCapability?.canStartVoiceCall == true ||
-                _relationshipCapability?.canStartVideoCall == true));
+    final canCall = _canInitiateOneToOneCall;
     if (!canCall) return const <ChatInputExtraPanelItem>[];
     final voiceLabel = _isGroupChat
         ? UITextConstants.callGroupVoice
@@ -712,6 +760,31 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   }
 
   Future<void> _initiateCall(String callType) async {
+    if (!_isGroupChat && !_canInitiateOneToOneCall) {
+      if (!mounted) {
+        return;
+      }
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: StateError('relationship gate denied call'),
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      await AppActionErrorFeedback.show(context, semantic: resolved);
+      return;
+    }
+    final requestedType = CallType.fromString(callType);
+    final permissionOutcome = await CallPermissionGuard.ensure(
+      context,
+      callType: requestedType,
+    );
+    if (!mounted || permissionOutcome == CallPermissionOutcome.blocked) {
+      return;
+    }
+    final effectiveType =
+        permissionOutcome == CallPermissionOutcome.fallbackVoiceOnly
+        ? CallType.audio
+        : requestedType;
     final notifier = ref.read(callSessionProvider.notifier);
     final List<String> targetIds;
     if (_isGroupChat) {
@@ -730,7 +803,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
       targetIds = <String>[otherId];
     }
     final callId = await notifier.initiateCall(
-      callTypeStr: callType,
+      callTypeStr: effectiveType.toApiString(),
       targetUserIds: targetIds,
       conversationId: widget.conversationId,
     );
@@ -772,6 +845,30 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
         UITextConstants.chatMutualFollowRtcHint,
         style: TextStyle(
           color: AppColors.primaryColor,
+          fontSize: AppTypography.sm,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlockedConversationHintBar() {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        UITextConstants.chatBlockedConversationHint,
+        style: TextStyle(
+          color: AppColors.error,
           fontSize: AppTypography.sm,
           fontWeight: FontWeight.w500,
         ),
@@ -1118,6 +1215,8 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (_isBlockedConversation)
+                    _buildBlockedConversationHintBar(),
                   if (!_isGroupChat &&
                       _relationshipCapability?.isMutual != true &&
                       _otherParticipantId != null)
@@ -1140,6 +1239,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                     enableVoiceInput: true,
                     showEmojiButton: true,
                     showXiaoquMentionButton: _isGroupChat,
+                    disabled: _shouldDisableComposer,
                     extraPanelItems: _buildCallPanelItems(),
                   ),
                 ],

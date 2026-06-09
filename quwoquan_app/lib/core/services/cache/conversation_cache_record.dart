@@ -13,6 +13,9 @@ class ConversationCacheRecord {
     this.creatorId = '',
     this.circleId = '',
     this.circleGroupId,
+    this.originType = 'direct_init',
+    this.bindingType = 'none',
+    this.lifecyclePolicy = 'persistent',
     this.maxSeq = 0,
     this.lastSeq = 0,
     this.memberCount = 0,
@@ -43,6 +46,9 @@ class ConversationCacheRecord {
   final String creatorId;
   final String circleId;
   final String? circleGroupId;
+  final String originType;
+  final String bindingType;
+  final String lifecyclePolicy;
   final int maxSeq;
   final int lastSeq;
   final int memberCount;
@@ -73,6 +79,12 @@ class ConversationCacheRecord {
       groupAvatarSourceHash: dto.groupAvatarSourceHash?.trim(),
       creatorId: dto.creatorId.trim(),
       circleId: dto.circleId?.trim() ?? '',
+      circleGroupId: dto.circleGroupId?.trim(),
+      originType: dto.originType.trim().isEmpty ? 'direct_init' : dto.originType.trim(),
+      bindingType: dto.bindingType.trim().isEmpty ? 'none' : dto.bindingType.trim(),
+      lifecyclePolicy: dto.lifecyclePolicy.trim().isEmpty
+          ? 'persistent'
+          : dto.lifecyclePolicy.trim(),
       maxSeq: dto.maxSeq,
       lastSeq: dto.maxSeq,
       memberCount: dto.memberCount,
@@ -127,6 +139,12 @@ class ConversationCacheRecord {
       creatorId: _string(map['creatorId']),
       circleId: _string(map['circleId']),
       circleGroupId: _optionalString(map['circleGroupId']),
+      originType: _firstNonEmpty(<Object?>[map['originType'], 'direct_init']),
+      bindingType: _firstNonEmpty(<Object?>[map['bindingType'], 'none']),
+      lifecyclePolicy: _firstNonEmpty(<Object?>[
+        map['lifecyclePolicy'],
+        'persistent',
+      ]),
       maxSeq: _int(map['maxSeq']),
       lastSeq: _int(map['lastSeq'], fallback: _int(map['maxSeq'])),
       memberCount: _int(map['memberCount']),
@@ -220,6 +238,9 @@ class ConversationCacheRecord {
       if (creatorId.isNotEmpty) 'creatorId': creatorId,
       if (circleId.isNotEmpty) 'circleId': circleId,
       if (circleGroupId != null) 'circleGroupId': circleGroupId,
+      if (originType.isNotEmpty) 'originType': originType,
+      if (bindingType.isNotEmpty) 'bindingType': bindingType,
+      if (lifecyclePolicy.isNotEmpty) 'lifecyclePolicy': lifecyclePolicy,
       'maxSeq': maxSeq,
       'lastSeq': lastSeq,
       'memberCount': memberCount,
@@ -259,6 +280,9 @@ class ConversationCacheRecord {
     String? circleId,
     String? circleGroupId,
     bool clearCircleGroupId = false,
+    String? originType,
+    String? bindingType,
+    String? lifecyclePolicy,
     int? maxSeq,
     int? lastSeq,
     int? memberCount,
@@ -295,6 +319,9 @@ class ConversationCacheRecord {
       circleGroupId: clearCircleGroupId
           ? null
           : circleGroupId ?? this.circleGroupId,
+      originType: originType ?? this.originType,
+      bindingType: bindingType ?? this.bindingType,
+      lifecyclePolicy: lifecyclePolicy ?? this.lifecyclePolicy,
       maxSeq: maxSeq ?? this.maxSeq,
       lastSeq: lastSeq ?? this.lastSeq,
       memberCount: memberCount ?? this.memberCount,

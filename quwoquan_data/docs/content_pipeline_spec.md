@@ -21,8 +21,9 @@
 | `explore` | 任务说明、目标范围、notes、已有目录快照 | 探索包、候选对象清单、候选 sourceKind 白名单、初步检索维度 | 目标对象不完整、主线缺失、无法冻结 baseline | 交给 `baseline` 的覆盖目标与检索维度 |
 | `baseline` | 探索包、task manifest、规则 hash | `baseline_freeze_packet.json`、冻结后的范围、门禁阈值、对象列表 | 范围未锁定、对象未稳定、后续 stage 依赖不明确 | 交给 `download` 的冻结范围与阈值 |
 | `download` | baseline packet、对象分解计划、source plan、source catalog | `batch_manifest.json`、`_shared/source_catalog.json`、对象级 `1.download/source_plan.json`、`1.download/sources/{NN}.{sourceKind}/`、`source.quality.json`、`assets/index.json` | 下载失败、来源不带 license / relevance / sourceKind、图片未过安全门、来源质量低于阈值 | 交给 `build` 的可用来源单元、质量分析与图片安全结果 |
-| `build` | download 产物、实体主题包、SOP / 模板 | 实体三件套 `page.md`、`_entity.json`、`manifest.json`、`assets/`，以及对象过程树 `1.download..5.review` | 页长不达标、条件画像缺失、资产闭环不完整、模板/平台痕迹存在 | 交给 `produce` 的可消费实体成品和事实摘要 |
-| `produce` | baseline packet、实体成品、来源包、检索计划、写作契约 | `3.compose/writing_pack.json`、`4.draft/prompt.md`、`4.draft/draft.article.md`、`4.draft/draft_meta.json`、`5.review/review.json`、`5.review/review_gate.json`、对象根 `article.md` / `manifest.json` / `assets/`、`content_object_index.json` | 写作包未闭合、草稿不是 `generator=agent`、事实不可回溯、图片未过安全门、正文出现机械标题或模板拼接 | 交给 `publish` 的 approved 成品、review ledger、provenance |
+| `build` | download 产物、实体主题包、SOP / 模板 | 实体三件套 `page.md`、`_entity.json`、`manifest.json`、`assets/`，以及对象过程树 `1.download..5.review` | 页长不达标、条件画像缺失、资产闭环不完整、模板/平台痕迹存在 | 交给 `content_plan` 的可消费实体成品与来源证据 |
+| `content_plan` | download/build 落盘来源、`source.quality.json`、实体主页摘要、`task.yaml` 内容配额 | `_shared/content_plan_packet.json`（篇目+`evidenceRefs`+`entityRefs`+`mustIncludeFacts`）、`content_object_index` 注册、各篇 `3.compose/brief.json` | 篇目无证据引用、B 组线路无联游互证、预置营销 ref、配额未满足 | 交给 `produce` 的已锁定篇目与 brief |
+| `produce` | content_plan packet、实体成品、写作契约 | `3.compose/writing_pack.json`、`4.draft/prompt.md`、`4.draft/draft.article.md`、`4.draft/draft_meta.json`、`5.review/review.json`、`5.review/review_gate.json`、对象根 `article.md` / `manifest.json` / `assets/` | 写作包未闭合、草稿不是 `generator=agent`、事实不可回溯、图片未过安全门、正文出现机械标题或模板拼接、`citedSourcePaths` 超出 content_plan 证据 | 交给 `publish` 的 approved 成品、review ledger、provenance |
 | `publish` | approved 的对象根、review ledger、entity pages | `publish/posts/...`、`publish/entities/...`、`release/{releaseId}/`、`publish/sample_bundles/{env}.json`、`publish/publish_meta.json` | 对象未 approved、资产闭环缺失、实体主页不存在、review 仍显示 unsafe | 交给 `ship` / importer 的发布包与环境采样包 |
 | `workflow` | task manifest、baseline packet、batch manifest、运行状态 | `_shared/task_workflow_state.json`、修复包、重试链、阶段状态 | 未完成必经阶段、达到重试上限、存在未处理的硬阻断 | 只把已过门阶段推进到下游，不绕过 repair |
 
@@ -35,6 +36,17 @@
 - `attempt-exit`：每个阶段完成后尝试进入下游，生成下一阶段输入包。
 - `hook-check`：在退出点统一做质量门检查，不满足就阻断。
 - `re-inject`：失败必须回灌到原始阶段，生成 repair packet 后重试失败对象，不允许跳步。
+- **hook-check 硬规则**：阶段 CLI 返回 done 不等于准出；必须读取 `write_gate_report` / `gate_*.py` 结果，有 issues 则**不得** `--resume` 进入下游。禁止 Agent 口头宣称完成而无 gate 证据。
+
+### 1.2.1 篇目与 ref（证据后置，禁止搜索向预置）
+
+- **task.yaml 只冻结**：`coverageTargets`（实体）与 `content.quotas`（如 `entityArticles` / `routeArticles`），**禁止** `plannedRefs` 作为第二真相源。
+- **篇目真相源**：`batches/{batch}/_shared/content_plan_packet.json` + `content_object_index.json`。
+- **时机**：`content_plan` 在 `build_validate` 之后、`produce_compose` 之前；ref/title 由已下载 `evidenceRefs` 归纳，禁止 download 前预置 `XX攻略` / 营销线路名再凑来源。
+- **B 组线路**：仅当 ≥2 条独立来源出现联游/顺路叙述，或地理邻接且有共享交通/季节证据时立项；不足则 `repair` 回 `download_plan` 补检索，禁止模板大环线填空。
+- **可读性**：对齐主要来源体裁（加工而非重写腔调）；禁止百科罗列、机械收尾、独立「实用信息」清单块。
+- **发布 tagRefs**：`brief.json` / manifest 的 `tagRefs` 必须指向 `publish/v1/tags/**/_definition.json` 已存在路径；禁止扁平的省名/品类名（如 `<region>`/`<category>`）等未发布 tag（`ship` dangling_post_tag_ref）。
+- **线路 title**：`publishTitle` / frontmatter `title` 不得嵌入乱序实体名片段，否则 `verify_content_semantics` 的 routeCoverage progression 会在全文（含 frontmatter）判失败。
 
 Cursor 只允许三类执行面：
 
@@ -61,12 +73,12 @@ Cursor 只允许三类执行面：
 ```json
 {
   "schemaVersion": "quwoquan_data.command_packet/1",
-  "taskId": "旅行/地域/四川省/景区/景区精选",
-  "batchId": "e2e_sichuan_20260607",
+  "taskId": "<vertical>/<dimension>/<region>/<category>/<topic>",
+  "batchId": "<batch_id>",
   "command": "download",
   "stage": "source_plan",
   "objectType": "entity|article|image|video",
-  "ref": "地点_景区__峨眉山",
+  "ref": "<object_ref>",
   "inputs": [],
   "outputs": [],
   "gates": [],

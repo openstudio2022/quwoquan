@@ -185,7 +185,7 @@ class RtcSignalingClient {
   ) {
     return <String, dynamic>{
       'type': 'auth',
-      'userId': ?userId,
+      if (userId != null && userId.isNotEmpty) 'userId': userId,
       ...headers,
     };
   }

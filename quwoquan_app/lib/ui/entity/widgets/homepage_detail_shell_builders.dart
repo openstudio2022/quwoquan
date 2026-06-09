@@ -10,6 +10,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         title: UITextConstants.homepageIntersectionTitle,
         reasons: bundleReasons,
         isDark: isDark,
+        onReasonTap: widget.onIntersectionReasonTap,
       );
       if (card != null) {
         return Padding(
@@ -39,6 +40,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         ),
         title: UITextConstants.homepageIntersectionTitle,
         isDark: isDark,
+        onReasonTap: widget.onIntersectionReasonTap,
       ),
     );
   }

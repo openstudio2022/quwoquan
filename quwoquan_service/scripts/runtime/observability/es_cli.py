@@ -21,6 +21,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[4]
 COMPOSE_FILE = ROOT / "deploy" / "observability" / "es" / "docker-compose.yml"
 ES_URL = os.environ.get("QUWOQUAN_ES_URL", "http://localhost:9200").rstrip("/")
+PRODUCT_OPS_BASE_URL = os.environ.get("PRODUCT_OPS_BASE_URL", "").rstrip("/")
+PLATFORM_OPS_BASE_URL = os.environ.get("PLATFORM_OPS_BASE_URL", "").rstrip("/")
 
 
 def main() -> int:
@@ -52,6 +54,17 @@ def main() -> int:
     trace.add_argument("--hours", type=int, default=24)
     trace.add_argument("--limit", type=int, default=50)
 
+    triage = sub.add_parser("triage")
+    triage.add_argument("--domain", choices=["product", "platform"], required=True)
+    triage.add_argument("--env", default="")
+    triage.add_argument("--cluster", default="")
+    triage.add_argument("--service", default="")
+    triage.add_argument("--page-name", default="")
+    triage.add_argument("--surface-id", default="")
+    triage.add_argument("--hours", type=int, default=24)
+    triage.add_argument("--limit", type=int, default=50)
+    triage.add_argument("--output", choices=["json", "markdown"], default="json")
+
     args = parser.parse_args()
     if args.command == "up":
         return compose("up", "-d", "--wait")
@@ -82,6 +95,18 @@ def main() -> int:
     if args.command == "trace-samples":
         docs = query_trace_samples(args.trace_id, args.hours, args.limit)
         print(json.dumps({"items": docs}, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "triage":
+        payload = query_control_plane_triage(args)
+        if payload is not None:
+            emit_triage_result(args.domain, payload, args.output)
+            return 0
+        docs = query_report_docs(args.env, args.hours, args.limit)
+        groups = group_by_fingerprint(docs)
+        if args.output == "json":
+            print(json.dumps({"source": "es-fallback", "groups": groups}, ensure_ascii=False, indent=2))
+        else:
+            emit_report(groups, "markdown")
         return 0
     raise AssertionError(args.command)
 
@@ -291,6 +316,64 @@ def emit_report(groups: list[dict[str, Any]], output: str) -> None:
         )
 
 
+def query_control_plane_triage(args: argparse.Namespace) -> dict[str, Any] | None:
+    base_url = PRODUCT_OPS_BASE_URL if args.domain == "product" else PLATFORM_OPS_BASE_URL
+    if not base_url:
+        return None
+    if args.domain == "product":
+        path = build_query_path(
+            "/v1/control-plane/product/triage/summary",
+            {
+                "pageName": args.page_name,
+                "surfaceId": args.surface_id,
+            },
+        )
+    else:
+        path = build_query_path(
+            "/v1/control-plane/platform/triage/summary",
+            {
+                "env": args.env,
+                "cluster": args.cluster,
+                "service": args.service,
+            },
+        )
+    try:
+        return request_json_url("GET", urllib.parse.urljoin(f"{base_url}/", path.lstrip("/")))
+    except SystemExit:
+        return None
+
+
+def build_query_path(path: str, params: dict[str, str]) -> str:
+    filtered = {key: value for key, value in params.items() if str(value or "").strip()}
+    if not filtered:
+        return path
+    return f"{path}?{urllib.parse.urlencode(filtered)}"
+
+
+def emit_triage_result(domain: str, payload: dict[str, Any], output: str) -> None:
+    if output == "json":
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    print(f"# {domain} triage")
+    backlog = payload.get("backlogCandidates") or []
+    if not backlog:
+        print("\n无 backlogCandidates。")
+        return
+    for item in backlog:
+        print(
+            "- `{id}` `{severity}` {title} next=`{next_action}` runbook={runbook} repair={repair} audit={audit} alert={alert}".format(
+                id=item.get("id", ""),
+                severity=item.get("severity", ""),
+                title=item.get("title", ""),
+                next_action=item.get("nextAction", ""),
+                runbook=item.get("runbookRoute", ""),
+                repair=item.get("repairEntry", ""),
+                audit=item.get("auditRoute", ""),
+                alert=item.get("alertId", ""),
+            )
+        )
+
+
 def index_template(pattern: str) -> dict[str, Any]:
     return {
         "index_patterns": [pattern],
@@ -389,9 +472,13 @@ def exception_doc(
 
 
 def request_json(method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    return request_json_url(method, urllib.parse.urljoin(f"{ES_URL}/", path.lstrip("/")), body)
+
+
+def request_json_url(method: str, url: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
     data = None if body is None else json.dumps(body).encode()
     req = urllib.request.Request(
-        urllib.parse.urljoin(f"{ES_URL}/", path.lstrip("/")),
+        url,
         data=data,
         method=method,
         headers={"Content-Type": "application/json"},
@@ -401,7 +488,7 @@ def request_json(method: str, path: str, body: dict[str, Any] | None = None) -> 
             raw = resp.read().decode()
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="ignore")
-        raise SystemExit(f"Elasticsearch request failed: {method} {path}: {exc.code} {detail}") from exc
+        raise SystemExit(f"request failed: {method} {url}: {exc.code} {detail}") from exc
     return json.loads(raw) if raw else {}
 
 

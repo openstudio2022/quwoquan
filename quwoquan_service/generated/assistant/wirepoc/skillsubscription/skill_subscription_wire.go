@@ -10,6 +10,9 @@ type SkillSubscriptionSearchQueryPlanWire struct {
 type SkillSubscriptionDestinationWire struct {
 	DestinationType string `json:"destinationType"`
 	DestinationId string `json:"destinationId"`
+	MaxPerDay int `json:"maxPerDay"`
+	CooldownMinutes int `json:"cooldownMinutes"`
+	QuietHoursPolicy string `json:"quietHoursPolicy"`
 }
 
 type SkillSubscriptionOwnerWire struct {

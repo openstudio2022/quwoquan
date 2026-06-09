@@ -33,12 +33,16 @@ void main() {
       expect(friendMessage.senderName, '契约联系人');
       expect(
         friendMessage.senderAvatar,
-        contains('/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png'),
+        contains(
+          '/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png',
+        ),
       );
       expect(selfMessage.senderName, '契约当前用户');
       expect(
         selfMessage.senderAvatar,
-        contains('/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png'),
+        contains(
+          '/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+        ),
       );
     });
 
@@ -79,7 +83,10 @@ void main() {
       expect(repo.lastType, 'image');
       expect(repo.lastContent, '');
       expect(repo.lastMediaUrl, 'https://cdn.example.com/photo.jpg');
-      expect(repo.lastMedia?['thumbnailUrl'], 'https://cdn.example.com/thumb.jpg');
+      expect(
+        repo.lastMedia?['thumbnailUrl'],
+        'https://cdn.example.com/thumb.jpg',
+      );
 
       final state = container.read(chatMessageProvider('fixture_conv_media'));
       expect(state.messages, hasLength(1));
@@ -87,8 +94,42 @@ void main() {
       expect(message.type, 'image');
       expect(message.content, '');
       expect(message.mediaUrl, 'https://cdn.example.com/photo.jpg');
-      expect(message.media?['thumbnailUrl'], 'https://cdn.example.com/thumb.jpg');
+      expect(
+        message.media?['thumbnailUrl'],
+        'https://cdn.example.com/thumb.jpg',
+      );
       expect(message.status, 'sent');
+    });
+
+    test('sendMessage forwards assistant mentions', () async {
+      final repo = _TrackingSendChatRepository();
+      final container = ProviderContainer(
+        overrides: [
+          chatRepositoryProvider.overrideWithValue(repo),
+          contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+          activePersonaContextProvider.overrideWith(
+            (ref) async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'persona_mention_test',
+              ownerUserId: 'user_mention_test',
+              displayName: '群聊测试分身',
+              avatarUrl: '',
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(
+        chatMessageProvider('fixture_conv_group').notifier,
+      );
+      final sent = await notifier.sendMessage(
+        'text',
+        '@小趣 总结一下',
+        mentions: const <String>['assistant'],
+      );
+
+      expect(sent, isTrue);
+      expect(repo.lastMentions, contains('assistant'));
     });
   });
 }
@@ -98,6 +139,7 @@ class _TrackingSendChatRepository extends MockChatRepository {
   String? lastContent;
   String? lastMediaUrl;
   Map<String, dynamic>? lastMedia;
+  List<String>? lastMentions;
 
   @override
   Future<SendMessageResponse> sendMessage({
@@ -119,6 +161,7 @@ class _TrackingSendChatRepository extends MockChatRepository {
     lastContent = content;
     lastMediaUrl = mediaUrl;
     lastMedia = media;
+    lastMentions = mentions;
     return super.sendMessage(
       conversationId: conversationId,
       type: type,

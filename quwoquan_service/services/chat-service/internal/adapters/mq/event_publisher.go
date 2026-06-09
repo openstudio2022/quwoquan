@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
@@ -40,6 +41,7 @@ var SupportedEventTypes = []string{
 }
 
 const EventAssistantRemoved = "AssistantRemoved"
+const AssistantMentionedStream = "events.chat.assistant_mentions"
 
 // EventPublisher publishes domain events to Redis Pub/Sub channels.
 // Channel format: rt:conversation:{conversationId}
@@ -77,10 +79,55 @@ func (p *EventPublisher) PublishBatch(ctx context.Context, events []DomainEvent)
 // bridging the application layer abstraction to the concrete Redis Pub/Sub
 // implementation without the application needing to import this package.
 func (p *EventPublisher) PublishDomainEvent(ctx context.Context, eventType, conversationId, actorId string, payload map[string]any) error {
-	return p.Publish(ctx, DomainEvent{
+	evt := DomainEvent{
 		Type:           eventType,
 		ConversationID: conversationId,
 		ActorID:        actorId,
 		Payload:        payload,
-	})
+	}
+	if err := p.Publish(ctx, evt); err != nil {
+		return err
+	}
+	if eventType == event.AssistantMentioned {
+		if _, err := p.client.XAdd(ctx, AssistantMentionedStream, assistantMentionedStreamValues(evt)); err != nil {
+			return fmt.Errorf("publish assistant mentioned stream: %w", err)
+		}
+	}
+	return nil
+}
+
+func assistantMentionedStreamValues(evt DomainEvent) map[string]string {
+	values := map[string]string{
+		"eventType":      evt.Type,
+		"conversationId": evt.ConversationID,
+		"actorId":        evt.ActorID,
+		"occurredAt":     evt.Timestamp.Format(time.RFC3339Nano),
+	}
+	for key, value := range evt.Payload {
+		values[key] = streamString(value)
+	}
+	return values
+}
+
+func streamString(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case fmt.Stringer:
+		return v.String()
+	case int:
+		return strconv.Itoa(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(v)
+	default:
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprint(v)
+		}
+		return string(raw)
+	}
 }

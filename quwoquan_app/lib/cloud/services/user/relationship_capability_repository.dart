@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
@@ -198,6 +196,45 @@ class RelationshipCapabilityDto {
       isBlockedBy: isBlockedBy,
     );
   }
+
+  RelationshipCapabilityDto copyWith({
+    String? viewerSubAccountId,
+    String? targetSubAccountId,
+    String? relationState,
+    bool? canFollow,
+    bool? canUnfollow,
+    bool? canFollowBack,
+    bool? canGreet,
+    bool? canCreateDirectConversation,
+    bool? canSendMessage,
+    bool? canOpenConversation,
+    bool? hasPendingGreeting,
+    bool? hasFormalConversation,
+    bool? canStartVoiceCall,
+    bool? canStartVideoCall,
+    bool? isBlocked,
+    bool? isBlockedBy,
+  }) {
+    return RelationshipCapabilityDto(
+      viewerSubAccountId: viewerSubAccountId ?? this.viewerSubAccountId,
+      targetSubAccountId: targetSubAccountId ?? this.targetSubAccountId,
+      relationState: relationState ?? this.relationState,
+      canFollow: canFollow ?? this.canFollow,
+      canUnfollow: canUnfollow ?? this.canUnfollow,
+      canFollowBack: canFollowBack ?? this.canFollowBack,
+      canGreet: canGreet ?? this.canGreet,
+      canCreateDirectConversation:
+          canCreateDirectConversation ?? this.canCreateDirectConversation,
+      canSendMessage: canSendMessage ?? this.canSendMessage,
+      canOpenConversation: canOpenConversation ?? this.canOpenConversation,
+      hasPendingGreeting: hasPendingGreeting ?? this.hasPendingGreeting,
+      hasFormalConversation: hasFormalConversation ?? this.hasFormalConversation,
+      canStartVoiceCall: canStartVoiceCall ?? this.canStartVoiceCall,
+      canStartVideoCall: canStartVideoCall ?? this.canStartVideoCall,
+      isBlocked: isBlocked ?? this.isBlocked,
+      isBlockedBy: isBlockedBy ?? this.isBlockedBy,
+    );
+  }
 }
 
 /// 关系能力位 Repository（三层模式）
@@ -245,23 +282,18 @@ class RemoteRelationshipCapabilityRepository
       subAccountId: targetUserId,
     );
     final uri = Uri.parse('$_baseUrl$path');
-    final resp = await _httpClient.get(
+    final decoded = await _httpClient.getJson(
       uri,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.getRelationshipCapability,
       ),
     );
-    if (resp.statusCode == 200) {
-      final body = CloudResponseDecoder.asObject(
-        jsonDecode(resp.body),
-        context: UserRequestPageIds.getRelationshipCapability,
-      );
-      return RelationshipCapabilityDto.fromRelationshipCapabilityWire(
-        RelationshipCapabilityWireDto.fromMap(body),
-      );
-    }
-    throw Exception(
-      'GetRelationshipCapability failed: ${resp.statusCode} ${resp.body}',
+    final body = CloudResponseDecoder.asObject(
+      decoded,
+      context: UserRequestPageIds.getRelationshipCapability,
+    );
+    return RelationshipCapabilityDto.fromRelationshipCapabilityWire(
+      RelationshipCapabilityWireDto.fromMap(body),
     );
   }
 }

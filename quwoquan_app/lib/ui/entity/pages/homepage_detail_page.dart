@@ -4,12 +4,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_detail_shell.dart';
 
 class HomepageDetailPage extends ConsumerStatefulWidget {
@@ -90,7 +91,24 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       onReport: _openStatusReport,
       onCreateContent: _openCreateContent,
       onAttach: (reference) => context.pop(reference),
+      onIntersectionReasonTap: _trackIntersectionReasonTap,
     );
+  }
+
+  void _trackIntersectionReasonTap(IntersectionReason reason) {
+    final targetId = reason.actionTargetId.trim().isEmpty
+        ? widget.homepageId
+        : reason.actionTargetId.trim();
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackClick(
+          targetId,
+          referralSource: widget.referralSource,
+          intersectionId: reason.intersectionId,
+          intersectionDimension: reason.dimension,
+          intersectionClass: reason.intersectionClass,
+          intersectionTagRefs: reason.tagRefs,
+        );
   }
 
   Future<void> _load() async {

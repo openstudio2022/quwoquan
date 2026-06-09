@@ -773,18 +773,6 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
         initialTabId: 'locations',
       ),
       NetworkSearchSuggestion(query: query, subtitle: '直接搜索 $query'),
-      NetworkSearchSuggestion(query: '$query群组', subtitle: '搜索 $query群组 的网络结果'),
-      NetworkSearchSuggestion(
-        query: '$query俱乐部',
-        subtitle: '搜索 $query俱乐部 的网络结果',
-      ),
-      NetworkSearchSuggestion(
-        query: '$query热门话题',
-        subtitle: '搜索 $query热门话题 的网络结果',
-      ),
-      NetworkSearchSuggestion(query: '$query攻略', subtitle: '搜索 $query攻略 的网络结果'),
-      NetworkSearchSuggestion(query: '$query推荐', subtitle: '搜索 $query推荐 的网络结果'),
-      NetworkSearchSuggestion(query: '$query精选', subtitle: '搜索 $query精选 的网络结果'),
     ];
     final unique = <String>{};
     return seeds

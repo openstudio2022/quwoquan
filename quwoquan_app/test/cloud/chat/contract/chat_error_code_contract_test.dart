@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 
-/// L1a 契约测试：ChatErrorCode — 覆盖 errors.yaml 中 5 个错误码
+/// L1a 契约测试：ChatErrorCode — 覆盖 errors.yaml 中 8 个错误码
 ///
 /// 三维度覆盖：
 ///   常规契约  — 每个已知错误码正确解析，错误码解析与状态码正确
@@ -36,6 +36,24 @@ void main() {
       expect(code.httpStatus, 429);
     });
 
+    test('parse not_mutual → notMutual', () {
+      final code = ChatErrorCode.fromCode('CHAT.USER.not_mutual');
+      expect(code, ChatErrorCode.notMutual);
+      expect(code.httpStatus, 403);
+    });
+
+    test('parse greeting_required → greetingRequired', () {
+      final code = ChatErrorCode.fromCode('CHAT.USER.greeting_required');
+      expect(code, ChatErrorCode.greetingRequired);
+      expect(code.httpStatus, 403);
+    });
+
+    test('parse blocked → blocked', () {
+      final code = ChatErrorCode.fromCode('CHAT.USER.blocked');
+      expect(code, ChatErrorCode.blocked);
+      expect(code.httpStatus, 403);
+    });
+
     test('parse internal_error → internalError', () {
       final code = ChatErrorCode.fromCode('CHAT.SYSTEM.internal_error');
       expect(code, ChatErrorCode.internalError);
@@ -57,8 +75,8 @@ void main() {
       expect(code, ChatErrorCode.unknown);
     });
 
-    test('enum 总数 = 6 (5 已知 + 1 unknown)', () {
-      expect(ChatErrorCode.values.length, 6);
+    test('enum 总数 = 9 (8 已知 + 1 unknown)', () {
+      expect(ChatErrorCode.values.length, 9);
     });
 
     test('每个 code 可以 round-trip：fromCode(code) == self', () {
@@ -84,6 +102,15 @@ void main() {
 
     test('乱码字符串 → unknown', () {
       expect(ChatErrorCode.fromCode('abc.def.ghi'), ChatErrorCode.unknown);
+    });
+
+    test('defaultMessage 中文非空', () {
+      expect(ChatErrorCode.notMutual.defaultMessage, contains('互相关注'));
+      expect(
+        ChatErrorCode.greetingRequired.defaultMessage,
+        contains('打招呼'),
+      );
+      expect(ChatErrorCode.blocked.defaultMessage, contains('不能继续发送消息'));
     });
   });
 }

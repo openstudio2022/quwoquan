@@ -22,6 +22,7 @@ import (
 	rtobs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/runtime/repository"
+	rtsearch "quwoquan_service/runtime/search"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	"quwoquan_service/services/content-service/internal/generated"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
@@ -3081,7 +3082,15 @@ func (s *PostService) SearchPosts(
 	expectedIdentity := normalizeRequestedIdentity(req.Identity)
 	expectedType := normalizeRequestType(req.RequestedType)
 	posts := s.store.ListPublished(ctx, limit*8, req.Cursor)
-	results := make([]postmodel.PostSearchItemView, 0, limit)
+	type indexedPost struct {
+		post        postmodel.Post
+		categoryID  string
+		subCategory string
+		summary     string
+		coverURL    string
+	}
+	index := map[string]indexedPost{}
+	docs := make([]rtsearch.Document, 0, len(posts))
 	for _, stored := range posts {
 		post := *normalizePostForRead(&stored)
 		postIdentity := strings.TrimSpace(strings.ToLower(post.ContentIdentity))
@@ -3091,32 +3100,6 @@ func (s *PostService) SearchPosts(
 		if expectedType != "" {
 			viewType := mapContentTypeToViewType(post.ContentType)
 			if expectedIdentity != "moment" && viewType != expectedType {
-				continue
-			}
-		}
-		matchedField := ""
-		highlight := ""
-		if query != "" {
-			candidates := []struct {
-				field string
-				value string
-			}{
-				{field: "title", value: post.Title},
-				{field: "summary", value: post.Summary},
-				{field: "body", value: post.Body},
-				{field: "tagRefs", value: strings.Join(asStringSlice(post.TagRefs), " ")},
-				{field: "entityRefs", value: strings.Join(asStringSlice(post.EntityRefs), " ")},
-				{field: "authorDisplayName", value: post.AuthorDisplayNameSnapshot},
-				{field: "locationName", value: post.LocationName},
-			}
-			for _, candidate := range candidates {
-				if strings.Contains(strings.ToLower(strings.TrimSpace(candidate.value)), query) {
-					matchedField = candidate.field
-					highlight = strings.TrimSpace(candidate.value)
-					break
-				}
-			}
-			if matchedField == "" {
 				continue
 			}
 		}
@@ -3140,28 +3123,81 @@ func (s *PostService) SearchPosts(
 			req.CategoryID,
 			req.SubCategory,
 		)
+		index[post.ID] = indexedPost{
+			post:        post,
+			categoryID:  categoryID,
+			subCategory: subCategory,
+			summary:     summary,
+			coverURL:    coverURL,
+		}
+		visibility := strings.TrimSpace(post.Visibility)
+		if visibility == "" {
+			visibility = "public"
+		}
+		docs = append(docs, rtsearch.Document{
+			ObjectType:   rtsearch.ObjectTypeContentPost,
+			ObjectID:     post.ID,
+			Title:        post.Title,
+			Summary:      summary,
+			Body:         post.Body,
+			SourceDomain: "content",
+			ContentType:  post.ContentType,
+			Visibility:   visibility,
+			BadgeLabel:   "内容",
+			Tags:         asStringSlice(post.TagRefs),
+			Entities:     asStringSlice(post.EntityRefs),
+			Popularity:   float64(post.LikeCount + post.CommentCount + post.FavoriteCount + post.ShareCount),
+			Freshness:    post.PublishedAt,
+			Fields: map[string]string{
+				"tagRefs":           strings.Join(asStringSlice(post.TagRefs), " "),
+				"entityRefs":        strings.Join(asStringSlice(post.EntityRefs), " "),
+				"authorDisplayName": post.AuthorDisplayNameSnapshot,
+				"locationName":      post.LocationName,
+				"categoryId":        categoryID,
+				"subCategory":       subCategory,
+				"circleId":          primaryCircleID,
+			},
+		})
+	}
+	searchResp := rtsearch.Execute(rtsearch.Request{
+		Query:       query,
+		Mode:        rtsearch.ModeResult,
+		ObjectTypes: []string{rtsearch.ObjectTypeContentPost},
+		Limit:       limit,
+	}, docs)
+	results := make([]postmodel.PostSearchItemView, 0, len(searchResp.Hits))
+	for _, hit := range searchResp.Hits {
+		item, ok := index[hit.ObjectID]
+		if !ok {
+			continue
+		}
+		post := item.post
+		primaryCircleID := strings.TrimSpace(post.CircleId)
+		if primaryCircleID == "" {
+			circleIDs := asStringSlice(post.CircleIds)
+			if len(circleIDs) > 0 {
+				primaryCircleID = strings.TrimSpace(circleIDs[0])
+			}
+		}
 		results = append(results, postmodel.PostSearchItemView{
 			PostId:            post.ID,
 			ContentType:       post.ContentType,
 			ContentIdentity:   post.ContentIdentity,
 			Title:             post.Title,
-			Summary:           summary,
-			CoverUrl:          coverURL,
+			Summary:           item.summary,
+			CoverUrl:          item.coverURL,
 			AuthorId:          post.AuthorId,
 			AuthorDisplayName: post.AuthorDisplayNameSnapshot,
 			AuthorAvatarUrl:   post.AuthorAvatarUrlSnapshot,
 			CircleId:          primaryCircleID,
 			CircleName:        "",
-			CategoryId:        categoryID,
-			SubCategory:       subCategory,
+			CategoryId:        item.categoryID,
+			SubCategory:       item.subCategory,
 			LikeCount:         post.LikeCount,
-			HighlightText:     highlight,
-			MatchedField:      matchedField,
+			HighlightText:     hit.Snippet,
+			MatchedField:      hit.MatchedField,
 			PublishedAt:       post.PublishedAt,
 		})
-		if len(results) >= limit {
-			break
-		}
 	}
 	nextCursor := ""
 	if len(results) == limit {

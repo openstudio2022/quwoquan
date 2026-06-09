@@ -13,8 +13,7 @@ void recordChatPageVisit(
           1 => 'chat_messages_at_me',
           2 => 'chat_messages_at_xiaoqu',
           3 => 'chat_messages_unread',
-          4 => 'chat_messages_reminders',
-          _ => 'chat_messages_secret',
+          _ => 'chat_messages_reminders',
         }
       : switch (subTabIndex) {
           0 => 'chat_contacts_all',

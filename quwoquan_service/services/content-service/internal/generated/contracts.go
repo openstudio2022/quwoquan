@@ -24,6 +24,8 @@ const (
 	RouteGenerateArticleSummaryPath                     = "/v1/content/articles/summary:generate"
 	RouteGetAppConfigMethod                             = "GET"
 	RouteGetAppConfigPath                               = "/v1/config/app"
+	RouteGetAuthorImpactMethod                          = "GET"
+	RouteGetAuthorImpactPath                            = "/v1/content/sub-accounts/{subAccountId}/author-impact"
 	RouteGetCountersMethod                              = "GET"
 	RouteGetCountersPath                                = "/v1/content/posts/{postId}/counters"
 	RouteGetFeedMethod                                  = "GET"

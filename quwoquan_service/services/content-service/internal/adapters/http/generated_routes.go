@@ -55,6 +55,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "GetAppConfig":
 		h.handleNotImplemented(w, r, operation)
+	case "GetAuthorImpact":
+		h.handleGetAuthorImpact(w, r)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":
@@ -184,6 +186,7 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/share", operation: "SharePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
 	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
+	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/author-impact", operation: "GetAuthorImpact"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/received", operation: "ListProfileInteractionActivitiesReceived"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/sent", operation: "ListProfileInteractionActivitiesSent"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/posts", operation: "ListUserPosts"},

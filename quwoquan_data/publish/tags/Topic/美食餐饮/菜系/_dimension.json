@@ -1,0 +1,10 @@
+{
+  "label": "菜系",
+  "labelEn": "Cuisine",
+  "description": "按饮食文化流派分类；与品类（食物形态）和 Entity/地点/餐厅（经营业态）正交",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 40
+}

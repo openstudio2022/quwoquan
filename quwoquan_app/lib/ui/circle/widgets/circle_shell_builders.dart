@@ -49,7 +49,9 @@ extension _CircleShellBuilders on _CircleShellState {
     required String? coverUrl,
   }) {
     final circle = state.circleData;
-    final hasConversation = (circle?.conversationId ?? '').trim().isNotEmpty;
+    final defaultGroupConversationId =
+        state.defaultPublicGroup?.conversationId?.trim() ?? '';
+    final hasConversation = defaultGroupConversationId.isNotEmpty;
     final summarySurface = AppColors.iosProfileSurface(context);
     final summaryBorder = AppColors.iosSeparator(
       context,
@@ -139,7 +141,7 @@ extension _CircleShellBuilders on _CircleShellState {
                   ? null
                   : () => _gatedJoinCircle(context, notifier),
               onOpenChat: hasConversation
-                  ? () => _openChat(context, circle!.conversationId!)
+                  ? () => _openChat(context, defaultGroupConversationId)
                   : null,
             ),
             if (state.error != null && state.error!.trim().isNotEmpty) ...[
@@ -499,7 +501,8 @@ extension _CircleShellBuilders on _CircleShellState {
                       isDark: isDark,
                       child: SectionChat(
                         circleId: widget.circleId,
-                        conversationId: circle?.conversationId,
+                        conversationId:
+                            state.defaultPublicGroup?.conversationId,
                         isDark: isDark,
                       ),
                     ),

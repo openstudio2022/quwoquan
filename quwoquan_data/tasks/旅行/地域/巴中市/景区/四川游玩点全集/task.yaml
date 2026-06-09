@@ -1,0 +1,39 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/巴中市/景区/四川游玩点全集
+title: 巴中市景区四川游玩点全集
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 巴中市
+entityCategory: 景区
+parentTaskId: null
+status: draft
+scope:
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 光雾山
+  - entityType: 地点/景区
+    name: 诺水河
+  - entityType: 地点/景区
+    name: 米仓山
+  - entityType: 地点/景区
+    name: 恩阳古镇
+  entityTypes:
+  - 地点/景区
+  region: 巴中市
+provenance:
+  createdAt: '2026-05-15T00:00:00+08:00'
+  createdBy: task run --mode fanout
+content:
+  angles:
+  - 攻略
+  - 体验
+  - 环线攻略
+  - 自驾路书
+  - 周末短途
+  - 枢纽到达
+  - 跟团攻略
+  - 省钱攻略
+  quotas:
+    entityArticles: 4
+    routeArticles: 8

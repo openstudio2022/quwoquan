@@ -15,6 +15,7 @@ from _common.paths import (
     committed_task_progress,
     committed_task_spec,
     ensure_task_layout,
+    resolve_existing_task_shared_path,
     task_baseline_freeze_packet_path,
     task_catalog,
     task_shared_dir,
@@ -97,7 +98,11 @@ def handle_baseline(args: argparse.Namespace) -> None:
 
     task_spec_path = committed_task_spec(task_id)
     progress_path = committed_task_progress(task_id)
-    catalog_path = Path(args.catalog) if getattr(args, "catalog", None) else task_catalog(task_id)
+    catalog_path = (
+        Path(args.catalog)
+        if getattr(args, "catalog", None)
+        else resolve_existing_task_shared_path(task_id, "catalog.ndjson")
+    )
     spec_doc = _optional_path(getattr(args, "spec_doc", None)) or DEFAULT_SPEC_DOC
     design_doc = _optional_path(getattr(args, "design_doc", None)) or DEFAULT_DESIGN_DOC
     acceptance_doc = _optional_path(getattr(args, "acceptance_doc", None)) or DEFAULT_ACCEPTANCE_DOC

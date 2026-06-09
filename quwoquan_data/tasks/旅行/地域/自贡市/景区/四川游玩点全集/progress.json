@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/自贡市/景区/四川游玩点全集",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/自贡恐龙博物馆",
+        "地点/景区/燊海井",
+        "地点/景区/富顺文庙",
+        "地点/景区/仙市古镇"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

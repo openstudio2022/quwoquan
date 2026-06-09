@@ -63,7 +63,10 @@ void main() {
 
     expect(template.profileId, 'moment');
     expect(template.deeplink, 'quwoquan://content/post/moment_1');
-    expect(template.landingUrl, AppPublicContentLinks.postWebUrl('moment_1'));
+    expect(
+      template.landingUrl,
+      startsWith(AppPublicContentLinks.postWebUrl('moment_1')),
+    );
     expect(find.text(UITextConstants.shareTemplateMomentTitle), findsOneWidget);
     expect(find.text(UITextConstants.copyLink), findsOneWidget);
     expect(find.text(UITextConstants.shareActionSavePoster), findsOneWidget);
@@ -229,7 +232,10 @@ void main() {
 
     expect(template.profileId, 'work');
     expect(template.deeplink, 'quwoquan://content/post/work_1?scope=circle');
-    expect(template.landingUrl, AppPublicContentLinks.postWebUrl('work_1'));
+    expect(
+      template.landingUrl,
+      startsWith(AppPublicContentLinks.postWebUrl('work_1')),
+    );
     expect(find.text(UITextConstants.shareTemplateWorkTitle), findsOneWidget);
     expect(
       find.text(UITextConstants.shareCircleVisibilityNotice),

@@ -24,6 +24,10 @@ class PlatformCapabilities {
     required this.wideScreenLayout,
     required this.promotesAppInstall,
     required this.oneTapLogin,
+    required this.wechatNativeLogin,
+    required this.appleNativeLogin,
+    required this.systemCredentialLogin,
+    required this.passkeyLogin,
   });
 
   /// Local random-access file system (`dart:io File/Directory`). False on web.
@@ -72,6 +76,18 @@ class PlatformCapabilities {
   /// Carrier / vendor one-tap login SDK.
   final bool oneTapLogin;
 
+  /// WeChat native OpenSDK login.
+  final bool wechatNativeLogin;
+
+  /// Apple native sign-in / AuthenticationServices entry.
+  final bool appleNativeLogin;
+
+  /// System credential entry (Android Credential Manager / iOS Password AutoFill).
+  final bool systemCredentialLogin;
+
+  /// WebAuthn / passkey entry available for this platform.
+  final bool passkeyLogin;
+
   PlatformCapabilities copyWith({
     bool? hasLocalFileSystem,
     bool? mediaLibrary,
@@ -85,6 +101,10 @@ class PlatformCapabilities {
     bool? wideScreenLayout,
     bool? promotesAppInstall,
     bool? oneTapLogin,
+    bool? wechatNativeLogin,
+    bool? appleNativeLogin,
+    bool? systemCredentialLogin,
+    bool? passkeyLogin,
   }) {
     return PlatformCapabilities(
       hasLocalFileSystem: hasLocalFileSystem ?? this.hasLocalFileSystem,
@@ -100,6 +120,11 @@ class PlatformCapabilities {
       wideScreenLayout: wideScreenLayout ?? this.wideScreenLayout,
       promotesAppInstall: promotesAppInstall ?? this.promotesAppInstall,
       oneTapLogin: oneTapLogin ?? this.oneTapLogin,
+      wechatNativeLogin: wechatNativeLogin ?? this.wechatNativeLogin,
+      appleNativeLogin: appleNativeLogin ?? this.appleNativeLogin,
+      systemCredentialLogin:
+          systemCredentialLogin ?? this.systemCredentialLogin,
+      passkeyLogin: passkeyLogin ?? this.passkeyLogin,
     );
   }
 }
@@ -127,6 +152,10 @@ class CapabilityProfile {
     wideScreenLayout: false,
     promotesAppInstall: false,
     oneTapLogin: true,
+    wechatNativeLogin: true,
+    appleNativeLogin: true,
+    systemCredentialLogin: true,
+    passkeyLogin: true,
   );
 
   static const PlatformCapabilities web = PlatformCapabilities(
@@ -142,6 +171,10 @@ class CapabilityProfile {
     wideScreenLayout: true,
     promotesAppInstall: true,
     oneTapLogin: false,
+    wechatNativeLogin: false,
+    appleNativeLogin: false,
+    systemCredentialLogin: false,
+    passkeyLogin: false,
   );
 
   // HarmonyOS / OpenHarmony initial baseline. RTC / incoming-call / native
@@ -159,6 +192,10 @@ class CapabilityProfile {
     wideScreenLayout: false,
     promotesAppInstall: false,
     oneTapLogin: false,
+    wechatNativeLogin: false,
+    appleNativeLogin: false,
+    systemCredentialLogin: false,
+    passkeyLogin: false,
   );
 
   static const PlatformCapabilities desktop = PlatformCapabilities(
@@ -174,6 +211,10 @@ class CapabilityProfile {
     wideScreenLayout: true,
     promotesAppInstall: false,
     oneTapLogin: false,
+    wechatNativeLogin: false,
+    appleNativeLogin: false,
+    systemCredentialLogin: false,
+    passkeyLogin: false,
   );
 }
 
@@ -181,6 +222,7 @@ class CapabilityProfile {
 PlatformCapabilities platformCapabilitiesFor(AppPlatform platform) {
   switch (platform) {
     case AppPlatform.android:
+      return CapabilityProfile.mobile.copyWith(appleNativeLogin: false);
     case AppPlatform.ios:
       return CapabilityProfile.mobile;
     case AppPlatform.web:

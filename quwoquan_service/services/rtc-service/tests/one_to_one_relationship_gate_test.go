@@ -2,11 +2,12 @@ package tests
 
 import (
 	"context"
-	"strings"
 	"testing"
 
+	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/rtc-service/internal/application"
 	callsession "quwoquan_service/services/rtc-service/internal/domain/call_session"
+	"quwoquan_service/services/rtc-service/internal/generated"
 	rtccache "quwoquan_service/services/rtc-service/internal/infrastructure/cache"
 	"quwoquan_service/services/rtc-service/internal/infrastructure/persistence"
 )
@@ -44,8 +45,8 @@ func TestInitiateCall_OneToOne_RequiresMutual(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected not mutual gate error")
 	}
-	if !strings.Contains(err.Error(), "not_mutual") && !strings.Contains(err.Error(), "mutual") {
-		t.Fatalf("expected mutual gate error, got %v", err)
+	if got := rterr.NormalizeError(err).Code.String(); got != generated.ErrNotMutual.Error() {
+		t.Fatalf("expected %s, got %s", generated.ErrNotMutual.Error(), got)
 	}
 }
 
@@ -63,8 +64,8 @@ func TestInitiateCall_OneToOne_Blocked(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected blocked gate error")
 	}
-	if !strings.Contains(err.Error(), "blocked") {
-		t.Fatalf("expected blocked gate error, got %v", err)
+	if got := rterr.NormalizeError(err).Code.String(); got != generated.ErrBlocked.Error() {
+		t.Fatalf("expected %s, got %s", generated.ErrBlocked.Error(), got)
 	}
 }
 

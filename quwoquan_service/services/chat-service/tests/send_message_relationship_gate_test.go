@@ -6,6 +6,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 
+	rterr "quwoquan_service/runtime/errors"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/chat-service/internal/application"
 	chatcache "quwoquan_service/services/chat-service/internal/infrastructure/cache"
@@ -56,6 +57,13 @@ func TestSendMessage_Direct_RequiresRelationshipGate(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected send message gate error")
+	}
+	appErr, ok := err.(*rterr.AppError)
+	if !ok {
+		t.Fatalf("expected AppError, got %T (%v)", err, err)
+	}
+	if got := appErr.Code.String(); got != "CHAT.USER.not_mutual" {
+		t.Fatalf("code = %q, want CHAT.USER.not_mutual", got)
 	}
 }
 

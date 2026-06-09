@@ -10,12 +10,16 @@ from typing import Any
 from _common.io import read_json
 from _common.paths import (
     PUBLISH_ROOT,
+    TASK_SHARED_LEDGER_FILENAMES,
     committed_task_notes,
     committed_task_root,
     committed_task_runs_dir,
     iter_committed_task_specs,
+    iter_existing_task_legacy_entries,
     publish_data,
     task_id_from_committed_path,
+    task_root,
+    task_shared_dir,
 )
 from task.store import (
     append_run,
@@ -501,3 +505,54 @@ def hydrate(task_id: str) -> None:
         shutil.copytree(path.parent, dst)
         copied += 1
     print(f"[hydrate] {task_id}: 拉回 {copied} 项到 {dst_root}")
+
+
+def cleanup_runtime(task_id: str) -> dict[str, Any]:
+    """一次性收敛 task runtime 根目录：迁移 `_shared` 账本并清理历史镜像位。"""
+    root = task_root(task_id)
+    if not root.is_dir():
+        raise FileNotFoundError(f"task runtime root not found: {root}")
+    shared_dir = task_shared_dir(task_id)
+    shared_dir.mkdir(parents=True, exist_ok=True)
+
+    migrated: list[str] = []
+    removed: list[str] = []
+    skipped: list[str] = []
+
+    for filename in TASK_SHARED_LEDGER_FILENAMES:
+        legacy = root / filename
+        canonical = shared_dir / filename
+        if not legacy.exists():
+            continue
+        if canonical.exists():
+            skipped.append(f"{filename}: canonical exists, drop legacy")
+        else:
+            canonical.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(legacy), str(canonical))
+            migrated.append(filename)
+            continue
+        if legacy.is_dir():
+            shutil.rmtree(legacy, ignore_errors=True)
+        else:
+            legacy.unlink(missing_ok=True)
+        removed.append(filename)
+
+    for legacy in iter_existing_task_legacy_entries(task_id):
+        if legacy.name in TASK_SHARED_LEDGER_FILENAMES:
+            continue
+        if legacy.is_dir():
+            shutil.rmtree(legacy, ignore_errors=True)
+        else:
+            legacy.unlink(missing_ok=True)
+        removed.append(legacy.name)
+
+    remaining_legacy = [path.name for path in iter_existing_task_legacy_entries(task_id)]
+    result = {
+        "taskId": task_id,
+        "migrated": sorted(migrated),
+        "removed": sorted(set(removed)),
+        "skipped": skipped,
+        "remainingLegacyEntries": remaining_legacy,
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return result

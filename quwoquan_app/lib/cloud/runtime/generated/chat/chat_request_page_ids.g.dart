@@ -18,6 +18,7 @@ class ChatRequestPageIds {
     'ListContacts': 'chat.contacts.list',
     'ListConversationTimestamps': 'chat.conversation.timestamps',
     'ListConversations': 'chat.conversation.list',
+    'ListGroupCandidates': 'chat.list.group.candidates',
     'ListInbox': 'chat.list.inbox',
     'ListMembers': 'chat.member.list',
     'ListMessages': 'chat.message.list',
@@ -48,6 +49,7 @@ class ChatRequestPageIds {
   static const String listContacts = 'chat.contacts.list';
   static const String listConversationTimestamps = 'chat.conversation.timestamps';
   static const String listConversations = 'chat.conversation.list';
+  static const String listGroupCandidates = 'chat.list.group.candidates';
   static const String listInbox = 'chat.list.inbox';
   static const String listMembers = 'chat.member.list';
   static const String listMessages = 'chat.message.list';

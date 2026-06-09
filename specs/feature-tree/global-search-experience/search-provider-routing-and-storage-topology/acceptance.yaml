@@ -7,16 +7,33 @@ node:
   parent_domain_service: global-search-experience
   parent_business_capability: search-provider-routing-and-storage-topology
 scope:
-  summary: search provider routing and storage topology 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: search provider routing and storage topology 验收范围，覆盖站内搜索核心、小趣 LLM 按需检索 provider contract 与三引擎 GATE_BLOCK 消解。
+  in_scope:
+    - canonical search(request) tool-facing contract。
+    - 站内业务对象 provider registry 与统一 hit/citation envelope。
+    - 搜索核心的分词/拼音/同义词/纠错、相关性排序、敏感 query 阻断。
+    - assistant web_search/search/app_search alias 到 canonical search 的一致性。
+    - tag/entity 信号进入召回、排序、解释与 zero-result fallback。
+  out_of_scope:
+    - 全量外部搜索引擎集群选型与生产扩容。
+    - 未授权私有聊天内容跨用户检索。
 sit_acceptance:
   SIT1:
-    title: search provider routing and storage topology 能力 SIT
-    story_refs: []
+    title: canonical search provider routing 三引擎能力 SIT
+    story_refs:
+    - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md
+    - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md
+    - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
+    - specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/spec.md
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
-    performance_points: []
+    - content.post / circle.circle / entity.homepage / circle.group 至少走共享搜索核心并返回稳定 matchedField/highlight/reasons。
+    - web_search / app_search / search 工具不再输出 fake_* provider，而是 canonical_search envelope 或结构化 degrade signal。
+    - LLM 检索响应含 hits/citations/degradeSignals/provenance，citation 可追溯 objectType/objectId/provider。
+    - 敏感 query 被阻断，未实现或无权限 provider 不影响其他 provider 结果。
+    - acceptance 中声明的测试路径存在并可由本地门禁重复运行。
+    performance_points:
+    - suggest/result 首屏检索路径必须可记录 latency 与 degrade rate。
+    - provider 级限流/降级不得扩大为整页不可用。
     evidence:
       primary:
       - T2_module_interaction
@@ -24,9 +41,36 @@ sit_acceptance:
       supporting:
       - T1_static_contract
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - quwoquan_service/runtime/search/core_test.go
+      - quwoquan_service/runtime/search/retrieve_test.go
+      - quwoquan_service/runtime/search/retrieve_contract_test.go
+      - quwoquan_service/runtime/search/backend_switch_test.go
+      - quwoquan_service/runtime/search/native_backend_test.go
+      - quwoquan_service/runtime/search/es/query_builder_test.go
+      - quwoquan_service/runtime/search/es/indexer_test.go
+      - quwoquan_service/services/content-service/tests/post_search_contract_test.go
+      - quwoquan_service/services/circle-service/tests/circle_search_contract_test.go
+      - quwoquan_service/services/entity-service/tests/homepage_search_contract_test.go
+      - quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
+      - quwoquan_service/services/assistant-service/tests/search_xiaoqu_contract_test.go
+      recorded:
+      - quwoquan_service/runtime/search/core_test.go
+      - quwoquan_service/runtime/search/retrieve_test.go
+      - quwoquan_service/runtime/search/retrieve_contract_test.go
+      - quwoquan_service/runtime/search/backend_switch_test.go
+      - quwoquan_service/runtime/search/native_backend_test.go
+      - quwoquan_service/runtime/search/es/query_builder_test.go
+      - quwoquan_service/runtime/search/es/indexer_test.go
+      - quwoquan_service/services/content-service/internal/application/post_retrieve_test.go
+      - quwoquan_service/services/entity-service/tests/homepage_search_contract_test.go
+      - quwoquan_service/services/circle-service/tests/circle_search_contract_test.go
+      - quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
+      - quwoquan_service/services/assistant-service/internal/application/tool/registry_retrieve_contract_test.go
+      - quwoquan_service/services/assistant-service/internal/application/service_test.go
+      - quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
+      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+    status: implemented
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

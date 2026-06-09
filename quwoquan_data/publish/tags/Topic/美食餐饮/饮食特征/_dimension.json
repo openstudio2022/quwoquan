@@ -1,0 +1,10 @@
+{
+  "label": "饮食特征",
+  "labelEn": "Dietary Attribute",
+  "description": "菜品的饮食特殊属性标签",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 13
+}

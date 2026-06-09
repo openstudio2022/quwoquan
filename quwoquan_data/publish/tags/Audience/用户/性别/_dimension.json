@@ -1,0 +1,9 @@
+{
+  "label": "性别",
+  "labelEn": "Gender",
+  "description": "用户性别维度",
+  "maxDepth": 2,
+  "pathPolicy": "leaf-only",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

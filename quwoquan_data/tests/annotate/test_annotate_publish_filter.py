@@ -146,11 +146,11 @@ def test_publish_filter_discard_and_homepage(tmp_path_factory=None):
     assert "asset://bad" not in verdict.article_md
 
 
-def test_publish_filter_accepts_release_entity_pages_root():
+def test_publish_filter_accepts_release_entities_root():
     release_root = Path(tempfile.mkdtemp(prefix="pf_release_"))
-    entity_pages_root = release_root / "entity_pages"
-    (entity_pages_root / "地点" / "景区" / "有主页").mkdir(parents=True, exist_ok=True)
-    (entity_pages_root / "地点" / "景区" / "有主页" / "page.md").write_text("# 有主页\n", encoding="utf-8")
+    entities_root = release_root / "entities"
+    (entities_root / "地点" / "景区" / "有主页").mkdir(parents=True, exist_ok=True)
+    (entities_root / "地点" / "景区" / "有主页" / "page.md").write_text("# 有主页\n", encoding="utf-8")
 
     topic = Path(tempfile.mkdtemp(prefix="pf_topic_release_"))
     write_json(topic / "manifest.json", {
@@ -160,7 +160,7 @@ def test_publish_filter_accepts_release_entity_pages_root():
     })
     (topic / "article.md").write_text("# t\n\n正文。\n", encoding="utf-8")
 
-    verdict = apply_publish_filter(topic, release_root, entity_homepage_root=entity_pages_root)
+    verdict = apply_publish_filter(topic, release_root, entity_homepage_root=entities_root)
     assert verdict.publishable is True
     assert verdict.filtered_entities == ["/entity/地点/景区/无主页"]
     assert verdict.manifest["entityRefs"] == ["/entity/地点/景区/有主页"]

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/阿坝州/景区/四川游玩点全集",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/九寨沟",
+        "地点/景区/黄龙",
+        "地点/景区/四姑娘山",
+        "地点/景区/毕棚沟",
+        "地点/景区/达古冰川",
+        "地点/景区/莲宝叶则",
+        "地点/景区/汶川映秀震中遗址"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

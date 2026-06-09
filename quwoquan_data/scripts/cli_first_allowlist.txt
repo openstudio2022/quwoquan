@@ -18,6 +18,10 @@ verify/verify_content_quality.py
 verify/verify_content_semantics.py
 verify/verify_no_flat_roots.py
 verify/verify_cli_first.py
+# 扫描门：禁止正式链路复用测试专用正文骨架(agent_draft_kit)；__main__ 仅便于单独排障。
+verify/verify_no_runtime_draft_kit.py
+# golden set 门标定与度量（好稿/坏稿拦截率/误杀率）；__main__ 仅便于单独排障。
+verify/measure_gate_goldenset.py
 # 目录与资产证据链静态门：同时经 qwq-data verify(gate_verify→scan_batch) 暴露，__main__ 仅便于单独排障。
 verify/verify_directory_evidence_chain.py
 # 新增批次级资产零碰撞门（单批排障入口）。

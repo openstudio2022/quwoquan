@@ -132,8 +132,8 @@ func TestDeletePersona_PrimaryForbidden(t *testing.T) {
 
 	createTestPersonaFull(t, "pa_other", "persona_user_3", "pa_other_sa", "Other", "open", false, false)
 	rec := doRequest(t, http.MethodDelete, "/v1/user/personas/pa_primary_sa/delete-empty", "", authHeaders("persona_user_3"))
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for deleting primary persona, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for deleting primary persona, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

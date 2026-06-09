@@ -1,0 +1,203 @@
+version: 1
+description: >
+  ACK prod 工作负载三态可审计清单（Modular Monolith 单元 / 同集群独立 workload / 后续拆分单元）。
+  process_domain_mapping.yaml 仍是 domain 归属唯一真相源；本文件只补充“部署形态分类 + 标准 K8s 原语 + 是否已 wired 进 prod root”，
+  让 stackctl / workflow / ACK root 对同一 inventory 解释一致。
+
+# 三态定义：
+#   modular-monolith-unit  —— seed-box：单 Deployment 聚合多个 Go 领域（Fowler MonolithFirst）。
+#   standalone-workload    —— 从第一天即独立 Deployment/StatefulSet 的同集群 workload（不做 sidecar）。
+#   split-candidate        —— 当前并入 seed-box，将来按 Strangler Fig 可抽出的域级独立单元。
+deploy_kinds: [modular-monolith-unit, standalone-workload, split-candidate]
+
+# 平面划分（共享单 ACK 集群 + 共享节点池，靠 bin-packing 落到同一批节点）。
+planes:
+  application:
+    summary: 无状态 HTTP / 后台 worker，标准 Deployment + HPA + PDB。
+  edge-media:
+    summary: 实时长连接 / UDP / SFU / TURN，独立 workload（Deployment + UDP/hostNetwork 特性）。
+
+# 允许出现在业务 Deployment Pod 内的非业务辅助容器（sidecar 白名单）；
+# 领域职责一律不得以 sidecar 承载。
+sidecar_allowlist:
+  init_container_suffixes: ["-config-bootstrap"]
+  container_names: []
+
+# wired_to_prod_root：是否已接入 deploy/kustomization/<cloud>-prod root 并随 prod rollout 部署。
+#   true  —— 已有 K8s prod overlay 且进 root，prod rollout 直接覆盖（standard primitives 强校验）。
+#   false —— 进程映射已在 process_domain_mapping prod，但 K8s prod overlay 尚未落地（planned）；
+#            不进 prod rollout，kustomize_overlay 必须为 null。
+# 注：prod root（aliyun/volcengine/huaweicloud-prod）include 的每个 overlay
+#     都必须在此对应一个 wired_to_prod_root=true 的 workload（verify 脚本双向校验，防止 root 与 inventory 漂移）。
+workloads:
+  - name: seed-box
+    plane: application
+    deploy_kind: modular-monolith-unit
+    workload_resource: Deployment
+    primary_container: seed-box
+    domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+    kustomize_overlay: deploy/service/seed-box/kustomize/overlays/prod
+    prod_root_kustomizations:
+      - deploy/kustomization/aliyun-prod
+      - deploy/kustomization/volcengine-prod
+      - deploy/kustomization/huaweicloud-prod
+    wired_to_prod_root: true
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: Go Modular Monolith 发布单元；逻辑独立靠 /v1/<domain>/* 路由 + service.name + 配置段。
+
+  - name: recommendation-service
+    plane: application
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: recommendation-service
+    domains: [recommendation]
+    kustomize_overlay: deploy/service/recommendation-service/kustomize/overlays/prod
+    prod_root_kustomizations:
+      - deploy/kustomization/aliyun-prod
+      - deploy/kustomization/volcengine-prod
+      - deploy/kustomization/huaweicloud-prod
+    wired_to_prod_root: true
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: >
+      Python 跨技术栈服务，同集群独立 Deployment，不并入 Go 二进制、不做 co-located sidecar；
+      seed-box 经集群 Service DNS http://recommendation-service:8000 调用。
+
+  - name: entity-service
+    plane: application
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: entity-service
+    domains: [entity]
+    kustomize_overlay: null
+    prod_root_kustomizations: []
+    wired_to_prod_root: false
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: 进程映射已在 process_domain_mapping prod；K8s prod overlay 待补（planned，不进 prod rollout）。
+
+  - name: tag-service
+    plane: application
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: tag-service
+    domains: [tag]
+    kustomize_overlay: null
+    prod_root_kustomizations: []
+    wired_to_prod_root: false
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: 进程映射已在 process_domain_mapping prod；K8s prod overlay 待补（planned，不进 prod rollout）。
+
+  - name: product-ops-service
+    plane: application
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: product-ops-service
+    domains: [ops]
+    kustomize_overlay: null
+    prod_root_kustomizations: []
+    wired_to_prod_root: false
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: 进程映射已在 process_domain_mapping prod；K8s prod overlay 待补（planned，不进 prod rollout）。
+
+  - name: assistant-service
+    plane: application
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: assistant-service
+    domains: [assistant]
+    kustomize_overlay: null
+    prod_root_kustomizations: []
+    wired_to_prod_root: false
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: 进程映射已在 process_domain_mapping prod；K8s prod overlay 待补（planned，不进 prod rollout）。
+
+  - name: realtime-gateway
+    plane: edge-media
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: realtime-gateway
+    domains: [realtime]
+    kustomize_overlay: deploy/service/realtime-gateway/kustomize/overlays/prod
+    prod_root_kustomizations:
+      - deploy/kustomization/aliyun-prod
+      - deploy/kustomization/volcengine-prod
+      - deploy/kustomization/huaweicloud-prod
+    wired_to_prod_root: true
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: WebSocket 长连接，从第一天即独立 workload；已 wired 进三朵云 prod root。
+
+  - name: rtc-service
+    plane: edge-media
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: rtc-service
+    domains: [rtc]
+    kustomize_overlay: deploy/service/rtc-service/kustomize/overlays/prod
+    prod_root_kustomizations:
+      - deploy/kustomization/aliyun-prod
+      - deploy/kustomization/volcengine-prod
+      - deploy/kustomization/huaweicloud-prod
+    wired_to_prod_root: true
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: 信令服务，独立 workload；已 wired 进三朵云 prod root。
+
+  - name: livekit-sfu
+    plane: edge-media
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: livekit-sfu
+    domains: [media]
+    kustomize_overlay: deploy/service/livekit-sfu/kustomize/overlays/prod
+    prod_root_kustomizations:
+      - deploy/kustomization/aliyun-prod
+      - deploy/kustomization/volcengine-prod
+      - deploy/kustomization/huaweicloud-prod
+    wired_to_prod_root: true
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: >
+      SFU 媒体转发（UDP/hostNetwork 特性）。当前 prod overlay 渲染为 Deployment；
+      若后续需要稳定网络标识/持久状态，可演进为 StatefulSet（同时同步本字段与 verify）。
+
+  - name: coturn
+    plane: edge-media
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: coturn
+    domains: [turn]
+    kustomize_overlay: deploy/service/coturn/kustomize/overlays/prod
+    prod_root_kustomizations:
+      - deploy/kustomization/aliyun-prod
+      - deploy/kustomization/volcengine-prod
+      - deploy/kustomization/huaweicloud-prod
+    wired_to_prod_root: true
+    required_primitives: [Deployment, Service]
+    notes: TURN relay（UDP）；已 wired 进三朵云 prod root。无 HPA/PDB（relay 容量按副本固定）。
+
+# 后续拆分单元：当前并入 seed-box modular monolith，满足拆分触发阈值时按 Strangler Fig 抽出独立 Deployment。
+# 拆分不变量：域级 API path / route / Service DNS 名 / 端侧 runtime 注入 / 数据面归属保持不变。
+# 注：deploy/service/content-service、chat-service 存在历史独立 overlay，但未 include 进任何 prod root，
+#     当前仍由 seed-box 承载，属 split-candidate（未 wired）。
+split_candidates:
+  - domain: content
+    parent: seed-box
+    route_prefix: /v1/content/
+    invariant_service_dns: 保持对外 Service/route 不变
+  - domain: chat
+    parent: seed-box
+    route_prefix: /v1/chat/
+    invariant_service_dns: 保持对外 Service/route 不变
+  - domain: user
+    parent: seed-box
+    route_prefix: /v1/user/
+    invariant_service_dns: 保持对外 Service/route 不变
+  - domain: circle
+    parent: seed-box
+    route_prefix: /v1/circle/
+    invariant_service_dns: 保持对外 Service/route 不变
+  - domain: integration
+    parent: seed-box
+    route_prefix: /v1/integration/
+    invariant_service_dns: 保持对外 Service/route 不变
+  - domain: notification
+    parent: seed-box
+    route_prefix: /v1/notification/
+    invariant_service_dns: 保持对外 Service/route 不变

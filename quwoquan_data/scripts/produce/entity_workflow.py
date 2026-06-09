@@ -28,9 +28,11 @@ from _common.stage_reports import write_gate_report, write_repair_report, write_
 from _common.template_fingerprints import template_fingerprint_issues
 from _common.writing_pack import build_writing_pack, render_prompt_md
 from produce.route_workflow import (
+    aggregate_checks,
     analyze_route_ref,
     is_route_brief,
     resolve_carrier,
+    _attach_base_draft_text,
     _build_route_assets,
     _build_summary,
     _check_carrier_consistency,
@@ -106,14 +108,11 @@ def _kind_word(brief: Mapping[str, Any]) -> str:
 
 
 def _entity_section_intents(brief: Mapping[str, Any], name: str) -> list[str]:
+    """章节意图：跟随底稿自身结构，仅给最小建议（不再下发固定 6 段骨架）。"""
     kind = _kind_word(brief)
     return [
-        f"开篇：写为什么想去 {name}、出发前的犹豫或期待（{kind} 是否值得专门跑一趟），别先罗列信息。",
-        f"初见 {name}：第一眼的真实感受与节奏，而不是名气介绍。",
-        f"最打动我的：具体写一处让你愿意为 {name} 慢下来的细节（来自素材）。",
-        f"也得说说不足：诚实写一处劝退/扫兴点（来自素材），并给出心理准备建议。",
-        "去之前要知道的：把开放/门票/到达/时段等关键事实就地融入叙述，禁止另起清单块。",
-        f"收尾：用一处真实取舍判断自然收束（{name} 值不值、时间有限时怎么取舍就地融进叙述），禁止『它到底适合谁／适合谁／{name} 适合谁』之类的固定小标题。",
+        f"结构跟随底稿：保留底稿（关于 {name} 的那篇）自身的小标题与叙述顺序，只做轻量编辑。",
+        f"轻改重点：去语病/纠错别字/理顺语句/补全可回溯证据/去平台与版权痕迹；不要从零另写，也不要套用固定模板小标题（如「它到底适合谁」）。",
     ]
 
 
@@ -146,6 +145,7 @@ def build_entity_writing_pack(
         source_urls=quality_payload.get("sourceUrls") or [],
         source_paths=quality_payload.get("sourcePaths") or [],
     )
+    _attach_base_draft_text(task_id, batch_id, pack)
     write_writing_pack(task_id, batch_id, ref, pack)
     write_prompt(task_id, batch_id, ref, render_prompt_md(pack))
     existing = read_draft_meta(task_id, batch_id, ref)
@@ -279,16 +279,51 @@ def review_entity_draft(
         "issues": traceability,
         "suggestions": ["补齐 mustIncludeFacts，并确保门票/开放时间/海拔等数字能在 source 证据中找到。"] if traceability else [],
     }
+    from _common.base_draft import base_draft_fidelity_issues, load_base_draft_text
 
-    blocking: list[str] = []
-    suggestions: list[str] = []
-    for cname, result in checks.items():
-        if not result["passed"]:
-            blocking.extend(f"{cname}: {issue}" for issue in result["issues"])
-            suggestions.extend(result.get("suggestions") or [])
+    base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
+    fidelity = base_draft_fidelity_issues(body, base_text)
+    checks["baseDraftFidelity"] = {
+        "passed": not fidelity,
+        "issues": fidelity,
+        "suggestions": ["以底稿为基础适度加工：相似度过低则贴回底稿叙事；过高则进一步改写表达、去版权痕迹。"] if fidelity else [],
+    }
+    from _common import quality_gates as qg
+
+    wi_issues = qg.writing_intent_consistency_issues(body, brief.get("writingIntent"))
+    checks["writingIntentConsistency"] = {
+        "passed": not wi_issues,
+        "issues": wi_issues,
+        "suggestions": ["按 writingIntent 主线补齐结构（攻略=步骤/交通/票务/取舍；体验=适合人群/价值/取舍；游记=时间线/现场/复盘）。"] if wi_issues else [],
+    }
+    banned_terms = [str(b) for b in (pack.get("bannedRegisterTerms") or brief.get("bannedRegisterTerms") or [])]
+    reg_issues = qg.register_lexicon_issues(body, banned_terms)
+    checks["registerMismatch"] = {
+        "passed": not reg_issues,
+        "issues": reg_issues,
+        "suggestions": ["改用该垂类合适的语域（如户外景区禁'看展/展厅/展陈'），由 SOP 词表约束。"] if reg_issues else [],
+    }
+    from _common import public_contacts as pc
+
+    allowed_contacts = [str(n) for n in (pack.get("allowedContactNumbers") or brief.get("allowedContactNumbers") or [])]
+    contact_issues = qg.contact_info_issues(body, allowed_numbers=pc.allowed_numbers(allowed_contacts))
+    checks["contactInfo"] = {
+        "passed": not contact_issues,
+        "issues": contact_issues,
+        "suggestions": ["删除私人电话/微信/QQ；仅保留紧急/公共服务短号或 source 核实的景区官方接待电话。"] if contact_issues else [],
+    }
+    heading_extra = [str(t) for t in (pack.get("mechanicalHeadingTerms") or brief.get("mechanicalHeadingTerms") or [])]
+    heading_issues = qg.mechanical_heading_issues(body, extra_terms=heading_extra)
+    checks["mechanicalHeading"] = {
+        "passed": not heading_issues,
+        "issues": heading_issues,
+        "suggestions": ["把纯清单式小标题改写得自然、有视角；优先沿用底稿已有小标题，不要套统一模板。"] if heading_issues else [],
+    }
+
+    blocking, suggestions, soft_failed = aggregate_checks(checks)
     human_review_required = bool(checks.get("imageGate", {}).get("humanReview"))
     decision = "approved" if not blocking else "revision_needed"
-    quality_score = max(0.0, 92.0 - len(blocking) * 8.0)
+    quality_score = max(0.0, 92.0 - len(blocking) * 8.0 - soft_failed * 3.0)
     payload = {
         "topicId": ref,
         "decision": decision,
@@ -360,17 +395,29 @@ def _entity_review_checks(
             article, brief, style_family=style_family, opening_strategy=opening_strategy
         )
         checks["crossArticleSimilarity"] = _check_cross_article_similarity(task_id, batch_id, ref, article)
+        checks["sectionShape"] = _check_section_shape(article)
     return checks
 
 
 def _check_entity_coverage(article: str, brief: Mapping[str, Any], evidence_bundle: Mapping[str, Any]) -> dict[str, Any]:
+    """HARD：实体必须在正文出现（事实完整性）。结构形态另由软门 sectionShape 评估。"""
     name = _entity_name(evidence_bundle, brief)
     issues: list[str] = []
     if name and name not in article:
         issues.append(f"entity '{name}' not mentioned in article")
+    return {
+        "passed": not issues,
+        "issues": issues,
+        "suggestions": ["正文须真正写到该实体，而非只在标题出现。"] if issues else [],
+    }
+
+
+def _check_section_shape(article: str) -> dict[str, Any]:
+    """SOFT：分节形态建议（章节过少/雷同）——不阻断，结构以底稿为准。"""
+    issues: list[str] = []
     headings = re.findall(r"(?m)^##\s", article)
-    if len(headings) < 3:
-        issues.append(f"too few sections ({len(headings)} < 3)")
+    if len(headings) < 2:
+        issues.append(f"too few sections ({len(headings)} < 2)")
     bodies = _section_bodies(article)
     for i in range(len(bodies)):
         for j in range(i + 1, len(bodies)):
@@ -380,7 +427,7 @@ def _check_entity_coverage(article: str, brief: Mapping[str, Any], evidence_bund
     return {
         "passed": not issues,
         "issues": issues,
-        "suggestions": ["围绕单实体补足初见/亮点/不足/实用提醒等差异化分节。"] if issues else [],
+        "suggestions": ["如底稿本身分节较细，可保留；过少或雷同时适度补足差异化分节。"] if issues else [],
     }
 
 
@@ -390,6 +437,8 @@ def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks["evidenceQuality"]["passed"]:
         return "download"
     if not checks.get("factTraceability", {"passed": True})["passed"]:
+        return "agent_compose"
+    if not checks.get("baseDraftFidelity", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks["provenanceRewrite"]["passed"]:
         return "agent_compose"

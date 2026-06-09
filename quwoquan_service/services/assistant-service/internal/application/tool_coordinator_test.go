@@ -49,6 +49,14 @@ func TestDefaultToolCoordinatorExecutesCloudToolAdapters(t *testing.T) {
 			if len(execution.Completed.Result) == 0 {
 				t.Fatalf("missing tool result")
 			}
+			if provider, _ := execution.Completed.Result["provider"].(string); provider == "fake_web_search" || provider == "fake_unified_search" {
+				t.Fatalf("tool %s must use canonical provider, got %q", toolName, provider)
+			}
+			if toolName == "app_search" {
+				if _, ok := execution.Completed.Result["provenance"].(map[string]any); !ok {
+					t.Fatalf("app_search missing canonical provenance: %#v", execution.Completed.Result)
+				}
+			}
 		})
 	}
 }

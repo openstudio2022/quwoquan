@@ -14,7 +14,7 @@ contracts/metadata/
 ├── README.md                     # 本文件
 │
 ├── _shared/                      # 跨聚合共享定义
-│   ├── tag_taxonomy.yaml         # 标签分类体系（4 域：用户/内容/社交/圈子）
+│   ├── domain_taxonomy.yaml      # 统一领域路由表（圈子频道/助理领域/推荐场景；user_tag_ref 桥接路径制 tagRef）
 │   ├── types.yaml                # 共享类型（GeoPoint/Enum/Classification/LogPolicy）
 │   ├── redis_keyspace.yaml       # Redis 全局键空间设计
 │   └── test_infra.yaml           # 契约测试基础设施配置（测试引擎 + 数据管理）
@@ -191,7 +191,8 @@ aggregate.yaml / entity.yaml ──→ codegen（struct/repo/handler/migration�
 fields.yaml                  ──→ codegen（OpenAPI schema / 拦截链 / mock 生成）
                               ──→ 日志脱敏 / 接口过滤 / 推荐特征标记
                               ──→ 契约测试 mock 数据生成
-_shared/tag_taxonomy.yaml    ──→ 标签服务 / 画像聚合 / 推荐引擎
+_shared/domain_taxonomy.yaml ──→ 领域路由（圈子频道 / 助理领域 / 推荐场景）
+                              ──→ 标签真相源 = 数据工程 publish/v1/tags（路径制 tagRef，tag-service 只读消费）
 events.yaml                  ──→ Event Store / MQ 路由 / Projector 注册
                               ──→ 契约测试事件发布断言
 storage.yaml                 ──→ codegen（migration / 索引脚本）/ 存储适配器

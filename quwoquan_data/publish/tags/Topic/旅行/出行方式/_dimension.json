@@ -1,0 +1,10 @@
+{
+  "label": "出行方式",
+  "labelEn": "Transportation",
+  "description": "旅行中的交通载具与移动方式",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 13
+}

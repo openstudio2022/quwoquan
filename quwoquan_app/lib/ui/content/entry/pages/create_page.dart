@@ -45,12 +45,18 @@ class CreatePage extends ConsumerStatefulWidget {
     this.initialAction,
     this.initialTabKey,
     this.initialHomepage,
+    this.initialCircleId,
+    this.initialCircleName,
     this.initialDraftId,
   });
 
   final EditorStartAction? initialAction;
   final String? initialTabKey;
   final HomepageCanonicalReference? initialHomepage;
+
+  /// 上下文化创作锚点：从圈子页「向圈子投稿」进入时预填，注入 PublishSettings.circleIds。
+  final String? initialCircleId;
+  final String? initialCircleName;
 
   /// 从全局「从草稿继续」进入时由路由 query 注入，与本地清单 id 对齐。
   final String? initialDraftId;
@@ -146,13 +152,31 @@ class _CreatePageState extends ConsumerState<CreatePage> {
         if (widget.initialAction != null) {
           notifier.setStartAction(widget.initialAction);
         }
-        if (widget.initialHomepage != null) {
-          notifier.setSettings(
-            ref
-                .read(createEditorProvider)
-                .settings
-                .copyWith(homepage: widget.initialHomepage),
-          );
+        final anchorCircleId = widget.initialCircleId?.trim();
+        if (widget.initialHomepage != null ||
+            (anchorCircleId != null && anchorCircleId.isNotEmpty)) {
+          var nextSettings = ref.read(createEditorProvider).settings;
+          if (widget.initialHomepage != null) {
+            nextSettings = nextSettings.copyWith(
+              homepage: widget.initialHomepage,
+            );
+          }
+          if (anchorCircleId != null && anchorCircleId.isNotEmpty) {
+            final anchorCircleName = widget.initialCircleName?.trim();
+            nextSettings = nextSettings.copyWith(
+              isPublic: true,
+              circleIds: <String>{
+                ...nextSettings.circleIds,
+                anchorCircleId,
+              }.toList(growable: false),
+              circleNames: <String>[
+                ...nextSettings.circleNames,
+                if (anchorCircleName != null && anchorCircleName.isNotEmpty)
+                  anchorCircleName,
+              ],
+            );
+          }
+          notifier.setSettings(nextSettings);
         }
         _syncControllersFromState(ref.read(createEditorProvider));
         await _runAfterOverlayDismissed(_applyInitialActionIfNeeded);

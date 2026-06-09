@@ -1,0 +1,10 @@
+{
+  "label": "地理",
+  "labelEn": "Geography",
+  "description": "地理维度：行政区（5层）由 bootstrap_admin_regions.py 生成；自然地标实例由 bootstrap_geo_landmarks.py 生成；本脚本生成骨架",
+  "maxDepth": 5,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 600
+}

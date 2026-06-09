@@ -1,0 +1,10 @@
+{
+  "label": "内容角度",
+  "labelEn": "Content Angle",
+  "description": "内容的创作切入视角，14个互斥视角，每篇内容至少标注一个",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 120
+}

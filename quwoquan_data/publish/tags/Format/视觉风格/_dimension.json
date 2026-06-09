@@ -1,0 +1,10 @@
+{
+  "label": "视觉风格",
+  "labelEn": "Visual Style",
+  "description": "摄影摄像的视觉调性与后期风格，面向图片/视频类内容",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 45
+}

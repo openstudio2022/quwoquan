@@ -23,6 +23,41 @@ extension _ProfileShellBuilders on _ProfileShellState {
     );
   }
 
+  Future<void> _gatedSendGreeting(
+    BuildContext context,
+    ProfileNotifier notifier,
+  ) async {
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      try {
+        await notifier.sendGreeting();
+        if (context.mounted) {
+          AppToast.show(context, UITextConstants.chatGreetingSent);
+        }
+      } catch (error) {
+        if (!context.mounted) {
+          return;
+        }
+        final resolved = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        );
+        await AppActionErrorFeedback.show(context, semantic: resolved);
+      }
+      return;
+    }
+    ref
+        .read(authContinuationProvider.notifier)
+        .set(GreetProfileContinuation(subAccountId: widget.userId));
+    await requireLogin(
+      ref,
+      context,
+      AuthGateReason.greet,
+      dismissFallback: AppRoutePaths.home,
+    );
+  }
+
   /// 关注：游客显示「未关注」，点击先登记续接再引导登录；已登录直接 toggle。
   void _gatedToggleFollow(BuildContext context, ProfileNotifier notifier) {
     if (ref.read(authSessionControllerProvider).isAuthenticated) {
@@ -35,16 +70,39 @@ extension _ProfileShellBuilders on _ProfileShellState {
     unawaited(requireLogin(ref, context, AuthGateReason.follow));
   }
 
-  /// 私信：经 `/chat/*` 路由门保障，按钮层显式带统一 reason，未登录引导登录后进入会话。
-  void _gatedOpenMessage(BuildContext context) {
+  /// 私信：创建或复用正式 1v1 会话后再进入聊天详情。
+  Future<void> _gatedOpenMessage(
+    BuildContext context,
+    ProfileNotifier notifier,
+  ) async {
     if (ref.read(authSessionControllerProvider).isAuthenticated) {
-      context.push(AppRoutePaths.chatDetail(id: widget.userId));
+      try {
+        final created = await notifier.openOrCreateDirectConversation();
+        if (!context.mounted || created.conversationId.isEmpty) {
+          return;
+        }
+        context.push(AppRoutePaths.chatDetail(id: created.conversationId));
+      } catch (error) {
+        if (!context.mounted) {
+          return;
+        }
+        final resolved = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        );
+        await AppActionErrorFeedback.show(context, semantic: resolved);
+      }
       return;
     }
-    openLoginPage(
+    ref
+        .read(authContinuationProvider.notifier)
+        .set(OpenDirectConversationContinuation(subAccountId: widget.userId));
+    await requireLogin(
+      ref,
       context,
-      reasonName: AuthGateReason.sendMessage.name,
-      redirect: AppRoutePaths.chatDetail(id: widget.userId),
+      AuthGateReason.sendMessage,
       dismissFallback: AppRoutePaths.home,
     );
   }
@@ -65,6 +123,33 @@ extension _ProfileShellBuilders on _ProfileShellState {
     }
     if (!ref.read(profileNotifierProvider(widget.userId)).isFollowing) {
       unawaited(notifier.toggleFollow());
+    }
+  }
+
+  void maybeResumeRelationshipContinuations(
+    BuildContext context,
+    ProfileNotifier notifier,
+  ) {
+    final direct = ref
+        .read(authContinuationProvider.notifier)
+        .take<OpenDirectConversationContinuation>();
+    if (direct != null) {
+      if (direct.subAccountId != widget.userId) {
+        ref.read(authContinuationProvider.notifier).set(direct);
+      } else {
+        unawaited(_gatedOpenMessage(context, notifier));
+      }
+    }
+
+    final greet = ref
+        .read(authContinuationProvider.notifier)
+        .take<GreetProfileContinuation>();
+    if (greet != null) {
+      if (greet.subAccountId != widget.userId) {
+        ref.read(authContinuationProvider.notifier).set(greet);
+      } else {
+        unawaited(_gatedSendGreeting(context, notifier));
+      }
     }
   }
 
@@ -145,8 +230,8 @@ extension _ProfileShellBuilders on _ProfileShellState {
                     ? () => context.push(AppRoutePaths.profilePersonas)
                     : null,
                 onFollow: () => _gatedToggleFollow(context, notifier),
-                onMessage: () => _gatedOpenMessage(context),
-                onGreet: () => _showGreetDialog(context),
+                onMessage: () => unawaited(_gatedOpenMessage(context, notifier)),
+                onGreet: () => unawaited(_gatedSendGreeting(context, notifier)),
                 onVoiceCall: () => _startCall(context, 'voice'),
                 onVideoCall: () => _startCall(context, 'video'),
               ),
@@ -499,25 +584,25 @@ extension _ProfileShellBuilders on _ProfileShellState {
       context,
       title: '更多操作',
       sections: const [
-        AppActionSheetSection<_ProfileMoreAction>(
+        const AppActionSheetSection<_ProfileMoreAction>(
           items: [
             AppActionSheetItem<_ProfileMoreAction>(
               value: _ProfileMoreAction.share,
-              label: '分享',
+              label: UITextConstants.share,
               icon: CupertinoIcons.share,
             ),
           ],
         ),
-        AppActionSheetSection<_ProfileMoreAction>(
+        const AppActionSheetSection<_ProfileMoreAction>(
           items: [
             AppActionSheetItem<_ProfileMoreAction>(
               value: _ProfileMoreAction.block,
-              label: '拉黑',
+              label: UITextConstants.profileBlockUser,
               icon: CupertinoIcons.person_crop_circle_badge_xmark,
             ),
             AppActionSheetItem<_ProfileMoreAction>(
               value: _ProfileMoreAction.report,
-              label: '举报',
+              label: UITextConstants.report,
               icon: CupertinoIcons.flag,
               isDestructive: true,
             ),
@@ -528,11 +613,84 @@ extension _ProfileShellBuilders on _ProfileShellState {
     if (!context.mounted || action == null) return;
     switch (action) {
       case _ProfileMoreAction.share:
-        AppToast.show(context, '分享能力待接入');
+        AppToast.show(context, UITextConstants.shareComingSoon);
       case _ProfileMoreAction.block:
-        AppToast.show(context, '拉黑能力待接入');
+        _gatedBlockUser(context);
       case _ProfileMoreAction.report:
-        AppToast.show(context, '举报能力待接入');
+        _gatedReportUser(context);
     }
+  }
+
+  /// 拉黑用户：登录门保障 + 二次确认，经 [blockRepositoryProvider] 走 Remote。
+  void _gatedBlockUser(BuildContext context) {
+    runWhenLoggedIn(ref, context, AuthGateReason.report, () async {
+      final confirmed = await showAppActionSheet<bool>(
+        context,
+        title: UITextConstants.profileBlockConfirmTitle,
+        message: UITextConstants.profileBlockConfirmMessage,
+        sections: const [
+          AppActionSheetSection<bool>(
+            items: [
+              AppActionSheetItem<bool>(
+                value: true,
+                label: UITextConstants.profileBlockUser,
+                icon: CupertinoIcons.person_crop_circle_badge_xmark,
+                isDestructive: true,
+              ),
+            ],
+          ),
+        ],
+      );
+      if (confirmed != true || !context.mounted) return;
+      try {
+        await ref.read(blockRepositoryProvider).blockUser(widget.userId);
+        if (context.mounted) {
+          AppToast.show(context, UITextConstants.profileBlockSuccess);
+        }
+      } catch (e) {
+        if (context.mounted) {
+          AppToast.show(context, UITextConstants.operationFailed);
+        }
+      }
+    });
+  }
+
+  /// 举报用户：登录门保障 + 原因选择，经 [reportRepositoryProvider] 走 Remote。
+  void _gatedReportUser(BuildContext context) {
+    runWhenLoggedIn(ref, context, AuthGateReason.report, () async {
+      final reason = await showAppActionSheet<_ProfileReportReason>(
+        context,
+        title: UITextConstants.profileReportReasonTitle,
+        sections: [
+          AppActionSheetSection<_ProfileReportReason>(
+            items: _ProfileReportReason.values
+                .map(
+                  (r) => AppActionSheetItem<_ProfileReportReason>(
+                    value: r,
+                    label: r.label,
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ],
+      );
+      if (reason == null || !context.mounted) return;
+      try {
+        await ref
+            .read(reportRepositoryProvider)
+            .createReport(
+              targetId: widget.userId,
+              targetType: 'user',
+              reason: reason.code,
+            );
+        if (context.mounted) {
+          AppToast.show(context, UITextConstants.commentReportSubmitted);
+        }
+      } catch (e) {
+        if (context.mounted) {
+          AppToast.show(context, UITextConstants.operationFailed);
+        }
+      }
+    });
   }
 }

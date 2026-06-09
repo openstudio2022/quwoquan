@@ -51,8 +51,7 @@ from _common.paths import (  # noqa: E402
     task_data,
     task_entities,
     task_tags,
-    task_entity_pages,
-    task_graph,
+    task_shared_dir,
 )
 from _common.source_unit import resolve_entity_object_dir  # noqa: E402
 from task import run as run_mod  # noqa: E402
@@ -310,15 +309,14 @@ def test_publish_stage_materializes_task_inputs_and_release():
     assert result.status == "done", result.message
     assert task_entities(task_id).exists()
     assert task_tags(task_id).exists()
-    assert task_entity_pages(task_id).is_dir()
-    assert (task_graph(task_id) / "relations.ndjson").exists()
+    assert task_shared_dir(task_id).is_dir()
     release_id = run_mod._workflow_release_id(task_id, batch_id)
     release_root_dir = release_root(release_id)
     assert (release_root_dir / "release_manifest.json").exists()
-    assert (release_root_dir / "entities" / "entities.ndjson").exists()
-    assert (release_root_dir / "tags" / "tags.ndjson").exists()
-    assert (release_root_dir / "entity_pages").is_dir()
-    assert (release_root_dir / "graph" / "relations.ndjson").exists()
+    assert (release_root_dir / "entities" / "地点" / "景区" / _EID / "page.md").exists()
+    assert not (release_root_dir / "entity_pages").exists()
+    assert not (release_root_dir / "graph").exists()
+    assert not (release_root_dir / "tags").exists()
     assert (release_root_dir / "posts" / "article" / "攻略" / _EID / "001" / "5.review" / "review_ledger.json").exists()
 
 

@@ -106,6 +106,7 @@ type metricSnapshot struct {
 	Unit        string  `json:"unit"`
 	Status      string  `json:"status"`
 	Trend       string  `json:"trend"`
+	Source      string  `json:"source,omitempty"`
 	Description string  `json:"description"`
 }
 
@@ -397,12 +398,31 @@ func newServerMux(service *productService, healthChecker *rthealth.Checker) *htt
 		}
 		service.handleProjectionSummary(w, r)
 	})
+	mux.HandleFunc("/v1/control-plane/product/triage/summary", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleGetTriageSummary(w, r)
+	})
 	mux.HandleFunc("/v1/control-plane/product/metrics/l1l4", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleGetL1L4Metrics(w, r)
+		scope := l1l4MetricsScope{
+			Environment: strings.TrimSpace(r.URL.Query().Get("env")),
+			Cluster:     strings.TrimSpace(r.URL.Query().Get("cluster")),
+			Service:     strings.TrimSpace(r.URL.Query().Get("service")),
+			InstanceID:  strings.TrimSpace(r.URL.Query().Get("instance")),
+			Level:       strings.TrimSpace(r.URL.Query().Get("level")),
+		}
+		payload, err := service.buildL1L4MetricsResponse(r.Context(), scope)
+		if err != nil {
+			writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, payload)
 	})
 	return mux
 }

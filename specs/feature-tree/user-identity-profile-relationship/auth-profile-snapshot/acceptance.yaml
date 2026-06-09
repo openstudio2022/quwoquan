@@ -7,24 +7,39 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: auth-profile-snapshot
 scope:
-  summary: auth profile snapshot 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 认证、refresh token、owner/subAccount 快照与凭证管理的能力级 SIT 验收。
+  in_scope:
+  - OTP/手机号登录、一键登录、匿名登录、refresh token、logout
+  - owner 级凭证列表、绑定/解绑、最后一个凭证保护
+  - ownerId / activeSub / accountState / identityOrigin 等登录结果快照一致性
+  out_of_scope:
+  - 账号注销、恢复申诉、数据导出
+  - Web 宽屏登录门 UI 细节
 sit_acceptance:
   SIT1:
-    title: auth profile snapshot 能力 SIT
-    story_refs: []
+    title: 登录结果快照、凭证管理与会话状态机端云一致
+    story_refs:
+    - auth-token-lifecycle--token-issue-refresh-revoke
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
-    performance_points: []
+    - LoginWithPhone / LoginOneTap / LoginAnonymous / RefreshToken / Logout 的 request/response 字段与 metadata、App DTO、服务端行为一致。
+    - accessToken、refreshToken、ownerId、activeSub、accountState、identityOrigin 在 App Session 与服务端 contract 中同源。
+    - ListCredentials / BindCredential / UnbindCredential 的鉴权模式、错误码与“最后一个凭证禁止解绑”约束可验证。
+    performance_points:
+    - refresh token 轮换成功路径 P95 <= 800ms
+    - OTP 登录成功到 session 写入完成 P95 <= 2s
     evidence:
       primary:
-      - T2_module_interaction
       - T3_app_api_integration
+      - T2_module_interaction
       supporting:
       - T1_static_contract
     tests:
-      planned: []
+      planned:
+      - quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - quwoquan_service/services/user-service/tests/credential_contract_test.go
+      - quwoquan_app/test/core/auth/auth_session_store_test.dart
+      - quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
       recorded: []
     status: pending
 execution:

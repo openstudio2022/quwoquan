@@ -13,8 +13,14 @@ api_routes:
     operation: SearchXiaoquResults
     description: 小趣搜网络结果 tab 查询（返回 AI 总结与引用，不直接创建完整对话页 UI）
     request_entity: AssistantSearchXiaoquRequestWire
-    request_fields: [userQuery, searchIntensity, subAccountId, personaContextVersion, sourceSurfaceId, fromGlobalSearch]
+    request_fields: [userQuery, searchIntensity, subAccountId, personaContextVersion, sourceSurfaceId, fromGlobalSearch, contextSnapshot]
     response_entity: AssistantSearchResultView
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/assistant/conversations
@@ -22,12 +28,24 @@ api_routes:
     description: M4 云端 Assistant Service Shell 创建连续对话
     request_fields: [summary]
     response_entity: AssistantConversation
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/assistant/conversations/{conversationId}
     operation: GetAssistantConversation
     description: M4 云端 Assistant Service Shell 读取连续对话
     response_entity: AssistantConversation
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/assistant/conversations/{conversationId}/turns
@@ -35,26 +53,50 @@ api_routes:
     description: M4 云端 Assistant Service Shell 创建对话轮次
     request_fields: [turnType, skillId, domainId, input, trigger]
     response_entity: AssistantTurnEnvelope
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/assistant/turns/{turnId}
     operation: GetAssistantTurn
     description: M4 云端 Assistant Service Shell 读取对话轮次
     response_entity: AssistantTurnEnvelope
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/assistant/turns/{turnId}/stream
     operation: StreamAssistantTurn
     description: M4 云端 Assistant Service Shell typed fake stream
     request_fields: []
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/assistant/page-context
     operation: ReportPageContext
     description: 页面上下文上报
     request_entity: AssistantReportPageContextRequestWire
-    request_fields: [pageType, businessObjects, userAction, userActions, subAccountId, personaContextVersion]
+    request_fields: [pageType, businessObjects, contextSnapshot, userAction, userActions, subAccountId, personaContextVersion]
     response_entity: PageContextAck
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/assistant/personalization
@@ -62,6 +104,12 @@ api_routes:
     description: 私助半屏入口的欢迎语、chips 与建议行云下发
     query_params: [source, pageType, tab, dimension, objectId, objectType, experienceLevel]
     response_entity: AssistantEntryPersonalizationView
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/assistant/suggested-actions
@@ -69,18 +117,36 @@ api_routes:
     description: 获取当前页面建议操作
     query_params: [pageType, objectId]
     response_entity: SuggestedActionListView
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/assistant/learning/events
     operation: ReportInteractionEvent
     description: 交互事件上报
     request_entity: InteractionEvent
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/assistant/learning/scorecards
     operation: ReportScorecard
     description: 评分卡上报
     request_entity: Scorecard
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/assistant/policy
@@ -101,6 +167,12 @@ api_routes:
     description: M8 主动式 Skill 订阅列表
     query_params: [limit, status]
     response_entity: SkillSubscriptionListView
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/assistant/skill-subscriptions
@@ -108,12 +180,24 @@ api_routes:
     description: M8 创建主动式 Skill 订阅
     request_fields: [skillId, domainId, tagRefs, searchQueryPlan, trigger, destination]
     response_entity: SkillSubscription
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/assistant/skill-subscriptions/{subscriptionId}
     operation: GetSkillSubscription
     description: M8 读取主动式 Skill 订阅详情
     response_entity: SkillSubscription
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: PATCH
     path: /v1/assistant/skill-subscriptions/{subscriptionId}/status
@@ -121,6 +205,12 @@ api_routes:
     description: M8 暂停、恢复或归档主动式 Skill 订阅
     request_fields: [status]
     response_entity: SkillSubscription
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/assistant/skill-subscriptions/cron/tick
@@ -128,6 +218,12 @@ api_routes:
     description: M8 本地测试或内部调度触发 cron 扫描
     request_fields: [now]
     response_entity: SkillSubscriptionCronTickResult
+    security:
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 
   - method: GET
     path: /v1/assistant/tasks
@@ -135,6 +231,12 @@ api_routes:
     description: 用户助手任务/待办列表（日程 tab 等）
     query_params: [limit, status]
     response_entity: AssistantUserTaskListView
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/assistant/memories
@@ -142,22 +244,46 @@ api_routes:
     description: 用户助手记忆条目列表（摘要级）
     query_params: [limit]
     response_entity: AssistantUserMemoryListView
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/assistant/ops/learning-summary
     operation: GetLearningOpsSummary
     description: 运营侧读取指定用户的学习画像摘要与低分指标下钻摘要
     response_entity: AssistantLearningOpsSummaryView
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 
   - method: POST
     path: /v1/assistant/skills/{skillId}/consent
     operation: GrantSkillConsent
     description: 授权 Skill
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: DELETE
     path: /v1/assistant/skills/{skillId}/consent
     operation: RevokeSkillConsent
     description: 撤销 Skill 授权
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
 consumers:
   - name: app

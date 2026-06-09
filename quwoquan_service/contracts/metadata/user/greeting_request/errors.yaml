@@ -1,8 +1,13 @@
 version: 1
+domain: USER
 entity: GreetingRequest
 
 errors:
   - code: USER.GREETING.target_blocked_sender
+    kind: GREETING
+    reason: target_blocked_sender
+    http_status: 403
+    recovery_action: surface
     go_const: ErrGreetingTargetBlockedSender
     dart_const: greetingTargetBlockedSender
     l10n_key: error_greeting_target_blocked_sender
@@ -12,6 +17,10 @@ errors:
     debug_hint: target has blocked sender or has allowStrangerGreeting=false
 
   - code: USER.GREETING.duplicate_pending
+    kind: GREETING
+    reason: duplicate_pending
+    http_status: 409
+    recovery_action: surface
     go_const: ErrGreetingDuplicatePending
     dart_const: greetingDuplicatePending
     l10n_key: error_greeting_duplicate_pending
@@ -21,6 +30,11 @@ errors:
     debug_hint: pending greeting already exists between same pair
 
   - code: USER.GREETING.rate_limited
+    kind: GREETING
+    reason: rate_limited
+    http_status: 429
+    recovery_action: retry
+    recovery_after_seconds: 86400
     go_const: ErrGreetingRateLimited
     dart_const: greetingRateLimited
     l10n_key: error_greeting_rate_limited
@@ -30,15 +44,23 @@ errors:
     debug_hint: sender exceeded daily greeting quota
 
   - code: USER.GREETING.already_contact
+    kind: GREETING
+    reason: already_contact
+    http_status: 409
+    recovery_action: surface
     go_const: ErrGreetingAlreadyContact
     dart_const: greetingAlreadyContact
     l10n_key: error_greeting_already_contact
     user_message:
-      zh: 已互相关注，可直接发消息
-      en: Already a contact, you can send messages directly
+      zh: 已互相关注，可直接进入正式私信
+      en: Already mutual followers, you can enter the formal direct conversation
     debug_hint: requester and target are already mutual followers
 
   - code: USER.GREETING.not_found
+    kind: GREETING
+    reason: not_found
+    http_status: 404
+    recovery_action: surface
     go_const: ErrGreetingNotFound
     dart_const: greetingNotFound
     l10n_key: error_greeting_not_found
@@ -48,6 +70,10 @@ errors:
     debug_hint: greeting request id not found or access denied
 
   - code: USER.GREETING.invalid_status_transition
+    kind: GREETING
+    reason: invalid_status_transition
+    http_status: 409
+    recovery_action: surface
     go_const: ErrGreetingInvalidStatusTransition
     dart_const: greetingInvalidStatusTransition
     l10n_key: error_greeting_invalid_status

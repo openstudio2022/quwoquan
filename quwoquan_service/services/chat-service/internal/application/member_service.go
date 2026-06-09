@@ -451,6 +451,71 @@ func (s *MemberService) ListContacts(
 	return contactHitsToMaps(hits), nil
 }
 
+func (s *MemberService) ListGroupCandidates(
+	ctx context.Context,
+	userID string,
+	conversationID string,
+	limit int,
+) ([]map[string]any, error) {
+	limit = clampSearchLimit(limit, 100)
+	locked := map[string]struct{}{strings.TrimSpace(userID): {}}
+	if strings.TrimSpace(conversationID) != "" {
+		members, err := s.repo.ListMembers(ctx, conversationID, 1000, "", "", "joined_asc")
+		if err != nil {
+			return nil, err
+		}
+		for _, member := range members {
+			if id := strings.TrimSpace(member.UserId); id != "" {
+				locked[id] = struct{}{}
+			}
+		}
+	}
+
+	hits, err := s.combinedContactHits(ctx, userID, "", limit*3)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, limit)
+	seen := map[string]struct{}{}
+	for _, hit := range hits {
+		contactID := strings.TrimSpace(hit.ContactID)
+		if contactID == "" {
+			continue
+		}
+		if _, ok := locked[contactID]; ok {
+			continue
+		}
+		if _, ok := seen[contactID]; ok {
+			continue
+		}
+		if normalizeRelationState(hit.RelationState) != "mutual" {
+			continue
+		}
+		seen[contactID] = struct{}{}
+		item := map[string]any{
+			"contactId":      contactID,
+			"userId":         contactID,
+			"displayName":    hit.DisplayName,
+			"avatarUrl":      hit.AvatarURL,
+			"bio":            hit.Bio,
+			"metFrom":        hit.MetFrom,
+			"lastInteraction": hit.LastInteraction,
+			"relationState":  hit.RelationState,
+			"source":         hit.Source,
+			"subtitle":       hit.Subtitle,
+			"highlightText":  hit.HighlightText,
+			"matchedField":   hit.MatchedField,
+			"isStarred":      hit.IsStarred,
+			"candidateSource": "server_group_candidates",
+		}
+		items = append(items, item)
+		if len(items) >= limit {
+			break
+		}
+	}
+	return items, nil
+}
+
 func (s *MemberService) SearchContacts(
 	ctx context.Context,
 	userID string,
@@ -623,7 +688,7 @@ func (s *MemberService) conversationContactHits(
 			LastInteraction:  conversation.LastMessageTime.UTC().Format(time.RFC3339),
 			RelationState:    "not_following",
 			ConversationID:   conversation.ID,
-			ConversationType: PublicConversationType(conversation.Type, conversation.CircleId),
+			ConversationType: strings.TrimSpace(conversation.Type),
 			Source:           "conversation",
 			Subtitle:         conversation.LastMessagePreview,
 			HighlightText:    displayName,

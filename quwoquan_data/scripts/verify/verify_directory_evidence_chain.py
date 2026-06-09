@@ -32,7 +32,17 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 from _common.batch_scan import iter_batch_object_dirs  # noqa: E402
 from _common.io import read_json  # noqa: E402
 from _common.image_rules import pixel_size_issue, relevance_issue  # noqa: E402
-from _common.paths import OBJECT_STAGES, TASKS_ROOT, batch_root, normalize_task_id  # noqa: E402
+from _common.paths import (  # noqa: E402
+    OBJECT_STAGES,
+    TASKS_ROOT,
+    TASK_ROOT_ALLOWED_ENTRIES,
+    TASK_ROOT_LEGACY_COMPAT_ENTRIES,
+    TASK_SHARED_LEDGER_FILENAMES,
+    batch_root,
+    normalize_task_id,
+    task_root,
+    task_shared_dir,
+)
 from _common.prose_style import mechanical_ending_title_issues  # noqa: E402
 from _common.source_catalog import source_unit_category_issues  # noqa: E402
 from verify.verify_asset_id_zero_collision import scan_batch as scan_asset_ids  # noqa: E402
@@ -40,6 +50,12 @@ from verify.verify_asset_id_zero_collision import scan_batch as scan_asset_ids  
 _REF_FIELDS = ("citedSourceRefs", "sourceAssetRef", "sourceRef", "sourcePaths", "citedSourcePaths")
 _UNIT_RE = __import__("re").compile(r"^(\d{2})\.(.+)$")
 _OBJECT_CHILD_ALLOW = set(OBJECT_STAGES) | {"assets"}
+_TASK_SHARED_ALLOW = {
+    *TASK_SHARED_LEDGER_FILENAMES,
+    "baseline_freeze_packet.json",
+    "explore_packet.json",
+    "discovery_adopt",
+}
 
 # 批次顶层允许集（§2/§12 A5）：对象目录 + 批次公共 + 受控 workspace 命令目录。
 # workspace 命令目录不得承载对象证据（由回退门 _regression_issues 保证）。
@@ -61,6 +77,42 @@ _REGRESSION_FACES = (
     ("task_produce/review/ledger", "*.json", False, "复核账本须落对象 5.review/review_ledger.json"),
     ("task_produce/review/entities", "*.json", False, "复核实体边车须落对象 5.review/review_entities.json"),
 )
+
+
+def _task_shared_issues(task_id: str) -> list[str]:
+    issues: list[str] = []
+    shared_dir = task_shared_dir(task_id)
+    if not shared_dir.is_dir():
+        return issues
+    for entry in sorted(shared_dir.iterdir()):
+        if entry.name.startswith("."):
+            continue
+        if entry.name not in _TASK_SHARED_ALLOW:
+            issues.append(
+                f"task/_shared/{entry.name}: 非法 task 共享条目（仅允许 {sorted(_TASK_SHARED_ALLOW)}）"
+            )
+    return issues
+
+
+def scan_task(task_id: str) -> list[str]:
+    """task 根目录门：只允许真相源根条目与最小 `_shared/` 账本。"""
+    root = task_root(task_id)
+    if not root.is_dir():
+        return [f"task not found: {root}"]
+    issues: list[str] = []
+    for entry in sorted(root.iterdir()):
+        if entry.name.startswith("."):
+            continue
+        if entry.name in TASK_ROOT_ALLOWED_ENTRIES:
+            continue
+        if entry.name in TASK_ROOT_LEGACY_COMPAT_ENTRIES:
+            issues.append(f"task/{entry.name}: 历史兼容位仍存在，需运行 task cleanup-runtime 清理")
+            continue
+        issues.append(
+            f"task/{entry.name}: 非法 task 顶层条目（仅允许 {sorted(TASK_ROOT_ALLOWED_ENTRIES)}）"
+        )
+    issues.extend(_task_shared_issues(task_id))
+    return issues
 
 
 def _is_absolute_ref(value: str) -> bool:
@@ -162,6 +214,38 @@ def _sync_issues(task_id: str, batch_id: str, batch: Path) -> list[str]:
     return issues
 
 
+# 阶段树完整性（opt-in，--require-stage-tree）：每类对象必须物化的过程阶段。
+# 内容对象：1.download 证据快照 → 5.review 全链；实体对象：补 2.quality/4.draft/5.review。
+_POST_REQUIRED_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
+_ENTITY_REQUIRED_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
+
+
+def stage_completeness_issues(batch: Path) -> list[str]:
+    """阶段树完整性门（opt-in）：成品对象必须物化完整 1-5 过程阶段证据。
+
+    - 内容对象（posts，有 article.md/gallery.md）：补齐 1.download 证据快照等全链。
+    - 实体对象（entities，有 page.md/_entity.json）：补齐 2.quality/4.draft/5.review。
+    """
+    issues: list[str] = []
+    for obj in iter_batch_object_dirs(batch):
+        rel = obj.relative_to(batch)
+        parts = rel.parts
+        if parts and parts[0] == "posts":
+            if not ((obj / "article.md").exists() or (obj / "gallery.md").exists()):
+                continue
+            required = _POST_REQUIRED_STAGES
+        elif parts and parts[0] == "entities":
+            if not ((obj / "page.md").exists() or (obj / "_entity.json").exists()):
+                continue
+            required = _ENTITY_REQUIRED_STAGES
+        else:
+            continue
+        missing = [stage for stage in required if not (obj / stage).is_dir()]
+        if missing:
+            issues.append(f"{rel}: 阶段树不完整，缺过程阶段 {missing}（须物化 1-5 全链证据）")
+    return issues
+
+
 def _task_batch_from_path(batch: Path) -> tuple[str, str]:
     """从 batch 目录反推 (task_id, batch_id)：tasks/{task...}/batches/{batch}。"""
     task_root_dir = batch.parent.parent
@@ -238,7 +322,7 @@ def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
                         issues.append(f"{rel}: {px}")
 
 
-def scan_batch(task_id: str, batch_id: str) -> list[str]:
+def scan_batch(task_id: str, batch_id: str, *, require_stage_tree: bool = False) -> list[str]:
     batch = batch_root(task_id, batch_id)
     issues: list[str] = []
     if not batch.is_dir():
@@ -249,6 +333,8 @@ def scan_batch(task_id: str, batch_id: str) -> list[str]:
     issues.extend(_regression_issues(batch))
     issues.extend(_sync_issues(task_id, batch_id, batch))
     issues.extend(scan_asset_ids(task_id, batch_id))
+    if require_stage_tree:
+        issues.extend(stage_completeness_issues(batch))
     return issues
 
 
@@ -256,15 +342,20 @@ def scan_all() -> list[str]:
     issues: list[str] = []
     if not TASKS_ROOT.is_dir():
         return issues
+    seen_tasks: set[str] = set()
     for batches_dir in TASKS_ROOT.rglob("batches"):
+        task_id = batches_dir.parent.relative_to(TASKS_ROOT).as_posix()
+        if task_id not in seen_tasks:
+            issues.extend(scan_task(task_id))
+            seen_tasks.add(task_id)
         for batch in sorted(p for p in batches_dir.iterdir() if p.is_dir()):
             for obj in iter_batch_object_dirs(batch):
                 _scan_object(obj, batch, issues)
             issues.extend(_top_level_issues(batch))
             issues.extend(_regression_issues(batch))
-            task_id, batch_id = _task_batch_from_path(batch)
-            issues.extend(_sync_issues(task_id, batch_id, batch))
-            issues.extend(scan_asset_ids(task_id, batch_id))
+            current_task_id, batch_id = _task_batch_from_path(batch)
+            issues.extend(_sync_issues(current_task_id, batch_id, batch))
+            issues.extend(scan_asset_ids(current_task_id, batch_id))
     return issues
 
 
@@ -272,9 +363,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="目录与资产证据链静态门 (T1)")
     parser.add_argument("--task", default="")
     parser.add_argument("--batch", default="")
+    parser.add_argument(
+        "--require-stage-tree",
+        action="store_true",
+        help="额外校验对象 1-5 阶段树完整性（新批次收口用；存量批次默认不开启避免误伤）",
+    )
     args = parser.parse_args(argv)
     if args.task and args.batch:
-        issues = scan_batch(normalize_task_id(args.task), args.batch)
+        normalized_task = normalize_task_id(args.task)
+        issues = scan_task(normalized_task)
+        issues.extend(scan_batch(normalized_task, args.batch, require_stage_tree=args.require_stage_tree))
+    elif args.task:
+        issues = scan_task(normalize_task_id(args.task))
     else:
         issues = scan_all()
     if issues:

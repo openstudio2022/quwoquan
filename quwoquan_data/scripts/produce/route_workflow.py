@@ -79,6 +79,40 @@ DISLIKE_FEELING_MARKERS = ("怕", "劝退", "累", "疲惫", "拖", "后悔", "�
 DECISION_MARKERS = ("我会", "我更愿意", "建议把", "如果你", "可以跟团", "宁可", "就该", "值不值得", "优先看", "我不会")
 STANDALONE_TIPS_MARKERS = ("实用信息", "实用攻略信息", "来源平台", "信息卡", "小贴士：", "tips：", "贴士：")
 
+# 修辞/结构骨架门：仅出建议与降分，不阻断（底稿轻改范式：结构跟随底稿，不强套骨架）。
+# 硬门保留：真实性(generatorProvenance/factTraceability/baseDraftFidelity)、反抄袭/去版权
+# (provenanceRewrite)、反雷同(crossArticleSimilarity)、证据/图片/联系方式/语域/载体/路线覆盖。
+SOFT_CHECKS = {
+    "travelogueDensity",
+    "mechanicalHeading",
+    "proseStyle",
+    "narrativeContinuity",
+    "sectionShape",
+}
+
+
+def aggregate_checks(
+    checks: Mapping[str, Mapping[str, Any]],
+) -> tuple[list[str], list[str], int]:
+    """聚合评审 checks：HARD 失败计入 blocking；SOFT 失败仅出建议+降分。
+
+    返回 (blocking, suggestions, soft_failed_count)。
+    """
+    blocking: list[str] = []
+    suggestions: list[str] = []
+    soft_failed = 0
+    for name, result in checks.items():
+        if result.get("passed", True):
+            continue
+        issues = list(result.get("issues") or [])
+        if name in SOFT_CHECKS:
+            soft_failed += 1
+            suggestions.extend(f"[建议] {name}: {issue}" for issue in issues)
+        else:
+            blocking.extend(f"{name}: {issue}" for issue in issues)
+        suggestions.extend(result.get("suggestions") or [])
+    return blocking, suggestions, soft_failed
+
 
 def is_route_brief(brief: Mapping[str, Any]) -> bool:
     subject = brief.get("subject") or {}
@@ -198,13 +232,13 @@ def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str,
 
 
 def _route_section_intents(brief: Mapping[str, Any], evidence_bundle: Mapping[str, Any]) -> list[str]:
+    """章节意图：跟随底稿自身结构，仅给最小推进建议（不再下发固定骨架）。"""
     nodes = [str(n.get("entityName") or "") for n in (evidence_bundle.get("routeNodes") or []) if n.get("entityName")]
-    intents = ["开篇：写出发动机与心情铺垫（为什么想走这条线、出发前的犹豫或期待），不要先罗列行程。"]
-    for i, name in enumerate(nodes, start=1):
-        intents.append(f"第{i}站「{name}」：写这一站真实的体验与至少一处取舍判断，按主线顺序推进。")
-    intents.append("出发前真正要确认的事：把交通/住宿/体力/退路等关键事实就地融入叙述，禁止另起清单块。")
-    intents.append("收尾：用一处真实取舍判断自然收束（值不值、给谁的建议就地融进叙述），禁止『它到底适合谁／这条线适合谁／适合谁』之类的固定小标题。")
-    return intents
+    order = "、".join(nodes) if nodes else "线路各节点"
+    return [
+        "结构跟随底稿：保留底稿自身的小标题与叙述顺序，只做轻量编辑（去语病/补证据/去平台痕迹）。",
+        f"若底稿未按主线推进，可按 {order} 的真实顺序理顺，但不要套用固定模板小标题。",
+    ]
 
 
 def build_route_writing_pack(
@@ -235,6 +269,7 @@ def build_route_writing_pack(
         source_urls=quality_payload.get("sourceUrls") or [],
         source_paths=quality_payload.get("sourcePaths") or [],
     )
+    _attach_base_draft_text(task_id, batch_id, pack)
     write_writing_pack(task_id, batch_id, ref, pack)
     write_prompt(task_id, batch_id, ref, render_prompt_md(pack))
     # 仅当尚无 agent 草稿时写占位，避免覆盖会话模型已创作的正文。
@@ -332,6 +367,18 @@ def _compose_payload_from_pack(
     return payload
 
 
+def _attach_base_draft_text(task_id: str, batch_id: str, pack: dict[str, Any]) -> None:
+    """把底稿正文内联进 writing pack，供 prompt 渲染「在此基础上适度加工」。"""
+    from _common.base_draft import load_base_draft_text
+
+    base_ref = str(pack.get("baseSourceRef") or "")
+    if not base_ref:
+        return
+    text = load_base_draft_text(task_id, batch_id, base_ref).strip()
+    if text:
+        pack["baseDraftText"] = text[:4000]
+
+
 def _load_source_texts(source_paths: Sequence[str]) -> list[str]:
     texts: list[str] = []
     for path in source_paths or []:
@@ -391,16 +438,51 @@ def review_route_draft(
         "issues": traceability,
         "suggestions": ["补齐 mustIncludeFacts，并确保票价/海拔/时长等数字能在 source 证据中找到。"] if traceability else [],
     }
+    from _common.base_draft import base_draft_fidelity_issues, load_base_draft_text
 
-    blocking: list[str] = []
-    suggestions: list[str] = []
-    for name, result in route_checks.items():
-        if not result["passed"]:
-            blocking.extend(f"{name}: {issue}" for issue in result["issues"])
-            suggestions.extend(result.get("suggestions") or [])
+    base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
+    fidelity = base_draft_fidelity_issues(body, base_text)
+    route_checks["baseDraftFidelity"] = {
+        "passed": not fidelity,
+        "issues": fidelity,
+        "suggestions": ["以底稿为基础适度加工：相似度过低则贴回底稿叙事；过高则进一步改写表达、去版权痕迹。"] if fidelity else [],
+    }
+    from _common import quality_gates as qg
+
+    wi_issues = qg.writing_intent_consistency_issues(body, brief.get("writingIntent"))
+    route_checks["writingIntentConsistency"] = {
+        "passed": not wi_issues,
+        "issues": wi_issues,
+        "suggestions": ["按 writingIntent 主线补齐结构（路线攻略=节点顺序/转场/票务/取舍；体验=过程/取舍；游记=时间线/复盘）。"] if wi_issues else [],
+    }
+    banned_terms = [str(b) for b in (pack.get("bannedRegisterTerms") or brief.get("bannedRegisterTerms") or [])]
+    reg_issues = qg.register_lexicon_issues(body, banned_terms)
+    route_checks["registerMismatch"] = {
+        "passed": not reg_issues,
+        "issues": reg_issues,
+        "suggestions": ["改用该垂类合适的语域（如户外景区禁'看展/展厅/展陈'），由 SOP 词表约束。"] if reg_issues else [],
+    }
+    from _common import public_contacts as pc
+
+    allowed_contacts = [str(n) for n in (pack.get("allowedContactNumbers") or brief.get("allowedContactNumbers") or [])]
+    contact_issues = qg.contact_info_issues(body, allowed_numbers=pc.allowed_numbers(allowed_contacts))
+    route_checks["contactInfo"] = {
+        "passed": not contact_issues,
+        "issues": contact_issues,
+        "suggestions": ["删除私人电话/微信/QQ；仅保留紧急/公共服务短号或 source 核实的景区官方接待电话。"] if contact_issues else [],
+    }
+    heading_extra = [str(t) for t in (pack.get("mechanicalHeadingTerms") or brief.get("mechanicalHeadingTerms") or [])]
+    heading_issues = qg.mechanical_heading_issues(body, extra_terms=heading_extra)
+    route_checks["mechanicalHeading"] = {
+        "passed": not heading_issues,
+        "issues": heading_issues,
+        "suggestions": ["把纯清单式小标题改写得自然、有视角；优先沿用底稿已有小标题，不要套统一模板。"] if heading_issues else [],
+    }
+
+    blocking, suggestions, soft_failed = aggregate_checks(route_checks)
     human_review_required = bool(route_checks.get("imageGate", {}).get("humanReview"))
     decision = "approved" if not blocking else "revision_needed"
-    quality_score = max(0.0, 92.0 - len(blocking) * 8.0)
+    quality_score = max(0.0, 92.0 - len(blocking) * 8.0 - soft_failed * 3.0)
     payload = {
         "topicId": ref,
         "decision": decision,
@@ -933,9 +1015,11 @@ def _review_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
         return "download"
     if not checks.get("factTraceability", {"passed": True})["passed"]:
         return "agent_compose"
+    if not checks.get("baseDraftFidelity", {"passed": True})["passed"]:
+        return "agent_compose"
     if not checks["provenanceRewrite"]["passed"]:
         return "agent_compose"
-    if not checks["routeCoverage"]["passed"] or not checks["narrativeContinuity"]["passed"]:
+    if not checks["routeCoverage"]["passed"]:
         return "agent_compose"
     if not checks.get("travelogueDensity", {"passed": True})["passed"]:
         return "agent_compose"
@@ -952,6 +1036,7 @@ def _review_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
 
 
 def _publish_angle(brief: Mapping[str, Any]) -> str:
+    """由 templateId 确定性映射 publish 目录 angle（与 tagRefs Format/内容角度 对齐）。"""
     template_id = str(brief.get("templateId") or "")
     if "跟团" in template_id:
         return "跟团攻略"
@@ -963,7 +1048,12 @@ def _publish_angle(brief: Mapping[str, Any]) -> str:
         return "枢纽到达"
     if "省钱" in template_id:
         return "省钱攻略"
-    return "环线攻略"
+    if "周末短途" in template_id or "银发" in template_id or "补给" in template_id:
+        # 一日游/周边/短线：落「攻略」层（见 test_post_dir_layout 都江堰一日游）
+        return "攻略"
+    if "环线" in template_id:
+        return "环线攻略"
+    return "攻略"
 
 
 def _entity_image_candidates(

@@ -1780,7 +1780,10 @@ features:
           path: runtime/deliver-deploy-prod-pipeline
           domain: ""
           status: specified
-          tags: []
+          tags:
+            - aliyun-ack
+            - modular-monolith-first
+            - split-ready
           children:
             - id: daily-merge-release-strategy
               name: daily-merge-release-strategy

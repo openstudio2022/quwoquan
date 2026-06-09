@@ -67,6 +67,10 @@ void main() {
       expect(caps.incomingCallUi, isTrue);
       expect(caps.webPushIncomingCall, isFalse);
       expect(caps.realtimeCommunication, isTrue);
+      expect(caps.appleNativeLogin, isTrue);
+      expect(caps.wechatNativeLogin, isFalse);
+      expect(caps.systemCredentialLogin, isTrue);
+      expect(caps.passkeyLogin, isTrue);
     });
 
     test('web：原生来电屏关、Web Push 开', () {
@@ -74,6 +78,8 @@ void main() {
       expect(caps.incomingCallUi, isFalse);
       expect(caps.webPushIncomingCall, isTrue);
       expect(caps.realtimeCommunication, isTrue);
+      expect(caps.systemCredentialLogin, isFalse);
+      expect(caps.passkeyLogin, isFalse);
     });
 
     test('ohos 初始：RTC/来电均关', () {
@@ -81,6 +87,18 @@ void main() {
       expect(caps.realtimeCommunication, isFalse);
       expect(caps.incomingCallUi, isFalse);
       expect(caps.webPushIncomingCall, isFalse);
+      expect(caps.wechatNativeLogin, isFalse);
+      expect(caps.appleNativeLogin, isFalse);
+      expect(caps.systemCredentialLogin, isFalse);
+      expect(caps.passkeyLogin, isFalse);
+    });
+
+    test('android：微信与系统凭据入口可见，Apple 关闭', () {
+      final caps = platformCapabilitiesFor(AppPlatform.android);
+      expect(caps.wechatNativeLogin, isTrue);
+      expect(caps.appleNativeLogin, isFalse);
+      expect(caps.systemCredentialLogin, isTrue);
+      expect(caps.passkeyLogin, isTrue);
     });
   });
 }

@@ -1,0 +1,10 @@
+{
+  "label": "生物类型",
+  "labelEn": "Living Being Type",
+  "description": "可观赏、养护或科普的自然生命体类型",
+  "maxDepth": 3,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "expectedSize": 15
+}

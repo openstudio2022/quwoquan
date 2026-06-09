@@ -12,6 +12,7 @@ import 'package:quwoquan_app/components/object_page/profile_ios_components.dart'
 /// | not_following | 关注 / 打招呼                                    |
 /// | following     | 已关注 / 打招呼                                  |
 /// | followed_by   | 回关 / 打招呼                                    |
+/// | formal        | 消息 / 视频通话 / 语音通话（通话按能力位控制）      |
 /// | mutual        | 消息 / 视频通话 / 语音通话 三等分                  |
 class ProfileActionBar extends StatelessWidget {
   const ProfileActionBar({
@@ -113,7 +114,9 @@ class ProfileActionBar extends StatelessWidget {
 
     final cap = capability;
 
-    if (cap != null && cap.isMutual) {
+    final showsMessageActions =
+        cap != null && (cap.isMutual || cap.hasFormalConversation);
+    if (showsMessageActions) {
       return _buildButtonRow(<Widget>[
         Expanded(
           child: neutralAction(

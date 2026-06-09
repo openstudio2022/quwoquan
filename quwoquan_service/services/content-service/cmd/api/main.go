@@ -177,6 +177,7 @@ func main() {
 	var bulkImportService *application.BulkImportService
 	var behaviorEventStore persistence.BehaviorEventStore = persistence.NoopBehaviorEventStore{}
 	var dailyMetricsStore *persistence.DailyMetricsStore
+	var authorImpactStore *persistence.AuthorImpactStore
 	var intersectionService *application.IntersectionService
 	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
@@ -304,6 +305,7 @@ func main() {
 		bulkImportService = application.NewBulkImportService(recinfra.NewMongoBulkImportStore(db))
 		behaviorEventStore = persistence.NewMongoBehaviorEventStore(db, logger)
 		dailyMetricsStore = persistence.NewDailyMetricsStore(db, logger)
+		authorImpactStore = persistence.NewAuthorImpactStore(db, logger)
 	} else {
 		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
 		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
@@ -427,6 +429,7 @@ func main() {
 		application.WithSessionCacheInvalidator(sessionCache.Invalidate),
 		application.WithBehaviorEventStore(behaviorEventStore),
 		application.WithDailyMetricsStore(dailyMetricsStore),
+		application.WithAuthorImpactStore(authorImpactStore),
 	)
 
 	var handlerOpts []httpadapter.ContentHandlerOption
@@ -439,6 +442,9 @@ func main() {
 	// （cache:viewer_intersections）+ 事实/概率合并排序。
 	if intersectionService != nil {
 		handlerOpts = append(handlerOpts, httpadapter.WithIntersectionService(intersectionService))
+	}
+	if authorImpactStore != nil {
+		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactStore(authorImpactStore))
 	}
 
 	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService, handlerOpts...).Routes()

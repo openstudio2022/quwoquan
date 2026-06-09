@@ -194,7 +194,40 @@ void main() {
 
       await tester.pumpWidget(CupertinoApp(home: card!));
       // §7.1：连接说明由实例构成，端不本地拼装。
-      expect(find.text('北京大学、摄影把你们连在一起'), findsOneWidget);
+      expect(find.text('北京大学、摄影把你们连在一起'), findsWidgets);
+    });
+
+    testWidgets('CTA：展示下一步动作并复用 reason tap 归因入口', (tester) async {
+      var tapped = false;
+      final reason = IntersectionReason(
+        dimension: 'relationship',
+        relationKind: 'person',
+        actionType: 'follow_author',
+        connectionSummary: '同校与摄影把你们连在一起',
+        intersectionPoints: <IntersectionPoint>[
+          _point(dimension: 'relationship', label: '共同关注', count: 4),
+        ],
+      );
+      final card = ObjectIntersectionCard.fromReasons(
+        title: '你们的交集',
+        reasons: <IntersectionReason>[reason],
+        isDark: false,
+        onReasonTap: (_) => tapped = true,
+      );
+
+      await tester.pumpWidget(CupertinoApp(home: card!));
+
+      expect(
+        find.byKey(const ValueKey<String>('object-intersection-primary-cta')),
+        findsOneWidget,
+      );
+      expect(find.text('关注作者'), findsOneWidget);
+      expect(find.text('同校与摄影把你们连在一起'), findsWidgets);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('object-intersection-primary-cta')),
+      );
+      expect(tapped, isTrue);
     });
 
     testWidgets('就地展开：默认 inlineExpandCount 行，点击展开余下证据组', (tester) async {
@@ -252,9 +285,7 @@ void main() {
       expect(find.text('都赞过'), findsOneWidget);
     });
 
-    testWidgets('宽屏下切成横向封面 rail，更多入口保留且高度收敛', (
-      tester,
-    ) async {
+    testWidgets('宽屏下切成横向封面 rail，更多入口保留且高度收敛', (tester) async {
       tester.view.physicalSize = const Size(1280, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -289,9 +320,7 @@ void main() {
 
       await tester.pumpWidget(
         CupertinoApp(
-          home: Center(
-            child: SizedBox(width: 760, child: card!),
-          ),
+          home: Center(child: SizedBox(width: 760, child: card!)),
         ),
       );
       await tester.pumpAndSettle();
@@ -305,7 +334,10 @@ void main() {
       );
       expect(find.text('川西攻略'), findsNothing);
       expect(find.textContaining('展开更多'), findsOneWidget);
-      expect(tester.getSize(find.byType(ObjectIntersectionCard)).height, lessThan(260));
+      expect(
+        tester.getSize(find.byType(ObjectIntersectionCard)).height,
+        lessThan(260),
+      );
 
       await tester.tap(find.textContaining('展开更多'));
       await tester.pumpAndSettle();

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
@@ -36,6 +37,7 @@ class HomepageDetailShell extends StatefulWidget {
     required this.onReport,
     required this.onCreateContent,
     required this.onAttach,
+    this.onIntersectionReasonTap,
   });
 
   final bool selectionMode;
@@ -52,6 +54,7 @@ class HomepageDetailShell extends StatefulWidget {
   final VoidCallback onReport;
   final ValueChanged<HomepageCanonicalReference> onCreateContent;
   final ValueChanged<HomepageCanonicalReference> onAttach;
+  final ValueChanged<IntersectionReason>? onIntersectionReasonTap;
 
   @override
   State<HomepageDetailShell> createState() => _HomepageDetailShellState();

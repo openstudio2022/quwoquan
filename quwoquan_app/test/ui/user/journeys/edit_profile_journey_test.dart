@@ -38,8 +38,7 @@ class _EditProfileMockRepository extends MockUserProfileRepository {
       subjectType: base.subjectType,
       userHandle: (_updatedProfile['userHandle'] as String?) ?? base.userHandle,
       username: (_updatedProfile['username'] as String?) ?? base.username,
-      displayName:
-          (nick != null && nick.isNotEmpty) ? nick : base.displayName,
+      displayName: (nick != null && nick.isNotEmpty) ? nick : base.displayName,
       avatarUrl: base.avatarUrl,
       backgroundUrl: base.backgroundUrl,
       bio: (_updatedProfile['bio'] as String?) ?? base.bio,
@@ -72,13 +71,26 @@ class _AuthenticatedAuthSessionStore implements AuthSessionStore {
       accountState: 'active',
       identityOrigin: 'phone',
       installId: 'install-id',
+      lastRefreshAtEpochMs: 0,
+      lastForegroundAuthCheckAtEpochMs: 0,
       manualLoggedOut: false,
       launchPromptDismissed: false,
     );
   }
 
   @override
-  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+  Future<void> saveLoginResult(
+    AuthLoginResultDto result, {
+    AuthRememberedLoginMethod rememberedLoginMethod =
+        AuthRememberedLoginMethod.unknown,
+    String? rememberedLoginMaskedIdentifier,
+  }) async {}
+
+  @override
+  Future<void> saveRefreshedTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
@@ -88,6 +100,9 @@ class _AuthenticatedAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> markLaunchPromptDismissed() async {}
+
+  @override
+  Future<void> markForegroundAuthCheckNow() async {}
 }
 
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -129,11 +144,13 @@ void main() {
       final app = ProviderScope(
         overrides: [
           userProfileRepositoryProvider.overrideWithValue(mockRepo),
-          relationshipCapabilityRepositoryProvider
-              .overrideWithValue(_ThrowingCapabilityRepository()),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            _ThrowingCapabilityRepository(),
+          ),
           currentUserIdProvider.overrideWithValue(currentUserId),
-          authSessionStoreProvider
-              .overrideWithValue(const _AuthenticatedAuthSessionStore()),
+          authSessionStoreProvider.overrideWithValue(
+            const _AuthenticatedAuthSessionStore(),
+          ),
         ],
         child: MaterialApp.router(
           routerConfig: GoRouter(

@@ -1,0 +1,9 @@
+{
+  "label": "适用受众",
+  "labelEn": "Target Audience",
+  "description": "商品主要适用的用户群体（画像）",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

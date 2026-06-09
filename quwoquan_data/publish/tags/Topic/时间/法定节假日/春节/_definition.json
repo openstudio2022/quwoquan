@@ -1,0 +1,10 @@
+{
+  "label": "春节",
+  "labelEn": "Chinese New Year",
+  "description": "农历正月初一春节",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00",
+  "aliases": [
+    "过年"
+  ]
+}

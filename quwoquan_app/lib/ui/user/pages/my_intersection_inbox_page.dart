@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_entity.dart';
 import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
 
@@ -75,6 +77,16 @@ class _MyIntersectionInboxPageState
   void _openObject(IntersectionReason reason) {
     final id = reason.actionTargetId.trim();
     if (id.isEmpty) return;
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackClick(
+          id,
+          referralSource: ReferralSource.organicFeed,
+          intersectionId: reason.intersectionId,
+          intersectionDimension: reason.dimension,
+          intersectionClass: reason.intersectionClass,
+          intersectionTagRefs: reason.tagRefs,
+        );
     final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);
     switch (kind) {
       case UnifiedObjectKind.person:

@@ -11,6 +11,7 @@ tag_taxonomy.yaml（topic_*/circle_*/interest_* 等扁平 id）。
   C2  对象标签字段已切路径制 tagRef（post / circle / entity.homepage / user_profile
       的 fields.yaml 至少各含一个 `tag_ref: true` 字段，且不含已废弃 tag_taxonomy_ref）。
   C3  metadata 中不残留旧扁平 id（domain_taxonomy.user_tag_ref 等已切路径制 tagRef）。
+  C4  metadata 文档(.md)不得引用扁平 tag_taxonomy（防 README 等回潮盲区，单一真相源 = publish/v1/tags）。
 
 用法: python3 verify_tag_ref_source_of_truth.py
 """
@@ -105,10 +106,35 @@ def c3_no_flat_ids() -> None:
         )
 
 
+def c4_metadata_docs_clean() -> None:
+    """metadata 文档(.md)不得引用扁平 tag_taxonomy（README 等回潮盲区）。
+
+    C1 只扫 .go/.dart 业务代码，metadata 自身的 .md（README/DESIGN 等）是盲区；
+    此前 README 把已删的 tag_taxonomy.yaml 写成现行真相源回潮未被任何门禁抓住。
+    单一真相源 = quwoquan_data/publish/v1/tags，metadata 文档不得描述扁平 taxonomy。
+    """
+    pat = re.compile(r"tag_taxonomy")
+    hits: list[str] = []
+    for f in META.rglob("*.md"):
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        for i, line in enumerate(text.splitlines(), 1):
+            if pat.search(line):
+                hits.append(f"{f.relative_to(ROOT)}:{i}")
+    if hits:
+        errors.append(
+            "C4: metadata 文档仍引用扁平 tag_taxonomy（单一真相源 = publish/v1/tags，"
+            "文档不得把已删扁平 taxonomy 写成现行真相源）:\n  " + "\n  ".join(hits)
+        )
+
+
 def main() -> int:
     c1_zero_reference()
     c2_fields_use_tag_ref()
     c3_no_flat_ids()
+    c4_metadata_docs_clean()
 
     for w in warnings:
         print(f"[verify_tag_ref] WARN {w}")
@@ -116,7 +142,7 @@ def main() -> int:
         for e in errors:
             print(f"[verify_tag_ref] FAIL {e}")
         return 1
-    print("[verify_tag_ref] OK: 标签真相源收口校验通过（扁平 taxonomy 零引用 / 字段已切 tagRef / 迁移格式合法）")
+    print("[verify_tag_ref] OK: 标签真相源收口校验通过（扁平 taxonomy 零引用 / 字段已切 tagRef / 迁移格式合法 / 文档无回潮）")
     return 0
 
 

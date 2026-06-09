@@ -51,11 +51,45 @@ def _collect_briefs(task_id: str, batch_id: str, refs):
     return routes, entities
 
 
+def _apply_writing_intent_override(brief, override):
+    """把 content_plan_packet 的 writingIntent/baseSourceRef 注入 brief（任务层覆盖默认值）。"""
+    if not override:
+        return brief
+    merged = dict(brief)
+    if override.get("writingIntent"):
+        merged["writingIntent"] = override["writingIntent"]
+    if override.get("baseSourceRef") and not merged.get("baseSourceRef"):
+        merged["baseSourceRef"] = override["baseSourceRef"]
+    return merged
+
+
+def _assign_base_draft(task_id: str, batch_id: str, ref: str, brief):
+    """认领唯一底稿（baseSourceRef 永远非空目标）；返回(brief, 缺底稿告警)。"""
+    from _common.base_draft import assign_base_draft
+
+    chosen = assign_base_draft(task_id, batch_id, ref, brief)
+    if chosen and chosen != brief.get("baseSourceRef"):
+        merged = dict(brief)
+        merged["baseSourceRef"] = chosen
+        return merged, None
+    if not chosen and not brief.get("baseSourceRef"):
+        return brief, f"{ref}: 无可用底稿（来源单元不足或均已被其它篇占用）"
+    return brief, None
+
+
 def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int = 1) -> int:
+    from _common.content_plan import load_writing_intent_overrides
+
+    overrides = load_writing_intent_overrides(task_id, batch_id)
     routes, entities = _collect_briefs(task_id, batch_id, refs)
     prepared_refs: list[str] = []
     blocked = 0
+    base_draft_warnings: list[str] = []
     for ref, brief in routes:
+        brief = _apply_writing_intent_override(brief, overrides.get(ref))
+        brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        if warn:
+            base_draft_warnings.append(warn)
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
         if quality.get("recommendation") == "skip":
             blocked += 1
@@ -64,6 +98,10 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
         build_route_writing_pack(task_id, batch_id, ref, brief, quality)
         prepared_refs.append(ref)
     for ref, brief in entities:
+        brief = _apply_writing_intent_override(brief, overrides.get(ref))
+        brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        if warn:
+            base_draft_warnings.append(warn)
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
         if quality.get("recommendation") == "skip":
             blocked += 1
@@ -71,6 +109,8 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
             continue
         build_entity_writing_pack(task_id, batch_id, ref, brief, quality)
         prepared_refs.append(ref)
+    for warn in base_draft_warnings:
+        print(f"[produce] BASE-DRAFT WARN {warn}", file=sys.stderr)
     out_dir = draft_package_dir(task_id, batch_id, prepared_refs[0]) if prepared_refs else None
     print(f"[produce] compose-brief prepared {len(prepared_refs)} writing pack(s); blocked={blocked}")
     if out_dir is not None:

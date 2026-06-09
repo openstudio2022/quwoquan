@@ -143,12 +143,7 @@ var allowedModules = map[Module]struct{}{
 	ModuleUnknown:     {},
 }
 
-var allowedKinds = map[Kind]struct{}{
-	KindUser:       {},
-	KindSystem:     {},
-	KindNetwork:    {},
-	KindMiddleware: {},
-}
+var kindPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
 func NewCode(module Module, kind Kind, reason string) ErrorCode {
 	return ErrorCode{Module: module, Kind: kind, Reason: reason}
@@ -178,13 +173,22 @@ func (c ErrorCode) Validate() error {
 	if _, ok := allowedModules[c.Module]; !ok {
 		return fmt.Errorf("invalid module: %s", c.Module)
 	}
-	if _, ok := allowedKinds[c.Kind]; !ok {
+	if !kindPattern.MatchString(string(c.Kind)) {
 		return fmt.Errorf("invalid kind: %s", c.Kind)
 	}
 	if !reasonPattern.MatchString(c.Reason) {
 		return fmt.Errorf("invalid reason: %s", c.Reason)
 	}
 	return nil
+}
+
+func isUserLikeKind(kind Kind) bool {
+	switch kind {
+	case "", KindSystem, KindNetwork, KindMiddleware:
+		return false
+	default:
+		return true
+	}
 }
 
 func NewAppError(code ErrorCode, userMessage string, debugMessage string) *AppError {
@@ -331,7 +335,7 @@ func NormalizeError(err error) *AppError {
 }
 
 func runtimeOriginFromCurrentKind(kind Kind) string {
-	if kind == KindUser {
+	if isUserLikeKind(kind) {
 		return "user"
 	}
 	if kind == KindNetwork {
@@ -344,15 +348,23 @@ func runtimeOriginFromCurrentKind(kind Kind) string {
 }
 
 func runtimeKindFromCurrent(kind Kind, reason string) string {
-	if kind == KindUser {
+	if isUserLikeKind(kind) {
 		switch reason {
-		case "unauthorized":
+		case "unauthorized",
+			"token_expired",
+			"otp_expired",
+			"otp_mismatch",
+			"credential_conflict",
+			"last_credential",
+			"login_locked",
+			"wechat_auth_failed",
+			"apple_auth_failed":
 			return "auth"
-		case "forbidden", "permission_denied", "location_permission_required":
+		case "forbidden", "permission_denied", "location_permission_required", "target_blocked_sender":
 			return "permission"
-		case "not_found", "route_not_found":
+		case "not_found", "route_not_found", "strict_isolation":
 			return "notFound"
-		case "rate_limited":
+		case "rate_limited", "daily_limit_exceeded":
 			return "rateLimited"
 		default:
 			if strings.HasSuffix(reason, "_not_found") {
@@ -403,11 +415,25 @@ func HTTPStatusFromError(err *AppError) int {
 	}
 	reason := err.Code.Reason
 	kind := err.Code.Kind
-	if kind == KindUser {
+	if isUserLikeKind(kind) {
 		switch reason {
-		case "invalid_argument", "invalid_content_type":
+		case "invalid_argument",
+			"invalid_content_type",
+			"invalid_call_ringtone",
+			"invalid_appearance_scope",
+			"invalid_code",
+			"too_many_contacts",
+			"otp_expired",
+			"otp_mismatch",
+			"last_credential",
+			"last_sub_account",
+			"quota_reached",
+			"primary_guard",
+			"active_guard",
+			"retired_guard",
+			"delete_empty_only":
 			return http.StatusBadRequest
-		case "unauthorized":
+		case "unauthorized", "token_expired":
 			return http.StatusUnauthorized
 		case "forbidden", "original_access_denied":
 			return http.StatusForbidden
@@ -415,20 +441,32 @@ func HTTPStatusFromError(err *AppError) int {
 			return http.StatusNotFound
 		case "target_blocked_sender":
 			return http.StatusForbidden
-		case "duplicate_pending", "already_contact", "invalid_status_transition":
+		case "duplicate_pending",
+			"already_contact",
+			"invalid_status_transition",
+			"conflict",
+			"nickname_taken",
+			"handle_taken",
+			"credential_conflict",
+			"already_accepted",
+			"retire_required":
 			return http.StatusConflict
+		case "expired":
+			return http.StatusGone
 		case "media_not_ready":
 			return http.StatusUnprocessableEntity
-		case "conflict":
-			return http.StatusConflict
-		case "rate_limited", "original_access_rate_limited":
+		case "rate_limited", "original_access_rate_limited", "daily_limit_exceeded":
 			return http.StatusTooManyRequests
 		case "location_unavailable":
 			return http.StatusBadRequest
 		case "permission_denied", "location_permission_required":
 			return http.StatusForbidden
+		case "login_locked":
+			return http.StatusLocked
+		case "wechat_auth_failed", "apple_auth_failed":
+			return http.StatusBadGateway
 		}
-		if strings.HasSuffix(reason, "_not_found") {
+		if reason == "strict_isolation" || strings.HasSuffix(reason, "_not_found") {
 			return http.StatusNotFound
 		}
 	}

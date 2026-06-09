@@ -1,7 +1,17 @@
 """实体主页正文质量门。"""
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+
+# 真实历史标记：年份/朝代/世纪/建置沿革动词等（用于「历史沿革」章节语义校验）。
+_HISTORY_MARKERS = (
+    "朝", "代", "世纪", "公元", "建于", "始建", "设立", "设置", "建置", "置县",
+    "改名", "更名", "撤", "并入", "隶属", "划归", "年间", "年（", "年(", "民国", "清", "明", "宋", "唐",
+)
+_YEAR_RE = re.compile(r"(?:1[0-9]{3}|20[0-9]{2})\s*年|[一二三四五六七八九十]+世纪")
+_SECTION_RE = re.compile(r"(?ms)^##\s+([^\n]+)\n(.*?)(?=^##\s|\Z)")
 
 
 FORBIDDEN_ENTITY_PAGE_PHRASES = (
@@ -33,4 +43,24 @@ def entity_page_quality_issues(page_path: Path, *, label: str = "") -> list[str]
             issues.append(f"{prefix}entity homepage contains engineering/template phrase: {phrase}")
     if "## 为什么值得关注" in text and "属于「" in text and "实体" in text:
         issues.append(f"{prefix}entity homepage looks like generated system explainer, not reader-facing copy")
+    issues.extend(_history_section_issues(text, prefix))
+    return issues
+
+
+def _history_section_issues(text: str, prefix: str) -> list[str]:
+    """章节语义门：若存在「历史沿革」，其正文须含真实历史标记，否则应省略或补真实历史。
+
+    直击「把地质成因/景区评级当历史沿革」这类语义错配（如诺水河）。
+    """
+    issues: list[str] = []
+    for heading, body in _SECTION_RE.findall(text):
+        title = heading.strip()
+        if "历史沿革" not in title and "历史" != title.strip():
+            continue
+        if _YEAR_RE.search(body) or any(m in body for m in _HISTORY_MARKERS):
+            continue
+        issues.append(
+            f"{prefix}「{title}」缺少真实历史（无年份/朝代/建置沿革等标记），"
+            "应省略该章节或补真实历史，勿把地质成因/评级塞进历史沿革"
+        )
     return issues

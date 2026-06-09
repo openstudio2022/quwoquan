@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	rterr "quwoquan_service/runtime/errors"
 	runtimegovernance "quwoquan_service/runtime/governance"
 	"quwoquan_service/services/user-service/internal/application"
 	followmodel "quwoquan_service/services/user-service/internal/domain/follow/model"
@@ -186,12 +187,12 @@ func (h *UserHandler) handleUpdateProfile(w http.ResponseWriter, r *http.Request
 	}
 	profile, err := h.profile.UpdateProfile(r.Context(), userID, data)
 	if err != nil {
-		if strings.Contains(err.Error(), "nickname_taken") {
-			writeHTTPError(w, r, appErrNicknameTaken(err.Error()))
+		if hasUserErrorCode(err, "USER.USER.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.USER.nickname_taken") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -374,25 +375,6 @@ func (h *UserHandler) handleClearRecentSearches(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
-func appErrNicknameTaken(msg string) error {
-	return appErr("AppErrorFromNicknameTaken", msg)
-}
-
-func appErr(_, msg string) error {
-	return appErrFromMsg(msg)
-}
-
-func appErrFromMsg(msg string) error {
-	if strings.Contains(msg, "nickname_taken") {
-		return appErrNickname(msg)
-	}
-	return nil
-}
-
-func appErrNickname(msg string) error {
-	return (&nickErr{msg: msg})
-}
-
 func anyString(value any) string {
 	if value == nil {
 		return ""
@@ -403,9 +385,19 @@ func anyString(value any) string {
 	return ""
 }
 
-type nickErr struct{ msg string }
+func hasUserErrorCode(err error, want string) bool {
+	if err == nil {
+		return false
+	}
+	return rterr.NormalizeError(err).Code.String() == want
+}
 
-func (e *nickErr) Error() string { return e.msg }
+func userErrorDebugMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	return rterr.NormalizeError(err).DebugMessage
+}
 
 func (h *UserHandler) handleFollow(w http.ResponseWriter, r *http.Request) {
 	body := readOptionalBody(r)
@@ -866,8 +858,8 @@ func (h *UserHandler) handleCreatePersona(w http.ResponseWriter, r *http.Request
 	}
 	p, err := h.subAccount.CreateSubAccount(r.Context(), userID, data)
 	if err != nil {
-		if strings.Contains(err.Error(), "persona_handle_taken") {
-			writeInvalidArg(w, r, "用户号已被占用")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.handle_taken") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -890,16 +882,16 @@ func (h *UserHandler) handleUpdatePersona(w http.ResponseWriter, r *http.Request
 	}
 	p, err := h.subAccount.UpdatePersona(r.Context(), userID, personaID, data)
 	if err != nil {
-		if strings.Contains(err.Error(), "persona_handle_taken") {
-			writeInvalidArg(w, r, "用户号已被占用")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.handle_taken") {
+			writeHTTPError(w, r, err)
 			return
 		}
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "已退役分身不可继续编辑")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -922,16 +914,16 @@ func (h *UserHandler) handleApplyPersonaProfileSync(w http.ResponseWriter, r *ht
 	}
 	result, err := h.subAccount.ApplyPersonaProfileSync(r.Context(), userID, personaID, data)
 	if err != nil {
-		if strings.Contains(err.Error(), "persona_handle_taken") {
-			writeInvalidArg(w, r, "用户号已被占用")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.handle_taken") {
+			writeHTTPError(w, r, err)
 			return
 		}
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "已退役分身不可继续同步资料")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -964,22 +956,16 @@ func (h *UserHandler) handleDeletePersona(w http.ResponseWriter, r *http.Request
 	personaID := r.PathValue("subAccountId")
 	err := h.subAccount.DeleteSubAccount(r.Context(), userID, personaID)
 	if err != nil {
-		if strings.Contains(err.Error(), "primary") ||
-			strings.Contains(err.Error(), "last") ||
-			strings.Contains(err.Error(), "switch to another persona") {
-			writeForbidden(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.primary_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.last_sub_account") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.active_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retire_required") {
+			writeHTTPError(w, r, err)
 			return
 		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "已退役分身不可删除")
-			return
-		}
-		if strings.Contains(err.Error(), "must be retired") {
-			writeConflict(w, r, "该分身已有记录归因，请使用退役而不是删除", err.Error())
-			return
-		}
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -997,22 +983,16 @@ func (h *UserHandler) handleRetirePersona(w http.ResponseWriter, r *http.Request
 	personaID := r.PathValue("subAccountId")
 	view, err := h.subAccount.RetirePersona(r.Context(), userID, personaID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if strings.Contains(err.Error(), "primary") ||
-			strings.Contains(err.Error(), "last") ||
-			strings.Contains(err.Error(), "switch to another persona") {
-			writeForbidden(w, r, err.Error())
-			return
-		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "该分身已退役")
-			return
-		}
-		if strings.Contains(err.Error(), "empty persona should be deleted directly") {
-			writeInvalidArg(w, r, "空白分身请直接删除，无需退役")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.primary_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.last_sub_account") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.active_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.delete_empty_only") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -1029,22 +1009,16 @@ func (h *UserHandler) handleDeleteEmptyPersona(w http.ResponseWriter, r *http.Re
 	}
 	personaID := r.PathValue("subAccountId")
 	if err := h.subAccount.DeleteEmptyPersona(r.Context(), userID, personaID); err != nil {
-		if strings.Contains(err.Error(), "primary") ||
-			strings.Contains(err.Error(), "last") ||
-			strings.Contains(err.Error(), "switch to another persona") {
-			writeForbidden(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.primary_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.last_sub_account") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.active_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") ||
+			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retire_required") {
+			writeHTTPError(w, r, err)
 			return
 		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "已退役分身不可删除")
-			return
-		}
-		if strings.Contains(err.Error(), "must be retired") {
-			writeConflict(w, r, "该分身已有记录归因，请使用退役而不是删除", err.Error())
-			return
-		}
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
 		writeHTTPError(w, r, err)
@@ -1062,12 +1036,12 @@ func (h *UserHandler) handleActivatePersona(w http.ResponseWriter, r *http.Reque
 	}
 	err := h.subAccount.ActivateSubAccount(r.Context(), userID, personaID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, r, err.Error())
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if strings.Contains(err.Error(), "retired persona") {
-			writeInvalidArg(w, r, "已退役分身不可再激活")
+		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") {
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeHTTPError(w, r, err)

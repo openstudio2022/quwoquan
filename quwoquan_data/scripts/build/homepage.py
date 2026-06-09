@@ -65,6 +65,21 @@ def season_keys() -> list[str]:
     return _catalog_keys("season_catalog.yaml", "seasons")
 
 
+def _entity_base_draft(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> dict[str, Any]:
+    """取该实体最完整的来源单元 source.md 作为主页底稿（百科优先，质量分→长度排序）。"""
+    from _common.base_draft import base_draft_candidates, load_base_draft_text
+
+    brief = {"entityRefs": [entity_ref(domain, etype, name)]}
+    candidates = base_draft_candidates(task_id, batch_id, brief)
+    if not candidates:
+        return {}
+    best = candidates[0]
+    text = load_base_draft_text(task_id, batch_id, best["sourceRef"]).strip()
+    if not text:
+        return {}
+    return {"sourceRef": best["sourceRef"], "text": text[:4000]}
+
+
 def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> tuple[Path, list[str]]:
     """为 coverage 实体下发实体主页产出契约（inputs + assistant_tasks）。"""
     inputs_root = batch_root(task_id, batch_id) / "entities"
@@ -76,6 +91,7 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
         domain, etype, name = target["domain"], target["etype"], target["name"]
         ref = _safe_ref(domain, etype, name)
         sop_dir = data.sop_dir(domain, etype)
+        base_draft = _entity_base_draft(task_id, batch_id, domain, etype, name)
         input_path = batch_entity_page_input_path(task_id, batch_id, domain, etype, name)
         write_json(input_path, {
             "schemaVersion": "quwoquan_data.stage_envelope",
@@ -96,6 +112,19 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
                 "conditionAxes": axes,
                 "regionMenu": region_keys(),
                 "seasonMenu": season_keys(),
+                "baseDraft": base_draft,
+                "editingInstruction": (
+                    "以上方百科底稿为基础做适度加工（轻改）：参考百度百科写法、按真实信息归类章节，"
+                    "只做去语病/纠错别字/理顺语句/补证据/去版权与平台痕迹；"
+                    "结构尊重底稿真实内容——SOP 模板里的章节只是『规范化参考』（用于章节命名与归类对齐），"
+                    "不是必须逐节填满的清单：仅『概况』必备，其余章节有真实内容才写、无内容直接省略、禁止硬凑，"
+                    "也允许按底稿增减或合并章节；章节语义须正确（如『历史沿革』必须是真实历史，否则省略）；"
+                    "不要从零总结，也不要硬套固定章节模板。"
+                ),
+                "imageRequirement": (
+                    "实体主页须配 ≥1 张真实 CC 图片：在 page.md 用 asset:// 引用并在 manifest.json 登记，"
+                    "图片来自 source_plan 的结构化 imageUrls（含 license/credit/relevance）。"
+                ),
                 "conditionEvidenceContract": {
                     "requiredWhen": "conditionProfile.regions 或 conditionProfile.seasons 非空",
                     "field": "conditionProfile.evidenceRefs",
@@ -136,7 +165,8 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
     refs = _page_asset_refs(entity_dir / "page.md")
     assets = manifest_payload.get("assets") or []
     if not refs and not assets:
-        return []
+        # 主页强制配图：实体主页须含 ≥1 真实图片资产（page.md asset:// + manifest 登记）。
+        return [f"{label}: 实体主页须配 ≥1 真实图片（page.md 用 asset:// 引用并在 manifest 登记）"]
     if not isinstance(assets, list):
         return [f"{label}: manifest.assets 须为数组"]
     id_to_file: dict[str, str] = {}

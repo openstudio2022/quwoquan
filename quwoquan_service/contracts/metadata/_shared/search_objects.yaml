@@ -41,11 +41,60 @@ object_types:
     domain: entity
     execution_strategy: remote_only
     provider: homepage_remote
+  - id: user.profile
+    label: 用户
+    domain: user
+    execution_strategy: remote_only
+    provider: user_profile_remote
+  - id: tag
+    label: 标签
+    domain: tag
+    execution_strategy: remote_only
+    provider: tag_remote
   - id: integration.location_poi
     label: 位置
     domain: integration
     execution_strategy: remote_only
     provider: location_remote
+
+# AI/App-facing target taxonomy. These are the ONLY object names exposed on the
+# retrieve contract; internal object_types stay implementation details.
+ai_targets:
+  - id: article
+    label: 文章
+    object_type: content.post
+    content_type: article
+    description: 文字为主题的文章
+  - id: photo
+    label: 图文
+    object_type: content.post
+    content_type: image
+    description: 发图配文，图片为主体、文字为说明
+  - id: video
+    label: 视频
+    object_type: content.post
+    content_type: video
+    description: 视频内容
+  - id: user
+    label: 用户
+    object_type: user.profile
+    description: 用户或创作者公开资料
+  - id: entity
+    label: 实体主页
+    object_type: entity.homepage
+    description: 景点、地点、品牌、学校等实体主页
+  - id: circle
+    label: 圈子
+    object_type: circle.circle
+    description: 圈子
+  - id: group
+    label: 群组
+    object_type: circle.group
+    description: 群组/群聊组
+  - id: chat
+    label: 聊天
+    object_type: chat.message
+    description: 聊天会话与消息片段（按权限返回）
 
 section_kinds:
   - id: contacts
@@ -78,3 +127,11 @@ section_kinds:
     title: 网页
     default_object_types:
       - web.document
+  - id: users
+    title: 用户
+    default_object_types:
+      - user.profile
+  - id: tags
+    title: 标签
+    default_object_types:
+      - tag

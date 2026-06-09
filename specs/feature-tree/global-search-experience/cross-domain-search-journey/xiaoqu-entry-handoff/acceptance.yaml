@@ -7,32 +7,57 @@ node:
   parent_domain_service: global-search-experience
   parent_business_capability: cross-domain-search-journey
 scope:
-  summary: xiaoqu entry handoff 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: xiaoqu entry handoff 验收范围，重点验证小趣通过 canonical search 获得 web_search 等价能力与趣我圈业务对象检索能力。
+  in_scope:
+    - 小趣自然语言 query 到 canonical search request 的转换。
+    - web.document 与站内对象统一聚合、引用和降级。
+    - SearchXiaoquResults 输出真实 citation provenance。
+    - page/object rich context 参与 retrieval 与 citation rank。
+  out_of_scope:
+    - LLM 自由执行未登记 provider。
+    - 未授权聊天消息跨用户检索。
 gwt_acceptance:
   GWT1:
-    title: xiaoqu entry handoff GWT
+    title: 小趣通过统一 LLM search tool 获得网页与站内对象检索结果
     given:
-    - 前置条件明确。
+    - 用户在小趣或全局搜索“小趣搜”输入自然语言 query。
+    - canonical search registry 已注册 web.document、content.post、entity.homepage、circle.group、chat.message 等对象类型。
     when:
-    - 用户或系统动作发生。
+    - 小趣生成 searchPlans/queryVariants 并调用 search 工具。
     then:
-    - 可观察结果符合预期。
+    - web_search 能力作为 web.document provider 接入 canonical search，而不是独立 fake adapter。
+    - app_search/search/web_search 的工具输出采用同一 hits/citations/provenance envelope。
+    - 返回 citation 至少包含 objectType、objectId、title、snippet、sourceDomain、score。
+    - 未实现或不可访问 provider 返回 degrade signal，不阻断其他 provider 结果。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - SearchXiaoquResults 不再返回固定 spec/knowledge 占位 citation。
+    - tool_coordinator 测试能证明 web_search/app_search/search 走 canonical_search provider。
+    - 小趣结果页可以打开真实站内对象或公开 web citation。
+    edge_cases:
+    - query 命中敏感词时返回结构化阻断，不生成编造 citation。
+    - chat.message 仅在授权用户上下文内可检索。
+    - web.document provider 不可用时，站内 provider 仍可返回结果并带 degrade。
+    contract_refs:
+    - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md
+    - quwoquan_service/contracts/metadata/_shared/search_contract.yaml
+    - quwoquan_service/contracts/metadata/_shared/search_objects.yaml
+    performance_points:
+    - 小趣检索必须记录 search.intensity、provider coverage、citation count 与 degrade signal。
     evidence:
       primary:
       - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T3_app_api_integration
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
+      - quwoquan_service/services/assistant-service/tests/search_xiaoqu_contract_test.go
+      - quwoquan_app/test/common/search/search_to_xiaoqu_journey_test.dart
+      recorded:
+      - quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
+      - quwoquan_service/services/assistant-service/internal/application/service_test.go
+    status: implemented
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

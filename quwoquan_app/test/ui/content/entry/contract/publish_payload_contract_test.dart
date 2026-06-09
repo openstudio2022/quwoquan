@@ -91,6 +91,42 @@ void main() {
     });
   });
 
+  group('PublishPayload — 创作锚点契约（上下文化入口）', () {
+    test('圈子锚点注入 circleIds 后 payload 携带该圈子且为公开', () {
+      // 模拟「向圈子投稿」入口：CreatePage 将 circle 锚点写入 PublishSettings。
+      const base = PublishSettings();
+      final anchored = base.copyWith(
+        isPublic: true,
+        circleIds: <String>['circle_west_sichuan'],
+        circleNames: <String>['川西出行圈'],
+      );
+      final payload = anchored.toPayloadFields();
+      expect(payload['visibility'], 'public');
+      expect(payload['circleIds'], contains('circle_west_sichuan'));
+    });
+
+    test('对象主页 + 圈子锚点可共存于同一 payload', () {
+      const base = PublishSettings(
+        homepage: HomepageCanonicalReference(
+          id: 'homepage_sight_daocheng',
+          homepageType: 'sight',
+          title: '稻城亚丁',
+          subtitle: '川西高原核心景区',
+          coverUrl: 'https://example.com/daocheng.jpg',
+          status: 'published',
+        ),
+      );
+      final anchored = base.copyWith(
+        isPublic: true,
+        circleIds: <String>['circle_west_sichuan'],
+        circleNames: <String>['川西出行圈'],
+      );
+      final payload = anchored.toPayloadFields();
+      expect(payload['primaryHomepageId'], 'homepage_sight_daocheng');
+      expect(payload['circleIds'], contains('circle_west_sichuan'));
+    });
+  });
+
   group('PublishPayload — 兼容性契约', () {
     test('visibility 仅允许 public 或 private', () {
       const allowed = ['public', 'private'];

@@ -21,9 +21,18 @@ domain_acceptance:
       - T3_service_contract
       supporting: []
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
+      - quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
+      - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+      recorded:
+      - quwoquan_service/services/chat-service/tests/event_publish_contract_test.go
+      - quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
+      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - quwoquan_app/test/ui/chat/providers/chat_message_provider_test.dart
+      - quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
+      - quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
+    status: partial
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
