@@ -101,12 +101,13 @@ jobs:
           ref: ${{ inputs.checkout_ref || github.sha }}
       - name: Download resolved release artifact
         if: ${{ inputs.release_artifact_name != '' }}
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.release_artifact_name }}
           path: .mainline-release-artifact
       - name: Unpack generated release snapshots
-        if: ${{ inputs.release_artifact_name != '' }}
+        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') != '' }}
         run: |
           python3 - <<'PY'
           import json
@@ -166,6 +167,7 @@ jobs:
           fi
           cp "${RUNNER_TEMP}/gamma-ecs-bundle.tgz" gamma-ecs-bundle.tgz
       - name: Upload bundle
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: gamma-ecs-bundle
@@ -194,10 +196,53 @@ jobs:
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Download bundle
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: gamma-ecs-bundle
           path: bundle
+      - name: Recreate bundle locally when artifact missing
+        if: ${{ hashFiles('bundle/gamma-ecs-bundle.tgz') == '' }}
+        run: |
+          mkdir -p bundle
+          if [ "${{ inputs.skip_upload }}" = "true" ] || [ -n "${{ inputs.release_artifact_name }}" ]; then
+            mkdir -p .gamma-minimal-bundle
+            mkdir -p .gamma-minimal-bundle/quwoquan_app
+            mkdir -p .gamma-minimal-bundle/releases
+            cp -R agent_ops .gamma-minimal-bundle/agent_ops
+            cp -R deploy .gamma-minimal-bundle/deploy
+            cp -R releases/config .gamma-minimal-bundle/releases/config
+            cp -R quwoquan_app/scripts .gamma-minimal-bundle/quwoquan_app/scripts
+            cp -R quwoquan_service .gamma-minimal-bundle/quwoquan_service
+            tar \
+              --exclude='.git' \
+              --exclude='.dart_tool' \
+              --exclude='build' \
+              --exclude='node_modules' \
+              --exclude='.venv' \
+              --exclude='__pycache__' \
+              --exclude='.pytest_cache' \
+              --exclude='.mypy_cache' \
+              --exclude='quwoquan_app/.dart_tool' \
+              --exclude='quwoquan_app/build' \
+              --exclude='apps/ops-portal/node_modules' \
+              -C ".gamma-minimal-bundle" \
+              -czf "bundle/gamma-ecs-bundle.tgz" .
+          else
+            tar \
+              --exclude='.git' \
+              --exclude='.dart_tool' \
+              --exclude='build' \
+              --exclude='node_modules' \
+              --exclude='.venv' \
+              --exclude='__pycache__' \
+              --exclude='.pytest_cache' \
+              --exclude='.mypy_cache' \
+              --exclude='quwoquan_app/.dart_tool' \
+              --exclude='quwoquan_app/build' \
+              --exclude='apps/ops-portal/node_modules' \
+              -czf "bundle/gamma-ecs-bundle.tgz" .
+          fi
       - name: Resolve gamma URLs
         id: urls
         run: |
@@ -253,6 +298,7 @@ jobs:
           ALLOW_DETERMINISTIC_BETA: ${{ env.ALLOW_DETERMINISTIC_BETA }}
       - name: Upload ECS deploy report (pre)
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: ecs-onebox-deploy-report-pre
@@ -291,6 +337,7 @@ jobs:
           GAMMA_PRODUCT_OPS_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.product_ops_base_url }}
       - name: Upload gamma readiness report (pre)
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: gamma-readiness-pre
@@ -421,6 +468,7 @@ jobs:
           "${args[@]}"
       - name: Upload assistant smoke report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: assistant-runtime-smoke-gamma-pre
@@ -460,6 +508,7 @@ jobs:
             --report artifacts/avatar-e2e/cloud-gamma-pre/avatar_e2e_report.json
       - name: Upload chat avatar API probe report (pre)
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: chat-avatar-api-probe-pre
@@ -551,6 +600,7 @@ jobs:
           fi
       - name: Upload gamma hosted timing summary
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: gamma-hosted-timing-summary
