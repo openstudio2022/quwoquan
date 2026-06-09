@@ -93,10 +93,10 @@ jobs:
       run:
         working-directory: quwoquan_service
     steps:
+      - uses: actions/checkout@v4
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
 
       - name: 设置 Go
         uses: actions/setup-go@v5
