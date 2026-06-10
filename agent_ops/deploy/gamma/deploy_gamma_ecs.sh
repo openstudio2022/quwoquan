@@ -34,6 +34,116 @@ DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS="${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}
 DEFAULT_COMPOSE_TIMEOUT_SECONDS="${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-3600}"
 DEFAULT_HOST_READY_TIMEOUT_SECONDS="${GAMMA_ECS_HOST_READY_TIMEOUT_SECONDS:-360}"
 DEFAULT_SKIP_IMAGE_PREPULL="${GAMMA_ECS_SKIP_IMAGE_PREPULL:-0}"
+TEST_AUTH_TOKEN_DEFAULT="${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}"
+if [[ "$STAGE" == "prod" ]]; then
+  TEST_AUTH_TOKEN_DEFAULT="${PROD_TEST_AUTH_TOKEN:-${TEST_AUTH_TOKEN:-$TEST_AUTH_TOKEN_DEFAULT}}"
+fi
+
+resolve_assistant_mimo_api_key() {
+  python3 - "$ROOT" <<'PY'
+import json
+import os
+import re
+from pathlib import Path
+
+root = Path(os.sys.argv[1])
+home = Path.home()
+config_path = root / "quwoquan_app" / "assistant" / "config.json"
+
+def parse_dotenv(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not path.is_file():
+        return values
+    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+def aliases(name: str) -> list[str]:
+    if name == "MIMO_API_KEY":
+        return ["MIMO_API_KEY", "PERSONAL_ASSISTANT_MIMO_API_KEY"]
+    if name == "PERSONAL_ASSISTANT_MIMO_API_KEY":
+        return ["PERSONAL_ASSISTANT_MIMO_API_KEY", "MIMO_API_KEY"]
+    return [name]
+
+def resolve_from_moltbot(env_name: str) -> str:
+    if env_name not in {"MIMO_API_KEY", "PERSONAL_ASSISTANT_MIMO_API_KEY"}:
+        return ""
+    for candidate in [
+        home / ".moltbot" / ".env",
+        home / ".clawdbot" / ".env",
+    ]:
+        values = parse_dotenv(candidate)
+        for name in aliases(env_name):
+            value = values.get(name, "").strip()
+            if value:
+                return value
+    for candidate in [
+        home / ".moltbot" / "moltbot.json",
+        home / ".moltbot" / "clawdbot.json",
+        home / ".moltbot" / "agents" / "main" / "agent" / "models.json",
+        home / ".clawdbot" / "moltbot.json",
+        home / ".clawdbot" / "clawdbot.json",
+        home / ".clawdbot" / "agents" / "main" / "agent" / "models.json",
+    ]:
+        if not candidate.is_file():
+            continue
+        try:
+            decoded = json.loads(candidate.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for path in [
+            ("skills", "mimo", "apiKey"),
+            ("models", "providers", "mimo", "apiKey"),
+        ]:
+            value = decoded
+            for part in path:
+                value = value.get(part) if isinstance(value, dict) else None
+            if isinstance(value, str) and value.strip() and not value.strip().startswith("${"):
+                print(value.strip())
+                raise SystemExit(0)
+    raise SystemExit(0)
+
+if not config_path.is_file():
+    raise SystemExit(0)
+try:
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+except Exception:
+    raise SystemExit(0)
+
+providers = (((config.get("models") or {}).get("providers")) or {})
+provider = providers.get("mimo") if isinstance(providers, dict) else None
+raw = str((provider or {}).get("apiKey") or "").strip()
+if not raw:
+    raise SystemExit(0)
+match = re.fullmatch(r"\$\{([A-Z0-9_]+)\}", raw)
+if not match:
+    print(raw)
+    raise SystemExit(0)
+env_name = match.group(1)
+for name in aliases(env_name):
+    value = os.environ.get(name, "").strip()
+    if value:
+        print(value)
+        raise SystemExit(0)
+resolved = resolve_from_moltbot(env_name)
+if resolved:
+    print(resolved)
+PY
+}
+
+ASSISTANT_MIMO_API_KEY="${PERSONAL_ASSISTANT_MIMO_API_KEY:-${MIMO_API_KEY:-}}"
+if [[ -z "$ASSISTANT_MIMO_API_KEY" && "$STAGE" == "prod" ]]; then
+  ASSISTANT_MIMO_API_KEY="$(resolve_assistant_mimo_api_key)"
+fi
+if [[ "$STAGE" == "prod" && -z "$ASSISTANT_MIMO_API_KEY" ]]; then
+  echo "::error::prod onebox deploy requires PERSONAL_ASSISTANT_MIMO_API_KEY (or resolvable MIMO_API_KEY)" >&2
+  exit 2
+fi
+PREV_IMAGE_VERSION=""
 if [[ "$SKIP_UPLOAD" == "1" ]]; then
   # skip_upload 可能紧跟一次手动 prune；这里仍默认补拉基础镜像，避免 --pull=never 直接失败。
   DEFAULT_COMPOSE_TIMEOUT_SECONDS="${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-2400}"
@@ -136,19 +246,21 @@ echo "[gamma-ecs] skip_upload=${SKIP_UPLOAD}"
 FAILURE_STAGE=""
 on_fail() {
   FAILURE_STAGE="${FAILURE_STAGE:-unknown}"
-  python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$BASE_URL" "$FAILURE_STAGE" <<'PY' || true
+  python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$CONFIG_VERSION" "$PREV_IMAGE_VERSION" "$BASE_URL" "$FAILURE_STAGE" <<'PY' || true
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-path, started, stage, image_version, base_url, failure_stage = sys.argv[1:7]
+path, started, stage, image_version, config_version, previous_image_version, base_url, failure_stage = sys.argv[1:9]
 report = {
     "startedAt": started,
     "endedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "status": "failed",
     "stage": stage,
     "imageVersion": image_version,
+    "configVersion": config_version,
+    "previousImageVersion": previous_image_version or None,
     "baseUrl": base_url,
     "failureStage": failure_stage,
 }
@@ -162,13 +274,15 @@ BACKUP_REMOTE="${BACKUP_PARENT:-$REMOTE_DIR/../gamma-backups}"
 echo "[gamma-ecs] remote_backup_parent=${BACKUP_REMOTE}"
 
 if [[ "$SKIP_UPLOAD" != "1" ]]; then
-  FAILURE_STAGE="prepare_curated_media"
-  echo "[gamma-ecs] preparing gamma curated fixture/media bundle"
-  python3 "$ROOT/quwoquan_service/scripts/seed/build_gamma_curated_fixture_bundle.py" \
-    --output-media-root "$CURATED_MEDIA_ROOT" >/dev/null
-  if [[ ! -f "$CURATED_MEDIA_BUNDLE" ]]; then
-    echo "::error::missing gamma curated media bundle: $CURATED_MEDIA_BUNDLE" >&2
-    exit 2
+  if [[ "$STAGE" != "prod" ]]; then
+    FAILURE_STAGE="prepare_curated_media"
+    echo "[gamma-ecs] preparing gamma curated fixture/media bundle"
+    python3 "$ROOT/quwoquan_service/scripts/seed/build_gamma_curated_fixture_bundle.py" \
+      --output-media-root "$CURATED_MEDIA_ROOT" >/dev/null
+    if [[ ! -f "$CURATED_MEDIA_BUNDLE" ]]; then
+      echo "::error::missing gamma curated media bundle: $CURATED_MEDIA_BUNDLE" >&2
+      exit 2
+    fi
   fi
 
   echo "[gamma-ecs] creating remote backup snapshot (if tree exists)"
@@ -205,16 +319,59 @@ if [[ "$SKIP_UPLOAD" != "1" ]]; then
       -czf - . | remote_tar_extract_into "$REMOTE_STAGE_DIR"
   fi
   activate_remote_stage_dir
-  remote_exec "rm -rf '$REMOTE_PREV_DIR'"
 
-  echo "[gamma-ecs] uploading curated gamma media bundle"
-  FAILURE_STAGE="upload_curated_media"
-  remote_exec "rm -rf '$REMOTE_DIR/state/local/gamma/media' && mkdir -p '$REMOTE_DIR/state/local/gamma'"
-  tar -czf - -C "$ROOT/state/local/gamma" media | remote_tar_extract_into "$REMOTE_DIR/state/local/gamma"
+  if [[ "$STAGE" != "prod" ]]; then
+    echo "[gamma-ecs] uploading curated gamma media bundle"
+    FAILURE_STAGE="upload_curated_media"
+    remote_exec "rm -rf '$REMOTE_DIR/state/local/gamma/media' && mkdir -p '$REMOTE_DIR/state/local/gamma'"
+    tar -czf - -C "$ROOT/state/local/gamma" media | remote_tar_extract_into "$REMOTE_DIR/state/local/gamma"
+  else
+    echo "[gamma-ecs] stage=prod — restoring existing remote media root from previous tree"
+    FAILURE_STAGE="restore_prod_media_root"
+    remote_exec "if [ ! -d '$REMOTE_PREV_DIR/state/local/gamma/media' ]; then echo '::error::missing previous remote media root at $REMOTE_PREV_DIR/state/local/gamma/media' >&2; exit 2; fi; mkdir -p '$REMOTE_DIR/state/local/gamma'; rm -rf '$REMOTE_DIR/state/local/gamma/media'; cp -a '$REMOTE_PREV_DIR/state/local/gamma/media' '$REMOTE_DIR/state/local/gamma/'"
+  fi
+  remote_exec "rm -rf '$REMOTE_PREV_DIR'"
 else
   echo "[gamma-ecs] skip_upload=1 — using existing tree at ${REMOTE_DIR}"
-  echo "[gamma-ecs] skip_upload=1 — reusing existing curated media bundle on remote"
+  if [[ "$STAGE" != "prod" ]]; then
+    echo "[gamma-ecs] skip_upload=1 — reusing existing curated media bundle on remote"
+  else
+    echo "[gamma-ecs] skip_upload=1 — preserving existing remote media root"
+  fi
 fi
+
+FAILURE_STAGE="remote_disk_reclaim"
+echo "[gamma-ecs] reclaiming remote disk before stack start"
+remote_exec "bash -s" <<'REMOTE_DISK_RECLAIM'
+set -euo pipefail
+root_use_pct="$(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')"
+echo "[gamma-ecs] root disk use: ${root_use_pct:-unknown}%"
+if [[ -n "$root_use_pct" && "$root_use_pct" -lt 85 ]]; then
+  exit 0
+fi
+echo "[gamma-ecs] reclaiming remote disk"
+journalctl --vacuum-size=256M >/dev/null 2>&1 || true
+if command -v podman >/dev/null 2>&1; then
+  podman container prune -f >/dev/null 2>&1 || true
+  podman image prune -f >/dev/null 2>&1 || true
+  podman volume prune -f >/dev/null 2>&1 || true
+  podman builder prune -af >/dev/null 2>&1 || true
+fi
+if command -v docker >/dev/null 2>&1; then
+  docker container prune -f >/dev/null 2>&1 || true
+  docker image prune -af >/dev/null 2>&1 || true
+  docker volume prune -f >/dev/null 2>&1 || true
+  docker builder prune -af >/dev/null 2>&1 || true
+fi
+find /tmp -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf {} + >/dev/null 2>&1 || true
+root_use_pct="$(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')"
+echo "[gamma-ecs] root disk use after reclaim: ${root_use_pct:-unknown}%"
+if [[ -n "$root_use_pct" && "$root_use_pct" -ge 95 ]]; then
+  echo "::error::remote root disk still >=95% after reclaim; aborting deploy" >&2
+  df -h / >&2 || true
+  exit 2
+fi
+REMOTE_DISK_RECLAIM
 
 FAILURE_STAGE="remote_compose"
 echo "[gamma-ecs] persisting deploy state & starting stack (LOCAL_GAMMA_IMAGE_VERSION=${IMAGE_VERSION})"
@@ -226,7 +383,7 @@ if [[ -z "$PREV_IMAGE_VERSION" ]] && remote_exec "test -f '${REMOTE_DIR}/.gamma_
   )"
 fi
 
-remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") CONFIG_VERSION=$(printf '%q' "$CONFIG_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL=$(printf '%q' "${MEDIA_ORIGIN_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_HOST_READY_TIMEOUT_SECONDS}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-deterministic}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-1}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_COMPOSE_TIMEOUT_SECONDS}") GAMMA_ECS_SKIP_IMAGE_PREPULL=$(printf '%q' "${DEFAULT_SKIP_IMAGE_PREPULL}") && bash -s" <<'REMOTE_SCRIPT'
+remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") CONFIG_VERSION=$(printf '%q' "$CONFIG_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "$TEST_AUTH_TOKEN_DEFAULT") PROD_TEST_AUTH_TOKEN=$(printf '%q' "${PROD_TEST_AUTH_TOKEN:-}") TEST_AUTH_TOKEN=$(printf '%q' "${TEST_AUTH_TOKEN:-}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL=$(printf '%q' "${MEDIA_ORIGIN_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_HOST_READY_TIMEOUT_SECONDS}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") PERSONAL_ASSISTANT_MIMO_API_KEY=$(printf '%q' "${ASSISTANT_MIMO_API_KEY}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_COMPOSE_TIMEOUT_SECONDS}") GAMMA_ECS_SKIP_IMAGE_PREPULL=$(printf '%q' "${DEFAULT_SKIP_IMAGE_PREPULL}") && bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 python3 - <<'PY'
 import json
@@ -240,6 +397,7 @@ prev = os.environ.get("PREV_IMAGE_VERSION", "").strip() or None
 data = {
     "previousImageVersion": prev,
     "imageVersion": os.environ["IMAGE_VERSION"],
+    "configVersion": os.environ["CONFIG_VERSION"],
     "stage": os.environ["STAGE"],
     "updatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
 }
@@ -348,7 +506,7 @@ pre_pull_local_gamma_images() {
     docker.io/library/redis:7.2-alpine
     docker.io/library/golang:1.24-bookworm
     docker.io/library/golang:1.24-bookworm
-    docker.io/library/python:3.11
+    docker.io/library/python:3.11-slim
     docker.io/library/alpine:3.19
     docker.io/library/caddy:2.8.4-alpine
   )
@@ -376,10 +534,43 @@ print_compose_diagnostics() {
   docker images || true
 }
 
+reclaim_remote_disk_if_needed() {
+  local root_use_pct=""
+  root_use_pct="$(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')"
+  echo "[gamma-ecs] root disk use: ${root_use_pct:-unknown}%"
+  if [[ -n "$root_use_pct" && "$root_use_pct" -lt 85 ]]; then
+    return 0
+  fi
+
+  echo "[gamma-ecs] reclaiming remote disk before stack start"
+  journalctl --vacuum-size=256M >/dev/null 2>&1 || true
+  if command -v podman >/dev/null 2>&1; then
+    podman container prune -f >/dev/null 2>&1 || true
+    podman image prune -f >/dev/null 2>&1 || true
+    podman volume prune -f >/dev/null 2>&1 || true
+    podman builder prune -af >/dev/null 2>&1 || true
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    docker container prune -f >/dev/null 2>&1 || true
+    docker image prune -af >/dev/null 2>&1 || true
+    docker volume prune -f >/dev/null 2>&1 || true
+    docker builder prune -af >/dev/null 2>&1 || true
+  fi
+  find /tmp -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf {} + >/dev/null 2>&1 || true
+  root_use_pct="$(df -P / | awk 'NR==2 {gsub(/%/,"",$5); print $5}')"
+  echo "[gamma-ecs] root disk use after reclaim: ${root_use_pct:-unknown}%"
+  if [[ -n "$root_use_pct" && "$root_use_pct" -ge 95 ]]; then
+    echo "::error::remote root disk still >=95% after reclaim; aborting deploy" >&2
+  df -h / >&2 || true
+    exit 2
+  fi
+}
+
 install_docker_if_needed
 configure_container_registry_mirror
 docker --version
 docker compose version
+reclaim_remote_disk_if_needed
 pre_pull_local_gamma_images
 
 export LOCAL_GAMMA_IMAGE_VERSION="${IMAGE_VERSION}"
@@ -419,7 +610,7 @@ fi
 docker compose -f quwoquan_service/docker-compose.gamma-local.yaml ps
 
 GW_LOCAL_PORT="${LOCAL_GAMMA_HTTP_PORT:-19000}"
-if python3 - <<'PY' >/dev/null 2>&1
+if [[ "$STAGE" != "prod" ]] && python3 - <<'PY' >/dev/null 2>&1
 import sys
 raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
 PY
@@ -427,7 +618,7 @@ then
   python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py \
     --base-url "http://127.0.0.1:${GW_LOCAL_PORT}" \
     --product-ops-base-url "http://127.0.0.1:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}" \
-    --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}" \
+    --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-${TEST_AUTH_TOKEN:-gamma-ecs-token}}" \
     --skip-flutter-contracts
 else
   echo "[gamma-ecs] WARN: skip run_local_gamma_t3.py because python3 < 3.10 on remote host" >&2
@@ -463,33 +654,50 @@ wait(base_url + "/healthz")
 wait(ops_url + "/healthz")
 PY
 
-python3 "${ROOT}/quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py" --base-url "${BASE_URL}"
-python3 "${ROOT}/quwoquan_service/scripts/media/verify_gamma_curated_media_routes.py" \
-  --base-url "${BASE_URL}" \
-  --report "${REPORT_DIR}/gamma-media-route-report.json"
-if [[ "${MEDIA_BASE_URL}" != "${BASE_URL}" ]]; then
+if [[ "$STAGE" != "prod" ]]; then
+  python3 "${ROOT}/quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py" --base-url "${BASE_URL}"
   python3 "${ROOT}/quwoquan_service/scripts/media/verify_gamma_curated_media_routes.py" \
-    --base-url "${MEDIA_BASE_URL}" \
-    --report "${REPORT_DIR}/gamma-media-public-route-report.json"
+    --base-url "${BASE_URL}" \
+    --report "${REPORT_DIR}/gamma-media-route-report.json"
+  if [[ "${MEDIA_BASE_URL}" != "${BASE_URL}" ]]; then
+    python3 "${ROOT}/quwoquan_service/scripts/media/verify_gamma_curated_media_routes.py" \
+      --base-url "${MEDIA_BASE_URL}" \
+      --report "${REPORT_DIR}/gamma-media-public-route-report.json"
+  fi
 fi
 
-python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$BASE_URL" "$PRODUCT_OPS_BASE_URL" "$REMOTE_DIR" "$MEDIA_ORIGIN_BASE_URL" "$MEDIA_BASE_URL" "$CURATED_MEDIA_BUNDLE" <<'PY'
+python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$CONFIG_VERSION" "$PREV_IMAGE_VERSION" "$BASE_URL" "$PRODUCT_OPS_BASE_URL" "$REMOTE_DIR" "$MEDIA_ORIGIN_BASE_URL" "$MEDIA_BASE_URL" "$CURATED_MEDIA_BUNDLE" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-path, started, stage, image_version, base_url, ops_url, remote_dir, media_origin, media_base_url, media_bundle = sys.argv[1:11]
+(
+    path,
+    started,
+    stage,
+    image_version,
+    config_version,
+    previous_image_version,
+    base_url,
+    ops_url,
+    remote_dir,
+    media_origin,
+    media_base_url,
+    media_bundle,
+) = sys.argv[1:13]
 report = {
     "startedAt": started,
     "endedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "status": "passed",
     "stage": stage,
     "imageVersion": image_version,
+    "configVersion": config_version,
+    "previousImageVersion": previous_image_version or None,
     "baseUrl": base_url,
     "productOpsBaseUrl": ops_url,
     "mediaBaseUrl": media_base_url,
-    "curatedMediaBundle": media_bundle,
+    "curatedMediaBundle": media_bundle if stage != "prod" else None,
     "remoteDir": remote_dir,
     "mediaOriginBaseUrl": media_origin or None,
     "failureStage": None,

@@ -61,6 +61,50 @@ LOCAL_GAMMA_MEDIA_ROOT="${LOCAL_GAMMA_STATE_ROOT}/media"
 LOCAL_GAMMA_CADDYFILE="${LOCAL_GAMMA_STATE_ROOT}/Caddyfile"
 LOCAL_GAMMA_MODEL_CACHE_ROOT="${LOCAL_GAMMA_STATE_ROOT}/model-cache"
 LOCAL_GAMMA_STACK_REPORT="${LOCAL_GAMMA_STATE_ROOT}/stack_state.json"
+STAGE="${STAGE:-gamma}"
+LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-}"
+CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-}"
+LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-}"
+case "$STAGE" in
+  ""|gamma|pre)
+    LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-gamma}"
+    CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-gamma}"
+    LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-local-gamma}"
+    ENABLE_FIXTURE_SEEDS="${ENABLE_FIXTURE_SEEDS:-1}"
+    ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-deterministic}"
+    ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-1}"
+    ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}"
+    ;;
+  prod)
+    LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-prod}"
+    CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-prod}"
+    LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-prod-onebox}"
+    ENABLE_FIXTURE_SEEDS="${ENABLE_FIXTURE_SEEDS:-0}"
+    ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-}"
+    ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-}"
+    ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-}"
+    ;;
+  *)
+    echo "[local-gamma] FAIL: unsupported STAGE=$STAGE (expected pre|gamma|prod)" >&2
+    exit 2
+    ;;
+esac
+LOCAL_GAMMA_READY_INDEX_STREAM="${LOCAL_GAMMA_READY_INDEX_STREAM:-reliabletask:chat:avatar:ready:${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
+LOCAL_GAMMA_READY_INDEX_GROUP="${LOCAL_GAMMA_READY_INDEX_GROUP:-chat.group_avatar_worker.${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
+LOCAL_GAMMA_READY_INDEX_QUEUE="${LOCAL_GAMMA_READY_INDEX_QUEUE:-reliabletask.chat.avatar}"
+PREVIOUS_IMAGE_VERSION="${PREVIOUS_IMAGE_VERSION:-${PREV_IMAGE_VERSION:-}}"
+export \
+  STAGE \
+  LOCAL_GAMMA_APP_ENV \
+  CONFIG_SOURCE_ENV \
+  ENABLE_FIXTURE_SEEDS \
+  ASSISTANT_MODEL_PROVIDER \
+  ALLOW_DETERMINISTIC_BETA \
+  ASSISTANT_SCENARIO_SEED_REFS \
+  LOCAL_GAMMA_READY_INDEX_STREAM \
+  LOCAL_GAMMA_READY_INDEX_GROUP \
+  LOCAL_GAMMA_READY_INDEX_QUEUE \
+  PREVIOUS_IMAGE_VERSION
 
 library_image() {
   local image="$1"
@@ -74,7 +118,7 @@ export LOCAL_GAMMA_GO_BOOKWORM_IMAGE="${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-$(library
 export LOCAL_GAMMA_CADDY_IMAGE="${LOCAL_GAMMA_CADDY_IMAGE:-$(library_image caddy:2.8.4-alpine)}"
 export LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-$(library_image golang:1.24-bookworm)}"
 export LOCAL_GAMMA_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-$(library_image alpine:3.19)}"
-export LOCAL_GAMMA_PYTHON_BASE_IMAGE="${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-$(library_image python:3.11)}"
+export LOCAL_GAMMA_PYTHON_BASE_IMAGE="${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-$(library_image python:3.11-slim)}"
 
 skip_build=0
 skip_up=0
@@ -192,6 +236,9 @@ cleanup_existing_gamma_runtime() {
   if command -v podman >/dev/null 2>&1; then
     podman pod rm -f quwoquan_service >/dev/null 2>&1 || true
     podman pod rm -f quwoquan_service_default >/dev/null 2>&1 || true
+    if [[ "${skip_build:-0}" == "1" ]]; then
+      return 0
+    fi
     for image_name in \
       quwoquan_service_content-service \
       quwoquan_service_chat-service \
@@ -342,43 +389,43 @@ prepare_config_root() {
   rm -rf "$out"
   mkdir -p \
     "$out/configs/content-service/default" \
-    "$out/configs/content-service/gamma" \
+    "$out/configs/content-service/${CONFIG_SOURCE_ENV}" \
     "$out/releases/config/content-service" \
     "$out/configs/chat-service/default" \
-    "$out/configs/chat-service/gamma" \
+    "$out/configs/chat-service/${CONFIG_SOURCE_ENV}" \
     "$out/releases/config/chat-service" \
     "$out/configs/user-service/default" \
-    "$out/configs/user-service/gamma" \
+    "$out/configs/user-service/${CONFIG_SOURCE_ENV}" \
     "$out/releases/config/user-service" \
     "$out/configs/assistant-service/default" \
-    "$out/configs/assistant-service/gamma" \
+    "$out/configs/assistant-service/${CONFIG_SOURCE_ENV}" \
     "$out/releases/config/assistant-service" \
     "$out/deploy/shared" \
     "$out/configs/product-ops-service/default" \
-    "$out/configs/product-ops-service/gamma" \
+    "$out/configs/product-ops-service/${CONFIG_SOURCE_ENV}" \
     "$out/releases/config/product-ops-service" \
     "$out/configs/recommendation-service/default" \
-    "$out/configs/recommendation-service/gamma" \
+    "$out/configs/recommendation-service/${CONFIG_SOURCE_ENV}" \
     "$out/releases/config/recommendation-service" \
     "$out/configs/tag-service/default" \
-    "$out/configs/tag-service/gamma" \
+    "$out/configs/tag-service/${CONFIG_SOURCE_ENV}" \
     "$out/releases/config/tag-service"
   cp "$ROOT/quwoquan_service/services/content-service/configs/default/config.yaml" "$out/configs/content-service/default/config.yaml"
-  cp "$ROOT/quwoquan_service/services/content-service/configs/gamma/config.yaml" "$out/configs/content-service/gamma/config.yaml"
+  cp "$ROOT/quwoquan_service/services/content-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/content-service/${CONFIG_SOURCE_ENV}/config.yaml"
   cp "$ROOT/quwoquan_service/services/chat-service/configs/default/config.yaml" "$out/configs/chat-service/default/config.yaml"
-  cp "$ROOT/quwoquan_service/services/chat-service/configs/gamma/config.yaml" "$out/configs/chat-service/gamma/config.yaml"
+  cp "$ROOT/quwoquan_service/services/chat-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/chat-service/${CONFIG_SOURCE_ENV}/config.yaml"
   cp "$ROOT/quwoquan_service/services/user-service/configs/default/config.yaml" "$out/configs/user-service/default/config.yaml"
-  cp "$ROOT/quwoquan_service/services/user-service/configs/gamma/config.yaml" "$out/configs/user-service/gamma/config.yaml"
+  cp "$ROOT/quwoquan_service/services/user-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/user-service/${CONFIG_SOURCE_ENV}/config.yaml"
   cp "$ROOT/quwoquan_service/services/assistant-service/configs/default/config.yaml" "$out/configs/assistant-service/default/config.yaml"
-  cp "$ROOT/quwoquan_service/services/assistant-service/configs/gamma/config.yaml" "$out/configs/assistant-service/gamma/config.yaml"
+  cp "$ROOT/quwoquan_service/services/assistant-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/assistant-service/${CONFIG_SOURCE_ENV}/config.yaml"
   cp "$ROOT/deploy/shared/reliable_task_module_catalog.yaml" "$out/deploy/shared/reliable_task_module_catalog.yaml"
   cp "$ROOT/deploy/shared/reliable_task_retention_policy.yaml" "$out/deploy/shared/reliable_task_retention_policy.yaml"
   cp "$ROOT/quwoquan_service/services/product-ops-service/configs/default/config.yaml" "$out/configs/product-ops-service/default/config.yaml"
-  cp "$ROOT/quwoquan_service/services/product-ops-service/configs/gamma/config.yaml" "$out/configs/product-ops-service/gamma/config.yaml"
+  cp "$ROOT/quwoquan_service/services/product-ops-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/product-ops-service/${CONFIG_SOURCE_ENV}/config.yaml"
   cp "$ROOT/quwoquan_service/services/rec-model-service/configs/default/config.yaml" "$out/configs/recommendation-service/default/config.yaml"
-  cp "$ROOT/quwoquan_service/services/rec-model-service/configs/gamma/config.yaml" "$out/configs/recommendation-service/gamma/config.yaml"
+  cp "$ROOT/quwoquan_service/services/rec-model-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/recommendation-service/${CONFIG_SOURCE_ENV}/config.yaml"
   cp "$ROOT/quwoquan_service/services/tag-service/configs/default/config.yaml" "$out/configs/tag-service/default/config.yaml"
-  cp "$ROOT/quwoquan_service/services/tag-service/configs/gamma/config.yaml" "$out/configs/tag-service/gamma/config.yaml"
+  cp "$ROOT/quwoquan_service/services/tag-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/tag-service/${CONFIG_SOURCE_ENV}/config.yaml"
   cat > "$out/releases/config/content-service/${CONFIG_VERSION}.yaml" <<YAML
 config:
   version: "${CONFIG_VERSION}"
@@ -435,9 +482,9 @@ runtime:
   reliable_task:
     ready_index:
       enabled: true
-      stream: "reliabletask:chat:avatar:ready:local-gamma"
-      group: "chat.group_avatar_worker.local-gamma"
-      queue: "reliabletask.chat.avatar"
+      stream: "${LOCAL_GAMMA_READY_INDEX_STREAM}"
+      group: "${LOCAL_GAMMA_READY_INDEX_GROUP}"
+      queue: "${LOCAL_GAMMA_READY_INDEX_QUEUE}"
   observability:
     runtime_media:
       group_avatar_recompute_duration_ms_p95: 500
@@ -538,6 +585,10 @@ prepare_media_root() {
   if [[ -d "$media/media" ]]; then
     echo "[local-gamma] reuse pre-synced gamma curated media bundle: $media"
     return 0
+  fi
+  if [[ "$ENABLE_FIXTURE_SEEDS" != "1" ]]; then
+    echo "[local-gamma] FAIL: STAGE=${STAGE} requires an existing media root at ${media}/media" >&2
+    return 1
   fi
   if [[ -d "$canonical_media_root" ]]; then
     python3 "$ROOT/quwoquan_service/scripts/seed/build_gamma_curated_fixture_bundle.py" \
@@ -750,7 +801,7 @@ PY
   fi
 
   python3 "$ROOT/quwoquan_app/scripts/env/print_app_env_dart_defines.py" \
-    --env gamma \
+    --env "$LOCAL_GAMMA_APP_ENV" \
     --gateway-base-url "$GATEWAY_BASE_URL" \
     --media-base-url "$MEDIA_BASE_URL"
 }
@@ -799,6 +850,31 @@ preflight_docker_storage() {
   fi
 }
 
+ensure_local_gamma_base_images() {
+  [[ "${podman_compose:-0}" == "1" ]] || return 0
+  local image=""
+  local -a required_images=(
+    "$LOCAL_GAMMA_GO_BOOKWORM_IMAGE"
+    "$LOCAL_GAMMA_ALPINE_BASE_IMAGE"
+    "$LOCAL_GAMMA_PYTHON_BASE_IMAGE"
+    "$LOCAL_GAMMA_POSTGRES_IMAGE"
+    "$LOCAL_GAMMA_MONGO_IMAGE"
+    "$LOCAL_GAMMA_REDIS_IMAGE"
+    "$LOCAL_GAMMA_CADDY_IMAGE"
+  )
+  for image in "${required_images[@]}"; do
+    [[ -n "$image" ]] || continue
+    if podman image exists "$image" >/dev/null 2>&1; then
+      continue
+    fi
+    echo "[local-gamma] pulling missing base image: $image"
+    podman pull --arch amd64 "$image" || podman pull "$image" || {
+      echo "[local-gamma] FAIL: unable to pull required base image: $image" >&2
+      return 1
+    }
+  done
+}
+
 expected_local_gamma_built_image_ref() {
   case "$1" in
     rec-model-service) echo "localhost/quwoquan_service_rec-model-service:latest" ;;
@@ -845,6 +921,7 @@ run_compose_build() {
   mkdir -p "$(dirname "$build_log")"
   rm -f "$build_log"
   preflight_docker_storage
+  ensure_local_gamma_base_images
   echo "[local-gamma] building services: ${compose_build_services[*]}"
   "${compose_cmd[@]}" build "${compose_build_services[@]}" 2>&1 | tee "$build_log" || build_status=$?
   if [[ "$build_status" -eq 0 && "${podman_compose:-0}" == "1" ]]; then
@@ -904,7 +981,9 @@ if [[ "$skip_up" == "1" ]]; then
   exit 0
 fi
 
-preflight_local_gamma_inputs
+if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
+  preflight_local_gamma_inputs
+fi
 
 podman_compose=0
 if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose >/dev/null 2>&1; then
@@ -939,6 +1018,10 @@ if [[ "$skip_build" == "0" ]]; then
 fi
 export LOCAL_GAMMA_CONFIG_VERSION="$CONFIG_VERSION"
 export LOCAL_GAMMA_IMAGE_VERSION="$IMAGE_VERSION"
+export LOCAL_GAMMA_APP_ENV
+export LOCAL_GAMMA_READY_INDEX_STREAM
+export LOCAL_GAMMA_READY_INDEX_GROUP
+export LOCAL_GAMMA_READY_INDEX_QUEUE
 if [[ "$podman_compose" == "1" ]]; then
   echo "[local-gamma] startup mode: podman-manual"
   wait_healthy() {
@@ -1055,7 +1138,7 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_rec-model-service_1 -d \
     --net "$network_name" --network-alias rec-model-service --network-alias recommendation-service \
-    -e SERVICE_NAME=recommendation-service -e APP_ENV=gamma \
+    -e SERVICE_NAME=recommendation-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PYTHONUNBUFFERED=1 \
     -e MODEL_CACHE_DIR=/app/cache \
@@ -1069,7 +1152,7 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_product-ops-service_1 -d \
     --net "$network_name" --network-alias product-ops-service \
-    -e SERVICE_NAME=product-ops-service -e APP_ENV=gamma \
+    -e SERVICE_NAME=product-ops-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PRODUCT_OPS_SERVICE_ADDR=:18086 \
     -e MONGO_URI=mongodb://mongodb:27017 \
@@ -1084,7 +1167,7 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_content-service_1 -d \
     --net "$network_name" --network-alias content-service \
-    -e SERVICE_NAME=content-service -e APP_ENV=gamma \
+    -e SERVICE_NAME=content-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" \
     -e MONGO_URI=mongodb://mongodb:27017 \
@@ -1099,16 +1182,16 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_chat-service_1 -d \
     --net "$network_name" --network-alias chat-service \
-    -e SERVICE_NAME=chat-service -e MODULE_PACKAGE=chat-service -e APP_ENV=gamma \
+    -e SERVICE_NAME=chat-service -e MODULE_PACKAGE=chat-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e CHAT_SERVICE_ADDR=:18081 \
     -e MONGO_URI=mongodb://mongodb:27017 -e MONGO_DATABASE=quwoquan_chat \
     -e CHAT_REDIS_REALTIME_ADDR=redis:6379 -e CHAT_REDIS_GENERAL_ADDR=redis:6379 \
     -e CHAT_REDIS_RELIABLE_TASK_ADDR=redis:6379 \
     -e RELIABLE_TASK_READY_INDEX_ENABLED=true \
-    -e RELIABLE_TASK_READY_INDEX_STREAM=reliabletask:chat:avatar:ready:local-gamma \
-    -e RELIABLE_TASK_READY_INDEX_GROUP=chat.group_avatar_worker.local-gamma \
-    -e RELIABLE_TASK_READY_INDEX_QUEUE=reliabletask.chat.avatar \
+    -e RELIABLE_TASK_READY_INDEX_STREAM="$LOCAL_GAMMA_READY_INDEX_STREAM" \
+    -e RELIABLE_TASK_READY_INDEX_GROUP="$LOCAL_GAMMA_READY_INDEX_GROUP" \
+    -e RELIABLE_TASK_READY_INDEX_QUEUE="$LOCAL_GAMMA_READY_INDEX_QUEUE" \
     -e CHAT_GROUP_AVATAR_CDN_BASE_URL="$MEDIA_BASE_URL" \
     -e CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT=/var/lib/quwoquan/chat-media \
     -e RUNTIME_SYNC_PATCH_TTL_HOURS=720 \
@@ -1122,13 +1205,14 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_user-service_1 -d \
     --net "$network_name" --network-alias user-service \
-    -e SERVICE_NAME=user-service -e APP_ENV=gamma \
+    -e SERVICE_NAME=user-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e USER_SERVICE_ADDR=:18082 \
     -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
     -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_user \
     -e REDIS_ADDR=redis:6379 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
+    -v "${ROOT}/quwoquan_service/contracts/metadata/user:/contracts/metadata/user:ro" \
     -p "${LOCAL_GAMMA_USER_PORT:-19210}:18082" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
@@ -1137,15 +1221,16 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_assistant-service_1 -d \
     --net "$network_name" --network-alias assistant-service \
-    -e SERVICE_NAME=assistant-service -e APP_ENV=gamma \
+    -e SERVICE_NAME=assistant-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e ASSISTANT_SERVICE_ADDR=:18087 \
     -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_assistant \
     -e REDIS_GENERAL_ADDR=redis:6379 -e REDIS_REC_ADDR=redis:6379 \
-    -e ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-deterministic}" \
-    -e ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-1}" \
-    -e ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}" \
+    -e ASSISTANT_MODEL_PROVIDER="${ASSISTANT_MODEL_PROVIDER:-}" \
+    -e ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-}" \
+    -e ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-}" \
     -e ASSISTANT_SEARCH_PROVIDER="${ASSISTANT_SEARCH_PROVIDER:-}" \
+    -e PERSONAL_ASSISTANT_MIMO_API_KEY="${PERSONAL_ASSISTANT_MIMO_API_KEY:-}" \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -p "${LOCAL_GAMMA_ASSISTANT_PORT:-19230}:18087" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1" \
@@ -1155,7 +1240,7 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_tag-service_1 -d \
     --net "$network_name" --network-alias tag-service \
-    -e SERVICE_NAME=tag-service -e APP_ENV=gamma \
+    -e SERVICE_NAME=tag-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e TAG_SERVICE_ADDR=:18092 \
     -e TAG_MONGO_URI=mongodb://mongodb:27017 -e TAG_MONGO_DATABASE=quwoquan_tag \
@@ -1342,7 +1427,11 @@ seed_tag_service_data() {
       --mongo-uri "$mongo_uri" --db "$LOCAL_GAMMA_TAG_DB" \
       --release-id "$data_release_id" --source-owner fixture )
 }
-seed_tag_service_data
+if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
+  seed_tag_service_data
+else
+  echo "[local-gamma] skip tag seed because STAGE=${STAGE} uses persisted/host data"
+fi
 
 seed_gamma_content_data() {
   echo "[local-gamma] seeding content posts (gamma curated manifest) ..."
@@ -1359,21 +1448,42 @@ PY
   fi
   echo "[local-gamma] content seed completed"
 }
-seed_gamma_content_data
+if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
+  seed_gamma_content_data
+else
+  echo "[local-gamma] skip content seed because STAGE=${STAGE} uses persisted/host data"
+fi
 
-python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$LOCAL_MEDIA_ORIGIN_URL" "$restarted_from_previous" <<'PY'
+python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$PREVIOUS_IMAGE_VERSION" "$STAGE" "$LOCAL_GAMMA_APP_ENV" "$CONFIG_SOURCE_ENV" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$LOCAL_MEDIA_ORIGIN_URL" "$restarted_from_previous" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-report_path, config_version, image_version, gateway, product_ops, media, media_origin, restarted = sys.argv[1:9]
+(
+    report_path,
+    config_version,
+    image_version,
+    previous_image_version,
+    stage,
+    runtime_env,
+    config_env,
+    gateway,
+    product_ops,
+    media,
+    media_origin,
+    restarted,
+) = sys.argv[1:13]
 payload = {
     "status": "passed",
     "serviceMode": "single-stack",
     "restartedFromPrevious": restarted == "1",
+    "stage": stage,
     "configVersion": config_version,
     "imageVersion": image_version,
+    "previousImageVersion": previous_image_version or None,
+    "runtimeEnv": runtime_env,
+    "configEnv": config_env,
     "gatewayBaseUrl": gateway,
     "productOpsBaseUrl": product_ops,
     "mediaEdgeBaseUrl": media,
