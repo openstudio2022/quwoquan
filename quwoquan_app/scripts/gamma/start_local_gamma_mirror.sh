@@ -801,6 +801,7 @@ expected_local_gamma_built_image_ref() {
     rec-model-service) echo "localhost/quwoquan_service_rec-model-service:latest" ;;
     content-service) echo "localhost/quwoquan_service_content-service:latest" ;;
     chat-service) echo "localhost/quwoquan_service_chat-service:latest" ;;
+    user-service) echo "localhost/quwoquan_service_user-service:latest" ;;
     assistant-service) echo "localhost/quwoquan_service_assistant-service:latest" ;;
     rtc-service) echo "localhost/quwoquan_service_rtc-service:latest" ;;
     *) return 1 ;;
@@ -914,6 +915,7 @@ compose_build_services=(
   rec-model-service
   content-service
   chat-service
+  user-service
   assistant-service
 )
 if [[ ",${COMPOSE_PROFILES:-}," == *,edge-media,* ]]; then
@@ -1119,23 +1121,17 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_user-service_1 -d \
     --net "$network_name" --network-alias user-service \
-    -e PATH=/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    -e GOPROXY="${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}" \
-    -e GOSUMDB="${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}" \
     -e SERVICE_NAME=user-service -e APP_ENV=gamma \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e USER_SERVICE_ADDR=:18082 \
     -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
     -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_user \
     -e REDIS_ADDR=redis:6379 \
-    -v "$ROOT/quwoquan_service:/workspace" \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
-    -v quwoquan_service_local-gamma-go-cache:/go \
-    -w /workspace/services/user-service \
     -p "${LOCAL_GAMMA_USER_PORT:-19210}:18082" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    "$LOCAL_GAMMA_GO_BOOKWORM_IMAGE" sh -lc "/usr/local/go/bin/go run ./cmd/api" >/dev/null
+    localhost/quwoquan_service_user-service:latest >/dev/null
   wait_healthy quwoquan_service_user-service_1
 
   podman run --pull=never --name quwoquan_service_assistant-service_1 -d \
