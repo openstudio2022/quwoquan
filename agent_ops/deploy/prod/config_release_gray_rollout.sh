@@ -67,6 +67,11 @@ prev_step=0
 if [[ -f "$state_file" ]]; then
   prev_step="$(awk -F= '/^step=/{print $2}' "$state_file" || true)"
   prev_step="${prev_step:-0}"
+  prev_to_image="$(awk -F= '/^to_image=/{print $2; exit}' "$state_file" || true)"
+  prev_to_config="$(awk -F= '/^to_config=/{print $2; exit}' "$state_file" || true)"
+  if [[ "$prev_to_image" != "$TO_IMAGE" || "$prev_to_config" != "$TO_CONFIG" ]]; then
+    prev_step=0
+  fi
 fi
 
 if [[ "$prev_step" -gt "$STEP" ]]; then
