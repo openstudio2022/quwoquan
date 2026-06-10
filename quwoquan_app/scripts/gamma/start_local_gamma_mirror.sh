@@ -166,6 +166,7 @@ stop_media_origin() {
 cleanup_existing_gamma_runtime() {
   local base_name=""
   local container_name=""
+  local image_name=""
   local -a base_names=(
     gamma-proxy
     assistant-service
@@ -191,6 +192,15 @@ cleanup_existing_gamma_runtime() {
   if command -v podman >/dev/null 2>&1; then
     podman pod rm -f quwoquan_service >/dev/null 2>&1 || true
     podman pod rm -f quwoquan_service_default >/dev/null 2>&1 || true
+    for image_name in \
+      quwoquan_service_content-service \
+      quwoquan_service_chat-service \
+      quwoquan_service_assistant-service \
+      quwoquan_service_rec-model-service \
+      quwoquan_service_rtc-service; do
+      podman rmi -f "$image_name" >/dev/null 2>&1 || true
+      podman rmi -f "localhost/${image_name}:latest" >/dev/null 2>&1 || true
+    done
   fi
 }
 
@@ -786,12 +796,61 @@ preflight_docker_storage() {
   fi
 }
 
+expected_local_gamma_built_image_ref() {
+  case "$1" in
+    rec-model-service) echo "localhost/quwoquan_service_rec-model-service:latest" ;;
+    content-service) echo "localhost/quwoquan_service_content-service:latest" ;;
+    chat-service) echo "localhost/quwoquan_service_chat-service:latest" ;;
+    assistant-service) echo "localhost/quwoquan_service_assistant-service:latest" ;;
+    rtc-service) echo "localhost/quwoquan_service_rtc-service:latest" ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_local_gamma_built_images() {
+  local service=""
+  local image_ref=""
+  [[ "${podman_compose:-0}" == "1" ]] || return 0
+  for service in "${compose_build_services[@]}"; do
+    image_ref="$(expected_local_gamma_built_image_ref "$service" || true)"
+    [[ -n "$image_ref" ]] || continue
+    if ! podman image exists "$image_ref" >/dev/null 2>&1; then
+      echo "[local-gamma] FAIL: expected podman image missing after build: $image_ref" >&2
+      return 1
+    fi
+  done
+}
+
+podman_build_log_has_nonzero_exit_codes() {
+  python3 - "$1" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+codes = [int(match.group(1)) for match in re.finditer(r"(?m)^exit code:\s*(\d+)\s*$", text)]
+raise SystemExit(0 if any(code != 0 for code in codes) else 1)
+PY
+}
+
 run_compose_build() {
   local build_log="${LOCAL_GAMMA_STATE_ROOT}/docker-build.log"
+  local build_status=0
   mkdir -p "$(dirname "$build_log")"
   rm -f "$build_log"
   preflight_docker_storage
-  if "${compose_cmd[@]}" build 2>&1 | tee "$build_log"; then
+  echo "[local-gamma] building services: ${compose_build_services[*]}"
+  "${compose_cmd[@]}" build "${compose_build_services[@]}" 2>&1 | tee "$build_log" || build_status=$?
+  if [[ "$build_status" -eq 0 && "${podman_compose:-0}" == "1" ]]; then
+    if podman_build_log_has_nonzero_exit_codes "$build_log"; then
+      echo "[local-gamma] FAIL: podman-compose build reported non-zero inner exit codes." >&2
+      build_status=1
+    fi
+  fi
+  if [[ "$build_status" -eq 0 ]] && ! validate_local_gamma_built_images; then
+    build_status=1
+  fi
+  if [[ "$build_status" -eq 0 ]]; then
     rm -f "$build_log"
     return 0
   fi
@@ -851,15 +910,26 @@ else
   compose_up_args=(up -d --remove-orphans --force-recreate)
 fi
 
+compose_build_services=(
+  rec-model-service
+  content-service
+  chat-service
+  assistant-service
+)
+if [[ ",${COMPOSE_PROFILES:-}," == *,edge-media,* ]]; then
+  compose_build_services+=(rtc-service)
+fi
+
+if [[ "$FORCE_CLEAN_RECREATE" == "1" ]]; then
+  echo "[local-gamma] forcing clean recreate of existing gamma containers"
+  cleanup_existing_gamma_runtime
+fi
+
 if [[ "$skip_build" == "0" ]]; then
   run_compose_build
 fi
 export LOCAL_GAMMA_CONFIG_VERSION="$CONFIG_VERSION"
 export LOCAL_GAMMA_IMAGE_VERSION="$IMAGE_VERSION"
-if [[ "$FORCE_CLEAN_RECREATE" == "1" ]]; then
-  echo "[local-gamma] forcing clean recreate of existing gamma containers"
-  cleanup_existing_gamma_runtime
-fi
 if [[ "$podman_compose" == "1" ]]; then
   echo "[local-gamma] startup mode: podman-manual"
   wait_healthy() {
@@ -924,14 +994,6 @@ if [[ "$podman_compose" == "1" ]]; then
     quwoquan_service_mongodb_1 \
     quwoquan_service_postgres_1; do
     podman rm -f "$container_name" >/dev/null 2>&1 || true
-  done
-  for image_name in \
-    quwoquan_service_content-service \
-    quwoquan_service_chat-service \
-    quwoquan_service_assistant-service \
-    quwoquan_service_rec-model-service; do
-    podman rmi -f "$image_name" >/dev/null 2>&1 || true
-    podman rmi -f "localhost/${image_name}:latest" >/dev/null 2>&1 || true
   done
   podman network exists "$network_name" || podman network create "$network_name" >/dev/null
   # user-service migrations are not idempotent yet; keep gamma startup
