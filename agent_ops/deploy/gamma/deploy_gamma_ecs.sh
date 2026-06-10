@@ -140,8 +140,12 @@ if [[ -z "$ASSISTANT_MIMO_API_KEY" && "$STAGE" == "prod" ]]; then
   ASSISTANT_MIMO_API_KEY="$(resolve_assistant_mimo_api_key)"
 fi
 if [[ "$STAGE" == "prod" && -z "$ASSISTANT_MIMO_API_KEY" ]]; then
-  echo "::error::prod onebox deploy requires PERSONAL_ASSISTANT_MIMO_API_KEY (or resolvable MIMO_API_KEY)" >&2
-  exit 2
+  if [[ "${ASSISTANT_MODEL_PROVIDER:-}" == "deterministic" && "${ALLOW_DETERMINISTIC_BETA:-}" == "1" ]]; then
+    echo "[gamma-ecs] prod onebox deterministic mode: skipping PERSONAL_ASSISTANT_MIMO_API_KEY requirement"
+  else
+    echo "::error::prod onebox deploy requires PERSONAL_ASSISTANT_MIMO_API_KEY (or resolvable MIMO_API_KEY)" >&2
+    exit 2
+  fi
 fi
 PREV_IMAGE_VERSION=""
 if [[ "$SKIP_UPLOAD" == "1" ]]; then
