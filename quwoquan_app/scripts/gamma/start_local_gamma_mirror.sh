@@ -195,7 +195,10 @@ cleanup_existing_gamma_runtime() {
     for image_name in \
       quwoquan_service_content-service \
       quwoquan_service_chat-service \
+      quwoquan_service_user-service \
       quwoquan_service_assistant-service \
+      quwoquan_service_product-ops-service \
+      quwoquan_service_tag-service \
       quwoquan_service_rec-model-service \
       quwoquan_service_rtc-service; do
       podman rmi -f "$image_name" >/dev/null 2>&1 || true
@@ -803,6 +806,8 @@ expected_local_gamma_built_image_ref() {
     chat-service) echo "localhost/quwoquan_service_chat-service:latest" ;;
     user-service) echo "localhost/quwoquan_service_user-service:latest" ;;
     assistant-service) echo "localhost/quwoquan_service_assistant-service:latest" ;;
+    product-ops-service) echo "localhost/quwoquan_service_product-ops-service:latest" ;;
+    tag-service) echo "localhost/quwoquan_service_tag-service:latest" ;;
     rtc-service) echo "localhost/quwoquan_service_rtc-service:latest" ;;
     *) return 1 ;;
   esac
@@ -917,6 +922,8 @@ compose_build_services=(
   chat-service
   user-service
   assistant-service
+  product-ops-service
+  tag-service
 )
 if [[ ",${COMPOSE_PROFILES:-}," == *,edge-media,* ]]; then
   compose_build_services+=(rtc-service)
@@ -1062,23 +1069,17 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_product-ops-service_1 -d \
     --net "$network_name" --network-alias product-ops-service \
-    -e PATH=/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    -e GOPROXY="${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}" \
-    -e GOSUMDB="${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}" \
     -e SERVICE_NAME=product-ops-service -e APP_ENV=gamma \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PRODUCT_OPS_SERVICE_ADDR=:18086 \
     -e MONGO_URI=mongodb://mongodb:27017 \
     -e PRODUCT_OPS_REDIS_REC_ADDR=redis:6379 -e PRODUCT_OPS_REDIS_GENERAL_ADDR=redis:6379 \
-    -v "$ROOT/quwoquan_service:/workspace" \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
-    -v quwoquan_service_local-gamma-go-cache:/go \
     -p "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:18086" \
     -p "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}:18086" \
-    -w /workspace \
     --healthcheck-command "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    "$LOCAL_GAMMA_GO_BOOKWORM_IMAGE" sh -lc "cd services/product-ops-service/cmd/api && /usr/local/go/bin/go run ." >/dev/null
+    localhost/quwoquan_service_product-ops-service:latest >/dev/null
   wait_healthy quwoquan_service_product-ops-service_1
 
   podman run --pull=never --name quwoquan_service_content-service_1 -d \
@@ -1154,21 +1155,15 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_tag-service_1 -d \
     --net "$network_name" --network-alias tag-service \
-    -e PATH=/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    -e GOPROXY="${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}" \
-    -e GOSUMDB="${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}" \
     -e SERVICE_NAME=tag-service -e APP_ENV=gamma \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e TAG_SERVICE_ADDR=:18092 \
     -e TAG_MONGO_URI=mongodb://mongodb:27017 -e TAG_MONGO_DATABASE=quwoquan_tag \
-    -v "$ROOT/quwoquan_service:/workspace" \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
-    -v quwoquan_service_local-gamma-go-cache:/go \
-    -w /workspace \
     -p "${LOCAL_GAMMA_TAG_PORT:-19270}:18092" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18092/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    "$LOCAL_GAMMA_GO_BOOKWORM_IMAGE" sh -lc "cd services/tag-service/cmd/api && /usr/local/go/bin/go run ." >/dev/null
+    localhost/quwoquan_service_tag-service:latest >/dev/null
   wait_healthy quwoquan_service_tag-service_1
 
   podman run --pull=never --name quwoquan_service_gamma-proxy_1 -d \
