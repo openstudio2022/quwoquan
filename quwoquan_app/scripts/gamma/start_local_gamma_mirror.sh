@@ -53,6 +53,7 @@ LOCAL_GAMMA_TAG_DB="${LOCAL_GAMMA_TAG_DB:-quwoquan_tag}"
 # daocloud 镜像代理在部分网络下会 EOF；默认直连 Docker Hub，可通过环境变量覆盖。
 DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}"
 HOST_READY_TIMEOUT_SECONDS="${LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS:-360}"
+FORCE_CLEAN_RECREATE="${LOCAL_GAMMA_FORCE_CLEAN_RECREATE:-0}"
 LOCAL_GAMMA_STATE_ROOT="${LOCAL_GAMMA_STATE_ROOT:-$ROOT/state/local/gamma}"
 LOCAL_GAMMA_ARTIFACT_ROOT="${LOCAL_GAMMA_ARTIFACT_ROOT:-$ROOT/artifacts/local-gamma}"
 LOCAL_GAMMA_CONFIG_ROOT="${LOCAL_GAMMA_STATE_ROOT}/config-root"
@@ -160,6 +161,37 @@ stop_media_origin() {
     done
   done
   rm -f "$media_origin_pid_file"
+}
+
+cleanup_existing_gamma_runtime() {
+  local base_name=""
+  local container_name=""
+  local -a base_names=(
+    gamma-proxy
+    assistant-service
+    user-service
+    chat-service
+    content-service
+    product-ops-service
+    tag-service
+    mongo-init
+    rec-model-service
+    redis
+    mongodb
+    postgres
+  )
+  for base_name in "${base_names[@]}"; do
+    for container_name in "quwoquan_service_${base_name}_1" "quwoquan_service-${base_name}-1"; do
+      docker rm -f "$container_name" >/dev/null 2>&1 || true
+      if command -v podman >/dev/null 2>&1; then
+        podman rm -f "$container_name" >/dev/null 2>&1 || true
+      fi
+    done
+  done
+  if command -v podman >/dev/null 2>&1; then
+    podman pod rm -f quwoquan_service >/dev/null 2>&1 || true
+    podman pod rm -f quwoquan_service_default >/dev/null 2>&1 || true
+  fi
 }
 
 start_media_origin() {
@@ -799,7 +831,7 @@ if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose
   compose_up_args=(up -d --no-build)
 else
   compose_cmd=(docker compose -f "$COMPOSE_FILE")
-  compose_up_args=(up -d --remove-orphans)
+  compose_up_args=(up -d --remove-orphans --force-recreate)
 fi
 
 if [[ "$skip_build" == "0" ]]; then
@@ -807,7 +839,12 @@ if [[ "$skip_build" == "0" ]]; then
 fi
 export LOCAL_GAMMA_CONFIG_VERSION="$CONFIG_VERSION"
 export LOCAL_GAMMA_IMAGE_VERSION="$IMAGE_VERSION"
+if [[ "$FORCE_CLEAN_RECREATE" == "1" ]]; then
+  echo "[local-gamma] forcing clean recreate of existing gamma containers"
+  cleanup_existing_gamma_runtime
+fi
 if [[ "$podman_compose" == "1" ]]; then
+  echo "[local-gamma] startup mode: podman-manual"
   wait_healthy() {
     local name="$1"
     local status=""
@@ -856,8 +893,6 @@ if [[ "$podman_compose" == "1" ]]; then
   }
 
   network_name="quwoquan_service_default"
-  podman pod rm -f quwoquan_service >/dev/null 2>&1 || true
-  podman pod rm -f quwoquan_service_default >/dev/null 2>&1 || true
   for container_name in \
     quwoquan_service_gamma-proxy_1 \
     quwoquan_service_assistant-service_1 \
@@ -1077,6 +1112,7 @@ if [[ "$podman_compose" == "1" ]]; then
     docker.io/library/caddy:2.8.4-alpine >/dev/null
   wait_healthy quwoquan_service_gamma-proxy_1
 else
+  echo "[local-gamma] startup mode: compose-up"
   # Recreate the local mirror on every gate run so changed host port envs take effect.
   "${compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
   docker volume rm -f quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || true
