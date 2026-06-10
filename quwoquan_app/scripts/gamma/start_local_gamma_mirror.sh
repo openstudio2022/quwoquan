@@ -199,14 +199,31 @@ start_media_origin() {
   # Caddy `root * /srv/media` + `handle /media/*` 同源：URL `/media/image/...` 解析为
   # `<root>/media/image/...`，curated bundle 实际落在 state/local/gamma/media/media/...，
   # 故 origin 静态服务 root 必须为 state/local/gamma/media（而非其父目录）。
+  # 某些远端 ECS 的 python3 过旧，不支持 `python3 -m http.server --directory ...`；
+  # 这里改为内嵌 SimpleHTTPRequestHandler，避免 CLI 选项兼容性问题。
   local media_root="${LOCAL_GAMMA_MEDIA_ROOT}"
   local log_file="${LOCAL_GAMMA_STATE_ROOT}/media-origin.log"
   mkdir -p "$media_root"
   stop_media_origin
-  nohup python3 -m http.server "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}" \
-    --bind 127.0.0.1 \
-    --directory "$media_root" \
-    </dev/null >"$log_file" 2>&1 &
+  nohup python3 - "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}" "$media_root" \
+    </dev/null >"$log_file" 2>&1 <<'PY' &
+import http.server
+import os
+import socketserver
+import sys
+
+port = int(sys.argv[1])
+media_root = sys.argv[2]
+os.chdir(media_root)
+
+
+class ReuseTCPServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+with ReuseTCPServer(("127.0.0.1", port), http.server.SimpleHTTPRequestHandler) as httpd:
+    httpd.serve_forever()
+PY
   local pid="$!"
   echo "$pid" > "$media_origin_pid_file"
   python3 - "${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}" <<'PY'
