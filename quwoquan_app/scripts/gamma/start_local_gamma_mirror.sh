@@ -443,10 +443,12 @@ redis:
     mode: standalone
     addr: "redis:6379"
     db: 0
+    tls: false
   general:
     mode: standalone
     addr: "redis:6379"
     db: 1
+    tls: false
 rec_model_service:
   enabled: true
   url: "http://recommendation-service:8000"
@@ -467,12 +469,15 @@ redis:
   realtime:
     mode: standalone
     addr: "redis:6379"
+    tls: false
   general:
     mode: standalone
     addr: "redis:6379"
+    tls: false
   reliable_task:
     mode: standalone
     addr: "redis:6379"
+    tls: false
 runtime:
   media:
     group_avatar_cdn_base_url: "${MEDIA_BASE_URL}"
@@ -513,6 +518,7 @@ redis:
     mode: standalone
     addr: "redis:6379"
     db: 0
+    tls: false
 YAML
   cat > "$out/releases/config/assistant-service/${CONFIG_VERSION}.yaml" <<YAML
 config:
@@ -530,10 +536,12 @@ redis:
     mode: standalone
     addr: "redis:6379"
     db: 0
+    tls: false
   general:
     mode: standalone
     addr: "redis:6379"
     db: 1
+    tls: false
 YAML
   cat > "$out/releases/config/product-ops-service/${CONFIG_VERSION}.yaml" <<YAML
 config:
@@ -551,10 +559,12 @@ redis:
     mode: standalone
     addr: "redis:6379"
     db: 0
+    tls: false
   general:
     mode: standalone
     addr: "redis:6379"
     db: 1
+    tls: false
 YAML
   cat > "$out/releases/config/recommendation-service/${CONFIG_VERSION}.yaml" <<YAML
 config:

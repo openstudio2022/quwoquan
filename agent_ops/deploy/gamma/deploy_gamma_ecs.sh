@@ -602,8 +602,30 @@ export LOCAL_GAMMA_HTTPS_PORT="${LOCAL_GAMMA_HTTPS_PORT:-18443}"
 export LOCAL_GAMMA_ADMIN_PORT="${LOCAL_GAMMA_ADMIN_PORT:-12019}"
 export LOCAL_GAMMA_FORCE_CLEAN_RECREATE="${LOCAL_GAMMA_FORCE_CLEAN_RECREATE:-1}"
 
+start_args=()
+if command -v podman >/dev/null 2>&1; then
+  required_images=(
+    localhost/quwoquan_service_rec-model-service:latest
+    localhost/quwoquan_service_content-service:latest
+    localhost/quwoquan_service_chat-service:latest
+    localhost/quwoquan_service_user-service:latest
+    localhost/quwoquan_service_assistant-service:latest
+    localhost/quwoquan_service_product-ops-service:latest
+    localhost/quwoquan_service_tag-service:latest
+  )
+  missing=0
+  for image in "${required_images[@]}"; do
+    podman image exists "$image" || missing=1
+  done
+  if [[ "$missing" -eq 0 ]]; then
+    echo "[gamma-ecs] reusing existing service images (--skip-build)"
+    start_args=(--skip-build)
+    export LOCAL_GAMMA_FORCE_CLEAN_RECREATE=0
+  fi
+fi
+
 set +e
-timeout "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-3600}" bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
+timeout "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-3600}" bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh "${start_args[@]}"
 rc=$?
 set -e
 if [[ "$rc" -ne 0 ]]; then
