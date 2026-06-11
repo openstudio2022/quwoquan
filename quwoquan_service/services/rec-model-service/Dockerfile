@@ -8,6 +8,11 @@ ARG PIP_TRUSTED_HOST
 
 WORKDIR /app
 
+# lightgbm loads libgomp at runtime; python slim images do not ship it by default.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends libgomp1 \
+  && rm -rf /var/lib/apt/lists/*
+
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_DEFAULT_TIMEOUT=120 \
     PIP_RETRIES=8 \
