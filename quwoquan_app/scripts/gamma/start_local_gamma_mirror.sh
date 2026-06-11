@@ -1223,6 +1223,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e REDIS_ADDR=redis:6379 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -v "${ROOT}/quwoquan_service/contracts/metadata/user:/contracts/metadata/user:ro" \
+    -v "${ROOT}/quwoquan_service/services/user-service/internal/infrastructure/migration:/internal/infrastructure/migration:ro" \
     -p "${LOCAL_GAMMA_USER_PORT:-19210}:18082" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
