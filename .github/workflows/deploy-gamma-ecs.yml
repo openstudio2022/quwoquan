@@ -128,8 +128,19 @@ jobs:
           fi
           sudo apt-get update
           sudo apt-get install -y sshpass
-      - name: Deploy to ECS (prod)
-        run: bash agent_ops/deploy/gamma/deploy_gamma_ecs.sh
+      - name: Deploy to ECS via stackctl (prod)
+        run: |
+          python3 agent_ops/deploy/stackctl.py \
+            --output-format json \
+            --report-dir artifacts/stackctl/gamma/deploy-prod \
+            deploy \
+            --target gamma-hosted \
+            --mode restart \
+            --stage prod \
+            --image-version "0.0.${{ github.run_number }}" \
+            --previous-image-version "0.0.${{ github.run_number }}" \
+            --base-url "${GAMMA_BASE_URL}" \
+            --product-ops-base-url "${GAMMA_PRODUCT_OPS_BASE_URL}"
         env:
           GAMMA_ECS_STAGE: prod
           GAMMA_ECS_SKIP_UPLOAD: "1"
@@ -149,7 +160,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ecs-onebox-deploy-report-prod
-          path: artifacts/ecs-onebox/deploy-report.json
+          path: |
+            artifacts/ecs-onebox/deploy-report.json
+            artifacts/stackctl/gamma/deploy-prod/**
           if-no-files-found: ignore
 
   gamma_api_contract_prod:

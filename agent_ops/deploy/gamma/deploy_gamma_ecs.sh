@@ -24,9 +24,11 @@ STAGE="${GAMMA_ECS_STAGE:-pre}"
 SKIP_UPLOAD="${GAMMA_ECS_SKIP_UPLOAD:-0}"
 IMAGE_VERSION="${GAMMA_DEPLOY_IMAGE_VERSION:-0.0.$(date +%Y%m%d%H%M%S)}"
 CONFIG_VERSION="${GAMMA_DEPLOY_CONFIG_VERSION:-local-gamma-v1}"
+DEPLOY_MODE="${GAMMA_ECS_DEPLOY_MODE:-}"
 LOCAL_TARBALL="${GAMMA_ECS_LOCAL_TARBALL:-}"
 REPORT_DIR="${ROOT}/artifacts/ecs-onebox"
 REPORT_PATH="${REPORT_DIR}/deploy-report.json"
+PHASE_FILE="${REPORT_DIR}/deploy-phases.json"
 BACKUP_PARENT="${GAMMA_ECS_BACKUP_PARENT:-}"
 CURATED_MEDIA_ROOT="${ROOT}/state/local/gamma/media"
 CURATED_MEDIA_BUNDLE="${ROOT}/deploy/shared/gamma_curated_media_bundle.json"
@@ -230,6 +232,7 @@ if [[ -n "$MEDIA_ORIGIN_BASE_URL" && "${GAMMA_ECS_ALLOW_MEDIA_ORIGIN_FALLBACK:-0
 fi
 
 mkdir -p "$REPORT_DIR"
+rm -f "$PHASE_FILE"
 STARTED_AT="$(python3 - <<'PY'
 import datetime as dt
 print(dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"))
@@ -246,17 +249,54 @@ echo "[gamma-ecs] media_origin_base_url=${MEDIA_ORIGIN_BASE_URL:-<none>}"
 echo "[gamma-ecs] image_version=${IMAGE_VERSION}"
 echo "[gamma-ecs] config_version=${CONFIG_VERSION}"
 echo "[gamma-ecs] skip_upload=${SKIP_UPLOAD}"
+echo "[gamma-ecs] deploy_mode=${DEPLOY_MODE:-auto}"
 
 FAILURE_STAGE=""
-on_fail() {
-  FAILURE_STAGE="${FAILURE_STAGE:-unknown}"
-  python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$CONFIG_VERSION" "$PREV_IMAGE_VERSION" "$BASE_URL" "$FAILURE_STAGE" <<'PY' || true
+record_phase() {
+  local phase_name="$1"
+  local phase_started="$2"
+  local phase_status="${3:-passed}"
+  python3 - "$PHASE_FILE" "$phase_name" "$phase_started" "$phase_status" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-path, started, stage, image_version, config_version, previous_image_version, base_url, failure_stage = sys.argv[1:9]
+path = Path(sys.argv[1])
+phase_name = sys.argv[2]
+started = sys.argv[3]
+status = sys.argv[4]
+ended = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+started_dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
+ended_dt = datetime.fromisoformat(ended.replace("Z", "+00:00"))
+duration_seconds = max((ended_dt - started_dt).total_seconds(), 0.0)
+payload = []
+if path.exists():
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        payload = []
+payload.append(
+    {
+        "name": phase_name,
+        "startedAt": started,
+        "endedAt": ended,
+        "durationSeconds": round(duration_seconds, 3),
+        "status": status,
+    }
+)
+path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+}
+on_fail() {
+  FAILURE_STAGE="${FAILURE_STAGE:-unknown}"
+  python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$CONFIG_VERSION" "$PREV_IMAGE_VERSION" "$BASE_URL" "$FAILURE_STAGE" "$DEPLOY_MODE" <<'PY' || true
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+path, started, stage, image_version, config_version, previous_image_version, base_url, failure_stage, deploy_mode = sys.argv[1:10]
 report = {
     "startedAt": started,
     "endedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -267,7 +307,14 @@ report = {
     "previousImageVersion": previous_image_version or None,
     "baseUrl": base_url,
     "failureStage": failure_stage,
+    "deployMode": deploy_mode or None,
 }
+phase_path = Path(path).parent / "deploy-phases.json"
+if phase_path.exists():
+    try:
+        report["phases"] = json.loads(phase_path.read_text(encoding="utf-8"))
+    except Exception:
+        report["phases"] = []
 Path(path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print(f"[gamma-ecs] deploy report written: {path}")
 PY
@@ -278,6 +325,11 @@ BACKUP_REMOTE="${BACKUP_PARENT:-$REMOTE_DIR/../gamma-backups}"
 echo "[gamma-ecs] remote_backup_parent=${BACKUP_REMOTE}"
 
 if [[ "$SKIP_UPLOAD" != "1" ]]; then
+  phase_started="$(python3 - <<'PY'
+import datetime as dt
+print(dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"))
+PY
+)"
   if [[ "$STAGE" != "prod" ]]; then
     FAILURE_STAGE="prepare_curated_media"
     echo "[gamma-ecs] preparing gamma curated fixture/media bundle"
@@ -335,8 +387,12 @@ if [[ "$SKIP_UPLOAD" != "1" ]]; then
     remote_exec "if [ ! -d '$REMOTE_PREV_DIR/state/local/gamma/media' ]; then echo '::error::missing previous remote media root at $REMOTE_PREV_DIR/state/local/gamma/media' >&2; exit 2; fi; mkdir -p '$REMOTE_DIR/state/local/gamma'; rm -rf '$REMOTE_DIR/state/local/gamma/media'; cp -a '$REMOTE_PREV_DIR/state/local/gamma/media' '$REMOTE_DIR/state/local/gamma/'"
   fi
   remote_exec "rm -rf '$REMOTE_PREV_DIR'"
+  record_phase "upload" "$phase_started"
 else
   echo "[gamma-ecs] skip_upload=1 — using existing tree at ${REMOTE_DIR}"
+  FAILURE_STAGE="verify_existing_remote_tree"
+  remote_exec "test -f '${REMOTE_DIR}/quwoquan_service/docker-compose.gamma-local.yaml' && test -f '${REMOTE_DIR}/quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_tags.py' && test -f '${REMOTE_DIR}/quwoquan_data/scripts/verify/verify_tag_tree.py' && test -f '${REMOTE_DIR}/quwoquan_data/scripts/publish_ops/build_publish_lookup_indexes.py'" \
+    || { echo "::error::skip_upload=1 but remote tree is incomplete; missing quwoquan_data taxonomy/bootstrap scripts under ${REMOTE_DIR}" >&2; exit 2; }
   if [[ "$STAGE" != "prod" ]]; then
     echo "[gamma-ecs] skip_upload=1 — reusing existing curated media bundle on remote"
   else
@@ -345,6 +401,11 @@ else
 fi
 
 FAILURE_STAGE="remote_disk_reclaim"
+phase_started="$(python3 - <<'PY'
+import datetime as dt
+print(dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"))
+PY
+)"
 echo "[gamma-ecs] reclaiming remote disk before stack start"
 remote_exec "bash -s" <<'REMOTE_DISK_RECLAIM'
 set -euo pipefail
@@ -357,13 +418,13 @@ echo "[gamma-ecs] reclaiming remote disk"
 journalctl --vacuum-size=256M >/dev/null 2>&1 || true
 if command -v podman >/dev/null 2>&1; then
   podman container prune -f >/dev/null 2>&1 || true
-  podman image prune -f >/dev/null 2>&1 || true
+  podman image prune -f --filter dangling=true >/dev/null 2>&1 || true
   podman volume prune -f >/dev/null 2>&1 || true
   podman builder prune -af >/dev/null 2>&1 || true
 fi
 if command -v docker >/dev/null 2>&1; then
   docker container prune -f >/dev/null 2>&1 || true
-  docker image prune -af >/dev/null 2>&1 || true
+  docker image prune -f >/dev/null 2>&1 || true
   docker volume prune -f >/dev/null 2>&1 || true
   docker builder prune -af >/dev/null 2>&1 || true
 fi
@@ -376,8 +437,14 @@ if [[ -n "$root_use_pct" && "$root_use_pct" -ge 95 ]]; then
   exit 2
 fi
 REMOTE_DISK_RECLAIM
+record_phase "remote_disk_reclaim" "$phase_started"
 
 FAILURE_STAGE="remote_compose"
+phase_started="$(python3 - <<'PY'
+import datetime as dt
+print(dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"))
+PY
+)"
 echo "[gamma-ecs] persisting deploy state & starting stack (LOCAL_GAMMA_IMAGE_VERSION=${IMAGE_VERSION})"
 
 PREV_IMAGE_VERSION="${GAMMA_PREVIOUS_IMAGE_VERSION:-${PREV_IMAGE_VERSION:-}}"
@@ -387,7 +454,7 @@ if [[ -z "$PREV_IMAGE_VERSION" ]] && remote_exec "test -f '${REMOTE_DIR}/.gamma_
   )"
 fi
 
-remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") CONFIG_VERSION=$(printf '%q' "$CONFIG_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "$TEST_AUTH_TOKEN_DEFAULT") PROD_TEST_AUTH_TOKEN=$(printf '%q' "${PROD_TEST_AUTH_TOKEN:-}") TEST_AUTH_TOKEN=$(printf '%q' "${TEST_AUTH_TOKEN:-}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL=$(printf '%q' "${MEDIA_ORIGIN_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_HOST_READY_TIMEOUT_SECONDS}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") PERSONAL_ASSISTANT_MIMO_API_KEY=$(printf '%q' "${ASSISTANT_MIMO_API_KEY}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_COMPOSE_TIMEOUT_SECONDS}") GAMMA_ECS_SKIP_IMAGE_PREPULL=$(printf '%q' "${DEFAULT_SKIP_IMAGE_PREPULL}") GAMMA_ECS_SKIP_IMAGE_REBUILD=$(printf '%q' "${GAMMA_ECS_SKIP_IMAGE_REBUILD:-0}") && bash -s" <<'REMOTE_SCRIPT'
+remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") CONFIG_VERSION=$(printf '%q' "$CONFIG_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "$TEST_AUTH_TOKEN_DEFAULT") PROD_TEST_AUTH_TOKEN=$(printf '%q' "${PROD_TEST_AUTH_TOKEN:-}") TEST_AUTH_TOKEN=$(printf '%q' "${TEST_AUTH_TOKEN:-}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL=$(printf '%q' "${MEDIA_ORIGIN_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_HOST_READY_TIMEOUT_SECONDS}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") PERSONAL_ASSISTANT_MIMO_API_KEY=$(printf '%q' "${ASSISTANT_MIMO_API_KEY}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_COMPOSE_TIMEOUT_SECONDS}") GAMMA_ECS_SKIP_IMAGE_PREPULL=$(printf '%q' "${DEFAULT_SKIP_IMAGE_PREPULL}") GAMMA_ECS_SKIP_IMAGE_REBUILD=$(printf '%q' "${GAMMA_ECS_SKIP_IMAGE_REBUILD:-0}") GAMMA_ECS_DEPLOY_MODE=$(printf '%q' "${DEPLOY_MODE:-}") LOCAL_GAMMA_FORCE_CLEAN_RECREATE=$(printf '%q' "${LOCAL_GAMMA_FORCE_CLEAN_RECREATE:-1}") LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME=$(printf '%q' "${LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME:-0}") && bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 python3 - <<'PY'
 import json
@@ -601,6 +668,7 @@ export LOCAL_GAMMA_REDIS_PORT="${LOCAL_GAMMA_REDIS_PORT:-19420}"
 export LOCAL_GAMMA_HTTPS_PORT="${LOCAL_GAMMA_HTTPS_PORT:-18443}"
 export LOCAL_GAMMA_ADMIN_PORT="${LOCAL_GAMMA_ADMIN_PORT:-12019}"
 export LOCAL_GAMMA_FORCE_CLEAN_RECREATE="${LOCAL_GAMMA_FORCE_CLEAN_RECREATE:-1}"
+export LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME="${LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME:-0}"
 
 start_args=()
 if [[ "${GAMMA_ECS_SKIP_IMAGE_REBUILD:-0}" == "1" ]] && command -v podman >/dev/null 2>&1; then
@@ -628,6 +696,9 @@ set +e
 timeout "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-3600}" bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh "${start_args[@]}"
 rc=$?
 set -e
+if command -v podman >/dev/null 2>&1; then
+  podman image prune -f --filter dangling=true >/dev/null 2>&1 || true
+fi
 if [[ "$rc" -ne 0 ]]; then
   echo "[gamma-ecs] local gamma mirror failed or timed out (exit=${rc})" >&2
   print_compose_diagnostics >&2
@@ -650,8 +721,14 @@ else
   echo "[gamma-ecs] WARN: skip run_local_gamma_t3.py because python3 < 3.10 on remote host" >&2
 fi
 REMOTE_SCRIPT
+record_phase "remote_compose" "$phase_started"
 
 FAILURE_STAGE="public_health"
+phase_started="$(python3 - <<'PY'
+import datetime as dt
+print(dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"))
+PY
+)"
 echo "[gamma-ecs] verifying public endpoints"
 python3 - "$BASE_URL" "$PRODUCT_OPS_BASE_URL" <<'PY'
 import sys
@@ -679,6 +756,7 @@ def wait(url: str) -> None:
 wait(base_url + "/healthz")
 wait(ops_url + "/healthz")
 PY
+record_phase "public_health" "$phase_started"
 
 if [[ "$STAGE" != "prod" ]]; then
   python3 "${ROOT}/quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py" --base-url "${BASE_URL}"
@@ -692,7 +770,7 @@ if [[ "$STAGE" != "prod" ]]; then
   fi
 fi
 
-python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$CONFIG_VERSION" "$PREV_IMAGE_VERSION" "$BASE_URL" "$PRODUCT_OPS_BASE_URL" "$REMOTE_DIR" "$MEDIA_ORIGIN_BASE_URL" "$MEDIA_BASE_URL" "$CURATED_MEDIA_BUNDLE" <<'PY'
+python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$CONFIG_VERSION" "$PREV_IMAGE_VERSION" "$BASE_URL" "$PRODUCT_OPS_BASE_URL" "$REMOTE_DIR" "$MEDIA_ORIGIN_BASE_URL" "$MEDIA_BASE_URL" "$CURATED_MEDIA_BUNDLE" "$DEPLOY_MODE" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -711,7 +789,8 @@ from pathlib import Path
     media_origin,
     media_base_url,
     media_bundle,
-) = sys.argv[1:13]
+    deploy_mode,
+) = sys.argv[1:14]
 report = {
     "startedAt": started,
     "endedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -727,7 +806,14 @@ report = {
     "remoteDir": remote_dir,
     "mediaOriginBaseUrl": media_origin or None,
     "failureStage": None,
+    "deployMode": deploy_mode or None,
 }
+phase_path = Path(path).parent / "deploy-phases.json"
+if phase_path.exists():
+    try:
+        report["phases"] = json.loads(phase_path.read_text(encoding="utf-8"))
+    except Exception:
+        report["phases"] = []
 Path(path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print(f"[gamma-ecs] deploy report written: {path}")
 PY

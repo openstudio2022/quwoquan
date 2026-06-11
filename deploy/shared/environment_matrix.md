@@ -162,7 +162,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 |------|-------------|----------|
 | `alpha` | 单服务 `APP_ENV=alpha go test ./...`；端侧 `flutter test` | 单实例用例绿 |
 | `beta` | `python3 agent_ops/deploy/stackctl.py up --target beta-local`；App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 本地 Android/iOS 设备矩阵通过，且新启动前会 stop 旧 beta 栈 |
-| `gamma` | `python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted ...` 或 `health --target gamma-hosted` | `mainline_auto_prod` / `manual_full` / `nightly_full` 对应 hosted 与 self-hosted 证据全绿 |
+| `gamma` | `python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --mode cold-build ...`；日常重复执行用 `python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart|rollout ...`；或 `health --target gamma-hosted` | `mainline_auto_prod` / `manual_full` / `nightly_full` 对应 hosted 与 self-hosted 证据全绿 |
 | `prod` | `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted ...` | `prod initial -> checks -> full` 全自动通过，失败自动回滚，关键路径不超过 900 秒 |
 
 ### 4.1 开发者一键启动
@@ -177,6 +177,28 @@ make dev-up ENV=<alpha|beta|gamma|prod-sim|prod> [DEVICE_ID=<flutter-device-id>]
 
 ```bash
 python3 agent_ops/deploy/stackctl.py up --env <alpha|beta|gamma|prod-sim|prod> [--device-id <id>]
+```
+
+### 4.2 Hosted gamma / prod 三模式预算
+
+统一约束：
+
+- `restart`：仅重启远端既有树和既有服务镜像，优先保留 Postgres volume，目标 `<= 5min`
+- `rollout`：复用远端代码树并复用既有服务镜像，允许更新配置与轻量重拉，目标 `<= 10min`
+- `cold-build`：完整上传并远端重建，作为最慢但最稳的兜底路径，目标 `<= 45min`
+
+推荐命令：
+
+```bash
+python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart --stage prod
+python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode rollout --stage pre
+python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --mode cold-build --stage pre --image-version <version> --previous-image-version <prev>
+```
+
+重复执行验收脚本：
+
+```bash
+bash agent_ops/deploy/gamma/verify_deploy_repeatable.sh
 ```
 
 约束：

@@ -28,6 +28,11 @@ on:
         required: false
         type: boolean
         default: false
+      deploy_mode:
+        description: restart / rollout / cold-build
+        required: false
+        type: string
+        default: cold-build
       assistant_scenario_id:
         description: 单场景 smoke 可填 scenario id；留空则跑全部 gamma 场景
         required: false
@@ -130,11 +135,14 @@ jobs:
           if [ "${{ inputs.skip_upload }}" = "true" ] || [ -n "${{ inputs.release_artifact_name }}" ]; then
             mkdir -p .gamma-minimal-bundle
             mkdir -p .gamma-minimal-bundle/quwoquan_app
+            mkdir -p .gamma-minimal-bundle/quwoquan_data/data
             mkdir -p .gamma-minimal-bundle/releases
             cp -R agent_ops .gamma-minimal-bundle/agent_ops
             cp -R deploy .gamma-minimal-bundle/deploy
             cp -R releases/config .gamma-minimal-bundle/releases/config
             cp -R quwoquan_app/scripts .gamma-minimal-bundle/quwoquan_app/scripts
+            cp -R quwoquan_data/scripts .gamma-minimal-bundle/quwoquan_data/scripts
+            cp -R quwoquan_data/data/admin_regions .gamma-minimal-bundle/quwoquan_data/data/admin_regions
             cp -R quwoquan_service .gamma-minimal-bundle/quwoquan_service
             tar \
               --exclude='.git' \
@@ -216,11 +224,14 @@ jobs:
           if [ "${{ inputs.skip_upload }}" = "true" ] || [ -n "${{ inputs.release_artifact_name }}" ]; then
             mkdir -p .gamma-minimal-bundle
             mkdir -p .gamma-minimal-bundle/quwoquan_app
+            mkdir -p .gamma-minimal-bundle/quwoquan_data/data
             mkdir -p .gamma-minimal-bundle/releases
             cp -R agent_ops .gamma-minimal-bundle/agent_ops
             cp -R deploy .gamma-minimal-bundle/deploy
             cp -R releases/config .gamma-minimal-bundle/releases/config
             cp -R quwoquan_app/scripts .gamma-minimal-bundle/quwoquan_app/scripts
+            cp -R quwoquan_data/scripts .gamma-minimal-bundle/quwoquan_data/scripts
+            cp -R quwoquan_data/data/admin_regions .gamma-minimal-bundle/quwoquan_data/data/admin_regions
             cp -R quwoquan_service .gamma-minimal-bundle/quwoquan_service
             tar \
               --exclude='.git' \
@@ -287,10 +298,23 @@ jobs:
           fi
           sudo apt-get update
           sudo apt-get install -y sshpass
-      - name: Deploy to ECS (pre)
-        run: bash agent_ops/deploy/gamma/deploy_gamma_ecs.sh
+      - name: Deploy to ECS via stackctl (pre)
+        run: |
+          python3 agent_ops/deploy/stackctl.py \
+            --output-format json \
+            --report-dir artifacts/stackctl/gamma/deploy-pre \
+            deploy \
+            --target gamma-hosted \
+            --mode "${DEPLOY_MODE}" \
+            --stage pre \
+            --image-version "${GAMMA_DEPLOY_IMAGE_VERSION}" \
+            --previous-image-version "${GAMMA_PREVIOUS_IMAGE_VERSION:-bootstrap}" \
+            --base-url "${GAMMA_BASE_URL}" \
+            --product-ops-base-url "${GAMMA_PRODUCT_OPS_BASE_URL}" \
+            --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}"
         env:
           GAMMA_ECS_STAGE: pre
+          DEPLOY_MODE: ${{ inputs.deploy_mode }}
           GAMMA_ECS_SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
           GAMMA_DEPLOY_IMAGE_VERSION: ${{ inputs.image_version || format('0.0.{0}', github.run_number) }}
           GAMMA_DEPLOY_CONFIG_VERSION: ${{ inputs.config_version }}
@@ -311,7 +335,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ecs-onebox-deploy-report-pre
-          path: artifacts/ecs-onebox/deploy-report.json
+          path: |
+            artifacts/ecs-onebox/deploy-report.json
+            artifacts/stackctl/gamma/deploy-pre/**
           if-no-files-found: ignore
       - id: finish
         if: always()

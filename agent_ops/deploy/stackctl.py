@@ -147,8 +147,24 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
+    roll_parser = subparsers.add_parser("roll")
+    roll_parser.add_argument(
+        "--target",
+        choices=("alpha-local", "beta-local", "gamma-local", "gamma-hosted"),
+        required=True,
+    )
+    roll_parser.add_argument("--mode", choices=("restart", "rollout"), default="restart")
+    roll_parser.add_argument("--stage", default="")
+    roll_parser.add_argument("--image-version", default="")
+    roll_parser.add_argument("--previous-image-version", default="")
+    roll_parser.add_argument("--base-url", default="")
+    roll_parser.add_argument("--product-ops-base-url", default="")
+    roll_parser.add_argument("--media-base-url", default="")
+    roll_parser.add_argument("--media-origin-base-url", default="")
+
     deploy_parser = subparsers.add_parser("deploy")
     deploy_parser.add_argument("--target", choices=("gamma-hosted", "prod-hosted"), required=True)
+    deploy_parser.add_argument("--mode", choices=("restart", "rollout", "cold-build"), default="")
     deploy_parser.add_argument("--stage", default="")
     deploy_parser.add_argument("--image-version", default="")
     deploy_parser.add_argument("--previous-image-version", default="")
@@ -2177,20 +2193,16 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
             "bash",
             "agent_ops/deploy/gamma/deploy_gamma_ecs.sh",
         ]
-        env = {}
-        for key, value in {
-            "GAMMA_ECS_STAGE": args.stage,
-            "GAMMA_DEPLOY_IMAGE_VERSION": args.image_version,
-            "GAMMA_PREVIOUS_IMAGE_VERSION": args.previous_image_version,
-            "GAMMA_BASE_URL": args.base_url,
-            "GAMMA_PRODUCT_OPS_BASE_URL": args.product_ops_base_url,
-        }.items():
-            if value:
-                env[key] = value
-        if args.media_base_url:
-            env["MEDIA_AVATAR_CDN_BASE_URL"] = args.media_base_url
-        if args.media_origin_base_url:
-            env["GAMMA_ECS_MEDIA_ORIGIN_BASE_URL"] = args.media_origin_base_url
+        env = _gamma_mode_env(
+            mode=args.mode or "cold-build",
+            stage=args.stage,
+            image_version=args.image_version,
+            previous_image_version=args.previous_image_version,
+            base_url=args.base_url,
+            product_ops_base_url=args.product_ops_base_url,
+            media_base_url=args.media_base_url,
+            media_origin_base_url=args.media_origin_base_url,
+        )
         result = run(cmd, env=env)
     else:
         required = [
@@ -2481,6 +2493,175 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
             f"rollback-check {item['summary']}"
             for item in rollback_post_checks
         ] + ([f"rollout decision: {rollout_decision}"] if args.target == "prod-hosted" else []) + ([f"rollback triggered: {rollback_reason}"] if rollback_reason else []) + (["dry-run remained read-only"] if dry_run_requested and args.target == "prod-hosted" else []),
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
+def _gamma_mode_env(
+    *,
+    mode: str,
+    stage: str,
+    image_version: str,
+    previous_image_version: str,
+    base_url: str,
+    product_ops_base_url: str,
+    media_base_url: str,
+    media_origin_base_url: str,
+) -> dict[str, str]:
+    env: dict[str, str] = {}
+    for key, value in {
+        "GAMMA_ECS_STAGE": stage,
+        "GAMMA_DEPLOY_IMAGE_VERSION": image_version,
+        "GAMMA_PREVIOUS_IMAGE_VERSION": previous_image_version,
+        "GAMMA_BASE_URL": base_url,
+        "GAMMA_PRODUCT_OPS_BASE_URL": product_ops_base_url,
+        "MEDIA_AVATAR_CDN_BASE_URL": media_base_url,
+        "GAMMA_ECS_MEDIA_ORIGIN_BASE_URL": media_origin_base_url,
+    }.items():
+        if value:
+            env[key] = value
+
+    if mode == "restart":
+        env.update(
+            {
+                "GAMMA_ECS_SKIP_UPLOAD": "1",
+                "GAMMA_ECS_SKIP_IMAGE_REBUILD": "1",
+                "GAMMA_ECS_SKIP_IMAGE_PREPULL": "1",
+                "LOCAL_GAMMA_FORCE_CLEAN_RECREATE": "0",
+                "LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME": "1",
+            }
+        )
+    elif mode == "rollout":
+        env.update(
+            {
+                "GAMMA_ECS_SKIP_UPLOAD": "1",
+                "GAMMA_ECS_SKIP_IMAGE_REBUILD": "1",
+                "LOCAL_GAMMA_FORCE_CLEAN_RECREATE": "0",
+                "LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME": "1",
+            }
+        )
+    elif mode == "cold-build":
+        env.update(
+            {
+                "GAMMA_ECS_SKIP_UPLOAD": "0",
+                "GAMMA_ECS_SKIP_IMAGE_REBUILD": "0",
+            }
+        )
+    else:
+        raise ValueError(f"unsupported gamma deploy mode: {mode}")
+    return env
+
+
+def command_roll(args: argparse.Namespace) -> dict[str, Any]:
+    started_monotonic, started_at = _start_timing()
+
+    if args.target in {"alpha-local", "beta-local", "gamma-local"}:
+        env_map = {
+            "alpha-local": "alpha",
+            "beta-local": "beta",
+            "gamma-local": "gamma",
+        }
+        nested_args = argparse.Namespace(
+            command="up",
+            env=env_map[args.target],
+            target=args.target,
+            device_id="",
+            output_format="json",
+            report_dir=getattr(args, "report_dir", ""),
+        )
+        payload = command_up(nested_args)
+        payload["summary"] = f"stackctl roll {args.mode} completed for {args.target}"
+        return payload
+
+    report_dir = resolve_report_dir(args, "gamma", args.target)
+    env = _gamma_mode_env(
+        mode=args.mode,
+        stage=args.stage or "prod",
+        image_version=args.image_version,
+        previous_image_version=args.previous_image_version,
+        base_url=args.base_url,
+        product_ops_base_url=args.product_ops_base_url,
+        media_base_url=args.media_base_url,
+        media_origin_base_url=args.media_origin_base_url,
+    )
+    result = run(["bash", "agent_ops/deploy/gamma/deploy_gamma_ecs.sh"], env=env)
+    timing = _finish_timing(started_monotonic, started_at)
+    summary = f"stackctl roll {'completed' if result.returncode == 0 else 'failed'} for {args.target}"
+    write_json(
+        report_dir / "report.json",
+        {
+            "command": "roll",
+            "target": args.target,
+            "mode": args.mode,
+            "argv": ["bash", "agent_ops/deploy/gamma/deploy_gamma_ecs.sh"],
+            "exitCode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            **timing,
+        },
+    )
+    _write_summary_bundle(
+        report_dir,
+        command="roll",
+        target=args.target,
+        status="ok" if result.returncode == 0 else "failed",
+        summary=summary,
+        details=[f"mode: {args.mode}"] + _command_details(result),
+        extra={"mode": args.mode},
+        timing=timing,
+    )
+    _write_stdout_markdown(
+        report_dir,
+        [("roll", "\n".join(filter(None, [result.stdout, result.stderr])))],
+    )
+    if result.returncode != 0:
+        return {
+            "exitCode": result.returncode,
+            "summary": summary,
+            "details": [f"mode: {args.mode}"] + _command_details(result),
+            "reportDir": relpath(report_dir),
+            **timing,
+        }
+
+    post_deploy_checks: list[dict[str, Any]] = []
+    for nested_command, nested_scope in (("health", "full"), ("inspect", "all"), ("doctor", "")):
+        nested_dir = report_dir / nested_command
+        if nested_command == "health":
+            nested_args = argparse.Namespace(
+                command="health",
+                target=args.target,
+                scope=nested_scope,
+                output_format="json",
+                report_dir=str(nested_dir),
+            )
+            post_deploy_checks.append(command_health(nested_args))
+        elif nested_command == "inspect":
+            nested_args = argparse.Namespace(
+                command="inspect",
+                target=args.target,
+                scope=nested_scope,
+                output_format="json",
+                report_dir=str(nested_dir),
+            )
+            post_deploy_checks.append(command_inspect(nested_args))
+        else:
+            nested_args = argparse.Namespace(
+                command="doctor",
+                target=args.target,
+                output_format="json",
+                report_dir=str(nested_dir),
+            )
+            post_deploy_checks.append(command_doctor(nested_args))
+    failures = [item["summary"] for item in post_deploy_checks if int(item.get("exitCode", 0) or 0) != 0]
+    return {
+        "exitCode": 1 if failures else 0,
+        "summary": (
+            f"stackctl roll completed with post-deploy failures for {args.target}"
+            if failures
+            else summary
+        ),
+        "details": [f"mode: {args.mode}"] + _command_details(result) + failures,
         "reportDir": relpath(report_dir),
         **timing,
     }
@@ -2894,6 +3075,7 @@ def main() -> int:
         "inspect": command_inspect,
         "doctor": command_doctor,
         "repair": command_repair,
+        "roll": command_roll,
         "deploy": command_deploy,
     }
     payload = dispatch[args.command](args)

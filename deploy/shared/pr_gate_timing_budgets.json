@@ -44,6 +44,30 @@
         "chat_avatar_api_probe": 120
       }
     },
+    "04.gamma_restart_repeatable": {
+      "budgetSeconds": 300,
+      "criticalPath": "gamma_restart_roll + health_checks",
+      "phaseBudgetsSeconds": {
+        "gamma_restart_roll": 240,
+        "health_checks": 60
+      }
+    },
+    "04.gamma_rollout_repeatable": {
+      "budgetSeconds": 600,
+      "criticalPath": "gamma_rollout_deploy + health_checks",
+      "phaseBudgetsSeconds": {
+        "gamma_rollout_deploy": 540,
+        "health_checks": 60
+      }
+    },
+    "04.gamma_cold_build_repeatable": {
+      "budgetSeconds": 2700,
+      "criticalPath": "gamma_cold_build_deploy + health_checks",
+      "phaseBudgetsSeconds": {
+        "gamma_cold_build_deploy": 2640,
+        "health_checks": 60
+      }
+    },
     "05.app_env_device_matrix_pr": {
       "budgetSeconds": 30,
       "criticalPath": "summary_only_when_self_hosted_disabled_by_default_on_pr",

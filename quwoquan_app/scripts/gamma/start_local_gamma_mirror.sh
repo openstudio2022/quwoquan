@@ -54,6 +54,7 @@ LOCAL_GAMMA_TAG_DB="${LOCAL_GAMMA_TAG_DB:-quwoquan_tag}"
 DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}"
 HOST_READY_TIMEOUT_SECONDS="${LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS:-360}"
 FORCE_CLEAN_RECREATE="${LOCAL_GAMMA_FORCE_CLEAN_RECREATE:-0}"
+PRESERVE_POSTGRES_VOLUME="${LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME:-0}"
 LOCAL_GAMMA_STATE_ROOT="${LOCAL_GAMMA_STATE_ROOT:-$ROOT/state/local/gamma}"
 LOCAL_GAMMA_ARTIFACT_ROOT="${LOCAL_GAMMA_ARTIFACT_ROOT:-$ROOT/artifacts/local-gamma}"
 LOCAL_GAMMA_CONFIG_ROOT="${LOCAL_GAMMA_STATE_ROOT}/config-root"
@@ -1099,9 +1100,11 @@ if [[ "$podman_compose" == "1" ]]; then
     podman rm -f "$container_name" >/dev/null 2>&1 || true
   done
   podman network exists "$network_name" || podman network create "$network_name" >/dev/null
-  # user-service migrations are not idempotent yet; keep gamma startup
-  # deterministic by recreating the Postgres volume on each boot.
-  podman volume rm -f quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || true
+  # Default cold-build path still recreates Postgres for deterministic startup.
+  # Restart/rollout mode may preserve the volume to avoid unnecessary full DB bootstrap.
+  if [[ "$PRESERVE_POSTGRES_VOLUME" != "1" ]]; then
+    podman volume rm -f quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || true
+  fi
   podman volume inspect quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-postgres >/dev/null
   podman volume inspect quwoquan_service_local-gamma-mongo >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-mongo >/dev/null
   podman volume inspect quwoquan_service_local-gamma-redis >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-redis >/dev/null
@@ -1282,7 +1285,9 @@ else
   echo "[local-gamma] startup mode: compose-up"
   # Recreate the local mirror on every gate run so changed host port envs take effect.
   "${compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
-  docker volume rm -f quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || true
+  if [[ "$PRESERVE_POSTGRES_VOLUME" != "1" ]]; then
+    docker volume rm -f quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || true
+  fi
   ensure_docker_gamma_proxy_started() {
     local name="quwoquan_service-gamma-proxy-1"
     local status=""

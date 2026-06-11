@@ -15,6 +15,14 @@ on:
         required: false
         type: string
         default: ''
+      mode:
+        description: restart / rollout / cold-build
+        type: choice
+        default: rollout
+        options:
+          - restart
+          - rollout
+          - cold-build
       skip_upload:
         description: Reuse the existing ECS tree and only rerun remote startup
         type: boolean
@@ -82,11 +90,14 @@ jobs:
         if: ${{ !inputs.skip_upload }}
         run: |
           mkdir -p "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_app"
+          mkdir -p "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_data/data"
           mkdir -p "${RUNNER_TEMP}/gamma-minimal-bundle/releases"
           cp -R agent_ops "${RUNNER_TEMP}/gamma-minimal-bundle/agent_ops"
           cp -R deploy "${RUNNER_TEMP}/gamma-minimal-bundle/deploy"
           cp -R releases/config "${RUNNER_TEMP}/gamma-minimal-bundle/releases/config"
           cp -R quwoquan_app/scripts "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_app/scripts"
+          cp -R quwoquan_data/scripts "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_data/scripts"
+          cp -R quwoquan_data/data/admin_regions "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_data/data/admin_regions"
           cp -R quwoquan_service "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_service"
           tar \
             --exclude='.git' \
@@ -103,10 +114,23 @@ jobs:
             -C "${RUNNER_TEMP}/gamma-minimal-bundle" \
             -czf "${RUNNER_TEMP}/gamma-ecs-bundle.tgz" .
           ls -lh "${RUNNER_TEMP}/gamma-ecs-bundle.tgz"
-      - name: Deploy to ECS
-        run: bash agent_ops/deploy/gamma/deploy_gamma_ecs.sh
+      - name: Deploy to ECS via stackctl
+        run: |
+          python3 agent_ops/deploy/stackctl.py \
+            --output-format json \
+            --report-dir artifacts/stackctl/gamma/deploy-direct \
+            deploy \
+            --target gamma-hosted \
+            --mode "${DEPLOY_MODE}" \
+            --stage "${GAMMA_ECS_STAGE}" \
+            --image-version "${GAMMA_DEPLOY_IMAGE_VERSION}" \
+            --previous-image-version "${GAMMA_PREVIOUS_IMAGE_VERSION:-bootstrap}" \
+            --base-url "${GAMMA_BASE_URL}" \
+            --product-ops-base-url "${GAMMA_PRODUCT_OPS_BASE_URL}" \
+            --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}"
         env:
           GAMMA_ECS_STAGE: ${{ inputs.stage }}
+          DEPLOY_MODE: ${{ inputs.mode }}
           GAMMA_ECS_SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
           GAMMA_DEPLOY_IMAGE_VERSION: ${{ inputs.image_version || format('0.0.{0}', github.run_number) }}
           GAMMA_ECS_LOCAL_TARBALL: ${{ runner.temp }}/gamma-ecs-bundle.tgz
@@ -122,6 +146,16 @@ jobs:
           GAMMA_ECS_SKIP_IMAGE_REBUILD: ${{ inputs.skip_upload && '1' || '0' }}
           ASSISTANT_MODEL_PROVIDER: ${{ env.ASSISTANT_MODEL_PROVIDER }}
           ALLOW_DETERMINISTIC_BETA: ${{ env.ALLOW_DETERMINISTIC_BETA }}
+      - name: Upload deploy evidence
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: stackctl-gamma-deploy-direct
+          path: |
+            artifacts/ecs-onebox/deploy-report.json
+            artifacts/stackctl/gamma/deploy-direct/**
+          if-no-files-found: ignore
       - name: Probe hosted content flow
         env:
           BASE_URL: ${{ steps.urls.outputs.base_url }}
