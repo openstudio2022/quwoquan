@@ -78,6 +78,16 @@ def _json_headers(test_auth_token: str) -> dict[str, str]:
     return headers
 
 
+def _readonly_sync_headers() -> dict[str, str]:
+    # user_sync readiness只验证 route/handler/data-plane 是否可读。
+    # user-service 若收到当前 stage 无法本地验签的 Bearer token，会按安全逻辑清空
+    # X-Client-User-Id 并返回 400；这里显式走稳定的 header-only 探针，避免把
+    # stage-secret 不一致误判成部署后业务不就绪。
+    headers = _common_headers("")
+    headers["Content-Type"] = "application/json"
+    return headers
+
+
 def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
     base = args.base_url.rstrip("/")
     checks: list[dict[str, Any]] = [
@@ -113,7 +123,7 @@ def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
             "name": "user_sync",
             "method": "POST",
             "url": f"{base}/v1/user/sync",
-            "headers": _json_headers(args.test_auth_token),
+            "headers": _readonly_sync_headers(),
             "body": json.dumps({"afterSeq": 0, "limit": 1}, ensure_ascii=False).encode(
                 "utf-8"
             ),

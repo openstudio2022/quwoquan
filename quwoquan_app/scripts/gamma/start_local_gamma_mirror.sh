@@ -131,6 +131,13 @@ media_origin_pid_file="${LOCAL_GAMMA_STATE_ROOT}/media-origin.pid"
 stack_report="${LOCAL_GAMMA_STACK_REPORT}"
 gamma_proxy_ensure_attempts=0
 
+# wait_local_gamma_host_ready() 会在 podman/manual 与 docker compose 两条路径共用。
+# docker compose 分支会在后面重载成真实探测逻辑；这里提供默认 noop，
+# 避免 podman/manual 路径命中“command not found”。
+ensure_docker_gamma_proxy_started() {
+  return 0
+}
+
 local_gamma_has_existing_stack() {
   if docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null | awk 'NF {found=1} END {exit found ? 0 : 1}'; then
     return 0
