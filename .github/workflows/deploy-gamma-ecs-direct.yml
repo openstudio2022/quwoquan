@@ -146,17 +146,6 @@ jobs:
           GAMMA_ECS_SKIP_IMAGE_REBUILD: ${{ inputs.skip_upload && '1' || '0' }}
           ASSISTANT_MODEL_PROVIDER: ${{ env.ASSISTANT_MODEL_PROVIDER }}
           ALLOW_DETERMINISTIC_BETA: ${{ env.ALLOW_DETERMINISTIC_BETA }}
-      - name: Upload deploy evidence
-        id: upload_deploy_evidence
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: stackctl-gamma-deploy-direct
-          path: |
-            artifacts/ecs-onebox/deploy-report.json
-            artifacts/stackctl/gamma/deploy-direct/**
-          if-no-files-found: ignore
       - name: Echo deploy failure reports
         if: failure()
         run: |
@@ -216,6 +205,27 @@ jobs:
             --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
             --require-non-empty-content-feed \
             --report artifacts/stackctl/gamma/deploy-direct/integration-probe-post-deploy.json
+      - name: Echo post-deploy probe report
+        if: always()
+        run: |
+          echo "::group::gamma post-deploy integration probe"
+          if [ -f artifacts/stackctl/gamma/deploy-direct/integration-probe-post-deploy.json ]; then
+            sed -n '1,260p' artifacts/stackctl/gamma/deploy-direct/integration-probe-post-deploy.json
+          else
+            echo "missing artifacts/stackctl/gamma/deploy-direct/integration-probe-post-deploy.json"
+          fi
+          echo "::endgroup::"
+      - name: Upload deploy evidence
+        id: upload_deploy_evidence
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: stackctl-gamma-deploy-direct
+          path: |
+            artifacts/ecs-onebox/deploy-report.json
+            artifacts/stackctl/gamma/deploy-direct/**
+          if-no-files-found: ignore
       - name: Fail when deploy evidence upload failed
         if: always() && steps.upload_deploy_evidence.outcome != 'success'
         run: |
