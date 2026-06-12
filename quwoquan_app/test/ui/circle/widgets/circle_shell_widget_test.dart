@@ -119,15 +119,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(CircleActionBar), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byKey(
-            const ValueKey<String>('circle-shell-primary-tabs-inline'),
-          ),
-          matching: find.text('首页'),
-        ),
-        findsOneWidget,
-      );
+      // 圈子壳层一级 Tab 收敛为 内容 / 讨论 / 成员（与 §18「讨论」命名一致）。
       expect(
         find.descendant(
           of: find.byKey(
@@ -142,7 +134,7 @@ void main() {
           of: find.byKey(
             const ValueKey<String>('circle-shell-primary-tabs-inline'),
           ),
-          matching: find.text('群或组织'),
+          matching: find.text('讨论'),
         ),
         findsOneWidget,
       );
@@ -155,17 +147,27 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('circle-shell-primary-tabs-inline'),
+          ),
+          matching: find.text('首页'),
+        ),
+        findsNothing,
+      );
     });
 
     testWidgets('私密圈子游客访问时显示内容门禁', (tester) async {
       await _pumpShell(tester, mock: _PrivateVisitorCircleRepository());
 
+      // 默认 Tab 为「内容」，私密圈子游客态展示内容门禁。
       expect(
-        find.byKey(const ValueKey<String>('circle-shell-gate-home')),
+        find.byKey(const ValueKey<String>('circle-shell-gate-content')),
         findsOneWidget,
       );
 
-      await tester.tap(find.text('群或组织').first);
+      await tester.tap(find.text('讨论').first);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 

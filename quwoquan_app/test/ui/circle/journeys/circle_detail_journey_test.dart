@@ -114,6 +114,10 @@ void main() {
     });
 
     testWidgets('旅程 A2：圈子详情页包含 Tab 导航', (tester) async {
+      // 壳层内容较长，放大视口保证一级 Tab（内容/讨论/成员）完整内联展示。
+      tester.view.physicalSize = const Size(1080, 3600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
@@ -219,6 +223,10 @@ void main() {
     });
 
     testWidgets('旅程 C3：Tab 存在且反复 pump 不崩溃', (tester) async {
+      // 同 A2：放大视口保证一级 Tab 完整内联展示。
+      tester.view.physicalSize = const Size(1080, 3600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 

@@ -7,6 +7,7 @@
 ## 1. 背景与现状
 
 - 三主页骨架已落地：`ObjectPageShell` 三壳（full/standard/minimal）、统一交集卡 `ObjectIntersectionCard`（你们的连接 / 你和这里的交集 / 你认识的人在这）、用户主页影响卡 `AuthorImpactCard`（我的影响力 / TA的影响）。
+- `AuthorImpactCard` 现状（基线修正已落地）：creator→author 改名已完成；`favorite/collect` helpType 图标分支已删除（影响表达只用连接型口径）；本包扩展圈子/实体影响卡时以该现状为基线。
 - 缺口：
   - 三主页 header/看点区/行动入口**视觉尚未统一**（`object-homepage-network/spec.md` 自述）；
   - 影响模块仅用户主页有，圈子页无「圈子影响」、实体页无介绍/影响模块；
@@ -59,7 +60,7 @@ Tab 内容区：用户=作品/圈子/互动/看点；实体=内容/讨论/兴趣
 ## 3. 周边契约
 
 - 影响投影 yaml 形状以本简报 §2.2 为冻结契约；落地顺序 metadata → `make verify-metadata` → `make codegen-app` → 业务。
-- 交集卡数据契约不动（与 WP1 解耦）；WP1 会移交「新 kind → rank/icon/维度短语」映射清单，由本包在 `evidence_group.dart` 实现。
+- 交集卡数据契约不动（与 WP1 解耦）；WP1·T6 的「kind → rank/icon/维度短语」映射清单为正式交接物（**格式与位置：`wp-01-intersection-data-and-expression.md` 附录 A**），由本包在 `evidence_group.dart` 实现端侧排序分组与 fallback 图标扩展；本包不得自造映射、不得依据 kind 做语义分支（G2：文案云侧直出）。
 - `lib/components/object_page/**` 本包独占；其他包对该目录的需求一律走清单交接。
 - 新增文案 key 追加 `UITextConstants`（连接模块标题、圈子影响标题、认识对象标题等），登记于此：（细化会话填写）。
 

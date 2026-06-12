@@ -213,7 +213,7 @@ void main() {
         .toSet();
     final beforeFunGroups = await container.read(
       chatContactsRowsForSubTabProvider(
-        UITextConstants.contactsTabFunGroup,
+        UITextConstants.contactsTabGroups,
       ).future,
     );
 
@@ -233,7 +233,7 @@ void main() {
     );
     final afterFunGroups = await container.read(
       chatContactsRowsForSubTabProvider(
-        UITextConstants.contactsTabFunGroup,
+        UITextConstants.contactsTabGroups,
       ).future,
     );
     expect(afterFunGroups.length, greaterThanOrEqualTo(beforeFunGroups.length));

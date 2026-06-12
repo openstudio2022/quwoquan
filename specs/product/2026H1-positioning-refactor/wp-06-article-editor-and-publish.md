@@ -14,7 +14,8 @@
   - `GenerateArticleSummary`（`/v1/content/articles/summary:generate`）：API + repository 已实现，UI 零调用；摘要现为自动截断 120 字、不可编辑；
   - 行内实体提及：`entityMentions` 仅读侧消费（`ArticleEntityMentionDto`），编辑器 AST（`qwq_markdown_ast.dart`）无 mention 节点；
   - 小趣创作辅助：零入口（`assistantUsePolicy: 'inherit'` 硬写）。
-- 技债：`create_page.dart` 3155 行，超 R03 红线（>1000 行 GATE_BLOCK 口径），本包内拆分。
+- 技债：`create_page.dart` 3155 行（基线修正收口后复核值），超 R03 红线（>1000 行 GATE_BLOCK 口径），本包内拆分。
+- 基线注记（基线修正已落地）：云侧契约就绪结论复核不变——`CreatePost` writable（`entityRefs/tagRefs/summary`）与 `GenerateArticleSummary` 均在 content 域 metadata/实现中就绪；小趣创作辅助契约在 assistant metadata 中**尚不存在**，确认归 WP8 定稿（本包仅按 §3 冻结形状写适配层与降级）。
 
 ## 2. 功能规格
 

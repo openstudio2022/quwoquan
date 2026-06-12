@@ -17,11 +17,13 @@
 
 ## 2. 功能规格
 
-### 2.0 统一概念基线（本包必须遵守）
+### 2.0 统一概念基线（已落地基线，引用词典；本包防回归）
+
+> 以下基线已由「持续连接基线修正」会话在全仓落地（含 `discovery_page.dart` 收藏入口/收藏动画/AuthGateReason.favorite 全部删除），本包按**防回归**口径执行，不再作为待办：
 
 - 内容卡主互动**只有** `点赞 / 评论 / 转发` 三件套；内容不提供任何长期动作入口（无收藏、无关注内容、无稍后看），发现页所有内容消费面同此约束。
 - 持续连接只针对对象：关注人 / 关注实体 / 加入圈子；「以后再看」由 `我的足迹`（自动记录，私有）承载，本包不为其新增入口。
-- 本包消费云侧交集理由时，只显示六个母表达口径：`共同关注的人 / 共同圈子 / 共同兴趣 / 共同地点 / 共同校友 / 共同讨论`；kind 以词典唯一注册表为准，无兼容别名。
+- 本包消费云侧交集理由时，只显示六个母表达口径：`共同关注的人 / 共同圈子 / 共同兴趣 / 共同地点 / 共同校友 / 共同讨论`；kind 以词典唯一注册表（`specs/product/intersection-definition-and-application.md` §5.4）为准，无兼容别名。
 - 交集叙事重点是连接关系而非行为计数：优先「来自AI产品圈」「2位校友正在讨论」「与你关注的对象相关」类表达。
 
 ### 2.1 卡结构契约固化（防回归）
@@ -48,8 +50,8 @@
 
 ## 3. 周边契约
 
-- 只消费 `cloud/runtime/generated/recommendation/intersection_reason.g.dart` 现有字段（含 `weightTier`），**不新增字段、不改 metadata**。
-- 开发期数据用 alpha mock seed（WP1 会补六类样本，但本包不依赖：现有 seed 已含蓝色主交集样本）；beta 阶段与 WP1 联调。
+- 只消费 `cloud/runtime/generated/recommendation/intersection_reason.g.dart` 现有字段（含 `weightTier`，端侧 DTO 已含该字段——基线修正已落地），**不新增字段、不改 metadata**。
+- 开发期数据用 alpha mock seed。**前置说明**：端侧 mock `intersection_repository.dart` 仍残留 3 处旧 kind（`friendInCircle/friendVisited/mutualFriend`），WP1·T4（端侧 mock/fixtures kind 标准化）须先行；否则本包开发期展示将出现旧 kind 样本。beta 联调依赖 WP1·T2（六类真实数据源）与 T3（空窗治理）。
 - 新增文案 key（如 light 形态占位）只追加 `UITextConstants`，登记于本节：（细化会话填写）。
 
 ## 4. 改动范围（独占权见总纲 §4）

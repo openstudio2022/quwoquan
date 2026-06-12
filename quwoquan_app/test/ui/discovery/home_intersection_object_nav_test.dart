@@ -102,13 +102,22 @@ void main() {
       matching: find.byType(Scrollable),
     );
     expect(spotlightRail, findsWidgets);
-    if (find.text('陆衡').evaluate().isEmpty) {
+    // 横滑直到「陆衡」卡完整进入视口（半可见时 tap 中心可能落在窗外导致静默 miss）。
+    var dragAttempts = 0;
+    while (dragAttempts < 6) {
+      final candidates = find.text('陆衡').evaluate();
+      if (candidates.isNotEmpty) {
+        final center = tester.getCenter(find.text('陆衡').first);
+        final viewSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+        if (center.dx > 0 && center.dx < viewSize.width) break;
+      }
       await tester.drag(
         spotlightRail.first,
         const Offset(-160, 0),
         warnIfMissed: false,
       );
       await tester.pump(const Duration(milliseconds: 300));
+      dragAttempts++;
     }
 
     final affinityCard = find.text('陆衡');

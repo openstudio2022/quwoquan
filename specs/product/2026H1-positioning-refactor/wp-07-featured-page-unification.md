@@ -6,7 +6,7 @@
 
 ## 1. 背景与现状
 
-- 移动端精品已收口统一沉浸 viewer（`lib/ui/discovery/widgets/works_immersive_viewer.dart`，3659 行）：四类画布（图片/视频/文章 Dark Paper/纯文本）、默认深色沉浸、格式筛选（`ContentUIConfig.workFormatFilters`：all/image/video/article）、交集理由 sheet、统一互动栏。
+- 移动端精品已收口统一沉浸 viewer（`lib/ui/discovery/widgets/works_immersive_viewer.dart`，3622 行（基线修正收藏退场后从 3659 降至 3622））：四类画布（图片/视频/文章 Dark Paper/纯文本）、默认深色沉浸、格式筛选（`ContentUIConfig.workFormatFilters`：all/image/video/article）、交集理由 sheet、统一互动栏。
 - 缺口：
   - **Web 宽屏「精品」退化**为普通发现流（`web_main_app_shell.dart` `_WebFeaturedWorkspace`），与移动端不同源；
   - 筛选维度只有格式（image/video/article），无长文细分、无垂类（contentVertical）维度；
@@ -15,9 +15,11 @@
 
 ## 2. 功能规格
 
-### 2.0 统一概念基线（本包必须遵守）
+### 2.0 统一概念基线（已达成现状 + 防回归）
 
-- 精品页「无收藏入口」从单页例外升级为全产品主线：内容消费互动只有 `点赞 / 评论 / 转发`，内容不提供任何长期动作入口。
+> 「无收藏入口」已由基线修正会话在全产品达成（精品 viewer 内收藏按钮/计数/动画已删），本节按防回归口径执行：
+
+- 精品页「无收藏入口」为全产品主线现状：内容消费互动只有 `点赞 / 评论 / 转发`，内容不提供任何长期动作入口。
 - 本包后续扩展操作面板也不得引入 `收藏 / 关注内容 / 稍后看`；长期连接动作只出现在对象上（关注作者、关注实体、加入圈子）。
 - 精品页展示的交集与影响说明只用六个母表达与连接型口径：`共同讨论`、`建立新连接`、`来自XX圈`。
 
@@ -38,7 +40,7 @@
 ### 2.4 体验核验
 
 - 深色沉浸核验（状态栏、文章画布强制 dark）与边缘滑动返回回归（`immersive-media-edge-swipe-back` journey 测试保持绿）。
-- R03 警戒：`works_immersive_viewer.dart` 已 3659 行，本包新增能力必须拆出子文件，总行数只减不增。
+- R03 警戒：`works_immersive_viewer.dart` 现 3622 行（行数 ratchet 基线已登记 `specs/gates/file_line_budget_allowlist.yaml`，只减不增），本包新增能力必须拆出子文件，总行数只减不增。
 
 ## 3. 周边契约
 

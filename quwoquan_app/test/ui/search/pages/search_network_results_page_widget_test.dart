@@ -147,6 +147,10 @@ void main() {
   });
 
   testWidgets('主页 tab 可展示共享主页结果', (tester) async {
+    // mock fixture 含多条「西湖」主页，放大视口避免目标卡被列表懒加载裁剪。
+    tester.view.physicalSize = const Size(1080, 3600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       _buildApp(
         launchContext: const SearchLaunchContext(
