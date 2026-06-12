@@ -42,6 +42,16 @@ WP0（本文档所在基线，已完成）
   WP1 ↔ WP2：经 IntersectionReason DTO 现有字段解耦（WP1 不改 DTO 形状，WP2 不依赖云侧新数据，先用 mock seed）
   WP3 ↔ WP4：WP3 只做「认识这个对象」摘要卡 + 入口占位；介绍页本体、路由、投影归 WP4
   WP6 ↔ WP8：经 WP0 冻结的 assistant 创作辅助 API 契约解耦（WP8 未就绪时 WP6 入口置灰降级）
+
+WP1 内部子序列（详见 wp-01 §2.5，可并行）：
+  WP1·T1~T4（云侧 kind 收尾 + 六类数据源 + 空窗治理 + mock/fixtures 标准化）——先行序列
+  WP1·T5（足迹端侧消费闭环：Repository 三层 + 足迹列表页）——独立子序列，可与 T1~T4 并行
+  WP1·T6（kind→rank/icon/维度短语映射清单，wp-01 附录 A）——WP3 evidence_group 扩展的交接物
+
+跨包依赖顺序补注：
+  WP2 开发期依赖 WP1·T4（端侧 mock kind 标准化）先行，否则开发期展示出现旧 kind 样本；beta 联调依赖 WP1·T2/T3
+  WP3 的 evidence_group.dart 扩展依赖 WP1·T6 映射清单（已随 wp-01 附录 A 交付为规格态）
+  WP8 新交集提醒依赖 WP1·T2；「引导到我的足迹」依赖 WP1·T5
 ```
 
 ## 4. 跨包统一约束（每个细化会话开场必读）
@@ -55,6 +65,7 @@ WP0（本文档所在基线，已完成）
    - `lib/ui/discovery/**` → 仅 WP2（WP7 例外：`works_immersive_viewer.dart` 归 WP7）。
    - `lib/ui/content/entry/**` 与 `markdown/**` → 仅 WP6。
    - `lib/ui/entity/**` → WP3 改 `widgets/homepage_detail_shell.dart` 系列；WP4 只新增 `pages/` 介绍页文件，不改既有壳。
+   - `lib/ui/user/pages/` 的**足迹列表页新文件** → 归 WP1（T5 足迹端侧闭环）；WP3 独占的是 `lib/components/object_page/**` 与 `lib/ui/user/widgets/`，二者目录不相交，不构成冲突。
 3. **统一语言与视觉**：交集措辞只用 §20.3 六个母表达与 `specs/product/intersection-definition-and-application.md` 词典口径；内容互动只有 `赞 / 评 / 转`，禁止在任何新增规格中引入 `收藏 / 关注内容 / 稍后看` 等内容长期动作；持续连接只针对对象（关注人 / 关注实体 / 加入圈子），「以后再看」由我的足迹承载；连接类信息一律 `AppColors` 品牌蓝 token；新增用户可见文案禁用 §18.3 禁用词。
 4. **页面横向质量**：新增/改动页面文件必须同步页面矩阵 + `metadata_driven_ui_gap_inventory` + PR checklist + 埋点（R20/R21）。
 5. **数据**：alpha mock 改动必须先进 contract fixtures + `app_alpha_seed_manifest.json`；beta/gamma 演示数据进对应 seed manifest。
