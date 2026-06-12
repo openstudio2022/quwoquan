@@ -179,7 +179,7 @@ key_patterns:
     redis_scene: general
     ttl_seconds: 300
     type: hash
-    description: 互动状态缓存（like / favorite）
+    description: 互动状态缓存（like）
 
   - pattern: "cache:group_avatar:{conversationId}"
     redis_scene: general

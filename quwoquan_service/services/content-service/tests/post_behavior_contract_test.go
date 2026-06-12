@@ -1,12 +1,13 @@
 // L2 契约测试：Post 业务对象 — 行为上报与互动操作
 //
-// 守护：点赞、收藏、行为上报接口的路由注册和基本语义。
+// 守护：点赞、行为上报接口的路由注册和基本语义；收藏概念已全量退场，
+// 由 TestFavoriteRouteRetired 反向守护 /favorite 路由不再注册。
 // contract.yaml go_func 覆盖：
 //
 //	TestBehaviorBatchReport — behavior_batch_report
 //	TestBehaviorBatchEmpty  — behavior_batch_empty
 //	TestBehaviorBatchRejectsLike — behavior_batch_accepts_like
-//	TestLikePost, TestFavoritePost, TestReportPost — 其他行为场景
+//	TestLikePost, TestReportPost — 其他行为场景
 package tests
 
 import (
@@ -60,11 +61,11 @@ func TestLikePost(t *testing.T) {
 	}
 }
 
-// TestFavoritePost verifies the favorite endpoint route is registered.
-// contract.yaml: go_func: TestFavoritePost
-func TestFavoritePost(t *testing.T) {
+// TestFavoriteRouteRetired 反向守护：收藏概念全量退场后，
+// /v1/content/posts/{id}/favorite 路由必须不再注册（404），防止兼容路由回潮。
+func TestFavoriteRouteRetired(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Favorite target","mediaUrls":["https://example.com/img.jpg"]}`)
+	created := createPost(t, `{"contentType":"image","title":"Favorite retired target","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
@@ -74,17 +75,8 @@ func TestFavoritePost(t *testing.T) {
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
-	if rec.Code == http.StatusNotFound {
-		t.Fatalf("favorite route not registered (got 404); expected 2xx or 5xx")
-	}
-	if rec.Code >= 400 {
-		var errResp map[string]any
-		if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
-			t.Fatalf("decode error response: %v", err)
-		}
-		if errResp["code"] == nil {
-			t.Error("expected structured error response with code field")
-		}
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("favorite route must be retired (expect 404), got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

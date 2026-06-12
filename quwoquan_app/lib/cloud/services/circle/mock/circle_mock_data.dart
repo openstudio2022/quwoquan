@@ -461,7 +461,6 @@ class CircleMockData {
         'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900',
       ],
       'likeCount': 342,
-      'favoriteCount': 31,
       'shareCount': 12,
     },
     {
@@ -489,7 +488,6 @@ class CircleMockData {
       'videoUrl':
           'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
       'likeCount': 211,
-      'favoriteCount': 22,
       'shareCount': 18,
     },
     {
@@ -515,7 +513,6 @@ class CircleMockData {
       'coverUrl':
           'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=900',
       'likeCount': 128,
-      'favoriteCount': 9,
       'shareCount': 6,
     },
     {
@@ -541,7 +538,6 @@ class CircleMockData {
       'coverUrl':
           'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=900',
       'likeCount': 89,
-      'favoriteCount': 14,
       'shareCount': 4,
     },
     {
@@ -588,7 +584,6 @@ class CircleMockData {
         'fontPreset': 'handwritten',
       },
       'likeCount': 164,
-      'favoriteCount': 28,
       'shareCount': 11,
     },
     {
@@ -622,7 +617,6 @@ class CircleMockData {
         'fontPreset': 'classic',
       },
       'likeCount': 117,
-      'favoriteCount': 17,
       'shareCount': 6,
     },
     {
@@ -669,7 +663,6 @@ class CircleMockData {
         'fontPreset': 'clean',
       },
       'likeCount': 96,
-      'favoriteCount': 13,
       'shareCount': 5,
     },
     {
@@ -703,7 +696,6 @@ class CircleMockData {
         'fontPreset': 'rounded',
       },
       'likeCount': 83,
-      'favoriteCount': 11,
       'shareCount': 4,
     },
   ];

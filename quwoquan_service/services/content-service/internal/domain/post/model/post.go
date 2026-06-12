@@ -54,11 +54,9 @@ type ContentReaction struct {
 	UserId        string    `json:"userId" bson:"userId"`
 	DeviceActorId string    `json:"deviceActorId" bson:"deviceActorId"`
 	Liked         bool      `json:"liked" bson:"liked"`
-	Favorited     bool      `json:"favorited" bson:"favorited"`
 	Shared        bool      `json:"shared" bson:"shared"`
 	Reported      bool      `json:"reported" bson:"reported"`
 	LikedAt       time.Time `json:"likedAt" bson:"likedAt"`
-	FavoritedAt   time.Time `json:"favoritedAt" bson:"favoritedAt"`
 	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
 }
 
@@ -130,6 +128,8 @@ type Post struct {
 	ArticleMarkdownDigest     string         `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
 	ArticleAssetManifest      map[string]any `json:"articleAssetManifest" bson:"articleAssetManifest"`
 	ArticleRenderProfile      map[string]any `json:"articleRenderProfile" bson:"articleRenderProfile"`
+	ContentVertical           string         `json:"contentVertical" bson:"contentVertical"`
+	EntityMentions            any            `json:"entityMentions" bson:"entityMentions"`
 	ArticleTemplate           string         `json:"articleTemplate" bson:"articleTemplate"`
 	ArticleFontPreset         string         `json:"articleFontPreset" bson:"articleFontPreset"`
 	VideoUrl                  string         `json:"videoUrl" bson:"videoUrl"`
@@ -154,7 +154,6 @@ type Post struct {
 	DeviceInfo                map[string]any `json:"deviceInfo" bson:"deviceInfo"`
 	LikeCount                 int64          `json:"likeCount" bson:"likeCount"`
 	CommentCount              int64          `json:"commentCount" bson:"commentCount"`
-	FavoriteCount             int64          `json:"favoriteCount" bson:"favoriteCount"`
 	ShareCount                int64          `json:"shareCount" bson:"shareCount"`
 	ViewCount                 int64          `json:"viewCount" bson:"viewCount"`
 	Embedding                 any            `json:"embedding" bson:"embedding"`

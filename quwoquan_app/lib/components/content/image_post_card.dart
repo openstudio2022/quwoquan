@@ -28,7 +28,6 @@ class ImagePostCard extends MediaPostCard {
     super.onLike,
     super.onComment,
     super.onShare,
-    super.onBookmark,
     super.onMore,
     this.isFirstPost = false,
   });

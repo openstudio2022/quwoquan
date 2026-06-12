@@ -116,8 +116,7 @@ func NewPostService(store persistence.PostRepository, opts ...PostServiceOption)
 }
 
 type contentReactionState struct {
-	Liked     bool
-	Favorited bool
+	Liked bool
 }
 
 func directShareKey(userID string) string {
@@ -1552,77 +1551,9 @@ func (s *PostService) UnlikePost(ctx context.Context, postID, userID, deviceActo
 	return post.LikeCount, changed, nil
 }
 
-func (s *PostService) FavoritePost(ctx context.Context, postID, userID string) (int64, bool, error) {
-	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if !ok {
-		return 0, false, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
-	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = AnonymousFallbackSubAccountID
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	byPost, ok := s.reactions[post.ID]
-	if !ok {
-		byPost = map[string]contentReactionState{}
-		s.reactions[post.ID] = byPost
-	}
-	state := byPost[userID]
-	changed := !state.Favorited
-	if changed {
-		state.Favorited = true
-		byPost[userID] = state
-		post.FavoriteCount++
-		post.UpdatedAt = time.Now().UTC()
-		_ = s.store.Update(ctx, post.ID, post)
-	}
-	return post.FavoriteCount, changed, nil
-}
-
-func (s *PostService) UnfavoritePost(ctx context.Context, postID, userID string) (int64, bool, error) {
-	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if !ok {
-		return 0, false, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
-	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = AnonymousFallbackSubAccountID
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	byPost, ok := s.reactions[post.ID]
-	if !ok {
-		byPost = map[string]contentReactionState{}
-		s.reactions[post.ID] = byPost
-	}
-	state := byPost[userID]
-	changed := state.Favorited
-	if changed {
-		state.Favorited = false
-		byPost[userID] = state
-		if post.FavoriteCount > 0 {
-			post.FavoriteCount--
-		}
-		post.UpdatedAt = time.Now().UTC()
-		_ = s.store.Update(ctx, post.ID, post)
-	}
-	return post.FavoriteCount, changed, nil
-}
-
 // GetReactionState 读取当前 actor 的互动状态。actor 维度由 userID（账号）优先、
 // 否则 deviceActorID（游客设备维度）解析，使游客也能读回自身设备态点赞/分享。
-func (s *PostService) GetReactionState(postID, userID, deviceActorID string) (liked, favorited, shared bool) {
+func (s *PostService) GetReactionState(postID, userID, deviceActorID string) (liked, shared bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	normalizedPostID := strings.TrimSpace(postID)
@@ -1630,13 +1561,13 @@ func (s *PostService) GetReactionState(postID, userID, deviceActorID string) (li
 	shared = hasActiveShareForUser(s.reshares[normalizedPostID], actorKey)
 	byPost, ok := s.reactions[normalizedPostID]
 	if !ok {
-		return false, false, shared
+		return false, shared
 	}
 	state, ok := byPost[actorKey]
 	if !ok {
-		return false, false, shared
+		return false, shared
 	}
-	return state.Liked, state.Favorited, shared
+	return state.Liked, shared
 }
 
 func (s *PostService) ListProfileInteractionActivities(
@@ -2884,10 +2815,9 @@ func (s *PostService) GetCounters(ctx context.Context, postID string) (map[strin
 		)
 	}
 	return map[string]any{
-		"like":     post.LikeCount,
-		"comment":  post.CommentCount,
-		"favorite": post.FavoriteCount,
-		"share":    post.ShareCount,
+		"like":    post.LikeCount,
+		"comment": post.CommentCount,
+		"share":   post.ShareCount,
 	}, nil
 }
 
@@ -3023,7 +2953,7 @@ func (s *PostService) SearchPosts(
 			BadgeLabel:   "内容",
 			Tags:         asStringSlice(post.TagRefs),
 			Entities:     asStringSlice(post.EntityRefs),
-			Popularity:   float64(post.LikeCount + post.CommentCount + post.FavoriteCount + post.ShareCount),
+			Popularity:   float64(post.LikeCount + post.CommentCount + post.ShareCount),
 			Freshness:    post.PublishedAt,
 			Fields: map[string]string{
 				"tagRefs":           strings.Join(asStringSlice(post.TagRefs), " "),

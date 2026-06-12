@@ -35,7 +35,6 @@ abstract class PostBaseDto {
   String get assistantUsePolicy;
   int get likeCount;
   int get commentCount;
-  int get favoriteCount;
   int get shareCount;
 
   /// 创作时间（内容首次进入系统）。

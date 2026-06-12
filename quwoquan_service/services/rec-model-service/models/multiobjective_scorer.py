@@ -35,7 +35,6 @@ OBJECTIVES = {
     "click":    {"weight": 0.30},
     "dwell_s":  {"weight": 0.25},
     "like":     {"weight": 0.15},
-    "favorite": {"weight": 0.10},
     "share":    {"weight": 0.08},
     "comment":  {"weight": 0.07},
     "follow":   {"weight": 0.05},

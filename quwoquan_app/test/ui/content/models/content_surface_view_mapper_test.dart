@@ -21,7 +21,6 @@ void main() {
         'likeCount': 10,
         'commentCount': 2,
         'shareCount': 3,
-        'favoriteCount': 4,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
@@ -38,7 +37,6 @@ void main() {
       expect(view.stats.like, 10);
       expect(view.stats.comment, 2);
       expect(view.stats.share, 3);
-      expect(view.stats.favorite, 4);
     });
 
     test('video 帖 → kind.video，单视频 ref + 时长', () {
@@ -57,7 +55,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
@@ -87,7 +84,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
@@ -124,7 +120,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
@@ -151,7 +146,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
         'intersectionReasons': <Map<String, dynamic>>[
           <String, dynamic>{
@@ -194,7 +188,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
         'updatedAt': '2026-02-01T00:00:00.000Z',
         'publishedAt': '2026-01-03T00:00:00.000Z',
@@ -225,7 +218,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
@@ -252,7 +244,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'publishedAt': '2026-01-05T00:00:00.000Z',
       });
 
@@ -277,7 +268,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 

@@ -94,7 +94,6 @@
 
   "editProfile": "编辑资料",
   "settings": "设置",
-  "bookmarks": "收藏",
 
   "createCircle": "创建圈子",
   "editCircle": "编辑圈子",
@@ -265,7 +264,6 @@
   "assistantReferenceCopied": "链接已复制",
   "assistantReferenceOpenFailed": "链接打开失败，已复制到剪贴板",
   "assistantReferenceHostBlocked": "该链接域名未通过安全白名单，已复制到剪贴板",
-  "assistantBookmarked": "已收藏",
   "assistantDevReplayTitle": "助理开发态回放",
   "assistantDevReplayOpen": "回放",
   "assistantDevReplayRun": "运行记录",

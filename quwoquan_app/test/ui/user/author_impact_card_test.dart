@@ -56,10 +56,10 @@ void main() {
           ),
           AuthorImpactItem(
             helpType: 'decision',
-            action: 'favorite',
+            action: 'share',
             intersectionDimension: 'content',
             count: 12,
-            displayText: '12人收藏了TA的内容',
+            displayText: '12人转发了TA的内容',
           ),
         ],
       );
@@ -79,9 +79,8 @@ void main() {
         find.byKey(const ValueKey<String>('author-impact-fact-decision')),
         findsOneWidget,
       );
-      expect(find.text('23'), findsOneWidget);
       expect(find.text('23人加入相关圈子'), findsOneWidget);
-      expect(find.text('12人收藏了TA的内容'), findsOneWidget);
+      expect(find.text('12人转发了TA的内容'), findsOneWidget);
     });
 
     testWidgets('摘要区最多渲染前 3 条（规格：取前 3 条 displayText）', (tester) async {

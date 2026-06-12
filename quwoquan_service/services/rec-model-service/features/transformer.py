@@ -44,7 +44,6 @@ def transform_user_features(raw: dict[str, Any] | None) -> dict[str, Any]:
         "authorAffinities": raw.get("authorAffinities", {}),
         "engagementRate": float(raw.get("engagementRate", 0)),
         "totalLikes": int(raw.get("totalLikes", 0)),
-        "totalFavorites": int(raw.get("totalFavorites", 0)),
         "totalShares": int(raw.get("totalShares", 0)),
         "totalEvents": int(raw.get("totalEvents", 0)),
     }

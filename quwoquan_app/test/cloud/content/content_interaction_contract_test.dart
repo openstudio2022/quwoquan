@@ -1,6 +1,6 @@
 /// L1a Contract Tests: 内容互动相关 Mock 契约（Block / Report）。
 ///
-/// 内容点赞/收藏窄接口已并入 [ContentReactionRepository]，其 like/favorite 行为
+/// 内容点赞窄接口已并入 [ContentReactionRepository]，其 like 行为
 /// 由 content_repository 契约测试与子接口契约测试覆盖。
 library;
 

@@ -620,7 +620,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionId: 'ix_id_1',
       intersectionClass: 'fact',
       label: '同校',
-      displayName: '新东方校友',
+      displayName: '新东方校友会',
       objectKind: 'school',
       primaryText: '同校校友',
       secondaryText: '3位校友最近活跃',

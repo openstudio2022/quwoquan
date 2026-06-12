@@ -42,7 +42,7 @@ ITEM_NUMERIC_FEATURES = [
 ]
 RECALL_PATH_MAP = {"tag_recall": 0, "hot_recall": 1, "social_friend": 2, "social_circle": 3, "explore_recall": 4}
 USER_NUMERIC_FEATURES = [
-    "engagementRate", "totalLikes", "totalFavorites", "totalShares", "totalEvents",
+    "engagementRate", "totalLikes", "totalShares", "totalEvents",
 ]
 CONTEXT_NUMERIC_FEATURES = [
     "requestHour", "requestDayOfWeek",

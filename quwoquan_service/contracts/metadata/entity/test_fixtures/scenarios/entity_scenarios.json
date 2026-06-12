@@ -61,6 +61,25 @@
           ]
         },
         {
+          "homepageId": "fixture_homepage_xdf_alumni",
+          "type": "university",
+          "title": "新东方校友会",
+          "subtitle": "校友组织主页模板样本",
+          "summary": "承接校友活动、经验分享、内推信息与相关讨论",
+          "city": "北京",
+          "status": "published",
+          "categoryTags": ["校友", "组织", "北京"],
+          "relatedGroups": [
+            {
+              "circleId": "fixture_circle_xdf_alumni",
+              "name": "新东方校友同趣圈",
+              "memberCount": 420,
+              "linkedHomepageId": "fixture_homepage_xdf_alumni",
+              "linkedHomepageTitle": "新东方校友会"
+            }
+          ]
+        },
+        {
           "homepageId": "fixture_homepage_university_tsinghua",
           "type": "university",
           "title": "清华大学",
@@ -127,6 +146,46 @@
               "linkedHomepageTitle": "西湖旅行摄影机位"
             }
           ]
+        },
+        {
+          "homepageId": "hp_duanqiao",
+          "type": "sight",
+          "title": "断桥残雪",
+          "subtitle": "西湖十景之一与白堤漫步起点",
+          "summary": "承接西湖晨光、断桥步道与城市漫游内容",
+          "city": "杭州",
+          "status": "published",
+          "categoryTags": ["景点", "西湖十景", "杭州"]
+        },
+        {
+          "homepageId": "hp_quyuanfenghe",
+          "type": "sight",
+          "title": "曲院风荷",
+          "subtitle": "西湖赏荷与园林步道的经典片区",
+          "summary": "聚合荷花季机位、路线与西湖深度玩法",
+          "city": "杭州",
+          "status": "published",
+          "categoryTags": ["景点", "园林", "杭州"]
+        },
+        {
+          "homepageId": "hp_lingyin",
+          "type": "sight",
+          "title": "灵隐寺",
+          "subtitle": "飞来峰与千年古刹共同构成的杭州地标",
+          "summary": "承接寺院参访、飞来峰步行线与文化讲解内容",
+          "city": "杭州",
+          "status": "published",
+          "categoryTags": ["景点", "寺院", "杭州"]
+        },
+        {
+          "homepageId": "hp_hefangjie",
+          "type": "sight",
+          "title": "河坊街",
+          "subtitle": "南宋御街延伸段与杭州老城步行街区",
+          "summary": "聚合夜色小吃、老街步行与本地逛吃攻略",
+          "city": "杭州",
+          "status": "published",
+          "categoryTags": ["老街", "夜游", "杭州"]
         },
         {
           "homepageId": "fixture_homepage_travel_photo_dali",

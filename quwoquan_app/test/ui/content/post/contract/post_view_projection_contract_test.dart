@@ -31,7 +31,6 @@ void main() {
     'height': 900,
     'likeCount': 100,
     'commentCount': 20,
-    'favoriteCount': 30,
     'shareCount': 5,
     'publishedAt': '2025-12-01T10:00:00Z',
   };
@@ -49,7 +48,6 @@ void main() {
     'durationMs': 45000,
     'likeCount': 500,
     'commentCount': 80,
-    'favoriteCount': 120,
     'shareCount': 25,
     'publishedAt': '2026-01-10T00:00:00Z',
   };
@@ -65,7 +63,6 @@ void main() {
     'coverUrl': 'https://example.com/cover3.jpg',
     'likeCount': 1000,
     'commentCount': 90,
-    'favoriteCount': 200,
     'shareCount': 150,
     'publishedAt': '2026-01-15T08:00:00Z',
   };
@@ -123,10 +120,9 @@ void main() {
       );
     });
 
-    test('commentCount / favoriteCount / shareCount 忠实保留', () {
+    test('commentCount / shareCount 忠实保留', () {
       final r = surfaceOf(minPhoto);
       expect(r.stats.comment, equals(20));
-      expect(r.stats.favorite, equals(30));
       expect(r.stats.share, equals(5));
     });
 
@@ -155,7 +151,6 @@ void main() {
         reason: 'likesCount alias 必须被 DTO 正确归一',
       );
       expect(r.stats.comment, equals(10));
-      expect(r.stats.favorite, equals(40));
     });
 
     test('计数字段缺失时默认为 0，不抛异常', () {
@@ -171,7 +166,6 @@ void main() {
       final r = surfaceOf(raw);
       expect(r.stats.like, equals(0));
       expect(r.stats.comment, equals(0));
-      expect(r.stats.favorite, equals(0));
       expect(r.stats.share, equals(0));
     });
   });
@@ -203,7 +197,6 @@ void main() {
       final r = surfaceOf(minVideo);
       expect(r.stats.like, equals(500));
       expect(r.stats.comment, equals(80));
-      expect(r.stats.favorite, equals(120));
       expect(r.stats.share, equals(25));
     });
 
@@ -470,7 +463,6 @@ void main() {
       ],
       'likeCount': 5,
       'commentCount': 2,
-      'favoriteCount': 1,
       'shareCount': 0,
       'publishedAt': '2025-06-01T10:00:00Z',
     };
@@ -487,7 +479,6 @@ void main() {
       'durationMs': 8000,
       'likeCount': 12,
       'commentCount': 3,
-      'favoriteCount': 0,
       'shareCount': 1,
       'publishedAt': '2025-06-01T11:00:00Z',
     };

@@ -22,7 +22,6 @@ class ContentApiMetadata {
     'CreateReport': '/v1/content/reports',
     'DeleteComment': '/v1/content/posts/{postId}/comments/{commentId}',
     'DeletePost': '/v1/content/posts/{postId}',
-    'FavoritePost': '/v1/content/posts/{postId}/favorite',
     'GenerateArticleSummary': '/v1/content/articles/summary:generate',
     'GetAppConfig': '/v1/config/app',
     'GetAuthorImpact': '/v1/content/sub-accounts/{subAccountId}/author-impact',
@@ -31,6 +30,7 @@ class ContentApiMetadata {
     'GetFeedIntersections': '/v1/content/feed/intersections',
     'GetHelperRead': '/v1/content/helper-read/{contentId}',
     'GetMediaAsset': '/v1/content/media/{mediaId}',
+    'GetMyFootprint': '/v1/content/footprint',
     'GetMyIntersectionSummary': '/v1/content/intersections/summary',
     'GetObjectIntersections': '/v1/content/intersections/object',
     'GetPost': '/v1/content/posts/{postId}',
@@ -61,7 +61,6 @@ class ContentApiMetadata {
     'SelectAutoVideoCover': '/v1/content/media/{mediaId}/cover:auto',
     'SelectManualVideoCover': '/v1/content/media/{mediaId}/cover:manual',
     'SharePost': '/v1/content/posts/{postId}/share',
-    'UnfavoritePost': '/v1/content/posts/{postId}/favorite',
     'UnlikePost': '/v1/content/posts/{postId}/like',
     'UnsharePost': '/v1/content/posts/{postId}/share',
     'UpdatePost': '/v1/content/posts/{postId}',
@@ -79,7 +78,6 @@ class ContentApiMetadata {
     'CreateReport': 'POST',
     'DeleteComment': 'DELETE',
     'DeletePost': 'DELETE',
-    'FavoritePost': 'POST',
     'GenerateArticleSummary': 'POST',
     'GetAppConfig': 'GET',
     'GetAuthorImpact': 'GET',
@@ -88,6 +86,7 @@ class ContentApiMetadata {
     'GetFeedIntersections': 'GET',
     'GetHelperRead': 'GET',
     'GetMediaAsset': 'GET',
+    'GetMyFootprint': 'GET',
     'GetMyIntersectionSummary': 'GET',
     'GetObjectIntersections': 'GET',
     'GetPost': 'GET',
@@ -118,7 +117,6 @@ class ContentApiMetadata {
     'SelectAutoVideoCover': 'POST',
     'SelectManualVideoCover': 'POST',
     'SharePost': 'POST',
-    'UnfavoritePost': 'DELETE',
     'UnlikePost': 'DELETE',
     'UnsharePost': 'DELETE',
     'UpdatePost': 'PATCH',
@@ -137,7 +135,6 @@ class ContentApiMetadata {
     'CreateReport': 'required',
     'DeleteComment': 'required',
     'DeletePost': 'required',
-    'FavoritePost': 'required',
     'GenerateArticleSummary': 'required',
     'GetAppConfig': 'public',
     'GetAuthorImpact': 'required',
@@ -146,6 +143,7 @@ class ContentApiMetadata {
     'GetFeedIntersections': 'optional',
     'GetHelperRead': 'public',
     'GetMediaAsset': 'public',
+    'GetMyFootprint': 'required',
     'GetMyIntersectionSummary': 'required',
     'GetObjectIntersections': 'required',
     'GetPost': 'public',
@@ -176,7 +174,6 @@ class ContentApiMetadata {
     'SelectAutoVideoCover': 'required',
     'SelectManualVideoCover': 'required',
     'SharePost': 'optional',
-    'UnfavoritePost': 'required',
     'UnlikePost': 'optional',
     'UnsharePost': 'optional',
     'UpdatePost': 'required',
@@ -193,7 +190,6 @@ class ContentApiMetadata {
   static const String createReportOperation = 'CreateReport';
   static const String deleteCommentOperation = 'DeleteComment';
   static const String deletePostOperation = 'DeletePost';
-  static const String favoritePostOperation = 'FavoritePost';
   static const String generateArticleSummaryOperation = 'GenerateArticleSummary';
   static const String getAppConfigOperation = 'GetAppConfig';
   static const String getAuthorImpactOperation = 'GetAuthorImpact';
@@ -202,6 +198,7 @@ class ContentApiMetadata {
   static const String getFeedIntersectionsOperation = 'GetFeedIntersections';
   static const String getHelperReadOperation = 'GetHelperRead';
   static const String getMediaAssetOperation = 'GetMediaAsset';
+  static const String getMyFootprintOperation = 'GetMyFootprint';
   static const String getMyIntersectionSummaryOperation = 'GetMyIntersectionSummary';
   static const String getObjectIntersectionsOperation = 'GetObjectIntersections';
   static const String getPostOperation = 'GetPost';
@@ -232,7 +229,6 @@ class ContentApiMetadata {
   static const String selectAutoVideoCoverOperation = 'SelectAutoVideoCover';
   static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
   static const String sharePostOperation = 'SharePost';
-  static const String unfavoritePostOperation = 'UnfavoritePost';
   static const String unlikePostOperation = 'UnlikePost';
   static const String unsharePostOperation = 'UnsharePost';
   static const String updatePostOperation = 'UpdatePost';
@@ -284,12 +280,6 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
-  static const String favoritePostPathTemplate = '/v1/content/posts/{postId}/favorite';
-  static String favoritePostPath({required String postId}) {
-    return _fillPath(favoritePostPathTemplate, <String, String>{
-      'postId': postId,
-    });
-  }
   static const String generateArticleSummaryPath = '/v1/content/articles/summary:generate';
   static const String getAppConfigPath = '/v1/config/app';
   static const String getAuthorImpactPathTemplate = '/v1/content/sub-accounts/{subAccountId}/author-impact';
@@ -318,6 +308,7 @@ class ContentApiMetadata {
       'mediaId': mediaId,
     });
   }
+  static const String getMyFootprintPath = '/v1/content/footprint';
   static const String getMyIntersectionSummaryPath = '/v1/content/intersections/summary';
   static const String getObjectIntersectionsPath = '/v1/content/intersections/object';
   static const String getPostPathTemplate = '/v1/content/posts/{postId}';
@@ -441,12 +432,6 @@ class ContentApiMetadata {
   static const String sharePostPathTemplate = '/v1/content/posts/{postId}/share';
   static String sharePostPath({required String postId}) {
     return _fillPath(sharePostPathTemplate, <String, String>{
-      'postId': postId,
-    });
-  }
-  static const String unfavoritePostPathTemplate = '/v1/content/posts/{postId}/favorite';
-  static String unfavoritePostPath({required String postId}) {
-    return _fillPath(unfavoritePostPathTemplate, <String, String>{
       'postId': postId,
     });
   }

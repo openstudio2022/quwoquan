@@ -608,12 +608,6 @@ abstract class AppLocalizations {
   /// **'设置'**
   String get settings;
 
-  /// No description provided for @bookmarks.
-  ///
-  /// In zh, this message translates to:
-  /// **'收藏'**
-  String get bookmarks;
-
   /// No description provided for @createCircle.
   ///
   /// In zh, this message translates to:
@@ -1561,12 +1555,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'该链接域名未通过安全白名单，已复制到剪贴板'**
   String get assistantReferenceHostBlocked;
-
-  /// No description provided for @assistantBookmarked.
-  ///
-  /// In zh, this message translates to:
-  /// **'已收藏'**
-  String get assistantBookmarked;
 
   /// No description provided for @assistantDevReplayTitle.
   ///

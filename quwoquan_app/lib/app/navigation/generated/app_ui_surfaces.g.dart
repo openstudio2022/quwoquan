@@ -367,6 +367,17 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface myFootprint = AppUiSurface(
+    id: 'myFootprint',
+    owner: 'content',
+    routeId: 'myFootprint',
+    pathTemplate: '/profile/footprint',
+    description: '我的足迹（私有只读消费轨迹：最近看过/赞过/评过/转过；数据源为既有行为边，无新写路径；不产生交集与影响）',
+    operationIds: <String>[
+      'GetMyFootprint',
+    ],
+  );
+
   static const AppUiSurface userProfile = AppUiSurface(
     id: 'userProfile',
     owner: 'user',
@@ -410,6 +421,7 @@ class AppUiSurfaces {
     homepageMaintenance,
     homepageStatusReport,
     circleDetail,
+    myFootprint,
     userProfile,
   ];
 
@@ -438,6 +450,7 @@ class AppUiSurfaces {
     'homepageMaintenance': homepageMaintenance,
     'homepageStatusReport': homepageStatusReport,
     'circleDetail': circleDetail,
+    'myFootprint': myFootprint,
     'userProfile': userProfile,
   };
 }

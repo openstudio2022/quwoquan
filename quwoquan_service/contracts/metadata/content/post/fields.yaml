@@ -453,15 +453,6 @@ entities:
         ops_exposure: read
         recommend_feature: true
 
-      - name: favoriteCount
-        type: int
-        constraints: [NOT_NULL, DEFAULT_0]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        recommend_feature: true
-
       - name: shareCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
@@ -1162,14 +1153,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: favorited
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
       - name: shared
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
@@ -1187,14 +1170,6 @@ entities:
         ops_exposure: read
 
       - name: likedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: favoritedAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC

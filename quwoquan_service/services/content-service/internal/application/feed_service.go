@@ -75,7 +75,6 @@ type FeedItemView struct {
 	Height       int64    `json:"height,omitempty"`
 	LikeCount    int64    `json:"likesCount"`
 	CommentCount int64    `json:"commentsCount"`
-	SaveCount    int64    `json:"savesCount"`
 	ShareCount   int64    `json:"shares"`
 	CreatedAt    string   `json:"createdAt"`
 	// UpdatedAt 最后实质更新时间；与 createdAt 相等或更早时端只显示创作时间。零值省略。
@@ -165,7 +164,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			Height:       height,
 			LikeCount:    post.LikeCount,
 			CommentCount: post.CommentCount,
-			SaveCount:    post.FavoriteCount,
 			ShareCount:   post.ShareCount,
 			CreatedAt:    post.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 			UpdatedAt:    feedTimeOrEmpty(post.UpdatedAt),

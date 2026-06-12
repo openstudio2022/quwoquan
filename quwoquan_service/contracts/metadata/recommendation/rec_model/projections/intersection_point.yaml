@@ -6,13 +6,16 @@ description: |
   推荐交集点来自算法分桶后的可解释推荐点，必须标注 recommended，不能伪装事实。
 
   维度与证据组类型为开放字符串（dimension / pointClass / sourceRef），端按字符串解析，
-  未来新增交集维度（如时间 coCohort、地点 coVisitedEntity）不需要改契约，端侧对未知
-  kind 优雅降级展示 displayText/label + count，不得写死闭集枚举。
+  未来新增交集 kind 不需要改契约，端侧对未知 kind 优雅降级展示 displayText/label + count，
+  不得写死闭集枚举。sourceRef 取值必须先在交集词典 kind 唯一注册表登记
+  （specs/product/intersection-definition-and-application.md §5.4，标准名如
+  sharedFollowees / sharedCircle / coCommented / coVisitedEntity / followeeInObject，
+  无兼容别名），登记后方可在云侧产出与 fixtures 铺设。
 
   证据组语义：
-    count            该证据组聚合到的事实条数（如「共同好友 4」中的 4）；端侧数字真相源。
-    displayText      用户语言短句名词（≤6 汉字，如「共同好友」），云侧下发，端不本地拼装。
-    sampleText       实例化样本（如某好友名 / 某地点名 / 某篇内容标题），让交集"可感知"。
+    count            该证据组聚合到的事实条数（如「共同关注的人 4」中的 4）；端侧数字真相源。
+    displayText      用户语言短句名词（≤6 汉字，如「共同关注的人」），云侧下发，端不本地拼装。
+    sampleText       实例化样本（如某用户名 / 某地点名 / 某篇内容标题），让交集"可感知"。
     sampleAvatarUrls 头像簇（≤3），真实的人/对象信号，端侧视觉锚。
 
 consumers:

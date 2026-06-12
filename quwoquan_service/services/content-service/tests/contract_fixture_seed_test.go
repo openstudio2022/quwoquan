@@ -48,7 +48,6 @@ type contentFixturePost struct {
 	LocationName  string   `json:"locationName"`
 	LikeCount     int64    `json:"likeCount"`
 	CommentCount  int64    `json:"commentCount"`
-	FavoriteCount int64    `json:"favoriteCount"`
 	ShareCount    int64    `json:"shareCount"`
 	CreatedAt     string   `json:"createdAt"`
 	UpdatedAt     string   `json:"updatedAt"`
@@ -63,10 +62,9 @@ type contentFixtureComment struct {
 }
 
 type contentFixtureReaction struct {
-	PostID    string `json:"postId"`
-	UserID    string `json:"userId"`
-	Liked     bool   `json:"liked"`
-	Favorited bool   `json:"favorited"`
+	PostID string `json:"postId"`
+	UserID string `json:"userId"`
+	Liked  bool   `json:"liked"`
 }
 
 func seedContentContractFixture(t *testing.T, seedRef string) contractSeedEvidence {
@@ -96,12 +94,6 @@ func seedContentContractFixture(t *testing.T, seedRef string) contractSeedEviden
 		if reaction.Liked {
 			if _, _, err := testPostService.LikePost(ctx, reaction.PostID, reaction.UserID, ""); err != nil {
 				t.Fatalf("seed content like %s: %v", reaction.PostID, err)
-			}
-			inserted++
-		}
-		if reaction.Favorited {
-			if _, _, err := testPostService.FavoritePost(ctx, reaction.PostID, reaction.UserID); err != nil {
-				t.Fatalf("seed content favorite %s: %v", reaction.PostID, err)
 			}
 			inserted++
 		}
@@ -190,7 +182,6 @@ func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 		Summary:                   fp.Summary,
 		LikeCount:                 fp.LikeCount,
 		CommentCount:              fp.CommentCount,
-		FavoriteCount:             fp.FavoriteCount,
 		ShareCount:                fp.ShareCount,
 		ModerationStatus:          "approved",
 		CreatedAt:                 createdAt,

@@ -304,7 +304,7 @@ components:
         contentId: { type: string }
         eventType:
           type: string
-          enum: [impression, click, dwell, like, favorite, dislike, report, share]
+          enum: [impression, click, dwell, like, dislike, report, share]
         timestamp: { type: string }
         durationMs: { type: integer }
         metadata:
@@ -415,14 +415,12 @@ components:
       type: object
       properties:
         liked: { type: boolean }
-        favorited: { type: boolean }
         reported: { type: boolean }
     Counters:
       type: object
       properties:
         likeCount: { type: integer }
         commentCount: { type: integer }
-        favoriteCount: { type: integer }
         shareCount: { type: integer }
     MediaAsset:
       type: object

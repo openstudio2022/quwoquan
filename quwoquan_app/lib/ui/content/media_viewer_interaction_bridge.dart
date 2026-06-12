@@ -21,10 +21,8 @@ MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
       .where((id) => id.trim().isNotEmpty)
       .toSet();
   final likedPosts = <String>{};
-  final savedPosts = <String>{};
   final followingUsers = <String>{};
   final postLikesCount = <String, int>{};
-  final postBookmarksCount = <String, int>{};
   final postSharesCount = <String, int>{};
   final postCommentCount = <String, int>{};
 
@@ -34,21 +32,11 @@ MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
         discoveryState.likedPosts.contains(id)) {
       likedPosts.add(id);
     }
-    if (postInteractionState.isSaved(id) ||
-        discoveryState.savedPosts.contains(id)) {
-      savedPosts.add(id);
-    }
     postLikesCount[id] = postInteractionState.likeCountFor(
       id,
       fallback: discoveryState.getPostLikesCount(id) > 0
           ? discoveryState.getPostLikesCount(id)
           : post.likeCount,
-    );
-    postBookmarksCount[id] = postInteractionState.bookmarkCountFor(
-      id,
-      fallback: discoveryState.getPostBookmarksCount(id) > 0
-          ? discoveryState.getPostBookmarksCount(id)
-          : post.favoriteCount,
     );
     postSharesCount[id] = postInteractionState.shareCountFor(
       id,
@@ -72,10 +60,8 @@ MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
     scopePostIds: scopePostIds,
     scopeProfileIds: scopeProfileIds,
     followingUsers: followingUsers,
-    savedPosts: savedPosts,
     likedPosts: likedPosts,
     postLikesCount: postLikesCount,
-    postBookmarksCount: postBookmarksCount,
     postSharesCount: postSharesCount,
     postCommentCount: postCommentCount,
   );
@@ -137,14 +123,6 @@ bool effectivePostLiked(WidgetRef ref, String postId) {
   return ref.read(discoveryStateProvider).likedPosts.contains(postId);
 }
 
-bool effectivePostSaved(WidgetRef ref, String postId) {
-  final postInteraction = ref.read(postInteractionStateProvider);
-  if (postInteraction.hasSaveStateFor(postId)) {
-    return postInteraction.isSaved(postId);
-  }
-  return ref.read(discoveryStateProvider).savedPosts.contains(postId);
-}
-
 bool effectiveProfileFollowing(WidgetRef ref, String subAccountId) {
   final relationshipState = ref.read(userRelationshipStateProvider);
   if (relationshipState.hasRelationshipStateFor(subAccountId)) {
@@ -167,21 +145,6 @@ int effectivePostLikeCount(
     postId,
     fallback: discoveryState.getPostLikesCount(postId) > 0
         ? discoveryState.getPostLikesCount(postId)
-        : fallback,
-  );
-}
-
-int effectivePostBookmarkCount(
-  WidgetRef ref,
-  String postId, {
-  required int fallback,
-}) {
-  final postInteraction = ref.read(postInteractionStateProvider);
-  final discoveryState = ref.read(discoveryStateProvider);
-  return postInteraction.bookmarkCountFor(
-    postId,
-    fallback: discoveryState.getPostBookmarksCount(postId) > 0
-        ? discoveryState.getPostBookmarksCount(postId)
         : fallback,
   );
 }
@@ -230,32 +193,6 @@ void syncPostLikeIntent(
       .enqueuePostLike(
         postId: postId,
         isLiked: isLiked,
-        flushImmediately: true,
-      );
-}
-
-void syncPostSaveIntent(
-  WidgetRef ref, {
-  required String postId,
-  required bool isSaved,
-  required int bookmarkCount,
-}) {
-  // 收藏属个人资产，仍需真实账号（FavoritePost=required）。防御性兜底：未登录绝不
-  // 写本地乐观态 / outbox；UI 入口已用 requireLogin 拦截，这里防止遗漏路径。
-  if (!ref.read(authSessionControllerProvider).isAuthenticated) {
-    return;
-  }
-  ref
-      .read(postInteractionStateProvider.notifier)
-      .setSaved(postId, isSaved, bookmarkCount: bookmarkCount);
-  ref
-      .read(discoveryStateProvider.notifier)
-      .setSaveState(postId, isSaved, bookmarkCount: bookmarkCount);
-  ref
-      .read(clientStateSyncOutboxProvider.notifier)
-      .enqueuePostSave(
-        postId: postId,
-        isSaved: isSaved,
         flushImmediately: true,
       );
 }

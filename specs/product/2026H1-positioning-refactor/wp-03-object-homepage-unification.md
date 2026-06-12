@@ -16,6 +16,12 @@
 
 ## 2. 功能规格
 
+### 2.0 统一概念基线（本包必须遵守）
+
+- 对象主页的“连接”与“影响”必须遵守新的动作基线：`认同（赞）/ 交流（评）/ 传播（转）/ 持续连接（关注人、关注实体、加入圈子）`；内容不提供长期动作。
+- 影响模块不得出现“收藏了我的内容”“持续关注了我的内容”类内容沉淀表达；只用连接型表达：“进入了相关圈子”“建立了新连接”“开始关注这个对象”“带来了新讨论”。
+- 对象页交集表达只用六个母表达与词典注册表 kind；内容维度交集由 `共同讨论` 等连接型表达承载。
+
 ### 2.1 四段式结构统一（概念文档 §20.5）
 
 用户 / 我的 / 实体 / 圈子主页统一为：
@@ -35,7 +41,7 @@ Tab 内容区：用户=作品/圈子/互动/看点；实体=内容/讨论/兴趣
 
 新增两个投影（对齐既有 `author_impact_summary/item` 形状，复用 item 结构）：
 
-- `circle_impact_summary`：`{circleId, total, items[{helpType, action, intersectionDimension, tagRef, source, count, displayText}]}`，示例 displayText：「328人通过这里认识新朋友」「189人加入相关圈子」「42个实体正在被讨论」（最后一条前台文案不出现「实体」字样，用「42个地方和事物正在被讨论」类口径，细化会话定稿）。
+- `circle_impact_summary`：`{circleId, total, items[{helpType, action, intersectionDimension, tagRef, source, count, displayText}]}`，示例 displayText：「328人通过这里建立了新连接」「189人加入相关圈子」「42个地方和事物正在被讨论」（最后一条前台文案不出现「实体」字样，细化会话定稿）。
 - `homepage_impact_summary`：实体页可选（首发可只做「认识这个对象」摘要卡，影响卡视数据可用性决定）。
 
 约束（概念文档 §20.3）：每条 displayText 必须可枚举来源（点开见明细或跳交集列表）；云侧无真实归因数据时不下发该条；端侧空态收起（mine 态可显示鼓励文案，对齐 AuthorImpactCard 现状）。

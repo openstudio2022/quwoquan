@@ -99,16 +99,16 @@ events:
     recommend_impact: engagement_signal
 
   - name: ContentReacted
-    description: 互动状态变更（点赞/收藏/权威分享记录/举报）
+    description: 互动状态变更（点赞/权威分享记录/举报）
     producer: content-service
     consumers: [recommendation-engine, notification-service]
     channel: direct
     payload_entity: ContentReaction
-    payload_fields: [postId, userId, liked, favorited, shared, reported]
+    payload_fields: [postId, userId, liked, shared, reported]
     recommend_impact: hot_path_signal
     description_detail: |
       写入 Redis 推荐热路径（direct channel），同时写入 Event Store。
-      点赞/收藏等显式喜好信号 → 实时影响下一批推荐。
+      点赞等显式喜好信号 → 实时影响下一批推荐。
 
   - name: ContentViewed
     description: 内容浏览

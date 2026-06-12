@@ -26,7 +26,6 @@ enum AuthGateReason {
   greet,
   comment,
   like,
-  favorite,
   follow,
   followingFeed,
   shareRecord,
@@ -102,12 +101,6 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
         title: UITextConstants.authGateTitleLike,
         prompt: UITextConstants.authGatePromptLike,
         requiredOperations: <String>[],
-      ),
-      AuthGateReason.favorite: AuthGateEntry(
-        reason: AuthGateReason.favorite,
-        title: UITextConstants.authGateTitleFavorite,
-        prompt: UITextConstants.authGatePromptFavorite,
-        requiredOperations: <String>['FavoritePost'],
       ),
       AuthGateReason.follow: AuthGateEntry(
         reason: AuthGateReason.follow,

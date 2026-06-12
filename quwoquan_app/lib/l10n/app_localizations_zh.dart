@@ -266,9 +266,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settings => '设置';
 
   @override
-  String get bookmarks => '收藏';
-
-  @override
   String get createCircle => '创建圈子';
 
   @override
@@ -746,9 +743,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get assistantReferenceHostBlocked => '该链接域名未通过安全白名单，已复制到剪贴板';
-
-  @override
-  String get assistantBookmarked => '已收藏';
 
   @override
   String get assistantDevReplayTitle => '助理开发态回放';

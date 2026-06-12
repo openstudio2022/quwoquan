@@ -67,7 +67,6 @@ collections:
     indexes:
       - { name: idx_reactions_post_user, keys: { postId: 1, userId: 1 }, unique: true }
       - { name: idx_reactions_user_liked, keys: { userId: 1, liked: 1, likedAt: -1 }, sparse: true }
-      - { name: idx_reactions_user_favorited, keys: { userId: 1, favorited: 1, favoritedAt: -1 }, sparse: true }
     write_pattern: upsert
 
   post_circle_distribution:

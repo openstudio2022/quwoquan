@@ -242,7 +242,7 @@ def main():
     feature_go = SERVICE_ROOT / "runtime" / "recommendation" / "feature.go"
     go_fields = scan_go_struct_fields(feature_go, "UserFeatureVector")
     required_fields = [
-        "likeLevel", "favoriteLevel", "shareLevel", "eventLevel",
+        "likeLevel", "shareLevel", "eventLevel",
         "topicAffinities", "audienceAffinities", "formatAffinities",
         "entityAffinities", "entityInstanceAffinities",
         "typeENER", "avgEngagementDepth", "sourceDistribution",

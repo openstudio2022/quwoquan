@@ -74,7 +74,6 @@ void main() {
         'click',
         'dwell',
         'like',
-        'favorite',
         'share',
         'dislike',
         'report',

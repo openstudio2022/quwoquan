@@ -18,10 +18,15 @@ class HomepageMockData {
     _nightMarketDetail,
     _vehicleCandidateDetail,
     _campusHomepage('fixture_homepage_university_pku', '北京大学', '北京'),
+    _alumniHomepage('fixture_homepage_xdf_alumni', '新东方校友会', '北京'),
     _campusHomepage('fixture_homepage_university_tsinghua', '清华大学', '北京'),
     _campusHomepage('fixture_homepage_university_fudan', '复旦大学', '上海'),
     _campusHomepage('fixture_homepage_university_zju', '浙江大学', '杭州'),
     _campusHomepage('fixture_homepage_university_nju', '南京大学', '南京'),
+    _sightHomepage('hp_duanqiao', '断桥残雪', '杭州', '西湖十景之一与白堤漫步起点'),
+    _sightHomepage('hp_quyuanfenghe', '曲院风荷', '杭州', '西湖赏荷与园林步道的经典片区'),
+    _sightHomepage('hp_lingyin', '灵隐寺', '杭州', '飞来峰与千年古刹共同构成的杭州地标'),
+    _sightHomepage('hp_hefangjie', '河坊街', '杭州', '南宋御街延伸段与杭州老城步行街区'),
     _sightHomepage('homepage_sight_emeishan', '峨眉山', '乐山', '世界遗产与川西南山地旅行代表目的地'),
     _sightHomepage(
       'homepage_sight_leshan_giant_buddha',
@@ -265,6 +270,40 @@ HomepageDetail _campusHomepage(String id, String title, String city) {
         circleId: '${id}_circle_001',
         name: '$title 同趣圈',
         memberCount: 600,
+        linkedHomepageId: id,
+        linkedHomepageTitle: title,
+      ),
+    ],
+    createdAt: _dt('2026-05-01T00:00:00.000Z'),
+    updatedAt: _dt('2026-05-01T00:00:00.000Z'),
+    publishedAt: _dt('2026-05-01T00:00:00.000Z'),
+  );
+}
+
+HomepageDetail _alumniHomepage(String id, String title, String city) {
+  return HomepageDetail(
+    id: id,
+    homepageType: 'university',
+    title: title,
+    subtitle: '校友组织主页模板样本',
+    status: 'published',
+    sourceType: 'contract_fixture',
+    claimStatus: 'unclaimed',
+    categoryTags: <String>['校友', '组织', city],
+    city: city,
+    contentPreview: <HomepageContentPreview>[
+      HomepageContentPreview(
+        postId: '${id}_post_001',
+        title: '$title 活动与讨论',
+        summary: '承接校友活动、经验分享、内推信息与相关讨论。',
+        contentType: 'article',
+      ),
+    ],
+    relatedGroups: <HomepageRelatedGroupSummary>[
+      HomepageRelatedGroupSummary(
+        circleId: '${id}_circle_001',
+        name: '$title 同趣圈',
+        memberCount: 420,
         linkedHomepageId: id,
         linkedHomepageTitle: title,
       ),

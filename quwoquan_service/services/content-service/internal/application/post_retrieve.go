@@ -59,7 +59,7 @@ func (s PostCandidateSource) Candidates(ctx context.Context, plan rtsearch.Retri
 			BadgeLabel:   "内容",
 			Tags:         asStringSlice(post.TagRefs),
 			Entities:     asStringSlice(post.EntityRefs),
-			Popularity:   float64(post.LikeCount + post.CommentCount + post.FavoriteCount + post.ShareCount),
+			Popularity:   float64(post.LikeCount + post.CommentCount + post.ShareCount),
 			Freshness:    post.PublishedAt,
 			Fields: map[string]string{
 				"authorId":          post.AuthorId,

@@ -21,13 +21,10 @@ class VideoMediaViewer extends ConsumerStatefulWidget {
   final Function(dynamic)? onCommentsClick;
   final Function(dynamic)? onMoreClick;
   final Function(dynamic)? onLikeClick;
-  final Function(dynamic)? onSaveClick;
   final Function(dynamic)? onShareClick;
   final Set<String>? followingUsers;
-  final Set<String>? savedPosts;
   final Set<String>? likedPosts;
   final Function(dynamic)? getPostLikesCount;
-  final Function(dynamic)? getPostBookmarksCount;
   final bool isBlocked;
   final String? source;
   final Map<String, dynamic>? userProfileData;
@@ -47,13 +44,10 @@ class VideoMediaViewer extends ConsumerStatefulWidget {
     this.onCommentsClick,
     this.onMoreClick,
     this.onLikeClick,
-    this.onSaveClick,
     this.onShareClick,
     this.followingUsers,
-    this.savedPosts,
     this.likedPosts,
     this.getPostLikesCount,
-    this.getPostBookmarksCount,
     this.isBlocked = false,
     this.source,
     this.userProfileData,
@@ -308,19 +302,6 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                       count: widget.getPostLikesCount?.call(currentPost) ?? 0,
                       isActive: widget.likedPosts?.contains(currentPost['id']) ?? false,
                       onTap: () => widget.onLikeClick?.call(currentPost),
-                    ),
-                    
-                    SizedBox(width: AppSpacing.lg.w),
-                    
-                    // 收藏按钮
-                    _buildActionButtonWidget(
-                      iconWidget: AppStarIcon(
-                        size: AppSpacing.iconLarge.sp,
-                        color: (widget.savedPosts?.contains(currentPost['id']) ?? false) ? AppColors.primaryColor : AppColors.white,
-                        filled: widget.savedPosts?.contains(currentPost['id']) ?? false,
-                      ),
-                      count: widget.getPostBookmarksCount?.call(currentPost) ?? 0,
-                      onTap: () => widget.onSaveClick?.call(currentPost),
                     ),
                     
                     SizedBox(width: AppSpacing.lg.w),

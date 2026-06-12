@@ -274,6 +274,14 @@ surfaces:
       - JoinCircle
       - LeaveCircle
 
+  - id: myFootprint
+    owner: content
+    route_id: myFootprint
+    path_template: /profile/footprint
+    description: 我的足迹（私有只读消费轨迹：最近看过/赞过/评过/转过；数据源为既有行为边，无新写路径；不产生交集与影响）
+    operation_ids:
+      - GetMyFootprint
+
   - id: userProfile
     owner: user
     route_id: userProfile

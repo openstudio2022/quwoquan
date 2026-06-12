@@ -327,7 +327,7 @@ void main() {
       if (!_apiAvailable)
         return markTestSkipped('$_apiContractEnv unavailable');
       // 验证合法 type 值（来自 behaviors.yaml behavior_events）被接受（不返回 400）
-      final validTypes = ['impression', 'dwell', 'click', 'share', 'favorite'];
+      final validTypes = ['impression', 'dwell', 'click', 'share'];
       for (final type in validTypes) {
         final resp = await _client
             .post(

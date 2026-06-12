@@ -57,7 +57,7 @@ def compute_online_metrics(db, scenario: str, window_hours: int) -> dict:
     click_count = action_counts.get("click", 0)
     total_engagement = sum(
         action_counts.get(a, 0)
-        for a in ("click", "like", "favorite", "share", "comment", "follow")
+        for a in ("click", "like", "share", "comment", "follow")
     )
 
     ctr = click_count / max(impression_count, 1)

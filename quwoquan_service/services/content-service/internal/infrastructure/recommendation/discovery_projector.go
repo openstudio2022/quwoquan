@@ -120,11 +120,10 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 		"conditionProfile": anyMap(event.Payload, "conditionProfile"),
 	}
 	setOnInsert := bson.M{
-		"likeCount":     int64(0),
-		"commentCount":  int64(0),
-		"favoriteCount": int64(0),
-		"viewCount":     int64(0),
-		"recScore":      0.0,
+		"likeCount":    int64(0),
+		"commentCount": int64(0),
+		"viewCount":    int64(0),
+		"recScore":     0.0,
 	}
 	// 时间语义：createdAt 仅首次插入置位（来自 Post.CreatedAt，永不被后续事件覆盖）；
 	// publishedAt 由首次发布事件携带（PostPublished 仅触发一次，值来自 set-once 的 Post.PublishedAt）；
@@ -158,9 +157,6 @@ func (p *DiscoveryFeedProjector) onContentReacted(ctx context.Context, event Pro
 	if boolVal(event.Payload, "liked") {
 		inc["likeCount"] = int64(1)
 	}
-	if boolVal(event.Payload, "favorited") {
-		inc["favoriteCount"] = int64(1)
-	}
 
 	if len(inc) == 0 {
 		return nil
@@ -192,8 +188,6 @@ func (p *DiscoveryFeedProjector) onBehaviorReported(ctx context.Context, event P
 			inc["viewCount"] = int64(1)
 		case "like":
 			inc["likeCount"] = int64(1)
-		case "favorite":
-			inc["favoriteCount"] = int64(1)
 		}
 
 		if len(inc) > 0 {

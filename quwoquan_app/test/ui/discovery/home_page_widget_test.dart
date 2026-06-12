@@ -876,7 +876,6 @@ void main() {
         closeTo(tester.getSize(page).height, 2.0),
       );
       expect(find.text('打赏'), findsOneWidget);
-      expect(find.text('保存'), findsOneWidget);
       expect(find.text('私信'), findsOneWidget);
       expect(find.text('复制链接'), findsOneWidget);
       expect(find.text('字体设置'), findsOneWidget);

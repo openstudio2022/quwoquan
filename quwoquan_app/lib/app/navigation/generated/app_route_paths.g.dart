@@ -213,6 +213,15 @@ class AppRoutePaths {
   }
   static const String myIntersectionsSegment = 'intersections';
 
+  static const String myFootprintPathTemplate = '/profile/footprint';
+  static String myFootprint({String? type}) {
+    return _buildPath(myFootprintPathTemplate, <String, String>{
+    }, <String, String?>{
+      'type': type,
+    });
+  }
+  static const String myFootprintSegment = 'footprint';
+
   static const String chatDetailPathTemplate = '/chat/{id}';
   static String chatDetail({required String id}) {
     return _buildPath(chatDetailPathTemplate, <String, String>{

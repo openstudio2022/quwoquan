@@ -1654,14 +1654,6 @@ entities:
         api_exposure: read_write
         ops_exposure: read
 
-      - name: favoritedAnswer
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
       - name: regeneratedAnswer
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]

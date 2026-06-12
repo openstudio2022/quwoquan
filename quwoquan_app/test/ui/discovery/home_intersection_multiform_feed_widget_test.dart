@@ -17,7 +17,6 @@ MicroPostDto _post() {
     assistantUsePolicy: 'allow',
     likeCount: 12,
     commentCount: 3,
-    favoriteCount: 2,
     shareCount: 1,
     createdAt: DateTime(2026),
     body: '川西雪山和校园摄影路线',

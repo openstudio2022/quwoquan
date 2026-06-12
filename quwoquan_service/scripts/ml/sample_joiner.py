@@ -12,7 +12,7 @@ Event schema (MongoSink):
   labels:  {sessionId, contentType, recallPath, action}
   context: {score, authorId, tags, duration, recScore, feedRequestId, referralSource, ...}
 
-Labels output: click, dwell_s, like, favorite, share, comment, follow, dislike, engaged
+Labels output: click, dwell_s, like, share, comment, follow, dislike, engaged
 """
 import argparse
 import os
@@ -26,7 +26,7 @@ except ImportError:
     print("pip install pymongo", file=sys.stderr)
     sys.exit(1)
 
-POSITIVE_ACTIONS = {"click", "like", "favorite", "share", "comment", "follow"}
+POSITIVE_ACTIONS = {"click", "like", "share", "comment", "follow"}
 NEGATIVE_ACTIONS = {"dislike", "report", "skip"}
 IMPRESSION_WINDOW_SEC = 10
 
@@ -85,7 +85,6 @@ def _build_user_features(user_feat_doc: dict) -> dict:
         "authorAffinities": dict(top_authors),
         "engagementRate": uf.get("engagementRate", 0.0),
         "totalLikes": uf.get("totalLikes", 0),
-        "totalFavorites": uf.get("totalFavorites", 0),
         "totalShares": uf.get("totalShares", 0),
         "totalEvents": uf.get("totalEvents", 0),
         "topicAffinities": dict(sorted(topic_affinities.items(), key=lambda x: -x[1])[:20]),
@@ -217,7 +216,6 @@ def main():
             "click": 1.0 if "click" in actions else 0.0,
             "dwell_s": float(max_dwell),
             "like": 1.0 if "like" in actions else 0.0,
-            "favorite": 1.0 if "favorite" in actions else 0.0,
             "share": 1.0 if "share" in actions else 0.0,
             "comment": 1.0 if "comment" in actions else 0.0,
             "follow": 1.0 if "follow" in actions else 0.0,

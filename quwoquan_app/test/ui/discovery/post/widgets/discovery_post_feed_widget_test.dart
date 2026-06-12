@@ -172,7 +172,7 @@ void main() {
 
     test('getReactionState returns reactionStateStub', () async {
       final mock = MockContentRepository()
-        ..reactionStateStub = {'liked': true, 'favorited': false};
+        ..reactionStateStub = {'liked': true};
       final state = await mock.getReactionState(postId: 'p1');
       expect(state.liked, isTrue);
       expect(state.postId, 'p1');

@@ -16,8 +16,9 @@
 
 | 规格原文 | 结论 | 修正口径 |
 |---|---|---|
-| 交集七类「共同X」表达 | 采纳，修正落点 | 落在证据组 kind + 云侧 `primaryText` 层，**不动 5 维闭集**，G2（端不拼装）不变；完整边界、关系语言与 alias 迁移以 `specs/product/intersection-definition-and-application.md` 为准 |
+| 交集六类「共同X」表达 | 采纳，修正落点 | 落在证据组 kind + 云侧 `primaryText` 层，**不动 5 维闭集**，G2（端不拼装）不变；完整边界、关系语言与 kind 唯一注册表以 `specs/product/intersection-definition-and-application.md` 为准 |
 | 共同校友 | 采纳，降级首发 | 首发以「同校」entity tagRef 事实落地，校友图谱后置 |
+| 收藏体系 | 全量退场（不留兼容） | 内容主互动只有 `点赞 / 评论 / 转发`，内容**不提供任何长期动作入口**（无收藏、无关注内容、无稍后看）；持续连接只针对对象（关注人 / 关注实体 / 加入圈子）；「以后再看」由 `我的足迹`（自动记录，私有，不产生交集）承载；`favorite` 契约、API、行为信号、UI 入口全链路退场，退场清单见 `specs/product/intersection-definition-and-application.md` |
 | 消息页五分类（消息/联系人/圈子/讨论/小趣） | 修正 | 保留已冻结「消息/联系」双 Tab，五分类语义落二级胶囊；小趣维持全局顶栏入口 |
 | 「实体」概念 | 采纳，前台不暴露词 | 实体=共享主页的概念/PRD 名，前台仍用对象名；「认识这个实体」前台文案为「认识 + 对象名」 |
 | 影响模块数字 | 采纳 + 硬约束 | 必须满足交集四条件（可证/可枚举/可解释/可行动），无真实归因则收起，禁止伪造 |
@@ -54,7 +55,7 @@ WP0（本文档所在基线，已完成）
    - `lib/ui/discovery/**` → 仅 WP2（WP7 例外：`works_immersive_viewer.dart` 归 WP7）。
    - `lib/ui/content/entry/**` 与 `markdown/**` → 仅 WP6。
    - `lib/ui/entity/**` → WP3 改 `widgets/homepage_detail_shell.dart` 系列；WP4 只新增 `pages/` 介绍页文件，不改既有壳。
-3. **统一语言与视觉**：交集措辞只用 §20.3 七个母表达与 `specs/product/intersection-definition-and-application.md` 词典口径；连接类信息一律 `AppColors` 品牌蓝 token；新增用户可见文案禁用 §18.3 禁用词。
+3. **统一语言与视觉**：交集措辞只用 §20.3 六个母表达与 `specs/product/intersection-definition-and-application.md` 词典口径；内容互动只有 `赞 / 评 / 转`，禁止在任何新增规格中引入 `收藏 / 关注内容 / 稍后看` 等内容长期动作；持续连接只针对对象（关注人 / 关注实体 / 加入圈子），「以后再看」由我的足迹承载；连接类信息一律 `AppColors` 品牌蓝 token；新增用户可见文案禁用 §18.3 禁用词。
 4. **页面横向质量**：新增/改动页面文件必须同步页面矩阵 + `metadata_driven_ui_gap_inventory` + PR checklist + 埋点（R20/R21）。
 5. **数据**：alpha mock 改动必须先进 contract fixtures + `app_alpha_seed_manifest.json`；beta/gamma 演示数据进对应 seed manifest。
 6. **CR**：每包完成后在 `CR-20260611-033` 的 `dev_log` 追加条目（date / change / verify 命令证据），不另开 CR（除非范围超出本总纲）。
@@ -70,7 +71,7 @@ WP0（本文档所在基线，已完成）
 1. 先读 specs/product/2026H1-positioning-refactor/00-overview.md（跨包约束与文件独占权）
 2. 再读 specs/product/2026H1-positioning-refactor/wp-0{N}-*.md（本包功能规格/契约/准出/验收）
 3. 概念与术语以 specs/00_PRODUCT_CONCEPT_SYSTEM.md §20、specs/00_GLOBAL_TERMINOLOGY.md §18 为准
-4. 交集完整词典、关系语言规则、standard kind / legacy alias 迁移以 specs/product/intersection-definition-and-application.md 为准
+4. 交集完整词典、关系语言规则、standard kind 与别名退场迁移以 specs/product/intersection-definition-and-application.md 为准
 严格按包内「准出要求」自验全绿后，把 dev_log 证据追加到 CR-20260611-033。
 不得越界改动其他包独占文件；需要跨包契约变更时停下来说明，不要私自扩散。
 ```

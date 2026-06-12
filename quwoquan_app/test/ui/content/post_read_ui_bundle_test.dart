@@ -19,7 +19,6 @@ void main() {
         'likeCount': 1,
         'commentCount': 2,
         'shareCount': 3,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
       expect(dto.authorId, 'current_author');
@@ -39,7 +38,6 @@ void main() {
         'likeCount': 1,
         'commentCount': 2,
         'shareCount': 3,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
       final pres = PostReadPresentation.fromPostBase(dto);
@@ -61,7 +59,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
       final pres = PostReadPresentation.fromPostBase(
@@ -86,7 +83,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
       final bundle = PostReadUiBundle.fromPost(

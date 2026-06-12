@@ -333,10 +333,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         for (final profileId in scopeProfileIds)
           if (relationshipState.isFollowing(profileId)) profileId,
       },
-      savedPosts: {
-        for (final postId in scopePostIds)
-          if (postInteractionState.isSaved(postId)) postId,
-      },
       likedPosts: {
         for (final postId in scopePostIds)
           if (postInteractionState.isLiked(postId)) postId,
@@ -346,13 +342,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
           postId: postInteractionState.likeCountFor(
             postId,
             fallback: postsById[postId]?.likeCount ?? 0,
-          ),
-      },
-      postBookmarksCount: {
-        for (final postId in scopePostIds)
-          postId: postInteractionState.bookmarkCountFor(
-            postId,
-            fallback: postsById[postId]?.favoriteCount ?? 0,
           ),
       },
       postSharesCount: {
@@ -489,8 +478,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   /// Opens the post-level more-options sheet for the currently visible post.
   ///
-  /// Work Browser V1.0：媒体筛选入口在「更多」菜单内（全部作品/图片/视频/文章）；
-  /// 浏览器内禁止收藏入口（showSaveAction: false）。
+  /// Work Browser V1.0：媒体筛选入口在「更多」菜单内（全部作品/图片/视频/文章）。
   void _showWorksMoreSheet(BuildContext context) {
     final posts = _buildFeed();
     final post = posts.isEmpty
@@ -525,7 +513,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     MoreActionPopup.show(
       context: context,
       config: MediaPostMoreActionConfig(
-        showSaveAction: false,
         filterOptions: filterOptions,
         selectedFilterIds: _effectiveFilterIds.toList(growable: false),
         onFilterSelectionChanged: _applyFilterSelection,
@@ -706,7 +693,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       'mediaUrls': raw?['mediaUrls'] ?? post.imageUrls,
       'likeCount': raw?['likeCount'] ?? post.likeCount,
       'commentCount': raw?['commentCount'] ?? post.commentCount,
-      'favoriteCount': raw?['favoriteCount'] ?? post.favoriteCount,
       'shareCount': raw?['shareCount'] ?? post.shareCount,
       'createdAt': raw?['createdAt'] ?? post.createdAt,
     };
@@ -1576,27 +1562,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     });
   }
 
-  void _onFavorite(PostBaseDto post) {
-    runWhenLoggedIn(ref, context, AuthGateReason.favorite, () {
-      final isSaved = effectivePostSaved(ref, post.id);
-      final currentCount = effectivePostBookmarkCount(
-        ref,
-        post.id,
-        fallback: post.favoriteCount,
-      );
-      final nextSaved = !isSaved;
-      final nextBookmarkCount = nextSaved
-          ? currentCount + 1
-          : (currentCount - 1).clamp(0, 1 << 31).toInt();
-      syncPostSaveIntent(
-        ref,
-        postId: post.id,
-        isSaved: nextSaved,
-        bookmarkCount: nextBookmarkCount,
-      );
-    });
-  }
-
   void _onFollow(PostBaseDto post) {
     runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
       final subjectId = post.subAccountId;
@@ -1687,11 +1652,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             content: _buildCommentSplitContent(commentSplitPost),
             commentContext: widget.initialCommentContext,
             likeCount: interaction.likeCountFor(splitPostId),
-            favoriteCount: interaction.bookmarkCountFor(splitPostId),
             isLiked: interaction.isLiked(splitPostId),
-            isFavorited: interaction.isSaved(splitPostId),
             onLikeTap: () => _onLike(commentSplitPost),
-            onFavoriteTap: () => _onFavorite(commentSplitPost),
             onClose: () => setState(() => _commentSplitPostId = null),
           ),
         ),

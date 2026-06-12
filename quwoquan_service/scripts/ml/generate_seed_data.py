@@ -70,7 +70,7 @@ ENTITY_REFS = [
 
 AUTHOR_IDS = [f"author_{i:03d}" for i in range(20)]
 
-POSITIVE_ACTIONS = ["click", "like", "favorite", "share", "comment", "follow"]
+POSITIVE_ACTIONS = ["click", "like", "share", "comment", "follow"]
 NEGATIVE_ACTIONS = ["dislike", "skip"]
 ALL_ENGAGEMENT_ACTIONS = POSITIVE_ACTIONS + NEGATIVE_ACTIONS
 
@@ -177,7 +177,6 @@ def generate_users(rng: random.Random, count: int = 8) -> list[dict]:
                 "entityInstanceAffinities": entity_inst_aff,
                 "engagementRate": round(rng.uniform(0.1, 0.6), 3),
                 "totalLikes": rng.randint(10, 500),
-                "totalFavorites": rng.randint(5, 200),
                 "totalShares": rng.randint(0, 50),
                 "totalEvents": rng.randint(100, 5000),
                 "avgEngagementDepth": round(rng.uniform(1.0, 3.5), 2),
@@ -244,7 +243,7 @@ def generate_events(
             duration = 0.0
             if action == "click":
                 duration = round(rng.uniform(1, 120), 1)
-            elif action in ("like", "favorite", "share", "comment"):
+            elif action in ("like", "share", "comment"):
                 duration = round(rng.uniform(5, 180), 1)
 
             event = {

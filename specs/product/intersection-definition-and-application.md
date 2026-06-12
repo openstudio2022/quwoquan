@@ -107,7 +107,7 @@ flowchart LR
 
 - 共同关注的人
 - 共同圈子
-- 共同收藏
+- 共同讨论
 - 同校
 
 ### 3.2 桥接事实 BridgeFact
@@ -127,7 +127,7 @@ flowchart LR
 
 例子：
 
-- 12 人收藏了我的内容
+- 7 人读完了我的长文
 - 8 人因为我建立了新连接
 - 23 人加入相关圈子
 
@@ -193,38 +193,63 @@ flowchart LR
 
 - `共同关注的人`
 - `你关注的人在这里`
-- `你关注的人来过 / 收藏过 / 正在看`
+- `你关注的人来过 / 正在看`
 - `帮助别人建立新连接`
 
-### 5.4 标准名与 legacy alias
+### 5.4 kind 唯一注册表（无兼容别名）
 
-为避免一次性打碎存量 fixture / mock / 测试，关系类交集采用双层命名：
+本节是全仓交集 `kind`（`IntersectionPoint.sourceRef` / 证据组 kind）的**唯一注册表**。规则：
 
-#### 标准语义名
+- 只有标准名，**不保留任何兼容别名**；契约、Go、Dart、fixture、mock、测试一次性迁移到标准名，不实现兼容解析。
+- 任何 kind 必须先在本注册表登记（含 §7 对应条目的工程五栏：展示入口 / 契约承载 / 数据源 / 计算策略 / 性能口径），才能进入实现。
+- 未登记的 kind 在云侧排序中落兜底 rank（不丢弃，便于灰度发现漂移），但禁止新增未登记 kind 的产出。
 
-- `sharedFollowees`
-- `followeeInObject`
-- `followeeVisited`
-- `followeeFavorited`
-- `followeeViewing`
+#### 注册表（标准 kind 全集）
 
-#### legacy alias（迁移兼容，禁止新增扩散）
+| 标准 kind | 条目 | 维度 | 层级 |
+|---|---|---|---|
+| `sharedFollowees` | A1 | relationship | 共同型 |
+| `commonFollower` | A2 | relationship | 共同型 |
+| `commonContact` | A3 | relationship | 共同型 |
+| `sameSchool / sameDepartment / sameMajor / sameCohort / alumni` | A4 | identity | 共同型 |
+| `sameCompany / sameTeam / sameIndustry` | A5 | identity | 共同型 |
+| `sharedCircle` | B1 | relationship/interest | 共同型 |
+| `sharedDiscussion` | B2 | relationship/content | 共同型 |
+| `coMemberCircle` | B3 | interest | 共同型 |
+| `coCommented` | C1 | content | 共同型 |
+| `coSharedContent` | C2 | content | 共同型 |
+| `coCreatedContent` | C3 | content | 共同型 |
+| `coVisitedEntity` | D1 | location | 共同型 |
+| `sharedEntityAttention` | D2 | interest/identity | 共同型 |
+| `coWishlistedEntity` | D3 | location | 共同型 |
+| `sharedTagSample` | （共同兴趣） | interest | 共同型 |
+| `followeeInObject` | E1 | relationship | 桥接型 |
+| `followeeVisited` | E2 | relationship/location | 桥接型 |
+| `followeeViewing` | E2 | relationship/content | 桥接型 |
+| `alumniHere / colleagueHere` | E3 | identity | 桥接型 |
+| `followeeDiscussedThis` | E4 | relationship/content | 桥接型 |
 
-- `mutualFriend`
-- `friendInCircle`
-- `friendVisited`
-- `friendFavorited`
+#### 一次性迁移映射（旧名 → 标准名，迁移后旧名零残留）
 
-规则：
-
-- 新规划、新实现优先使用标准名
-- 旧名只作为迁移过渡层，不再进入新的产品文案和标准 contract 词表
+| 旧名（代码 / fixture / mock 现存） | 标准名 | 说明 |
+|---|---|---|
+| `mutualFriend` | `sharedFollowees` | 互关判断升级为真实第三方共同关注集合 |
+| `commonFollow` | `sharedFollowees` | 与 mutualFriend 合并 |
+| `friendInCircle` / `contactInCircle` / `friendActiveHere` | `followeeInObject` | 去好友化 + 桥接统一 |
+| `friendVisited` / `contactVisited` | `followeeVisited` | 去好友化 |
+| `friendJoinedRelatedCircle` | `followeeInObject` | 并入对象桥接 |
+| `coVisitedEntity`（保留） / `coVisitedPlace`（规格旧名） | `coVisitedEntity` | 以实体口径定名（地点是实体子类） |
+| `coCollectedEntity` | `coWishlistedEntity` | 「想去/愿望」是对象级意图，与内容收藏无关 |
+| `coLiked` | 废弃（不登记） | 点赞是轻态度，不构成交集事实 |
+| `coFavorited` / `coFollowedContent` | 废弃（不登记） | 内容无长期动作，无对应交集 |
+| `followeeFollowedContent` / `friendFavorited` | 废弃（不登记） | 同上 |
+| `coCity` / `coEra` / `coCohort` / `sameOrg` / `sameBrand` / `youInteracted` | 并入注册表近义标准名或废弃 | 迁移时逐个裁决：`coCity`→`coVisitedEntity`（城市实体）、`coCohort`→`sameCohort`、`sameOrg`→`sameCompany`、`sameBrand`→`sharedEntityAttention`、`coEra`/`youInteracted`→废弃 |
 
 ---
 
-## 6. 七个母表达
+## 6. 六个母表达
 
-七个母表达是用户在首页、我的交集、对象页摘要、内容卡理由位等**紧凑 surfaces** 中看到的一级表达。
+六个母表达是用户在首页、我的交集、对象页摘要、内容卡理由位等**紧凑 surfaces** 中看到的一级表达。
 
 它们是：
 
@@ -233,17 +258,27 @@ flowchart LR
 3. `共同兴趣`
 4. `共同地点`
 5. `共同校友`
-6. `共同收藏`
-7. `共同讨论`
+6. `共同讨论`
+
+### 6.0 为什么没有「共同收藏 / 共同关注内容」
+
+内容上没有长期动作（内容只有 赞 / 评 / 转），因此不存在「双方都收藏 / 都长期关注同一内容」这类交集事实。内容维度的交集全部来自**连接型行为**：
+
+- 都在同一内容下讨论过（`coCommented`）
+- 都传播过同一内容（`coSharedContent`）
+- 都参与过同一创作链（`coCreatedContent`）
+- 你关注的人正在看 / 正在讨论（`followeeViewing` / `followeeDiscussedThis`）
+
+交集叙事重点从「收藏行为」转向「连接关系」：「来自AI产品圈」「2位校友正在讨论」「与你关注的对象相关」。
 
 ### 6.1 母表达不是所有深层证据的总目录
 
-七个母表达的作用是：
+六个母表达的作用是：
 
 - 在首屏、紧凑卡片、spotlight、列表摘要中统一语言
 - 帮用户快速理解推荐理由
 
-七个母表达**不要求**覆盖所有深层证据的最细差异。
+六个母表达**不要求**覆盖所有深层证据的最细差异。
 
 例如：
 
@@ -251,9 +286,9 @@ flowchart LR
 - `共同联系人`
 - `共同被关注`
 
-这些可以作为深层对象页证据或下钻条目存在，不强制升级为新的第 8 个母表达。
+这些可以作为深层对象页证据或下钻条目存在，不强制升级为新的第 7 个母表达。
 
-### 6.2 七个母表达的边界
+### 6.2 六个母表达的边界
 
 | 母表达 | 主要维度 | 典型 surfaces | 不是什么 |
 |---|---|---|---|
@@ -262,14 +297,21 @@ flowchart LR
 | `共同兴趣` | `interest` | feed 理由位、spotlight | 不是 affinity 猜测 |
 | `共同地点` | `location` | 旅行/本地场景、对象页 | 不是“你可能会喜欢这个地方” |
 | `共同校友` | `identity` | 校园/职业场景、对象页 | 不等于所有身份类都叫校友 |
-| `共同收藏` | `content` | 内容消费、创作者发现 | 不等于“都看过” |
-| `共同讨论` | `content/relationship` | 讨论入口、对象页、内容页 | 不等于“共同圈子” |
+| `共同讨论` | `content/relationship` | 讨论入口、对象页、内容页 | 不等于“共同圈子”，也不是收藏/浏览行为交集 |
 
 ---
 
 ## 7. 交集全量词典
 
-> 以下词典完整保留历史所有维度定义，只在关系语言上做局部修正。
+> 以下词典完整保留既往所有维度定义，关系语言已统一为关注口径，kind 只用 §5.4 注册表标准名。
+>
+> **工程五栏说明**（每条必填，是「确保可落地」的强制口径）：
+>
+> - `展示入口`：spotlight（首页频道交集模块 `intersection_spotlight_module.dart`，消费 `GET /v1/content/feed/intersections`）/ feed 理由位（`feed_intersection_mixer.go` 70/20/10 附着 → `intersection_reason_chip.dart`）/ 收件箱（我的交集 `my_intersection_inbox_page.dart`，summary+list API）/ 对象页交集卡（`object_intersection_card.dart` + entity bundle 预附着）。
+> - `契约承载`：`IntersectionPoint.sourceRef` 取标准 kind；reason 级 `dimension/objectKind/relationKind/actionType` 按条目注明。
+> - `数据源`：Mongo 读模型边表（`follow_edges` / `circle_members` / `rec_learning_events` 行为边 / `rm_entity_tags` 对象标签 / 通讯录映射）。
+> - `计算策略`：三选一——`请求期边表查询`（现状默认，`intersection_source.go`）/ `投影预计算`（高频聚合，需新增 projector）/ `推荐通道复用`（affinity）。
+> - `性能口径`：单请求边表查询次数与索引、集合上限、聚合缓存 `cache:viewer_intersections`（TTL 900s）、曝光冷却 `rec:icool`（14d，仅推荐位，收件箱/对象页不冷却）。
 
 ### A. 人与人：共同型事实
 
@@ -277,7 +319,6 @@ flowchart LR
 
 - 母表达：`共同关注的人`
 - 标准 kind：`sharedFollowees`
-- legacy alias：`mutualFriend`
 - 主维度：`relationship`
 - 语义：我和 TA 共同关注的第三方用户集合，不是简单互关。
 - 用户价值：降低陌生连接风险，增强信任与安全感。
@@ -286,33 +327,38 @@ flowchart LR
 - 适用 contract：
   - feed / inbox / 推荐：`IntersectionReason + IntersectionPoint`
   - 对象页：`ObjectIntersection + ObjectIntersectionEvidence`
-- 动作闭环：
-  - 关注
-  - 私信
-  - 查看这些共同关注的人
-  - 进入共同圈子
+- 动作闭环：关注 / 私信 / 查看这些共同关注的人 / 进入共同圈子
+- 工程五栏：
+  - 展示入口：spotlight、收件箱（relationship 维度）、他人主页交集卡。
+  - 契约承载：`sourceRef=sharedFollowees`；`dimension=relationship`、`objectKind=person`、`actionType=follow`。
+  - 数据源：`follow_edges`（我的关注集 ∩ TA 的关注集）。
+  - 计算策略：请求期边表查询（两次 userId 索引查询 + 内存交集）。
+  - 性能口径：单边关注集取上限（建议 ≤1000，超限取最近边）；结果进 `viewer_intersections` 缓存 900s；points 枚举分页下钻，summary 只带 count + ≤3 头像。
 - 优先级：`P0`
 
 #### A2. 共同被关注
 
 - 母表达：默认不作为一级母表达独立出现；深层证据保留
-- 细 kind：`commonFollower`
+- 标准 kind：`commonFollower`
 - 主维度：`relationship`
 - 语义：我和 TA 被同一批人关注。
 - 用户价值：提示“你们在同一注意力网络中”。
 - 创作者价值：帮助发现同赛道创作者或同社群意见节点。
 - 证据真相源：共同 follower 集合或数量。
 - 适用 contract：`IntersectionReason + IntersectionPoint`，对象页可作为 evidence。
-- 动作闭环：
-  - 查看共同关注来源
-  - 关注 / 互相关注
-  - 发起合作或对话
+- 动作闭环：查看共同关注来源 / 关注 / 发起合作或对话
+- 工程五栏：
+  - 展示入口：对象页交集卡深层证据（不进 spotlight）。
+  - 契约承载：`sourceRef=commonFollower`；`dimension=relationship`、`objectKind=person`。
+  - 数据源：`follow_edges` 反向边（粉丝集交集）。
+  - 计算策略：**投影预计算**（粉丝集可能极大，请求期全量交集不可行；先落 follower 计数桶投影，无投影前不实现）。
+  - 性能口径：禁止请求期对大 V 粉丝集做全量交集；P1 实现前置条件是 follower 投影就位。
 - 优先级：`P1`
 
 #### A3. 共同联系人
 
 - 母表达：默认不作为公开一级母表达；受权限约束
-- 细 kind：`commonContact`
+- 标准 kind：`commonContact`
 - 主维度：`relationship`
 - 语义：通讯录或现实联系层面的共同联系人。
 - 用户价值：最强现实信任背书。
@@ -321,21 +367,19 @@ flowchart LR
 - 适用 contract：
   - `IntersectionReason + IntersectionPoint`
   - 需要显式 `visibility/privacyLevel`
-- 动作闭环：
-  - 打招呼
-  - 请共同联系人引荐
-  - 查看对应联系人
+- 动作闭环：打招呼 / 请共同联系人引荐 / 查看对应联系人
+- 工程五栏：
+  - 展示入口：他人主页交集卡（双方均授权通讯录时）；不进 feed/spotlight。
+  - 契约承载：`sourceRef=commonContact`；`relationKind=contact`、`visibility` 必填（默认 mutual-only）。
+  - 数据源：通讯录映射表（contact 边，独立于 `follow_edges`）。
+  - 计算策略：请求期边表查询（双方 contact 集交集，集合小）。
+  - 性能口径：单请求 2 次点查；结果不进共享缓存（隐私），仅会话内缓存。
 - 优先级：`P1`
 
 #### A4. 同校 / 同院系 / 同专业 / 同届
 
 - 母表达：`共同校友`
-- 细 kind：
-  - `sameSchool`
-  - `sameDepartment`
-  - `sameMajor`
-  - `sameCohort`
-  - `alumni`
+- 标准 kind：`sameSchool` / `sameDepartment` / `sameMajor` / `sameCohort` / `alumni`
 - 主维度：`identity`
 - 语义：我和 TA 在教育身份上存在真实共同背景。
 - 用户价值：身份锚点极强，特别适合校园与职业迁移场景。
@@ -344,30 +388,32 @@ flowchart LR
 - 适用 contract：
   - 紧凑 surfaces：可统一归入 `共同校友`
   - 深层证据：通过 `IntersectionPoint.sourceRef` / `sampleText` 区分差异
-- 动作闭环：
-  - 关注
-  - 打招呼
-  - 进入校友圈
-  - 查看同届讨论
+- 动作闭环：关注 / 打招呼 / 进入校友圈 / 查看同届讨论
+- 工程五栏：
+  - 展示入口：spotlight（campusSpotlight 策略频道）、收件箱（identity 维度）、他人主页交集卡。
+  - 契约承载：`sourceRef` 取细 kind；`dimension=identity`、`objectKind=person|school`、`tagRefs` 携带学校 tagRef。
+  - 数据源：用户 identity tagRef（`rm_entity_tags` / 用户身份标签投影）。
+  - 计算策略：请求期标签比对（双方身份标签集合交集，O(标签数)）。
+  - 性能口径：标签集合小（<50），无需额外缓存；同校聚合计数（「N位校友」）复用 E3 口径。
 - 优先级：`P0`
 
 #### A5. 同公司 / 同团队 / 同行业
 
-- 母表达：默认不新增第 8 类母表达；在深层 identity 证据中展示
-- 细 kind：
-  - `sameCompany`
-  - `sameTeam`
-  - `sameIndustry`
+- 母表达：默认不新增第 7 类母表达；在深层 identity 证据中展示
+- 标准 kind：`sameCompany` / `sameTeam` / `sameIndustry`
 - 主维度：`identity`
 - 语义：我和 TA 在职业组织或职业背景上存在共同身份。
 - 用户价值：职业协作、内推、共识成本低。
 - 创作者价值：专业创作者能更快建立可信行业影响力。
 - 证据真相源：organization/entity tagRef、membership。
 - 适用 contract：当前挂在 `identity` 维度下，深层 evidence 展示细项。
-- 动作闭环：
-  - 私信
-  - 进入行业圈
-  - 查看相关工作内容
+- 动作闭环：私信 / 进入行业圈 / 查看相关工作内容
+- 工程五栏：
+  - 展示入口：他人主页交集卡深层证据。
+  - 契约承载：`sourceRef` 取细 kind；`dimension=identity`、`objectKind=enterprise`。
+  - 数据源：用户职业身份 tagRef（同 A4 通道）。
+  - 计算策略：请求期标签比对。
+  - 性能口径：同 A4。
 - 优先级：`P1`
 
 ### B. 人与圈子 / 讨论：共同参与事实
@@ -375,114 +421,119 @@ flowchart LR
 #### B1. 共同圈子
 
 - 母表达：`共同圈子`
-- 细 kind：`sharedCircle`
+- 标准 kind：`sharedCircle`
 - 主维度：`relationship` 或 `interest`
 - 语义：我和 TA 共同加入了同一个圈子。
 - 用户价值：代表长期共同兴趣与归属。
 - 创作者价值：圈主/活跃创作者可以更可信地被圈内外传播。
 - 证据真相源：共同 `circleId` 集合。
 - 适用 contract：`IntersectionReason + IntersectionPoint`，对象页可补 `ObjectIntersectionEvidence`。
-- 动作闭环：
-  - 进入共同圈子
-  - 看共同圈内内容
-  - 参与共同讨论
+- 动作闭环：进入共同圈子 / 看共同圈内内容 / 参与共同讨论
+- 工程五栏：
+  - 展示入口：spotlight、收件箱（relationship 维度）、他人主页与圈子页交集卡。
+  - 契约承载：`sourceRef=sharedCircle`；`dimension=relationship`、`objectKind=circle`、`actionType=join|view_object`。
+  - 数据源：`circle_members`（双方圈子集合交集）。
+  - 计算策略：请求期边表查询（两次 userId 索引查询 + 内存交集）。
+  - 性能口径：用户圈子数有限（通常 <100）；结果进 `viewer_intersections` 缓存 900s。
 - 优先级：`P0`
 
-#### B2. 共同讨论
+#### B2. 共同讨论（讨论分区参与）
 
 - 母表达：`共同讨论`
-- 细 kind：`sharedDiscussion`
+- 标准 kind：`sharedDiscussion`
 - 主维度：`relationship` / `content`
 - 语义：我和 TA 共同参与过某个讨论分区或主题串。
 - 用户价值：比“共同圈子”更强的即时共同话题信号。
 - 创作者价值：说明内容不是被动浏览，而是引发参与。
 - 证据真相源：共同 discussion/thread 参与记录。
 - 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：
-  - 回到讨论
-  - 继续对话
-  - @对方
+- 动作闭环：回到讨论 / 继续对话 / @对方
+- 工程五栏：
+  - 展示入口：spotlight、收件箱（content 维度）、对象页交集卡。
+  - 契约承载：`sourceRef=sharedDiscussion`；`dimension=content`、`actionType=view_object`（跳讨论）。
+  - 数据源：`rec_learning_events` 发言/评论行为边（按 discussionId 聚合）。
+  - 计算策略：请求期边表查询，限时间窗（建议 90 天）；若 p95 超标升级为 user→discussion 参与集投影。
+  - 性能口径：索引 `(userId, action, ts)`；窗口外不计；结果进 `viewer_intersections` 缓存。
 - 优先级：`P0`
 
 #### B3. 同圈层活跃
 
 - 母表达：通常不作为一级母表达；作为 `共同圈子` 强化证据
-- 细 kind：`coMemberCircle`
+- 标准 kind：`coMemberCircle`
 - 主维度：`interest`
 - 语义：不只是都加入，而是在同一圈子里持续活跃。
 - 用户价值：从“成员”升级为“同频参与者”。
 - 创作者价值：能把创作影响和社群活跃绑定起来。
 - 证据真相源：圈内行为频次或活跃阈值。
 - 适用 contract：`IntersectionPoint` 或 `ObjectIntersectionEvidence`
-- 动作闭环：
-  - 进入圈子
-  - 看活跃讨论
-  - 发起连接
+- 动作闭环：进入圈子 / 看活跃讨论 / 发起连接
+- 工程五栏：
+  - 展示入口：圈子页交集卡强化证据（在 B1 之上叠加「都很活跃」sampleText）。
+  - 契约承载：`sourceRef=coMemberCircle`；作为 B1 reason 下的附加 point。
+  - 数据源：圈内行为频次聚合（`circle_tag_aggregates` / 活跃度投影）。
+  - 计算策略：**投影预计算**（活跃阈值依赖滚动窗口聚合，请求期不可行）。
+  - 性能口径：P1 实现前置条件是圈子活跃度投影就位；请求期只点查投影结果。
 - 优先级：`P1`
 
-### C. 人与内容：共同内容行为事实
+### C. 人与内容：连接型内容行为事实
 
-#### C1. 共同收藏
+> 内容无长期动作（无收藏 / 无关注内容），本节交集全部来自连接型行为：讨论、传播、共创。浏览/足迹行为**永不**产生交集（私有）。
 
-- 母表达：`共同收藏`
-- 细 kind：`coFavorited`
-- 主维度：`content`
-- 语义：我和 TA 收藏了同一篇内容或同一组内容。
-- 用户价值：比“都看过”更强，代表明确价值判断。
-- 创作者价值：是对内容“有用 / 值得回看”的强证据。
-- 证据真相源：favorite 行为边。
-- 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：
-  - 查看共同收藏内容
-  - 收藏同系列内容
-  - 关注作者
-- 优先级：`P0`
-
-#### C2. 共同讨论内容
+#### C1. 共同讨论内容
 
 - 母表达：`共同讨论`
-- 细 kind：`coCommented`
+- 标准 kind：`coCommented`
 - 主维度：`content`
 - 语义：我和 TA 都评论或回复过同一内容或讨论。
 - 用户价值：说明真实参与，不只是被动观看。
 - 创作者价值：证明内容能引发互动网络。
 - 证据真相源：comment/reply 行为边。
 - 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：
-  - 回到原内容
-  - 继续讨论
-  - 关注对方
+- 动作闭环：回到原内容 / 继续讨论 / 关注对方
+- 工程五栏：
+  - 展示入口：spotlight、feed 理由位、收件箱（content 维度）、他人主页交集卡。
+  - 契约承载：`sourceRef=coCommented`；`dimension=content`、`actionType=view_object`（回内容）。
+  - 数据源：`rec_learning_events` comment 行为边（按 postId 聚合）。
+  - 计算策略：请求期边表查询（双方评论过的 postId 集合交集，窗口 90 天）。
+  - 性能口径：索引 `(userId, action=comment, ts)`；单边集合上限（最近 500 条评论）；结果进 `viewer_intersections` 缓存 900s；feed 理由位经 `rec:icool` 冷却。
 - 优先级：`P0`
 
-#### C3. 共同转发 / 共同传播
+#### C2. 共同转发 / 共同传播
 
-- 母表达：默认不单列一级母表达；可挂在 `共同收藏` 或 `共同讨论` 下的深层项
-- 细 kind：`coSharedContent`
+- 母表达：默认不单列一级母表达；挂在 `共同讨论` 下的深层项
+- 标准 kind：`coSharedContent`
 - 主维度：`content`
 - 语义：我和 TA 都传播过同一内容或同一对象。
 - 用户价值：说明价值观或传播取向重叠。
 - 创作者价值：直接体现内容扩散能力。
 - 证据真相源：share 行为边。
 - 适用 contract：`IntersectionPoint` 或 `ObjectIntersectionEvidence`
-- 动作闭环：
-  - 查看被共同传播的内容源
-  - 进入原始内容或对象页
+- 动作闭环：查看被共同传播的内容源 / 进入原始内容或对象页
+- 工程五栏：
+  - 展示入口：对象页交集卡深层证据、收件箱下钻。
+  - 契约承载：`sourceRef=coSharedContent`；`dimension=content`。
+  - 数据源：`rec_learning_events` share 行为边。
+  - 计算策略：请求期边表查询（同 C1 口径，share 边稀疏、成本更低）。
+  - 性能口径：同 C1；share 频次低，无需单独缓存策略。
 - 优先级：`P1`
 
-#### C4. 共同创作 / 共创参与
+#### C3. 共同创作 / 共创参与
 
 - 母表达：默认不单列一级母表达；深层协作证据保留
-- 细 kind：`coCreatedContent`
+- 标准 kind：`coCreatedContent`
 - 主维度：`content`
 - 语义：我和 TA 共同参与过同一内容生产或同一作品链路。
 - 用户价值：最强协作关系之一。
 - 创作者价值：构建作者网络与共同生产关系。
 - 证据真相源：共同作者、引用、协作链。
 - 适用 contract：`ObjectIntersection` / `ObjectIntersectionEvidence` 优先
-- 动作闭环：
-  - 关注协作者
-  - 查看协作作品
-  - 继续共创
+- 动作闭环：关注协作者 / 查看协作作品 / 继续共创
+- 工程五栏：
+  - 展示入口：他人主页交集卡深层证据。
+  - 契约承载：`sourceRef=coCreatedContent`；`dimension=content`。
+  - 数据源：post 协作/引用字段（内容读模型，非行为边）。
+  - 计算策略：请求期内容读模型查询（双方作品集合的协作关系比对）。
+  - 性能口径：协作链稀疏；按作者 id 索引点查；P1 实现。
 - 优先级：`P1`
 
 ### D. 人与地点 / 对象：共同对象事实
@@ -490,49 +541,58 @@ flowchart LR
 #### D1. 共同地点
 
 - 母表达：`共同地点`
-- 细 kind：`coVisitedPlace`
+- 标准 kind：`coVisitedEntity`
 - 主维度：`location`
-- 语义：我和 TA 到过同一个地点 / 景区 / 酒店 / 路线锚点。
+- 语义：我和 TA 到过同一个地点 / 景区 / 酒店 / 路线锚点（地点是实体子类，故以实体口径定名）。
 - 用户价值：最强现实生活桥接之一，适合旅行、本地生活、校园场景。
 - 创作者价值：路线与地点内容的社会证明更强。
-- 证据真相源：visit/check-in/favorite/route usage 等地点行为边。
+- 证据真相源：visit/check-in/route usage 等地点行为边。
 - 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：
-  - 看共同地点内容
-  - 发起约伴
-  - 进入相关圈子
+- 动作闭环：看共同地点内容 / 发起约伴 / 进入相关圈子
+- 工程五栏：
+  - 展示入口：spotlight（travel 频道）、收件箱（location 维度）、他人主页与地点对象页交集卡。
+  - 契约承载：`sourceRef=coVisitedEntity`；`dimension=location`、`objectKind=place`、`tagRefs` 携带 geoTagRef。
+  - 数据源：`rec_learning_events` visit/check-in 行为边 + geoTagRef。
+  - 计算策略：请求期边表查询（双方到访实体集合交集，窗口 365 天）。
+  - 性能口径：索引 `(userId, action=visit, ts)`；单边集合上限 500；结果进 `viewer_intersections` 缓存。
 - 优先级：`P0`
 
 #### D2. 都关注同一对象
 
 - 母表达：默认紧凑 surfaces 常归入 `共同兴趣`
-- 细 kind：`sharedEntityAttention`
+- 标准 kind：`sharedEntityAttention`
 - 主维度：`interest` / `identity`
 - 语义：我和 TA 都关注同一学校、品牌、产品、书、影视、景点等对象。
-- 用户价值：比泛兴趣更具体，适合对象页推荐与人物发现。
+- 用户价值：比泛兴趣更具体，适合对象页推荐与人物发现；也是「与你关注的对象相关」叙事的事实源。
 - 创作者价值：帮助围绕对象建立稳定内容网络。
-- 证据真相源：entity follow / favorite / bookmark。
+- 证据真相源：entity follow 边（对象级关注，持续连接动作）。
 - 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：
-  - 进入对象页
-  - 查看共同关注者
-  - 参与讨论
+- 动作闭环：进入对象页 / 查看共同关注者 / 参与讨论
+- 工程五栏：
+  - 展示入口：spotlight、feed 理由位（「与你关注的对象相关」）、对象页交集卡。
+  - 契约承载：`sourceRef=sharedEntityAttention`；`dimension=interest`、`objectKind=place|enterprise|school`、`actionType=follow|view_object`。
+  - 数据源：`follow_edges`（objectKind=entity 的关注边）。
+  - 计算策略：请求期边表查询（双方实体关注集交集）。
+  - 性能口径：同 A1 口径（关注集上限 + `viewer_intersections` 缓存）。
 - 优先级：`P1`
 
 #### D3. 共同愿望清单 / 共同想去
 
 - 母表达：通常仍归 `共同地点`
-- 细 kind：`coWishlistedPlace`
+- 标准 kind：`coWishlistedEntity`
 - 主维度：`location`
-- 语义：都想去而不是都去过。
+- 语义：都想去而不是都去过；「想去」是**对象级**未来意图（实体维度的持续连接前置态），与内容收藏无关。
 - 用户价值：适合约伴和未来计划连接。
 - 创作者价值：能把种草内容转成预行动网络。
-- 证据真相源：wishlist/save-for-later 行为边。
+- 证据真相源：对象级「想去」标记行为边。
 - 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：
-  - 加入路线圈
-  - 收藏攻略
-  - 发起同行
+- 动作闭环：加入路线圈 / 关注对象 / 发起同行
+- 工程五栏：
+  - 展示入口：地点对象页交集卡、travel 频道 spotlight。
+  - 契约承载：`sourceRef=coWishlistedEntity`；`dimension=location`、`objectKind=place`。
+  - 数据源：对象级想去标记边（独立行为类型，不是内容 favorite）。
+  - 计算策略：请求期边表查询。
+  - 性能口径：想去集合小；同 D1 口径。
 - 优先级：`P1`
 
 ### E. 桥接型交集（第三方桥接，不一定是共同拥有）
@@ -541,74 +601,80 @@ flowchart LR
 
 - 母表达：通常通过 `secondaryText` / `connectionSummary` 展示，也可作为独立 point
 - 标准 kind：`followeeInObject`
-- legacy alias：`friendInCircle`
 - 主维度：`relationship`
 - 语义：我关注的人已经在这个圈子、对象或讨论里。
 - 用户价值：强烈降低陌生进入门槛。
 - 创作者价值：帮助创作者把关系网络转化为社群增长。
 - 证据真相源：我关注的人与对象的 membership / follow / active 边。
 - 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：
-  - 查看这些人
-  - 加入圈子
-  - 进入讨论
+- 动作闭环：查看这些人 / 加入圈子 / 进入讨论
+- 工程五栏：
+  - 展示入口：圈子页与实体页交集卡（entity bundle 预附着）、spotlight。
+  - 契约承载：`sourceRef=followeeInObject`；`dimension=relationship`、`relationKind=follow`、`actionType=join|view_object`。
+  - 数据源：`follow_edges`（我的关注集）×`circle_members`/entity follower 边（membership 点查）。
+  - 计算策略：请求期「小集合驱动点查」——以我的关注集（小）逐个点查对象 membership，禁止反向扫对象成员全集；entity bundle 由 entity-service 经 HTTP 预附着（3s 超时回落默认 reasons）。
+  - 性能口径：我的关注集上限 1000；批量 `$in` 点查一次完成；对象页结果进 `viewer_intersections` 缓存 900s。
 - 优先级：`P0`
 
-#### E2. 你关注的人来过 / 收藏过 / 正在看
+#### E2. 你关注的人来过 / 正在看
 
 - 母表达：
   - `共同地点`（来过）
-  - `共同收藏`（收藏过）
   - 桥接型实时消费（正在看）
 - 标准 kind：
   - `followeeVisited`
-  - `followeeFavorited`
   - `followeeViewing`
-- legacy alias：
-  - `friendVisited`
-  - `friendFavorited`
 - 主维度：`relationship` / `location` / `content`
+- 语义：我关注的人到访过这个对象，或正在消费这个内容；不存在「关注过这篇内容」桥接（内容无长期动作）。
 - 用户价值：典型社会证明，尤其适用于地点与内容消费。
 - 创作者价值：有助于内容触发“从围观到行动”的扩散。
-- 证据真相源：followee 的行为边。
+- 证据真相源：followee 的来过 / 正在看行为边。
 - 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：
-  - 查看这些人的痕迹
-  - 打开内容
-  - 进入对象页
+- 动作闭环：查看这些人的痕迹 / 打开内容 / 进入对象页
+- 工程五栏：
+  - 展示入口：地点对象页交集卡（followeeVisited）、feed 理由位与内容页（followeeViewing）。
+  - 契约承载：`sourceRef=followeeVisited|followeeViewing`；`relationKind=follow`。
+  - 数据源：followeeVisited=`rec_learning_events` visit 边；followeeViewing=实时在看集合（短 TTL Redis，会话级信号）。
+  - 计算策略：followeeVisited=请求期小集合驱动点查（同 E1）；followeeViewing=实时通道（推荐管线在看信号），不落长期存储。
+  - 性能口径：viewing 信号 TTL ≤5 分钟、只进 feed 理由位不进收件箱；visited 同 E1 缓存口径。
 - 优先级：`P0`
 
 #### E3. 校友在这里 / 同事在这里
 
 - 母表达：`共同校友` 或 identity 深层变体
-- 细 kind：
-  - `alumniHere`
-  - `colleagueHere`
+- 标准 kind：`alumniHere` / `colleagueHere`
 - 主维度：`identity`
 - 语义：不是我和对象共享事实，而是和我身份相关的一群人已经在这里。
 - 用户价值：强信任桥。
 - 创作者价值：适合校友、垂直职业圈内容扩散。
 - 证据真相源：身份集合与对象成员/参与记录交叉。
 - 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：
-  - 进入对象页
-  - 加入相关圈子
+- 动作闭环：进入对象页 / 加入相关圈子
+- 工程五栏：
+  - 展示入口：对象卡（「2位校友在这里」）、campusSpotlight、对象页交集卡。
+  - 契约承载：`sourceRef=alumniHere|colleagueHere`；`dimension=identity`、`tagRefs` 携带学校/公司 tagRef。
+  - 数据源：身份标签集合 × 对象成员/到访记录交叉。
+  - 计算策略：**投影预计算**（对象×学校聚合计数，请求期交叉成本高；首发可用受限请求期实现——对象成员 ≤500 时实时数，超限收起）。
+  - 性能口径：聚合计数投影按 join/visit 事件增量更新；展示时只点查计数 + 样本 ≤3 人。
 - 优先级：`P1`
 
 #### E4. 你关注的人正在讨论
 
 - 母表达：`共同讨论` 的桥接型补充
-- 细 kind：`followeeDiscussedThis`
+- 标准 kind：`followeeDiscussedThis`
 - 主维度：`relationship` / `content`
 - 语义：我关注的人正在这个讨论、内容串或对象主题下发言。
-- 用户价值：比抽象推荐更容易转化成打开讨论。
+- 用户价值：比抽象推荐更容易转化成打开讨论；「N位校友正在讨论」「来自AI产品圈的讨论」类叙事的事实源之一。
 - 创作者价值：讨论被关系网络激活。
 - 证据真相源：followee 评论 / 发言 / 加入讨论。
 - 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：
-  - 进入讨论
-  - 跟帖
-  - 关注发言者
+- 动作闭环：进入讨论 / 跟帖 / 关注发言者
+- 工程五栏：
+  - 展示入口：feed 理由位、讨论入口卡、对象页交集卡。
+  - 契约承载：`sourceRef=followeeDiscussedThis`；`relationKind=follow`、`actionType=view_object`（跳讨论）。
+  - 数据源：`rec_learning_events` comment/发言边（followee 集过滤，窗口 7 天保鲜）。
+  - 计算策略：请求期小集合驱动点查（同 E1），按 `freshAt` 保鲜过滤。
+  - 性能口径：窗口短（7 天）+ followee 集上限；feed 理由位经 `rec:icool` 冷却。
 - 优先级：`P1`
 
 ---
@@ -658,29 +724,29 @@ flowchart LR
 - helpType：`decision`
 - 细 action：
   - `visitedEntityViaMyContent`
-  - `favoritedEntityViaMyContent`
   - `followedEntityViaMyContent`
-- 语义：别人因为我的内容对地点或对象做出行动。
+  - `wishlistedEntityViaMyContent`
+- 语义：别人因为我的内容对地点或对象做出行动（到访、关注对象、标记想去）。
 - 用户价值：看到内容改变现实决策的力量。
 - 创作者价值：这是最接近商业化转化的高质量影响，但不直接展示运营指标。
 - 证据真相源：post -> entity -> downstream action attribution。
-- UI 示例：`12人因为我的攻略收藏了这条路线`
+- UI 示例：`12人因为我的攻略开始关注这条路线`（对象级关注，非内容收藏）
 - 优先级：`P1`
 
 ### 8.4 knowledge：知识影响
 
 - helpType：`knowledge`
 - 细 action：
-  - `savedMyContent`
   - `finishedMyArticle`
   - `referencedMyAnswer`
-- 语义：我的内容帮助别人理解、学习、记住。
+  - `broughtDiscussionToMyContent`
+- 语义：我的内容帮助别人理解、学习、记住（完读、引用、带来讨论）；不存在「持续关注我的内容」类影响（内容无长期动作）。
 - 用户价值：形成“我在帮助别人”的长期心智。
 - 创作者价值：比点赞更体现高质量沉淀。
-- 证据真相源：favorite / completion / quote/reference。
+- 证据真相源：completion / quote/reference / comment 行为边。
 - UI 示例：
-  - `12人收藏了我的内容`
   - `7人读完了我的长文`
+  - `5人引用了我的回答`
 - 优先级：`P0`
 
 ### 8.5 spread：传播影响
@@ -774,8 +840,7 @@ flowchart LR
 | 字段 | 含义 |
 |---|---|
 | `母表达` | 用户在紧凑 surfaces 中看到的一级表达 |
-| `standardKind` | 新规划标准 kind |
-| `legacyAlias` | 迁移兼容别名，可空 |
+| `standardKind` | §5.4 注册表标准 kind（唯一命名，无 alias） |
 | `sourceRef` | 数据源标识 |
 | `交集层级` | 共同型 / 桥接型 / 影响型 / 概率型 |
 | `主维度` | identity/location/content/interest/relationship |
@@ -791,6 +856,9 @@ flowchart LR
 | `freshness TTL` | 新鲜度时长 |
 | `推荐 / 冷却策略` | 是否参与冷却、如何重排 |
 | `可行动 CTA` | 关注 / 打招呼 / 进入圈子 / 回到内容等 |
+| `展示入口` | spotlight / feed 理由位 / 收件箱 / 对象页交集卡（工程五栏之一） |
+| `计算策略` | 请求期边表查询 / 投影预计算 / 推荐通道复用（工程五栏之一） |
+| `性能口径` | 查询次数、集合上限、缓存与冷却（工程五栏之一） |
 | `优先级` | `P0 / P1 / P2` |
 
 ### 10.1 填写规则
@@ -798,7 +866,8 @@ flowchart LR
 - 若无法明确 `evidence 真相源`，不得标为事实交集。
 - 若无法明确 `actionTargetId / objectKind`，不得进入对象卡型推荐。
 - 若属于影响类，必须写明下游动作，不得只写“曝光、浏览、增长”。
-- 若使用 legacy alias，必须同时给出标准名。
+- kind 必须是 §5.4 注册表标准名；禁止引入任何 alias 或第二命名。
+- 若计算策略为「投影预计算」，实现前置条件是对应 projector 就位；未就位前该条目不得上线（不得用请求期全量扫描顶替）。
 
 ---
 
@@ -813,25 +882,24 @@ flowchart LR
 - 共同兴趣
 - 共同地点（至少去过 / 来过中的一条）
 - 共同校友（以同校落地）
-- 共同收藏
 - 共同讨论
 - 你关注的人在这里
-- 你关注的人来过 / 收藏过 / 正在看
+- 你关注的人来过 / 正在看
 - relationship / community / knowledge 类影响
 
 ### 11.2 `P1`
 
 需新增读模型或更强事实支持：
 
-- 共同被关注
+- 共同被关注（前置：follower 投影）
 - 共同联系人
 - 同公司 / 同团队 / 同行业
-- 同圈层活跃
+- 同圈层活跃（前置：圈子活跃度投影）
 - 共同转发 / 共同传播
 - 共同创作 / 共创参与
 - 都关注同一对象
 - 共同愿望清单 / 共同想去
-- 校友在这里 / 同事在这里
+- 校友在这里 / 同事在这里（前置：对象×身份聚合投影，或受限请求期实现）
 - 你关注的人正在讨论
 - decision / spread 类影响
 
@@ -858,11 +926,12 @@ flowchart LR
 | 影响力卡 | 影响事实 | 不展示共同事实本身 |
 | 小趣解释入口 | 共同事实 + 桥接事实 + affinity | 负责把证据解释清楚、引导动作 |
 
-### 12.1 七个母表达的应用原则
+### 12.1 六个母表达的应用原则
 
-- 紧凑 surfaces 优先用 7 个母表达
+- 紧凑 surfaces 优先用 6 个母表达
 - 深层 surfaces 允许展示更细的 identity / relationship / content 子类
 - 任何深层细项都不能推翻紧凑 surfaces 的母表达统一性
+- 「我的足迹」不是交集 surface：足迹数据私有、永不进入任何交集层与影响数字
 
 ---
 
@@ -896,22 +965,18 @@ flowchart LR
 → 再更新 seed / 测试 / UI
 ```
 
-### 14.2 legacy alias 退场规则
+### 14.2 一次性迁移规则（不留兼容）
 
-- alias 只服务迁移兼容
-- 新增实现不得再优先使用 alias
-- 当标准名已覆盖 metadata / fixture / mock / 测试后，alias 才能退场
+- 本次升级**不保留任何兼容别名**：契约、Go、Dart、fixture、mock、测试按 §5.4 迁移映射一次性切到标准名。
+- 不实现 alias 解析层、不保留兼容路由、不做灰度双写；迁移完成的判据是全仓 grep 旧名零残留。
+- 后续新增 kind 必须先登记注册表（含工程五栏），再 metadata → codegen → 实现。
 
 ### 14.3 禁止继续新增的表达
 
 不得继续新增：
 
-- `好友`
-- `朋友`
-- `新朋友`
-- `加好友`
-
-作为结构化关系或交集文案。
+- `好友` / `朋友` / `新朋友` / `加好友`（结构化关系或交集文案）
+- `收藏` / `收藏夹` / `关注内容` / `稍后看`（内容动作语境）
 
 ### 14.4 当前实现的特别校正项
 
@@ -921,7 +986,59 @@ flowchart LR
 
 - 排序、高亮、母表达归类可以看维度
 - 但细粒度交集身份必须保留 `kind/sourceRef`
-- 否则 `coFavorited`、`coCommented`、`followeeVisited` 等会被压扁成粗维度
+- 否则 `coCommented`、`followeeVisited` 等会被压扁成粗维度
+
+同时 fixtures `intersection_core` 段当前 reason 级 `source` 只有维度词、未铺 point 级 `sourceRef` 细 kind，需按注册表补齐（WP-01 Stage 4 交付）。
+
+---
+
+## 14A. favorite 全链路退场清单（Stage 3–6 执行真相源）
+
+> 原则：不留兼容。删除而非废弃标记；无兼容路由、无字段 alias、无灰度开关。点赞心形图标 `Icons.favorite / favorite_border`（Material 命名，语义=点赞）豁免，逐处确认语义后保留。
+
+### 14A.1 contracts/metadata
+
+- [ ] `content/post/service.yaml`：删 `FavoritePost` / `UnfavoritePost` 路由；`GetReactionState` 返回去掉 `favorited`；`ReportBehaviors` 描述去 favorite 口径。
+- [ ] `_shared/request_context.yaml`：删 `FavoritePost/UnfavoritePost → page_id` 两条映射。
+- [ ] `content/post/fields.yaml`：删 `favoriteCount`（Post stats）、`favorited` / `favoritedAt`（ContentReaction）。
+- [ ] `content/post/behaviors.yaml`：删 `type: favorite` 行为定义与训练样本权重。
+- [ ] `content/post/events.yaml`：`ContentReacted` payload 去 `favorited`。
+- [ ] `content/post/storage.yaml`：删 `idx_reactions_user_favorited` 索引。
+- [ ] `content/post/aggregate.yaml`：删 `favorite` counter。
+- [ ] `_shared/types.yaml`：`BehaviorEventType` 删 `favorite`。
+- [ ] `_shared/redis_keyspace.yaml`：互动状态缓存描述去 favorite。
+- [ ] 5 个投影 yaml（discovery_feed / photo / video / article / micro）：删 `favoriteCount` 字段及 `savesCount/bookmarks/favorite_count` aliases。
+- [ ] `content/post/projections/author_impact_item.yaml`：示例文案改连接型（无「N人收藏」）。
+- [ ] `content/post/ui_config.yaml`：action_bar_items 删 `favorite`；删 `interaction_config.favorite`、`show_favorite_count` 与悬空 `error_favorite_failed` 引用。
+- [ ] `recommendation/rec_model/projections/learning_events.yaml`：eventType 删 `favorite`。
+- [ ] `assistant/assistant_run/fields.yaml`：删 `favoritedAnswer`（收藏回答同退场，不做替代）。
+- [ ] `content/post/tests/contract.yaml`：删 favorite 契约测试登记。
+- [ ] fixtures：`content_scenarios.json`（72 处）+ `.lite` / `.gamma-curated` 变体删 `favoriteCount/favorited` 与「N人收藏」displayText。
+
+### 14A.2 Go 云侧
+
+- [ ] content-service：删 `handleFavoritePost/handleUnfavoritePost`、`post_service.go` 的 `FavoritePost/UnfavoritePost`、counter key、Popularity 中 FavoriteCount 项、`GetReactionState` favorited、`feed_service.go` 的 `SaveCount`、`behavior_service.go` 的 favorite→decision 分支。
+- [ ] codegen 产物（generated_routes.go / contracts.go）经 metadata + `make codegen` 刷新。
+- [ ] 推荐管线：`hotpath.go` 权重表、`feature.go` 的 `TotalFavorites/FavoriteLevel`、`metrics.go`、`recommend_feature.go`、`discovery_projector.go`、`mongo_source.go`、`static_source.go`、`social_infra.go`、`daily_metrics_store.go` 逐项清除。
+- [ ] rec-model-service（Python）与 `scripts/ml/**`：特征、权重、训练样本同步删除。
+- [ ] assistant-service：删 `FavoritedAnswer` 链路。
+- [ ] 信号替代：长期价值信号使用足迹侧既有行为（完读 / 复访 / 转发），不引入新行为类型。
+
+### 14A.3 Dart 端
+
+- [ ] UI 入口（约 15 处）：discovery_page、works_immersive_viewer、comment_toolbar、comment_viewer_modal、immersive_comment_split_sheet、media_post_card、image/video viewer、more_actions_popup、media_viewer_interaction_bridge。
+- [ ] 本地状态：`app_providers.dart` 的 `savedPostIds/bookmarkCounts/isSaved/setSaved/enqueuePostSave`、`discovery_state.baseBookmarksCount`、`circle_hub_feed_post_entry.bookmarkCount`。
+- [ ] 鉴权与文案：`AuthGateReason.favorite`、`TestKeys.favorite*`、UITextConstants 收藏常量族（favorite/savePost/savedLabel/bookmarks/assistantBookmarked/authGate*Favorite）、`app_strings.saveFeatureDeveloping`、l10n 收藏条目。
+- [ ] Repository：`quwoquan_cloud_contracts` 删 `favoritePost/unfavoritePost`，Remote/Mock/缓存装饰器同步；`BehaviorEventType.favorite` 删除。
+- [ ] DTO：`post_base_dto.favoriteCount` 及各 `*_post_dto.g.dart`（codegen 刷新）、`content_reaction_state.favorited`、`post_engagement_counters.favoriteCount`。
+- [ ] 我的页：登出态「收藏」tab 占位改「足迹」。
+
+### 14A.4 我的足迹（替代承载）
+
+- 只读契约：`GET /v1/content/footprint?type&cursor`（type=viewed|liked|commented|shared），数据源=既有行为边，**无新写路径**。
+- route/surface：`myFootprint`（`_shared/ui_surfaces.yaml` + app_routes 登记）。
+- 端侧：`lib/ui/user/pages/my_footprint_page.dart` 只读列表，仅本人可见。
+- 约束：足迹不产生交集与影响（测试断言）；前台不出现「收藏 / 稍后看」文案。
 
 ---
 
@@ -933,7 +1050,7 @@ flowchart LR
    - 什么叫交集
    - 什么叫影响
    - 什么只是推荐或亲和力
-2. 能覆盖历史所有维度的交集与影响定义
+2. 能覆盖既往所有维度的交集与影响定义
 3. 能作为 `WP-01 / WP-03 / WP-08` 的共享真相源
 4. 能直接指导 metadata、DTO、seed、UI、小趣解释的后续实现
 5. 不再让与冻结关系口径冲突的“好友/朋友”表达继续扩散

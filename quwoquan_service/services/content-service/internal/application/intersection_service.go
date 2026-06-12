@@ -574,24 +574,26 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 }
 
 // evidenceKindRank 证据组 kind 的挖掘强度（§9.8）：值越小越靠前；
-// 人物 > 事物 > 地点 > 内容 > 兴趣fact > recommended。未知 kind 落中段，
-// 保证未来新增维度优雅降级（不写死闭集，缺省排在已知 fact 之后、recommended 之前）。
+// 人物 > 事物 > 地点 > 内容 > 身份 > 兴趣fact > recommended。
+// kind 取值集合 = 交集词典 §5.4 唯一注册表标准名（云侧唯一真相源，端侧不解析语义）。
+// 未知 kind 落中段，保证未来新增维度优雅降级（不写死闭集，缺省排在已知 fact 之后、recommended 之前）。
 func evidenceKindRank(kind, pointClass string) int {
 	if pointClass == "recommended" {
 		return 900
 	}
 	switch kind {
-	case "mutualFriend", "commonContact", "commonFollow",
-		"friendInCircle", "contactInCircle", "friendActiveHere",
-		"friendVisited", "contactVisited", "friendJoinedRelatedCircle":
+	case "sharedFollowees", "commonFollower", "commonContact",
+		"followeeInObject", "followeeVisited", "followeeViewing", "followeeDiscussedThis":
 		return 10
-	case "coMemberCircle", "sameOrg", "sameBrand", "coCollectedEntity":
+	case "coMemberCircle", "sharedCircle", "sameCompany", "sameTeam", "sameIndustry",
+		"sharedEntityAttention", "coWishlistedEntity":
 		return 20
-	case "coVisitedEntity", "coCity", "youInteracted":
+	case "coVisitedEntity":
 		return 30
-	case "coLiked", "coCommented", "coShared":
+	case "coCommented", "coSharedContent", "coCreatedContent", "sharedDiscussion":
 		return 40
-	case "coCohort", "coEra":
+	case "sameSchool", "sameDepartment", "sameMajor", "sameCohort", "alumni",
+		"alumniHere", "colleagueHere":
 		return 50
 	case "sharedTagSample":
 		return 60

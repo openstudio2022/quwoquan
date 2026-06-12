@@ -802,16 +802,6 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     return post.likeCount > 0 ? post.likeCount : null;
   }
 
-  int? _displayBookmarksCount(PostBaseDto post) {
-    final n = effectivePostBookmarkCount(
-      ref,
-      post.id,
-      fallback: post.favoriteCount,
-    );
-    if (n > 0) return n;
-    return post.favoriteCount > 0 ? post.favoriteCount : null;
-  }
-
   Widget _buildPhotoContent(bool isDark, {String tabId = 'photo'}) {
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(tabId));
@@ -861,7 +851,6 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
               final post = photos[index];
               final height = _photoItemHeight(cardWidth, post, index);
               final likesDisplay = _displayLikesCount(post);
-              final bookmarksDisplay = _displayBookmarksCount(post);
               return SizedBox(
                 height: height,
                 // Use TestKeys.photoPostCard only on first item to avoid
@@ -878,9 +867,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                     category: tabId,
                   ),
                   isLiked: effectivePostLiked(ref, post.id),
-                  isSaved: effectivePostSaved(ref, post.id),
                   likesCount: likesDisplay,
-                  bookmarksCount: bookmarksDisplay,
                 ),
               );
             },
@@ -1525,14 +1512,6 @@ class _ArticleCardPlaceholder extends StatelessWidget {
                         color: muted,
                       ),
                     ),
-                    AppStarIcon(size: AppSpacing.iconMedium, color: muted),
-                    Text(
-                      ' ${article.favoriteCount} ',
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        color: muted,
-                      ),
-                    ),
                     AppMediaCommentIcon(
                       size: AppSpacing.iconMedium,
                       color: muted,
@@ -1561,25 +1540,21 @@ class _ArticleCardPlaceholder extends StatelessWidget {
   }
 }
 
-/// 美图/视频卡片：缩略图用 CachedNetworkImage，占位与降级；多图角标、视频 Play 角标；与详情一致的点赞/收藏状态
+/// 美图/视频卡片：缩略图用 CachedNetworkImage，占位与降级；多图角标、视频 Play 角标；与详情一致的点赞状态
 class _DiscoveryItemCard extends StatelessWidget {
   const _DiscoveryItemCard({
     required this.isDark,
     required this.post,
     required this.onTap,
     this.isLiked = false,
-    this.isSaved = false,
     this.likesCount,
-    this.bookmarksCount,
   });
 
   final bool isDark;
   final PostBaseDto post;
   final VoidCallback onTap;
   final bool isLiked;
-  final bool isSaved;
   final int? likesCount;
-  final int? bookmarksCount;
 
   @override
   Widget build(BuildContext context) {
@@ -1733,22 +1708,6 @@ class _DiscoveryItemCard extends StatelessWidget {
                       ),
                     ),
                   ],
-                  SizedBox(width: AppSpacing.intraGroupSm),
-                  Icon(
-                    isSaved ? Icons.bookmark : Icons.bookmark_border,
-                    size: AppSpacing.iconSmall,
-                    color: isSaved ? AppColors.primaryColor : overlayFgMuted,
-                  ),
-                  if (bookmarksCount != null && bookmarksCount! > 0) ...[
-                    SizedBox(width: AppSpacing.xs),
-                    Text(
-                      '$bookmarksCount',
-                      style: TextStyle(
-                        fontSize: AppTypography.xs,
-                        color: overlayFgMuted,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -1816,9 +1775,7 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
     with TickerProviderStateMixin {
   late PageController _pageController;
   late AnimationController _likeAnimationController;
-  late AnimationController _bookmarkAnimationController;
   late Animation<double> _likeScaleAnimation;
-  late Animation<double> _bookmarkScaleAnimation;
 
   List<String> get _primaryTabIds => widget.categories
       .map((category) => category['id']!)
@@ -1856,10 +1813,6 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
-    _bookmarkAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
     _likeScaleAnimation = TweenSequence<double>(<TweenSequenceItem<double>>[
       TweenSequenceItem(
         tween: Tween<double>(
@@ -1876,29 +1829,12 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
         weight: 50,
       ),
     ]).animate(_likeAnimationController);
-    _bookmarkScaleAnimation = TweenSequence<double>(<TweenSequenceItem<double>>[
-      TweenSequenceItem(
-        tween: Tween<double>(
-          begin: 1.0,
-          end: 1.2,
-        ).chain(CurveTween(curve: Curves.easeOut)),
-        weight: 50,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(
-          begin: 1.2,
-          end: 1.0,
-        ).chain(CurveTween(curve: Curves.easeIn)),
-        weight: 50,
-      ),
-    ]).animate(_bookmarkAnimationController);
   }
 
   @override
   void dispose() {
     _pageController.dispose();
     _likeAnimationController.dispose();
-    _bookmarkAnimationController.dispose();
     super.dispose();
   }
 
@@ -1961,7 +1897,6 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                   final authorBg = post.authorBackgroundUrl;
                   final thumbnail = post.primaryVisualUrl;
                   final isLiked = effectivePostLiked(ref, post.id);
-                  final isSaved = effectivePostSaved(ref, post.id);
                   final likeCount = effectivePostLikeCount(
                     ref,
                     post.id,
@@ -2153,46 +2088,6 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                                       );
                                     },
                                     scaleAnimation: _likeScaleAnimation,
-                                  ),
-                                  _videoActionWidget(
-                                    context,
-                                    AppStarIcon(
-                                      size: AppSpacing.iconMedium,
-                                      filled: isSaved,
-                                      color: isSaved
-                                          ? AppColors.warning
-                                          : videoFgQuaternary,
-                                    ),
-                                    UITextConstants.bookmarks,
-                                    () {
-                                      runWhenLoggedIn(
-                                        ref,
-                                        context,
-                                        AuthGateReason.favorite,
-                                        () {
-                                          final bookmarkCount =
-                                              effectivePostBookmarkCount(
-                                                ref,
-                                                post.id,
-                                                fallback: post.favoriteCount,
-                                              );
-                                          syncPostSaveIntent(
-                                            ref,
-                                            postId: post.id,
-                                            isSaved: !isSaved,
-                                            bookmarkCount: isSaved
-                                                ? (bookmarkCount - 1)
-                                                      .clamp(0, 1 << 31)
-                                                      .toInt()
-                                                : bookmarkCount + 1,
-                                          );
-                                          _bookmarkAnimationController.forward(
-                                            from: 0,
-                                          );
-                                        },
-                                      );
-                                    },
-                                    scaleAnimation: _bookmarkScaleAnimation,
                                   ),
                                   _videoActionWidget(
                                     context,

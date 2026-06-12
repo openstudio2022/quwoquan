@@ -8,8 +8,6 @@ enum MoreActionType {
   block,
   like,
   unlike,
-  save,
-  unsave,
   reward,
   message,
   viewOriginal,
@@ -35,10 +33,6 @@ extension MoreActionTypeExtension on MoreActionType {
         return Icons.favorite_border;
       case MoreActionType.unlike:
         return Icons.favorite;
-      case MoreActionType.save:
-        return Icons.bookmark_border;
-      case MoreActionType.unsave:
-        return Icons.bookmark;
       case MoreActionType.reward:
         return Icons.monetization_on;
       case MoreActionType.message:

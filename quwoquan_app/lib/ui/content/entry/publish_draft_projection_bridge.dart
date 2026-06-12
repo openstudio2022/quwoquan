@@ -29,7 +29,6 @@ Map<String, dynamic> createEditorStateToArticlePreviewWire(
     'createdAt': DateTime.now().toUtc().toIso8601String(),
     'likeCount': 0,
     'commentCount': 0,
-    'favoriteCount': 0,
     'shareCount': 0,
     'coverUrl': cover,
     ArticleDetailWireKeys.articleMarkdown: markdown,
@@ -78,7 +77,6 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
     'createdAt': DateTime.now().toUtc().toIso8601String(),
     'likeCount': 0,
     'commentCount': 0,
-    'favoriteCount': 0,
     'shareCount': 0,
   };
   final isMoment = contentIdentity == CreateContentIdentity.moment;

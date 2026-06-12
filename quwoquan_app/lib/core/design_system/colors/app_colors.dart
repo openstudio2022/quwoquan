@@ -194,9 +194,6 @@ class AppColors {
   /// 作品频道 — 点赞激活色（暗玫瑰，降低饱和度避免在深色背景过度刺眼）
   static const Color worksLike = Color(0xFFD94F6A);
 
-  /// 作品频道 — 收藏激活色（琥珀棕，业界通行星标色调）
-  static const Color worksSave = Color(0xFFE0A850);
-
   /// 创作页媒体错误占位渐变
   static const Color createMediaFallbackGradientTop = Color(0xFF343434);
   static const Color createMediaFallbackGradientBottom = Color(0xFF141414);

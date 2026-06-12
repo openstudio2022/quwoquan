@@ -203,7 +203,7 @@ func (m *MongoSocialGraphProvider) GetFriendInteractedContent(ctx context.Contex
 	eventCursor, err := eventColl.Find(ctx, bson.M{
 		"userId":    bson.M{"$in": followeeIDs},
 		"eventType": "rec_engagement",
-		"labels.action": bson.M{"$in": []string{"like", "favorite", "share"}},
+		"labels.action": bson.M{"$in": []string{"like", "share"}},
 		"createdAt":     bson.M{"$gte": cutoff},
 	}, options.Find().SetLimit(int64(limit)).SetSort(bson.M{"createdAt": -1}))
 	if err != nil {

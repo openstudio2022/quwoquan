@@ -205,9 +205,6 @@ class _ImpactRow extends StatelessWidget {
       case 'circle':
       case 'join_circle':
         return CupertinoIcons.person_2_fill;
-      case 'favorite':
-      case 'collect':
-        return CupertinoIcons.bookmark_fill;
       case 'friend':
       case 'connection':
         return CupertinoIcons.person_add_solid;

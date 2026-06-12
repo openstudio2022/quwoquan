@@ -23,7 +23,7 @@ import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 
 /// 图片浏览器组件 - 基于原型代码实现
-/// 支持状态与Post同步，包含更多功能、点赞、收藏、评论、转发
+/// 支持状态与Post同步，包含更多功能、点赞、评论、转发
 class ImageViewer extends ConsumerStatefulWidget {
   final bool isOpen;
   final VoidCallback onClose;
@@ -35,13 +35,10 @@ class ImageViewer extends ConsumerStatefulWidget {
   final Function(dynamic)? onCommentsClick;
   final Function(dynamic)? onMoreClick;
   final Function(dynamic)? onLikeClick;
-  final Function(dynamic)? onSaveClick;
   final Function(dynamic)? onShareClick;
   final Set<String>? followingUsers;
-  final Set<String>? savedPosts;
   final Set<String>? likedPosts;
   final Function(dynamic)? getPostLikesCount;
-  final Function(dynamic)? getPostBookmarksCount;
 
   const ImageViewer({
     super.key,
@@ -55,13 +52,10 @@ class ImageViewer extends ConsumerStatefulWidget {
     this.onCommentsClick,
     this.onMoreClick,
     this.onLikeClick,
-    this.onSaveClick,
     this.onShareClick,
     this.followingUsers,
-    this.savedPosts,
     this.likedPosts,
     this.getPostLikesCount,
-    this.getPostBookmarksCount,
   });
 
   @override
@@ -77,10 +71,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
   int _currentIndex = 0;
   bool _showControls = true;
   bool _isLiked = false;
-  bool _isSaved = false;
   bool _isFollowing = false;
   int _likesCount = 0;
-  int _savesCount = 0;
   int _commentsCount = 0;
   int _sharesCount = 0;
   bool _isPureMode = false;
@@ -114,12 +106,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
     if (widget.post != null) {
       _isLiked =
           widget.likedPosts?.contains(widget.post['id']?.toString()) ?? false;
-      _isSaved =
-          widget.savedPosts?.contains(widget.post['id']?.toString()) ?? false;
       _isFollowing =
           widget.followingUsers?.contains(widget.post['username']) ?? false;
       _likesCount = widget.getPostLikesCount?.call(widget.post) ?? 0;
-      _savesCount = widget.getPostBookmarksCount?.call(widget.post) ?? 0;
       _commentsCount = widget.post['commentsCount'] ?? 0;
       _sharesCount =
           widget.post['sharesCount'] ?? widget.post['shareCount'] ?? 0;
@@ -621,20 +610,6 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
 
         SizedBox(width: AppSpacing.interGroupSm),
 
-        // 收藏按钮
-        _buildInteractionButton(
-          iconWidget: AppStarIcon(
-            size: AppSpacing.iconMedium,
-            color: _isSaved ? AppColors.warning : AppColors.white,
-            filled: _isSaved,
-          ),
-          count: _savesCount,
-          isActive: _isSaved,
-          onTap: _handleSave,
-        ),
-
-        SizedBox(width: AppSpacing.interGroupSm),
-
         // 评论按钮
         _buildInteractionButton(
           iconWidget: AppBubbleIcon(
@@ -791,11 +766,6 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
               icon: CupertinoIcons.gift,
             ),
             AppActionSheetItem<_ImageViewerMoreAction>(
-              value: _ImageViewerMoreAction.save,
-              label: '保存',
-              icon: CupertinoIcons.arrow_down_to_line,
-            ),
-            AppActionSheetItem<_ImageViewerMoreAction>(
               value: _ImageViewerMoreAction.message,
               label: '私信',
               icon: CupertinoIcons.chat_bubble,
@@ -818,8 +788,6 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
       switch (action) {
         case _ImageViewerMoreAction.reward:
           _handleReward();
-        case _ImageViewerMoreAction.save:
-          _handleSave();
         case _ImageViewerMoreAction.message:
           _handleMessage();
         case _ImageViewerMoreAction.copyLink:
@@ -841,14 +809,6 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
 
   void _handleComment() {
     widget.onCommentsClick?.call(widget.post);
-  }
-
-  void _handleSave() {
-    setState(() {
-      _isSaved = !_isSaved;
-      _savesCount += _isSaved ? 1 : -1;
-    });
-    widget.onSaveClick?.call(widget.post);
   }
 
   void _handleFollow() {
@@ -925,4 +885,4 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
   }
 }
 
-enum _ImageViewerMoreAction { reward, save, message, copyLink, viewOriginal }
+enum _ImageViewerMoreAction { reward, message, copyLink, viewOriginal }

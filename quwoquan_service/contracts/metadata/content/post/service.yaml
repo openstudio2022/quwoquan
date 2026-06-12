@@ -205,7 +205,7 @@ api_routes:
   - method: GET
     path: /v1/content/posts/{postId}/reactions
     operation: GetReactionState
-    description: 当前用户互动状态（liked/favorited/shared；shared 来自权威分享记录）
+    description: 当前用户互动状态（liked/shared；shared 来自权威分享记录）
     response_entity: ContentReaction
     security:
       auth_mode: optional
@@ -237,18 +237,6 @@ api_routes:
       visibility: public
 
   - method: POST
-    path: /v1/content/posts/{postId}/favorite
-    operation: FavoritePost
-    description: 收藏（幂等 upsert，立即更新 ContentReaction.favorited + favoriteCount）
-    auth: required
-
-  - method: DELETE
-    path: /v1/content/posts/{postId}/favorite
-    operation: UnfavoritePost
-    description: 取消收藏（幂等，立即更新 ContentReaction.favorited + favoriteCount）
-    auth: required
-
-  - method: POST
     path: /v1/content/posts/{postId}/share
     operation: SharePost
     description: 成功分享记录写入（幂等；更新 ContentReaction.shared + shareCount；用于通用分享成功落库，不等同于 telemetry）；游客以设备维度（deviceActorId）真实累加，登录用户以账号维度累加，两者独立计数不并账
@@ -275,10 +263,16 @@ api_routes:
     operation: GetCounters
     description: 聚合计数
 
+  - method: GET
+    path: /v1/content/footprint
+    operation: GetMyFootprint
+    description: 我的足迹（私有只读消费轨迹：type=viewed|liked|commented|shared + cursor 分页；数据源为既有行为边 rec_learning_events，无新写路径；仅本人可见，不产生交集与影响）
+    auth: required
+
   - method: POST
     path: /v1/content/behaviors
     operation: ReportBehaviors
-    description: 行为批量上报（impression/click/dwell/dislike/report/shareIntent/shareClick；like/favorite/shareCount 用专用路由，不驱动 post.shareCount）
+    description: 行为批量上报（impression/click/dwell/dislike/report/shareIntent/shareClick；like/shareCount 用专用路由，不驱动 post.shareCount）
 
   - method: POST
     path: /v1/content/posts/{postId}/repost
@@ -422,7 +416,7 @@ api_routes:
   - method: GET
     path: /v1/content/intersections/object
     operation: GetObjectIntersections
-    description: 对象页「我与该对象」的关系类交集（共同好友/联系人来过/好友加入等证据组，与标签交集在端合并）
+    description: 对象页「我与该对象」的关系类交集（共同关注的人/你关注的人来过/你关注的人在这里等证据组，kind 见交集词典注册表，与标签交集在端合并）
     query_params: [objectId, objectType, limit]
     security:
       auth_mode: required

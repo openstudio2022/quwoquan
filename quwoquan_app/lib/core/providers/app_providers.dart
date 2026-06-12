@@ -1044,10 +1044,8 @@ class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
 class PostInteractionState {
   const PostInteractionState({
     this.likedPostIds = const <String>{},
-    this.savedPostIds = const <String>{},
     this.sharedPostIds = const <String>{},
     this.likeCounts = const <String, int>{},
-    this.bookmarkCounts = const <String, int>{},
     this.confirmedShareCounts = const <String, int>{},
     this.pendingShareDeltas = const <String, int>{},
     this.confirmedCommentCounts = const <String, int>{},
@@ -1055,33 +1053,22 @@ class PostInteractionState {
   });
 
   final Set<String> likedPostIds;
-  final Set<String> savedPostIds;
   final Set<String> sharedPostIds;
   final Map<String, int> likeCounts;
-  final Map<String, int> bookmarkCounts;
   final Map<String, int> confirmedShareCounts;
   final Map<String, int> pendingShareDeltas;
   final Map<String, int> confirmedCommentCounts;
   final Map<String, int> pendingCommentDeltas;
 
   bool isLiked(String postId) => likedPostIds.contains(postId);
-  bool isSaved(String postId) => savedPostIds.contains(postId);
   bool isShared(String postId) => sharedPostIds.contains(postId);
 
   bool hasLikeStateFor(String postId) {
     return likedPostIds.contains(postId) || likeCounts.containsKey(postId);
   }
 
-  bool hasSaveStateFor(String postId) {
-    return savedPostIds.contains(postId) || bookmarkCounts.containsKey(postId);
-  }
-
   int likeCountFor(String postId, {int fallback = 0}) {
     return likeCounts[postId] ?? fallback;
-  }
-
-  int bookmarkCountFor(String postId, {int fallback = 0}) {
-    return bookmarkCounts[postId] ?? fallback;
   }
 
   int shareCountFor(String postId, {int fallback = 0}) {
@@ -1098,10 +1085,8 @@ class PostInteractionState {
 
   PostInteractionState copyWith({
     Set<String>? likedPostIds,
-    Set<String>? savedPostIds,
     Set<String>? sharedPostIds,
     Map<String, int>? likeCounts,
-    Map<String, int>? bookmarkCounts,
     Map<String, int>? confirmedShareCounts,
     Map<String, int>? pendingShareDeltas,
     Map<String, int>? confirmedCommentCounts,
@@ -1109,10 +1094,8 @@ class PostInteractionState {
   }) {
     return PostInteractionState(
       likedPostIds: likedPostIds ?? this.likedPostIds,
-      savedPostIds: savedPostIds ?? this.savedPostIds,
       sharedPostIds: sharedPostIds ?? this.sharedPostIds,
       likeCounts: likeCounts ?? this.likeCounts,
-      bookmarkCounts: bookmarkCounts ?? this.bookmarkCounts,
       confirmedShareCounts: confirmedShareCounts ?? this.confirmedShareCounts,
       pendingShareDeltas: pendingShareDeltas ?? this.pendingShareDeltas,
       confirmedCommentCounts:
@@ -1145,10 +1128,8 @@ class PostInteractionState {
 
     return PostInteractionState(
       likedPostIds: readSet('likedPostIds'),
-      savedPostIds: readSet('savedPostIds'),
       sharedPostIds: readSet('sharedPostIds'),
       likeCounts: readIntMap('likeCounts'),
-      bookmarkCounts: readIntMap('bookmarkCounts'),
       confirmedShareCounts: readIntMap('confirmedShareCounts').isNotEmpty
           ? readIntMap('confirmedShareCounts')
           : readIntMap('shareCounts'),
@@ -1163,10 +1144,8 @@ class PostInteractionState {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'likedPostIds': likedPostIds.toList(growable: false),
-      'savedPostIds': savedPostIds.toList(growable: false),
       'sharedPostIds': sharedPostIds.toList(growable: false),
       'likeCounts': likeCounts,
-      'bookmarkCounts': bookmarkCounts,
       'confirmedShareCounts': confirmedShareCounts,
       'pendingShareDeltas': pendingShareDeltas,
       'confirmedCommentCounts': confirmedCommentCounts,
@@ -1204,21 +1183,6 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
       nextCounts[postId] = likeCount;
     }
     state = state.copyWith(likedPostIds: nextLiked, likeCounts: nextCounts);
-    unawaited(_persistState());
-  }
-
-  void setSaved(String postId, bool isSaved, {int? bookmarkCount}) {
-    final nextSaved = Set<String>.from(state.savedPostIds);
-    final nextCounts = Map<String, int>.from(state.bookmarkCounts);
-    if (isSaved) {
-      nextSaved.add(postId);
-    } else {
-      nextSaved.remove(postId);
-    }
-    if (bookmarkCount != null) {
-      nextCounts[postId] = bookmarkCount;
-    }
-    state = state.copyWith(savedPostIds: nextSaved, bookmarkCounts: nextCounts);
     unawaited(_persistState());
   }
 
@@ -1397,9 +1361,7 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
       return;
     }
     final nextLiked = Set<String>.from(state.likedPostIds);
-    final nextSaved = Set<String>.from(state.savedPostIds);
     final nextLikeCounts = Map<String, int>.from(state.likeCounts);
-    final nextBookmarkCounts = Map<String, int>.from(state.bookmarkCounts);
     final nextConfirmedShareCounts = Map<String, int>.from(
       state.confirmedShareCounts,
     );
@@ -1418,18 +1380,9 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
       } else {
         nextLiked.remove(postId);
       }
-      if (snapshot.savedPosts.contains(postId)) {
-        nextSaved.add(postId);
-      } else {
-        nextSaved.remove(postId);
-      }
       final likeCount = snapshot.postLikesCount[postId];
       if (likeCount != null) {
         nextLikeCounts[postId] = likeCount;
-      }
-      final bookmarkCount = snapshot.postBookmarksCount[postId];
-      if (bookmarkCount != null) {
-        nextBookmarkCounts[postId] = bookmarkCount;
       }
       final shareCount = snapshot.postSharesCount[postId];
       if (shareCount != null) {
@@ -1444,9 +1397,7 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     }
     state = state.copyWith(
       likedPostIds: nextLiked,
-      savedPostIds: nextSaved,
       likeCounts: nextLikeCounts,
-      bookmarkCounts: nextBookmarkCounts,
       confirmedShareCounts: nextConfirmedShareCounts,
       pendingShareDeltas: nextPendingShareDeltas,
       confirmedCommentCounts: nextConfirmedCommentCounts,
@@ -1515,20 +1466,6 @@ class ClientStateSyncOutboxNotifier
       objectId: postId,
       intentType: 'like',
       desiredBoolValue: isLiked,
-      flushImmediately: flushImmediately,
-    );
-  }
-
-  void enqueuePostSave({
-    required String postId,
-    required bool isSaved,
-    bool flushImmediately = false,
-  }) {
-    _upsertEntry(
-      objectType: 'post',
-      objectId: postId,
-      intentType: 'save',
-      desiredBoolValue: isSaved,
       flushImmediately: flushImmediately,
     );
   }
@@ -1614,14 +1551,6 @@ class ClientStateSyncOutboxNotifier
           await repo.likePost(postId: entry.objectId);
         } else {
           await repo.unlikePost(postId: entry.objectId);
-        }
-        return;
-      case 'post:save':
-        final repo = ref.read(contentRepositoryProvider);
-        if (entry.desiredBoolValue) {
-          await repo.favoritePost(postId: entry.objectId);
-        } else {
-          await repo.unfavoritePost(postId: entry.objectId);
         }
         return;
       case 'post:share':

@@ -582,7 +582,7 @@ class _CacheManagementSheetState extends ConsumerState<_CacheManagementSheet> {
                       label: '清理搜索和浏览记录',
                       onTap: () => _confirmAndClear(
                         CacheClearLevel.searchAndBrowseHistory,
-                        '会删除最近查询和浏览快照；收藏、关注和会话引用的对象不会被删除。',
+                        '会删除最近查询和浏览快照；关注和会话引用的对象不会被删除。',
                       ),
                     ),
                     SettingsInsetFormSectionDivider(isDark: isDark),

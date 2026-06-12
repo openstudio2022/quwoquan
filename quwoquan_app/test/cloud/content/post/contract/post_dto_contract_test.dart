@@ -31,8 +31,8 @@ void main() {
           'height': 800,
           'likeCount': 100,
           'commentCount': 10,
-          'favoriteCount': 20,
           'shareCount': 5,
+          'createdAt': '2025-12-01T10:00:00Z',
           'publishedAt': '2025-12-01T10:00:00Z',
         };
         final dto = PhotoPostDto.fromMap(raw);
@@ -107,7 +107,6 @@ void main() {
           'durationMs': 30000,
           'likeCount': 500,
           'commentCount': 50,
-          'favoriteCount': 80,
           'shareCount': 20,
           'publishedAt': '2026-01-10T00:00:00Z',
         };
@@ -174,7 +173,6 @@ void main() {
           'coverUrl': 'https://example.com/cover3.jpg',
           'likeCount': 1000,
           'commentCount': 80,
-          'favoriteCount': 200,
           'shareCount': 150,
           'publishedAt': '2026-01-15T08:00:00Z',
         };

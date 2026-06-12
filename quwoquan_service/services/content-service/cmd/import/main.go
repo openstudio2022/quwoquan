@@ -423,7 +423,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			bson.M{"postId": p.PostRef},
 			bson.M{"$set": set, "$setOnInsert": bson.M{
 				"likeCount": int64(0), "commentCount": int64(0),
-				"favoriteCount": int64(0), "viewCount": int64(0), "recScore": 0.0,
+				"viewCount": int64(0), "recScore": 0.0,
 			}},
 			options.UpdateOne().SetUpsert(true),
 		); err != nil {

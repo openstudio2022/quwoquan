@@ -130,11 +130,6 @@ void main() {
       await repo.unlikePost(postId: 'test');
     });
 
-    test('favoritePost / unfavoritePost 不崩溃', () async {
-      await repo.favoritePost(postId: 'test');
-      await repo.unfavoritePost(postId: 'test');
-    });
-
     test('sharePost / unsharePost 返回幂等变化标记', () async {
       final changed = await repo.sharePost(postId: 'test');
       final unchanged = await repo.sharePost(postId: 'test');

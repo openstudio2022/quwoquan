@@ -774,6 +774,55 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleGetMyFootprint 我的足迹只读列表：仅本人可见，复用既有行为边，
+// 不产生交集与影响事实。type 枚举与展示语义由云侧统一定义，端侧仅透传与展示。
+func (h *ContentHandler) handleGetMyFootprint(w http.ResponseWriter, r *http.Request) {
+	userID := resolveUserID(r)
+	if strings.TrimSpace(userID) == "" {
+		writeHTTPError(w, r, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "unauthorized"),
+			"需要登录后查看我的足迹",
+			"footprint requires authenticated user",
+		))
+		return
+	}
+	query := r.URL.Query()
+	limit := 20
+	if rawLimit := strings.TrimSpace(query.Get("limit")); rawLimit != "" {
+		if parsed, err := strconv.Atoi(rawLimit); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	entries, nextCursor, err := h.behaviorService.GetMyFootprint(
+		r.Context(),
+		userID,
+		query.Get("type"),
+		query.Get("cursor"),
+		limit,
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(entries))
+	for _, entry := range entries {
+		item := map[string]any{
+			"postId":     entry.PostID,
+			"action":     entry.Action,
+			"occurredAt": entry.OccurredAt.UTC().Format(time.RFC3339),
+		}
+		if entry.Post != nil {
+			item["post"] = projectPostForClient(entry.Post)
+		}
+		items = append(items, item)
+	}
+	resp := map[string]any{"items": items}
+	if nextCursor != "" {
+		resp["nextCursor"] = nextCursor
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (h *ContentHandler) handleGetRecommendation(w http.ResponseWriter, r *http.Request) {
 	var req application.RecommendRequest
 	if r.Body != nil {
@@ -826,34 +875,6 @@ func (h *ContentHandler) handleUnlikePost(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (h *ContentHandler) handleFavoritePost(w http.ResponseWriter, r *http.Request, postID string) {
-	favoriteCount, changed, err := h.postService.FavoritePost(r.Context(), postID, resolveUserID(r))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"postId":        postID,
-		"favorited":     true,
-		"changed":       changed,
-		"favoriteCount": favoriteCount,
-	})
-}
-
-func (h *ContentHandler) handleUnfavoritePost(w http.ResponseWriter, r *http.Request, postID string) {
-	favoriteCount, changed, err := h.postService.UnfavoritePost(r.Context(), postID, resolveUserID(r))
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"postId":        postID,
-		"favorited":     false,
-		"changed":       changed,
-		"favoriteCount": favoriteCount,
-	})
-}
-
 func (h *ContentHandler) handleSharePost(w http.ResponseWriter, r *http.Request, postID string) {
 	shareCount, changed, shared, err := h.postService.SharePost(
 		r.Context(),
@@ -893,7 +914,7 @@ func (h *ContentHandler) handleUnsharePost(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ContentHandler) handleGetReactionState(w http.ResponseWriter, r *http.Request, postID string) {
-	liked, favorited, shared := h.postService.GetReactionState(
+	liked, shared := h.postService.GetReactionState(
 		postID,
 		resolveUserID(r),
 		resolveDeviceActorID(r),
@@ -901,7 +922,6 @@ func (h *ContentHandler) handleGetReactionState(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, map[string]any{
 		"postId":    postID,
 		"liked":     liked,
-		"favorited": favorited,
 		"shared":    shared,
 		"reported":  false,
 		"updatedAt": time.Now().UTC().Format(time.RFC3339),
@@ -1251,12 +1271,6 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 	case "UnlikePost":
 		h.handleUnlikePost(w, r, postIDFromPath(r.URL.Path))
 		return
-	case "FavoritePost":
-		h.handleFavoritePost(w, r, postIDFromPath(r.URL.Path))
-		return
-	case "UnfavoritePost":
-		h.handleUnfavoritePost(w, r, postIDFromPath(r.URL.Path))
-		return
 	case "SharePost":
 		h.handleSharePost(w, r, postIDFromPath(r.URL.Path))
 		return
@@ -1265,6 +1279,9 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		return
 	case "GetReactionState":
 		h.handleGetReactionState(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "GetMyFootprint":
+		h.handleGetMyFootprint(w, r)
 		return
 	case "CreateComment":
 		h.handleCreateComment(w, r, postIDFromPath(r.URL.Path))

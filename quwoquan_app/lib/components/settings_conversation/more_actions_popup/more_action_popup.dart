@@ -114,13 +114,6 @@ class _MediaPostMoreActionSheetState
         label: AppStrings.reward,
         onTap: widget.config.onReward,
       ),
-      if (widget.config.showSaveAction)
-        _ScrollAction(
-          id: 'save',
-          icon: CupertinoIcons.arrow_down_to_line,
-          label: AppStrings.save,
-          onTap: widget.config.onSave,
-        ),
       _ScrollAction(
         id: 'message',
         icon: CupertinoIcons.chat_bubble,
@@ -310,8 +303,6 @@ class _MediaPostMoreActionSheetState
     switch (actionId) {
       case 'reward':
         return () => _showToast(AppStrings.rewardFeatureDeveloping);
-      case 'save':
-        return () => _showToast(AppStrings.saveFeatureDeveloping);
       case 'message':
         return () => _showToast(AppStrings.messageFeatureDeveloping);
       case 'viewOriginal':

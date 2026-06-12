@@ -20,7 +20,6 @@ class VideoPostCard extends MediaPostCard {
     super.onLike,
     super.onComment,
     super.onShare,
-    super.onBookmark,
     super.onMore,
     super.isFirstPost,
   });

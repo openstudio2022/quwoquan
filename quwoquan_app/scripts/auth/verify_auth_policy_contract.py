@@ -44,14 +44,13 @@ AUTH_PUBLIC_OPERATIONS = {
 
 # 明确需要账号身份的核心入口：必须 required，防止漏标回退为 public。
 # 注意：点赞/分享已按「游客设备态可写」策略下放到 MUST_BE_DEVICE_WRITABLE；
-# 收藏（Favorite）属个人资产，仍保持 required（与点赞/分享口径不同）。
+# 内容互动只有 赞/评/转；足迹（GetMyFootprint）属个人资产，必须登录。
 MUST_BE_REQUIRED = {
     "CreatePost",
     "UpdatePost",
     "DeletePost",
     "CreateComment",
-    "FavoritePost",
-    "UnfavoritePost",
+    "GetMyFootprint",
     "SendMessage",
     "ListConversations",
     "GetConversation",

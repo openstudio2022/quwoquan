@@ -144,8 +144,6 @@ class TestKeys {
   // ── Post Interaction ────────────────────────────────────────────────
   static const likeButton = ValueKey<String>('like_button');
   static const likeCountText = ValueKey<String>('like_count_text');
-  static const favoriteButton = ValueKey<String>('favorite_button');
-  static const favoriteCountText = ValueKey<String>('favorite_count_text');
   static const commentButton = ValueKey<String>('comment_button');
   static const commentCountText = ValueKey<String>('comment_count_text');
   static const shareButton = ValueKey<String>('share_button');
@@ -171,9 +169,6 @@ class TestKeys {
   );
   static const commentRecentEmojiStrip = ValueKey<String>(
     'comment_recent_emoji_strip',
-  );
-  static const commentToolbarFavoriteButton = ValueKey<String>(
-    'comment_toolbar_favorite_button',
   );
   static const assistantChatInputField = ValueKey<String>(
     'assistant_chat_input_field',

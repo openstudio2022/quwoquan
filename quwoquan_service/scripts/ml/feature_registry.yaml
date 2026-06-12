@@ -18,9 +18,6 @@ scenarios:
       - name: totalLikes
         type: int
         source: rm_recommend_feature.userFeatures.totalLikes
-      - name: totalFavorites
-        type: int
-        source: rm_recommend_feature.userFeatures.totalFavorites
       - name: totalShares
         type: int
         source: rm_recommend_feature.userFeatures.totalShares
@@ -146,8 +143,6 @@ scenarios:
         description: "seconds spent viewing the item"
       - name: like
         type: binary
-      - name: favorite
-        type: binary
       - name: share
         type: binary
       - name: comment
@@ -159,5 +154,5 @@ scenarios:
         type: binary
       - name: engaged
         type: binary
-        derived: "click OR dwell_s>10 OR like OR favorite OR share OR comment OR follow"
+        derived: "click OR dwell_s>10 OR like OR share OR comment OR follow"
         description: "composite positive signal for primary ranking objective"

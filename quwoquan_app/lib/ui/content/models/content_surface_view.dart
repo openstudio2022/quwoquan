@@ -60,14 +60,12 @@ class ContentStats {
   const ContentStats({
     this.like = 0,
     this.comment = 0,
-    this.favorite = 0,
     this.share = 0,
     this.view = 0,
   });
 
   final int like;
   final int comment;
-  final int favorite;
   final int share;
   final int view;
 }

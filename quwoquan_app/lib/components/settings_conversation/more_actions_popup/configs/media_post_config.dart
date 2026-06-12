@@ -20,11 +20,7 @@ class MoreActionReadingOption {
 class MediaPostMoreActionConfig {
   final bool showShareAction;
   final bool showViewOriginalAction;
-
-  /// Work Browser V1.0 明确禁止收藏入口；默认保留以兼容其他宿主。
-  final bool showSaveAction;
   final VoidCallback? onReward;
-  final VoidCallback? onSave;
   final VoidCallback? onMessage;
   final VoidCallback? onCopyLink;
   final VoidCallback? onViewOriginal;
@@ -56,9 +52,7 @@ class MediaPostMoreActionConfig {
   const MediaPostMoreActionConfig({
     this.showShareAction = false,
     this.showViewOriginalAction = false,
-    this.showSaveAction = true,
     this.onReward,
-    this.onSave,
     this.onMessage,
     this.onCopyLink,
     this.onViewOriginal,

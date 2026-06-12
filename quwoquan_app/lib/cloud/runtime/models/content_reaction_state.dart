@@ -7,22 +7,18 @@ class ContentReactionState {
     required this.postId,
     required this.userId,
     required this.liked,
-    required this.favorited,
     this.shared = false,
     this.reported = false,
     this.likedAt,
-    this.favoritedAt,
     this.updatedAt,
   });
 
   final String postId;
   final String userId;
   final bool liked;
-  final bool favorited;
   final bool shared;
   final bool reported;
   final DateTime? likedAt;
-  final DateTime? favoritedAt;
   final DateTime? updatedAt;
 
   factory ContentReactionState.fromMap(Map<String, dynamic> m) {
@@ -33,11 +29,9 @@ class ContentReactionState {
       postId: (m['postId'] ?? '').toString(),
       userId: (m['userId'] ?? m['profileSubjectId'] ?? '').toString(),
       liked: m['liked'] == true,
-      favorited: m['favorited'] == true,
       shared: m['shared'] == true,
       reported: m['reported'] == true,
       likedAt: parseTs(m['likedAt']),
-      favoritedAt: parseTs(m['favoritedAt']),
       updatedAt: parseTs(m['updatedAt']),
     );
   }
@@ -50,11 +44,9 @@ class ContentReactionState {
           postId == other.postId &&
           userId == other.userId &&
           liked == other.liked &&
-          favorited == other.favorited &&
           shared == other.shared &&
           reported == other.reported &&
           likedAt == other.likedAt &&
-          favoritedAt == other.favoritedAt &&
           updatedAt == other.updatedAt;
 
   @override
@@ -62,11 +54,9 @@ class ContentReactionState {
     postId,
     userId,
     liked,
-    favorited,
     shared,
     reported,
     likedAt,
-    favoritedAt,
     updatedAt,
   );
 }

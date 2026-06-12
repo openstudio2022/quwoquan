@@ -128,7 +128,7 @@ class UITextConstants {
   static const String webPcSearchHintFeatured = '搜索精品作品、视频、图文';
   static const String webPcSearchHintCreate = '搜索素材、草稿、发布模板';
   static const String webPcSearchHintMessages = '搜索联系人、群聊、消息';
-  static const String webPcSearchHintProfile = '搜索我的内容、收藏、互动';
+  static const String webPcSearchHintProfile = '搜索我的内容、足迹、互动';
   static const String webPcWelcomeLogin = '登录';
   static const String webPcWelcomePublish = '发布作品';
   static const String webPcWelcomeHeadline = '以兴趣为半径，画出我们的交集。';
@@ -317,13 +317,13 @@ class UITextConstants {
   static const String loginSendOtp = '获取验证码';
   static const String loginPhoneSubmit = '手机号登录';
   static const String loginLater = '稍后登录';
-  static const String loginLaterHint = '稍后也可以在「我的」页面登录，同步作品、收藏和消息。';
+  static const String loginLaterHint = '稍后也可以在「我的」页面登录，同步作品、足迹和消息。';
   static const String loginContinueAsGuest = loginLater;
   static const String loginTitleFirstRun = '登录后，趣我圈更懂你的热爱';
   static const String loginTitleReturn = '欢迎回来，登录后继续同步';
   static const String loginTitleActionRequired = '登录后继续使用';
-  static const String loginSubtitleFirstRun = '作品、收藏、赞过、消息与分身资料会跟随账号保存。';
-  static const String loginSubtitleReturn = '你可以直接浏览，登录后继续同步点赞、收藏、关注和创作记录。';
+  static const String loginSubtitleFirstRun = '作品、足迹、赞过、消息与分身资料会跟随账号保存。';
+  static const String loginSubtitleReturn = '你可以直接浏览，登录后继续同步点赞、关注和创作记录。';
   static const String loginSubtitleActionRequired = '该操作需要账号身份，用于保存你的记录和权限。';
   static const String loginRememberedMethodTitle = '继续上次登录方式';
   static const String loginRememberedMethodPhoneOtp = '上次使用手机号验证码登录';
@@ -364,7 +364,6 @@ class UITextConstants {
   static const String authGateTitleSendMessage = '登录后发送消息';
   static const String authGateTitleComment = '登录后继续评论';
   static const String authGateTitleLike = '登录后继续点赞';
-  static const String authGateTitleFavorite = '登录后同步收藏';
   static const String authGateTitleFollow = '登录后继续关注';
   static const String authGateTitleGreet = '登录后发送打招呼';
   static const String authGateTitleFollowingFeed = '登录后查看关注';
@@ -387,7 +386,6 @@ class UITextConstants {
   static const String authGatePromptSendMessage = '登录后即可发送消息';
   static const String authGatePromptComment = '登录后即可评论，评论会按账号发布并沉淀到对象页';
   static const String authGatePromptLike = '登录后即可点赞';
-  static const String authGatePromptFavorite = '登录后即可收藏';
   static const String authGatePromptFollow = '登录后即可关注';
   static const String authGatePromptGreet = '登录后即可发起打招呼';
   static const String authGatePromptFollowingFeed = '登录后查看你关注的人、圈子和地点动态';
@@ -411,16 +409,16 @@ class UITextConstants {
   static const String authPermissionDenied = '当前账号暂无权限';
   static const String legalLoadFailed = '页面加载失败，请重试';
   static const String profileLoginCardTitle = '登录后，可同步使用记录';
-  static const String profileLoginCardSubtitle = '作品、收藏、赞过、消息与分身资料会跟随账号保存。';
+  static const String profileLoginCardSubtitle = '作品、足迹、赞过、消息与分身资料会跟随账号保存。';
   static const String profileLoginNow = '立即登录';
   static const String profileLoggedOutDisplayName = '未登录用户';
-  static const String profileLoggedOutTimelineHint = '登录后，这里会展示你的作品、收藏与互动记录。';
-  static const String favorite = '收藏';
+  static const String profileLoggedOutTimelineHint = '登录后，这里会展示你的作品、足迹与互动记录。';
+  static const String myFootprint = '足迹';
   static const String profileLikedTab = '赞过';
   static const String logout = '退出登录';
   static const String logoutConfirmTitle = '确定退出登录吗';
   static const String logoutConfirmMessage =
-      '退出登录后，将不能发布内容和评论，无法同步点赞、关注、收藏记录等。你可以选择切换其他账号使用。';
+      '退出登录后，将不能发布内容和评论，无法同步点赞、关注、足迹记录等。你可以选择切换其他账号使用。';
   static const String logoutThinkAgain = '我再想想';
   static const String logoutConfirm = '确定退出';
   static const String switchAccount = '切换账号';
@@ -539,8 +537,6 @@ class UITextConstants {
   static String shareSeedMomentTitle(String displayName) => '$displayName 的点滴';
   static const String savePhoto = '保存图片';
   static const String saveVideo = '保存视频';
-  static const String savePost = '收藏';
-  static const String savedLabel = '已收藏';
   static const String unknown = '未知';
   static const String commentSent = '评论已发送';
   static const String replySent = '回复已发送';
@@ -641,7 +637,6 @@ class UITextConstants {
   // ==================== 我的主页 ====================
   static const String editProfile = '编辑资料';
   static const String settings = '设置';
-  static const String bookmarks = '收藏';
 
   // ==================== 圈子 ====================
   static const String createCircle = '创建圈子';
@@ -1143,7 +1138,6 @@ class UITextConstants {
       '我在切换更合适的处理路径，优先保证结论稳定。';
   static const String assistantProcessRecoveryReassurance =
       '中途有一部分信息需要重试，我已自动恢复并继续收敛。';
-  static const String assistantBookmarked = '已收藏';
   static const String assistantDevReplayTitle = '助理开发态回放';
   static const String assistantDevReplayOpen = '回放';
   static const String assistantDevReplayRun = '运行记录';
@@ -1645,7 +1639,7 @@ class UITextConstants {
   static const String shareTemplateMomentTitle = '分享点滴';
   static const String shareTemplateMomentSubtitle = '保留当时的语境与氛围';
   static const String shareTemplateWorkTitle = '分享作品';
-  static const String shareTemplateWorkSubtitle = '突出标题、摘要与收藏价值';
+  static const String shareTemplateWorkSubtitle = '突出标题、摘要与长期参考价值';
 
   static String contentLabelForKey(String labelKey) =>
       _contentLabelForKey(labelKey);

@@ -309,7 +309,7 @@ class _LoggedOutProfileContentPreview extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: const <Widget>[
                 _LoggedOutTabLabel(UITextConstants.creationFilterWork),
-                _LoggedOutTabLabel(UITextConstants.favorite),
+                _LoggedOutTabLabel(UITextConstants.myFootprint),
                 _LoggedOutTabLabel(UITextConstants.profileLikedTab),
               ],
             ),
@@ -331,7 +331,7 @@ class _LoggedOutStatsRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: const <Widget>[
         _LoggedOutStatItem(label: UITextConstants.creationFilterWork),
-        _LoggedOutStatItem(label: UITextConstants.favorite),
+        _LoggedOutStatItem(label: UITextConstants.myFootprint),
         _LoggedOutStatItem(label: UITextConstants.follow),
       ],
     );

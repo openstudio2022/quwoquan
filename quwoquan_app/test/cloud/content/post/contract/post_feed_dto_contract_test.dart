@@ -30,7 +30,6 @@ void main() {
       expect(dto.imageUrls, isNotEmpty);
       expect(dto.likeCount, equals(1200));
       expect(dto.commentCount, equals(45));
-      expect(dto.favoriteCount, equals(230));
       expect(dto.shareCount, equals(18));
       expect(dto.createdAt, isA<DateTime>());
       expect(dto.createdAt.year, equals(2025));
@@ -146,7 +145,6 @@ void main() {
         expect(dto.displayName, equals('Server Author'));
         expect(dto.likeCount, equals(200));
         expect(dto.commentCount, equals(20));
-        expect(dto.favoriteCount, equals(5));
         expect(dto.createdAt.year, equals(2025));
         expect(dto.createdAt.month, equals(5));
         expect(dto.publishedAt?.month, equals(6));
@@ -217,7 +215,6 @@ void main() {
       final dto = FeedItemDto.fromMap(minimalRaw);
       expect(dto.likeCount, equals(0));
       expect(dto.commentCount, equals(0));
-      expect(dto.favoriteCount, equals(0));
       expect(dto.shareCount, equals(0));
       expect(dto.imageUrls, isEmpty);
     });

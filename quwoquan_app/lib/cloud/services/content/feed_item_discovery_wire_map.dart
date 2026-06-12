@@ -31,7 +31,6 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       if (height != null) 'height': height,
       'likeCount': likeCount,
       'commentCount': commentCount,
-      'favoriteCount': favoriteCount,
       'shareCount': shareCount,
       'createdAt': createdIso,
       if (updatedIso != null) 'updatedAt': updatedIso,

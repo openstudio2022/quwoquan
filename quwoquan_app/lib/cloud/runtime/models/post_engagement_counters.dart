@@ -6,13 +6,11 @@ class PostEngagementCounters {
   const PostEngagementCounters({
     required this.likeCount,
     required this.commentCount,
-    this.favoriteCount = 0,
     this.shareCount = 0,
   });
 
   final int likeCount;
   final int commentCount;
-  final int favoriteCount;
   final int shareCount;
 
   factory PostEngagementCounters.fromMap(Map<String, dynamic> m) {
@@ -22,9 +20,6 @@ class PostEngagementCounters {
       likeCount: n(m['likeCount'] ?? m['likesCount'] ?? m['likes']),
       commentCount: n(
         m['commentCount'] ?? m['commentsCount'] ?? m['comments'],
-      ),
-      favoriteCount: n(
-        m['favoriteCount'] ?? m['savesCount'] ?? m['bookmarks'],
       ),
       shareCount: n(m['shareCount'] ?? m['shares']),
     );
@@ -37,10 +32,8 @@ class PostEngagementCounters {
           runtimeType == other.runtimeType &&
           likeCount == other.likeCount &&
           commentCount == other.commentCount &&
-          favoriteCount == other.favoriteCount &&
           shareCount == other.shareCount;
 
   @override
-  int get hashCode =>
-      Object.hash(likeCount, commentCount, favoriteCount, shareCount);
+  int get hashCode => Object.hash(likeCount, commentCount, shareCount);
 }

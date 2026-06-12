@@ -27,11 +27,8 @@ class ImmersiveCommentSplitSheet extends ConsumerStatefulWidget {
     this.commentContext = const MediaViewerCommentContext(),
     this.config = const CommentConfig(),
     this.likeCount = 0,
-    this.favoriteCount = 0,
     this.isLiked = false,
-    this.isFavorited = false,
     this.onLikeTap,
-    this.onFavoriteTap,
     this.onClose,
   });
 
@@ -40,11 +37,8 @@ class ImmersiveCommentSplitSheet extends ConsumerStatefulWidget {
   final MediaViewerCommentContext commentContext;
   final CommentConfig config;
   final int likeCount;
-  final int favoriteCount;
   final bool isLiked;
-  final bool isFavorited;
   final VoidCallback? onLikeTap;
-  final VoidCallback? onFavoriteTap;
   final VoidCallback? onClose;
 
   @override
@@ -283,13 +277,10 @@ class _ImmersiveCommentSplitSheetState
                   ),
                   CommentToolbar(
                     likeCount: widget.likeCount,
-                    favoriteCount: widget.favoriteCount,
                     commentCount: commentCount,
                     isLiked: widget.isLiked,
-                    isFavorited: widget.isFavorited,
                     onInputTap: _openInput,
                     onLikeTap: widget.onLikeTap,
-                    onFavoriteTap: widget.onFavoriteTap,
                     onCommentTap: _scrollToList,
                   ),
                 ],

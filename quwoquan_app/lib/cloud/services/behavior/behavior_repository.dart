@@ -24,7 +24,6 @@ enum BehaviorAction {
   click('click'),
   dwell('dwell'),
   like('like'),
-  favorite('favorite'),
   share('share'),
   dislike('dislike'),
   report('report'),

@@ -64,8 +64,11 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 	if err := json.Unmarshal(reactionRec.Body.Bytes(), &reaction); err != nil {
 		t.Fatalf("decode reaction: %v", err)
 	}
-	if reaction["liked"] != true || reaction["favorited"] != true {
+	if reaction["liked"] != true {
 		t.Fatalf("expected seeded reaction state, got %+v", reaction)
+	}
+	if _, exists := reaction["favorited"]; exists {
+		t.Fatalf("favorited 字段已随收藏概念退场，不应再出现在 reaction state: %+v", reaction)
 	}
 }
 

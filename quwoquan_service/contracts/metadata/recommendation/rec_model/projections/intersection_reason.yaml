@@ -24,7 +24,7 @@ description: |
     不得成为第二套事实来源。
     connectionSummary 是云侧实例化的「连接说明」一句话（由具体实例构成，如"北京大学、摄影把你们连在一起"），
     对象页交集卡顶部展示；缺省时端不展示该行，禁止端本地用维度词空说。
-    primaryText 是主交集结论句（蓝色，云侧产出，端只读直出，如"4位共同好友"）；
+    primaryText 是主交集结论句（蓝色，云侧产出，端只读直出，如"4位共同关注的人"）；
     secondaryText 是副交集辅助说明（灰色；缺省端不展示）。
     端禁止再用 intersectionPoints/EvidenceGroup 本地拼装主/副交集文案（G2）。
 

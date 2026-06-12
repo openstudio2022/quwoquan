@@ -24,7 +24,6 @@ type InteractionEvent struct {
 	ExplicitReasonCodes     []string  `bson:"explicitReasonCodes,omitempty" json:"explicitReasonCodes,omitempty"`
 	CopiedAnswer            bool      `bson:"copiedAnswer" json:"copiedAnswer"`
 	SharedAnswer            bool      `bson:"sharedAnswer" json:"sharedAnswer"`
-	FavoritedAnswer         bool      `bson:"favoritedAnswer" json:"favoritedAnswer"`
 	RegeneratedAnswer       bool      `bson:"regeneratedAnswer" json:"regeneratedAnswer"`
 	StyleAdjusted           bool      `bson:"styleAdjusted" json:"styleAdjusted"`
 	ModelSwitched           bool      `bson:"modelSwitched" json:"modelSwitched"`

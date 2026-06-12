@@ -59,7 +59,6 @@ class MockContentRepository implements ContentRepository {
 
   Exception? throwOnLike;
   Exception? throwOnCreateComment;
-  Exception? throwOnFavorite;
   Exception? throwOnShare;
 
   /// 软删除墓碑：被 [deletePost] 删除的帖 id。删除后 [getPost] 抛「不存在」，
@@ -74,7 +73,6 @@ class MockContentRepository implements ContentRepository {
 
   Map<String, dynamic> reactionStateStub = {
     'liked': false,
-    'favorited': false,
     'shared': false,
   };
   List<CommentDto> commentsStub = _contractSeedComments();
@@ -130,7 +128,6 @@ class MockContentRepository implements ContentRepository {
       'mediaUrls': <String>[],
       'likeCount': 0,
       'commentCount': 0,
-      'favoriteCount': 0,
       'shareCount': 0,
       'publishedAt': DateTime.now().toUtc().toIso8601String(),
       'createdAt': DateTime.now().toUtc().toIso8601String(),
@@ -245,14 +242,6 @@ class MockContentRepository implements ContentRepository {
     likePostCallCount++;
     if (throwOnLike != null) throw throwOnLike!;
   }
-
-  @override
-  Future<void> favoritePost({required String postId}) async {
-    if (throwOnFavorite != null) throw throwOnFavorite!;
-  }
-
-  @override
-  Future<void> unfavoritePost({required String postId}) async {}
 
   @override
   Future<bool> sharePost({required String postId}) async {

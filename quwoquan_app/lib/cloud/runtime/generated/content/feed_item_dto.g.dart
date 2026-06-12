@@ -22,7 +22,6 @@ class FeedItemDto {
   final int? height;
   final int likeCount;
   final int commentCount;
-  final int favoriteCount;
   final int shareCount;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -68,7 +67,6 @@ class FeedItemDto {
     this.height,
     required this.likeCount,
     required this.commentCount,
-    required this.favoriteCount,
     required this.shareCount,
     required this.createdAt,
     this.updatedAt,
@@ -116,7 +114,6 @@ class FeedItemDto {
       height: (m['height'] as num?)?.toInt() ?? (m['imageHeight'] as num?)?.toInt() ?? (m['image_height'] as num?)?.toInt() ?? (m['h'] as num?)?.toInt() ?? null,
       likeCount: (m['likeCount'] as num?)?.toInt() ?? (m['likesCount'] as num?)?.toInt() ?? (m['likes'] as num?)?.toInt() ?? (m['like_count'] as num?)?.toInt() ?? 0,
       commentCount: (m['commentCount'] as num?)?.toInt() ?? (m['commentsCount'] as num?)?.toInt() ?? (m['comments'] as num?)?.toInt() ?? (m['comment_count'] as num?)?.toInt() ?? 0,
-      favoriteCount: (m['favoriteCount'] as num?)?.toInt() ?? (m['savesCount'] as num?)?.toInt() ?? (m['bookmarks'] as num?)?.toInt() ?? (m['favorite_count'] as num?)?.toInt() ?? 0,
       shareCount: (m['shareCount'] as num?)?.toInt() ?? (m['shares'] as num?)?.toInt() ?? (m['share_count'] as num?)?.toInt() ?? 0,
       createdAt: _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
       updatedAt: _parseDateTime(m['updatedAt']) ?? _parseDateTime(m['updated_at']) ?? null,
@@ -165,7 +162,6 @@ class FeedItemDto {
       'height': height,
       'likeCount': likeCount,
       'commentCount': commentCount,
-      'favoriteCount': favoriteCount,
       'shareCount': shareCount,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
@@ -213,7 +209,6 @@ class FeedItemDto {
     int? height,
     int? likeCount,
     int? commentCount,
-    int? favoriteCount,
     int? shareCount,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -259,7 +254,6 @@ class FeedItemDto {
       height: height ?? this.height,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
-      favoriteCount: favoriteCount ?? this.favoriteCount,
       shareCount: shareCount ?? this.shareCount,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

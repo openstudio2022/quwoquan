@@ -115,22 +115,6 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
     });
   }
 
-  void _toggleFavorite() {
-    final interaction = ref.read(postInteractionStateProvider);
-    final isSaved = interaction.isSaved(widget.postId);
-    final bookmarkCount = interaction.bookmarkCountFor(widget.postId);
-    runWhenLoggedIn(ref, context, AuthGateReason.favorite, () {
-      syncPostSaveIntent(
-        ref,
-        postId: widget.postId,
-        isSaved: !isSaved,
-        bookmarkCount: isSaved
-            ? (bookmarkCount - 1).clamp(0, 1 << 31).toInt()
-            : bookmarkCount + 1,
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final commentState = ref.watch(commentProviderFamily(widget.postId));
@@ -185,16 +169,13 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
           ),
           CommentToolbar(
             likeCount: interaction.likeCountFor(widget.postId),
-            favoriteCount: interaction.bookmarkCountFor(widget.postId),
             commentCount: interaction.commentCountFor(
               widget.postId,
               fallback: commentState.comments.length,
             ),
             isLiked: interaction.isLiked(widget.postId),
-            isFavorited: interaction.isSaved(widget.postId),
             onInputTap: _openInput,
             onLikeTap: _toggleLike,
-            onFavoriteTap: _toggleFavorite,
             onCommentTap: _scrollToList,
           ),
         ],

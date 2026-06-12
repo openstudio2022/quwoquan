@@ -31,7 +31,6 @@ fields:
   - { name: durationMs,     type: int,    description: 视频时长（毫秒） }
   - { name: likeCount,      type: int }
   - { name: commentCount,   type: int }
-  - { name: favoriteCount,  type: int }
   - { name: shareCount,     type: int }
   - { name: publishedAt,    type: timestamp }
   - { name: createdAt,      type: timestamp, description: "内容首次进入系统时间（仅插入时写一次，永不变）" }
@@ -175,13 +174,6 @@ client_projection:
       nullable: false
       source: commentCount
       aliases: [commentCount, commentsCount, comments, comment_count]
-      default: "0"
-
-    - name: favoriteCount
-      dart_type: int
-      nullable: false
-      source: favoriteCount
-      aliases: [favoriteCount, savesCount, bookmarks, favorite_count]
       default: "0"
 
     - name: shareCount

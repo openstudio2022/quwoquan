@@ -335,10 +335,6 @@ func (p *RecommendFeatureProjector) onContentReacted(ctx context.Context, event 
 		inc["userFeatures.totalLikes"] = 1
 		p.injectSignal(ctx, userID, contentID, "like", tags)
 	}
-	if boolVal(event.Payload, "favorited") {
-		inc["userFeatures.totalFavorites"] = 1
-		p.injectSignal(ctx, userID, contentID, "favorite", tags)
-	}
 	if boolVal(event.Payload, "shared") {
 		inc["userFeatures.totalShares"] = 1
 		p.injectSignal(ctx, userID, contentID, "share", tags)
@@ -446,7 +442,6 @@ type UserFeatures struct {
 	AuthorInteraction        map[string]int     `bson:"authorInteraction"`
 	TotalEvents              int                `bson:"totalEvents"`
 	TotalLikes               int                `bson:"totalLikes"`
-	TotalFavorites           int                `bson:"totalFavorites"`
 	TotalShares              int                `bson:"totalShares"`
 	TopicAffinities          map[string]float64 `bson:"topicAffinities"`
 	AudienceAffinities       map[string]float64 `bson:"audienceAffinities"`
@@ -474,7 +469,6 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 			AuthorInteraction        map[string]int     `bson:"authorInteraction"`
 			TotalEvents              int                `bson:"totalEvents"`
 			TotalLikes               int                `bson:"totalLikes"`
-			TotalFavorites           int                `bson:"totalFavorites"`
 			TotalShares              int                `bson:"totalShares"`
 			TopicAffinities          map[string]float64 `bson:"topicAffinities"`
 			AudienceAffinities       map[string]float64 `bson:"audienceAffinities"`
@@ -506,7 +500,6 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 		AuthorInteraction:        doc.UserFeatures.AuthorInteraction,
 		TotalEvents:              doc.UserFeatures.TotalEvents,
 		TotalLikes:               doc.UserFeatures.TotalLikes,
-		TotalFavorites:           doc.UserFeatures.TotalFavorites,
 		TotalShares:              doc.UserFeatures.TotalShares,
 		TopicAffinities:          doc.UserFeatures.TopicAffinities,
 		AudienceAffinities:       doc.UserFeatures.AudienceAffinities,
@@ -545,7 +538,7 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 
 	var engagementRate float64
 	if raw.TotalEvents > 0 {
-		engagementRate = float64(raw.TotalLikes+raw.TotalFavorites+raw.TotalShares) / float64(raw.TotalEvents)
+		engagementRate = float64(raw.TotalLikes+raw.TotalShares) / float64(raw.TotalEvents)
 	}
 
 	depthDist := make(map[string]int, len(raw.DepthDistribution))
@@ -565,12 +558,10 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 		TagAffinities:            tagAffinities,
 		AuthorAffinities:         authorAffinities,
 		TotalLikes:               raw.TotalLikes,
-		TotalFavorites:           raw.TotalFavorites,
 		TotalShares:              raw.TotalShares,
 		TotalEvents:              raw.TotalEvents,
 		EngagementRate:           engagementRate,
 		LikeLevel:                rtrec.MapCountToLevel(raw.TotalLikes),
-		FavoriteLevel:            rtrec.MapCountToLevel(raw.TotalFavorites),
 		ShareLevel:               rtrec.MapCountToLevel(raw.TotalShares),
 		EventLevel:               rtrec.MapCountToLevel(raw.TotalEvents),
 		TopicAffinities:          raw.TopicAffinities,

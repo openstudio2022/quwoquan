@@ -92,9 +92,9 @@ func TestLikePost_GuestDeviceDimensionIndependentAndIdempotent(t *testing.T) {
 	}
 
 	// 读回各 actor 的设备态：A 已赞，C 未赞，账号 U 已赞。
-	likedA, _, _ := svc.GetReactionState(postID, "", "device_A")
-	likedC, _, _ := svc.GetReactionState(postID, "", "device_C")
-	likedU, _, _ := svc.GetReactionState(postID, "user_777", "")
+	likedA, _ := svc.GetReactionState(postID, "", "device_A")
+	likedC, _ := svc.GetReactionState(postID, "", "device_C")
+	likedU, _ := svc.GetReactionState(postID, "user_777", "")
 	if !likedA {
 		t.Fatalf("device A 读回应已点赞")
 	}
@@ -169,10 +169,10 @@ func TestSharePost_GuestDeviceDimensionIndependent(t *testing.T) {
 	}
 
 	// 设备 A 读回 shared=true，设备 C 读回 shared=false。
-	if _, _, sharedA := svc.GetReactionState(postID, "", "device_A"); !sharedA {
+	if _, sharedA := svc.GetReactionState(postID, "", "device_A"); !sharedA {
 		t.Fatalf("device A 读回应已分享")
 	}
-	if _, _, sharedC := svc.GetReactionState(postID, "", "device_C"); sharedC {
+	if _, sharedC := svc.GetReactionState(postID, "", "device_C"); sharedC {
 		t.Fatalf("device C 未分享，读回不应为 true")
 	}
 }

@@ -60,7 +60,6 @@ class ContentSurfaceViewMapper {
       stats: ContentStats(
         like: dto.likeCount,
         comment: dto.commentCount,
-        favorite: dto.favoriteCount,
         share: dto.shareCount,
       ),
       createdAt: dto.createdAt,

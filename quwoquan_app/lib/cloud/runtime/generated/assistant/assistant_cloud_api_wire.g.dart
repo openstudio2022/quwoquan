@@ -1146,7 +1146,6 @@ class InteractionEvent {
     this.explicitReasonCodes = const [],
     required this.copiedAnswer,
     required this.sharedAnswer,
-    required this.favoritedAnswer,
     required this.regeneratedAnswer,
     required this.styleAdjusted,
     required this.modelSwitched,
@@ -1176,7 +1175,6 @@ class InteractionEvent {
   final List<String>? explicitReasonCodes;
   final bool copiedAnswer;
   final bool sharedAnswer;
-  final bool favoritedAnswer;
   final bool regeneratedAnswer;
   final bool styleAdjusted;
   final bool modelSwitched;
@@ -1211,7 +1209,6 @@ class InteractionEvent {
             .toList(growable: false),
       copiedAnswer: json['copiedAnswer'] == true,
       sharedAnswer: json['sharedAnswer'] == true,
-      favoritedAnswer: json['favoritedAnswer'] == true,
       regeneratedAnswer: json['regeneratedAnswer'] == true,
       styleAdjusted: json['styleAdjusted'] == true,
       modelSwitched: json['modelSwitched'] == true,
@@ -1243,7 +1240,6 @@ class InteractionEvent {
         'explicitReasonCodes': explicitReasonCodes,
         'copiedAnswer': copiedAnswer,
         'sharedAnswer': sharedAnswer,
-        'favoritedAnswer': favoritedAnswer,
         'regeneratedAnswer': regeneratedAnswer,
         'styleAdjusted': styleAdjusted,
         'modelSwitched': modelSwitched,

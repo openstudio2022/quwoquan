@@ -81,7 +81,6 @@ type EngagementMetrics struct {
 
 	// Interactions
 	LikeTotal    atomic.Int64
-	FavTotal     atomic.Int64
 	ShareTotal   atomic.Int64
 	CommentTotal atomic.Int64
 
@@ -98,10 +97,6 @@ type EngagementMetrics struct {
 	ShareVideo   atomic.Int64
 	ShareArticle atomic.Int64
 	ShareMoment  atomic.Int64
-	FavPhoto     atomic.Int64
-	FavVideo     atomic.Int64
-	FavArticle   atomic.Int64
-	FavMoment    atomic.Int64
 	CommentPhoto   atomic.Int64
 	CommentVideo   atomic.Int64
 	CommentArticle atomic.Int64
@@ -171,10 +166,6 @@ func RecordBehaviorMetric(signal BehaviorSignal) {
 		GlobalEngagementMetrics.LikeTotal.Add(1)
 		recordLikeByType(signal.Tags)
 		engInteractionTotal.WithLabelValues("like").Inc()
-	case "favorite":
-		GlobalEngagementMetrics.FavTotal.Add(1)
-		recordFavoriteByType(signal.Tags)
-		engInteractionTotal.WithLabelValues("favorite").Inc()
 	case "share":
 		GlobalEngagementMetrics.ShareTotal.Add(1)
 		recordShareByType(signal.Tags)
@@ -203,7 +194,7 @@ func RecordBehaviorMetric(signal BehaviorSignal) {
 		signal.ReferralSource == "circle_post"
 	if isSocial {
 		GlobalEngagementMetrics.SocialImpressions.Add(1)
-		if signal.Action == "like" || signal.Action == "favorite" ||
+		if signal.Action == "like" ||
 			signal.Action == "share" || signal.Action == "comment" ||
 			signal.Action == "follow" {
 			GlobalEngagementMetrics.SocialPositiveActions.Add(1)
@@ -299,19 +290,6 @@ func recordShareByType(tags []string) {
 	}
 }
 
-func recordFavoriteByType(tags []string) {
-	switch inferContentTypeFromTags(tags) {
-	case "video":
-		GlobalEngagementMetrics.FavVideo.Add(1)
-	case "article":
-		GlobalEngagementMetrics.FavArticle.Add(1)
-	case "moment":
-		GlobalEngagementMetrics.FavMoment.Add(1)
-	default:
-		GlobalEngagementMetrics.FavPhoto.Add(1)
-	}
-}
-
 func recordCommentByType(tags []string) {
 	switch inferContentTypeFromTags(tags) {
 	case "video":
@@ -378,7 +356,6 @@ func SnapshotEngagementMetrics() map[string]int64 {
 		GlobalEngagementMetrics.DeepEngageMoment.Load()
 
 	interactionTotal := GlobalEngagementMetrics.LikeTotal.Load() +
-		GlobalEngagementMetrics.FavTotal.Load() +
 		GlobalEngagementMetrics.ShareTotal.Load() +
 		GlobalEngagementMetrics.CommentTotal.Load()
 
@@ -407,10 +384,6 @@ func SnapshotEngagementMetrics() map[string]int64 {
 		"share_video":               GlobalEngagementMetrics.ShareVideo.Load(),
 		"share_article":             GlobalEngagementMetrics.ShareArticle.Load(),
 		"share_moment":              GlobalEngagementMetrics.ShareMoment.Load(),
-		"fav_photo":                 GlobalEngagementMetrics.FavPhoto.Load(),
-		"fav_video":                 GlobalEngagementMetrics.FavVideo.Load(),
-		"fav_article":               GlobalEngagementMetrics.FavArticle.Load(),
-		"fav_moment":                GlobalEngagementMetrics.FavMoment.Load(),
 		"comment_photo":             GlobalEngagementMetrics.CommentPhoto.Load(),
 		"comment_video":             GlobalEngagementMetrics.CommentVideo.Load(),
 		"comment_article":           GlobalEngagementMetrics.CommentArticle.Load(),

@@ -61,7 +61,6 @@
           "height": 960,
           "likeCount": 80,
           "commentCount": 6,
-          "favoriteCount": 26,
           "shareCount": 3,
           "createdAt": "2026-05-01T00:00:00Z",
           "authorDisplayNameSnapshot": "契约摄影师",
@@ -132,7 +131,6 @@
           "height": 720,
           "likeCount": 97,
           "commentCount": 7,
-          "favoriteCount": 32,
           "shareCount": 4,
           "createdAt": "2026-05-01T01:00:00Z",
           "authorDisplayNameSnapshot": "契约摄影师",
@@ -201,7 +199,6 @@
           "height": 720,
           "likeCount": 131,
           "commentCount": 9,
-          "favoriteCount": 43,
           "shareCount": 6,
           "createdAt": "2026-05-01T03:00:00Z",
           "authorDisplayNameSnapshot": "契约旅行家",
@@ -312,7 +309,6 @@
           "height": 720,
           "likeCount": 165,
           "commentCount": 11,
-          "favoriteCount": 55,
           "shareCount": 4,
           "createdAt": "2026-05-01T05:00:00Z",
           "updatedAt": "2026-05-03T05:00:00Z",
@@ -348,11 +344,11 @@
           "locationName": "杭州",
           "articleMarkdown": "---\ntitle: 杭州一日游：从西湖晨光到河坊街夜色\nsummary: 西湖、灵隐寺与河坊街串成的一日步行线路。\ntemplate: journal\nfontPreset: clean\ncoverImage: asset://fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\n---\n\n# 杭州一日游：从西湖晨光到河坊街夜色\n\n清晨从@[断桥残雪](entity:homepage/homepage_sight_west_lake)出发，沿白堤慢慢走到@[曲院风荷](entity:homepage/homepage_sight_west_lake)，把湖面最安静的一段留给第一杯咖啡。\n\n:::figure id=\"fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\" layout=\"fullWidth\" caption=\"西湖晨光适合作为一日游封面\"\nasset://fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\n:::\n\n## 午前：寺院与山脚\n\n10 点前抵达@[灵隐寺](entity:homepage/homepage_sight_west_lake)，避开拥挤队列。午餐建议回到湖滨，选择步行可达的小店，不把时间浪费在跨城移动上。\n\n## 傍晚：老街收尾\n\n日落后到@[河坊街](entity:homepage/homepage_restaurant_night_market)，用小吃和夜色结束路线。Tip：这条线路适合轻装，雨天把灵隐寺和河坊街顺序对调。\n",
           "articleMarkdownVersion": "qwq-rich-md/1",
-          "articleMarkdownDigest": "sha256:3881015eef939f99c698c71b5901e02714a17bf6f1b42e5da0ce46be57726507",
+          "articleMarkdownDigest": "sha256:101b5125705d313e0373f3f59c736eccf493b89677a09c65e538391c808e4980",
           "articleAssetManifest": {
             "schemaVersion": 1,
             "articleMarkdownVersion": "qwq-rich-md/1",
-            "articleMarkdownDigest": "sha256:3881015eef939f99c698c71b5901e02714a17bf6f1b42e5da0ce46be57726507",
+            "articleMarkdownDigest": "sha256:101b5125705d313e0373f3f59c736eccf493b89677a09c65e538391c808e4980",
             "assets": [
               {
                 "assetId": "fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png",
@@ -451,7 +447,6 @@
           "height": 720,
           "likeCount": 199,
           "commentCount": 13,
-          "favoriteCount": 66,
           "shareCount": 6,
           "createdAt": "2026-05-01T07:00:00Z",
           "authorDisplayNameSnapshot": "契约当前用户",
@@ -518,7 +513,6 @@
           "height": 720,
           "likeCount": 48,
           "commentCount": 4,
-          "favoriteCount": 16,
           "shareCount": 2,
           "createdAt": "2026-05-12T16:00:00Z",
           "authorDisplayNameSnapshot": "契约摄影师",
@@ -585,7 +579,6 @@
           "height": 720,
           "likeCount": 48,
           "commentCount": 4,
-          "favoriteCount": 16,
           "shareCount": 2,
           "createdAt": "2026-05-14T00:00:00Z",
           "authorDisplayNameSnapshot": "契约旅行家",
@@ -652,7 +645,6 @@
           "height": 720,
           "likeCount": 48,
           "commentCount": 4,
-          "favoriteCount": 16,
           "shareCount": 2,
           "createdAt": "2026-05-15T08:00:00Z",
           "authorDisplayNameSnapshot": "契约剪辑师",
@@ -719,7 +711,6 @@
           "height": 720,
           "likeCount": 48,
           "commentCount": 4,
-          "favoriteCount": 16,
           "shareCount": 2,
           "createdAt": "2026-05-19T08:00:00Z",
           "authorDisplayNameSnapshot": "契约当前用户",
@@ -786,7 +777,6 @@
           "height": 720,
           "likeCount": 48,
           "commentCount": 4,
-          "favoriteCount": 16,
           "shareCount": 2,
           "createdAt": "2026-05-24T16:00:00Z",
           "authorDisplayNameSnapshot": "契约户外作者",
@@ -853,7 +843,6 @@
           "height": 720,
           "likeCount": 48,
           "commentCount": 4,
-          "favoriteCount": 16,
           "shareCount": 2,
           "createdAt": "2026-05-26T00:00:00Z",
           "authorDisplayNameSnapshot": "契约科技作者",
@@ -880,44 +869,37 @@
         {
           "postId": "fixture_photo_001",
           "userId": "fixture_user_current",
-          "liked": true,
-          "favorited": true
+          "liked": true
         },
         {
           "postId": "fixture_photo_002",
           "userId": "fixture_user_friend",
-          "liked": true,
-          "favorited": false
+          "liked": true
         },
         {
           "postId": "fixture_video_001",
           "userId": "fixture_user_friend",
-          "liked": true,
-          "favorited": true
+          "liked": true
         },
         {
           "postId": "fixture_article_001",
           "userId": "fixture_user_friend",
-          "liked": true,
-          "favorited": false
+          "liked": true
         },
         {
           "postId": "fixture_moment_001",
           "userId": "fixture_user_friend",
-          "liked": true,
-          "favorited": false
+          "liked": true
         },
         {
           "postId": "fixture_post_photography_001",
           "userId": "fixture_user_current",
-          "liked": true,
-          "favorited": false
+          "liked": true
         },
         {
           "postId": "fixture_post_travel_001",
           "userId": "fixture_user_current",
-          "liked": true,
-          "favorited": true
+          "liked": true
         }
       ],
       "comments": [
@@ -1009,8 +991,8 @@
           "intersectionClass": "fact",
           "label": "共同关注",
           "displayName": "林清越",
-          "displayText": "4位共同好友",
-          "primaryText": "4位共同好友",
+          "displayText": "4位共同关注的人",
+          "primaryText": "4位共同关注的人",
           "secondaryText": "都在黄金投资圈",
           "weightTier": "heavy",
           "objectKind": "person",
@@ -1023,7 +1005,8 @@
           "source": "relationship",
           "confidenceLabel": "",
           "modelReasonBucket": "",
-          "freshAgoHours": 3
+          "freshAgoHours": 3,
+          "sourceRef": "sharedFollowees"
         },
         {
           "intersectionId": "ix_rel_2",
@@ -1036,7 +1019,7 @@
           "secondaryText": "",
           "weightTier": "light",
           "objectKind": "person",
-          "relationKind": "",
+          "relationKind": "mutualFollow",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
           "sharedCount": 2,
           "strength": 0.7,
@@ -1045,7 +1028,8 @@
           "source": "relationship",
           "confidenceLabel": "",
           "modelReasonBucket": "",
-          "freshAgoHours": 96
+          "freshAgoHours": 96,
+          "sourceRef": "sharedFollowees"
         },
         {
           "intersectionId": "ix_id_1",
@@ -1067,16 +1051,17 @@
           "source": "identity",
           "confidenceLabel": "",
           "modelReasonBucket": "",
-          "freshAgoHours": 10
+          "freshAgoHours": 10,
+          "sourceRef": "sameSchool"
         },
         {
           "intersectionId": "ix_ct_1",
           "dimension": "content",
           "intersectionClass": "fact",
-          "label": "共看内容",
+          "label": "共同讨论",
           "displayName": "黄金投资圈",
-          "displayText": "8人和你共看黄金内容",
-          "primaryText": "8人和你共看黄金内容",
+          "displayText": "8人和你讨论过黄金内容",
+          "primaryText": "8人和你讨论过黄金内容",
           "secondaryText": "",
           "weightTier": "light",
           "objectKind": "circle",
@@ -1089,7 +1074,8 @@
           "source": "content",
           "confidenceLabel": "",
           "modelReasonBucket": "",
-          "freshAgoHours": 30
+          "freshAgoHours": 30,
+          "sourceRef": "coCommented"
         },
         {
           "intersectionId": "ix_loc_1",
@@ -1097,8 +1083,8 @@
           "intersectionClass": "fact",
           "label": "同游",
           "displayName": "西湖",
-          "displayText": "5人有相同旅行足迹",
-          "primaryText": "5人有相同旅行足迹",
+          "displayText": "5人去过相同的地方",
+          "primaryText": "5人去过相同的地方",
           "secondaryText": "上周你也来过",
           "weightTier": "heavy",
           "objectKind": "place",
@@ -1111,7 +1097,8 @@
           "source": "location",
           "confidenceLabel": "",
           "modelReasonBucket": "",
-          "freshAgoHours": 2
+          "freshAgoHours": 2,
+          "sourceRef": "coVisitedEntity"
         },
         {
           "intersectionId": "ix_int_1",
@@ -1133,7 +1120,8 @@
           "source": "interest",
           "confidenceLabel": "推荐",
           "modelReasonBucket": "friend_suggestion",
-          "freshAgoHours": 20
+          "freshAgoHours": 20,
+          "sourceRef": ""
         }
       ],
       "channelReasons": {
@@ -1144,8 +1132,8 @@
             "intersectionClass": "fact",
             "label": "共同关注",
             "displayName": "林清越",
-            "displayText": "4位共同好友",
-            "primaryText": "4位共同好友",
+            "displayText": "4位共同关注的人",
+            "primaryText": "4位共同关注的人",
             "secondaryText": "都在黄金投资圈",
             "weightTier": "heavy",
             "objectKind": "person",
@@ -1158,7 +1146,8 @@
             "source": "relationship",
             "confidenceLabel": "",
             "modelReasonBucket": "",
-            "freshAgoHours": 3
+            "freshAgoHours": 3,
+            "sourceRef": "sharedFollowees"
           },
           {
             "intersectionId": "ix_id_1",
@@ -1180,16 +1169,17 @@
             "source": "identity",
             "confidenceLabel": "",
             "modelReasonBucket": "",
-            "freshAgoHours": 10
+            "freshAgoHours": 10,
+            "sourceRef": "sameSchool"
           },
           {
             "intersectionId": "ix_ct_1",
             "dimension": "content",
             "intersectionClass": "fact",
-            "label": "共看内容",
+            "label": "共同讨论",
             "displayName": "黄金投资圈",
-            "displayText": "8人和你共看黄金内容",
-            "primaryText": "8人和你共看黄金内容",
+            "displayText": "8人和你讨论过黄金内容",
+            "primaryText": "8人和你讨论过黄金内容",
             "secondaryText": "",
             "weightTier": "light",
             "objectKind": "circle",
@@ -1202,7 +1192,8 @@
             "source": "content",
             "confidenceLabel": "",
             "modelReasonBucket": "",
-            "freshAgoHours": 30
+            "freshAgoHours": 30,
+            "sourceRef": "coCommented"
           },
           {
             "intersectionId": "ix_int_1",
@@ -1224,7 +1215,8 @@
             "source": "interest",
             "confidenceLabel": "推荐",
             "modelReasonBucket": "friend_suggestion",
-            "freshAgoHours": 20
+            "freshAgoHours": 20,
+            "sourceRef": ""
           }
         ],
         "campus": [
@@ -1248,7 +1240,8 @@
             "source": "identity",
             "confidenceLabel": "",
             "modelReasonBucket": "",
-            "freshAgoHours": 5
+            "freshAgoHours": 5,
+            "sourceRef": "sameMajor"
           },
           {
             "intersectionId": "ix_campus_2",
@@ -1270,7 +1263,8 @@
             "source": "interest",
             "confidenceLabel": "推荐",
             "modelReasonBucket": "circle_discovery",
-            "freshAgoHours": 40
+            "freshAgoHours": 40,
+            "sourceRef": ""
           }
         ],
         "travel": [
@@ -1294,7 +1288,8 @@
             "source": "location",
             "confidenceLabel": "",
             "modelReasonBucket": "",
-            "freshAgoHours": 8
+            "freshAgoHours": 8,
+            "sourceRef": "coVisitedEntity"
           },
           {
             "intersectionId": "ix_travel_2",
@@ -1316,7 +1311,8 @@
             "source": "interest",
             "confidenceLabel": "推荐",
             "modelReasonBucket": "travel_affinity",
-            "freshAgoHours": 50
+            "freshAgoHours": 50,
+            "sourceRef": ""
           }
         ]
       },
@@ -1336,12 +1332,12 @@
             },
             {
               "helpType": "decision",
-              "action": "favorite",
+              "action": "followedEntityViaMyContent",
               "intersectionDimension": "content",
               "tagRef": "",
               "source": "post",
               "count": 12,
-              "displayText": "12人收藏了我的内容"
+              "displayText": "12人因为我的内容开始关注相关对象"
             },
             {
               "helpType": "relationship",
@@ -1369,12 +1365,12 @@
             },
             {
               "helpType": "decision",
-              "action": "favorite",
+              "action": "followedEntityViaMyContent",
               "intersectionDimension": "content",
               "tagRef": "",
               "source": "post",
               "count": 10,
-              "displayText": "10人收藏了TA的内容"
+              "displayText": "10人因为TA的内容开始关注相关对象"
             },
             {
               "helpType": "relationship",
@@ -1450,7 +1446,7 @@
       ],
       "uiExpectations": {
         "textFragments": [
-          "4位共同好友",
+          "4位共同关注的人",
           "23人加入相关圈子"
         ]
       },

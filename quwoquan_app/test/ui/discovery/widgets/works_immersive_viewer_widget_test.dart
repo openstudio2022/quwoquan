@@ -411,7 +411,6 @@ PhotoPostDto _photoPost({
     height: height,
     likeCount: 0,
     commentCount: 0,
-    favoriteCount: 0,
     shareCount: 0,
     createdAt: DateTime.now(),
   );
@@ -433,7 +432,6 @@ VideoPostDto _videoPost({int? width, int? height}) {
     height: height,
     likeCount: 0,
     commentCount: 0,
-    favoriteCount: 0,
     shareCount: 0,
     createdAt: DateTime.now(),
   );
@@ -456,7 +454,6 @@ ArticlePostDto _articlePost() {
     articleFontPreset: 'clean',
     likeCount: 0,
     commentCount: 0,
-    favoriteCount: 0,
     shareCount: 0,
     createdAt: DateTime.now(),
   );
@@ -562,7 +559,6 @@ MicroPostDto _textMoment({List<IntersectionReason>? intersectionReasons}) {
     imageUrls: const <String>[],
     likeCount: 0,
     commentCount: 0,
-    favoriteCount: 0,
     shareCount: 0,
     createdAt: DateTime.now(),
     intersectionReasons: intersectionReasons,

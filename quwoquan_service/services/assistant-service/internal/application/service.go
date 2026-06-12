@@ -438,7 +438,6 @@ func interactionEventPayload(event assistant.InteractionEvent, priority string) 
 		"createdAt":           event.CreatedAt.Format(time.RFC3339),
 		"copiedAnswer":        event.CopiedAnswer,
 		"sharedAnswer":        event.SharedAnswer,
-		"favoritedAnswer":     event.FavoritedAnswer,
 		"regeneratedAnswer":   event.RegeneratedAnswer,
 		"styleAdjusted":       event.StyleAdjusted,
 		"modelSwitched":       event.ModelSwitched,
@@ -507,7 +506,7 @@ func normalizeInteractionEventType(event assistant.InteractionEvent) string {
 	if normalizeFeedbackType(event) != "" {
 		return "feedback"
 	}
-	if event.ReferenceOpened || event.CopiedAnswer || event.SharedAnswer || event.FavoritedAnswer || event.RegeneratedAnswer || event.StyleAdjusted || event.ModelSwitched {
+	if event.ReferenceOpened || event.CopiedAnswer || event.SharedAnswer || event.RegeneratedAnswer || event.StyleAdjusted || event.ModelSwitched {
 		return "action_click"
 	}
 	return "response"
@@ -563,7 +562,7 @@ func classifyInteractionPriority(event assistant.InteractionEvent) string {
 	if event.FeedbackType == "thumbs_down" || event.FeedbackType == "text" || containsAny(event.ExplicitReasonCodes, "unsafe", "privacy") {
 		return "high"
 	}
-	if event.ReferenceOpened || event.SharedAnswer || event.CopiedAnswer || event.FavoritedAnswer || event.RegeneratedAnswer || event.ModelSwitched || event.StyleAdjusted {
+	if event.ReferenceOpened || event.SharedAnswer || event.CopiedAnswer || event.RegeneratedAnswer || event.ModelSwitched || event.StyleAdjusted {
 		return "medium"
 	}
 	return "normal"

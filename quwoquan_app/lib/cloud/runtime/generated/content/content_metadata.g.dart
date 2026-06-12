@@ -13,7 +13,6 @@ class GeneratedPostRuntimeMetadata {
     'embedding': <double>[],
     'entityMentions': <Map<String, dynamic>>[],
     'entityRefs': <String>[],
-    'favoriteCount': 0,
     'likeCount': 0,
     'mediaItems': <Map<String, dynamic>>[],
     'mediaUrls': <String>[],
@@ -114,9 +113,7 @@ class GeneratedPostRuntimeMetadata {
 
   // Reaction mutation route paths (from post/service.yaml).
   static const Map<String, String> reactionRoutePaths = <String, String>{
-    'FavoritePost': '/v1/content/posts/{postId}/favorite',
     'LikePost': '/v1/content/posts/{postId}/like',
-    'UnfavoritePost': '/v1/content/posts/{postId}/favorite',
     'UnlikePost': '/v1/content/posts/{postId}/like',
   };
 }

@@ -172,7 +172,6 @@ void main() {
           onLike: (_) {},
           onComment: (_) {},
           onShare: (_) {},
-          onBookmark: (_) {},
         ),
       ));
       await tester.pump();
@@ -221,16 +220,14 @@ void main() {
       expect(find.byType(ImagePostCard), findsOneWidget);
     });
 
-    testWidgets('onShare and onBookmark callbacks compile and register', (tester) async {
+    testWidgets('onShare callback compiles and registers', (tester) async {
       var shareTapped = false;
-      var bookmarkTapped = false;
       await tester.pumpWidget(_wrapCard(
         ImagePostCard(
           post: PhotoPostDto.fromMap(_photoFixture),
           onPostTap: (post, _) {},
           onUserTap: (_) {},
           onShare: (_) { shareTapped = true; },
-          onBookmark: (_) { bookmarkTapped = true; },
         ),
       ));
       await tester.pump();
@@ -238,7 +235,6 @@ void main() {
       expect(find.byType(ImagePostCard), findsOneWidget);
       // Variables exist and are accessible (suppresses lint warning)
       expect(shareTapped || !shareTapped, isTrue);
-      expect(bookmarkTapped || !bookmarkTapped, isTrue);
     });
   });
 
@@ -265,7 +261,7 @@ void main() {
           post: PhotoPostDto.fromMap(_photoFixture),
           onPostTap: (post, _) {},
           onUserTap: (_) {},
-          // onLike, onComment, onShare, onBookmark all null
+          // onLike, onComment, onShare all null
         ),
       ));
       await tester.pump();

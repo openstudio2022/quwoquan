@@ -198,7 +198,6 @@ void main() {
           onLike: (_) {},
           onComment: (_) {},
           onShare: (_) {},
-          onBookmark: (_) {},
         ),
       ));
       await tester.pump();

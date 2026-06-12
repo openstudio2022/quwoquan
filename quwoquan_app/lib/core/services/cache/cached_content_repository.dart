@@ -325,16 +325,6 @@ class CachedContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> favoritePost({required String postId}) {
-    return _delegate.favoritePost(postId: postId);
-  }
-
-  @override
-  Future<void> unfavoritePost({required String postId}) {
-    return _delegate.unfavoritePost(postId: postId);
-  }
-
-  @override
   Future<bool> sharePost({required String postId}) {
     return _delegate.sharePost(postId: postId);
   }

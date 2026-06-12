@@ -12,7 +12,6 @@ class User {
   final int? posts;
   final int? following;
   final int? likes;
-  final int? bookmarks;
   final Map<String, dynamic>? metadata;
   
   const User({
@@ -28,7 +27,6 @@ class User {
     this.posts,
     this.following,
     this.likes,
-    this.bookmarks,
     this.metadata,
   });
   

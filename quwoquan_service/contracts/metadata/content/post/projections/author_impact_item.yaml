@@ -3,7 +3,7 @@ read_model: AuthorImpactItem
 description: |
   创作者影响力单条事实（「TA的影响 / 我的影响力」模块行真相源）。
   云侧按 helpType + action + intersectionDimension 反向聚合真实动作计数，
-  并产出 displayText 结论句（如「23人加入相关圈子」「12人收藏了TA的内容」），
+  并产出 displayText 结论句（如「23人加入相关圈子」「7人读完了TA的长文」），
   端只读直出，禁止本地拼装文案（全局验收 G2）；禁止下发转化率/漏斗/增长率等运营指标。
 
   闭集枚举（端按字符串解析）：

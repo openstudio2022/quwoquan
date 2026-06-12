@@ -344,9 +344,8 @@ card_config:
     show_author_name: true
     show_like_count: true
     show_comment_count: false           # 列表态不展示评论数
-    show_favorite_count: false
     action_bar_position: overlay        # 覆盖在图片上
-    action_bar_items: [like, favorite, share]
+    action_bar_items: [like, share]
 
   video:
     show_author_avatar: true
@@ -355,7 +354,7 @@ card_config:
     show_like_count: true
     show_comment_count: false
     action_bar_position: right_side
-    action_bar_items: [like, comment, favorite, share]
+    action_bar_items: [like, comment, share]
     progress_bar: true
 
   micro:
@@ -375,7 +374,7 @@ card_config:
     show_comment_count: true
     show_cover: true
     action_bar_position: bottom
-    action_bar_items: [like, comment, favorite, share]
+    action_bar_items: [like, comment, share]
 
 # ── 三、互动操作 UI 配置 ─────────────────────────────────────────────────
 interaction_config:
@@ -386,14 +385,6 @@ interaction_config:
     inactive_icon: favorite_border
     error_rollback: true
     error_message_key: error_like_failed
-
-  favorite:
-    optimistic_update: true
-    animation: star_collect
-    active_icon: bookmark
-    inactive_icon: bookmark_border
-    error_rollback: true
-    error_message_key: error_favorite_failed
 
   share:
     optimistic_update: false            # 分享操作不做乐观更新
