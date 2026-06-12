@@ -147,6 +147,7 @@ jobs:
           ASSISTANT_MODEL_PROVIDER: ${{ env.ASSISTANT_MODEL_PROVIDER }}
           ALLOW_DETERMINISTIC_BETA: ${{ env.ALLOW_DETERMINISTIC_BETA }}
       - name: Upload deploy evidence
+        id: upload_deploy_evidence
         if: always()
         continue-on-error: true
         uses: actions/upload-artifact@v4
@@ -206,37 +207,17 @@ jobs:
           MEDIA_BASE_URL: ${{ steps.urls.outputs.media_base_url }}
           GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
         run: |
-          python3 - <<'PY'
-          import json
-          import os
-          import urllib.request
-
-          base = os.environ["BASE_URL"].rstrip("/")
-          product_ops = os.environ["PRODUCT_OPS_BASE_URL"].rstrip("/")
-          media = os.environ["MEDIA_BASE_URL"].rstrip("/")
-          token = os.environ.get("GAMMA_TEST_AUTH_TOKEN", "")
-          headers = {"Authorization": f"Bearer {token}"} if token else {}
-
-          def fetch(url: str) -> tuple[int, str]:
-              req = urllib.request.Request(url, headers=headers)
-              with urllib.request.urlopen(req, timeout=20) as resp:
-                  body = resp.read(4096).decode("utf-8", errors="replace")
-                  return int(resp.status), body
-
-          probes = {
-              "api_health": f"{base}/healthz",
-              "product_ops_health": f"{product_ops}/healthz",
-              "content_feed": f"{base}/v1/content/feed?limit=1",
-              "media_sample": f"{media}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-          }
-          results = {}
-          for name, url in probes.items():
-              status, body = fetch(url)
-              results[name] = {"url": url, "status": status, "preview": body[:300]}
-              if status < 200 or status >= 300:
-                  raise SystemExit(f"{name} returned http {status}: {url}")
-          feed = results["content_feed"]["preview"].strip()
-          if not feed or feed in {"[]", "{}"}:
-              raise SystemExit("content_feed returned empty preview")
-          print(json.dumps(results, ensure_ascii=False, indent=2))
-          PY
+          python3 agent_ops/deploy/probes/run_environment_integration_probe.py \
+            --env gamma \
+            --mode post-deploy \
+            --base-url "${BASE_URL}" \
+            --product-ops-base-url "${PRODUCT_OPS_BASE_URL}" \
+            --media-base-url "${MEDIA_BASE_URL}" \
+            --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
+            --require-non-empty-content-feed \
+            --report artifacts/stackctl/gamma/deploy-direct/integration-probe-post-deploy.json
+      - name: Fail when deploy evidence upload failed
+        if: always() && steps.upload_deploy_evidence.outcome != 'success'
+        run: |
+          echo "::error::deploy evidence upload failed; do not treat this run as having a downloadable evidence chain."
+          exit 1

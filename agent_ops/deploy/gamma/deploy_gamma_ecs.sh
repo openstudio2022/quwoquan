@@ -707,7 +707,9 @@ fi
 docker compose -f quwoquan_service/docker-compose.gamma-local.yaml ps
 
 GW_LOCAL_PORT="${LOCAL_GAMMA_HTTP_PORT:-19000}"
-if [[ "$STAGE" != "prod" ]] && python3 - <<'PY' >/dev/null 2>&1
+if [[ "$STAGE" == "prod" ]]; then
+  echo "[gamma-ecs] INFO: skip run_local_gamma_t3.py on remote host because STAGE=prod; authoritative prod verification stays in hosted post-deploy checks and gamma_api_contract_prod" >&2
+elif python3 - <<'PY' >/dev/null 2>&1
 import sys
 raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
 PY
@@ -718,7 +720,7 @@ then
     --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-${TEST_AUTH_TOKEN:-gamma-ecs-token}}" \
     --skip-flutter-contracts
 else
-  echo "[gamma-ecs] WARN: skip run_local_gamma_t3.py because python3 < 3.10 on remote host" >&2
+  echo "[gamma-ecs] WARN: skip run_local_gamma_t3.py on remote host because python3 < 3.10; local mirror started, but remote T3 evidence is unavailable for this run" >&2
 fi
 REMOTE_SCRIPT
 record_phase "remote_compose" "$phase_started"

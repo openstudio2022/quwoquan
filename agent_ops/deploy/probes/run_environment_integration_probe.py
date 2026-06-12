@@ -28,8 +28,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--env", required=True, choices=("beta", "gamma", "prod"))
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--product-ops-base-url", default="")
+    parser.add_argument("--media-base-url", default="")
     parser.add_argument("--test-auth-token", default="")
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
+    parser.add_argument(
+        "--require-non-empty-content-feed",
+        action="store_true",
+        help="Fail when content_feed returns an empty [] / {} / {\"items\": []} payload.",
+    )
     parser.add_argument(
         "--mode",
         choices=("readonly", "post-deploy"),
@@ -51,10 +57,10 @@ def request(
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as response:
             payload = response.read().decode("utf-8", errors="replace")
-            return True, int(response.status), payload[:1200]
+            return True, int(response.status), payload
     except urllib.error.HTTPError as exc:
         payload = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-        return False, int(exc.code), payload[:1200]
+        return False, int(exc.code), payload
     except Exception as exc:  # noqa: BLE001
         return False, None, str(exc)
 
@@ -141,7 +147,39 @@ def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
                 "expected_statuses": [200],
             }
         )
+    media_base = args.media_base_url.rstrip("/")
+    if media_base:
+        checks.append(
+            {
+                "name": "media_sample",
+                "method": "GET",
+                "url": f"{media_base}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                "headers": _common_headers(args.test_auth_token),
+                "expected_statuses": [200],
+            }
+        )
     return checks
+
+
+def _content_feed_semantic_issue(payload: str) -> tuple[str | None, int | None]:
+    body = payload.strip()
+    if not body:
+        return "response body is empty", 0
+    try:
+        decoded = json.loads(body)
+    except json.JSONDecodeError as exc:
+        return f"response body is not valid JSON: {exc.msg}", None
+    if decoded in ([], {}):
+        return "response payload is empty", 0
+    if isinstance(decoded, dict):
+        items = decoded.get("items")
+        if isinstance(items, list):
+            if not items:
+                return 'response payload has empty "items"', 0
+            return None, len(items)
+    if isinstance(decoded, list):
+        return None, len(decoded)
+    return None, None
 
 
 def run_checks(args: argparse.Namespace) -> dict[str, Any]:
@@ -149,7 +187,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     findings: list[str] = []
     results: list[dict[str, Any]] = []
     for check in build_checks(args):
-        ok, status_code, preview = request(
+        ok, status_code, payload = request(
             check["method"],
             check["url"],
             headers=check.get("headers"),
@@ -157,6 +195,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         )
         expected_statuses = list(check.get("expected_statuses") or [])
         matched = ok and status_code in expected_statuses
+        preview = payload[:1200]
         entry = {
             "name": check["name"],
             "method": check["method"],
@@ -165,10 +204,24 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
             "ok": matched,
             "bodyPreview": preview,
         }
+        if (
+            matched
+            and args.require_non_empty_content_feed
+            and check["name"] == "content_feed"
+        ):
+            semantic_issue, item_count = _content_feed_semantic_issue(payload)
+            if item_count is not None:
+                entry["contentItemCount"] = item_count
+            if semantic_issue:
+                matched = False
+                entry["ok"] = False
+                entry["semanticError"] = semantic_issue
         results.append(entry)
         if not matched:
+            detail = entry.get("semanticError")
             findings.append(
                 f"{check['name']} failed: {status_code or 'ERR'} {check['url']}"
+                + (f" ({detail})" if detail else "")
             )
     return {
         "schemaVersion": 1,
@@ -179,6 +232,8 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         "endedAt": utc_now(),
         "baseUrl": args.base_url.rstrip("/"),
         "productOpsBaseUrl": args.product_ops_base_url.rstrip("/"),
+        "mediaBaseUrl": args.media_base_url.rstrip("/"),
+        "requireNonEmptyContentFeed": args.require_non_empty_content_feed,
         "checks": results,
         "findings": findings,
     }
