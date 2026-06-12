@@ -56,9 +56,7 @@ void main() {
     );
     expect(card, isNotNull);
 
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: card!)),
-    );
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: card!)));
     await tester.pump();
 
     expect(find.text('你们都喜欢 摄影'), findsOneWidget);

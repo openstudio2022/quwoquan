@@ -130,6 +130,17 @@ entities:
         search_field: true
         description: 个人签名
 
+      - name: identityTags
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        search_field: true
+        description: 主页单行身份标签（用户语言短词，如「AI产品 / 摄影 / 旅行 / 北京」），端侧以 · 分隔单行展示；与 bio 互补不重复
+
       - name: interestTags
         type: "[]string"
         constraints: [NULLABLE]
@@ -1614,6 +1625,15 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: identityTags
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 主页单行身份标签（继承 owner 基线 identityTags，端侧以 · 分隔单行展示）
 
       - name: followerCount
         type: int

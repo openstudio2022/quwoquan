@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
@@ -15,6 +16,7 @@ class ArticleReaderHostConfig {
     this.pagePadding = EdgeInsets.zero,
     this.enablePageCurl = true,
     this.forceDegradedPager = false,
+    this.headerLabel,
     this.showFooterPageLabel = true,
     this.paperTexture,
     this.presentationStyle = ArticleReadOnlyBookDeckPresentationStyle.book,
@@ -26,6 +28,7 @@ class ArticleReaderHostConfig {
     this.onPageCurlAborted,
     this.onSceneChanged,
     this.onDebugStateChanged,
+    this.onEntityTap,
     this.debugPageSurfaceBuilder,
     this.debugBackPageSurfaceBuilder,
   });
@@ -39,6 +42,7 @@ class ArticleReaderHostConfig {
   final EdgeInsets pagePadding;
   final bool enablePageCurl;
   final bool forceDegradedPager;
+  final String? headerLabel;
   final bool showFooterPageLabel;
   final ArticlePaperTexture? paperTexture;
   final ArticleReadOnlyBookDeckPresentationStyle presentationStyle;
@@ -50,6 +54,7 @@ class ArticleReaderHostConfig {
   final ValueChanged<ArticleReaderPageCurlAbort>? onPageCurlAborted;
   final ValueChanged<StPageFlipScene>? onSceneChanged;
   final ValueChanged<ArticleReadOnlyBookDebugState>? onDebugStateChanged;
+  final ValueChanged<ArticleInlineSpan>? onEntityTap;
   final Widget Function(BuildContext context, int pageIndex, Size pageSize)?
   debugPageSurfaceBuilder;
   final Widget Function(BuildContext context, int pageIndex, Size pageSize)?

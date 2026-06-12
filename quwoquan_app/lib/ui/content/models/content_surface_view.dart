@@ -93,7 +93,6 @@ class ContentArticleRender {
     this.layoutMode = 'hero',
     this.images = const <String>[],
     this.contentBlocks = const <ArticleContentBlockView>[],
-    this.cards = const <ArticleCardView>[],
     required this.document,
     this.pages = const <ArticlePageData>[],
     this.template = ArticleTemplatePreset.gentle,
@@ -109,7 +108,6 @@ class ContentArticleRender {
   final String layoutMode;
   final List<String> images;
   final List<ArticleContentBlockView> contentBlocks;
-  final List<ArticleCardView> cards;
   final ArticleDocumentData document;
   final List<ArticlePageData> pages;
   final ArticleTemplatePreset template;
@@ -136,6 +134,8 @@ class ContentSurfaceView {
     required this.author,
     required this.stats,
     required this.createdAt,
+    this.updatedAt,
+    this.publishedAt,
     this.title,
     this.body,
     this.cover,
@@ -160,7 +160,15 @@ class ContentSurfaceView {
 
   final ContentAuthorRef author;
   final ContentStats stats;
+
+  /// 创作时间（内容首次进入系统）。
   final DateTime createdAt;
+
+  /// 最后实质更新时间；null 或不晚于 [createdAt] 表示未编辑过。
+  final DateTime? updatedAt;
+
+  /// 首次公开时间；null 表示未发布或未知。
+  final DateTime? publishedAt;
 
   final String? title;
   final String? body;
@@ -186,6 +194,16 @@ class ContentSurfaceView {
   bool get hasIntersectionReasons => intersectionReasons.isNotEmpty;
   bool get hasArticleRender => article != null;
 
+  /// 是否在创作之后发生过实质更新（决定 UI 是否展示「更新于」）。
+  /// 容忍秒级抖动：仅当更新时间比创作时间晚超过 1 秒才算更新。
+  bool get hasMeaningfulUpdate {
+    final updated = updatedAt;
+    if (updated == null) {
+      return false;
+    }
+    return updated.difference(createdAt).inSeconds > 1;
+  }
+
   ContentSurfaceView copyWith({
     ContentSurfaceReferral? referral,
     List<IntersectionReason>? intersectionReasons,
@@ -199,6 +217,8 @@ class ContentSurfaceView {
       author: author,
       stats: stats,
       createdAt: createdAt,
+      updatedAt: updatedAt,
+      publishedAt: publishedAt,
       title: title,
       body: body,
       cover: cover,

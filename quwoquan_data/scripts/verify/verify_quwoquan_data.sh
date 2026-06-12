@@ -11,6 +11,7 @@ python3 quwoquan_data/scripts/verify/verify_no_flat_roots.py
 python3 quwoquan_data/tests/common/test_quality_gates.py
 # 扫描门：禁止 scripts/tasks/runtime 复用测试专用正文骨架 agent_draft_kit（脚本拼正文反模式）
 python3 quwoquan_data/scripts/verify/verify_no_runtime_draft_kit.py
+python3 quwoquan_data/tests/verify/test_no_runtime_draft_kit.py
 # object-stage job 队列：幂等/lease/崩溃恢复/同源互斥/失败升级
 python3 quwoquan_data/tests/task/test_object_queue.py
 # Subagent handoff packet 与出口门（single ref gate + batch reducer gate + 执行合约 5 要素）
@@ -37,6 +38,7 @@ python3 quwoquan_data/scripts/cli.py verify --scope current
 python3 quwoquan_data/scripts/cli.py task lint
 # 垂类规模化治理：coverage registry / 脚本目录 / golden samples / 摄影版权策略
 python3 quwoquan_data/scripts/cli.py vertical governance
+python3 quwoquan_data/scripts/cli.py vertical source-registry
 python3 quwoquan_data/scripts/cli.py vertical quality
 # 任务工程 + 采样回填契约测试
 python3 quwoquan_data/tests/task/test_task_cli.py

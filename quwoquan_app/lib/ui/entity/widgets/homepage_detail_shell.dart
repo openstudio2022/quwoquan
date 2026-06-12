@@ -63,10 +63,9 @@ class HomepageDetailShell extends StatefulWidget {
 class _HomepageDetailShellState extends State<HomepageDetailShell> {
   static const double _cardRadius = AppSpacing.radiusTwenty;
   static const List<_HomepagePrimaryTabSpec> _tabs = <_HomepagePrimaryTabSpec>[
-    _HomepagePrimaryTabSpec(id: 'overview', label: '首页'),
     _HomepagePrimaryTabSpec(id: 'content', label: '内容'),
-    _HomepagePrimaryTabSpec(id: 'reviews', label: '口碑'),
-    _HomepagePrimaryTabSpec(id: 'related', label: '关联'),
+    _HomepagePrimaryTabSpec(id: 'reviews', label: '讨论'),
+    _HomepagePrimaryTabSpec(id: 'related', label: '兴趣圈'),
   ];
 
   String _activeTabId = _tabs.first.id;

@@ -1,0 +1,60 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/景区/真实联网发布复核
+title: 四川景区真实联网发布复核（10实体×20文×20图）
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 景区
+parentTaskId: null
+status: draft
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 青城山
+  - entityType: 地点/景区
+    name: 都江堰
+  - entityType: 地点/景区
+    name: 峨眉山
+  - entityType: 地点/景区
+    name: 乐山大佛
+  - entityType: 地点/景区
+    name: 九寨沟
+  - entityType: 地点/景区
+    name: 黄龙
+  - entityType: 地点/景区
+    name: 稻城亚丁
+  - entityType: 地点/景区
+    name: 四姑娘山
+  - entityType: 地点/景区
+    name: 西岭雪山
+  - entityType: 地点/景区
+    name: 碧峰峡
+provenance:
+  createdAt: '2026-06-10T00:00:00+08:00'
+  createdBy: cursor-agent
+content:
+  quotas:
+    entityArticles: 20
+    routeArticles: 0
+    galleryPosts: 20
+  angles:
+  - 攻略
+  carriers:
+  - article
+  - gallery
+  conditionAxes:
+    regions:
+    - 高原
+    - 雪山
+    - 山地森林
+    - 平原都市
+    - 乡村田园
+    seasons:
+    - 春
+    - 夏
+    - 秋
+    - 冬

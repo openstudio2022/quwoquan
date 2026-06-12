@@ -39,11 +39,23 @@
           "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "mediaUrls": [
             "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-5.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-6.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-7.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-8.png"
           ],
           "imageUrls": [
             "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-5.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-6.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-7.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-8.png"
           ],
           "circleIds": [
             "fixture_circle_photo"
@@ -68,7 +80,13 @@
           "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "mediaObjectKeys": [
             "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-5.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-6.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-7.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-8.png"
           ],
           "imageObjectKeys": [
             "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
@@ -219,7 +237,45 @@
           ],
           "locationName": "杭州",
           "videoUrl": "media/video/s/archived-video/beta-sample.mp4",
-          "durationMs": 45000
+          "durationMs": 45000,
+          "mediaItems": [
+            {
+              "kind": "video",
+              "url": "media/video/s/archived-video/beta-sample.mp4",
+              "coverUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+              "durationMs": 36000,
+              "width": 1280,
+              "height": 720,
+              "title": "晨雾断桥"
+            },
+            {
+              "kind": "video",
+              "url": "media/video/s/archived-video/beta-sample.mp4",
+              "coverUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+              "durationMs": 42000,
+              "width": 1280,
+              "height": 720,
+              "title": "曲院风荷"
+            },
+            {
+              "kind": "video",
+              "url": "media/video/s/archived-video/beta-sample.mp4",
+              "coverUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+              "durationMs": 45000,
+              "width": 1280,
+              "height": 720,
+              "title": "雷峰落日"
+            },
+            {
+              "kind": "video",
+              "url": "media/video/s/archived-video/beta-sample.mp4",
+              "coverUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+              "durationMs": 39000,
+              "width": 1280,
+              "height": 720,
+              "title": "夜泊湖心"
+            }
+          ]
         },
         {
           "postId": "fixture_article_001",
@@ -243,9 +299,9 @@
             "designWriting",
             "tech"
           ],
-          "title": "契约驱动的发现页文章",
-          "summary": "契约驱动的发现页文章。",
-          "body": "文章、攻略与长图文作者。",
+          "title": "杭州一日游：从西湖晨光到河坊街夜色",
+          "summary": "西湖、灵隐寺与河坊街串成的一日步行线路。",
+          "body": "从西湖晨光出发，穿过灵隐寺与河坊街，适合第一次来杭州的轻量路线。",
           "coverUrl": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
           "thumbnailUrl": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
           "mediaUrls": [
@@ -271,6 +327,8 @@
           "favoriteCount": 55,
           "shareCount": 4,
           "createdAt": "2026-05-01T05:00:00Z",
+          "updatedAt": "2026-05-03T05:00:00Z",
+          "publishedAt": "2026-05-02T05:00:00Z",
           "authorDisplayNameSnapshot": "契约撰稿人",
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
@@ -287,11 +345,20 @@
           ],
           "tagRefs": [
             "fixture",
-            "designWriting",
+            "travel",
             "articlePost"
           ],
-          "locationName": "线上专栏",
-          "articleMarkdown": "---\ntitle: 契约驱动的发现页文章\nsummary: 契约驱动的发现页文章。\ntemplate: journal\nfontPreset: clean\ncoverImage: asset://fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\n---\n\n# 契约驱动的发现页文章\n\n文章、攻略与长图文作者。\n\n:::figure id=\"fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\" layout=\"fullWidth\" caption=\"\"\nasset://fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\n:::\n",
+          "entityRefs": [
+            "homepage/homepage_sight_west_lake",
+            "homepage/homepage_sight_west_lake",
+            "homepage/homepage_sight_west_lake",
+            "homepage/homepage_restaurant_night_market"
+          ],
+          "contentVertical": "travel",
+          "paperThemeMode": "system",
+          "paperTexture": "warmBlack",
+          "locationName": "杭州",
+          "articleMarkdown": "---\ntitle: 杭州一日游：从西湖晨光到河坊街夜色\nsummary: 西湖、灵隐寺与河坊街串成的一日步行线路。\ntemplate: journal\nfontPreset: clean\ncoverImage: asset://fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\n---\n\n# 杭州一日游：从西湖晨光到河坊街夜色\n\n清晨从@[断桥残雪](entity:homepage/homepage_sight_west_lake)出发，沿白堤慢慢走到@[曲院风荷](entity:homepage/homepage_sight_west_lake)，把湖面最安静的一段留给第一杯咖啡。\n\n:::figure id=\"fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\" layout=\"fullWidth\" caption=\"西湖晨光适合作为一日游封面\"\nasset://fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\n:::\n\n## 午前：寺院与山脚\n\n10 点前抵达@[灵隐寺](entity:homepage/homepage_sight_west_lake)，避开拥挤队列。午餐建议回到湖滨，选择步行可达的小店，不把时间浪费在跨城移动上。\n\n## 傍晚：老街收尾\n\n日落后到@[河坊街](entity:homepage/homepage_restaurant_night_market)，用小吃和夜色结束路线。Tip：这条线路适合轻装，雨天把灵隐寺和河坊街顺序对调。\n",
           "articleMarkdownVersion": "qwq-rich-md/1",
           "articleMarkdownDigest": "sha256:3881015eef939f99c698c71b5901e02714a17bf6f1b42e5da0ce46be57726507",
           "articleAssetManifest": {
@@ -312,11 +379,44 @@
           "articleRenderProfile": {
             "template": "journal",
             "fontPreset": "clean",
+            "paperThemeMode": "system",
+            "paperTexture": "warmBlack",
+            "contentVertical": "travel",
             "layoutPolicy": {
               "wrapDowngrade": "compactWidthToFullWidth",
               "galleryDowngrade": "singleColumn"
             }
-          }
+          },
+          "entityMentions": [
+            {
+              "subjectType": "homepage",
+              "subjectId": "homepage_sight_west_lake",
+              "displayName": "断桥残雪",
+              "rangeStart": 0,
+              "rangeEnd": 4
+            },
+            {
+              "subjectType": "homepage",
+              "subjectId": "homepage_sight_west_lake",
+              "displayName": "曲院风荷",
+              "rangeStart": 0,
+              "rangeEnd": 4
+            },
+            {
+              "subjectType": "homepage",
+              "subjectId": "homepage_sight_west_lake",
+              "displayName": "灵隐寺",
+              "rangeStart": 0,
+              "rangeEnd": 3
+            },
+            {
+              "subjectType": "homepage",
+              "subjectId": "homepage_restaurant_night_market",
+              "displayName": "河坊街",
+              "rangeStart": 0,
+              "rangeEnd": 3
+            }
+          ]
         },
         {
           "postId": "fixture_moment_001",
@@ -626,6 +726,395 @@
           "createdAt": "2026-06-06T06:00:00Z"
         }
       ]
+    },
+    "intersection_core": {
+      "description": "交集驱动发现三场景核心种子：inbox 五维度、recommend/campus/travel 频道、创作者影响力（含 objectKind/primaryText/secondaryText/weightTier 闭集字段）。",
+      "inboxReasons": [
+        {
+          "intersectionId": "ix_rel_1",
+          "dimension": "relationship",
+          "intersectionClass": "fact",
+          "label": "共同关注",
+          "displayName": "林清越",
+          "displayText": "4位共同好友",
+          "primaryText": "4位共同好友",
+          "secondaryText": "都在黄金投资圈",
+          "weightTier": "heavy",
+          "objectKind": "person",
+          "relationKind": "",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "sharedCount": 4,
+          "strength": 0.9,
+          "actionType": "view",
+          "actionTargetId": "fixture_user_lin",
+          "source": "relationship",
+          "confidenceLabel": "",
+          "modelReasonBucket": "",
+          "freshAgoHours": 3
+        },
+        {
+          "intersectionId": "ix_rel_2",
+          "dimension": "relationship",
+          "intersectionClass": "fact",
+          "label": "互相关注",
+          "displayName": "周屿",
+          "displayText": "你们互相关注",
+          "primaryText": "你们互相关注",
+          "secondaryText": "",
+          "weightTier": "light",
+          "objectKind": "person",
+          "relationKind": "",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+          "sharedCount": 2,
+          "strength": 0.7,
+          "actionType": "view",
+          "actionTargetId": "fixture_user_zhou",
+          "source": "relationship",
+          "confidenceLabel": "",
+          "modelReasonBucket": "",
+          "freshAgoHours": 96
+        },
+        {
+          "intersectionId": "ix_id_1",
+          "dimension": "identity",
+          "intersectionClass": "fact",
+          "label": "同校",
+          "displayName": "新东方校友",
+          "displayText": "同校校友",
+          "primaryText": "同校校友",
+          "secondaryText": "3位校友也在这里",
+          "weightTier": "heavy",
+          "objectKind": "school",
+          "relationKind": "",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+          "sharedCount": 3,
+          "strength": 0.82,
+          "actionType": "view",
+          "actionTargetId": "fixture_homepage_university_pku",
+          "source": "identity",
+          "confidenceLabel": "",
+          "modelReasonBucket": "",
+          "freshAgoHours": 10
+        },
+        {
+          "intersectionId": "ix_ct_1",
+          "dimension": "content",
+          "intersectionClass": "fact",
+          "label": "共看内容",
+          "displayName": "黄金投资圈",
+          "displayText": "8人和你共看黄金内容",
+          "primaryText": "8人和你共看黄金内容",
+          "secondaryText": "",
+          "weightTier": "light",
+          "objectKind": "circle",
+          "relationKind": "",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "sharedCount": 8,
+          "strength": 0.88,
+          "actionType": "join",
+          "actionTargetId": "fixture_circle_gold_invest",
+          "source": "content",
+          "confidenceLabel": "",
+          "modelReasonBucket": "",
+          "freshAgoHours": 30
+        },
+        {
+          "intersectionId": "ix_loc_1",
+          "dimension": "location",
+          "intersectionClass": "fact",
+          "label": "同游",
+          "displayName": "西湖",
+          "displayText": "5人有相同旅行足迹",
+          "primaryText": "5人有相同旅行足迹",
+          "secondaryText": "上周你也来过",
+          "weightTier": "heavy",
+          "objectKind": "place",
+          "relationKind": "",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_travel/v1/avatar.png",
+          "sharedCount": 5,
+          "strength": 0.76,
+          "actionType": "view",
+          "actionTargetId": "homepage_sight_west_lake",
+          "source": "location",
+          "confidenceLabel": "",
+          "modelReasonBucket": "",
+          "freshAgoHours": 2
+        },
+        {
+          "intersectionId": "ix_int_1",
+          "dimension": "interest",
+          "intersectionClass": "affinity",
+          "label": "可能合得来",
+          "displayName": "陆衡",
+          "displayText": "可能合得来",
+          "primaryText": "可能合得来",
+          "secondaryText": "同样关注摄影",
+          "weightTier": "light",
+          "objectKind": "person",
+          "relationKind": "",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+          "sharedCount": 0,
+          "strength": 0.61,
+          "actionType": "view",
+          "actionTargetId": "fixture_user_lu",
+          "source": "interest",
+          "confidenceLabel": "推荐",
+          "modelReasonBucket": "friend_suggestion",
+          "freshAgoHours": 20
+        }
+      ],
+      "channelReasons": {
+        "recommend": [
+          {
+            "intersectionId": "ix_rel_1",
+            "dimension": "relationship",
+            "intersectionClass": "fact",
+            "label": "共同关注",
+            "displayName": "林清越",
+            "displayText": "4位共同好友",
+            "primaryText": "4位共同好友",
+            "secondaryText": "都在黄金投资圈",
+            "weightTier": "heavy",
+            "objectKind": "person",
+            "relationKind": "",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+            "sharedCount": 4,
+            "strength": 0.9,
+            "actionType": "view",
+            "actionTargetId": "fixture_user_lin",
+            "source": "relationship",
+            "confidenceLabel": "",
+            "modelReasonBucket": "",
+            "freshAgoHours": 3
+          },
+          {
+            "intersectionId": "ix_id_1",
+            "dimension": "identity",
+            "intersectionClass": "fact",
+            "label": "同校",
+            "displayName": "新东方校友",
+            "displayText": "同校校友",
+            "primaryText": "同校校友",
+            "secondaryText": "3位校友也在这里",
+            "weightTier": "heavy",
+            "objectKind": "school",
+            "relationKind": "",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+            "sharedCount": 3,
+            "strength": 0.82,
+            "actionType": "view",
+            "actionTargetId": "fixture_homepage_university_pku",
+            "source": "identity",
+            "confidenceLabel": "",
+            "modelReasonBucket": "",
+            "freshAgoHours": 10
+          },
+          {
+            "intersectionId": "ix_ct_1",
+            "dimension": "content",
+            "intersectionClass": "fact",
+            "label": "共看内容",
+            "displayName": "黄金投资圈",
+            "displayText": "8人和你共看黄金内容",
+            "primaryText": "8人和你共看黄金内容",
+            "secondaryText": "",
+            "weightTier": "light",
+            "objectKind": "circle",
+            "relationKind": "",
+            "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+            "sharedCount": 8,
+            "strength": 0.88,
+            "actionType": "join",
+            "actionTargetId": "fixture_circle_gold_invest",
+            "source": "content",
+            "confidenceLabel": "",
+            "modelReasonBucket": "",
+            "freshAgoHours": 30
+          },
+          {
+            "intersectionId": "ix_int_1",
+            "dimension": "interest",
+            "intersectionClass": "affinity",
+            "label": "可能合得来",
+            "displayName": "陆衡",
+            "displayText": "可能合得来",
+            "primaryText": "可能合得来",
+            "secondaryText": "同样关注摄影",
+            "weightTier": "light",
+            "objectKind": "person",
+            "relationKind": "",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+            "sharedCount": 0,
+            "strength": 0.61,
+            "actionType": "view",
+            "actionTargetId": "fixture_user_lu",
+            "source": "interest",
+            "confidenceLabel": "推荐",
+            "modelReasonBucket": "friend_suggestion",
+            "freshAgoHours": 20
+          }
+        ],
+        "campus": [
+          {
+            "intersectionId": "ix_campus_1",
+            "dimension": "identity",
+            "intersectionClass": "fact",
+            "label": "同专业",
+            "displayName": "苏黎",
+            "displayText": "同专业同校",
+            "primaryText": "同专业同校",
+            "secondaryText": "2门共同课程",
+            "weightTier": "heavy",
+            "objectKind": "person",
+            "relationKind": "",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "sharedCount": 6,
+            "strength": 0.84,
+            "actionType": "view",
+            "actionTargetId": "fixture_user_su",
+            "source": "identity",
+            "confidenceLabel": "",
+            "modelReasonBucket": "",
+            "freshAgoHours": 5
+          },
+          {
+            "intersectionId": "ix_campus_2",
+            "dimension": "interest",
+            "intersectionClass": "affinity",
+            "label": "同社团可能",
+            "displayName": "吉他社",
+            "displayText": "推荐加入社团",
+            "primaryText": "推荐加入社团",
+            "secondaryText": "",
+            "weightTier": "light",
+            "objectKind": "circle",
+            "relationKind": "",
+            "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_tech/v1/avatar.png",
+            "sharedCount": 0,
+            "strength": 0.58,
+            "actionType": "join",
+            "actionTargetId": "fixture_circle_guitar",
+            "source": "interest",
+            "confidenceLabel": "推荐",
+            "modelReasonBucket": "circle_discovery",
+            "freshAgoHours": 40
+          }
+        ],
+        "travel": [
+          {
+            "intersectionId": "ix_travel_1",
+            "dimension": "location",
+            "intersectionClass": "fact",
+            "label": "同目的地",
+            "displayName": "大理",
+            "displayText": "3人去过相同目的地",
+            "primaryText": "3人去过相同目的地",
+            "secondaryText": "都住过古城客栈",
+            "weightTier": "heavy",
+            "objectKind": "place",
+            "relationKind": "",
+            "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+            "sharedCount": 3,
+            "strength": 0.8,
+            "actionType": "view",
+            "actionTargetId": "fixture_homepage_dali",
+            "source": "location",
+            "confidenceLabel": "",
+            "modelReasonBucket": "",
+            "freshAgoHours": 8
+          },
+          {
+            "intersectionId": "ix_travel_2",
+            "dimension": "interest",
+            "intersectionClass": "affinity",
+            "label": "兴趣相近",
+            "displayName": "程一苇",
+            "displayText": "可能喜欢相同路线",
+            "primaryText": "可能喜欢相同路线",
+            "secondaryText": "旅行风格相似",
+            "weightTier": "light",
+            "objectKind": "person",
+            "relationKind": "",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png",
+            "sharedCount": 0,
+            "strength": 0.66,
+            "actionType": "view",
+            "actionTargetId": "fixture_user_cheng",
+            "source": "interest",
+            "confidenceLabel": "推荐",
+            "modelReasonBucket": "travel_affinity",
+            "freshAgoHours": 50
+          }
+        ]
+      },
+      "authorImpact": {
+        "fixture_user_current": {
+          "authorId": "fixture_user_current",
+          "total": 43,
+          "items": [
+            {
+              "helpType": "community",
+              "action": "join",
+              "intersectionDimension": "interest",
+              "tagRef": "",
+              "source": "circle",
+              "count": 23,
+              "displayText": "23人加入相关圈子"
+            },
+            {
+              "helpType": "decision",
+              "action": "favorite",
+              "intersectionDimension": "content",
+              "tagRef": "",
+              "source": "post",
+              "count": 12,
+              "displayText": "12人收藏了我的内容"
+            },
+            {
+              "helpType": "relationship",
+              "action": "add_contact",
+              "intersectionDimension": "relationship",
+              "tagRef": "",
+              "source": "profile",
+              "count": 8,
+              "displayText": "8人通过我认识新朋友"
+            }
+          ]
+        },
+        "fixture_user_photographer": {
+          "authorId": "fixture_user_photographer",
+          "total": 31,
+          "items": [
+            {
+              "helpType": "community",
+              "action": "join",
+              "intersectionDimension": "interest",
+              "tagRef": "",
+              "source": "circle",
+              "count": 16,
+              "displayText": "16人加入相关圈子"
+            },
+            {
+              "helpType": "decision",
+              "action": "favorite",
+              "intersectionDimension": "content",
+              "tagRef": "",
+              "source": "post",
+              "count": 10,
+              "displayText": "10人收藏了TA的内容"
+            },
+            {
+              "helpType": "relationship",
+              "action": "add_contact",
+              "intersectionDimension": "relationship",
+              "tagRef": "",
+              "source": "profile",
+              "count": 5,
+              "displayText": "5人通过TA认识新朋友"
+            }
+          ]
+        }
+      }
     }
   },
   "scenarios": [
@@ -663,6 +1152,51 @@
         "detailPostId": "fixture_photo_001",
         "commentIds": [
           "fixture_comment_photo_001"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    },
+    {
+      "id": "content_intersection_discovery",
+      "title": "交集驱动发现三场景种子加载",
+      "type": "content_intersection",
+      "domainId": "content",
+      "seedRefs": [
+        "intersection_core"
+      ],
+      "uiExpectations": {
+        "textFragments": [
+          "4位共同好友",
+          "23人加入相关圈子"
+        ]
+      },
+      "remoteExpectations": {
+        "inboxReasonIds": [
+          "ix_rel_1",
+          "ix_rel_2",
+          "ix_id_1",
+          "ix_ct_1",
+          "ix_loc_1",
+          "ix_int_1"
+        ],
+        "authorImpactAuthorIds": [
+          "fixture_user_current",
+          "fixture_user_photographer"
         ]
       },
       "environments": {

@@ -331,6 +331,26 @@ type articleTemplateRecommendationDef struct {
 	RecommendedArticleTemplates []string `yaml:"recommended_article_templates"`
 }
 
+type articlePaperThemeOptionDef struct {
+	ID       string `yaml:"id"`
+	LabelKey string `yaml:"label_key"`
+}
+
+type articlePaperThemeDef struct {
+	ID            string `yaml:"id"`
+	Stage         string `yaml:"stage"`
+	Paper         string `yaml:"paper"`
+	Text          string `yaml:"text"`
+	SecondaryText string `yaml:"secondary_text"`
+}
+
+type articleDarkPaperThemesDef struct {
+	DefaultTheme          string                       `yaml:"default_theme"`
+	ReadingSettingOptions []articlePaperThemeOptionDef `yaml:"reading_setting_options"`
+	VerticalDefaults      map[string]string            `yaml:"vertical_defaults"`
+	Themes                []articlePaperThemeDef       `yaml:"themes"`
+}
+
 type featureFlagDef struct {
 	Flag        string `yaml:"flag"`
 	Default     bool   `yaml:"default"`
@@ -358,6 +378,7 @@ type uiConfigFile struct {
 	ArticleReaderProfiles          []articleReaderProfileDef          `yaml:"article_reader_profiles"`
 	ArticleTemplateConfigs         []articleTemplateConfigDef         `yaml:"article_template_configs"`
 	ArticleTemplateRecommendations []articleTemplateRecommendationDef `yaml:"article_template_recommendations"`
+	ArticleDarkPaperThemes         articleDarkPaperThemesDef          `yaml:"article_dark_paper_themes"`
 	FeatureFlags                   []featureFlagDef                   `yaml:"feature_flags"`
 	EmptyStates                    map[string]emptyStateDef           `yaml:"empty_states"`
 }
@@ -2230,6 +2251,8 @@ var postBaseDtoFields = map[string]bool{
 	"favoriteCount":       true,
 	"shareCount":          true,
 	"createdAt":           true,
+	"updatedAt":           true,
+	"publishedAt":         true,
 	"intersectionReasons": true,
 }
 
@@ -3827,6 +3850,30 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("  });\n")
 	b.WriteString("}\n\n")
 
+	b.WriteString("class ArticlePaperThemeOptionConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String labelKey;\n\n")
+	b.WriteString("  const ArticlePaperThemeOptionConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.labelKey,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("class ArticleDarkPaperThemeConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String stage;\n")
+	b.WriteString("  final String paper;\n")
+	b.WriteString("  final String text;\n")
+	b.WriteString("  final String secondaryText;\n\n")
+	b.WriteString("  const ArticleDarkPaperThemeConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.stage,\n")
+	b.WriteString("    required this.paper,\n")
+	b.WriteString("    required this.text,\n")
+	b.WriteString("    required this.secondaryText,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
 	tabs := append([]discoveryTabDef(nil), uc.DiscoveryTabs...)
 	sort.Slice(tabs, func(i, j int) bool { return tabs[i].Order < tabs[j].Order })
 	rails := append([]discoveryRailDef(nil), uc.DiscoveryRails...)
@@ -3847,6 +3894,9 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	sort.Slice(articleTemplateRecommendations, func(i, j int) bool {
 		return articleTemplateRecommendations[i].CategoryID < articleTemplateRecommendations[j].CategoryID
 	})
+	articlePaperThemeOptions := append([]articlePaperThemeOptionDef(nil), uc.ArticleDarkPaperThemes.ReadingSettingOptions...)
+	articleDarkPaperThemes := append([]articlePaperThemeDef(nil), uc.ArticleDarkPaperThemes.Themes...)
+	sort.Slice(articleDarkPaperThemes, func(i, j int) bool { return articleDarkPaperThemes[i].ID < articleDarkPaperThemes[j].ID })
 
 	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
 	b.WriteString("class ContentUIConfig {\n")
@@ -3967,6 +4017,41 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 			b.WriteString(dartStringLiteral(templateID))
 		}
 		b.WriteString("]),\n")
+	}
+	b.WriteString("  ];\n\n")
+
+	b.WriteString(fmt.Sprintf("  static const String articleDarkPaperDefaultTheme = %s;\n\n",
+		dartStringLiteral(uc.ArticleDarkPaperThemes.DefaultTheme)))
+
+	b.WriteString("  static const List<ArticlePaperThemeOptionConfig> articlePaperThemeOptions = <ArticlePaperThemeOptionConfig>[\n")
+	for _, option := range articlePaperThemeOptions {
+		b.WriteString(fmt.Sprintf("    ArticlePaperThemeOptionConfig(id: %s, labelKey: %s),\n",
+			dartStringLiteral(option.ID),
+			dartStringLiteral(option.LabelKey)))
+	}
+	b.WriteString("  ];\n\n")
+
+	b.WriteString("  static const Map<String, String> articlePaperVerticalDefaults = <String, String>{\n")
+	verticalKeys := make([]string, 0, len(uc.ArticleDarkPaperThemes.VerticalDefaults))
+	for k := range uc.ArticleDarkPaperThemes.VerticalDefaults {
+		verticalKeys = append(verticalKeys, k)
+	}
+	sort.Strings(verticalKeys)
+	for _, k := range verticalKeys {
+		b.WriteString(fmt.Sprintf("    %s: %s,\n",
+			dartStringLiteral(k),
+			dartStringLiteral(uc.ArticleDarkPaperThemes.VerticalDefaults[k])))
+	}
+	b.WriteString("  };\n\n")
+
+	b.WriteString("  static const List<ArticleDarkPaperThemeConfig> articleDarkPaperThemes = <ArticleDarkPaperThemeConfig>[\n")
+	for _, theme := range articleDarkPaperThemes {
+		b.WriteString(fmt.Sprintf("    ArticleDarkPaperThemeConfig(id: %s, stage: %s, paper: %s, text: %s, secondaryText: %s),\n",
+			dartStringLiteral(theme.ID),
+			dartStringLiteral(theme.Stage),
+			dartStringLiteral(theme.Paper),
+			dartStringLiteral(theme.Text),
+			dartStringLiteral(theme.SecondaryText)))
 	}
 	b.WriteString("  ];\n\n")
 

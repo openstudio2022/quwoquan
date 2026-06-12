@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from _common.base_draft import FIDELITY_MAX, FIDELITY_MIN
+from _common.content_object import require_title_hint
 from _common.quality_gates import WRITING_INTENTS
 from _common.style_catalog import opening_guidance
 
@@ -108,6 +110,7 @@ def build_writing_pack(
     source_urls: Sequence[str],
     source_paths: Sequence[str],
 ) -> dict[str, Any]:
+    title = require_title_hint(brief, ref=ref)
     narrative = {
         "requireMotivation": bool((brief.get("openingTension") or {}).get("required", True)),
         "requireLike": bool((brief.get("explicitFeelings") or {}).get("requireLike", True)),
@@ -120,7 +123,7 @@ def build_writing_pack(
         "schemaVersion": "quwoquan_data.writing_pack",
         "ref": ref,
         "kind": kind,
-        "title": str(brief.get("titleHint") or ref),
+        "title": title,
         "byline": byline,
         "carrier": carrier,
         "publishLayout": publish_layout,
@@ -134,6 +137,8 @@ def build_writing_pack(
         "styleFamily": style_family,
         "evidencePoints": _evidence_points(evidence_bundle),
         "assets": _compact_assets(assets),
+        "sourceUrls": [str(x) for x in source_urls if x],
+        "sourcePaths": [str(x) for x in source_paths if x],
         "sopExampleRef": brief.get("sopExampleRef"),
         "writingIntent": brief.get("writingIntent"),
         "baseSourceRef": brief.get("baseSourceRef"),
@@ -143,6 +148,10 @@ def build_writing_pack(
 
 def _fmt_list(items: Sequence[str], bullet: str = "-") -> str:
     return "\n".join(f"{bullet} {x}" for x in items if x) or "（无）"
+
+
+def _base_fidelity_range_label() -> str:
+    return f"{int(FIDELITY_MIN * 100)}%~{int(FIDELITY_MAX * 100)}%"
 
 
 def render_prompt_md(pack: Mapping[str, Any]) -> str:
@@ -172,7 +181,9 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         lines.append(
             f"- **主底稿来源**：以 `{base}`（见下方「## 底稿」）为基础做**适度加工（轻改）**——"
             "保留其叙事顺序与结构，只做去语病/纠错别字/理顺语句/补证据/去版权与平台痕迹；"
-            "**与底稿相似度维持 70%~90%**：不得逐句搬运（≥90% 视为未去版权），也不得从零另写或换稿（≤70% 视为脱离底稿）。"
+            f"**与底稿相似度维持 {_base_fidelity_range_label()}**："
+            f"不得逐句搬运（≥{int(FIDELITY_MAX * 100)}% 视为未去版权），"
+            f"也不得从零另写或换稿（≤{int(FIDELITY_MIN * 100)}% 视为脱离底稿）。"
             "其它来源只能补充事实证据，不得再当底稿。排版可适度优化。"
         )
     banned = pack.get("bannedRegisterTerms") or []
@@ -217,7 +228,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         lines.append(f"- 禁用词: {', '.join(forb)}")
     lines.append("")
     if base_text:
-        lines.append("## 底稿（在此基础上适度加工 / 轻改；与其相似度维持 70%~90%）")
+        lines.append(f"## 底稿（在此基础上适度加工 / 轻改；与其相似度维持 {_base_fidelity_range_label()}）")
         lines.append("")
         lines.append("> 保留底稿叙事顺序与结构，只做：去语病、纠错别字、理顺语句、补全可回溯证据、去版权与平台痕迹；排版可适度优化。禁止逐句搬运，也禁止从零另写。")
         lines.append("")
@@ -251,6 +262,12 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     lines.append("")
     lines.append(_fmt_list(pack.get("mustIncludeFacts") or []))
     lines.append("")
+    source_paths = [str(x) for x in (pack.get("sourcePaths") or []) if x]
+    if source_paths:
+        lines.append("## 允许引用的来源路径")
+        lines.append("")
+        lines.append(_fmt_list(source_paths))
+        lines.append("")
     lines.append("## 章节意图（仅参考；结构以底稿为准，可自然调整，不要照抄为标题）")
     lines.append("")
     lines.append(_fmt_list(pack.get("sectionIntents") or []))
@@ -299,7 +316,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     lines.append("")
     lines.append("## 产出方式")
     lines.append("")
-    lines.append("- 把创作的正文写回同目录 `article.md`（覆盖占位）。")
+    lines.append("- 把创作的正文写回同目录 `draft.article.md`（覆盖占位）。")
     lines.append("- 在同目录 `draft_meta.json` 标注 generator=agent、model、styleFamily、openingStrategy（所选开篇策略 id）、引用了哪些 sourcePath、覆盖了哪些 fact。")
     lines.append("- 之后运行 `produce --stage review` 过门禁；**失败按 repair report 修改正文重跑（Ralph 自纠环），直到 ref_review_gate 全绿（approved）或超墙钟上限**；不得在未过门时宣称完成。")
     return "\n".join(lines) + "\n"

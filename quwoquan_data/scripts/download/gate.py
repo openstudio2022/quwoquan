@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from _common.paths import batch_root
+from _common.io import read_json
 
 
 def _source_roots(task_id: str, batch_id: str) -> tuple[Path, list[Path]]:
@@ -30,8 +31,21 @@ def gate_download(task_id: str, batch_id: str) -> list[str]:
     for sources_dir in sources_dirs:
         source_units = [d for d in sources_dir.iterdir() if d.is_dir()]
         md_count = sum(1 for sd in source_units if (sd / "source.md").exists())
+        retained_count = 0
+        for sd in source_units:
+            quality_path = sd / "source.quality.json"
+            if not quality_path.is_file():
+                continue
+            try:
+                payload = read_json(quality_path)
+            except Exception:  # noqa: BLE001
+                continue
+            if str(payload.get("quality") or "") != "Reject":
+                retained_count += 1
         rel = sources_dir.relative_to(root).as_posix() if sources_dir.is_relative_to(root) else sources_dir.name
         if md_count < 2:
             issues.append(f"{rel}: only {md_count} sources (need >= 2)")
+        if retained_count < 2:
+            issues.append(f"{rel}: only {retained_count} retained sources (need >= 2; Reject/manual probe sources do not count)")
 
     return issues

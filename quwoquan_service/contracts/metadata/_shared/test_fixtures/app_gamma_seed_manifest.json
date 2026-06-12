@@ -21,7 +21,8 @@
       "domain": "content",
       "fixturePath": "content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
       "refs": [
-        "content_discovery_core"
+        "content_discovery_core",
+        "intersection_core"
       ],
       "resetScope": "fixture_content_*",
       "targetStore": "content-service:gamma_test_namespace",

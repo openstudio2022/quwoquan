@@ -20,6 +20,10 @@ type IntersectionReasonView struct {
 	AvatarURL              string                           `json:"avatarUrl"`
 	Label                  string                           `json:"label"`
 	DisplayText            string                           `json:"displayText"`
+	PrimaryText            string                           `json:"primaryText"`   // 主交集结论句（蓝色，云侧产出，端只读直出）
+	SecondaryText          string                           `json:"secondaryText"` // 副交集辅助说明（灰色；缺省端不展示）
+	WeightTier             string                           `json:"weightTier"`    // light | heavy（内容卡交集轻重等级，云侧离散产出）
+	ObjectKind             string                           `json:"objectKind"`    // person | circle | school | place | enterprise
 	SharedCount            int                              `json:"sharedCount"`
 	Strength               float64                          `json:"strength"`
 	ConfidenceLabel        string                           `json:"confidenceLabel"`
@@ -397,6 +401,26 @@ func hydratePointSummary(r IntersectionReasonView) IntersectionReasonView {
 	}
 	if r.RankState == "" {
 		r.RankState = "fresh"
+	}
+	return hydrateDisplayLanguage(r)
+}
+
+// hydrateDisplayLanguage 云侧统一产出主/副交集结论句与轻重等级（G2：端禁止本地拼装文案）。
+// primaryText 缺省时回退 displayText/label；weightTier 缺省时按 strength + intersectionClass 离散化。
+func hydrateDisplayLanguage(r IntersectionReasonView) IntersectionReasonView {
+	if strings.TrimSpace(r.PrimaryText) == "" {
+		if text := strings.TrimSpace(r.DisplayText); text != "" {
+			r.PrimaryText = text
+		} else if label := strings.TrimSpace(r.Label); label != "" {
+			r.PrimaryText = label
+		}
+	}
+	if strings.TrimSpace(r.WeightTier) == "" {
+		if r.IntersectionClass == "fact" && r.Strength >= 0.8 {
+			r.WeightTier = "heavy"
+		} else {
+			r.WeightTier = "light"
+		}
 	}
 	return r
 }

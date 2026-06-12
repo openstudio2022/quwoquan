@@ -248,9 +248,17 @@ void main() {
       expect(r, isA<ContentArticleRender>());
     });
 
-    test('contentHtml 来自 body', () {
-      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
+    test('有 markdown 时 contentHtml 才承载正文 HTML 回退', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..['articleMarkdown'] =
+            '---\ntitle: Markdown 标题\n---\n\n# Markdown 标题\n\n正文第一段。\n';
+      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb1');
       expect(r.contentHtml, equals('这是文章内容，包含多段落...'));
+    });
+
+    test('无 markdown 时 contentHtml 为空，不再借壳 body', () {
+      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
+      expect(r.contentHtml, isEmpty);
     });
 
     test('isOfficial / badge 来自 raw', () {
@@ -273,57 +281,11 @@ void main() {
       expect(r.images.first, equals('https://example.com/cover3.jpg'));
     });
 
-    test('无 articleBlocks/cards 时 contentBlocks 回退为 body 段落', () {
+    test('无 markdown 时文章视为空文档（不再有 body/blocks/cards 竞争源）', () {
       final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
-      expect(r.contentBlocks, hasLength(1));
-      expect(r.contentBlocks.first.type, equals('paragraph'));
-      expect(r.contentBlocks.first.body, contains('这是文章内容'));
-    });
-
-    test('articleBlocks 优先投射为连续内容块', () {
-      final raw = Map<String, dynamic>.from(minArticle)
-        ..['articleBlocks'] = <Map<String, dynamic>>[
-          {'id': 'p1', 'type': 'paragraph', 'text': '第一段', 'imagePath': ''},
-          {'id': 'o1', 'type': 'orderedItem', 'text': '第二条', 'imagePath': ''},
-          {
-            'id': 'i1',
-            'type': 'image',
-            'text': '',
-            'imagePath': 'https://example.com/block.jpg',
-          },
-        ];
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_blocks');
-      expect(r.contentBlocks, hasLength(3));
-      expect(r.contentBlocks[0].type, equals('paragraph'));
-      expect(r.contentBlocks[1].type, equals('ordered_item'));
-      expect(r.contentBlocks[1].orderedIndex, equals(1));
-      expect(r.contentBlocks[2].type, equals('image'));
-      expect(
-        r.contentBlocks[2].imageUrl,
-        equals('https://example.com/block.jpg'),
-      );
-    });
-
-    test('wrap image + paragraph 会投射为 wrapped_paragraph', () {
-      final raw = Map<String, dynamic>.from(minArticle)
-        ..['articleBlocks'] = <Map<String, dynamic>>[
-          {
-            'id': 'i1',
-            'type': 'image',
-            'text': '',
-            'imagePath': 'https://example.com/wrap.jpg',
-            'imageLayout': 'wrapLeft',
-          },
-          {'id': 'p1', 'type': 'paragraph', 'text': '图片旁边的正文', 'imagePath': ''},
-        ];
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_wrap');
-      expect(r.contentBlocks, hasLength(1));
-      expect(r.contentBlocks.first.type, equals('wrapped_paragraph'));
-      expect(r.contentBlocks.first.imageLayout, equals('wrapLeft'));
-      expect(
-        r.contentBlocks.first.imageUrl,
-        equals('https://example.com/wrap.jpg'),
-      );
+      expect(r.documentSource, ArticleDetailDocumentSource.empty);
+      expect(r.contentBlocks, isEmpty);
+      expect(r.pages.single.body, isEmpty);
     });
 
     test(
@@ -383,69 +345,10 @@ void main() {
       },
     );
 
-    test('正文标题块会投射到连续文档与阅读块语义', () {
-      final raw = Map<String, dynamic>.from(minArticle)
-        ..['articleBlocks'] = <Map<String, dynamic>>[
-          {'id': 'p1', 'type': 'paragraph', 'text': '第一段'},
-          {'id': 'h2_1', 'type': 'heading2', 'text': '章节一'},
-          {'id': 'p2', 'type': 'paragraph', 'text': '第二段'},
-          {'id': 's1', 'type': 'sectionTitle', 'text': '尾声'},
-        ];
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_headings');
-      expect(r.document.blocks, hasLength(2));
-      expect(r.document.blocks.first.text, equals('章节一'));
-      expect(r.document.blocks.last.text, equals('尾声'));
-      expect(r.contentBlocks[1].type, equals('heading_2'));
-      expect(r.contentBlocks.last.type, equals('section_heading'));
-    });
-
-    test('旧 cards 可回退为连续阅读 section 块', () {
-      final raw = Map<String, dynamic>.from(minArticle)
-        ..['cards'] = <Map<String, dynamic>>[
-          {
-            'title': '小节一',
-            'body': '这是第一节',
-            'imageUrl': 'https://example.com/card.jpg',
-          },
-        ];
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_cards');
-      expect(r.contentBlocks, hasLength(1));
-      expect(r.contentBlocks.first.type, equals('section'));
-      expect(r.contentBlocks.first.title, equals('小节一'));
-      expect(
-        r.contentBlocks.first.imageUrl,
-        equals('https://example.com/card.jpg'),
-      );
-    });
-
-    test('cards 使用 ArticleDetailWireKeys + ArticleCardWireKeys 构造仍可投射', () {
-      final raw = Map<String, dynamic>.from(minArticle)
-        ..[ArticleDetailWireKeys.cards] = <Map<String, dynamic>>[
-          {
-            ArticleCardWireKeys.title: 'SSOT 小节',
-            ArticleCardWireKeys.body: 'SSOT 正文',
-            ArticleCardWireKeys.imageUrl: 'https://example.com/ssot-card.jpg',
-          },
-        ];
-      final r = projectArticleDetailView(
-        raw,
-        fallbackArticleId: 'fb_cards_keys',
-      );
-      expect(r.contentBlocks, hasLength(1));
-      expect(r.contentBlocks.first.type, equals('section'));
-      expect(r.contentBlocks.first.title, equals('SSOT 小节'));
-      expect(
-        r.contentBlocks.first.imageUrl,
-        equals('https://example.com/ssot-card.jpg'),
-      );
-    });
-
     test('articleMarkdown canonical 优先投射为连续内容块与分页首页', () {
       final raw = Map<String, dynamic>.from(minArticle)
         ..['title'] = '旧标题'
         ..['body'] = '分发摘要正文'
-        ..['cards'] = <Map<String, dynamic>>[]
-        ..['articleBlocks'] = <Map<String, dynamic>>[]
         ..['articleMarkdown'] =
             '---\ntitle: 连续文档标题\ntemplate: journal\nfontPreset: clean\n---\n\n# 连续文档标题\n\n## 章节一\n\n图旁正文\n\n:::figure id="hero" layout="wrapRight" caption="文档配图"\nasset://hero\n:::\n'
         ..['articleAssetManifest'] = <String, dynamic>{

@@ -192,7 +192,10 @@ void main() {
 
     expect(find.text(UITextConstants.loginMethodWechat), findsOneWidget);
     expect(find.text(UITextConstants.loginMethodApple), findsOneWidget);
-    expect(find.text(UITextConstants.loginMethodCredentialManager), findsOneWidget);
+    expect(
+      find.text(UITextConstants.loginMethodCredentialManager),
+      findsOneWidget,
+    );
     expect(find.text(UITextConstants.loginMethodPasskey), findsOneWidget);
   });
 
@@ -212,7 +215,10 @@ void main() {
 
     expect(find.text(UITextConstants.loginMethodWechat), findsNothing);
     expect(find.text(UITextConstants.loginMethodApple), findsNothing);
-    expect(find.text(UITextConstants.loginMethodCredentialManager), findsNothing);
+    expect(
+      find.text(UITextConstants.loginMethodCredentialManager),
+      findsNothing,
+    );
     expect(find.text(UITextConstants.loginMethodPasskey), findsNothing);
     expect(find.text(UITextConstants.loginMethodWeibo), findsOneWidget);
   });

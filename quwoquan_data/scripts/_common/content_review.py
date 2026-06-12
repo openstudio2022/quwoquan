@@ -9,6 +9,7 @@ from typing import Iterable
 from _common.io import read_json
 from _common.paths import batch_command_root
 from _common.fact_coverage import FACT_COVERAGE_ALIASES, fact_covered
+from _common import quality_gates as qg
 from _common.template_fingerprints import template_fingerprint_issues
 
 
@@ -104,8 +105,9 @@ def check_narrative_quality(article: str, manifest: dict) -> list[str]:
         issues.append("blockquote leaks displayName")
     if re.search(r"^\s*> .*阿宁在路上", article, flags=re.M):
         issues.append("blockquote leaks system builtin persona")
-    if len(re.sub(r"\s+", "", article)) < 600:
+    if str(manifest.get("carrier") or "") != "gallery" and len(re.sub(r"\s+", "", article)) < 600:
         issues.append("article too short")
+    issues.extend(qg.intra_doc_repetition_issues(article))
     return issues
 
 
@@ -303,11 +305,16 @@ _NUMERIC_FACT_RE = re.compile(
 _NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
 
 
+def _normalize_numeric_token(value: str) -> str:
+    return value.replace(",", "").replace("，", "").strip()
+
+
 def numeric_traceability_issues(article: str, source_texts: Iterable[str]) -> list[str]:
     """关键数值可回溯门：正文中带旅行单位的数字必须能在 source 证据里找到，杜绝杜撰票价/海拔/时长。"""
     sources_compact = "".join(re.sub(r"\s+", "", t) for t in source_texts)
     if not sources_compact:
         return []
+    normalized_sources_compact = _normalize_numeric_token(sources_compact)
     issues: list[str] = []
     seen: set[str] = set()
     for match in _NUMERIC_FACT_RE.finditer(article):
@@ -316,13 +323,14 @@ def numeric_traceability_issues(article: str, source_texts: Iterable[str]) -> li
         if not numbers:
             continue
         for num in numbers:
-            if num in seen:
+            normalized_num = _normalize_numeric_token(num)
+            if normalized_num in seen:
                 continue
-            seen.add(num)
+            seen.add(normalized_num)
             # 至少 2 位的数字才校验（个位数太易巧合）；命中任一 source 即视为可回溯。
-            if len(num.replace(".", "").replace(",", "")) < 2:
+            if len(normalized_num.replace(".", "")) < 2:
                 continue
-            if num not in sources_compact:
+            if normalized_num not in normalized_sources_compact:
                 issues.append(f"numeric fact not traceable to source: '{token}'")
                 break
     return issues
@@ -339,17 +347,28 @@ def fact_traceability_issues(article: str, brief: dict, source_texts: Iterable[s
 
 
 def generator_provenance_issues(draft_meta: dict | None) -> list[str]:
-    """出处门：正文必须由 generator=agent 创作，并附 model 与引用的 sourcePath。"""
+    """出处门：正文必须由 generator=agent 创作，并附运行证据与可回查哈希。"""
     if not draft_meta:
         return ["missing draft_meta (no generator provenance)"]
     generator = str(draft_meta.get("generator") or "")
     if generator != "agent":
         return [f"generator is '{generator or 'unknown'}', only 'agent' may be materialized"]
     issues: list[str] = []
-    if not str(draft_meta.get("model") or "").strip():
+    model = str(draft_meta.get("model") or "").strip()
+    if not model:
         issues.append("draft_meta missing model")
+    elif model == "scaled-e2e/agent":
+        issues.append("draft_meta uses blocked pseudo model 'scaled-e2e/agent'")
     if not (draft_meta.get("citedSourcePaths") or []):
         issues.append("draft_meta missing citedSourcePaths")
+    if not str(draft_meta.get("agentRunId") or "").strip():
+        issues.append("draft_meta missing agentRunId")
+    for key in ("promptSha256", "writingPackSha256", "sourceBundleSha256", "draftSha256"):
+        value = str(draft_meta.get(key) or "").strip()
+        if not value:
+            issues.append(f"draft_meta missing {key}")
+        elif not value.startswith("sha256:"):
+            issues.append(f"draft_meta {key} must use sha256: digest")
     return issues
 
 

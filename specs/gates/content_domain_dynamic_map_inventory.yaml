@@ -92,20 +92,6 @@ codegen_generated:
       已 nested/专用生成：content_app_config_client_dto.g.dart（App 配置 content 子树）；
       wire 键：article_*_wire_keys、content_post_immersive_wire_keys.g.dart。
 
-# 独立里程碑：article_document_schema → 全量节点 codegen → 与 ArticleDocumentData 深度合并
-article_document_codegen:
-  - path: quwoquan_service/contracts/metadata/content/post/article_document_schema.yaml
-    category: ssot_pending_codegen
-    notes: |
-      形状 SSOT；App 已增加手写适配壳 quwoquan_app/lib/cloud/runtime/models/article_document_wire_dto.dart
-      （nodes 仍为 JSON 边界 List<Map>，经 toArticleDocumentData 进入编辑器模型）。
-      全量生成节点 DTO 与 UI 替换仍单列里程碑。
-
-article_document_wire_adapter:
-  - path: quwoquan_app/lib/cloud/runtime/models/article_document_wire_dto.dart
-    category: migrate_done_partially
-    notes: 与 schema 对齐的手写 wire DTO；测试见 test/cloud/content/contract/article_document_wire_dto_test.dart。
-
 # 计划 P0–P4 与仓库状态（metadata 加深 / 减少手写 dynamic）
 migration_slices:
   p0_app_config_client_projection:
@@ -120,9 +106,11 @@ migration_slices:
     status: done
     notes: content_post_immersive_wire_keys.yaml + codegen；works_immersive_viewer 消费。
   p3_article_document_codegen:
-    status: in_progress
+    status: retired
     notes: |
-      已落地 ArticleDocumentWireDto 适配壳 + 契约测试；编辑器全量切换仍 pending。
+      articleDocument wire/schema 适配壳已整体退役；
+      未上线版本不再保留该元数据路径，运行时唯一正文真相源为 articleMarkdown，
+      编辑器内存模型由端侧 `ArticleDocumentData` 继续承载。
   p4_gates_and_verify:
     status: done
     notes: |

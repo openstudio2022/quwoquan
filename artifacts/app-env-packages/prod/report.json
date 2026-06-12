@@ -3,12 +3,12 @@
   "env": "prod",
   "runtimeEnv": "prod",
   "dataSource": "remote",
-  "gatewayBaseUrl": "https://api.quwoquan.com",
-  "realtimeBaseUrl": "wss://api.quwoquan.com",
-  "avatarCdnBaseUrl": "https://avatar-cdn.quwoquan.com",
-  "imageCdnBaseUrl": "https://image-cdn.quwoquan.com",
-  "videoCdnBaseUrl": "https://video-cdn.quwoquan.com",
-  "uploadBaseUrl": "https://upload.quwoquan.com",
+  "gatewayBaseUrl": "http://118.31.239.122:19000",
+  "realtimeBaseUrl": "ws://118.31.239.122:19000",
+  "avatarCdnBaseUrl": "http://118.31.239.122:19100",
+  "imageCdnBaseUrl": "http://118.31.239.122:19100",
+  "videoCdnBaseUrl": "http://118.31.239.122:19100",
+  "uploadBaseUrl": "http://118.31.239.122:19100",
   "currentUserId": "",
   "seedManifest": "",
   "topologySchemaVersion": "environment-topology/v1",
@@ -21,11 +21,11 @@
     "distribution": "store-release"
   },
   "publicBases": {
-    "gatewayBaseUrl": "https://api.quwoquan.com",
-    "realtimeBaseUrl": "wss://api.quwoquan.com",
-    "mediaAvatarCdnBaseUrl": "https://avatar-cdn.quwoquan.com",
-    "mediaImageCdnBaseUrl": "https://image-cdn.quwoquan.com",
-    "mediaVideoCdnBaseUrl": "https://video-cdn.quwoquan.com",
-    "mediaUploadBaseUrl": "https://upload.quwoquan.com"
+    "gatewayBaseUrl": "http://118.31.239.122:19000",
+    "realtimeBaseUrl": "ws://118.31.239.122:19000",
+    "mediaAvatarCdnBaseUrl": "http://118.31.239.122:19100",
+    "mediaImageCdnBaseUrl": "http://118.31.239.122:19100",
+    "mediaVideoCdnBaseUrl": "http://118.31.239.122:19100",
+    "mediaUploadBaseUrl": "http://118.31.239.122:19100"
   }
 }

@@ -13,6 +13,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 
 from pathlib import Path
 import shutil
+from typing import Any
 
 from _common.article_package import (
     MARKDOWN_VERSION,
@@ -22,7 +23,7 @@ from _common.article_package import (
 )
 from _common.batch_asset_registry import allocate_post_asset_id, load_batch_asset_registry
 from _common.batch_manifest import load_batch_manifest
-from _common.paths import batch_root, relative_batch_ref
+from _common.paths import DATA_ROOT, RUNTIME_ROOT, batch_root, relative_batch_ref
 from _common.io import write_json
 from _common.draft_io import read_draft_meta, read_writing_pack
 from _common.provenance import build_provenance
@@ -55,14 +56,30 @@ def _relativize_ref(value: str, task_id: str, batch_id: str) -> str:
     s = str(value or "")
     if not s:
         return s
+    base = batch_root(task_id, batch_id).resolve()
     batch_prefix = f"batches/{batch_id}/"
     if s.startswith(batch_prefix):
         return s[len(batch_prefix) :]
+    marker = f"/batches/{batch_id}/"
+    normalized_full = s.replace("\\", "/")
+    if marker in normalized_full:
+        return normalized_full.split(marker, 1)[1]
     p = Path(s)
     if not p.is_absolute():
+        runtime_candidates = []
+        normalized = s.lstrip("./")
+        if normalized.startswith("quwoquan_data/runtime/"):
+            runtime_candidates.append(DATA_ROOT.parent / normalized)
+        runtime_candidates.append(RUNTIME_ROOT / normalized)
+        for candidate in runtime_candidates:
+            try:
+                candidate_resolved = candidate.resolve()
+                candidate_resolved.relative_to(base)
+            except (ValueError, OSError):
+                continue
+            return relative_batch_ref(candidate_resolved, task_id, batch_id)
         return s
     try:
-        base = batch_root(task_id, batch_id).resolve()
         p.resolve().relative_to(base)
     except (ValueError, OSError):
         return s
@@ -74,6 +91,12 @@ def _publication_condition_context(raw: object) -> object:
     if not isinstance(raw, dict):
         return raw
     context = dict(raw)
+    top_regions = [str(v) for v in (context.get("regions") or []) if v]
+    top_seasons = [str(v) for v in (context.get("seasons") or []) if v]
+    if top_regions and not context.get("region"):
+        context["region"] = top_regions[0]
+    if top_seasons and not context.get("season"):
+        context["season"] = top_seasons[0]
     profile = context.get("entityProfile")
     if isinstance(profile, dict):
         regions = [str(v) for v in (profile.get("regions") or []) if v]
@@ -121,6 +144,12 @@ def _publication_story_spine(compose_payload: dict) -> dict | list:
         )
         if key in raw
     }
+
+
+def _manifest_time_fact(payload: dict[str, Any], key: str) -> str | None:
+    value = payload.get(key)
+    text = str(value or "").strip()
+    return text or None
 
 
 def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Path]:
@@ -286,6 +315,12 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
             "sourceTaskId": task_id,
             "sourceBatchId": batch_id,
         }
+        created_at = _manifest_time_fact(compose_payload, "createdAt")
+        updated_at = _manifest_time_fact(compose_payload, "updatedAt")
+        if created_at:
+            manifest["createdAt"] = created_at
+        if updated_at:
+            manifest["updatedAt"] = updated_at
         # 「明」：预生成内容侧交集锚点（对齐 IntersectionReason 闭集口径），runtime 据此 + 用户补全文案。
         manifest["intersectionHints"] = build_intersection_hints(manifest)
         write_json(post_dir / "manifest.json", manifest)

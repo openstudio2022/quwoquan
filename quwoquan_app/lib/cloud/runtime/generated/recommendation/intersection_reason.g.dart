@@ -8,11 +8,15 @@ class IntersectionReason {
   final String dimension;
   final List<String> tagRefs;
   final String relationKind;
+  final String objectKind;
   final String relationObjectId;
   final String label;
   final int sharedCount;
   final double strength;
   final String displayText;
+  final String primaryText;
+  final String secondaryText;
+  final String weightTier;
   final String actionType;
   final String actionTargetId;
   final String source;
@@ -41,11 +45,15 @@ class IntersectionReason {
     this.dimension = '',
     this.tagRefs = const <String>[],
     this.relationKind = '',
+    this.objectKind = '',
     this.relationObjectId = '',
     this.label = '',
     this.sharedCount = 0,
     this.strength = 0.0,
     this.displayText = '',
+    this.primaryText = '',
+    this.secondaryText = '',
+    this.weightTier = '',
     this.actionType = '',
     this.actionTargetId = '',
     this.source = '',
@@ -76,11 +84,15 @@ class IntersectionReason {
       dimension: m['dimension']?.toString() ?? '',
       tagRefs: _parseStringList(m['tagRefs']) ?? <String>[],
       relationKind: m['relationKind']?.toString() ?? '',
+      objectKind: m['objectKind']?.toString() ?? '',
       relationObjectId: m['relationObjectId']?.toString() ?? '',
       label: m['label']?.toString() ?? '',
       sharedCount: (m['sharedCount'] as num?)?.toInt() ?? 0,
       strength: (m['strength'] as num?)?.toDouble() ?? 0.0,
       displayText: m['displayText']?.toString() ?? '',
+      primaryText: m['primaryText']?.toString() ?? '',
+      secondaryText: m['secondaryText']?.toString() ?? '',
+      weightTier: m['weightTier']?.toString() ?? '',
       actionType: m['actionType']?.toString() ?? '',
       actionTargetId: m['actionTargetId']?.toString() ?? '',
       source: m['source']?.toString() ?? '',
@@ -112,11 +124,15 @@ class IntersectionReason {
       'dimension': dimension,
       'tagRefs': tagRefs,
       'relationKind': relationKind,
+      'objectKind': objectKind,
       'relationObjectId': relationObjectId,
       'label': label,
       'sharedCount': sharedCount,
       'strength': strength,
       'displayText': displayText,
+      'primaryText': primaryText,
+      'secondaryText': secondaryText,
+      'weightTier': weightTier,
       'actionType': actionType,
       'actionTargetId': actionTargetId,
       'source': source,
@@ -147,11 +163,15 @@ class IntersectionReason {
     String? dimension,
     List<String>? tagRefs,
     String? relationKind,
+    String? objectKind,
     String? relationObjectId,
     String? label,
     int? sharedCount,
     double? strength,
     String? displayText,
+    String? primaryText,
+    String? secondaryText,
+    String? weightTier,
     String? actionType,
     String? actionTargetId,
     String? source,
@@ -180,11 +200,15 @@ class IntersectionReason {
       dimension: dimension ?? this.dimension,
       tagRefs: tagRefs ?? this.tagRefs,
       relationKind: relationKind ?? this.relationKind,
+      objectKind: objectKind ?? this.objectKind,
       relationObjectId: relationObjectId ?? this.relationObjectId,
       label: label ?? this.label,
       sharedCount: sharedCount ?? this.sharedCount,
       strength: strength ?? this.strength,
       displayText: displayText ?? this.displayText,
+      primaryText: primaryText ?? this.primaryText,
+      secondaryText: secondaryText ?? this.secondaryText,
+      weightTier: weightTier ?? this.weightTier,
       actionType: actionType ?? this.actionType,
       actionTargetId: actionTargetId ?? this.actionTargetId,
       source: source ?? this.source,

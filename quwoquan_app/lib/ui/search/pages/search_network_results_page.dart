@@ -18,7 +18,6 @@ import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
@@ -1150,18 +1149,6 @@ class _SearchNetworkResultsPageState
       }
       final dto = detail.post;
       final raw = detail.mergedArticleWireMap;
-      if (dto.isArticleLike) {
-        context.push(
-          AppRoutePaths.articleDetail(id: dto.id),
-          extra: const ArticleDetailPageRouteExtra(
-            referralSource: ReferralSource.search,
-          ),
-        );
-        return;
-      }
-      final route = dto.isVideoLike
-          ? '/video-viewer/0'
-          : '/media-viewer/photo/0';
       final interactionSnapshot = buildMediaViewerInteractionSnapshot(
         posts: <PostBaseDto>[dto],
         discoveryState: ref.read(discoveryStateProvider),
@@ -1173,7 +1160,14 @@ class _SearchNetworkResultsPageState
           .read(feedSessionProvider.notifier)
           .newFeedRequestId();
       final result = await context.push<Object?>(
-        route,
+        AppRoutePaths.workBrowser(
+          workId: dto.id,
+          filter: dto.isVideoLike
+              ? 'video'
+              : (dto.isArticleLike ? 'article' : 'image'),
+          source: 'global-search-network',
+          index: '0',
+        ),
         extra: MediaViewerExtra(
           posts: <ContentSurfaceView>[
             ContentSurfaceViewMapper.fromDto(dto, wire: raw),

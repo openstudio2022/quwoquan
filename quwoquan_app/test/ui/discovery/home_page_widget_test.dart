@@ -989,8 +989,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // V1.0：顶部不再有形态分段，仅保留返回与更多。
       expect(
         find.byKey(const ValueKey<String>('works-format-tab-strip')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('works-top-back')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('works-top-more')),
         findsOneWidget,
       );
       expect(find.byType(WorksImmersiveViewer), findsOneWidget);

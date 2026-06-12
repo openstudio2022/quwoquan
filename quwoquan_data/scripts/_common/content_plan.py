@@ -67,11 +67,22 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
     quotas = content.get("quotas") if isinstance(content.get("quotas"), Mapping) else {}
     want_entity = int(quotas.get("entityArticles") or 0)
     want_route = int(quotas.get("routeArticles") or 0)
-    if want_entity or want_route:
-        entity_n = sum(1 for i in items if str(i.get("kind") or "") == "entity")
+    want_gallery = int(quotas.get("galleryPosts") or 0)
+
+    def _item_carrier(item: Mapping[str, Any]) -> str:
+        return str(item.get("carrier") or item.get("contentType") or "article")
+
+    if want_entity or want_route or want_gallery:
+        entity_article_n = sum(
+            1 for i in items
+            if str(i.get("kind") or "") == "entity" and _item_carrier(i) != "gallery"
+        )
+        gallery_n = sum(1 for i in items if _item_carrier(i) == "gallery")
         route_n = sum(1 for i in items if str(i.get("kind") or "") == "route")
-        if want_entity and entity_n != want_entity:
-            issues.append(f"entityArticles quota {want_entity} but packet has {entity_n}")
+        if want_entity and entity_article_n != want_entity:
+            issues.append(f"entityArticles quota {want_entity} but packet has {entity_article_n}")
+        if want_gallery and gallery_n != want_gallery:
+            issues.append(f"galleryPosts quota {want_gallery} but packet has {gallery_n}")
         if want_route and route_n != want_route:
             issues.append(f"routeArticles quota {want_route} but packet has {route_n}")
 
@@ -136,7 +147,11 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
 def content_plan_quotas_required(spec: Mapping[str, Any]) -> bool:
     content = spec.get("content") if isinstance(spec.get("content"), Mapping) else {}
     quotas = content.get("quotas") if isinstance(content.get("quotas"), Mapping) else {}
-    return bool(int(quotas.get("entityArticles") or 0) or int(quotas.get("routeArticles") or 0))
+    return bool(
+        int(quotas.get("entityArticles") or 0)
+        or int(quotas.get("routeArticles") or 0)
+        or int(quotas.get("galleryPosts") or 0)
+    )
 
 
 def load_writing_intent_overrides(task_id: str, batch_id: str) -> dict[str, dict[str, Any]]:

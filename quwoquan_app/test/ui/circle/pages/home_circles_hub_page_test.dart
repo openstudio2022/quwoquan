@@ -251,14 +251,9 @@ Widget _buildTestApp({
         builder: (context, state) => const Scaffold(body: CirclesHubPage()),
       ),
       GoRoute(
-        path: '/media-viewer/:category/:index',
+        path: '/works/browser/:workId',
         builder: (context, state) =>
-            const Scaffold(body: Center(child: Text('media-viewer'))),
-      ),
-      GoRoute(
-        path: '/video-viewer/:index',
-        builder: (context, state) =>
-            const Scaffold(body: Center(child: Text('video-viewer'))),
+            const Scaffold(body: Center(child: Text('work-browser'))),
       ),
       GoRoute(
         path: '/circles',
@@ -400,7 +395,9 @@ void main() {
     await tester.pumpWidget(
       _buildTestApp(
         overrides: [
-          circleRepositoryProvider.overrideWithValue(_FailingHubCircleRepository()),
+          circleRepositoryProvider.overrideWithValue(
+            _FailingHubCircleRepository(),
+          ),
         ],
       ),
     );
@@ -536,7 +533,7 @@ void main() {
     expect(find.text('circles-page'), findsOneWidget);
   });
 
-  testWidgets('一级 tab 图片作品点击进入 unified media viewer', (tester) async {
+  testWidgets('一级 tab 图片作品点击进入 unified work browser', (tester) async {
     await tester.pumpWidget(_buildTestApp());
     _consumeImageLoadExceptions(tester);
 
@@ -549,10 +546,10 @@ void main() {
     await tester.tap(card);
     await _hubPumpSettled(tester);
 
-    expect(find.text('media-viewer'), findsOneWidget);
+    expect(find.text('work-browser'), findsOneWidget);
   });
 
-  testWidgets('一级 tab 视频作品点击进入 unified video viewer', (tester) async {
+  testWidgets('一级 tab 视频作品点击进入 unified work browser', (tester) async {
     await tester.pumpWidget(_buildTestApp());
     _consumeImageLoadExceptions(tester);
 
@@ -565,7 +562,7 @@ void main() {
     await tester.tap(card);
     await _hubPumpSettled(tester);
 
-    expect(find.text('video-viewer'), findsOneWidget);
+    expect(find.text('work-browser'), findsOneWidget);
   });
 
   testWidgets('圈子横向卡片在窄屏大字号下保持自适应不溢出', (tester) async {

@@ -1,12 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/components/avatar/conversation_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
@@ -29,7 +26,6 @@ import 'package:quwoquan_app/ui/chat/models/start_group_pickable_member.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/start_group_member_wizard_provider.dart';
-import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 
 // settings-canonical-exception: 多步发起群聊向导，完整 Inset 化见后续 slice owner:chat CR-20260329-003
 
@@ -61,7 +57,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   String _query = '';
   bool _isLoading = true;
   UiErrorSemantic? _pageErrorSemantic;
-  UiErrorSemantic? _submitErrorSemantic;
 
   @override
   void initState() {
@@ -169,7 +164,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       ),
       dismissible: true,
     );
-    _submitErrorSemantic = semantic;
     unawaited(
       AppActionErrorFeedback.show(
         context,
@@ -184,14 +178,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     );
   }
 
-  void _showEmptySelectableMembersToast(String message) {
-    AppToast.show(context, message);
-  }
-
   Future<void> _refreshChatEntryLists() async {
     await ref.read(chatInboxListProvider.notifier).refresh();
     ref.invalidate(
-      chatContactsRowsForSubTabProvider(UITextConstants.contactsTabFunGroup),
+      chatContactsRowsForSubTabProvider(UITextConstants.contactsTabGroups),
     );
   }
 
@@ -839,61 +829,6 @@ class _SelectionListDivider extends StatelessWidget {
   }
 }
 
-class _SectionRow extends StatelessWidget {
-  const _SectionRow({
-    required this.label,
-    required this.fgPrimary,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  final String label;
-  final Color fgPrimary;
-  final bool isDark;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: SettingsSemanticConstants.selectionRowMinHeight,
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: SettingsSemanticConstants.blockHorizontalPadding,
-            vertical: AppSpacing.sm,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: AppTypography.lg,
-                    color: onTap == null
-                        ? SettingsSemanticConstants.secondaryColor(isDark)
-                        : fgPrimary,
-                  ),
-                ),
-              ),
-              Icon(
-                CupertinoIcons.chevron_forward,
-                size: AppSpacing.iconMedium,
-                color: onTap == null
-                    ? SettingsSemanticConstants.secondaryColor(isDark)
-                    : SettingsSemanticConstants.selectionChevronColor(isDark),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _RelatedFriendRow extends StatelessWidget {
   const _RelatedFriendRow({
     required this.name,
@@ -1401,39 +1336,6 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SquareSymbolAvatar extends StatelessWidget {
-  const _SquareSymbolAvatar({
-    required this.isDark,
-    required this.icon,
-    required this.tintColor,
-  });
-
-  final bool isDark;
-  final IconData icon;
-  final Color tintColor;
-
-  @override
-  Widget build(BuildContext context) {
-    const size = AppSpacing.avatarSize;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: tintColor.withValues(alpha: isDark ? 0.18 : 0.14),
-        borderRadius: BorderRadius.circular(
-          AppSpacing.contentPreviewCornerRadius,
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        icon,
-        color: tintColor,
-        size: size * ChatConversationAvatarTokens.placeholderIconScale,
       ),
     );
   }

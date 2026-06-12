@@ -32,15 +32,18 @@ Widget _scopedApp({CircleRepository? mock}) {
           ),
           GoRoute(
             path: '/circle/:id/stats',
-            builder: (_, _) => const Scaffold(body: Center(child: Text('Stats'))),
+            builder: (_, _) =>
+                const Scaffold(body: Center(child: Text('Stats'))),
           ),
           GoRoute(
-            path: '/article/:id',
-            builder: (_, _) => const Scaffold(body: Center(child: Text('Article'))),
+            path: '/works/browser/:workId',
+            builder: (_, _) =>
+                const Scaffold(body: Center(child: Text('Work Browser'))),
           ),
           GoRoute(
             path: '/chat/:id',
-            builder: (_, _) => const Scaffold(body: Center(child: Text('Chat'))),
+            builder: (_, _) =>
+                const Scaffold(body: Center(child: Text('Chat'))),
           ),
         ],
       ),

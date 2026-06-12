@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
@@ -25,7 +26,7 @@ class ChatListItemViewModel {
   final String subtitle;
   final String timeLabel;
 
-  /// 会话级主头像：单聊优先对方头像；群聊优先服务端头像，缺失时由 UI 再回退到成员拼图。
+  /// 会话级主头像：单聊优先对方头像；群聊只消费服务端预合成头像。
   final String avatarUrl;
   final int groupAvatarVersion;
   final IconData? previewIcon;
@@ -37,6 +38,7 @@ class ChatListItemViewModel {
 
   bool get hasUnread => unreadCount > 0;
   bool get hasMention => mentionUnreadCount > 0;
+  bool get isNotification => id.startsWith('notification:');
 
   factory ChatListItemViewModel.fromDto(ChatInboxDto dto) {
     final preview = _resolvePreview(
@@ -58,6 +60,31 @@ class ChatListItemViewModel {
       unreadCount: dto.unreadCount,
       mentionUnreadCount: dto.mentionUnreadCount,
       isGroup: dto.type == 'group',
+      isMuted: dto.muted,
+      isPinned: dto.pinned,
+    );
+  }
+
+  factory ChatListItemViewModel.fromMessageHomeDto(MessageHomeRowDto dto) {
+    final preview = _resolvePreview('text', dto.summary);
+    final id = dto.conversationId.trim().isNotEmpty
+        ? dto.conversationId.trim()
+        : 'notification:${dto.notificationId.trim()}';
+    return ChatListItemViewModel(
+      id: id,
+      title: dto.title.trim().isEmpty
+          ? UITextConstants.untitledConversation
+          : dto.title.trim(),
+      subtitle: preview.text,
+      timeLabel: dto.lastActiveAt == null
+          ? ''
+          : ChatTimeFormatter.formatForConversationList(dto.lastActiveAt!),
+      avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
+      groupAvatarVersion: dto.groupAvatarVersion,
+      previewIcon: preview.icon,
+      unreadCount: dto.unreadCount,
+      mentionUnreadCount: dto.mentionUnreadCount,
+      isGroup: dto.conversationType == 'group',
       isMuted: dto.muted,
       isPinned: dto.pinned,
     );

@@ -10,6 +10,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	contenhttp "quwoquan_service/services/content-service/internal/adapters/http"
+	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 // TestCreatePostAggregate verifies POST /v1/content/posts creates an image post
@@ -121,7 +125,7 @@ func TestPublishPostContract(t *testing.T) {
 }
 
 // TestDeletePostContract verifies deleting a published post tombstones the
-// aggregate and GET then returns 404.
+// aggregate and GET then returns conflict/deleted.
 func TestDeletePostContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
@@ -149,6 +153,53 @@ func TestDeletePostContract(t *testing.T) {
 	testHandler.ServeHTTP(getRec, getReq)
 	if getRec.Code != http.StatusConflict {
 		t.Fatalf("expected 409 after delete, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+}
+
+func TestGetDeletedPostAfterServiceRestartStillReturnsConflict(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPostWithAuthor(t, "delete_restart_author", `{
+		"contentType":"micro",
+		"contentIdentity":"moment",
+		"body":"准备删除后重启再读取"
+	}`)
+	postID, _ := created["_id"].(string)
+	if postID == "" {
+		t.Fatal("published post missing _id")
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/v1/content/posts/"+postID, nil)
+	deleteReq.Header.Set("X-Client-User-Id", "delete_restart_author")
+	deleteRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 delete, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	restartedStore := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
+	restartedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")) == "" {
+			subAccountID := application.AnonymousFallbackSubAccountID
+			if userID := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); userID != "" {
+				subAccountID = userID
+			}
+			r.Header.Set("X-Client-Sub-Account-Id", subAccountID)
+		}
+		contenhttp.NewContentHandler(
+			nil,
+			application.NewPostService(restartedStore),
+			nil,
+			nil,
+		).Routes().ServeHTTP(w, r)
+	})
+
+	getReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	getReq.Header.Set("X-Client-User-Id", "delete_restart_author")
+	getRec := httptest.NewRecorder()
+	restartedHandler.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 after restart for deleted post, got %d: %s", getRec.Code, getRec.Body.String())
 	}
 }
 

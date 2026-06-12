@@ -57,6 +57,9 @@ def build_provenance(
             "publishSeq": manifest.get("publishSeq"),
             "generator": meta.get("generator") or cp.get("generator"),
             "model": meta.get("model") or cp.get("generatorModel"),
+            "agentRunId": meta.get("agentRunId"),
+            "agentId": meta.get("agentId"),
+            "sessionTrace": meta.get("sessionTrace"),
             "styleFamily": meta.get("styleFamily") or wp.get("styleFamily"),
             "openingStrategy": meta.get("openingStrategy"),
             "articleDigest": cp.get("articleMarkdownDigest") or manifest.get("articleMarkdownDigest"),
@@ -67,6 +70,10 @@ def build_provenance(
             "prompt": f"4.draft/prompt.md",
             "title": wp.get("title"),
             "styleFamily": wp.get("styleFamily"),
+            "promptSha256": meta.get("promptSha256"),
+            "writingPackSha256": meta.get("writingPackSha256"),
+            "sourceBundleSha256": meta.get("sourceBundleSha256"),
+            "draftSha256": meta.get("draftSha256"),
         },
         "originalSources": _original_sources(cp),
         "gateResults": {
@@ -99,8 +106,17 @@ def provenance_issues(post_dir: Path, manifest: Mapping[str, Any]) -> list[str]:
         issues.append(f"{post_dir}: provenance.final.articleDigest != article.md digest")
     if final.get("generator") != "agent":
         issues.append(f"{post_dir}: provenance.final.generator must be 'agent'")
+    if not str(final.get("agentRunId") or "").strip():
+        issues.append(f"{post_dir}: provenance.final.agentRunId missing")
     if not data.get("agentInput"):
         issues.append(f"{post_dir}: provenance.agentInput missing (agent 输入摘要必须记录)")
+    agent_input = data.get("agentInput") or {}
+    for key in ("promptSha256", "writingPackSha256", "sourceBundleSha256", "draftSha256"):
+        value = str(agent_input.get(key) or "").strip()
+        if not value:
+            issues.append(f"{post_dir}: provenance.agentInput.{key} missing")
+        elif not value.startswith("sha256:"):
+            issues.append(f"{post_dir}: provenance.agentInput.{key} invalid")
     if not data.get("originalSources"):
         issues.append(f"{post_dir}: provenance.originalSources empty (原始数据源必须一一记录)")
     if (data.get("gateResults") or {}).get("decision") != "approved":

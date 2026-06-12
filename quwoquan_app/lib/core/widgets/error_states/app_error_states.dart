@@ -26,14 +26,28 @@ class AppPageErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    final fallbackStyle = TextStyle(
+      color: AppColors.iosLabel(context),
+      fontSize: AppTypography.iosBody,
+      decoration: TextDecoration.none,
+    );
+    return DefaultTextStyle(
+      style: fallbackStyle,
       child: Padding(
-        padding: padding ?? EdgeInsets.all(AppSpacing.containerMd),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: AppSpacing.feedMaxContentWidth,
+        padding: EdgeInsets.zero,
+        child: Center(
+          child: Padding(
+            padding: padding ?? EdgeInsets.all(AppSpacing.containerMd),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: AppSpacing.feedMaxContentWidth,
+              ),
+              child: _ErrorEmptyPageBody(
+                semantic: semantic,
+                onAction: onAction,
+              ),
+            ),
           ),
-          child: _ErrorEmptyPageBody(semantic: semantic, onAction: onAction),
         ),
       ),
     );

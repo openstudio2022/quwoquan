@@ -19,15 +19,18 @@ class ChatApiMetadata {
     'CreateConversation': '/v1/chat/conversations',
     'DissolveConversation': '/v1/chat/conversations/{conversationId}',
     'GetConversation': '/v1/chat/conversations/{conversationId}',
+    'GetGroupHome': '/v1/chat/groups/{conversationId}/home',
     'GetReceipts': '/v1/chat/conversations/{conversationId}/messages/{messageId}/receipts',
     'InitChatUpload': '/v1/chat/media/uploads:init',
     'InviteAssistant': '/v1/chat/conversations/{conversationId}/assistant',
+    'ListContactHome': '/v1/chat/contact-home',
     'ListContacts': '/v1/chat/contacts',
     'ListConversationTimestamps': '/v1/chat/conversations/timestamps',
     'ListConversations': '/v1/chat/conversations',
     'ListGroupCandidates': '/v1/chat/group-candidates',
     'ListInbox': '/v1/chat/inbox',
     'ListMembers': '/v1/chat/conversations/{conversationId}/members',
+    'ListMessageHome': '/v1/chat/message-home',
     'ListMessages': '/v1/chat/conversations/{conversationId}/messages',
     'MarkAsRead': '/v1/chat/conversations/{conversationId}/messages/{messageId}/read',
     'RecallMessage': '/v1/chat/conversations/{conversationId}/messages/{messageId}/recall',
@@ -40,6 +43,7 @@ class ChatApiMetadata {
     'SyncMessages': '/v1/chat/conversations/{conversationId}/sync',
     'TransferOwnership': '/v1/chat/conversations/{conversationId}/owner',
     'UpdateConversationSettings': '/v1/chat/conversations/{conversationId}/settings',
+    'UpdateConversationTitle': '/v1/chat/conversations/{conversationId}',
     'UpdateGroupAdmins': '/v1/chat/conversations/{conversationId}/admins',
   };
 
@@ -51,15 +55,18 @@ class ChatApiMetadata {
     'CreateConversation': 'POST',
     'DissolveConversation': 'DELETE',
     'GetConversation': 'GET',
+    'GetGroupHome': 'GET',
     'GetReceipts': 'GET',
     'InitChatUpload': 'POST',
     'InviteAssistant': 'POST',
+    'ListContactHome': 'GET',
     'ListContacts': 'GET',
     'ListConversationTimestamps': 'GET',
     'ListConversations': 'GET',
     'ListGroupCandidates': 'GET',
     'ListInbox': 'GET',
     'ListMembers': 'GET',
+    'ListMessageHome': 'GET',
     'ListMessages': 'GET',
     'MarkAsRead': 'POST',
     'RecallMessage': 'POST',
@@ -72,6 +79,7 @@ class ChatApiMetadata {
     'SyncMessages': 'POST',
     'TransferOwnership': 'PATCH',
     'UpdateConversationSettings': 'PATCH',
+    'UpdateConversationTitle': 'PATCH',
     'UpdateGroupAdmins': 'PUT',
   };
 
@@ -84,15 +92,18 @@ class ChatApiMetadata {
     'CreateConversation': 'public',
     'DissolveConversation': 'required',
     'GetConversation': 'required',
+    'GetGroupHome': 'required',
     'GetReceipts': 'public',
     'InitChatUpload': 'required',
     'InviteAssistant': 'required',
+    'ListContactHome': 'required',
     'ListContacts': 'public',
     'ListConversationTimestamps': 'public',
     'ListConversations': 'required',
     'ListGroupCandidates': 'required',
     'ListInbox': 'required',
     'ListMembers': 'public',
+    'ListMessageHome': 'required',
     'ListMessages': 'public',
     'MarkAsRead': 'required',
     'RecallMessage': 'public',
@@ -105,6 +116,7 @@ class ChatApiMetadata {
     'SyncMessages': 'required',
     'TransferOwnership': 'required',
     'UpdateConversationSettings': 'required',
+    'UpdateConversationTitle': 'required',
     'UpdateGroupAdmins': 'required',
   };
 
@@ -115,15 +127,18 @@ class ChatApiMetadata {
   static const String createConversationOperation = 'CreateConversation';
   static const String dissolveConversationOperation = 'DissolveConversation';
   static const String getConversationOperation = 'GetConversation';
+  static const String getGroupHomeOperation = 'GetGroupHome';
   static const String getReceiptsOperation = 'GetReceipts';
   static const String initChatUploadOperation = 'InitChatUpload';
   static const String inviteAssistantOperation = 'InviteAssistant';
+  static const String listContactHomeOperation = 'ListContactHome';
   static const String listContactsOperation = 'ListContacts';
   static const String listConversationTimestampsOperation = 'ListConversationTimestamps';
   static const String listConversationsOperation = 'ListConversations';
   static const String listGroupCandidatesOperation = 'ListGroupCandidates';
   static const String listInboxOperation = 'ListInbox';
   static const String listMembersOperation = 'ListMembers';
+  static const String listMessageHomeOperation = 'ListMessageHome';
   static const String listMessagesOperation = 'ListMessages';
   static const String markAsReadOperation = 'MarkAsRead';
   static const String recallMessageOperation = 'RecallMessage';
@@ -136,6 +151,7 @@ class ChatApiMetadata {
   static const String syncMessagesOperation = 'SyncMessages';
   static const String transferOwnershipOperation = 'TransferOwnership';
   static const String updateConversationSettingsOperation = 'UpdateConversationSettings';
+  static const String updateConversationTitleOperation = 'UpdateConversationTitle';
   static const String updateGroupAdminsOperation = 'UpdateGroupAdmins';
 
   static const String abortChatUploadPath = '/v1/chat/media/uploads:abort';
@@ -160,6 +176,12 @@ class ChatApiMetadata {
       'conversationId': conversationId,
     });
   }
+  static const String getGroupHomePathTemplate = '/v1/chat/groups/{conversationId}/home';
+  static String getGroupHomePath({required String conversationId}) {
+    return _fillPath(getGroupHomePathTemplate, <String, String>{
+      'conversationId': conversationId,
+    });
+  }
   static const String getReceiptsPathTemplate = '/v1/chat/conversations/{conversationId}/messages/{messageId}/receipts';
   static String getReceiptsPath({required String conversationId, required String messageId}) {
     return _fillPath(getReceiptsPathTemplate, <String, String>{
@@ -174,6 +196,7 @@ class ChatApiMetadata {
       'conversationId': conversationId,
     });
   }
+  static const String listContactHomePath = '/v1/chat/contact-home';
   static const String listContactsPath = '/v1/chat/contacts';
   static const String listConversationTimestampsPath = '/v1/chat/conversations/timestamps';
   static const String listConversationsPath = '/v1/chat/conversations';
@@ -185,6 +208,7 @@ class ChatApiMetadata {
       'conversationId': conversationId,
     });
   }
+  static const String listMessageHomePath = '/v1/chat/message-home';
   static const String listMessagesPathTemplate = '/v1/chat/conversations/{conversationId}/messages';
   static String listMessagesPath({required String conversationId}) {
     return _fillPath(listMessagesPathTemplate, <String, String>{
@@ -242,6 +266,12 @@ class ChatApiMetadata {
   static const String updateConversationSettingsPathTemplate = '/v1/chat/conversations/{conversationId}/settings';
   static String updateConversationSettingsPath({required String conversationId}) {
     return _fillPath(updateConversationSettingsPathTemplate, <String, String>{
+      'conversationId': conversationId,
+    });
+  }
+  static const String updateConversationTitlePathTemplate = '/v1/chat/conversations/{conversationId}';
+  static String updateConversationTitlePath({required String conversationId}) {
+    return _fillPath(updateConversationTitlePathTemplate, <String, String>{
       'conversationId': conversationId,
     });
   }

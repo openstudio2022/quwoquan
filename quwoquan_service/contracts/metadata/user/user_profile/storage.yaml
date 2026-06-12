@@ -18,6 +18,7 @@ tables:
       - { name: avatar_asset_id, type: VARCHAR(64) }
       - { name: avatar_version, type: INTEGER, constraints: [NOT_NULL], default: 0 }
       - { name: bio, type: VARCHAR(500) }
+      - { name: identity_tags, type: "TEXT[]" }
       - { name: gender, type: VARCHAR(16) }
       - { name: birth_date, type: DATE }
       - { name: region, type: VARCHAR(128) }

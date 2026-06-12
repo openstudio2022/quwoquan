@@ -118,6 +118,57 @@ def test_requeue_affected_refs():
     assert payload["state"] == oq.STATE_QUEUED
 
 
+def test_requeue_resets_dead_job_runtime_flags():
+    batch = "test_batch_requeue_dead"
+    oq.enqueue_ref_job(TASK, batch, "rdead", "author", max_attempts=1)
+    job = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    oq.fail_job(TASK, batch, job["jobId"], job["lease"], error="dead now", fingerprint="fp-dead")
+    touched = oq.requeue_refs(TASK, batch, ["rdead"], "author", reason="manual_repair")
+    assert touched == ["rdead"]
+    payload = read_json(oq._job_path(TASK, batch, job["jobId"]))
+    assert payload["state"] == oq.STATE_QUEUED
+    assert payload["lease"] is None
+    assert payload["leaseExpiresEpoch"] == 0
+    assert payload["deadlineEpoch"] == 0
+    assert payload["notBeforeEpoch"] == 0
+    assert payload["sameRunRetryable"] is True
+    assert payload["lastError"] is None
+    assert payload["failureFingerprints"] == []
+    assert payload["timings"][-1]["reason"] == "manual_repair"
+
+
+def test_requeue_resets_startup_failure_count():
+    batch = "test_batch_requeue_startup"
+    oq.enqueue_ref_job(TASK, batch, "rstartup", "author", max_attempts=2)
+    job = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    oq.fail_job(
+        TASK,
+        batch,
+        job["jobId"],
+        job["lease"],
+        error="startup: Bridge request failed",
+        same_run_retryable=True,
+        startup_failure=True,
+    )
+    touched = oq.requeue_refs(TASK, batch, ["rstartup"], "author", reason="manual_repair")
+    assert touched == ["rstartup"]
+    payload = read_json(oq._job_path(TASK, batch, job["jobId"]))
+    assert payload["state"] == oq.STATE_QUEUED
+    assert payload["startupFailureCount"] == 0
+    assert payload["lastError"] is None
+
+
+def test_purge_jobs_removes_matching_stage_entries():
+    batch = "test_batch_purge"
+    oq.enqueue_ref_job(TASK, batch, "keep_download", "download")
+    oq.enqueue_ref_job(TASK, batch, "drop_a", "author")
+    oq.enqueue_ref_job(TASK, batch, "drop_b", "author")
+    res = oq.purge_jobs(TASK, batch, stage="author", refs=["drop_b", "drop_a"])
+    assert res["removed"] == ["drop_a", "drop_b"]
+    summary = oq.queue_summary(TASK, batch)
+    assert summary["byState"] == {"queued": ["keep_download"]}
+
+
 def test_fail_sets_backoff_not_before():
     batch = "test_batch_backoff"
     oq.enqueue_ref_job(TASK, batch, "rb", "author", max_attempts=3)
@@ -128,6 +179,70 @@ def test_fail_sets_backoff_not_before():
     assert payload["notBeforeEpoch"] > oq._now(), "failed job must back off before re-lease"
     # 退避未到期 → 不可重取
     assert oq.acquire_lease(TASK, batch, worker="w2", stage="author") is None
+
+
+def test_startup_failure_can_skip_attempt_budget():
+    batch = "test_batch_startup_no_consume"
+    oq.enqueue_ref_job(TASK, batch, "rsu", "author", max_attempts=2)
+    job = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    res = oq.fail_job(
+        TASK,
+        batch,
+        job["jobId"],
+        job["lease"],
+        error="startup: Bridge request failed",
+        same_run_retryable=True,
+        startup_failure=True,
+    )
+    assert res["state"] == oq.STATE_FAILED
+    assert res["attempt"] == 1
+    assert res["startupFailureCount"] == 1
+
+
+def test_startup_failure_uses_independent_startup_budget():
+    batch = "test_batch_startup_budget"
+    oq.enqueue_ref_job(TASK, batch, "rsub", "author", max_attempts=1, max_startup_failures=3)
+    job1 = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    res1 = oq.fail_job(
+        TASK,
+        batch,
+        job1["jobId"],
+        job1["lease"],
+        error="startup: Bridge request failed",
+        same_run_retryable=True,
+        startup_failure=True,
+    )
+    assert res1["state"] == oq.STATE_FAILED
+    payload = read_json(oq._job_path(TASK, batch, job1["jobId"]))
+    payload["notBeforeEpoch"] = 0
+    from _common.io import write_json
+    write_json(oq._job_path(TASK, batch, job1["jobId"]), payload)
+    job2 = oq.acquire_lease(TASK, batch, worker="w2", stage="author")
+    res2 = oq.fail_job(
+        TASK,
+        batch,
+        job2["jobId"],
+        job2["lease"],
+        error="startup: Bridge request failed",
+        same_run_retryable=True,
+        startup_failure=True,
+    )
+    assert res2["state"] == oq.STATE_FAILED
+    payload = read_json(oq._job_path(TASK, batch, job2["jobId"]))
+    payload["notBeforeEpoch"] = 0
+    write_json(oq._job_path(TASK, batch, job2["jobId"]), payload)
+    job3 = oq.acquire_lease(TASK, batch, worker="w3", stage="author")
+    res3 = oq.fail_job(
+        TASK,
+        batch,
+        job3["jobId"],
+        job3["lease"],
+        error="startup: Bridge request failed",
+        same_run_retryable=True,
+        startup_failure=True,
+    )
+    assert res3["state"] == oq.STATE_DEAD
+    assert res3["startupFailureCount"] == 3
 
 
 def test_reaper_times_out_over_wall_clock():
@@ -179,6 +294,27 @@ def test_spillover_dead_to_repair_batch():
     new_job = read_json(oq._job_path(TASK, target, new_job_id))
     assert new_job["state"] == oq.STATE_QUEUED and new_job["attempt"] == 0
     assert new_job["meta"]["spilledFromBatch"] == batch
+
+
+def test_revive_dead_startup_jobs_requeues_without_manual_edit():
+    batch = "test_batch_revive_startup"
+    oq.enqueue_ref_job(TASK, batch, "rrevive", "author", max_attempts=1, max_startup_failures=1)
+    job = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    oq.fail_job(
+        TASK,
+        batch,
+        job["jobId"],
+        job["lease"],
+        error="startup: Bridge request failed",
+        same_run_retryable=False,
+        startup_failure=True,
+    )
+    revived = oq.revive_dead_startup_jobs(TASK, batch, refs=["rrevive"], stage="author")
+    assert revived["revived"] == ["rrevive"]
+    payload = read_json(oq._job_path(TASK, batch, job["jobId"]))
+    assert payload["state"] == oq.STATE_QUEUED
+    assert payload["attempt"] == 1
+    assert payload["startupFailureCount"] == 0
 
 
 def test_lease_packet_carries_ralph_exit_contract():

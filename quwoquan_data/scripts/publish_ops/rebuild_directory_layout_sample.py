@@ -95,6 +95,11 @@ def _texture(seed: int) -> bytes:
     return buf.tobytes()
 
 
+def _ensure_object_stages(obj: Path, stages: tuple[str, ...]) -> None:
+    for stage in stages:
+        (obj / stage).mkdir(parents=True, exist_ok=True)
+
+
 def _build_entity(
     task: str,
     batch: str,
@@ -108,6 +113,7 @@ def _build_entity(
     obj = batch_entity_object_dir(task, batch, "地点", "景区", name)
     if obj.exists():
         shutil.rmtree(obj)
+    _ensure_object_stages(obj, ("1.download", "2.quality", "3.compose", "4.draft", "5.review"))
     images = [
         {"bytes": _texture(seed + i), "url": f"https://commons.example/{name}/{i}.jpg",
          "license": "CC BY-SA (Wikimedia Commons)", "credit": "Wikimedia Commons",
@@ -202,6 +208,7 @@ def _build_post(task: str, batch: str, *, global_batch_seq: int, asset_registry)
     post = content_object.content_object_dir(task, batch, ref)
     if post.exists():
         shutil.rmtree(post)
+    _ensure_object_stages(post, ("1.download", "2.quality", "3.compose", "4.draft", "5.review"))
     assets_dir = post / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
     roles = [("cover", "fullWidth"), ("detail_1", "gallery"), ("closing", "fullWidth")]

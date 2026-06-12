@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_presentation.g.dart';
+import 'package:quwoquan_app/ui/content/models/content_time_label.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_surface_id.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -388,7 +389,10 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                     ),
                     SizedBox(width: AppSpacing.smallBorderRadius.w),
                     Text(
-                      _formatTimeAgo(widget.presentation.createdAt),
+                      ContentTimeLabel.cardLabel(
+                        createdAt: widget.presentation.createdAt,
+                        updatedAt: widget.presentation.updatedAt,
+                      ),
                       style: TextStyle(
                         fontSize: AppTypography.sm, // 使用语义标签
                         color: isDark
@@ -714,28 +718,6 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   }
 
   /// 格式化时间
-  String _formatTimeAgo(DateTime createdAt) {
-    try {
-      final now = DateTime.now();
-      final created = createdAt;
-      final difference = now.difference(created);
-
-      if (difference.inMinutes < 1) {
-        return AppStrings.justNow;
-      } else if (difference.inMinutes < 60) {
-        return '${difference.inMinutes}${AppStrings.minutesAgo}';
-      } else if (difference.inHours < 24) {
-        return '${difference.inHours}${AppStrings.hoursAgo}';
-      } else if (difference.inDays < 7) {
-        return '${difference.inDays}${AppStrings.daysAgo}';
-      } else {
-        return '${created.month}${AppStrings.monthDay}${created.day}';
-      }
-    } catch (e) {
-      return AppStrings.justNow;
-    }
-  }
-
   /// 格式化数量显示 - 按照Figma原型设计，确保数字长度可控
   String _formatCount(int count) {
     if (count == 0) {

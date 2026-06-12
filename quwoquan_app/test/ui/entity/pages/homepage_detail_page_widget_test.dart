@@ -10,7 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_context.
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_rollout_context.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 
 void main() {
@@ -50,12 +50,11 @@ void main() {
     expect(find.text('与你相关'), findsOneWidget);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -520));
     await tester.pumpAndSettle();
-    expect(find.text('首页'), findsOneWidget);
     expect(find.text('内容'), findsWidgets);
-    expect(find.text('口碑'), findsWidgets);
-    expect(find.text('关联'), findsOneWidget);
-    expect(find.text('统一对象键'), findsOneWidget);
-    expect(find.text('对象页模板'), findsOneWidget);
+    expect(find.text('讨论'), findsWidgets);
+    expect(find.text('兴趣圈'), findsOneWidget);
+    expect(find.text('实体介绍'), findsOneWidget);
+    expect(find.text('查看详情'), findsOneWidget);
     expect(find.text('认领主页'), findsWidgets);
     expect(find.text('治理入口'), findsNothing);
   });
@@ -74,6 +73,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('关联到本次发布'), findsOneWidget);
+  });
+
+  testWidgets('alpha/mock 下支持数据工程 entityRef 直达实体主页', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: HomepageDetailPage(homepageId: 'Entity/旅行/景区/峨眉山'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('峨眉山'), findsWidgets);
+    expect(find.byType(AppPageErrorState), findsNothing);
   });
 
   testWidgets('对象页 bundle 请求透传推荐与灰度上下文', (tester) async {

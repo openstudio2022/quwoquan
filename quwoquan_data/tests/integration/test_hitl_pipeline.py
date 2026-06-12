@@ -145,6 +145,8 @@ def _run_pipeline() -> Path:
         cited_source_paths=quality.get("sourcePaths") or [],
         covered_facts=pack.get("mustIncludeFacts") or [],
         extracted_entities=[{"name": MINED, "type": "自然景观", "evidenceRef": "curated_story"}],
+        agent_run_id="run-hitl",
+        agent_id="agent-hitl",
     )
     review = review_route_draft(TASK, BATCH, REF, brief, quality)
     assert review["decision"] == "approved", review["issues"]
@@ -157,6 +159,9 @@ def test_manifest_is_minimal_and_trace_offloaded():
     post_dir = _run_pipeline()
     manifest = read_json(post_dir / "manifest.json")
     assert post_manifest_contract_issues(manifest) == []
+    assert manifest["createdAt"]
+    assert manifest["updatedAt"]
+    assert "publishedAt" not in manifest
     for dropped in ("sourceQuality", "relatedSearchPlan", "evidenceBundle", "sourcePaths"):
         assert dropped not in manifest, f"manifest 不应再含中间态 {dropped}"
     assert "articleMarkdownDigest" not in manifest

@@ -174,7 +174,7 @@ workloads:
 
 # 后续拆分单元：当前并入 seed-box modular monolith，满足拆分触发阈值时按 Strangler Fig 抽出独立 Deployment。
 # 拆分不变量：域级 API path / route / Service DNS 名 / 端侧 runtime 注入 / 数据面归属保持不变。
-# 注：deploy/service/content-service、chat-service 存在历史独立 overlay，但未 include 进任何 prod root，
+# 注：deploy/service/content-service、chat-service 存在既往独立 overlay，但未 include 进任何 prod root，
 #     当前仍由 seed-box 承载，属 split-candidate（未 wired）。
 split_candidates:
   - domain: content

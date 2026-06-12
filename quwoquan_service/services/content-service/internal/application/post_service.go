@@ -69,15 +69,6 @@ type StoryRuntimeConfig struct {
 	CanaryMatrix     []StoryCanaryStage `json:"canaryMatrix"`
 }
 
-type articleDocumentSnapshot struct {
-	Title      string
-	Body       string
-	MediaURLs  []string
-	CoverURL   string
-	Template   string
-	FontPreset string
-}
-
 type PostService struct {
 	store            persistence.PostRepository
 	signaler         rtrec.SignalProcessor
@@ -1466,7 +1457,10 @@ func (s *PostService) GenerateArticleSummary(title, body string) string {
 
 func (s *PostService) GetPostOrTombstone(ctx context.Context, postID string) (*postmodel.Post, bool, bool) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if ok && !strings.EqualFold(strings.TrimSpace(post.Status), "deleted") {
+	if ok {
+		if strings.EqualFold(strings.TrimSpace(post.Status), "deleted") {
+			return nil, false, true
+		}
 		return normalizePostForRead(post), true, false
 	}
 	s.mu.Lock()
@@ -1824,123 +1818,6 @@ func parseActivityTime(raw any) time.Time {
 		}
 	}
 	return time.Now().UTC()
-}
-
-func deriveArticleDocumentSnapshot(document map[string]any) articleDocumentSnapshot {
-	snapshot := articleDocumentSnapshot{
-		Template: strings.TrimSpace(asString(document["template"])),
-		FontPreset: strings.TrimSpace(
-			asString(document["fontPreset"]),
-		),
-		CoverURL: strings.TrimSpace(asString(document["coverImageUrl"])),
-	}
-	if snapshot.Template == "" {
-		snapshot.Template = strings.TrimSpace(asString(document["articleTemplate"]))
-	}
-	if snapshot.FontPreset == "" {
-		snapshot.FontPreset = strings.TrimSpace(asString(document["articleFontPreset"]))
-	}
-	if snapshot.CoverURL == "" {
-		snapshot.CoverURL = strings.TrimSpace(asString(document["coverUrl"]))
-	}
-	if len(document) == 0 {
-		return snapshot
-	}
-	appendLine := func(lines []string, line string) []string {
-		normalized := strings.TrimSpace(line)
-		if normalized == "" {
-			return lines
-		}
-		return append(lines, normalized)
-	}
-	var lines []string
-	orderedIndex := 0
-	rawNodes, _ := document["nodes"].([]any)
-	for _, rawNode := range rawNodes {
-		node := asMap(rawNode)
-		if len(node) == 0 {
-			continue
-		}
-		nodeType := strings.TrimSpace(asString(node["type"]))
-		text := strings.TrimSpace(asString(node["text"]))
-		switch nodeType {
-		case "documentTitle", "title":
-			if snapshot.Title == "" {
-				snapshot.Title = text
-			}
-			orderedIndex = 0
-		case "headingMajor", "headingMinor", "heading2", "heading3", "sectionTitle":
-			orderedIndex = 0
-			lines = appendLine(lines, text)
-		case "orderedItem":
-			if text == "" {
-				continue
-			}
-			orderedIndex++
-			lines = appendLine(lines, fmt.Sprintf("%d. %s", orderedIndex, text))
-		case "bulletItem":
-			orderedIndex = 0
-			lines = appendLine(lines, "• "+text)
-		case "figure", "image":
-			orderedIndex = 0
-			imageURL := strings.TrimSpace(asString(node["imageUrl"]))
-			if imageURL == "" {
-				continue
-			}
-			snapshot.MediaURLs = append(snapshot.MediaURLs, imageURL)
-			if snapshot.CoverURL == "" {
-				snapshot.CoverURL = imageURL
-			}
-		default:
-			orderedIndex = 0
-			lines = appendLine(lines, text)
-		}
-	}
-	if len(rawNodes) == 0 {
-		snapshot.Title = strings.TrimSpace(asString(document["title"]))
-		snapshot.Body = strings.TrimSpace(asString(document["body"]))
-		rawAssets, _ := document["assets"].([]any)
-		for _, rawAsset := range rawAssets {
-			asset := asMap(rawAsset)
-			if len(asset) == 0 {
-				continue
-			}
-			imageURL := strings.TrimSpace(asString(asset["imageUrl"]))
-			if imageURL == "" {
-				continue
-			}
-			snapshot.MediaURLs = append(snapshot.MediaURLs, imageURL)
-			if snapshot.CoverURL == "" {
-				snapshot.CoverURL = imageURL
-			}
-		}
-		if snapshot.CoverURL == "" && len(snapshot.MediaURLs) > 0 {
-			snapshot.CoverURL = snapshot.MediaURLs[0]
-		}
-		return snapshot
-	}
-	snapshot.Body = strings.Join(lines, "\n")
-	if snapshot.CoverURL == "" && len(snapshot.MediaURLs) > 0 {
-		snapshot.CoverURL = snapshot.MediaURLs[0]
-	}
-	return snapshot
-}
-
-func (s *PostService) syncArticleDocumentSnapshot(post *postmodel.Post) {
-	if post == nil || strings.TrimSpace(post.ContentType) != "article" {
-		return
-	}
-	if strings.TrimSpace(post.ArticleMarkdown) != "" {
-		return
-	}
-	snapshot := deriveArticleDocumentSnapshot(post.ArticleDocument)
-	post.Title = snapshot.Title
-	post.Body = snapshot.Body
-	post.MediaUrls = snapshot.MediaURLs
-	post.CoverUrl = snapshot.CoverURL
-	post.ArticleTemplate = snapshot.Template
-	post.ArticleFontPreset = snapshot.FontPreset
-	post.Summary = generateArticleSummary(snapshot.Title, snapshot.Body)
 }
 
 func shareActorID(shareKey string) string {
@@ -3427,6 +3304,8 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"circleIds":          asStringSlice(post.CircleIds),
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
+		"createdAt":          formatTimePtr(post.CreatedAt),
+		"updatedAt":          formatTimePtr(post.UpdatedAt),
 		"title":              post.Title,
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
@@ -3575,7 +3454,6 @@ func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) erro
 		"summary",
 		"mediaUrls",
 		"coverUrl",
-		"articleDocument",
 		"articleTemplate",
 		"articleFontPreset",
 	} {

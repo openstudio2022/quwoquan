@@ -106,8 +106,10 @@ void main() {
         fallbackArticleId: 'article_hydration_switch',
       );
 
-      expect(before.documentSource, ArticleDetailDocumentSource.body);
-      expect(before.contentHtml, equals('分发摘要正文'));
+      expect(before.documentSource, ArticleDetailDocumentSource.empty);
+      expect(before.contentHtml, isEmpty);
+      expect(before.pages.single.body, isEmpty);
+      expect(before.pages.single.title, equals('分发标题'));
       expect(after.documentSource, ArticleDetailDocumentSource.markdown);
       expect(after.document.title, equals('水合后标题'));
       expect(after.document.body, contains('水合后正文第一段'));

@@ -389,10 +389,14 @@ class _ProfileCommentItem extends StatelessWidget {
         'parentCommentId': comment.parentCommentId!,
       if (reply) 'replyToCommentId': comment.id,
     };
-    return Uri(
-      path: AppRoutePaths.articleDetail(id: postId),
-      queryParameters: query,
-    ).toString();
+    final route = Uri.parse(
+      AppRoutePaths.workBrowser(workId: postId, source: 'profile-comments'),
+    );
+    return route
+        .replace(
+          queryParameters: <String, String>{...route.queryParameters, ...query},
+        )
+        .toString();
   }
 
   String get _postId {

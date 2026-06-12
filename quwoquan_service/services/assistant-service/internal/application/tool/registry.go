@@ -321,7 +321,7 @@ func canonicalToolDocuments(query string) []rtsearch.Document {
 
 // executeRetrieveToolSearch runs the unified retrieve contract for the cloud
 // search/app_search tools. AI input is targets/ids/names/terms/filters; the
-// legacy "query" key is only parsed for backward compatibility.
+// compat "query" key is only parsed for backward compatibility.
 func executeRetrieveToolSearch(ctx context.Context, req Request, defaults []rtsearch.Target) rtsearch.RetrieveResponse {
 	rreq := parseRetrieveToolRequest(req, defaults)
 	display := retrieveDisplayQuery(rreq)

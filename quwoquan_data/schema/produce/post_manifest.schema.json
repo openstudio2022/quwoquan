@@ -34,6 +34,9 @@
     "publishAngle": { "type": "string" },
     "publishTitle": { "type": "string" },
     "publishSeq": { "type": "integer" },
+    "createdAt": { "type": "string", "format": "date-time", "description": "内容首次创建时间（来自 draft_meta 事实）" },
+    "updatedAt": { "type": "string", "format": "date-time", "description": "内容最后编辑时间（来自 draft_meta 事实）" },
+    "publishedAt": { "type": "string", "format": "date-time", "description": "首次公开可见时间（由 promote 注入并保留）" },
     "sourceTaskId": { "type": ["string", "null"], "description": "溯源：生成此内容的任务 id（task trace/hydrate）" },
     "sourceBatchId": { "type": ["string", "null"], "description": "溯源：生成此内容的批次 id" },
     "writingIntent": {
@@ -70,5 +73,5 @@
       }
     }
   },
-  "required": ["topicId", "contentType", "entityRefs", "tagRefs", "sourceUrls", "generator"]
+  "required": ["topicId", "contentType", "entityRefs", "tagRefs", "sourceUrls", "generator", "createdAt", "updatedAt"]
 }

@@ -8,8 +8,10 @@ import yaml
 
 from _common.paths import DATA_ROOT
 from _common.source_catalog import known_category_ids
+from download.fetch import SUPPORTED_TEXT_EXTRACTORS
 from vertical.coverage import list_verticals, load_registry
-from vertical.license import load_photography_license_policy
+from vertical.license import load_photography_license_policy, load_travel_license_policy
+from vertical.source_registry import verify_travel_source_registry
 
 
 def _samples_path(vertical: str) -> Path:
@@ -52,4 +54,14 @@ def verify_vertical_quality() -> list[str]:
         for field in ("license", "credit", "sourceUrl", "termsUrl", "usageScope"):
             if field not in required:
                 issues.append(f"photography: requiredImageFields missing {field}")
+    try:
+        travel_policy = load_travel_license_policy()
+    except Exception as exc:
+        issues.append(f"travel: license policy invalid: {exc}")
+    else:
+        required = set(travel_policy.get("requiredImageFields") or [])
+        for field in ("license", "credit", "sourceUrl", "termsUrl", "usageScope"):
+            if field not in required:
+                issues.append(f"travel: requiredImageFields missing {field}")
+    issues.extend(verify_travel_source_registry(allowed_extractors=set(SUPPORTED_TEXT_EXTRACTORS)))
     return issues

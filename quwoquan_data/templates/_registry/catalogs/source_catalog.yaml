@@ -32,7 +32,7 @@ categories:
     verticals: [travel]
     description: 真实第一人称体验/动机/取舍/避坑，提供 emotionEvidence 与叙事线。
     evidenceFocus: [emotion, mainline, decision]
-    examplePlatforms: [马蜂窝, 携程, 携程攻略, 携程游记, 小红书, 穷游, 知乎, 游记, 蚂蜂窝]
+    examplePlatforms: [马蜂窝, 携程, 携程攻略, 携程游记, 去哪儿攻略, 小红书, 穷游, 知乎, 游记, 蚂蜂窝]
   - id: video
     label: 短视频/中视频
     verticals: [travel, campus]
@@ -135,6 +135,7 @@ platformAliases:
   unknown: null
   mafengwo: travelogue
   ctrip: travelogue
+  qunar: travelogue
   xiaohongshu: travelogue
   rednote: travelogue
   douyin: video

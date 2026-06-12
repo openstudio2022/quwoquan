@@ -222,7 +222,7 @@
 
 ### 8.8 数据与契约
 
-- 布局枚举、图宽策略、**caption** 等字段以 **`contracts/metadata`** 为唯一真相源；`articleDocument` 内块与 assets 序列化与 `article_document_schema.yaml` 一致。  
+- 布局枚举、图宽策略、**caption** 等字段以 **`contracts/metadata`** 为唯一真相源；编辑器内存中的 `ArticleDocumentData` 节点/asset 结构需与阅读投影保持同构，禁止恢复独立 `articleDocument` 持久化 schema。  
 - 发布载荷仍通过 `CreatePost` **writable_fields**；禁止在 UI 维护第二套字段表。
 
 ---

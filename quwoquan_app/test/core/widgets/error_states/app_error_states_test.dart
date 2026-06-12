@@ -27,6 +27,15 @@ void main() {
     expect(find.text(UITextConstants.tryAgain), findsOneWidget);
     expect(find.text(UITextConstants.loadFailed), findsNothing);
     expect(find.text(UITextConstants.retry), findsNothing);
+    final defaultText = tester.widget<DefaultTextStyle>(
+      find
+          .ancestor(
+            of: find.text(UITextConstants.temporarilyUnavailable),
+            matching: find.byType(DefaultTextStyle),
+          )
+          .first,
+    );
+    expect(defaultText.style.decoration, TextDecoration.none);
 
     await tester.tap(find.text(UITextConstants.tryAgain));
     await tester.pump();

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
@@ -45,14 +44,12 @@ void main() {
         const ImmersiveEngagementBar(
           avatarUrl: '',
           displayName: '你的皮',
-          circleName: '',
           likeCount: 234,
           shareCount: 4,
           commentCount: 36,
           isLiked: false,
           isFollowing: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -84,13 +81,56 @@ void main() {
     );
   });
 
+  testWidgets('作者认证角标随云侧快照显示，空字段不渲染（V1.0）', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const ImmersiveEngagementBar(
+          avatarUrl: '',
+          displayName: '认证作者',
+          authorBadge: 'verified_creator',
+          likeCount: 1,
+          shareCount: 1,
+          commentCount: 1,
+          isLiked: false,
+          isFollowing: false,
+          onUserTap: _noop,
+          onFollowTap: _noop,
+          onLikeTap: _noop,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('immersive-author-badge')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        const ImmersiveEngagementBar(
+          avatarUrl: '',
+          displayName: '普通作者',
+          likeCount: 1,
+          shareCount: 1,
+          commentCount: 1,
+          isLiked: false,
+          isFollowing: false,
+          onUserTap: _noop,
+          onFollowTap: _noop,
+          onLikeTap: _noop,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('immersive-author-badge')), findsNothing);
+  });
+
   testWidgets('我的 post 使用无作者栏的一行三等分工具栏', (tester) async {
     await tester.pumpWidget(
       _wrap(
         const ImmersiveEngagementBar(
           avatarUrl: '',
           displayName: '我的名字',
-          circleName: '',
           likeCount: 12,
           shareCount: 8,
           commentCount: 5,
@@ -98,7 +138,6 @@ void main() {
           isFollowing: false,
           isSelfPost: true,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -132,14 +171,12 @@ void main() {
           layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
           avatarUrl: '',
           displayName: 'TechDaily',
-          circleName: '',
           likeCount: 1200,
           shareCount: 89,
           commentCount: 56,
           isLiked: false,
           isFollowing: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -182,14 +219,12 @@ void main() {
           layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
           avatarUrl: '',
           displayName: '特别长的作者名字用于验证宽屏下不会把空白全部留给两组之间',
-          circleName: '',
           likeCount: 8200,
           shareCount: 560,
           commentCount: 430,
           isLiked: false,
           isFollowing: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -226,7 +261,6 @@ void main() {
           ImmersiveEngagementBar(
             avatarUrl: '',
             displayName: '稳定用户',
-            circleName: '',
             likeCount: 12,
             shareCount: 8,
             commentCount: 5,
@@ -234,7 +268,6 @@ void main() {
             isFollowing: false,
             showFollowButton: showFollow,
             onUserTap: _noop,
-            onCircleTap: _noop,
             onFollowTap: _noop,
             onLikeTap: _noop,
           ),
@@ -266,14 +299,12 @@ void main() {
         const ImmersiveEngagementBar(
           avatarUrl: '',
           displayName: twelveChars,
-          circleName: '',
           likeCount: 12,
           shareCount: 8,
           commentCount: 5,
           isLiked: false,
           isFollowing: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -300,7 +331,6 @@ void main() {
         const ImmersiveEngagementBar(
           avatarUrl: '',
           displayName: '特别长的作者名字用于验证固定宽度',
-          circleName: '',
           likeCount: 12,
           shareCount: 8,
           commentCount: 5,
@@ -308,7 +338,6 @@ void main() {
           isFollowing: false,
           showFollowButton: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -325,7 +354,6 @@ void main() {
         const ImmersiveEngagementBar(
           avatarUrl: '',
           displayName: '特别长的作者名字用于验证固定宽度',
-          circleName: '',
           likeCount: 12,
           shareCount: 8,
           commentCount: 5,
@@ -333,7 +361,6 @@ void main() {
           isFollowing: false,
           showFollowButton: true,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -372,14 +399,12 @@ void main() {
           layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
           avatarUrl: '',
           displayName: '纸上居',
-          circleName: '',
           likeCount: 117,
           shareCount: 6,
           commentCount: 0,
           isLiked: false,
           isFollowing: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -413,14 +438,12 @@ void main() {
           layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
           avatarUrl: '',
           displayName: authorName,
-          circleName: '',
           likeCount: 211,
           shareCount: 18,
           commentCount: 0,
           isLiked: false,
           isFollowing: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -448,14 +471,12 @@ void main() {
         const ImmersiveEngagementBar(
           avatarUrl: '',
           displayName: '一二三四五六七八九十甲乙丙丁戊',
-          circleName: '',
           likeCount: 1,
           shareCount: 1,
           commentCount: 1,
           isLiked: false,
           isFollowing: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -474,14 +495,12 @@ void main() {
         const ImmersiveEngagementBar(
           avatarUrl: '',
           displayName: '甲',
-          circleName: '',
           likeCount: 1,
           shareCount: 1,
           commentCount: 1,
           isLiked: false,
           isFollowing: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -502,14 +521,12 @@ void main() {
           layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
           avatarUrl: '',
           displayName: twelveChars,
-          circleName: '',
           likeCount: 12,
           shareCount: 8,
           commentCount: 5,
           isLiked: false,
           isFollowing: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
@@ -542,14 +559,12 @@ void main() {
             layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
             avatarUrl: '',
             displayName: '自然摄影师',
-            circleName: '',
             likeCount: 1200,
             shareCount: 18,
             commentCount: 45,
             isLiked: false,
             isFollowing: false,
             onUserTap: _noop,
-            onCircleTap: _noop,
             onFollowTap: _noop,
             onLikeTap: _noop,
           ),
@@ -611,14 +626,12 @@ void main() {
         const ImmersiveEngagementBar(
           avatarUrl: '',
           displayName: '头像用户',
-          circleName: '',
           likeCount: 12,
           shareCount: 8,
           commentCount: 5,
           isLiked: false,
           isFollowing: false,
           onUserTap: _noop,
-          onCircleTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),

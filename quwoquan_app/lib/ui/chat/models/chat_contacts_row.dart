@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 
@@ -62,6 +63,28 @@ class ChatContactsRow {
       relationState: dto.relationState,
       source: source,
       isStarred: dto.isStarred,
+    );
+  }
+
+  factory ChatContactsRow.fromContactHomeDto(ContactHomeRowDto dto) {
+    final kind = switch (dto.kind) {
+      'circle' => ChatContactsRowKind.circle,
+      'group' => ChatContactsRowKind.group,
+      _ => ChatContactsRowKind.user,
+    };
+    return ChatContactsRow(
+      kind: kind,
+      id: dto.id.isNotEmpty ? dto.id : dto.objectId,
+      displayName: dto.title,
+      avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
+      subtitle: dto.subtitle.trim().isNotEmpty
+          ? dto.subtitle.trim()
+          : dto.summaryIntersections.take(2).join(' · '),
+      relationState: dto.relationState,
+      source: dto.kind,
+      isStarred: dto.isStarred,
+      circleId: dto.circleId.isNotEmpty ? dto.circleId : null,
+      conversationId: dto.conversationId.isNotEmpty ? dto.conversationId : null,
     );
   }
 

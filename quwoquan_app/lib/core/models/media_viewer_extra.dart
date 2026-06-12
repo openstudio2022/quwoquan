@@ -143,6 +143,50 @@ class MediaViewerResult extends MediaViewerInteractionSnapshot {
   }
 }
 
+/// work browser / 沉浸式评论直达上下文。
+///
+/// `openComments=true` 表示进入帖子后直接展开评论分屏；其余 id 用于恢复
+/// “查看原评论 / 在上下文中回复”的目标语义。
+class MediaViewerCommentContext {
+  const MediaViewerCommentContext({
+    this.openComments = false,
+    this.commentId,
+    this.parentCommentId,
+    this.replyToCommentId,
+  });
+
+  final bool openComments;
+  final String? commentId;
+  final String? parentCommentId;
+  final String? replyToCommentId;
+
+  bool get shouldOpen =>
+      openComments ||
+      (commentId?.trim().isNotEmpty ?? false) ||
+      (parentCommentId?.trim().isNotEmpty ?? false) ||
+      (replyToCommentId?.trim().isNotEmpty ?? false);
+
+  static MediaViewerCommentContext fromQueryParameters(
+    Map<String, String> query,
+  ) {
+    final openComments =
+        (query['openComments'] ?? '').trim().toLowerCase() == 'true';
+    final commentId = query['commentId']?.trim();
+    final parentCommentId = query['parentCommentId']?.trim();
+    final replyToCommentId = query['replyToCommentId']?.trim();
+    return MediaViewerCommentContext(
+      openComments: openComments,
+      commentId: commentId?.isEmpty == true ? null : commentId,
+      parentCommentId: parentCommentId?.isEmpty == true
+          ? null
+          : parentCommentId,
+      replyToCommentId: replyToCommentId?.isEmpty == true
+          ? null
+          : replyToCommentId,
+    );
+  }
+}
+
 /// 媒体查看器路由传参：列表、浏览器、作者详情共享同一 feed
 class MediaViewerExtra {
   const MediaViewerExtra({
@@ -159,6 +203,7 @@ class MediaViewerExtra {
     this.referralSource = ReferralSource.organicFeed,
     this.feedRequestId,
     this.position,
+    this.commentContext = const MediaViewerCommentContext(),
   });
 
   final List<ContentSurfaceView> posts;
@@ -177,4 +222,25 @@ class MediaViewerExtra {
 
   /// 入口 post 在 feed 中的位置（推荐归因用；从 feed 列表序号透传）。
   final int? position;
+
+  final MediaViewerCommentContext commentContext;
+
+  MediaViewerExtra copyWith({MediaViewerCommentContext? commentContext}) {
+    return MediaViewerExtra(
+      posts: posts,
+      dtoPosts: dtoPosts,
+      initialIndex: initialIndex,
+      category: category,
+      initialImageIndex: initialImageIndex,
+      source: source,
+      circleId: circleId,
+      showWorksNavigation: showWorksNavigation,
+      rawPostsById: rawPostsById,
+      interactionSnapshot: interactionSnapshot,
+      referralSource: referralSource,
+      feedRequestId: feedRequestId,
+      position: position,
+      commentContext: commentContext ?? this.commentContext,
+    );
+  }
 }

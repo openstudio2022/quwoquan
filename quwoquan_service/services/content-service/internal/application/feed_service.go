@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"sort"
 	"strings"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -22,15 +23,27 @@ type publishedPostReader interface {
 }
 
 type FeedService struct {
-	engine     *rtrec.Engine
-	postReader postReader
+	engine        *rtrec.Engine
+	postReader    postReader
+	intersections feedIntersectionProvider
 }
 
-func NewFeedService(engine *rtrec.Engine, reader postReader) *FeedService {
-	return &FeedService{
+func NewFeedService(engine *rtrec.Engine, reader postReader, opts ...FeedServiceOption) *FeedService {
+	s := &FeedService{
 		engine:     engine,
 		postReader: reader,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+type FeedServiceOption func(*FeedService)
+
+// WithFeedIntersectionProvider 注入交集理由池来源（70/20/10 内容流附着）。
+func WithFeedIntersectionProvider(provider feedIntersectionProvider) FeedServiceOption {
+	return func(s *FeedService) { s.intersections = provider }
 }
 
 type ListFeedRequest struct {
@@ -65,12 +78,27 @@ type FeedItemView struct {
 	SaveCount    int64    `json:"savesCount"`
 	ShareCount   int64    `json:"shares"`
 	CreatedAt    string   `json:"createdAt"`
+	// UpdatedAt 最后实质更新时间；与 createdAt 相等或更早时端只显示创作时间。零值省略。
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	// PublishedAt 首次公开时间；零值（未发布/未知）时省略。
+	PublishedAt string `json:"publishedAt,omitempty"`
+	// IntersectionReasons 内容卡交集行（70/20/10 频率契约；空即无交集，端不渲染）。
+	IntersectionReasons []IntersectionReasonView `json:"intersectionReasons,omitempty"`
 }
 
 type ListFeedResponse struct {
 	Items      []FeedItemView `json:"items"`
 	NextCursor string         `json:"nextCursor,omitempty"`
 	Cursor     string         `json:"cursor,omitempty"`
+}
+
+// feedTimeOrEmpty 把零值时间渲染为空串（配合 json omitempty 省略），
+// 非零按统一 UTC RFC3339 输出，供端侧「创作 vs 更新」展示判定。
+func feedTimeOrEmpty(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2006-01-02T15:04:05Z")
 }
 
 func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *ListFeedResponse, err error) {
@@ -140,6 +168,8 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			SaveCount:    post.FavoriteCount,
 			ShareCount:   post.ShareCount,
 			CreatedAt:    post.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:    feedTimeOrEmpty(post.UpdatedAt),
+			PublishedAt:  feedTimeOrEmpty(post.PublishedAt),
 		})
 		return true
 	}
@@ -191,6 +221,11 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 				}
 				fallbackCursor = posts[len(posts)-1].ID
 			}
+		}
+	}
+	if s.intersections != nil && strings.TrimSpace(req.UserID) != "" {
+		if reasons, reasonErr := s.intersections.Feed(ctx, req.UserID, "", feedIntersectionPoolLimit); reasonErr == nil {
+			attachFeedIntersections(views, reasons, req.UserID)
 		}
 	}
 	return &ListFeedResponse{Items: views, NextCursor: nextCursor, Cursor: nextCursor}, nil

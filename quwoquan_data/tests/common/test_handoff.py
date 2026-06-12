@@ -33,6 +33,7 @@ def test_author_job_packet_isolation_and_exit_gates():
     assert packet["assets"][0]["assetId"] == "a1"
     # 执行合约 5 要素必须随 packet 下发
     assert handoff.execution_contract_issues(packet.get("executionContract")) == []
+    assert "5.review/repair_report.json" in packet["executionContract"]["inputs"]
 
 
 def test_execution_contract_requires_five_elements():

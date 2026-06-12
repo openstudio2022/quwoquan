@@ -23,6 +23,8 @@ class VideoPostDto extends PostBaseDto {
   @override final int favoriteCount;
   @override final int shareCount;
   @override final DateTime createdAt;
+  @override final DateTime? updatedAt;
+  @override final DateTime? publishedAt;
 
   const VideoPostDto({
     required this.id,
@@ -44,6 +46,8 @@ class VideoPostDto extends PostBaseDto {
     required this.favoriteCount,
     required this.shareCount,
     required this.createdAt,
+    this.updatedAt,
+    this.publishedAt,
   });
 
   factory VideoPostDto.fromMap(Map<String, dynamic> m) {
@@ -66,7 +70,9 @@ class VideoPostDto extends PostBaseDto {
       commentCount: (m['commentCount'] as num?)?.toInt() ?? (m['commentsCount'] as num?)?.toInt() ?? (m['comments'] as num?)?.toInt() ?? (m['comment_count'] as num?)?.toInt() ?? 0,
       favoriteCount: (m['favoriteCount'] as num?)?.toInt() ?? (m['savesCount'] as num?)?.toInt() ?? (m['bookmarks'] as num?)?.toInt() ?? (m['favorite_count'] as num?)?.toInt() ?? 0,
       shareCount: (m['shareCount'] as num?)?.toInt() ?? (m['shares'] as num?)?.toInt() ?? (m['share_count'] as num?)?.toInt() ?? 0,
-      createdAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
+      createdAt: _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
+      updatedAt: _parseDateTime(m['updatedAt']) ?? _parseDateTime(m['updated_at']) ?? null,
+      publishedAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['published_at']) ?? null,
     );
   }
 
@@ -92,6 +98,8 @@ class VideoPostDto extends PostBaseDto {
       'favoriteCount': favoriteCount,
       'shareCount': shareCount,
       'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      'publishedAt': publishedAt,
     };
   }
 
@@ -115,6 +123,8 @@ class VideoPostDto extends PostBaseDto {
     int? favoriteCount,
     int? shareCount,
     DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? publishedAt,
   }) {
     return VideoPostDto(
       id: id ?? this.id,
@@ -136,6 +146,8 @@ class VideoPostDto extends PostBaseDto {
       favoriteCount: favoriteCount ?? this.favoriteCount,
       shareCount: shareCount ?? this.shareCount,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      publishedAt: publishedAt ?? this.publishedAt,
     );
   }
 

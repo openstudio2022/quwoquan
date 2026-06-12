@@ -3,12 +3,12 @@
   "env": "gamma",
   "runtimeEnv": "gamma",
   "dataSource": "remote",
-  "gatewayBaseUrl": "https://gamma-api.quwoquan-env.test",
-  "realtimeBaseUrl": "wss://gamma-api.quwoquan-env.test",
-  "avatarCdnBaseUrl": "https://gamma-avatar.quwoquan-env.test",
-  "imageCdnBaseUrl": "https://gamma-image.quwoquan-env.test",
-  "videoCdnBaseUrl": "https://gamma-video.quwoquan-env.test",
-  "uploadBaseUrl": "https://gamma-upload.quwoquan-env.test",
+  "gatewayBaseUrl": "http://118.31.239.122:19000",
+  "realtimeBaseUrl": "ws://118.31.239.122:19000",
+  "avatarCdnBaseUrl": "http://118.31.239.122:19100",
+  "imageCdnBaseUrl": "http://118.31.239.122:19100",
+  "videoCdnBaseUrl": "http://118.31.239.122:19100",
+  "uploadBaseUrl": "http://118.31.239.122:19100",
   "currentUserId": "fixture_user_current",
   "seedManifest": "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json",
   "topologySchemaVersion": "environment-topology/v1",
@@ -21,11 +21,11 @@
     "distribution": "pre-release"
   },
   "publicBases": {
-    "gatewayBaseUrl": "https://gamma-api.quwoquan-env.test",
-    "realtimeBaseUrl": "wss://gamma-api.quwoquan-env.test",
-    "mediaAvatarCdnBaseUrl": "https://gamma-avatar.quwoquan-env.test",
-    "mediaImageCdnBaseUrl": "https://gamma-image.quwoquan-env.test",
-    "mediaVideoCdnBaseUrl": "https://gamma-video.quwoquan-env.test",
-    "mediaUploadBaseUrl": "https://gamma-upload.quwoquan-env.test"
+    "gatewayBaseUrl": "http://118.31.239.122:19000",
+    "realtimeBaseUrl": "ws://118.31.239.122:19000",
+    "mediaAvatarCdnBaseUrl": "http://118.31.239.122:19100",
+    "mediaImageCdnBaseUrl": "http://118.31.239.122:19100",
+    "mediaVideoCdnBaseUrl": "http://118.31.239.122:19100",
+    "mediaUploadBaseUrl": "http://118.31.239.122:19100"
   }
 }

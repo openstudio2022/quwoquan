@@ -191,8 +191,8 @@ work_format_filters:
     content_type: video
     order: 2
 
-  - id: note
-    label_key: work_format_note
+  - id: article
+    label_key: work_format_article
     content_type: article
     order: 3
 
@@ -294,6 +294,48 @@ article_template_recommendations:
 
   - category_id: photography
     recommended_article_templates: [journal, ritual]
+
+article_dark_paper_themes:
+  default_theme: darkPaper
+  reading_setting_options:
+    - { id: system, label_key: article_paper_theme_system }
+    - { id: darkPaper, label_key: article_paper_theme_dark_paper }
+    - { id: coolGray, label_key: article_paper_theme_cool_gray }
+    - { id: warmBlack, label_key: article_paper_theme_warm_black }
+    - { id: inkGreen, label_key: article_paper_theme_ink_green }
+    - { id: deepBrown, label_key: article_paper_theme_deep_brown }
+  vertical_defaults:
+    photography: darkPaper
+    travel: warmBlack
+    history: deepBrown
+    tech: coolGray
+    nature: inkGreen
+  themes:
+    - id: darkPaper
+      stage: "#0F1115"
+      paper: "#161A20"
+      text: "#E6E8EB"
+      secondary_text: "#8B919C"
+    - id: coolGray
+      stage: "#101318"
+      paper: "#1A1F26"
+      text: "#E6E8EB"
+      secondary_text: "#8B919C"
+    - id: warmBlack
+      stage: "#13100D"
+      paper: "#1E1A16"
+      text: "#E8E6E3"
+      secondary_text: "#8D8680"
+    - id: inkGreen
+      stage: "#101511"
+      paper: "#161B18"
+      text: "#E6EAE6"
+      secondary_text: "#879086"
+    - id: deepBrown
+      stage: "#15110F"
+      paper: "#1F1A17"
+      text: "#E8E4DF"
+      secondary_text: "#8F8882"
 
 # ── 二、内容卡片展示配置 ────────────────────────────────────────────────
 card_config:

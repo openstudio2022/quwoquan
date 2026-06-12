@@ -15,6 +15,8 @@ import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
+import '../../../support/harness/profile_shell_scroll_utils.dart';
+
 class _AuthedSessionStore implements AuthSessionStore {
   const _AuthedSessionStore();
 
@@ -164,7 +166,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
-      await tester.tap(_profileSegment('圈子'));
+      await tapProfilePrimaryTab(tester, '圈子');
       await _pumpFrames(tester, count: 20);
       expect(find.text('极简摄影俱乐部'), findsOneWidget);
     });
@@ -176,7 +178,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
-      await tester.tap(_profileSegment('互动'));
+      await tapProfilePrimaryTab(tester, '互动');
       await _pumpFrames(tester, count: 20);
       expect(find.text('收到'), findsOneWidget);
     });
@@ -224,7 +226,13 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle(const Duration(seconds: 5));
-      // 创作 Tab 默认展示统一创作内容，至少应渲染首屏作品标题。
+      // 摘要区变高后创作内容不再保证首屏，滚动至作品标题可见再断言。
+      await tester.scrollUntilVisible(
+        find.text('光影的节奏'),
+        160,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 40,
+      );
       expect(find.text('光影的节奏'), findsAtLeastNWidgets(1));
     });
 
@@ -235,7 +243,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
-      await tester.tap(_profileSegment('圈子'));
+      await tapProfilePrimaryTab(tester, '圈子');
       await _pumpFrames(tester, count: 20);
       expect(find.text('极简摄影俱乐部'), findsOneWidget);
     });
@@ -247,7 +255,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester);
-      await tester.tap(_profileSegment('互动'));
+      await tapProfilePrimaryTab(tester, '互动');
       await _pumpFrames(tester, count: 20);
       expect(find.text('你的皮炎有点辣'), findsOneWidget);
     });

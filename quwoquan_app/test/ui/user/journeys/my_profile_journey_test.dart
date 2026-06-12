@@ -12,6 +12,8 @@ import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_lifestyle_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
+import '../../../support/harness/profile_shell_scroll_utils.dart';
+
 /// T4 旅程：我的主页一级 4 Tab（作品/圈子/互动/看点）端到端可达，
 /// 看点 Tab 走 codegen lifestyle 子页 + contract seed 渲染真实记录。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
@@ -57,13 +59,6 @@ Future<void> _pumpFrames(WidgetTester tester, {int count = 20}) async {
   }
 }
 
-Finder _inlinePrimaryTab(String label) {
-  return find.descendant(
-    of: find.byKey(const ValueKey<String>('profile-shell-primary-tabs-inline')),
-    matching: find.text(label),
-  );
-}
-
 void main() {
   setUp(() {
     HttpOverrides.global = _NoNetworkHttpOverrides();
@@ -76,6 +71,7 @@ void main() {
 
     await tester.pumpWidget(_scopedApp());
     await _pumpFrames(tester);
+    await revealProfilePrimaryTabs(tester);
 
     // 默认创作 Tab：二级子页存在。
     expect(
@@ -83,15 +79,15 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(_inlinePrimaryTab('圈子'));
+    await tapProfilePrimaryTab(tester, '圈子');
     await _pumpFrames(tester);
     expect(find.byType(ProfileCirclesTab), findsOneWidget);
 
-    await tester.tap(_inlinePrimaryTab('互动'));
+    await tapProfilePrimaryTab(tester, '互动');
     await _pumpFrames(tester);
     expect(find.byType(ProfileInteractionTab), findsOneWidget);
 
-    await tester.tap(_inlinePrimaryTab('看点'));
+    await tapProfilePrimaryTab(tester, '看点');
     await _pumpFrames(tester);
     expect(find.byType(ProfileLifestyleTab), findsOneWidget);
     expect(find.text('足迹'), findsOneWidget);

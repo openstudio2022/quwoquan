@@ -28,6 +28,7 @@ os.environ["QWQ_PUBLISH_ROOT"] = str(_TMP / "publish")
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common import paths  # noqa: E402
+from _common.base_draft import FIDELITY_MAX, FIDELITY_MIN  # noqa: E402
 from _common.writing_pack import _load_sop_fewshot, build_writing_pack, render_prompt_md  # noqa: E402
 
 _EXAMPLE_MARK = "峨眉山金顶四大奇观示范段落"
@@ -88,6 +89,21 @@ def test_render_prompt_without_sop_does_not_crash():
     prompt = render_prompt_md(pack)
     assert "写作范例与规范" not in prompt
     assert "## 必须覆盖的事实" in prompt
+
+
+def test_render_prompt_uses_runtime_fidelity_range_and_draft_filename():
+    pack = _build(
+        {
+            "titleHint": "峨眉山",
+            "baseSourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.base/source.md",
+        },
+        ref="entity-fidelity",
+    )
+    pack["baseDraftText"] = "# 底稿\n\n这是一段底稿正文。"
+    prompt = render_prompt_md(pack)
+    assert f"{int(FIDELITY_MIN * 100)}%~{int(FIDELITY_MAX * 100)}%" in prompt
+    assert "`draft.article.md`" in prompt
+    assert "`article.md`" not in prompt
 
 
 def _run_all() -> None:

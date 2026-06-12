@@ -25,6 +25,7 @@ import argparse
 import os
 import sys
 import tempfile
+from io import BytesIO
 from pathlib import Path
 
 _TMP = Path(tempfile.mkdtemp(prefix="task_run_"))
@@ -38,6 +39,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 from _common.draft_io import draft_article_path, write_placeholder_draft  # noqa: E402
 from _common.command_packet import build_packet, write_packet  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
+from _common.stage_reports import write_gate_report  # noqa: E402
 from _common import content_object  # noqa: E402
 from _common.paths import (  # noqa: E402
     batch_posts_root,
@@ -54,10 +56,27 @@ from _common.paths import (  # noqa: E402
     task_shared_dir,
 )
 from _common.source_unit import resolve_entity_object_dir  # noqa: E402
+from task import object_queue as oq  # noqa: E402
 from task import run as run_mod  # noqa: E402
 from task import store  # noqa: E402
 
 _EID = "测试景区甲"
+
+
+def _real_jpeg(seed: int) -> bytes:
+    from PIL import Image
+
+    width, height = 960, 640
+    img = Image.new("RGB", (width, height))
+    for y in range(height):
+        for x in range(width):
+            r = (x * 3 + seed * 17) % 256
+            g = (y * 5 + seed * 29) % 256
+            b = ((x + y) * 7 + seed * 11) % 256
+            img.putpixel((x, y), (r, g, b))
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=92)
+    return buf.getvalue()
 
 
 def _make_task() -> str:
@@ -117,24 +136,102 @@ def _seed_source_plan(task_id: str, batch_id: str) -> None:
         "sources": [
             {
                 "source_id": "s1",
-                "platform": "baike",
+                "platform": "百度百科",
                 "url": "https://x.invalid/a",
-                "body": "离线兜底正文：测试景区甲简介与门票海拔。",
+                "body": (
+                    "测试景区甲位于测试省山地森林地带，景区开放时间通常从上午到傍晚，"
+                    "门票与观光车费用需要在出发前确认。主游线步行强度中等，遇到雨天路况会变得湿滑，"
+                    "建议预留补给和返程时间。景区海拔有起伏，核心停留点之间需要一定徒步时间。"
+                ),
             },
             {
                 "source_id": "s2",
-                "platform": "mafengwo",
+                "platform": "维基百科",
                 "url": "https://x.invalid/b",
-                "body": "离线兜底正文：测试景区甲游记与避坑。",
+                "body": (
+                    "清晨进入测试景区甲时人流较少，先走主景步道再去栈道更顺。"
+                    "上午徒步体感最好，傍晚返程容易排队。沿线补给点不算密集，"
+                    "遇到降雨时栈道会更滑，返程上车位置也需要提前确认。"
+                ),
             },
             {
                 "source_id": "s3",
-                "platform": "官网",
+                "platform": "景区官网",
                 "url": "https://x.invalid/c",
-                "body": "离线兜底正文：测试景区甲官方开放与预约信息。",
+                "body": (
+                    "景区官网说明测试景区甲实行预约入园，开放时段、门票、观光车、交通接驳和应急提示会按季节调整。"
+                    "高峰日需要更早集合，景区交通与返程车次也会同步变化，建议把停留时长和返程时间一起规划。"
+                ),
+            },
+        ],
+        "imageUrls": [
+            {
+                "url": "https://img.invalid/a.jpg",
+                "platform": "景区官网",
+                "license": "CC-BY-SA 4.0",
+                "credit": "景区官方",
+                "sourceUrl": "https://img.invalid/a.jpg",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "usageScope": "app_publish",
+                "caption": "测试景区甲主景实拍",
+                "relevance": "支撑测试景区甲主景观段落",
+            },
+            {
+                "url": "https://img.invalid/b.jpg",
+                "platform": "景区官网",
+                "license": "CC-BY-SA 4.0",
+                "credit": "景区官方",
+                "sourceUrl": "https://img.invalid/b.jpg",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "usageScope": "app_publish",
+                "caption": "测试景区甲栈道实拍",
+                "relevance": "支撑测试景区甲游线与栈道段落",
             },
         ],
     })
+
+
+def _run_pipeline_with_fake_download(ctx: run_mod.PipelineContext) -> int:
+    import download.handler as download_handler_mod
+
+    img_a = _real_jpeg(11)
+    img_b = _real_jpeg(97)
+
+    def _fake_payload(url, *, min_bytes=3000):
+        import hashlib as _h
+
+        body = {"https://img.invalid/a.jpg": img_a, "https://img.invalid/b.jpg": img_b}.get(url, img_a)
+        return {
+            "url": url,
+            "ext": ".jpg",
+            "bytes": body,
+            "contentType": "image/jpeg",
+            "sha256": _h.sha256(body).hexdigest(),
+        }
+
+    def _fake_source_fetch(url: str):
+        return {
+            "url": url,
+            "statusCode": 200,
+            "htmlBytes": b"<html></html>",
+            "text": (
+                f"{_EID} 位于测试省山地森林地带，适合安排半日到一日游。"
+                f"景区开放时间、门票、观光车与交通接驳信息需要在出发前确认，"
+                f"主景段和栈道段体验差异明显。清晨徒步更舒服，午后返程更容易排队，"
+                f"如遇雨天，路况湿滑，应预留补给和返程时间。"
+            ),
+            "sha256": "sha-source",
+        }
+
+    orig_payload = download_handler_mod.fetch_image_payload
+    orig_source = download_handler_mod.fetch_source_payload
+    try:
+        download_handler_mod.fetch_image_payload = _fake_payload
+        download_handler_mod.fetch_source_payload = _fake_source_fetch
+        return run_mod.run_pipeline(ctx)
+    finally:
+        download_handler_mod.fetch_image_payload = orig_payload
+        download_handler_mod.fetch_source_payload = orig_source
 
 
 def _seed_publish_inputs(task_id: str, batch_id: str) -> None:
@@ -223,7 +320,7 @@ def test_resume_advances_after_source_plan():
     task_id = _make_task()
     run_mod.run_pipeline(_ctx(task_id, "b2"))  # pause at download_plan
     _seed_source_plan(task_id, "b2")
-    code = run_mod.run_pipeline(_ctx(task_id, "b2"))  # resume
+    code = _run_pipeline_with_fake_download(_ctx(task_id, "b2"))  # resume
     assert code == 10, f"expected next-checkpoint pause(10), got {code}"
     state = run_mod.load_workflow_state(task_id, "b2")
     # download_plan/fetch/build_prepare 应已完成，停在 build_homepage
@@ -272,7 +369,7 @@ def test_until_stops_early():
     _seed_source_plan(task_id, "b3")
     ctx = _ctx(task_id, "b3")
     ctx.until = "download_fetch"
-    code = run_mod.run_pipeline(ctx)
+    code = _run_pipeline_with_fake_download(ctx)
     assert code == 0, f"expected clean stop(0) at --until, got {code}"
     state = run_mod.load_workflow_state(task_id, "b3")
     assert "download_fetch" in state["completed"]
@@ -298,6 +395,122 @@ def test_author_checkpoint_only_reads_packaged_drafts():
     draft_article_path(task_id, batch_id, "新").write_text("# 新正文\n\n这是 Agent 完成的正文。", encoding="utf-8")
     ok, pending = run_mod._drafts_authored(ctx)
     assert ok is True and pending == []
+
+
+def test_produce_review_rewind_invalidates_failed_ref_outputs():
+    task_id = _make_task()
+    batch_id = "retry1"
+    ensure_batch_layout(task_id, batch_id, "produce")
+    ctx = _ctx(task_id, batch_id)
+
+    brief_ok = {
+        "titleHint": f"{_EID}·顺游攻略",
+        "templateId": "travel.route.guide",
+        "carrier": "article",
+        "writingIntent": "planning_consultation",
+        "mustIncludeFacts": ["预约"],
+    }
+    brief_bad = {
+        **brief_ok,
+        "titleHint": f"{_EID}·避峰攻略",
+    }
+    content_object.write_brief_object(task_id, batch_id, "ref_ok", brief_ok, content_type="article")
+    content_object.write_brief_object(task_id, batch_id, "ref_bad", brief_bad, content_type="article")
+
+    write_placeholder_draft(task_id, batch_id, "ref_ok")
+    write_placeholder_draft(task_id, batch_id, "ref_bad")
+    oq.enqueue_ref_job(task_id, batch_id, "ref_ok", "author")
+    oq.enqueue_ref_job(task_id, batch_id, "ref_bad", "author")
+    draft_article_path(task_id, batch_id, "ref_ok").write_text("# 已完成\n\n正文。", encoding="utf-8")
+    draft_article_path(task_id, batch_id, "ref_bad").write_text("# 旧稿\n\n需要重写。", encoding="utf-8")
+    write_json(
+        draft_article_path(task_id, batch_id, "ref_bad").parent / "author_self_check.json",
+        {"ok": False},
+    )
+
+    bad_obj = content_object.content_object_dir(task_id, batch_id, "ref_bad")
+    bad_obj.mkdir(parents=True, exist_ok=True)
+    (bad_obj / "5.review").mkdir(parents=True, exist_ok=True)
+    (bad_obj / "article.md").write_text("# 旧成品\n\n旧正文。", encoding="utf-8")
+    write_json(bad_obj / "manifest.json", {"reviewDecision": "approved"})
+    write_json(bad_obj / "5.review" / "ref_review_gate.json", {"passed": True})
+    assets_dir = bad_obj / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    (assets_dir / "a.jpg").write_text("x", encoding="utf-8")
+
+    write_gate_report(
+        task_id=task_id,
+        batch_id=batch_id,
+        command="produce",
+        step="review",
+        ref="ref_bad",
+        passed=False,
+        issues=["skeletonSimilarity: heading sequence too similar to a peer (0.85)"],
+        fallback_stage="agent_compose",
+    )
+
+    result = run_mod.StageResult(
+        "produce_review",
+        run_mod.AUTO,
+        "failed",
+        "发布门未过",
+        fallback_stage="agent_compose",
+        issues=[f"{content_object.content_object_rel(task_id, batch_id, 'ref_bad')}: skeletonSimilarity"],
+    )
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    completed = set(run_mod.STAGE_NAMES)
+
+    completed, ok = run_mod._react_rewind(ctx, state, completed, result)
+    assert ok is True
+    assert "produce_compose" not in completed
+    assert "produce_author" not in completed
+    assert run_mod._drafts_authored(ctx) == (False, ["ref_bad"])
+    assert "<!-- QWQ_AWAITING_AGENT_DRAFT -->" in draft_article_path(task_id, batch_id, "ref_bad").read_text(encoding="utf-8")
+    assert not (bad_obj / "article.md").exists()
+    assert not (bad_obj / "manifest.json").exists()
+    assert not (bad_obj / "5.review" / "ref_review_gate.json").exists()
+    assert not (bad_obj / "assets").exists()
+    assert draft_article_path(task_id, batch_id, "ref_ok").read_text(encoding="utf-8") == "# 已完成\n\n正文。"
+    queue = oq.queue_summary(task_id, batch_id)
+    assert "ref_bad" in queue["byState"]["queued"], queue
+
+
+def test_produce_review_rewind_to_download_purges_stale_author_queue():
+    task_id = _make_task()
+    batch_id = "retry_download"
+    ensure_batch_layout(task_id, batch_id, "produce")
+    ctx = _ctx(task_id, batch_id)
+
+    brief = {
+        "titleHint": f"{_EID}·图集",
+        "templateId": "travel.gallery",
+        "carrier": "gallery",
+        "writingIntent": "post_trip_journal",
+        "mustIncludeFacts": ["云海"],
+    }
+    content_object.write_brief_object(task_id, batch_id, "ref_a", brief, content_type="image")
+    content_object.write_brief_object(task_id, batch_id, "ref_b", brief, content_type="image")
+    write_placeholder_draft(task_id, batch_id, "ref_a")
+    write_placeholder_draft(task_id, batch_id, "ref_b")
+    oq.enqueue_ref_job(task_id, batch_id, "ref_a", "author")
+    oq.enqueue_ref_job(task_id, batch_id, "ref_b", "author")
+
+    result = run_mod.StageResult(
+        "produce_review",
+        run_mod.AUTO,
+        "failed",
+        "发布门未过",
+        fallback_stage="download_plan",
+        issues=["images must be recollected"],
+    )
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    completed = set(run_mod.STAGE_NAMES)
+
+    completed, ok = run_mod._react_rewind(ctx, state, completed, result)
+    assert ok is True
+    assert "download_fetch" not in completed
+    queue = oq.queue_summary(task_id, batch_id)
+    assert queue["total"] == 0, queue
 
 
 def test_publish_stage_materializes_task_inputs_and_release():

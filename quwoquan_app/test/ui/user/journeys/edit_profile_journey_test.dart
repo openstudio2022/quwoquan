@@ -16,6 +16,8 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 
+import '../../../support/harness/profile_shell_scroll_utils.dart';
+
 /// T28 旅程：我的主页 → 编辑资料 → 修改昵称 → 保存 → 返回 → 验证主页展示新昵称
 class _EditProfileMockRepository extends MockUserProfileRepository {
   _EditProfileMockRepository() : super();
@@ -175,6 +177,12 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 5));
 
       expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
+      // 摘要区（连接/影响力卡）变高后按钮可能在首屏外或贴顶被工具栏遮挡，
+      // 先滚到可命中位置再点。
+      await revealProfileSummaryWidget(
+        tester,
+        find.text(UITextConstants.profileEditLabel),
+      );
       await tester.tap(find.text(UITextConstants.profileEditLabel));
       await _pumpFrames(tester, count: 10);
 

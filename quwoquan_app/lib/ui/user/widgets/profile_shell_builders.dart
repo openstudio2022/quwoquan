@@ -1,7 +1,7 @@
 part of 'profile_shell.dart';
 
 extension _ProfileShellBuilders on _ProfileShellState {
-  /// 交集卡「你们的交集」：tag-service shared-tags 对象对直打（当前用户 × 被看用户）。
+  /// 交集卡「你们的连接」：tag-service shared-tags 对象对直打（当前用户 × 被看用户）。
   /// 仅 other 模式展示；无可解析交集（空/异步未就绪）则不占位（G2 不造假）。
   Widget _buildIntersectionCard(bool isDark) {
     if (widget.mode != ProfileMode.other) {
@@ -20,6 +20,26 @@ extension _ProfileShellBuilders on _ProfileShellState {
       title: UITextConstants.profileMutualIntersectionTitle,
       isDark: isDark,
       bottomPadding: AppSpacing.md,
+    );
+  }
+
+  /// 影响力摘要模块（other =「TA的影响」/ mine =「我的影响力」）。
+  ///
+  /// async 三态：loading / error 不占位；data 由 [AuthorImpactCard] 决定
+  /// （other 无事实收起，mine 空态展示鼓励发布文案）。
+  Widget _buildAuthorImpactCard(bool isDark) {
+    final impact = ref.watch(authorImpactProvider(widget.userId));
+    return impact.when(
+      data: (summary) => Padding(
+        padding: EdgeInsets.only(bottom: AppSpacing.md),
+        child: AuthorImpactCard(
+          summary: summary,
+          isDark: isDark,
+          isMine: widget.mode == ProfileMode.mine,
+        ),
+      ),
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 
@@ -201,22 +221,9 @@ extension _ProfileShellBuilders on _ProfileShellState {
               avatarUrl: avatarUrl,
               displayName: displayName,
               bio: bio,
+              identityTags: state.profile?.identityTags ?? const <String>[],
             ),
             SizedBox(height: AppSpacing.md),
-            _buildIntersectionCard(isDark),
-            if (widget.mode == ProfileMode.mine) ...[
-              MyIntersectionInboxCard(isDark: isDark),
-              SizedBox(height: AppSpacing.md),
-            ],
-            SizedBox(height: AppSpacing.md),
-            ProfileStatsRow(
-              isDark: isDark,
-              profile: state.profile,
-              onStatTap: (type) => context.push(
-                '${AppRoutePaths.profileStats(type: type)}&userId=${Uri.encodeComponent(widget.userId)}',
-              ),
-            ),
-            SizedBox(height: AppSpacing.sm),
             if (widget.mode == ProfileMode.other &&
                 displayCapability == null) ...[
               SizedBox(height: AppSpacing.xl + AppSpacing.md),
@@ -230,12 +237,29 @@ extension _ProfileShellBuilders on _ProfileShellState {
                     ? () => context.push(AppRoutePaths.profilePersonas)
                     : null,
                 onFollow: () => _gatedToggleFollow(context, notifier),
-                onMessage: () => unawaited(_gatedOpenMessage(context, notifier)),
+                onMessage: () =>
+                    unawaited(_gatedOpenMessage(context, notifier)),
                 onGreet: () => unawaited(_gatedSendGreeting(context, notifier)),
                 onVoiceCall: () => _startCall(context, 'voice'),
                 onVideoCall: () => _startCall(context, 'video'),
               ),
             ],
+            SizedBox(height: AppSpacing.md),
+            if (widget.mode == ProfileMode.mine) ...[
+              MyIntersectionInboxCard(isDark: isDark),
+              SizedBox(height: AppSpacing.md),
+            ] else ...[
+              _buildIntersectionCard(isDark),
+            ],
+            _buildAuthorImpactCard(isDark),
+            SizedBox(height: AppSpacing.md),
+            ProfileStatsRow(
+              isDark: isDark,
+              profile: state.profile,
+              onStatTap: (type) => context.push(
+                '${AppRoutePaths.profileStats(type: type)}&userId=${Uri.encodeComponent(widget.userId)}',
+              ),
+            ),
           ],
         ),
       ),
@@ -584,7 +608,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
       context,
       title: '更多操作',
       sections: const [
-        const AppActionSheetSection<_ProfileMoreAction>(
+        AppActionSheetSection<_ProfileMoreAction>(
           items: [
             AppActionSheetItem<_ProfileMoreAction>(
               value: _ProfileMoreAction.share,
@@ -593,7 +617,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
             ),
           ],
         ),
-        const AppActionSheetSection<_ProfileMoreAction>(
+        AppActionSheetSection<_ProfileMoreAction>(
           items: [
             AppActionSheetItem<_ProfileMoreAction>(
               value: _ProfileMoreAction.block,
@@ -647,10 +671,17 @@ extension _ProfileShellBuilders on _ProfileShellState {
         if (context.mounted) {
           AppToast.show(context, UITextConstants.profileBlockSuccess);
         }
-      } catch (e) {
-        if (context.mounted) {
-          AppToast.show(context, UITextConstants.operationFailed);
+      } catch (error) {
+        if (!context.mounted) {
+          return;
         }
+        final resolved = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        );
+        await AppActionErrorFeedback.show(context, semantic: resolved);
       }
     });
   }
@@ -686,10 +717,17 @@ extension _ProfileShellBuilders on _ProfileShellState {
         if (context.mounted) {
           AppToast.show(context, UITextConstants.commentReportSubmitted);
         }
-      } catch (e) {
-        if (context.mounted) {
-          AppToast.show(context, UITextConstants.operationFailed);
+      } catch (error) {
+        if (!context.mounted) {
+          return;
         }
+        final resolved = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        );
+        await AppActionErrorFeedback.show(context, semantic: resolved);
       }
     });
   }

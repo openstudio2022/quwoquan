@@ -50,12 +50,26 @@ def load_index(task_id: str, batch_id: str) -> dict[str, dict[str, Any]]:
     return refs if isinstance(refs, dict) else {}
 
 
+def content_type_from_brief(brief: Mapping[str, Any]) -> str:
+    """brief.carrier=gallery → image，否则 article（与 posts/{type}/ 布局一致）。"""
+    return "image" if str(brief.get("carrier") or "") == "gallery" else "article"
+
+
+def require_title_hint(brief: Mapping[str, Any], *, ref: str = "") -> str:
+    """发布标题真相源：compose 阶段必须给出非空 titleHint，禁止回退到 ref/空串。"""
+    title = str(brief.get("titleHint") or "").strip()
+    if title:
+        return title
+    suffix = f" for ref={ref!r}" if ref else ""
+    raise ValueError(f"titleHint missing or empty{suffix}; publish title must be decided before content object routing")
+
+
 def compute_content_coords(brief: Mapping[str, Any], content_type: str = "article") -> dict[str, Any]:
     """从 brief 确定性算出内容对象坐标（angle/title），不含 seq。"""
     from produce.route_workflow import _publish_angle  # 延迟导入避免循环依赖
 
     angle = _publish_angle(brief)
-    title = str(brief.get("titleHint") or "").strip()
+    title = require_title_hint(brief)
     return {"contentType": content_type, "angle": angle, "title": title}
 
 
@@ -70,6 +84,9 @@ def register_content_object(
     seq: int | None = None,
 ) -> dict[str, Any]:
     """登记/刷新 ref→coords 路由（幂等）。seq 缺省时整组按 ref 稳定排序重排（常态 1:1 → 1）。"""
+    title = str(title or "").strip()
+    if not title:
+        raise ValueError(f"content object title missing or empty for ref={ref!r}")
     index = load_index(task_id, batch_id)
     index[ref] = {"contentType": content_type, "angle": angle, "title": title,
                   "seq": int(seq) if seq is not None else int((index.get(ref) or {}).get("seq") or 1)}

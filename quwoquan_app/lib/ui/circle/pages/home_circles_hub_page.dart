@@ -157,15 +157,15 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       }(),
       () async {
         try {
-          final cfg = await repo
-              .getCircleCategoryConfig()
-              .timeout(
-                const Duration(seconds: 2),
-                onTimeout: () => Map<String, CircleCategoryTabConfigDto>.from(
-                  CircleCategoryTabDefaults.remoteStyleFallback,
-                ),
-              );
-          nextCategoryConfig = Map<String, CircleCategoryTabConfigDto>.from(cfg);
+          final cfg = await repo.getCircleCategoryConfig().timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => Map<String, CircleCategoryTabConfigDto>.from(
+              CircleCategoryTabDefaults.remoteStyleFallback,
+            ),
+          );
+          nextCategoryConfig = Map<String, CircleCategoryTabConfigDto>.from(
+            cfg,
+          );
         } catch (_) {
           nextCategoryConfig = Map<String, CircleCategoryTabConfigDto>.from(
             CircleCategoryTabDefaults.remoteStyleFallback,
@@ -616,12 +616,14 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         .read(feedSessionProvider.notifier)
         .newFeedRequestId();
     final result = await context.push<Object?>(
-      _isVideoPost(tappedDto)
-          ? AppRoutePaths.videoViewer(index: '$initialIndex')
-          : AppRoutePaths.mediaViewer(
-              category: 'circle',
-              index: '$initialIndex',
-            ),
+      AppRoutePaths.workBrowser(
+        workId: tappedDto.id,
+        filter: _isVideoPost(tappedDto)
+            ? 'video'
+            : (tappedDto.isArticleLike ? 'article' : 'image'),
+        source: 'circle',
+        index: '$initialIndex',
+      ),
       extra: MediaViewerExtra(
         posts: viewerDtos
             .map(

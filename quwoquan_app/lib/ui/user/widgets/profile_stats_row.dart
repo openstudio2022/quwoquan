@@ -29,12 +29,8 @@ class ProfileStatsRow extends StatelessWidget {
     ).withValues(alpha: 0.9);
     final subject = profile;
 
+    // 体验规格四列统计：关注 / 粉丝 / 获赞 / 作品（获赞、作品无列表页，不可点）。
     final items = [
-      _StatItem(
-        value: _formatCount(subject?.circleCount ?? 0),
-        label: UITextConstants.contactsTabCircles,
-        type: 'circles',
-      ),
       _StatItem(
         value: _formatCount(subject?.followingCount ?? 0),
         label: UITextConstants.follow,
@@ -44,6 +40,16 @@ class ProfileStatsRow extends StatelessWidget {
         value: _formatCount(subject?.followerCount ?? 0),
         label: UITextConstants.circleFans,
         type: 'fans',
+      ),
+      _StatItem(
+        value: _formatCount(subject?.likeCount ?? 0),
+        label: UITextConstants.circleLikes,
+        type: '',
+      ),
+      _StatItem(
+        value: _formatCount(subject?.postCount ?? 0),
+        label: UITextConstants.discoveryRailWorks,
+        type: '',
       ),
     ];
 
@@ -59,46 +65,7 @@ class ProfileStatsRow extends StatelessWidget {
         children: <Widget>[
           for (var i = 0; i < items.length; i += 1) ...<Widget>[
             Expanded(
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: onStatTap != null
-                    ? () => onStatTap!(items[i].type)
-                    : null,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    vertical: AppSpacing.intraGroupXs,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        items[i].value,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosTitle3,
-                          fontWeight: AppTypography.semiBold,
-                          color: fg,
-                          letterSpacing: -0.32,
-                        ),
-                      ),
-                      SizedBox(height: AppSpacing.intraGroupXs / 2),
-                      Text(
-                        items[i].label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosFootnote,
-                          fontWeight: AppTypography.medium,
-                          color: fgSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              child: _buildStatCell(items[i], fg, fgSecondary),
             ),
             if (i != items.length - 1)
               Container(
@@ -109,6 +76,52 @@ class ProfileStatsRow extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+extension on ProfileStatsRow {
+  Widget _buildStatCell(_StatItem item, Color fg, Color fgSecondary) {
+    final content = Padding(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            item.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.iosTitle3,
+              fontWeight: AppTypography.semiBold,
+              color: fg,
+              letterSpacing: -0.32,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs / 2),
+          Text(
+            item.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.iosFootnote,
+              fontWeight: AppTypography.medium,
+              color: fgSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+    // 无列表页的列（获赞/作品）渲染为静态格，避免 disabled 按钮的降透明视觉。
+    if (onStatTap == null || item.type.isEmpty) {
+      return content;
+    }
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: () => onStatTap!(item.type),
+      child: content,
     );
   }
 }

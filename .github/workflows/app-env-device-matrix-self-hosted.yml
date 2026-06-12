@@ -378,29 +378,19 @@ jobs:
           CACHE_ROOT="${HOME}/.cache/quwoquan-mobile-matrix"
           REPO_DIR="${CACHE_ROOT}/repo"
           AUTH_HEADER="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64)"
-          sync_repo() {
-            mkdir -p "${REPO_DIR}"
-            if [ ! -d "${REPO_DIR}/.git" ]; then
-              rm -rf "${REPO_DIR}"
-              git init "${REPO_DIR}"
-              git -C "${REPO_DIR}" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-            fi
-            git -C "${REPO_DIR}" remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
-            git -C "${REPO_DIR}" config --local gc.auto 0
-            git -C "${REPO_DIR}" reset --hard >/dev/null 2>&1 || true
-            git -C "${REPO_DIR}" clean -ffdx >/dev/null 2>&1 || true
-            git -C "${REPO_DIR}" sparse-checkout init --cone
-            git -C "${REPO_DIR}" sparse-checkout set agent_ops deploy packages quwoquan_app quwoquan_service
-            git -C "${REPO_DIR}" -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" fetch --depth=1 origin "${GITHUB_SHA}"
-            git -C "${REPO_DIR}" checkout --force --detach FETCH_HEAD
-            git -C "${REPO_DIR}" clean -ffdx
-          }
           mkdir -p "${CACHE_ROOT}"
-          if ! sync_repo; then
-            echo "::warning::cached repo sync failed, rebuilding local repo cache"
-            rm -rf "${REPO_DIR}"
-            sync_repo
-          fi
+          rm -rf "${REPO_DIR}"
+          git init "${REPO_DIR}"
+          git -C "${REPO_DIR}" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -C "${REPO_DIR}" config --local gc.auto 0
+          git -C "${REPO_DIR}" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${AUTH_HEADER}"
+          git -C "${REPO_DIR}" fetch --depth=1 origin "${GITHUB_SHA}"
+          git -C "${REPO_DIR}" checkout --force --detach FETCH_HEAD
+          git -C "${REPO_DIR}" sparse-checkout init --cone
+          git -C "${REPO_DIR}" sparse-checkout set agent_ops deploy packages quwoquan_app quwoquan_service
+          git -C "${REPO_DIR}" read-tree -mu HEAD
+          git -C "${REPO_DIR}" clean -ffdx
+          test -f "${REPO_DIR}/agent_ops/assistant/run_assistant_device_matrix_ci.py"
           rm -rf "${GITHUB_WORKSPACE}/repo"
           ln -s "${REPO_DIR}" "${GITHUB_WORKSPACE}/repo"
       - name: 记录发现结果

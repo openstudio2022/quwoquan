@@ -22,6 +22,13 @@ class HomepageMockData {
     _campusHomepage('fixture_homepage_university_fudan', '复旦大学', '上海'),
     _campusHomepage('fixture_homepage_university_zju', '浙江大学', '杭州'),
     _campusHomepage('fixture_homepage_university_nju', '南京大学', '南京'),
+    _sightHomepage('homepage_sight_emeishan', '峨眉山', '乐山', '世界遗产与川西南山地旅行代表目的地'),
+    _sightHomepage(
+      'homepage_sight_leshan_giant_buddha',
+      '乐山大佛',
+      '乐山',
+      '岷江、青衣江、大渡河交汇处的石刻造像与城市地标',
+    ),
     _travelPhotoHomepage(
       'fixture_homepage_travel_photo_west_lake',
       '西湖旅行摄影机位',
@@ -292,6 +299,67 @@ HomepageDetail _travelPhotoHomepage(String id, String title, String city) {
         circleId: '${id}_circle_001',
         name: '$title 兴趣圈',
         memberCount: 480,
+        linkedHomepageId: id,
+        linkedHomepageTitle: title,
+      ),
+    ],
+    createdAt: _dt('2026-05-01T00:00:00.000Z'),
+    updatedAt: _dt('2026-05-01T00:00:00.000Z'),
+    publishedAt: _dt('2026-05-01T00:00:00.000Z'),
+  );
+}
+
+HomepageDetail _sightHomepage(
+  String id,
+  String title,
+  String city,
+  String subtitle,
+) {
+  return HomepageDetail(
+    id: id,
+    homepageType: 'sight',
+    title: title,
+    subtitle: subtitle,
+    coverUrl: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
+    status: 'published',
+    sourceType: 'data_pipeline_seed',
+    claimStatus: 'unclaimed',
+    categoryTags: <String>['旅行', '景区', city],
+    city: city,
+    averageRating: 4.8,
+    ratingCount: 327,
+    reviewSummary: HomepageReviewSummaryData(
+      averageRating: 4.8,
+      ratingCount: 327,
+      highlightTags: <String>['适合攻略', '适合摄影', '同城讨论多'],
+      dimensionScores: <HomepageReviewDimensionScore>[
+        HomepageReviewDimensionScore(label: '景观', score: 4.9),
+        HomepageReviewDimensionScore(label: '交通', score: 4.4),
+        HomepageReviewDimensionScore(label: '内容丰富度', score: 4.7),
+      ],
+    ),
+    contentPreview: <HomepageContentPreview>[
+      HomepageContentPreview(
+        postId: '${id}_post_001',
+        title: '$title 攻略与真实体验',
+        summary: '承接数据工程生产的实体主页、内容攻略和关联讨论。',
+        contentType: 'article',
+        coverUrl:
+            'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
+      ),
+    ],
+    questionPreview: <HomepageQuestionPreview>[
+      HomepageQuestionPreview(
+        postId: '${id}_question_001',
+        title: '第一次去$title，路线和时间怎么安排？',
+        summary: '实体主页沉淀用户围绕同一地点的问答。',
+      ),
+    ],
+    relatedGroups: <HomepageRelatedGroupSummary>[
+      HomepageRelatedGroupSummary(
+        circleId: '${id}_circle_001',
+        name: '$title 兴趣圈',
+        memberCount: 327,
         linkedHomepageId: id,
         linkedHomepageTitle: title,
       ),

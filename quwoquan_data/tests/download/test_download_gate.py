@@ -36,6 +36,7 @@ def test_gate_download_passes_object_first_sources():
         ordinal=1,
         source_id="overview_baike",
         source_md="# 峨眉山\n\n概述",
+        quality={"sourceId": "overview_baike", "quality": "B-fact", "score": 5},
         platform="baike",
         source_category="overview_baike",
         url="https://example.com/1",
@@ -47,6 +48,7 @@ def test_gate_download_passes_object_first_sources():
         ordinal=2,
         source_id="travel_notes",
         source_md="# 峨眉山\n\n游记",
+        quality={"sourceId": "travel_notes", "quality": "A-story", "score": 8},
         platform="travelogue",
         source_category="travelogue",
         url="https://example.com/2",
@@ -67,6 +69,7 @@ def test_gate_download_blocks_single_source_unit():
         ordinal=1,
         source_id="overview_baike",
         source_md="# 乐山大佛\n\n概述",
+        quality={"sourceId": "overview_baike", "quality": "B-fact", "score": 5},
         platform="baike",
         source_category="overview_baike",
         url="https://example.com/3",
@@ -75,6 +78,38 @@ def test_gate_download_blocks_single_source_unit():
     )
     issues = gate_download(TASK, batch)
     assert any("only 1 sources" in issue for issue in issues), issues
+
+
+def test_gate_download_blocks_reject_only_units():
+    batch = "download_gate_reject_only"
+    ensure_task_layout(TASK)
+    entity_dir = batch_entity_object_dir(TASK, batch, "地点", "景区", "九寨沟")
+    write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="probe_1",
+        source_md="---\nretained: false\n---\n\nmanual_source_plan_note: 探针页\n",
+        quality={"sourceId": "probe_1", "quality": "Reject", "score": 0},
+        platform="mafengwo",
+        source_category="travelogue",
+        url="https://example.com/r1",
+        title="探针页1",
+        target_ref="/entity/地点/景区/九寨沟",
+    )
+    write_source_unit(
+        entity_dir,
+        ordinal=2,
+        source_id="probe_2",
+        source_md="---\nretained: false\n---\n\nmanual_source_plan_note: 探针页\n",
+        quality={"sourceId": "probe_2", "quality": "Reject", "score": 0},
+        platform="ctrip",
+        source_category="travelogue",
+        url="https://example.com/r2",
+        title="探针页2",
+        target_ref="/entity/地点/景区/九寨沟",
+    )
+    issues = gate_download(TASK, batch)
+    assert any("retained sources" in issue for issue in issues), issues
 
 
 if __name__ == "__main__":

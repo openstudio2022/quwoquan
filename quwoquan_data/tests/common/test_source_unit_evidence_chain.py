@@ -34,14 +34,17 @@ import cv2  # noqa: E402
 
 from _common.article_package import copy_asset_files  # noqa: E402
 from _common.batch_manifest import write_batch_manifest  # noqa: E402
+from _common.io import write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
     batch_entity_object_dir,
     batch_root,
     ensure_batch_layout,
     ensure_task_layout,
+    task_shared_dir,
 )
 from _common.source_unit import iter_source_units, object_image_candidates, write_source_unit  # noqa: E402
 from produce.route_workflow import _build_route_assets  # noqa: E402
+from verify.verify_directory_evidence_chain import scan_task  # noqa: E402
 
 TASK = "旅行/地域/四川省/景区/景区全覆盖"
 BATCH = "evidence_chain"
@@ -136,6 +139,15 @@ def test_route_assets_to_post_assets_traceable():
         # sourceAssetRef 回查源图存在
         src = batch_root(TASK, BATCH) / a["sourceAssetRef"]
         assert src.is_file(), src
+
+
+def test_task_shared_allows_baseline_report():
+    ensure_task_layout(TASK)
+    shared = task_shared_dir(TASK)
+    shared.mkdir(parents=True, exist_ok=True)
+    write_json(shared / "baseline_report.json", {"status": "passed"})
+    issues = scan_task(TASK)
+    assert not any("baseline_report.json" in issue for issue in issues), issues
 
 
 def _run_all() -> None:

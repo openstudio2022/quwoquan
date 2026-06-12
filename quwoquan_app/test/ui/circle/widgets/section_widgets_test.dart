@@ -32,7 +32,10 @@ Widget _wrap(Widget child, {double textScaleFactor = 1.0}) => ProviderScope(
           path: '/',
           builder: (_, _) => Scaffold(body: child),
         ),
-        GoRoute(path: '/article/:id', builder: (_, _) => const SizedBox()),
+        GoRoute(
+          path: '/works/browser/:workId',
+          builder: (_, _) => const SizedBox(),
+        ),
         GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
       ],
     ),

@@ -1417,6 +1417,7 @@ func buildSubAccountProfileView(owner *model.UserProfile, persona *model.Persona
 		"avatarUrl":         avatarURL,
 		"backgroundUrl":     "",
 		"bio":               owner.Bio,
+		"identityTags":      parsePgTextArray(owner.IdentityTags),
 		"followerCount":     owner.FollowerCount,
 		"followingCount":    owner.FollowingCount,
 		"postCount":         owner.PostCount,
@@ -1600,6 +1601,25 @@ func removeProfileFields(existing, toRemove []string) []string {
 		result = append(result, field)
 	}
 	return normalizeProfileFields(result)
+}
+
+// parsePgTextArray 解析 Postgres TEXT[] 扫描出的 "{a,b}" 字面量为字符串切片（不做字段白名单归一）。
+func parsePgTextArray(raw string) []string {
+	text := strings.TrimSpace(raw)
+	text = strings.TrimPrefix(text, "{")
+	text = strings.TrimSuffix(text, "}")
+	if text == "" {
+		return []string{}
+	}
+	parts := strings.Split(text, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.Trim(strings.TrimSpace(part), `"`)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
 }
 
 func parseProfileFieldList(raw string) []string {

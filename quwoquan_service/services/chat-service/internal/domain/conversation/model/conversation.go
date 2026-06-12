@@ -16,6 +16,7 @@ type Conversation struct {
 	CreatorId             string    `json:"creatorId" bson:"creatorId"`
 	CircleId              string    `json:"circleId" bson:"circleId"`
 	CircleGroupId         string    `json:"circleGroupId" bson:"circleGroupId"`
+	EntityId              string    `json:"entityId" bson:"entityId"`
 	OriginType            string    `json:"originType" bson:"originType"`
 	BindingType           string    `json:"bindingType" bson:"bindingType"`
 	LifecyclePolicy       string    `json:"lifecyclePolicy" bson:"lifecyclePolicy"`

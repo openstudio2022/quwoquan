@@ -34,7 +34,7 @@ GROUP_RENDER_PACKAGE = "./cmd/render-group-avatar"
 GAMMA_CURATED_EXPECTATIONS = {
     "content": {
         "fixturePath": "content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
-        "refs": ["content_discovery_core"],
+        "refs": ["content_discovery_core", "intersection_core"],
     },
     "circle": {
         "fixturePath": "social/circle/test_fixtures/scenarios/circle_scenarios.gamma-curated.json",

@@ -244,6 +244,8 @@ func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Re
 		writeHTTPError(w, r, err)
 		return
 	}
+	viewerID := strings.TrimSpace(resolveUserID(r))
+	summary = application.DecorateAuthorImpact(summary, viewerID != "" && viewerID == authorID)
 	writeJSON(w, http.StatusOK, summary)
 }
 

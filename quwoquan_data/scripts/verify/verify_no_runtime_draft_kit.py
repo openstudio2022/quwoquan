@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""扫描门：禁止正式链路复用测试专用的正文骨架（agent_draft_kit）。
+"""扫描门：禁止正式链路复用测试专用的正文骨架（agent_draft_kit），
+并禁止普通脚本直接调用 ``write_agent_draft()`` 冒充会话模型写回正文。
 
 背景（整改计划第一阶段）：四川 10e20c 批次的正文实际由 runtime 批次脚本
 `from helpers.agent_draft_kit import route_article/entity_article` 拼接派生，
@@ -9,6 +10,8 @@
   - import agent_draft_kit（测试专用 fixture builder）；
   - 调用 route_article/entity_article/gallery_article 这类 kit 骨架函数；
   - 复刻 kit 的固定段落骨架指纹句。
+  - 调用 `write_agent_draft()`（除 `_common/draft_io.py` 自身定义外）；正文写回只能由会话模型/外部 runner 执行，
+    编排/verify/普通 CLI 脚本不得伪造 generator=agent。
 
 runtime/** 是本地产物（.gitignore），CI 上通常不存在 → 门会自动跳过不存在的根；
 但本地一旦残留"脚本拼正文"路径即 FAIL，逼迫改回会话模型单篇创作。
@@ -23,13 +26,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA_ROOT = ROOT / "quwoquan_data"
-SCAN_ROOTS = [DATA_ROOT / "scripts", DATA_ROOT / "tasks", DATA_ROOT / "runtime"]
 
 # kit 是测试专用，唯一合法位置是 tests/helpers/agent_draft_kit.py 及 tests/ 内消费者。
 _KIT_IMPORT_RE = re.compile(
     r"(?:^|\n)\s*(?:from\s+(?:tests\.)?helpers\.agent_draft_kit\s+import|import\s+agent_draft_kit|from\s+agent_draft_kit\s+import)"
 )
 _KIT_FUNC_RE = re.compile(r"\b(?:route_article|entity_article|gallery_article)\s*\(")
+_WRITE_AGENT_DRAFT_RE = re.compile(r"\bwrite_agent_draft\s*\(")
 # kit 标志性骨架句（复刻即视为脚本拼正文）。
 _KIT_FINGERPRINTS = (
     "出发前我犹豫了很久",
@@ -51,9 +54,12 @@ def _is_test_path(path: Path) -> bool:
     return "tests" in parts or path.name.startswith("test_")
 
 
-def scan() -> list[str]:
+def scan(root: Path | None = None) -> list[str]:
+    scan_root = Path(root) if root is not None else ROOT
+    data_root = scan_root / "quwoquan_data"
+    scan_roots = [data_root / "scripts", data_root / "tasks", data_root / "runtime"]
     offenders: list[str] = []
-    for base in SCAN_ROOTS:
+    for base in scan_roots:
         if not base.exists():
             continue
         for path in base.rglob("*.py"):
@@ -63,11 +69,19 @@ def scan() -> list[str]:
                 text = path.read_text(encoding="utf-8")
             except (OSError, ValueError):
                 continue
-            rel = path.relative_to(ROOT)
+            rel = path.relative_to(scan_root)
             if _KIT_IMPORT_RE.search(text):
                 offenders.append(f"{rel}: imports test-only agent_draft_kit (body must be authored by the session model)")
             elif _KIT_FUNC_RE.search(text) and "def route_article" not in text and "def entity_article" not in text:
                 offenders.append(f"{rel}: calls draft-kit skeleton function (script-spliced body is forbidden)")
+            elif (
+                _WRITE_AGENT_DRAFT_RE.search(text)
+                and rel.as_posix() != "quwoquan_data/scripts/_common/draft_io.py"
+                and "def write_agent_draft" not in text
+            ):
+                offenders.append(
+                    f"{rel}: calls write_agent_draft directly (only session-model author / external runner may write agent drafts)"
+                )
             for fp in _KIT_FINGERPRINTS:
                 if fp in text:
                     offenders.append(f"{rel}: replicates draft-kit skeleton phrase: {fp!r}")

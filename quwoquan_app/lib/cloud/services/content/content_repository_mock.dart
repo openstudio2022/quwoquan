@@ -48,10 +48,23 @@ class MockContentRepository implements ContentRepository {
     return byId.values.toList(growable: false);
   }
 
+  Never _throwMockPostNotFound(String postId) {
+    throw CloudErrorMapper.fromStatusCode(
+      404,
+      body:
+          '{"code":"${ContentErrorCode.postNotFound.code}","message":"${ContentErrorMessages.zh[ContentErrorCode.postNotFound]}"}',
+      requestPath: ContentApiMetadata.getPostPath(postId: postId),
+    );
+  }
+
   Exception? throwOnLike;
   Exception? throwOnCreateComment;
   Exception? throwOnFavorite;
   Exception? throwOnShare;
+
+  /// 软删除墓碑：被 [deletePost] 删除的帖 id。删除后 [getPost] 抛「不存在」，
+  /// 与云侧软删 + tombstone 语义一致，使删除旅程在 alpha 下可契约验证（R12/R13）。
+  final Set<String> _deletedPostIds = <String>{};
 
   int likePostCallCount = 0;
   int createCommentCallCount = 0;
@@ -193,125 +206,23 @@ class MockContentRepository implements ContentRepository {
     String? categoryId,
     String? subCategory,
     int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final normalizedQuery = query.trim().toLowerCase();
-    if (normalizedQuery.isEmpty) {
-      return const <PostSearchItemView>[];
-    }
-    final expectedIdentity = (identity ?? '').trim().toLowerCase();
-    final expectedType = (type ?? '').trim().toLowerCase();
-    final expectedCategoryId = (categoryId ?? '').trim().toLowerCase();
-    final expectedSubCategory = (subCategory ?? '').trim().toLowerCase();
-    final allRaw = _allDiscoveryPosts().map((e) => e.toMap()).toList();
-    final results = <PostSearchItemView>[];
-    for (final item in allRaw) {
-      final circleIds = <String>{
-        if ((item['circleId'] ?? '').toString().trim().isNotEmpty)
-          (item['circleId'] ?? '').toString().trim(),
-        ...((item['circleIds'] as List?)
-                ?.map((value) => value.toString().trim())
-                .where((value) => value.isNotEmpty) ??
-            const <String>[]),
-      };
-      final associatedCircles = circleIds
-          .map(CircleMockData.tryResolveCircleDto)
-          .whereType<CircleDto>()
-          .toList(growable: false);
-      final matchedCategory = associatedCircles
-          .where(
-            (circle) =>
-                (expectedCategoryId.isEmpty ||
-                    (circle.category ?? '').toLowerCase() ==
-                        expectedCategoryId) &&
-                (expectedSubCategory.isEmpty ||
-                    (circle.subCategory ?? '').toLowerCase() ==
-                        expectedSubCategory),
-          )
-          .toList(growable: false);
-      final matchedCircle = matchedCategory.isNotEmpty
-          ? matchedCategory.first
-          : (associatedCircles.isEmpty ? null : associatedCircles.first);
-      final fallbackCategoryId = _mockCategoryForCircleIds(circleIds);
-      final itemIdentity =
-          (item['contentIdentity'] ??
-                  (item['contentType'] == 'micro' ? 'moment' : 'work'))
-              .toString()
-              .toLowerCase();
-      final itemType = (item['contentType'] ?? item['type'] ?? '')
-          .toString()
-          .toLowerCase();
-      final itemCategoryId =
-          (item['categoryId'] ?? matchedCircle?.category ?? fallbackCategoryId)
-              .toString()
-              .toLowerCase();
-      final itemSubCategory =
-          (item['subCategory'] ?? matchedCircle?.subCategory ?? '')
-              .toString()
-              .toLowerCase();
-      if (expectedIdentity.isNotEmpty && itemIdentity != expectedIdentity) {
-        continue;
-      }
-      if (expectedType.isNotEmpty && itemType != expectedType) {
-        continue;
-      }
-      if (expectedCategoryId.isNotEmpty &&
-          itemCategoryId != expectedCategoryId) {
-        continue;
-      }
-      if (expectedSubCategory.isNotEmpty &&
-          itemSubCategory != expectedSubCategory) {
-        continue;
-      }
-      final searchable = <String>[
-        item['title']?.toString() ?? '',
-        item['displayName']?.toString() ?? '',
-        item['body']?.toString() ?? '',
-        item['summary']?.toString() ?? '',
-        item['locationName']?.toString() ?? '',
-      ];
-      final matched = searchable.firstWhere(
-        (value) => value.toLowerCase().contains(normalizedQuery),
-        orElse: () => '',
-      );
-      if (matched.isEmpty) {
-        continue;
-      }
-      results.add(
-        PostSearchItemView.fromMap(<String, dynamic>{
-          ...item,
-          'categoryId': item['categoryId'] ?? matchedCircle?.category,
-          'subCategory': item['subCategory'] ?? matchedCircle?.subCategory,
-          'highlightText': matched,
-          'matchedField': matched == (item['title']?.toString() ?? '')
-              ? 'title'
-              : matched == (item['displayName']?.toString() ?? '')
-              ? 'author'
-              : 'body',
-          'authorId': item['authorId'] ?? item['subAccountId'] ?? '',
-          'authorDisplayName':
-              item['displayName'] ?? item['authorDisplayNameSnapshot'] ?? '',
-          'authorAvatarUrl':
-              item['authorAvatarUrl'] ?? item['authorAvatarUrlSnapshot'] ?? '',
-        }),
-      );
-    }
-    results.sort((a, b) {
-      final aAuthorMatch = a.matchedField == 'author' ? 0 : 1;
-      final bAuthorMatch = b.matchedField == 'author' ? 0 : 1;
-      final byAuthor = aAuthorMatch.compareTo(bAuthorMatch);
-      if (byAuthor != 0) {
-        return byAuthor;
-      }
-      return a.postId.compareTo(b.postId);
-    });
-    return results.take(limit).toList(growable: false);
-  }
+  }) async => _searchMockPosts(
+    query: query,
+    identity: identity,
+    type: type,
+    categoryId: categoryId,
+    subCategory: subCategory,
+    limit: limit,
+  );
 
   @override
   Future<ContentPostDetailPayload> getPost({required String postId}) async {
-    final raw = lookupCanonicalDiscoveryWireRowByPostId(postId);
+    if (_deletedPostIds.contains(postId)) {
+      _throwMockPostNotFound(postId);
+    }
+    final raw = _contractSeedPostWire(postId) ?? lookupCanonicalDiscoveryWireRowByPostId(postId);
     if (raw == null) {
-      return Future.error(Exception('Post $postId not found'));
+      _throwMockPostNotFound(postId);
     }
     return ContentPostDetailPayload.fromWire(raw);
   }
@@ -617,7 +528,12 @@ class MockContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> deletePost({required String postId}) async {}
+  Future<void> deletePost({required String postId}) async {
+    if (postId.trim().isEmpty) {
+      return;
+    }
+    _deletedPostIds.add(postId);
+  }
 
   @override
   Future<PostBaseDto> publishPost({
@@ -806,6 +722,29 @@ class MockContentRepository implements ContentRepository {
       return List<PostBaseDto>.from(seeded, growable: false);
     }
     return _discoverySeedPosts();
+  }
+
+  Map<String, dynamic>? _contractSeedPostWire(String postId) {
+    final trimmed = postId.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final raw = ContractFixtureRuntimeLoader.contentSeedSet()?['posts'];
+    if (raw is! List) {
+      return null;
+    }
+    for (final item in raw.whereType<Map>()) {
+      final wire = item.cast<String, dynamic>();
+      final itemId =
+          wire['postId']?.toString() ??
+          wire['_id']?.toString() ??
+          wire['id']?.toString() ??
+          '';
+      if (itemId == trimmed) {
+        return Map<String, dynamic>.from(wire);
+      }
+    }
+    return null;
   }
 
   List<CommentDto> _sortComments(List<CommentDto> comments, String sort) {

@@ -9,6 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
@@ -422,7 +423,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
         promptReason: AuthPromptReason.sessionExpired,
         rememberedLoginMethod: state.rememberedLoginMethod,
         rememberedLoginMaskedIdentifier: state.rememberedLoginMaskedIdentifier,
-        errorMessage: e.toString(),
+        errorMessage: runtimeErrorDisplayMessage(e),
       );
     }
   }
@@ -613,14 +614,16 @@ class AuthSessionController extends Notifier<AuthSessionState> {
         if (!ref.mounted) {
           return false;
         }
-        state = state.copyWith(errorMessage: () => e.toString());
+        state = state.copyWith(
+          errorMessage: () => runtimeErrorDisplayMessage(e),
+        );
         return false;
       }
       await _store.markForegroundAuthCheckNow();
       if (!ref.mounted) {
         return false;
       }
-      state = state.copyWith(errorMessage: () => e.toString());
+      state = state.copyWith(errorMessage: () => runtimeErrorDisplayMessage(e));
       return false;
     }
   }

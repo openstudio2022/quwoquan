@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var (
@@ -58,6 +59,9 @@ type PostDoc struct {
 	ArticleDigest        string                   `json:"articleDigest" bson:"articleDigest"`
 	ArticleAssetManifest *ArticleAssetManifestDoc `json:"articleAssetManifest" bson:"articleAssetManifest"`
 	SourceTaskId         string                   `json:"sourceTaskId" bson:"sourceTaskId"`
+	CreatedAt            time.Time                `json:"createdAt" bson:"createdAt"`
+	UpdatedAt            time.Time                `json:"updatedAt" bson:"updatedAt"`
+	PublishedAt          time.Time                `json:"publishedAt" bson:"publishedAt"`
 }
 
 // EntityDoc 是灌入运行库的实体文档（与 publish entity _entity.json + page.md 对齐）。
@@ -118,6 +122,21 @@ type postManifest struct {
 	PublishSeq           int                      `json:"publishSeq"`
 	SourceTaskId         string                   `json:"sourceTaskId"`
 	ArticleAssetManifest *ArticleAssetManifestDoc `json:"articleAssetManifest"`
+	CreatedAt            string                   `json:"createdAt"`
+	UpdatedAt            string                   `json:"updatedAt"`
+	PublishedAt          string                   `json:"publishedAt"`
+}
+
+func parseManifestTime(ref string, field string, raw string) (time.Time, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return time.Time{}, fmt.Errorf("%s: manifest missing %s", ref, field)
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%s: invalid %s %q: %w", ref, field, value, err)
+	}
+	return parsed.UTC(), nil
 }
 
 func validateAssetItem(asset AssetManifestItem, ref string) error {
@@ -216,6 +235,18 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 				title = segs[3]
 			}
 		}
+		createdAt, err := parseManifestTime(postRef, "createdAt", m.CreatedAt)
+		if err != nil {
+			return err
+		}
+		updatedAt, err := parseManifestTime(postRef, "updatedAt", m.UpdatedAt)
+		if err != nil {
+			return err
+		}
+		publishedAt, err := parseManifestTime(postRef, "publishedAt", m.PublishedAt)
+		if err != nil {
+			return err
+		}
 		docs = append(docs, PostDoc{
 			PostRef:              postRef,
 			ContentType:          m.ContentType,
@@ -230,6 +261,9 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			ArticleDigest:        m.ArticleDigest,
 			ArticleAssetManifest: m.ArticleAssetManifest,
 			SourceTaskId:         m.SourceTaskId,
+			CreatedAt:            createdAt,
+			UpdatedAt:            updatedAt,
+			PublishedAt:          publishedAt,
 		})
 		return nil
 	})

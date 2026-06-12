@@ -263,11 +263,6 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
   }
 
   Future<void> _onPostTap(BuildContext context, PostBaseDto post) async {
-    if (post.identity == 'work' && post.displayFormat == 'note') {
-      context.push(AppRoutePaths.articleDetail(id: post.id));
-      return;
-    }
-
     final state = ref.read(profileNotifierProvider(widget.userId));
     final filtered = state.creations
         .where((p) => _matchesCreationFilter(p, state.activeSubTab))
@@ -277,12 +272,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         .indexWhere((p) => p.id == post.id)
         .clamp(0, filtered.length - 1);
     final postViews = filtered
-        .map(
-          (dto) => ContentSurfaceViewMapper.fromDto(
-            dto,
-            wire: dto.toMap(),
-          ),
-        )
+        .map((dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()))
         .toList();
     final isMoment = post.identity == 'moment';
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
@@ -292,31 +282,19 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
-    final navFeedRequestId =
-        ref.read(feedSessionProvider.notifier).newFeedRequestId();
-
-    if (post.displayFormat == 'video') {
-      final result = await context.push<Object?>(
-        '/video-viewer/$initialIndex',
-        extra: MediaViewerExtra(
-          posts: postViews,
-          dtoPosts: filtered,
-          initialIndex: initialIndex,
-          category: isMoment ? 'profile_moment' : 'profile',
-          source: isMoment ? 'profile_moment' : 'profile',
-          interactionSnapshot: interactionSnapshot,
-          referralSource: ReferralSource.authorProfile,
-          feedRequestId: navFeedRequestId,
-        ),
-      );
-      if (result is MediaViewerResult) {
-        applyMediaViewerResultToInteractionState(ref, result);
-      }
-      return;
-    }
+    final navFeedRequestId = ref
+        .read(feedSessionProvider.notifier)
+        .newFeedRequestId();
 
     final result = await context.push<Object?>(
-      '/media-viewer/photo/$initialIndex',
+      AppRoutePaths.workBrowser(
+        workId: post.id,
+        filter: post.isVideoLike
+            ? 'video'
+            : (post.isArticleLike ? 'article' : 'image'),
+        source: isMoment ? 'profile_moment' : 'profile',
+        index: '$initialIndex',
+      ),
       extra: MediaViewerExtra(
         posts: postViews,
         dtoPosts: filtered,

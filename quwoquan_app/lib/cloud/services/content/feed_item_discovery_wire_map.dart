@@ -3,7 +3,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dar
 /// 将 [FeedItemDto] 还原为发现区 / postBaseDtoFromMap 兼容的 wire 形状（含别名键）。
 extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
   Map<String, dynamic> toDiscoveryWireMap() {
-    final iso = createdAt.toUtc().toIso8601String();
+    final createdIso = createdAt.toUtc().toIso8601String();
+    final updatedIso = updatedAt?.toUtc().toIso8601String();
+    final publishedIso = publishedAt?.toUtc().toIso8601String();
     return <String, dynamic>{
       'postId': id,
       '_id': id,
@@ -31,8 +33,9 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       'commentCount': commentCount,
       'favoriteCount': favoriteCount,
       'shareCount': shareCount,
-      'publishedAt': iso,
-      'createdAt': iso,
+      'createdAt': createdIso,
+      if (updatedIso != null) 'updatedAt': updatedIso,
+      if (publishedIso != null) 'publishedAt': publishedIso,
       if (authorBackgroundUrl != null && authorBackgroundUrl!.trim().isNotEmpty)
         'authorBackgroundUrl': authorBackgroundUrl,
       if (articleTemplate != null && articleTemplate!.trim().isNotEmpty)

@@ -119,6 +119,47 @@ def test_carrier_consistency_article_needs_sections():
     assert good["passed"] is True
 
 
+def test_carrier_consistency_gallery_tracks_pack_assets():
+    article = '\n'.join([
+        '# 图集',
+        '',
+        ':::figure',
+        'asset://a1',
+        ':::',
+        '',
+        ':::figure',
+        'asset://a2',
+        ':::',
+    ])
+    gate = _check_carrier_consistency(
+        {"carrier": "gallery", "articleMarkdown": article, "assets": [{"assetId": "a1"}, {"assetId": "a2"}]}
+    )
+    assert gate["passed"] is True, gate["issues"]
+
+
+def test_carrier_consistency_gallery_blocks_when_missing_required_figure():
+    article = '\n'.join([
+        '# 图集',
+        '',
+        ':::figure',
+        'asset://a1',
+        ':::',
+        '',
+        ':::figure',
+        'asset://a2',
+        ':::',
+    ])
+    gate = _check_carrier_consistency(
+        {
+            "carrier": "gallery",
+            "articleMarkdown": article,
+            "assets": [{"assetId": "a1"}, {"assetId": "a2"}, {"assetId": "a3"}],
+        }
+    )
+    assert gate["passed"] is False
+    assert any("2 < 3" in issue for issue in gate["issues"]), gate["issues"]
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

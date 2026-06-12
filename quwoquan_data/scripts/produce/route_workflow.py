@@ -13,6 +13,7 @@ from typing import Any, Mapping, Sequence
 
 from _common.batch_asset_registry import BatchAssetRegistry, allocate_post_asset_id, load_batch_asset_registry
 from _common.batch_manifest import load_batch_manifest
+from _common.content_object import require_title_hint
 from _common.content_evidence import (
     build_related_search_plan,
     build_route_evidence_bundle,
@@ -126,25 +127,33 @@ def is_route_brief(brief: Mapping[str, Any]) -> bool:
 
 def load_compose_brief(task_id: str, batch_id: str, ref: str) -> dict[str, Any]:
     from _common.content_object import read_brief_object
+    from plan.brief import hydrate_entity_condition_context
 
-    return read_brief_object(task_id, batch_id, ref) or {}
+    brief = read_brief_object(task_id, batch_id, ref) or {}
+    if not brief:
+        return {}
+    return hydrate_entity_condition_context(brief)
 
 
 def iter_route_briefs(task_id: str, batch_id: str, refs: Sequence[str] | None = None) -> list[tuple[str, dict[str, Any]]]:
-    from _common.content_object import iter_briefs
+    from _common.content_object import iter_content_refs
 
     wanted = {ref for ref in (refs or []) if ref}
-    return [
-        (ref, brief)
-        for ref, brief in iter_briefs(task_id, batch_id)
-        if (not wanted or ref in wanted) and is_route_brief(brief)
-    ]
+    rows: list[tuple[str, dict[str, Any]]] = []
+    for ref in iter_content_refs(task_id, batch_id):
+        if wanted and ref not in wanted:
+            continue
+        brief = load_compose_brief(task_id, batch_id, ref)
+        if brief and is_route_brief(brief):
+            rows.append((ref, brief))
+    return rows
 
 
 def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str, Any]) -> dict[str, Any]:
-    from _common.content_object import register_from_brief
+    from _common.content_object import content_type_from_brief, register_from_brief, require_title_hint
 
-    register_from_brief(task_id, batch_id, ref, brief, content_type="article")
+    register_from_brief(task_id, batch_id, ref, brief, content_type=content_type_from_brief(brief))
+    title = require_title_hint(brief, ref=ref)
     entity_refs = [str(item) for item in brief.get("entityRefs") or [] if item]
     entity_names = entity_names_from_refs(entity_refs)
     source_records = load_source_records(task_id, batch_id, entity_names)
@@ -153,7 +162,7 @@ def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str,
         brief,
         source_records,
         entity_refs=entity_refs,
-        title=str(brief.get("titleHint") or ref),
+        title=title,
     )
     source_quality = evidence_bundle.get("storySpine", {}).get("sourceQuality", [])
     issues = gate_route_evidence_bundle(brief, evidence_bundle)
@@ -182,7 +191,7 @@ def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str,
         },
         "recommendation": recommendation,
         "templateId": brief.get("templateId"),
-        "title": brief.get("titleHint") or ref,
+        "title": title,
         "evidenceBundle": evidence_bundle,
         "sourceUrls": _unique_strings(str(row.get("url") or "") for row in source_records),
         "sourcePaths": _unique_strings(str(row.get("sourcePath") or "") for row in source_records),
@@ -248,9 +257,11 @@ def build_route_writing_pack(
     brief: Mapping[str, Any],
     quality_payload: Mapping[str, Any],
 ) -> dict[str, Any]:
-    from _common.content_object import register_from_brief
+    if str(quality_payload.get("recommendation") or "") == "skip":
+        raise ValueError(f"{ref}: evidence too weak (recommendation=skip), writing_pack must not be prepared")
+    from _common.content_object import content_type_from_brief, register_from_brief
 
-    register_from_brief(task_id, batch_id, ref, brief, content_type="article")
+    register_from_brief(task_id, batch_id, ref, brief, content_type=content_type_from_brief(brief))
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
     assets = _build_route_assets(task_id, batch_id, ref, brief, evidence_bundle)
     carrier = resolve_carrier(brief, evidence_bundle, assets)
@@ -337,7 +348,7 @@ def _compose_payload_from_pack(
     meta = draft_meta or {}
     payload = {
         "topicId": ref,
-        "title": brief.get("titleHint") or ref,
+        "title": require_title_hint(brief, ref=ref),
         "summary": _build_summary(article),
         "articleMarkdown": article,
         "carrier": carrier,
@@ -349,7 +360,7 @@ def _compose_payload_from_pack(
         "assets": list(pack.get("assets") or []),
         "publishLayout": "gallery" if carrier == "gallery" else "travel",
         "publishAngle": _publish_angle(brief),
-        "publishTitle": brief.get("titleHint") or ref,
+        "publishTitle": require_title_hint(brief, ref=ref),
         "publishSeq": 1,
         "conditionContext": brief.get("conditionContext"),
         "composeBriefRef": ref,
@@ -357,6 +368,8 @@ def _compose_payload_from_pack(
         "generator": str(meta.get("generator") or "pending"),
         "generatorModel": meta.get("model"),
         "citedSourceRefs": list(meta.get("citedSourcePaths") or []),
+        "createdAt": meta.get("createdAt"),
+        "updatedAt": meta.get("updatedAt"),
         "articleRenderProfile": {
             "template": template,
             "fontPreset": (brief.get("render") or {}).get("fontPreset", "clean"),
@@ -441,7 +454,11 @@ def review_route_draft(
     from _common.base_draft import base_draft_fidelity_issues, load_base_draft_text
 
     base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
-    fidelity = base_draft_fidelity_issues(body, base_text)
+    fidelity = base_draft_fidelity_issues(
+        body,
+        base_text,
+        carrier=str(compose_payload.get("carrier") or brief.get("carrier") or "article"),
+    )
     route_checks["baseDraftFidelity"] = {
         "passed": not fidelity,
         "issues": fidelity,
@@ -756,8 +773,12 @@ def _check_carrier_consistency(compose_payload: Mapping[str, Any]) -> dict[str, 
     article = str(compose_payload.get("articleMarkdown") or "")
     issues: list[str] = []
     if carrier == "gallery":
-        if article.count(":::figure") < 3:
-            issues.append("gallery carrier lacks figure blocks")
+        assets = [a for a in (compose_payload.get("assets") or []) if a.get("assetId")]
+        required_figures = max(2, len(assets)) if assets else 2
+        if article.count(":::figure") < required_figures:
+            issues.append(
+                f"gallery carrier lacks figure blocks ({article.count(':::figure')} < {required_figures})"
+            )
     else:
         if len(re.findall(r"(?m)^##\s", article)) < 3:
             issues.append("article carrier lacks prose sections (looks like a gallery)")
@@ -799,7 +820,12 @@ def _check_image_gate(compose_payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _opening_paragraph(article: str) -> str:
-    body = re.split(r"(?m)^##\s", article, maxsplit=1)[0]
+    text = article.lstrip()
+    if text.startswith("---\n"):
+        parts = text.split("\n---\n", 1)
+        if len(parts) == 2:
+            text = parts[1]
+    body = re.split(r"(?m)^##\s", text, maxsplit=1)[0]
     paragraphs = [p.strip() for p in body.split("\n\n") if p.strip() and not p.lstrip().startswith(("#", ">", ":::"))]
     return paragraphs[0] if paragraphs else ""
 
@@ -961,7 +987,8 @@ def _check_provenance_rewrite(
     brief: Mapping[str, Any],
     quality_payload: Mapping[str, Any],
 ) -> dict[str, Any]:
-    issues = check_narrative_quality(article, {"template": brief.get("templateId")})
+    carrier = str(brief.get("carrier") or "article")
+    issues = check_narrative_quality(article, {"template": brief.get("templateId"), "carrier": carrier})
     if any(term in article for term in PROVENANCE_TERMS):
         issues.append("contains provenance/platform wording")
     source_texts: list[str] = []
@@ -1053,6 +1080,8 @@ def _publish_angle(brief: Mapping[str, Any]) -> str:
         return "攻略"
     if "环线" in template_id:
         return "环线攻略"
+    if "画报" in template_id or "图集" in template_id:
+        return "画报"
     return "攻略"
 
 

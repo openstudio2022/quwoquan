@@ -3,8 +3,8 @@
   "environment": "gamma",
   "selectionProfile": "gamma-curated-core-100",
   "maxImageObjectCount": 100,
-  "imageObjectCount": 96,
-  "totalObjectCount": 97,
+  "imageObjectCount": 98,
+  "totalObjectCount": 99,
   "mediaObjects": [
     {
       "objectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
@@ -611,6 +611,20 @@
     {
       "objectKey": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+      "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3",
+      "mimeType": "image/png",
+      "sizeBytes": 722996
+    },
+    {
+      "objectKey": "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+      "sourceHash": "sha256:eb3bd2ec68f5e90ac470b5a3a816dd8e2a7df5d4a4ae61577c10438d77065224",
+      "mimeType": "image/png",
+      "sizeBytes": 1594793
+    },
+    {
+      "objectKey": "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
       "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3",
       "mimeType": "image/png",
       "sizeBytes": 722996

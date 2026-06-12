@@ -51,6 +51,8 @@ type contentFixturePost struct {
 	FavoriteCount int64    `json:"favoriteCount"`
 	ShareCount    int64    `json:"shareCount"`
 	CreatedAt     string   `json:"createdAt"`
+	UpdatedAt     string   `json:"updatedAt"`
+	PublishedAt   string   `json:"publishedAt"`
 }
 
 type contentFixtureComment struct {
@@ -156,6 +158,14 @@ func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 		id = strings.TrimSpace(fp.ID)
 	}
 	createdAt := parseFixtureTime(fp.CreatedAt)
+	updatedAt := createdAt
+	if value := strings.TrimSpace(fp.UpdatedAt); value != "" {
+		updatedAt = parseFixtureTime(value)
+	}
+	publishedAt := createdAt
+	if value := strings.TrimSpace(fp.PublishedAt); value != "" {
+		publishedAt = parseFixtureTime(value)
+	}
 	mediaURLs := append([]string{}, fp.ImageURLs...)
 	if len(mediaURLs) == 0 && fp.CoverURL != "" && fp.ContentType == "image" {
 		mediaURLs = []string{fp.CoverURL}
@@ -184,9 +194,9 @@ func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 		ShareCount:                fp.ShareCount,
 		ModerationStatus:          "approved",
 		CreatedAt:                 createdAt,
-		UpdatedAt:                 createdAt,
-		PublishedAt:               createdAt,
-		LastActiveAt:              createdAt,
+		UpdatedAt:                 updatedAt,
+		PublishedAt:               publishedAt,
+		LastActiveAt:              updatedAt,
 	}
 }
 

@@ -224,7 +224,8 @@ PlatformCapabilities platformCapabilitiesFor(AppPlatform platform) {
     case AppPlatform.android:
       return CapabilityProfile.mobile.copyWith(appleNativeLogin: false);
     case AppPlatform.ios:
-      return CapabilityProfile.mobile;
+      // 微信原生登录仅 Android 开启；iOS 走 Apple 登录（与来电能力位基线测试契约一致）。
+      return CapabilityProfile.mobile.copyWith(wechatNativeLogin: false);
     case AppPlatform.web:
       return CapabilityProfile.web;
     case AppPlatform.ohos:

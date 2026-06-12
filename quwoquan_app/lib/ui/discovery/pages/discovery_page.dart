@@ -31,7 +31,6 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
@@ -736,15 +735,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 article: dto,
                 isDark: isDark,
                 isFirst: isFirst,
-                onTap: () {
-                  _trackBehavior(BehaviorAction.click, dto);
-                  context.push(
-                    AppRoutePaths.articleDetail(id: dto.id),
-                    extra: const ArticleDetailPageRouteExtra(
-                      referralSource: ReferralSource.organicFeed,
-                    ),
-                  );
-                },
+                onTap: () => _onPostTap(
+                  dto,
+                  index,
+                  feedPosts: articles,
+                  category: 'article',
+                ),
                 onUserTap: () {
                   context.push(
                     AppRoutePaths.userProfile(username: dto.authorId),
@@ -911,15 +907,6 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     String? category,
   }) async {
     _trackBehavior(BehaviorAction.click, post);
-    if (post.identity == 'work' && post.displayFormat == 'note') {
-      context.push(
-        AppRoutePaths.articleDetail(id: post.id),
-        extra: const ArticleDetailPageRouteExtra(
-          referralSource: ReferralSource.organicFeed,
-        ),
-      );
-      return;
-    }
     final postViews = feedPosts
         ?.map((dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()))
         .toList();
@@ -940,27 +927,18 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
               .indexWhere((p) => p.id == post.id)
               .clamp(0, feedPosts.length - 1)
         : mediaIndex;
-    if (post.isVideoLike) {
-      if (postViews != null && postViews.isNotEmpty) {
-        await context.push<Object?>(
-          '/video-viewer/$initialIndex',
-          extra: MediaViewerExtra(
-            posts: postViews,
-            initialIndex: initialIndex,
-            category: category ?? 'video',
-            interactionSnapshot: interactionSnapshot,
-            feedRequestId: navFeedRequestId,
-          ),
-        );
-      } else {
-        context.push(AppRoutePaths.videoViewer(index: '$initialIndex'));
-      }
-      return;
-    }
+    final filter = post.isVideoLike
+        ? 'video'
+        : (post.isArticleLike ? 'article' : 'image');
     if (postViews != null && postViews.isNotEmpty) {
       final isMoment = category == 'moment';
       await context.push<Object?>(
-        '/media-viewer/photo/$initialIndex',
+        AppRoutePaths.workBrowser(
+          workId: post.id,
+          filter: filter,
+          source: category ?? post.displayFormat,
+          index: '$initialIndex',
+        ),
         extra: MediaViewerExtra(
           posts: postViews,
           initialIndex: initialIndex,
@@ -972,8 +950,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       );
     } else {
       context.push(
-        AppRoutePaths.mediaViewer(
-          category: post.displayFormat == 'video' ? 'video' : 'photo',
+        AppRoutePaths.workBrowser(
+          workId: post.id,
+          filter: filter,
+          source: category ?? post.displayFormat,
           index: '$initialIndex',
         ),
       );
@@ -992,27 +972,38 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   void _openIntersectionObject(IntersectionReason reason) {
-    final targetId = reason.actionTargetId.trim();
-    if (targetId.isEmpty) return;
+    final actionTargetId = reason.actionTargetId.trim();
+    final entityTargetId = reason.relationObjectId.trim().isNotEmpty
+        ? reason.relationObjectId.trim()
+        : actionTargetId;
+    if (actionTargetId.isEmpty && entityTargetId.isEmpty) return;
     ref
         .read(contentBehaviorTrackerProvider)
         .trackClick(
-          targetId,
+          actionTargetId.isEmpty ? entityTargetId : actionTargetId,
           referralSource: ReferralSource.organicFeed,
           intersectionId: reason.intersectionId,
           intersectionDimension: reason.dimension,
           intersectionClass: reason.intersectionClass,
           intersectionTagRefs: reason.tagRefs,
         );
-    final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);
+    final kind = UnifiedObjectKind.resolve(
+      objectKind: reason.objectKind,
+      relationKind: reason.relationKind,
+    );
     switch (kind) {
       case UnifiedObjectKind.person:
-        context.push(AppRoutePaths.userProfile(username: targetId));
+        if (actionTargetId.isNotEmpty) {
+          context.push(AppRoutePaths.userProfile(username: actionTargetId));
+        }
       case UnifiedObjectKind.circle:
-        context.push(AppRoutePaths.circleDetail(id: targetId));
+        if (actionTargetId.isNotEmpty) {
+          context.push(AppRoutePaths.circleDetail(id: actionTargetId));
+        }
       case UnifiedObjectKind.place:
-      case UnifiedObjectKind.org:
-        context.push(AppRoutePaths.homepageDetail(id: targetId));
+      case UnifiedObjectKind.school:
+      case UnifiedObjectKind.enterprise:
+        context.push(AppRoutePaths.homepageDetail(id: entityTargetId));
     }
   }
 

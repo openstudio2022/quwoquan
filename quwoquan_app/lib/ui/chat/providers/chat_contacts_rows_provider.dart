@@ -3,37 +3,24 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 
-/// 联系人二级 Tab 下的列表行（ChatRepository + 圈子/趣群占位）。
+/// 联系人二级 Tab 下的商用聚合行。
+///
+/// 业务事实来自云端 ContactHomeProjection；App 不再本地拼 contacts/circles/groups。
 final chatContactsRowsForSubTabProvider =
     FutureProvider.family<List<ChatContactsRow>, String>((ref, subTab) async {
       final repo = ref.watch(chatRepositoryProvider);
-      if (subTab == UITextConstants.contactsTabAll) {
-        final userRows = await repo.listContacts(limit: 500);
-        final circleRows = await repo.listContactTabCircles(limit: 500);
-        final groupRows = await repo.listContactTabFunGroups(limit: 500);
-        final merged = <ChatContactsRow>[
-          ...userRows.map(ChatContactsRow.fromContactDto),
-          ...circleRows.map(ChatContactsRow.fromContactTabCircleDto),
-          ...groupRows.map(ChatContactsRow.fromContactTabFunGroupDto),
-        ];
-        final seen = <String>{};
-        return merged.where((row) {
-          final key = '${row.kind}:${row.id}';
-          return seen.add(key);
-        }).toList(growable: false);
-      }
-      if (subTab == UITextConstants.contactsTabCircles) {
-        final rows = await repo.listContactTabCircles(limit: 500);
-        return rows.map(ChatContactsRow.fromContactTabCircleDto).toList();
-      }
-      if (subTab == UITextConstants.contactsTabFunGroup) {
-        final rows = await repo.listContactTabFunGroups(limit: 500);
-        return rows.map(ChatContactsRow.fromContactTabFunGroupDto).toList();
-      }
-      final contacts = await repo.listContacts(limit: 500);
-      var rows = contacts.map(ChatContactsRow.fromContactDto).toList();
-      if (subTab == UITextConstants.contactsTabMutualFollow) {
-        rows = rows.where((r) => r.isMutualFollow).toList();
-      }
-      return rows;
+      final rows = await repo.listContactHome(
+        filter: _contactHomeFilterForSubTab(subTab),
+        limit: 500,
+      );
+      return rows.map(ChatContactsRow.fromContactHomeDto).toList();
     });
+
+String _contactHomeFilterForSubTab(String subTab) {
+  return switch (subTab) {
+    UITextConstants.contactsTabMutualFollow => 'mutual',
+    UITextConstants.contactsTabCircles => 'circle',
+    UITextConstants.contactsTabGroups => 'group',
+    _ => 'all',
+  };
+}

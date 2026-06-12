@@ -10,9 +10,9 @@ import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
-import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -123,8 +123,13 @@ void main() {
       await tester.pump();
 
       expect(find.byType(ChatPage), findsOneWidget);
-      expect(find.text(UITextConstants.atXiaoqu), findsOneWidget);
-      expect(find.text(UITextConstants.reminders), findsOneWidget);
+      expect(find.text(UITextConstants.chatPrimaryContacts), findsOneWidget);
+      expect(find.text(UITextConstants.unread), findsOneWidget);
+      expect(find.text(UITextConstants.groupChat), findsOneWidget);
+      expect(find.text(UITextConstants.chatPrivateMessages), findsOneWidget);
+      expect(find.text(UITextConstants.chatNotifications), findsOneWidget);
+      expect(find.text(UITextConstants.atXiaoqu), findsNothing);
+      expect(find.text(UITextConstants.reminders), findsNothing);
     });
 
     testWidgets('进入和切换聊天页会记录页面访问', (tester) async {
@@ -138,7 +143,7 @@ void main() {
         contains(const VisitTarget.page('chat_messages_all')),
       );
 
-      await tester.tap(find.text(AppConceptConstants.contacts));
+      await tester.tap(find.text(UITextConstants.chatPrimaryContacts));
       await tester.pumpAndSettle();
 
       expect(
@@ -212,7 +217,7 @@ void main() {
         );
         expect(inboxDivider.color, expectedListDivider);
 
-        await tester.tap(find.text(AppConceptConstants.contacts));
+        await tester.tap(find.text(UITextConstants.chatPrimaryContacts));
         await tester.pumpAndSettle();
 
         final contactRowFinder = _findByValueKeyPrefix('chat-contact-row-');
@@ -345,26 +350,13 @@ void main() {
       expect(find.byKey(const ValueKey('chat-detail-page')), findsOneWidget);
     });
 
-    testWidgets('@小趣分组展示评论和群聊小趣回复投影', (tester) async {
+    testWidgets('通知分组展示 AppMessage 投影', (tester) async {
       await tester.pumpWidget(
         _scopedApp(mock: _XiaoquDeliveryChatRepository()),
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(UITextConstants.atXiaoqu));
-      await tester.pumpAndSettle();
-
-      expect(find.text('小趣评论回复'), findsOneWidget);
-      expect(find.text('圈子普通聊天'), findsNothing);
-    });
-
-    testWidgets('提醒分组展示实体更新和圈子摘要投影', (tester) async {
-      await tester.pumpWidget(
-        _scopedApp(mock: _XiaoquDeliveryChatRepository()),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text(UITextConstants.reminders));
+      await tester.tap(find.text(UITextConstants.chatNotifications));
       await tester.pumpAndSettle();
 
       expect(find.text('主页更新提醒'), findsOneWidget);
@@ -468,7 +460,7 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      expect(find.text(UITextConstants.reminders), findsOneWidget);
+      expect(find.text(UITextConstants.chatNotifications), findsOneWidget);
       expect(find.text(UITextConstants.secretMessage), findsNothing);
 
       await tester.fling(
@@ -478,7 +470,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text(UITextConstants.contactsTabFunGroup), findsOneWidget);
+      expect(find.text(UITextConstants.contactsTabGroups), findsOneWidget);
       expect(find.text(UITextConstants.secretMessage), findsNothing);
     });
   });
@@ -676,6 +668,39 @@ class _NavigationChatRepository extends MockChatRepository {
 }
 
 class _XiaoquDeliveryChatRepository extends MockChatRepository {
+  @override
+  Future<List<MessageHomeRowDto>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) async {
+    final now = DateTime.utc(2026, 5, 1, 12);
+    if (filter == 'notification') {
+      return <MessageHomeRowDto>[
+        MessageHomeRowDto(
+          id: 'app_msg_homepage_reminder',
+          kind: 'notification',
+          notificationId: 'app_msg_homepage_reminder',
+          title: '主页更新提醒',
+          summary: '北京大学主页有新内容更新',
+          lastActiveAt: now,
+          unreadCount: 1,
+        ),
+      ];
+    }
+    return <MessageHomeRowDto>[
+      MessageHomeRowDto(
+        id: 'conv_regular_group',
+        kind: 'conversation',
+        conversationId: 'conv_regular_group',
+        conversationType: 'group',
+        title: '圈子普通聊天',
+        summary: '今晚一起拍照吗',
+        lastActiveAt: now.subtract(const Duration(minutes: 2)),
+      ),
+    ];
+  }
+
   @override
   Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     final now = DateTime.utc(2026, 5, 1, 12);

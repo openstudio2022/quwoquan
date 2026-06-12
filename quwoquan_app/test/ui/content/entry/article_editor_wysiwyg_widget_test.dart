@@ -349,7 +349,7 @@ class _EditorHarnessState extends State<_EditorHarness> {
       body: document.body,
       articleDocument: document,
       articleTemplate: ArticleTemplatePreset.gentle,
-      articlePaperTexture: ArticlePaperTexture.white,
+      articlePaperTexture: ArticlePaperTexture.darkPaper,
       articleFontPreset: ArticleFontPreset.clean,
       articlePages: pages,
       articleBlocks: blocks,

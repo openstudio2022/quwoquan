@@ -20,7 +20,7 @@ python3 quwoquan_data/scripts/cli.py task decompose freeze --plan <planId> --con
 # 阶段 B：确定性分层调度（建 task/batch + 入队叶子，幂等可重放）
 python3 quwoquan_data/scripts/cli.py task run --mode fanout --plan <planId> --strategy by-partition --concurrency 8
 
-# 外部多 worker 执行（cursor-sdk；--dry-run 自检连通）+ 归并治理
+# 外部多 worker 执行（cursor-sdk 真实执行）+ 归并治理
 python3 agent_ops/runners/fanout_runner.py --plan <planId> --strategy by-partition --concurrency 8
 python3 quwoquan_data/scripts/cli.py task rollup --plan <planId>
 ```

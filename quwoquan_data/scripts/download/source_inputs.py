@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import re
 
 from _common.io import read_json
 from _common.paths import STAGE_DOWNLOAD
@@ -130,16 +131,26 @@ def curated_images_for_entity(
 
 
 def source_frontmatter(source: dict[str, Any], entity_id: str) -> str:
-    """离线兜底：fetch 失败时写最小 frontmatter + 任务提供的 body（无则空骨架）。"""
-    body = source.get("body") or ""
+    """来源 frontmatter：只记录真实抓取元信息，source.md 正文不再允许 task body 冒充。"""
     return (
         f"---\n"
         f"url: {source.get('url', '')}\n"
         f"platform: {source.get('platform', 'web')}\n"
-        f"license: task-provided\n"
+        f"license: fetch-required\n"
         f"allowedUse: internal_reference\n"
         f"entity: {entity_id}\n"
-        f"retained: true\n"
+        f"retained: false\n"
+        f"taskProvidedBody: {'true' if str(source.get('body') or '').strip() else 'false'}\n"
         f"---\n\n"
-        f"{body}"
     )
+
+
+def manual_body_note(source: dict[str, Any], *, max_chars: int = 180) -> str:
+    """task/source_plan 里的 body 仅作为人工计划备注，不得充当 source.md 正文。"""
+    body = re.sub(r"\s+", " ", str(source.get("body") or "")).strip()
+    if not body:
+        return ""
+    clipped = body[:max_chars]
+    if len(body) > max_chars:
+        clipped += "..."
+    return f"manual_source_plan_note: {clipped}"

@@ -31,3 +31,30 @@ scenarios:
     assertions:
       - unread_count_decremented
       - redis_unread_key_updated
+      - message_home_all_group_direct_unread_filters_reflect_read_state
+
+  - name: commercial_message_home_projection
+    command: ListMessageHome
+    assertions:
+      - chat_inbox_rows_sorted_by_pinned_then_last_active
+      - notification_rows_loaded_from_persistent_app_message_inbox
+      - filter_group_direct_unread_notification_are_disjoint
+      - read_state_consistent_after_mark_as_read
+      - group_rows_use_server_avatar_url
+
+  - name: commercial_contact_home_projection
+    command: ListContactHome
+    assertions:
+      - all_rows_mix_users_and_groups_by_recent_interaction
+      - mutual_rows_only_relation_state_mutual
+      - circle_rows_resolve_from_circle_projection
+      - group_rows_resolve_from_joined_group_conversations
+      - intersection_labels_max_two
+
+  - name: commercial_group_home_projection
+    command: GetGroupHome
+    assertions:
+      - group_home_reuses_conversation_and_member_count
+      - source_entity_and_circle_are_projected
+      - capabilities_include_album_file_event_member
+      - can_dissolve_depends_on_binding_and_role

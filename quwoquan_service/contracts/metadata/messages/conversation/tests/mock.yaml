@@ -21,6 +21,34 @@ scenarios:
       - unread_count_decremented_after_mark_read
       - mention_unread_count_decremented_after_mark_read
 
+  - name: commercial_message_home_rows
+    description: 商用消息首页行解析，覆盖 conversation 与 notification 两类行
+    route: GET /v1/chat/message-home
+    variants: [all, unread, group, direct, notification]
+    assertions:
+      - items_match_message_home_row_schema
+      - group_rows_use_server_avatar_url
+      - notification_rows_have_notification_id
+      - app_does_not_parse_notification_from_title
+
+  - name: commercial_contact_home_rows
+    description: 商用联系首页行解析，覆盖用户、圈子和群聊
+    route: GET /v1/chat/contact-home
+    variants: [all, mutual, circle, group]
+    assertions:
+      - items_match_contact_home_row_schema
+      - intersection_labels_max_two
+      - group_rows_have_source_and_member_count
+      - app_does_not_build_source_summary
+
+  - name: commercial_group_home
+    description: 群聊天页顶部与聊天信息页共享同一个 GroupHome DTO
+    route: GET /v1/chat/groups/{conversationId}/home
+    assertions:
+      - title_member_count_sources_present
+      - capability_entries_include_album_file_event_member
+      - group_avatar_url_present
+
   - name: error_code_mapping
     cases:
       - http_status: 429, code: CHAT.USER.rate_limited

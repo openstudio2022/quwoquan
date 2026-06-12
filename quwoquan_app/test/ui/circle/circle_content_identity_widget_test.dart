@@ -20,7 +20,10 @@ Widget _buildApp(Widget child) {
             path: '/',
             builder: (_, _) => Scaffold(body: child),
           ),
-          GoRoute(path: '/article/:id', builder: (_, _) => const SizedBox()),
+          GoRoute(
+            path: '/works/browser/:workId',
+            builder: (_, _) => const SizedBox(),
+          ),
           GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
         ],
       ),

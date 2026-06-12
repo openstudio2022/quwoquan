@@ -64,6 +64,8 @@ class ContentSurfaceViewMapper {
         share: dto.shareCount,
       ),
       createdAt: dto.createdAt,
+      updatedAt: dto.updatedAt,
+      publishedAt: dto.publishedAt,
       title: title,
       body: body,
       cover: cover,

@@ -818,7 +818,7 @@ class CreateEditorState {
       activeArticlePageId: initialPages.first.id,
       activeArticleBlockId: initialBlocks.first.id,
       articleTemplate: ArticleTemplatePreset.gentle,
-      articlePaperTexture: ArticlePaperTexture.white,
+      articlePaperTexture: ArticlePaperTexture.darkPaper,
       articleFontPreset: ArticleFontPreset.clean,
       articleCoverImagePath: '',
       titlePresentation: TitlePresentation.collapsed,
@@ -981,46 +981,22 @@ class CreateDraft {
     final storedImagePaths = List<String>.from(
       map['imagePaths'] as List? ?? const <String>[],
     );
-    final storedDocumentMap = Map<String, dynamic>.from(
-      map['articleDocument'] as Map? ?? const <String, dynamic>{},
-    );
     final storedMarkdown = (map['articleMarkdown'] ?? '').toString();
     final storedAssetManifest = Map<String, dynamic>.from(
       map['articleAssetManifest'] as Map? ?? const <String, dynamic>{},
     );
-    final articlePages = ((map['articlePages'] as List?) ?? const <Object?>[])
-        .whereType<Map>()
-        .map(
-          (entry) => ArticlePageData.fromMap(Map<String, dynamic>.from(entry)),
-        )
-        .where((page) => page.id.trim().isNotEmpty)
-        .toList(growable: false);
-    final articleBlocks = ((map['articleBlocks'] as List?) ?? const <Object?>[])
-        .whereType<Map>()
-        .map(
-          (entry) => CreateTextBlock.fromMap(Map<String, dynamic>.from(entry)),
-        )
-        .where((block) => block.id.trim().isNotEmpty)
-        .toList(growable: false);
+    // 本地草稿唯一正文真相源为 articleMarkdown；不再从 articleDocument /
+    // articlePages / articleBlocks 等旧存储键恢复（未上线，不做兼容读取）。
     final articleDocument = storedMarkdown.trim().isNotEmpty
         ? ArticleMarkdownCodec.parseDocument(
             storedMarkdown,
             assetManifest: storedAssetManifest,
           )
-        : storedDocumentMap.isNotEmpty
-        ? ArticleDocumentData.fromMap(storedDocumentMap)
-        : articlePages.isNotEmpty
-        ? buildArticleDocumentFromPages(
-            articlePages,
-            title: (map['title'] ?? '').toString(),
-          )
         : buildArticleDocumentFromBlocks(
-            articleBlocks.isNotEmpty
-                ? articleBlocks
-                : createDefaultArticleBlocks(
-                    body: storedBody,
-                    imagePaths: storedImagePaths,
-                  ),
+            createDefaultArticleBlocks(
+              body: storedBody,
+              imagePaths: storedImagePaths,
+            ),
             title: (map['title'] ?? '').toString(),
           );
     final normalizedBlocks = buildArticleBlocksFromDocument(articleDocument);

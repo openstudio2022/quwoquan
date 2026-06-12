@@ -856,7 +856,7 @@ class _WebFeaturedWorkspace extends StatelessWidget {
     final channelId = switch (filterId) {
       'image' => 'photo',
       'video' => 'video',
-      'note' => 'article',
+      'article' => 'article',
       _ => 'work',
     };
     return _WebDesktopFrame(child: _WebContentFeed(channelId: channelId));

@@ -54,9 +54,7 @@ void main() {
     // codegen 契约：lifestyleSubTabs 恰为 footprint/soul/taste/private 四项且带 lifeCategory。
     expect(UserProfileUIConfig.lifestyleSubTabs.length, 4);
     expect(
-      UserProfileUIConfig.lifestyleSubTabs
-          .map((t) => t.lifeCategory)
-          .toList(),
+      UserProfileUIConfig.lifestyleSubTabs.map((t) => t.lifeCategory).toList(),
       <String>['footprint', 'soul', 'taste', 'private'],
     );
 

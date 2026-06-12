@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -23,8 +24,13 @@ os.environ["QWQ_RUNTIME_ROOT"] = str(Path(_TMP) / "runtime")
 os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(Path(_TMP) / "tasks")
 
 from _common import fanout_plan as fp  # noqa: E402
+from _common import content_object  # noqa: E402
+from _common.draft_io import read_draft_meta, write_agent_draft, write_placeholder_draft, write_prompt, write_writing_pack  # noqa: E402
+from _common.io import read_json, write_json  # noqa: E402
+from _common.paths import fanout_run_matrix_path  # noqa: E402
 from task import fanout_dispatch as fd  # noqa: E402
 from task import object_queue as oq  # noqa: E402
+from task import store  # noqa: E402
 from agent_ops.runners import fanout_runner as fr  # noqa: E402
 
 
@@ -35,6 +41,77 @@ def _frozen(plan_id: str, names: list[str]) -> dict:
     fp.freeze_plan(plan, confirmed=True)
     fp.save_plan(plan)
     return plan
+
+
+def _seed_source_task(task_id: str) -> str:
+    spec = store.scaffold_spec(
+        vertical="travel",
+        organize_by="地域",
+        key="四川省",
+        name="源任务",
+        category="景区",
+        scope={
+            "region": "四川省",
+            "entityTypes": ["地点/景区"],
+            "coverageTargets": [{"entityType": "地点/景区", "name": "九寨沟"}],
+        },
+        content={"angles": ["攻略"], "quotas": {"entityArticles": 2}},
+        created_by="test",
+    )
+    spec["taskId"] = task_id
+    store.save_spec(spec)
+    store.save_progress(store.init_progress(task_id, remaining=["地点/景区/九寨沟"]))
+    return task_id
+
+
+def _content_plan(plan_id: str, names: list[str]) -> dict:
+    source_task_id = _seed_source_task(f"旅行/地域/四川省/景区/{plan_id}_源任务")
+    plan = fp.new_plan(
+        plan_id,
+        "四川景点主页",
+        "travel",
+        defaults={"entityType": "地点/景区", "strategy": "by-partition"},
+        source_task_id=source_task_id,
+    )
+    fp.add_partition(plan, "四川省")
+    fp.add_leaves(plan, ["四川省"], [{"name": n} for n in names])
+    fp.freeze_plan(plan, confirmed=True)
+    fp.save_plan(plan)
+    return plan
+
+
+def _seed_content_ref(task_id: str, batch_id: str, ref: str) -> None:
+    brief = {
+        "titleHint": f"{ref} 标题",
+        "templateId": "travel.route.guide",
+        "writingIntent": "planning_consultation",
+        "mustIncludeFacts": [f"{ref} 事实"],
+        "baseSourceRef": f"posts/article/攻略/{ref} 标题/1/1.download/sources/01.base/source.md",
+    }
+    content_object.write_brief_object(task_id, batch_id, ref, brief, content_type="article")
+    write_writing_pack(
+        task_id,
+        batch_id,
+        ref,
+        {
+            "ref": ref,
+            "title": f"{ref} 标题",
+            "kind": "route",
+            "carrier": "article",
+            "writingIntent": "planning_consultation",
+            "styleFamily": "route-guide",
+            "mustIncludeFacts": [f"{ref} 事实"],
+            "baseSourceRef": f"posts/article/攻略/{ref} 标题/1/1.download/sources/01.base/source.md",
+            "sourcePaths": [f"posts/article/攻略/{ref} 标题/1/1.download/sources/01.base/source.md"],
+            "sourceUrls": [f"https://example.invalid/{ref}"],
+            "assets": [],
+        },
+    )
+    write_prompt(task_id, batch_id, ref, f"# {ref}\n\n请根据 writing pack 创作正文。")
+    write_placeholder_draft(task_id, batch_id, ref)
+    source_file = content_object.content_object_stage_dir(task_id, batch_id, ref, "1.download") / "sources" / "01.base" / "source.md"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(f"# {ref}\n\n{ref} 来源正文。", encoding="utf-8")
 
 
 def test_all_pass_completes_all():
@@ -66,6 +143,114 @@ def test_run_failure_marks_failed_or_dead():
     # maxAttempts 默认 2：单次失败后应为 failed（退避）或 dead，不应 succeeded
     summary = oq.queue_summary(sc, "fanout_r_fail")
     assert "succeeded" not in summary["byState"]
+
+
+def test_failed_backoff_job_released_again_within_same_run():
+    plan = _frozen("r_backoff_retry", ["九寨沟"])
+    fd.dispatch(plan, strategy="by-leaf", concurrency=1)
+    seen_attempts: list[int] = []
+
+    def runner(packet):
+        seen_attempts.append(int(packet.get("attempt") or 0))
+        if len(seen_attempts) == 1:
+            return fr.RunOutcome(started=True, status="error", passed=False, error="needs revision", fingerprint="fp-retry")
+        return fr.RunOutcome(started=True, status="finished", passed=True)
+
+    original_backoff = oq._backoff_seconds
+    try:
+        oq._backoff_seconds = lambda attempt: 0.05
+        report = fr.run_fanout("r_backoff_retry", agent_runner=runner, strategy="by-leaf", concurrency=1)
+    finally:
+        oq._backoff_seconds = original_backoff
+    sc = "旅行/地域/四川省/四川景点主页"
+    summary = oq.queue_summary(sc, "fanout_r_backoff_retry")
+    assert seen_attempts == [1, 2], seen_attempts
+    assert report["completed"] == 1
+    assert report["failed"] == 0
+    assert report["attemptFailures"] == 1
+    assert report["refsCompleted"] == ["地点_景区__九寨沟"]
+    assert report["refsFailed"] == []
+    assert summary["byState"].get("succeeded") == ["地点_景区__九寨沟"]
+
+
+def test_non_retryable_startup_failure_does_not_wait_forever():
+    plan = _frozen("r_startup_no_wait", ["九寨沟"])
+    fd.dispatch(plan, strategy="by-leaf", concurrency=1)
+    started_at = time.time()
+
+    def runner(_packet):
+        return fr.RunOutcome(started=False, error="CURSOR_API_KEY missing", retryable=False)
+
+    report = fr.run_fanout("r_startup_no_wait", agent_runner=runner, strategy="by-leaf", concurrency=1)
+    elapsed = time.time() - started_at
+    sc = "旅行/地域/四川省/四川景点主页"
+    snapshot = oq.queue_runtime_snapshot(sc, "fanout_r_startup_no_wait", stage="author")
+    assert elapsed < 2.0, elapsed
+    assert report["completed"] == 0
+    assert report["failed"] == 1
+    assert report["startupFailures"] == 1
+    assert snapshot["waitableLive"] == 0
+    assert snapshot["byState"].get("failed") == 1
+
+
+def test_retryable_startup_failure_retried_within_same_run():
+    plan = _frozen("r_startup_retry", ["九寨沟"])
+    fd.dispatch(plan, strategy="by-leaf", concurrency=1)
+    attempts: list[int] = []
+
+    def runner(packet):
+        attempts.append(int(packet.get("attempt") or 0))
+        if len(attempts) == 1:
+            return fr.RunOutcome(started=False, error="Bridge request failed: ConnectError: [Errno 61] Connection refused", retryable=True)
+        return fr.RunOutcome(started=True, status="finished", passed=True)
+
+    original_base = fr.STARTUP_BACKOFF_BASE
+    try:
+        fr.STARTUP_BACKOFF_BASE = 0
+        report = fr.run_fanout("r_startup_retry", agent_runner=runner, strategy="by-leaf", concurrency=1)
+    finally:
+        fr.STARTUP_BACKOFF_BASE = original_base
+    sc = "旅行/地域/四川省/四川景点主页"
+    summary = oq.queue_summary(sc, "fanout_r_startup_retry")
+    assert attempts == [1, 2], attempts
+    assert report["completed"] == 1
+    assert report["failed"] == 0
+    assert report["startupFailures"] == 0
+    assert report["refsCompleted"] == ["地点_景区__九寨沟"]
+    assert summary["byState"].get("succeeded") == ["地点_景区__九寨沟"]
+    job = read_json(oq._job_path(sc, "fanout_r_startup_retry", oq.stable_job_id(sc, "fanout_r_startup_retry", "地点_景区__九寨沟", "author")))
+    assert job["attempt"] == 2
+    assert job["startupFailureCount"] == 1
+
+
+def test_retryable_startup_failure_stops_after_retry_budget():
+    plan = _frozen("r_startup_retry_budget", ["九寨沟"])
+    fd.dispatch(plan, strategy="by-leaf", concurrency=1)
+    attempts: list[int] = []
+
+    def runner(packet):
+        attempts.append(int(packet.get("attempt") or 0))
+        return fr.RunOutcome(started=False, error="Bridge request failed: ConnectError: [Errno 61] Connection refused", retryable=True)
+
+    original_base = fr.STARTUP_BACKOFF_BASE
+    original_budget = fr.MAX_STARTUP_RETRIES
+    try:
+        fr.STARTUP_BACKOFF_BASE = 0
+        fr.MAX_STARTUP_RETRIES = 2
+        report = fr.run_fanout("r_startup_retry_budget", agent_runner=runner, strategy="by-leaf", concurrency=1)
+    finally:
+        fr.STARTUP_BACKOFF_BASE = original_base
+        fr.MAX_STARTUP_RETRIES = original_budget
+    sc = "旅行/地域/四川省/四川景点主页"
+    snapshot = oq.queue_runtime_snapshot(sc, "fanout_r_startup_retry_budget", stage="author")
+    assert attempts == [1, 2], attempts
+    assert report["completed"] == 0
+    assert report["failed"] == 1
+    assert report["startupFailures"] == 1
+    assert snapshot["waitableLive"] == 0
+    job = read_json(oq._job_path(sc, "fanout_r_startup_retry_budget", oq.stable_job_id(sc, "fanout_r_startup_retry_budget", "地点_景区__九寨沟", "author")))
+    assert job["attempt"] == 2
+    assert job["startupFailureCount"] == 2
 
 
 def test_startup_failure_does_not_complete():
@@ -115,6 +300,145 @@ def test_orchestrator_packet_has_no_prose_and_targets_checkpoints():
     assert "workflow run" in contract["command"]
     assert set(contract["checkpointSemantics"]) == set(fr.ORCHESTRATOR_CHECKPOINTS)
     assert any("CC" in f or "纯色块" in f for f in contract["forbidden"])
+
+
+def test_by_partition_content_mode_syncs_content_refs_and_run_matrix():
+    plan = _content_plan("r_content_sync", ["九寨沟", "稻城亚丁"])
+    report0 = fd.dispatch(plan, strategy="by-partition", concurrency=1)
+    sc = report0["perPartition"][0]["taskId"]
+    batch = "fanout_r_content_sync"
+
+    from task.run import load_workflow_state, save_workflow_state
+
+    state = load_workflow_state(sc, batch)
+    state["completed"] = list(fr.ORCHESTRATOR_CHECKPOINTS)
+    save_workflow_state(state)
+    _seed_content_ref(sc, batch, "route_九寨沟")
+    _seed_content_ref(sc, batch, "route_稻城亚丁")
+
+    def orch(_packet):
+        return fr.RunOutcome(started=True, status="finished", passed=True, run_id="run-orch", agent_id="agent-orch")
+
+    def leaf(packet):
+        ref = str(packet.get("ref"))
+        from _common.draft_io import write_agent_draft
+
+        meta = packet.get("meta") or {}
+        write_agent_draft(
+            sc,
+            batch,
+            ref,
+            f"# {ref}\n\n正文与事实：{ref} 事实。",
+            model="runner-test",
+            cited_source_paths=[str(x) for x in ((meta.get("sourcePaths") or packet.get("meta", {}).get("sourcePaths") or []))],
+            covered_facts=[f"{ref} 事实"],
+            session_trace="leaf-session",
+        )
+        return fr.RunOutcome(started=True, status="finished", passed=True, run_id=f"run-{ref}", agent_id=f"agent-{ref}")
+
+    report = fr.run_fanout(
+        "r_content_sync",
+        agent_runner=leaf,
+        orchestrator_runner=orch,
+        strategy="by-partition",
+        concurrency=1,
+    )
+    assert report["completed"] == 2
+    assert sorted(report["refsCompleted"]) == ["route_九寨沟", "route_稻城亚丁"]
+    matrix = read_json(fanout_run_matrix_path("r_content_sync"))
+    assert matrix["refs"]["route_九寨沟"]["agentRunId"] == "run-route_九寨沟"
+    assert matrix["refs"]["route_稻城亚丁"]["agentId"] == "agent-route_稻城亚丁"
+    assert matrix["orchestrators"][0]["preparedRefs"] == ["route_九寨沟", "route_稻城亚丁"]
+    meta = read_draft_meta(sc, batch, "route_九寨沟")
+    assert meta is not None
+    assert meta["agentRunId"] == "run-route_九寨沟"
+    assert meta["agentId"] == "agent-route_九寨沟"
+    assert meta["promptSha256"].startswith("sha256:")
+
+
+def test_content_mode_refs_filter_refreshes_and_runs_only_requested_ref():
+    plan = _content_plan("r_content_ref_filter", ["九寨沟", "稻城亚丁"])
+    report0 = fd.dispatch(plan, strategy="by-partition", concurrency=1)
+    sc = report0["perPartition"][0]["taskId"]
+    batch = "fanout_r_content_ref_filter"
+
+    _seed_content_ref(sc, batch, "route_九寨沟")
+    _seed_content_ref(sc, batch, "route_稻城亚丁")
+    write_agent_draft(
+        sc,
+        batch,
+        "route_九寨沟",
+        "# route_九寨沟\n\n旧正文。",
+        model="runner-test",
+        cited_source_paths=["posts/article/攻略/route_九寨沟 标题/1/1.download/sources/01.base/source.md"],
+        covered_facts=["route_九寨沟 事实"],
+        session_trace="done-session",
+    )
+    write_agent_draft(
+        sc,
+        batch,
+        "route_稻城亚丁",
+        "# route_稻城亚丁\n\n旧正文。",
+        model="runner-test",
+        cited_source_paths=["posts/article/攻略/route_稻城亚丁 标题/1/1.download/sources/01.base/source.md"],
+        covered_facts=["route_稻城亚丁 事实"],
+        session_trace="done-session",
+    )
+    write_writing_pack(
+        sc,
+        batch,
+        "route_九寨沟",
+        {
+            "ref": "route_九寨沟",
+            "title": "route_九寨沟 标题",
+            "kind": "route",
+            "carrier": "article",
+            "writingIntent": "planning_consultation",
+            "styleFamily": "route-guide",
+            "mustIncludeFacts": ["route_九寨沟 事实"],
+            "baseSourceRef": "posts/article/攻略/route_九寨沟 标题/1/1.download/sources/04.new/source.md",
+            "sourcePaths": ["posts/article/攻略/route_九寨沟 标题/1/1.download/sources/04.new/source.md"],
+            "sourceUrls": ["https://example.invalid/new-jzg"],
+            "assets": [],
+        },
+    )
+
+    seen_refs: list[str] = []
+
+    def leaf(packet):
+        ref = str(packet.get("ref"))
+        seen_refs.append(ref)
+        meta = packet.get("meta") or {}
+        write_agent_draft(
+            sc,
+            batch,
+            ref,
+            f"# {ref}\n\n重跑正文与事实：{ref} 事实。",
+            model="runner-test",
+            cited_source_paths=[str(x) for x in (meta.get("sourcePaths") or [])],
+            covered_facts=[f"{ref} 事实"],
+            session_trace="leaf-session",
+        )
+        return fr.RunOutcome(started=True, status="finished", passed=True, run_id=f"run-{ref}", agent_id=f"agent-{ref}")
+
+    report = fr.run_fanout(
+        "r_content_ref_filter",
+        agent_runner=leaf,
+        strategy="by-partition",
+        concurrency=1,
+        orchestrator_runner=None,
+        refs=["route_九寨沟"],
+        force_refs=["route_九寨沟"],
+    )
+    assert report["completed"] == 1
+    assert report["failed"] == 0
+    assert report["refsCompleted"] == ["route_九寨沟"]
+    assert seen_refs == ["route_九寨沟"]
+    packet = read_json(content_object.content_object_stage_dir(sc, batch, "route_九寨沟", "4.draft") / "author_job_packet.json")
+    assert packet["baseSourceRef"] == "posts/article/攻略/route_九寨沟 标题/1/1.download/sources/04.new/source.md"
+    summary = oq.queue_summary(sc, batch)
+    assert summary["byState"].get("succeeded") == ["route_九寨沟"]
+    assert "route_稻城亚丁" not in (summary["byState"].get("succeeded") or [])
 
 
 def test_by_partition_orchestrates_then_authors_leaves():
@@ -230,6 +554,43 @@ def test_runtime_selects_local_cwd_vs_cloud_repos():
         del sys.modules["cursor_sdk"]
 
 
+def test_cloud_runtime_derives_repo_when_omitted():
+    import types
+
+    captured: dict[str, dict] = {}
+
+    def _AgentOptions(**kw):
+        captured["agent"] = kw
+        return kw
+
+    def _CloudAgentOptions(**kw):
+        captured["cloud"] = kw
+        return ("cloud", kw)
+
+    def _LocalAgentOptions(**kw):
+        return ("local", kw)
+
+    fake = types.SimpleNamespace(
+        AgentOptions=_AgentOptions,
+        LocalAgentOptions=_LocalAgentOptions,
+        CloudAgentOptions=_CloudAgentOptions,
+    )
+    original_git_output = fr._git_output
+    sys.modules["cursor_sdk"] = fake
+    try:
+        fr._git_output = lambda args, cwd=None: "https://github.com/openstudio2022/quwoquan.git" if args[:3] == ["remote", "get-url", "origin"] else "dev1.0"
+        cloud_opts = fr._build_agent_options(
+            api_key="k", model="composer-2.5", runtime=fr.RUNTIME_CLOUD, cwd="/repo", repos=None
+        )
+        assert cloud_opts["cloud"] == (
+            "cloud",
+            {"repos": [{"url": "https://github.com/openstudio2022/quwoquan.git", "startingRef": "dev1.0"}]},
+        )
+    finally:
+        fr._git_output = original_git_output
+        del sys.modules["cursor_sdk"]
+
+
 def test_missing_key_blocks_both_runtimes():
     """无 CURSOR_API_KEY 时 local/cloud 均启动失败（不会偷偷本机裸跑）。"""
     saved = os.environ.pop("CURSOR_API_KEY", None)
@@ -240,6 +601,39 @@ def test_missing_key_blocks_both_runtimes():
     finally:
         if saved is not None:
             os.environ["CURSOR_API_KEY"] = saved
+
+
+def test_main_exit_code_uses_final_failed_refs_not_attempt_failures():
+    plan = _frozen("r_exit_final_state", ["九寨沟"])
+    fd.dispatch(plan, strategy="by-leaf", concurrency=1)
+
+    original_backoff = oq._backoff_seconds
+    try:
+        oq._backoff_seconds = lambda attempt: 0.01
+
+        calls = {"n": 0}
+
+        def runner(_packet):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return fr.RunOutcome(started=True, status="error", passed=False, error="revise", fingerprint="fp-exit")
+            return fr.RunOutcome(started=True, status="finished", passed=True)
+
+        original_default_agent_runner = fr.default_agent_runner
+        fr.default_agent_runner = lambda packet, **kwargs: runner(packet)
+        try:
+            exit_code = fr.main([
+                "--plan", "r_exit_final_state",
+                "--strategy", "by-leaf",
+                "--concurrency", "1",
+                "--runtime", "local",
+            ])
+        finally:
+            fr.default_agent_runner = original_default_agent_runner
+    finally:
+        oq._backoff_seconds = original_backoff
+    assert calls["n"] == 2
+    assert exit_code == 0
 
 
 def _run_all() -> None:

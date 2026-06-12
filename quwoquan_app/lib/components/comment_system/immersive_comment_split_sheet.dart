@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart'
+    show CommentDto;
 import 'package:quwoquan_app/components/comment_system/comment_input_overlay.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_thread_view.dart';
 import 'package:quwoquan_app/components/comment_system/comment_toolbar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/ui/content/providers/comment_provider.dart';
@@ -19,6 +24,7 @@ class ImmersiveCommentSplitSheet extends ConsumerStatefulWidget {
     super.key,
     required this.postId,
     required this.content,
+    this.commentContext = const MediaViewerCommentContext(),
     this.config = const CommentConfig(),
     this.likeCount = 0,
     this.favoriteCount = 0,
@@ -31,6 +37,7 @@ class ImmersiveCommentSplitSheet extends ConsumerStatefulWidget {
 
   final String postId;
   final Widget content;
+  final MediaViewerCommentContext commentContext;
   final CommentConfig config;
   final int likeCount;
   final int favoriteCount;
@@ -49,6 +56,12 @@ class _ImmersiveCommentSplitSheetState
     extends ConsumerState<ImmersiveCommentSplitSheet> {
   double _sheetRatio = AppSpacing.immersiveCommentSheetRatio;
   final ScrollController _scrollController = ScrollController();
+  bool _handledInitialCommentContext = false;
+
+  bool get _hasSpecificCommentTarget =>
+      (widget.commentContext.commentId?.isNotEmpty ?? false) ||
+      (widget.commentContext.parentCommentId?.isNotEmpty ?? false) ||
+      (widget.commentContext.replyToCommentId?.isNotEmpty ?? false);
 
   @override
   void dispose() {
@@ -96,6 +109,84 @@ class _ImmersiveCommentSplitSheetState
     );
   }
 
+  CommentModel? _resolveCommentModel(
+    List<CommentDto> comments,
+    String commentId,
+  ) {
+    for (final comment in comments) {
+      if (comment.id == commentId) {
+        return CommentModel(
+          id: comment.id,
+          content: comment.content,
+          authorId: comment.authorId,
+          username: comment.displayName ?? comment.authorId,
+        );
+      }
+      for (final reply in comment.replyPreview) {
+        if (reply.id == commentId) {
+          return CommentModel(
+            id: reply.id,
+            content: reply.content,
+            authorId: reply.authorId,
+            username: reply.displayName ?? reply.authorId,
+          );
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<void> _consumeInitialCommentContext(CommentState commentState) async {
+    if (_handledInitialCommentContext || !widget.commentContext.shouldOpen) {
+      return;
+    }
+    final notifier = ref.read(commentProviderFamily(widget.postId).notifier);
+    final parentCommentId = widget.commentContext.parentCommentId;
+    var parentCanLoadMore = false;
+    if (parentCommentId != null && parentCommentId.isNotEmpty) {
+      final parentLoaded = commentState.comments.any(
+        (comment) => comment.id == parentCommentId,
+      );
+      if (parentLoaded) {
+        final parent = commentState.comments.firstWhere(
+          (comment) => comment.id == parentCommentId,
+        );
+        parentCanLoadMore = parent.replyNextCursor != null;
+        final hasReplyTarget =
+            parent.replyPreview.any(
+              (reply) =>
+                  reply.id == widget.commentContext.commentId ||
+                  reply.id == widget.commentContext.replyToCommentId,
+            ) ||
+            !parentCanLoadMore;
+        if (!hasReplyTarget) {
+          await notifier.expandReplies(parentCommentId);
+          return;
+        }
+      }
+    }
+    final replyTargetId = widget.commentContext.replyToCommentId;
+    if (replyTargetId != null && replyTargetId.isNotEmpty) {
+      final replyTarget = _resolveCommentModel(
+        commentState.comments,
+        replyTargetId,
+      );
+      if (replyTarget != null) {
+        _handledInitialCommentContext = true;
+        await _openInput(replyTo: replyTarget);
+        return;
+      }
+      if (parentCommentId != null &&
+          parentCommentId.isNotEmpty &&
+          parentCanLoadMore) {
+        return;
+      }
+      _handledInitialCommentContext = true;
+      return;
+    }
+    _handledInitialCommentContext = true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
@@ -103,14 +194,26 @@ class _ImmersiveCommentSplitSheetState
     final commentState = ref.watch(commentProviderFamily(widget.postId));
     final commentCount = ref
         .watch(postInteractionStateProvider)
-        .commentCountFor(
-          widget.postId,
-          fallback: commentState.comments.length,
-        );
+        .commentCountFor(widget.postId, fallback: commentState.comments.length);
     final surface = AppColorsFunctional.getColor(
       isDark,
       ColorType.backgroundPrimary,
     );
+    final readyForInitialContext =
+        !_hasSpecificCommentTarget ||
+        commentState.comments.isNotEmpty ||
+        commentState.status == CommentListStatus.error;
+    if (!_handledInitialCommentContext &&
+        widget.commentContext.shouldOpen &&
+        !commentState.isLoading &&
+        readyForInitialContext) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        unawaited(_consumeInitialCommentContext(commentState));
+      });
+    }
 
     return ColoredBox(
       key: TestKeys.immersiveCommentSplitSheet,
@@ -157,8 +260,7 @@ class _ImmersiveCommentSplitSheetState
                 children: [
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onVerticalDragUpdate: (d) =>
-                        _onDragUpdate(d, screenHeight),
+                    onVerticalDragUpdate: (d) => _onDragUpdate(d, screenHeight),
                     child: _SheetHeader(
                       isDark: isDark,
                       commentCount: commentCount,

@@ -16,8 +16,6 @@ export 'post_search_item_view_dto.g.dart';
 export 'report_create_request_wire.g.dart';
 export 'post_read_surface_id.g.dart';
 export 'article_detail_wire_keys.g.dart';
-export 'article_card_wire_keys.g.dart';
-export 'article_block_wire_keys.g.dart';
 export 'content_post_immersive_wire_keys.g.dart';
 export 'content_app_config_client_dto.g.dart';
 export 'content_post_detail_wire_dto.g.dart';

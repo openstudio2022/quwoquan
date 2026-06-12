@@ -246,6 +246,10 @@ class ArticleInlineSpan {
     this.italic = false,
     this.underline = false,
     this.strikethrough = false,
+    this.kind = 'text',
+    this.targetType,
+    this.targetId,
+    this.displayText,
   });
 
   factory ArticleInlineSpan.fromMap(Map<String, dynamic> map) {
@@ -256,6 +260,10 @@ class ArticleInlineSpan {
       italic: map['italic'] == true,
       underline: map['underline'] == true,
       strikethrough: map['strikethrough'] == true,
+      kind: (map['kind'] ?? 'text').toString(),
+      targetType: map['targetType']?.toString(),
+      targetId: map['targetId']?.toString(),
+      displayText: map['displayText']?.toString(),
     );
   }
 
@@ -265,6 +273,15 @@ class ArticleInlineSpan {
   final bool italic;
   final bool underline;
   final bool strikethrough;
+  final String kind;
+  final String? targetType;
+  final String? targetId;
+  final String? displayText;
+
+  bool get isEntity =>
+      kind == 'entity' &&
+      (targetType ?? '').trim().isNotEmpty &&
+      (targetId ?? '').trim().isNotEmpty;
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
@@ -274,6 +291,10 @@ class ArticleInlineSpan {
       if (italic) 'italic': true,
       if (underline) 'underline': true,
       if (strikethrough) 'strikethrough': true,
+      if (kind != 'text') 'kind': kind,
+      if (targetType != null) 'targetType': targetType,
+      if (targetId != null) 'targetId': targetId,
+      if (displayText != null) 'displayText': displayText,
     };
   }
 }
@@ -1102,16 +1123,18 @@ _ArticleDocumentProjection _projectArticleDocument(
       case ArticleDocumentNodeType.paragraph:
         orderedIndex = 0;
         if (node.text.trim().isNotEmpty) {
-          allBlocks.add(
-            ArticleDocumentBlock(
-              id: node.id,
-              type: ArticleDocumentBlockType.paragraph,
-              offset: bodyBuffer.length,
-              text: node.text,
-              textAlign: node.textAlign,
-              spans: node.spans,
-            ),
+          final b = ArticleDocumentBlock(
+            id: node.id,
+            type: ArticleDocumentBlockType.paragraph,
+            offset: bodyBuffer.length,
+            text: node.text,
+            textAlign: node.textAlign,
+            spans: node.spans,
           );
+          if (node.spans.any((span) => span.isEntity)) {
+            blocks.add(b);
+          }
+          allBlocks.add(b);
         }
         appendBodyText(
           node.text,

@@ -60,6 +60,15 @@ class PostObjectCacheService {
     }
   }
 
+  void removePost(String postId) {
+    final normalized = postId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    _detailStore.remove(normalized);
+    _projectionStore.remove(normalized);
+  }
+
   int clearRecentDetails() {
     return _detailStore.clearAllRebuildable();
   }
@@ -156,6 +165,23 @@ class ContentQuerySnapshotStore {
     return count;
   }
 
+  int invalidatePost(String postId) {
+    final normalized = postId.trim();
+    if (normalized.isEmpty) {
+      return 0;
+    }
+    final keys = _snapshots.entries
+        .where(
+          (entry) => entry.value.items.any((item) => item.id == normalized),
+        )
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    for (final key in keys) {
+      _snapshots.remove(key);
+    }
+    return keys.length;
+  }
+
   int get count => _snapshots.length;
 }
 
@@ -183,8 +209,8 @@ String contentFeedQueryKey({
 
 String _resolvePostVersion(PostBaseDto post) {
   final map = post.toMap();
-  final updatedAt = (map['updatedAt'] ?? map['publishedAt'] ?? map['createdAt'])
-      ?.toString()
-      .trim();
-  return updatedAt?.isNotEmpty == true ? updatedAt! : post.id;
+  // 缓存版本以「最后变更时间」为准：updatedAt 优先，缺失回退不可变的 createdAt。
+  // 不再用 publishedAt 借壳——发布时间不是内容变更时间。
+  final version = (map['updatedAt'] ?? map['createdAt'])?.toString().trim();
+  return version?.isNotEmpty == true ? version! : post.id;
 }

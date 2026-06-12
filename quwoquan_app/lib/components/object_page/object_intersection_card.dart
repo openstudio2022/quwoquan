@@ -274,7 +274,10 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
     final wideExpanded = _expanded || wideHighlightHidden;
     final primaryRow = rows.first;
     final primaryReason = primaryRow.reason;
-    final kind = UnifiedObjectKind.fromRelationKind(primaryReason.relationKind);
+    final kind = UnifiedObjectKind.resolve(
+      objectKind: primaryReason.objectKind,
+      relationKind: primaryReason.relationKind,
+    );
     final coverName = primaryReason.displayName.trim().isNotEmpty
         ? primaryReason.displayName.trim()
         : primaryReason.label.trim();
@@ -697,7 +700,11 @@ class _IntersectionCta extends StatelessWidget {
           ),
           child: Row(
             children: <Widget>[
-              Icon(CupertinoIcons.arrow_right_circle, size: 18, color: fg),
+              Icon(
+                CupertinoIcons.arrow_right_circle,
+                size: AppSpacing.iconSmall,
+                color: fg,
+              ),
               SizedBox(width: AppSpacing.intraGroupXs),
               Expanded(
                 child: Column(

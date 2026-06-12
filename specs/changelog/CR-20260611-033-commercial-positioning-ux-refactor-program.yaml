@@ -1,0 +1,67 @@
+id: CR-20260611-033-commercial-positioning-ux-refactor-program
+title: 商用定位与 UX 重构需求包群基线（WP0–WP8）
+status: specified
+feature_path: object-homepage-network/intersection-unified-experience
+summary: |
+  基于「产品统一定位与 UX 重构规格」会话，冻结 2026H1 商用上线重构基线并拆解为可并行需求包群：
+  1) 概念基线增量：00_PRODUCT_CONCEPT_SYSTEM.md 新增 §20（产品核心闭环、实体先行、交集五维闭集 +
+     七类用户表达词表、连接/影响/讨论用户语言、四段式主页结构、统一设计原则）；
+     00_GLOBAL_TERMINOLOGY.md 新增 §18（「讨论」统一群概念前台名、禁用词增量、迁移字典、术语门禁）。
+  2) 规格合理性修正冻结：交集七类表达落证据组 kind + 云侧 primaryText 层（不动 5 维闭集、G2 不变）；
+     共同校友首发降级「同校」事实；消息页保留「消息/联系」双 Tab、五分类落二级胶囊、小趣维持全局
+     顶栏入口；影响数字必须满足交集四条件（可证/可枚举/可解释/可行动），无归因即收起。
+  3) 需求包群落盘 specs/product/2026H1-positioning-refactor/：WP1 交集事实数据源与表达升级（云侧：
+     mutualFriend 真实集合 / coFavorited / coCommented / coVisitedPlace 新源 + spotlight 空窗治理）、
+     WP2 发现页交集呈现统一（卡结构契约固化 + weightTier 轻重分化）、WP3 三对象主页四段式统一与
+     影响模块扩展（circle_impact / 认识对象摘要卡 / Tab 标签 metadata 化）、WP4 实体完整介绍页、
+     WP5 「讨论」命名统一与消息页 IA + 术语门禁、WP6 长文编辑与发布增强（tagRefs/entityRefs/AI 摘要/
+     行内提及 + create_page 拆分）、WP7 精品页统一（Web 同源 + 筛选 metadata 化 + 专题卡位）、
+     WP8 小趣贯穿（创作辅助技能 / 新交集提醒 / 解释推荐扩展）。
+  4) 跨包并行机制：文件独占权矩阵、跨包契约（WP6↔WP8 创作辅助 API、WP1→WP3 evidence kind 映射
+     清单交接、WP3↔WP4 摘要卡/介绍页边界）、独立会话开场模板、集成验收清单（90-integration-acceptance.md，
+     含 gate 全量、统一性审计、T4 闭环旅程、CR 收口）。
+  各包完成后在本 CR dev_log 追加证据；全部合入并通过集成验收后推进 status: implemented。
+artifacts:
+  - specs/00_PRODUCT_CONCEPT_SYSTEM.md
+  - specs/00_GLOBAL_TERMINOLOGY.md
+  - specs/product/2026H1-positioning-refactor/00-overview.md
+  - specs/product/2026H1-positioning-refactor/wp-01-intersection-data-and-expression.md
+  - specs/product/2026H1-positioning-refactor/wp-02-discovery-intersection-presentation.md
+  - specs/product/2026H1-positioning-refactor/wp-03-object-homepage-unification.md
+  - specs/product/2026H1-positioning-refactor/wp-04-entity-introduction-page.md
+  - specs/product/2026H1-positioning-refactor/wp-05-discussion-naming-and-message-ia.md
+  - specs/product/2026H1-positioning-refactor/wp-06-article-editor-and-publish.md
+  - specs/product/2026H1-positioning-refactor/wp-07-featured-page-unification.md
+  - specs/product/2026H1-positioning-refactor/wp-08-assistant-throughline.md
+  - specs/product/2026H1-positioning-refactor/90-integration-acceptance.md
+related_cr:
+  - CR-20260602-029
+nodes_extended:
+  - object-homepage-network/intersection-unified-experience (七类交集表达词表 + 影响数字四条件)
+  - discovery-content/dual-rail-discovery-redesign (卡结构契约固化 + weightTier 分化)
+  - user-identity-profile-relationship/profile-homepage-redesign (四段式统一 + Tab 措辞裁决)
+  - circle-community/circle-experience-redesign/circle-homepage-redesign (圈子影响模块)
+  - shared-homepage-network/homepage-review-and-content-journey (实体完整介绍页)
+  - chat-conversation/commercial-message-system (「讨论」命名 + 二级胶囊修订)
+  - discovery-content/publish-comment-reaction (发布增强 tagRefs/entityRefs/AI 摘要/行内提及)
+  - discovery-content/content-display-journey-consistency (精品页 Web 同源)
+  - assistant-run-learning (创作辅助技能 + 新交集提醒)
+convergence_items:
+  - item: 校友图谱（共同校友图谱级计算）
+    current: identity 维度「同校」entity tagRef 事实表达
+    target: 校友关系图谱数据源就绪后升级为可枚举校友集合
+  - item: 实体页影响卡（homepage_impact）
+    current: WP3 首发仅做「认识对象」摘要卡，影响卡视归因数据可用性
+    target: 归因数据可用后补 homepage_impact_summary 投影与卡片
+  - item: 消息页五个一级分类
+    current: 双 Tab + 五分类落二级胶囊（折中冻结）
+    target: 商用后若数据证明二级承载不足，另起 CR 评估一级分类重构
+dev_log:
+  - date: "2026-06-11"
+    change: |
+      WP0 基线落盘：概念文档 §20 与术语表 §18 冻结；需求包群 WP1-WP8 简报、跨包独占权矩阵、
+      跨包契约、独立会话开场模板与集成验收清单落盘 specs/product/2026H1-positioning-refactor/。
+    verify:
+      - ls specs/product/2026H1-positioning-refactor/
+      - rg -n '## 20\.' specs/00_PRODUCT_CONCEPT_SYSTEM.md
+      - rg -n '## 18\.' specs/00_GLOBAL_TERMINOLOGY.md

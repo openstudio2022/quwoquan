@@ -117,7 +117,6 @@ extension _CircleShellBuilders on _CircleShellState {
               stats: state.circleStats.forDetailRow(circle),
             ),
             SizedBox(height: AppSpacing.sm),
-            _buildIntersectionCard(isDark),
             CircleActionBar(
               isDark: isDark,
               role: state.role,
@@ -144,6 +143,9 @@ extension _CircleShellBuilders on _CircleShellState {
                   ? () => _openChat(context, defaultGroupConversationId)
                   : null,
             ),
+            SizedBox(height: AppSpacing.sm),
+            _buildIntersectionCard(isDark),
+            _buildCircleImpactCard(context, isDark: isDark, state: state),
             if (state.error != null && state.error!.trim().isNotEmpty) ...[
               SizedBox(height: AppSpacing.sm),
               AppSectionErrorCard(
@@ -186,6 +188,100 @@ extension _CircleShellBuilders on _CircleShellState {
       title: UITextConstants.circleIntersectionTitle,
       isDark: isDark,
       bottomPadding: AppSpacing.sm,
+    );
+  }
+
+  Widget _buildCircleImpactCard(
+    BuildContext context, {
+    required bool isDark,
+    required CircleState state,
+  }) {
+    final circle = state.circleData;
+    final memberCount = state.circleStats.members != 0
+        ? state.circleStats.members
+        : circle?.memberCount ?? 0;
+    final postCount = state.circleStats.posts != 0
+        ? state.circleStats.posts
+        : circle?.postCount ?? 0;
+    final rows = <_CircleImpactRowData>[
+      _CircleImpactRowData(
+        icon: CupertinoIcons.person_2_fill,
+        text: '${_formatCount(memberCount)} 人在这里建立连接',
+      ),
+      _CircleImpactRowData(
+        icon: CupertinoIcons.doc_text_fill,
+        text: '${_formatCount(postCount)} 条内容正在沉淀经验',
+      ),
+      const _CircleImpactRowData(
+        icon: CupertinoIcons.chat_bubble_2_fill,
+        text: '相关讨论会持续连接同趣的人',
+      ),
+    ];
+    return Padding(
+      padding: EdgeInsets.only(top: AppSpacing.sm),
+      child: _SectionSurface(
+        isDark: isDark,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              '圈子影响',
+              style: TextStyle(
+                fontSize: AppTypography.iosSubheadline,
+                fontWeight: AppTypography.semiBold,
+                color: AppColors.iosLabel(context),
+              ),
+            ),
+            SizedBox(height: AppSpacing.containerSm),
+            for (var i = 0; i < rows.length; i++) ...<Widget>[
+              if (i > 0)
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    vertical: AppSpacing.intraGroupSm,
+                  ),
+                  child: Container(
+                    height: AppSpacing.hairline,
+                    color: AppColors.iosSeparator(
+                      context,
+                    ).withValues(alpha: isDark ? 0.18 : 0.12),
+                  ),
+                ),
+              Row(
+                children: <Widget>[
+                  Container(
+                    width: AppSpacing.buttonHeightMd,
+                    height: AppSpacing.buttonHeightMd,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusNinetyNine,
+                      ),
+                    ),
+                    child: Icon(
+                      rows[i].icon,
+                      size: AppSpacing.iconSmall,
+                      color: AppColors.primaryColor,
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.containerSm),
+                  Expanded(
+                    child: Text(
+                      rows[i].text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosSubheadline,
+                        color: AppColors.iosLabel(context),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -551,4 +647,11 @@ extension _CircleShellBuilders on _CircleShellState {
       child: child,
     );
   }
+}
+
+class _CircleImpactRowData {
+  const _CircleImpactRowData({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
 }

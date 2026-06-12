@@ -28,6 +28,33 @@ LEDGER_SCHEMA = "quwoquan_data.base_draft_ledger/1"
 FIDELITY_MIN = 0.55
 FIDELITY_MAX = 0.97
 _NGRAM = 3
+_NOISE_LINE_MARKERS = (
+    "登录",
+    "注册",
+    "联系客服",
+    "我的订单",
+    "举报",
+    "点赞",
+    "写点评",
+    "上一页",
+    "下一页",
+    "回到顶部",
+    "用户问答",
+    "附近景点",
+    "推荐景点",
+    "附近美食",
+    "附近购物",
+    "热门旅游目的地推荐",
+    "旅游攻略导航",
+    "微信小程序",
+    "扫码前往",
+    "值机选座",
+    "退票改签",
+    "报销凭证",
+    "AI行程助手",
+    "特价机票",
+    "企业商旅",
+)
 
 
 # ─── 账本（一源仅一稿）────────────────────────────────────────────────
@@ -72,15 +99,19 @@ def _entity_refs(brief: Mapping[str, Any]) -> list[str]:
 def _unit_quality_score(unit_dir: Path) -> tuple[float, int]:
     """(质量分, source.md 去空白字符数)；质量分缺失回退 0，长度作次级排序键。"""
     score = 0.0
+    quality = ""
     quality_path = unit_dir / "source.quality.json"
     if quality_path.is_file():
         try:
             data = read_json(quality_path)
+            quality = str(data.get("quality") or "")
             raw = data.get("score") if isinstance(data, dict) else None
             if isinstance(raw, (int, float)):
                 score = float(raw)
         except (OSError, ValueError):
             pass
+    if quality == "Reject":
+        return -1.0, 0
     source_md = unit_dir / "source.md"
     length = 0
     if source_md.is_file():
@@ -89,6 +120,10 @@ def _unit_quality_score(unit_dir: Path) -> tuple[float, int]:
         except OSError:
             length = 0
     return score, length
+
+
+def _is_candidate_eligible(score: float, length: int) -> bool:
+    return score >= 0.0 and length > 0
 
 
 def base_draft_candidates(
@@ -111,6 +146,8 @@ def base_draft_candidates(
                 continue
             seen.add(source_ref)
             score, length = _unit_quality_score(unit)
+            if not _is_candidate_eligible(score, length):
+                continue
             rows.append(
                 {"sourceRef": source_ref, "score": score, "length": length, "unitDir": unit}
             )
@@ -119,15 +156,17 @@ def base_draft_candidates(
 
 
 def _normalize_to_source_ref(declared: str, candidates: Sequence[Mapping[str, Any]]) -> str:
-    """把 content_plan 里可能为「来源单元名」(如 03.gws_ctrip) 的 baseSourceRef 归一为完整 source.md 相对路径。"""
+    """把 content_plan 里可能为「来源单元名」(如 03.gws_ctrip) 的 baseSourceRef 归一为完整 source.md 相对路径。
+
+    只接受当前候选集合里的可用来源；Reject/空正文/失配路径都不得原样透传。
+    """
     if not declared:
         return ""
     for cand in candidates:
         ref = str(cand["sourceRef"])
         if ref == declared or ref.endswith(declared) or f"/sources/{declared}/" in ("/" + ref):
             return ref
-    # 已是完整 source.md 路径或无法匹配时，原样返回（load_base_draft_text 会再尝试 .parent/source.md）。
-    return declared
+    return ""
 
 
 def assign_base_draft(
@@ -135,7 +174,7 @@ def assign_base_draft(
 ) -> str | None:
     """为某篇认领唯一底稿并落账本，返回 sourceRef；无可用底稿返回 None。
 
-    - 若 brief 已声明 baseSourceRef：尊重之，并登记账本（同一源不会被两篇认领）。
+    - 若 brief 已声明 baseSourceRef：仅在该源未被其它篇占用时优先认领；若已占用则自动改派。
     - 否则在候选里挑质量分最高、尚未被其它篇占用的来源单元。
     """
     ledger = load_base_draft_ledger(task_id, batch_id)
@@ -145,6 +184,8 @@ def assign_base_draft(
 
     declared = str(brief.get("baseSourceRef") or "").strip()
     chosen = _normalize_to_source_ref(declared, candidates)
+    if chosen in taken:
+        chosen = ""
     if not chosen:
         for cand in candidates:
             if cand["sourceRef"] not in taken:
@@ -163,25 +204,81 @@ def assign_base_draft(
 
 # ─── 底稿正文读取与贴合度 ──────────────────────────────────────────────
 def load_base_draft_text(task_id: str, batch_id: str, base_source_ref: str | None) -> str:
-    """读底稿正文：优先 source.md；其相对路径以 batch 根解析。"""
+    """读底稿正文：优先 source.clean.md，回退 source.md。"""
     if not base_source_ref:
         return ""
     candidate = batch_root(task_id, batch_id) / str(base_source_ref)
-    paths = [candidate]
-    # 兼容指向 source.clean.md / 目录的情况，回退同目录 source.md。
-    if candidate.name != "source.md":
-        paths.append(candidate.parent / "source.md")
+    paths: list[Path] = []
+    # 兼容指向 source.clean.md / source.md / 来源目录三种情况；review 与 prompt 都应优先消费清洗正文。
+    if candidate.name == "source.clean.md":
+        paths.extend([candidate, candidate.parent / "source.md"])
+    elif candidate.name == "source.md":
+        paths.extend([candidate.parent / "source.clean.md", candidate])
+    elif candidate.suffix:
+        paths.extend([candidate, candidate.parent / "source.clean.md", candidate.parent / "source.md"])
+    else:
+        paths.extend([candidate / "source.clean.md", candidate / "source.md"])
     for path in paths:
         if path.is_file():
             try:
-                return path.read_text(encoding="utf-8")
+                return _extract_base_draft_body(path.read_text(encoding="utf-8"))
             except OSError:
                 continue
     return ""
 
 
+def _looks_like_noise_line(line: str) -> bool:
+    compact = re.sub(r"\s+", "", line)
+    letters = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", compact)
+    if not letters:
+        return True
+    if any(marker in line for marker in _NOISE_LINE_MARKERS):
+        return True
+    if "http" in compact.lower():
+        return True
+    if re.fullmatch(r"[\d./:+\-—~～()（） ]+", compact):
+        return True
+    if compact.startswith(("IP属地", "第", "共")) and any(ch.isdigit() for ch in compact):
+        return True
+    return False
+
+
+def _is_signal_line(line: str) -> bool:
+    compact = re.sub(r"\s+", "", line)
+    letters = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", compact)
+    if len(letters) < 10:
+        return False
+    if _looks_like_noise_line(line):
+        return False
+    if not (re.search(r"[，。！？；：,.!?]", line) or len(letters) >= 22):
+        return False
+    return True
+
+
+def _extract_base_draft_body(text: str) -> str:
+    """从清洗来源里提取可写正文，避开整页导航/点评/相关推荐噪声。"""
+    lines = [line.strip() for line in (text or "").splitlines()]
+    signal_lines = [line for line in lines if _is_signal_line(line)]
+    if not signal_lines:
+        return text
+
+    picked: list[str] = []
+    total_chars = 0
+    for line in signal_lines[:18]:
+        line_chars = len(re.sub(r"\s+", "", line))
+        if total_chars >= 2200 and len(picked) >= 4:
+            break
+        picked.append(line)
+        total_chars += line_chars
+
+    body = "\n\n".join(picked).strip()
+    return body or text
+
+
 _FIGURE_RE = re.compile(r"(?ms)^:::figure.*?:::")
 _ASSET_RE = re.compile(r"asset://[^\s)]+")
+_GALLERY_BASE_TARGET_CHARS = 1000
+_GALLERY_BASE_BODY_RATIO = 0.7
 
 
 def _readable_body(article: str) -> str:
@@ -192,15 +289,35 @@ def _readable_body(article: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
-def _strip_source_meta(text: str) -> str:
-    """去掉底稿里的 license/credit/url 等元信息行，只留正文，便于公平比相似度。"""
+def _base_excerpt_for_gallery(text: str, *, body_len: int) -> str:
+    """画报正文较短，只要求贴住底稿前段主线，不强求覆盖整篇长底稿。"""
+    target_chars = max(_GALLERY_BASE_TARGET_CHARS, int(body_len * _GALLERY_BASE_BODY_RATIO))
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    if not paragraphs:
+        return text[:target_chars]
+    picked: list[str] = []
+    total = 0
+    for paragraph in paragraphs:
+        chars = len(re.sub(r"\s+", "", paragraph))
+        if picked and total >= target_chars:
+            break
+        picked.append(paragraph)
+        total += chars
+    return "\n\n".join(picked)
+
+
+def _strip_source_meta(text: str, *, carrier: str = "article", body_len: int = 0) -> str:
+    """去掉底稿里的 license/credit/url 等元信息行，并按载体裁切公平比较窗口。"""
     kept: list[str] = []
     for line in text.splitlines():
         low = line.strip().lower()
         if low.startswith(("license", "alloweduse", "credit", "url", "source", "title:", "图片来源", "授权")):
             continue
         kept.append(line)
-    return re.sub(r"\s+", "", "\n".join(kept))
+    filtered = "\n".join(kept).strip()
+    if carrier == "gallery" and filtered:
+        filtered = _base_excerpt_for_gallery(filtered, body_len=body_len)
+    return re.sub(r"\s+", "", filtered)
 
 
 def _char_ngrams(text: str, n: int = _NGRAM) -> set[str]:
@@ -209,10 +326,10 @@ def _char_ngrams(text: str, n: int = _NGRAM) -> set[str]:
     return {text[i : i + n] for i in range(len(text) - n + 1)}
 
 
-def base_draft_similarity(article: str, base_text: str) -> float:
+def base_draft_similarity(article: str, base_text: str, *, carrier: str = "article") -> float:
     """底稿留存率：底稿 char 三连里有多少在成品中出现（单向覆盖，与成品长度无关）。"""
     body = _readable_body(article)
-    base = _strip_source_meta(base_text)
+    base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body))
     base_grams = _char_ngrams(base)
     if not body or not base_grams:
         return 0.0
@@ -226,13 +343,14 @@ def base_draft_fidelity_issues(
     *,
     min_ratio: float = FIDELITY_MIN,
     max_ratio: float = FIDELITY_MAX,
+    carrier: str = "article",
 ) -> list[str]:
     """底稿贴合度区间门：仅当存在可读底稿时生效；底稿留存率落区间外报问题。"""
-    base = _strip_source_meta(base_text)
     body = _readable_body(article)
+    base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body))
     if not base or not body:
         return []
-    sim = base_draft_similarity(article, base_text)
+    sim = base_draft_similarity(article, base_text, carrier=carrier)
     pct = round(sim * 100, 1)
     if sim < min_ratio:
         return [

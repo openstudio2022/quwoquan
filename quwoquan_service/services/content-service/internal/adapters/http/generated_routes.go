@@ -56,7 +56,7 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetAppConfig":
 		h.handleNotImplemented(w, r, operation)
 	case "GetAuthorImpact":
-		h.handleGetAuthorImpact(w, r)
+		h.handleNotImplemented(w, r, operation)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":

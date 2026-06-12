@@ -23,6 +23,8 @@ class MicroPostDto extends PostBaseDto {
   @override final int favoriteCount;
   @override final int shareCount;
   @override final DateTime createdAt;
+  @override final DateTime? updatedAt;
+  @override final DateTime? publishedAt;
   @override final List<IntersectionReason>? intersectionReasons;
 
   const MicroPostDto({
@@ -43,6 +45,8 @@ class MicroPostDto extends PostBaseDto {
     required this.favoriteCount,
     required this.shareCount,
     required this.createdAt,
+    this.updatedAt,
+    this.publishedAt,
     this.intersectionReasons,
   });
 
@@ -64,7 +68,9 @@ class MicroPostDto extends PostBaseDto {
       commentCount: (m['commentCount'] as num?)?.toInt() ?? (m['commentsCount'] as num?)?.toInt() ?? (m['comments'] as num?)?.toInt() ?? (m['comment_count'] as num?)?.toInt() ?? 0,
       favoriteCount: (m['favoriteCount'] as num?)?.toInt() ?? (m['savesCount'] as num?)?.toInt() ?? (m['bookmarks'] as num?)?.toInt() ?? (m['favorite_count'] as num?)?.toInt() ?? 0,
       shareCount: (m['shareCount'] as num?)?.toInt() ?? (m['shares'] as num?)?.toInt() ?? (m['share_count'] as num?)?.toInt() ?? 0,
-      createdAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
+      createdAt: _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
+      updatedAt: _parseDateTime(m['updatedAt']) ?? _parseDateTime(m['updated_at']) ?? null,
+      publishedAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['published_at']) ?? null,
       intersectionReasons: m['intersectionReasons'] == null ? null : _parseProjectionDtoList(m['intersectionReasons'], IntersectionReason.fromMap),
     );
   }
@@ -89,6 +95,8 @@ class MicroPostDto extends PostBaseDto {
       'favoriteCount': favoriteCount,
       'shareCount': shareCount,
       'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      'publishedAt': publishedAt,
       'intersectionReasons': intersectionReasons,
     };
   }
@@ -111,6 +119,8 @@ class MicroPostDto extends PostBaseDto {
     int? favoriteCount,
     int? shareCount,
     DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? publishedAt,
     List<IntersectionReason>? intersectionReasons,
   }) {
     return MicroPostDto(
@@ -131,6 +141,8 @@ class MicroPostDto extends PostBaseDto {
       favoriteCount: favoriteCount ?? this.favoriteCount,
       shareCount: shareCount ?? this.shareCount,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      publishedAt: publishedAt ?? this.publishedAt,
       intersectionReasons: intersectionReasons ?? this.intersectionReasons,
     );
   }

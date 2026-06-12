@@ -248,6 +248,7 @@ class ConversationSheetActionRow extends StatelessWidget {
     required this.icon,
     required this.label,
     this.description,
+    this.isDestructive = false,
     required this.onTap,
   });
 
@@ -255,6 +256,7 @@ class ConversationSheetActionRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String? description;
+  final bool isDestructive;
   final VoidCallback onTap;
 
   @override
@@ -263,6 +265,9 @@ class ConversationSheetActionRow extends StatelessWidget {
         SettingsSemanticConstants.conversationSheetPrimaryLabelColor(isDark);
     final secondary =
         SettingsSemanticConstants.conversationSheetSecondaryLabelColor(isDark);
+    final actionColor = isDestructive
+        ? AppColors.iosDestructive(context)
+        : primary;
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
@@ -278,7 +283,7 @@ class ConversationSheetActionRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, size: AppSpacing.twenty, color: primary),
+              Icon(icon, size: AppSpacing.twenty, color: actionColor),
               const SizedBox(width: AppSpacing.containerSm),
               Expanded(
                 child: Text(
@@ -286,7 +291,7 @@ class ConversationSheetActionRow extends StatelessWidget {
                   style: TextStyle(
                     fontSize: AppTypography.lg,
                     fontWeight: AppTypography.regular,
-                    color: primary,
+                    color: actionColor,
                   ),
                 ),
               ),
@@ -300,7 +305,9 @@ class ConversationSheetActionRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: AppTypography.base,
                         fontWeight: AppTypography.medium,
-                        color: secondary,
+                        color: isDestructive
+                            ? actionColor.withValues(alpha: 0.75)
+                            : secondary,
                       ),
                       textAlign: TextAlign.right,
                       maxLines: 1,

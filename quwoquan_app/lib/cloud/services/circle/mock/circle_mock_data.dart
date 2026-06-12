@@ -572,41 +572,20 @@ class CircleMockData {
           'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
-      'articleDocument': {
-        'title': '山路晨雾手账：把徒步笔记做成可翻页的旅途册',
-        'body':
-            '凌晨出发时，山路像一张还没晒干的纸。\n把海拔、气温和一句突然冒出的心情都贴进同一页，旅行就有了温度。\n真正值得留下来的，是那些会在很久之后再次把人带回去的瞬间。',
-        'blocks': [
+      'articleMarkdown':
+          '---\ntitle: 山路晨雾手账：把徒步笔记做成可翻页的旅途册\ntemplate: journal\nfontPreset: handwritten\n---\n\n# 山路晨雾手账：把徒步笔记做成可翻页的旅途册\n\n凌晨出发时，山路像一张还没晒干的纸。\n\n## 边走边贴\n\n:::figure id="circle_journal_cover_img" layout="wrapRight" caption="晨雾扉页"\nasset://circle_journal_cover_img\n:::\n\n把海拔、气温和一句突然冒出的心情都贴进同一页，旅行就有了温度。\n\n### 收束\n\n真正值得留下来的，是那些会在很久之后再次把人带回去的瞬间。\n',
+      'articleAssetManifest': const <String, dynamic>{
+        'assets': <Map<String, dynamic>>[
           {
-            'id': 'circle_journal_cover_p0',
-            'type': 'paragraph',
-            'text': '凌晨出发时，山路像一张还没晒干的纸。',
-          },
-          {'id': 'circle_journal_cover_h2', 'type': 'heading2', 'text': '边走边贴'},
-          {
-            'id': 'circle_journal_cover_img',
-            'type': 'image',
-            'imageUrl':
+            'assetId': 'circle_journal_cover_img',
+            'objectKey':
                 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
-            'imageLayout': 'wrapRight',
-            'caption': '晨雾扉页',
-          },
-          {
-            'id': 'circle_journal_cover_p1',
-            'type': 'paragraph',
-            'text': '把海拔、气温和一句突然冒出的心情都贴进同一页，旅行就有了温度。',
-          },
-          {
-            'id': 'circle_journal_cover_section',
-            'type': 'sectionTitle',
-            'text': '收束',
-          },
-          {
-            'id': 'circle_journal_cover_p2',
-            'type': 'paragraph',
-            'text': '真正值得留下来的，是那些会在很久之后再次把人带回去的瞬间。',
           },
         ],
+      },
+      'articleRenderProfile': const <String, dynamic>{
+        'template': 'journal',
+        'fontPreset': 'handwritten',
       },
       'likeCount': 164,
       'favoriteCount': 28,
@@ -636,33 +615,11 @@ class CircleMockData {
         {'id': 'c-human-1', 'name': '电影放映室'},
       ],
       'circleName': '光影摄影社',
-      'articleDocument': {
-        'title': '雨夜读帖：为什么东方卷页总能让人慢下来',
-        'body':
-            '展开手卷时，视线被主动限制在一小段距离里。\n纸张纹理、行距与墨色密度一起把阅读的呼吸感带了回来。\n当媒介本身参与叙事，阅读就不只是理解信息，而是进入一种状态。',
-        'blocks': [
-          {
-            'id': 'circle_ritual_plain_p0',
-            'type': 'paragraph',
-            'text': '展开手卷时，视线被主动限制在一小段距离里。',
-          },
-          {'id': 'circle_ritual_plain_h2', 'type': 'heading2', 'text': '节奏控制'},
-          {
-            'id': 'circle_ritual_plain_p1',
-            'type': 'paragraph',
-            'text': '纸张纹理、行距与墨色密度一起把阅读的呼吸感带了回来。',
-          },
-          {
-            'id': 'circle_ritual_plain_section',
-            'type': 'sectionTitle',
-            'text': '收束',
-          },
-          {
-            'id': 'circle_ritual_plain_p2',
-            'type': 'paragraph',
-            'text': '当媒介本身参与叙事，阅读就不只是理解信息，而是进入一种状态。',
-          },
-        ],
+      'articleMarkdown':
+          '---\ntitle: 雨夜读帖：为什么东方卷页总能让人慢下来\ntemplate: ritual\nfontPreset: classic\n---\n\n# 雨夜读帖：为什么东方卷页总能让人慢下来\n\n展开手卷时，视线被主动限制在一小段距离里。\n\n## 节奏控制\n\n纸张纹理、行距与墨色密度一起把阅读的呼吸感带了回来。\n\n### 收束\n\n当媒介本身参与叙事，阅读就不只是理解信息，而是进入一种状态。\n',
+      'articleRenderProfile': const <String, dynamic>{
+        'template': 'ritual',
+        'fontPreset': 'classic',
       },
       'likeCount': 117,
       'favoriteCount': 17,
@@ -696,45 +653,20 @@ class CircleMockData {
           'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=900',
       'thumbnailUrl':
           'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=900',
-      'articleDocument': {
-        'title': '',
-        'body':
-            '散场前，站台的风比人群更早一步安静下来。\n把路线、风向和末班车时间并排写下，这张卡片就有了真正能回看的信息。\n封面先定住情绪，正文再把那一晚重新讲清楚。',
-        'blocks': [
+      'articleMarkdown':
+          '---\ntitle: \ntemplate: diffuse\nfontPreset: clean\n---\n\n散场前，站台的风比人群更早一步安静下来。\n\n## 把信息写进气氛\n\n:::figure id="circle_diffuse_cover_body_only_img" layout="wrapRight" caption="夜色出站口"\nasset://circle_diffuse_cover_body_only_img\n:::\n\n把路线、风向和末班车时间并排写下，这张卡片就有了真正能回看的信息。\n\n### 收束\n\n封面先定住情绪，正文再把那一晚重新讲清楚。\n',
+      'articleAssetManifest': const <String, dynamic>{
+        'assets': <Map<String, dynamic>>[
           {
-            'id': 'circle_diffuse_cover_body_only_p0',
-            'type': 'paragraph',
-            'text': '散场前，站台的风比人群更早一步安静下来。',
-          },
-          {
-            'id': 'circle_diffuse_cover_body_only_h2',
-            'type': 'heading2',
-            'text': '把信息写进气氛',
-          },
-          {
-            'id': 'circle_diffuse_cover_body_only_img',
-            'type': 'image',
-            'imageUrl':
+            'assetId': 'circle_diffuse_cover_body_only_img',
+            'objectKey':
                 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=900',
-            'imageLayout': 'wrapRight',
-            'caption': '夜色出站口',
-          },
-          {
-            'id': 'circle_diffuse_cover_body_only_p1',
-            'type': 'paragraph',
-            'text': '把路线、风向和末班车时间并排写下，这张卡片就有了真正能回看的信息。',
-          },
-          {
-            'id': 'circle_diffuse_cover_body_only_section',
-            'type': 'sectionTitle',
-            'text': '收束',
-          },
-          {
-            'id': 'circle_diffuse_cover_body_only_p2',
-            'type': 'paragraph',
-            'text': '封面先定住情绪，正文再把那一晚重新讲清楚。',
           },
         ],
+      },
+      'articleRenderProfile': const <String, dynamic>{
+        'template': 'diffuse',
+        'fontPreset': 'clean',
       },
       'likeCount': 96,
       'favoriteCount': 13,
@@ -764,37 +696,11 @@ class CircleMockData {
         {'id': 'c2', 'name': '旅行手账'},
       ],
       'circleName': '光影摄影社',
-      'articleDocument': {
-        'title': '',
-        'body':
-            '回家路上，我把路灯下那几句还没散掉的话先记下来。\n没有标题也没有封面，正文自己决定了这一页要从哪里开始。\n如果一段内容真的足够完整，它本身就能成为一张轻巧的圈子卡片。',
-        'blocks': [
-          {
-            'id': 'circle_gentle_plain_body_only_p0',
-            'type': 'paragraph',
-            'text': '回家路上，我把路灯下那几句还没散掉的话先记下来。',
-          },
-          {
-            'id': 'circle_gentle_plain_body_only_h2',
-            'type': 'heading2',
-            'text': '从正文起笔',
-          },
-          {
-            'id': 'circle_gentle_plain_body_only_p1',
-            'type': 'paragraph',
-            'text': '没有标题也没有封面，正文自己决定了这一页要从哪里开始。',
-          },
-          {
-            'id': 'circle_gentle_plain_body_only_section',
-            'type': 'sectionTitle',
-            'text': '收束',
-          },
-          {
-            'id': 'circle_gentle_plain_body_only_p2',
-            'type': 'paragraph',
-            'text': '如果一段内容真的足够完整，它本身就能成为一张轻巧的圈子卡片。',
-          },
-        ],
+      'articleMarkdown':
+          '---\ntitle: \ntemplate: gentle\nfontPreset: rounded\n---\n\n回家路上，我把路灯下那几句还没散掉的话先记下来。\n\n## 从正文起笔\n\n没有标题也没有封面，正文自己决定了这一页要从哪里开始。\n\n### 收束\n\n如果一段内容真的足够完整，它本身就能成为一张轻巧的圈子卡片。\n',
+      'articleRenderProfile': const <String, dynamic>{
+        'template': 'gentle',
+        'fontPreset': 'rounded',
       },
       'likeCount': 83,
       'favoriteCount': 11,

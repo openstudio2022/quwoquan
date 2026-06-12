@@ -26,6 +26,12 @@ class CommentDto {
     this.attachmentMediaIds = const <String>[],
     this.attachments = const <CloudJsonMap>[],
     this.mentions = const <CloudJsonMap>[],
+    this.entityRefs = const <String>[],
+    this.primaryHomepageId,
+    this.canonicalEntityId,
+    this.assistantMentioned = false,
+    this.assistantReplySource,
+    this.assistantCorrectionStatus,
     this.replyCount = 0,
     this.replyPreview = const <CommentDto>[],
     this.replyNextCursor,
@@ -56,6 +62,12 @@ class CommentDto {
   final List<String> attachmentMediaIds;
   final List<CloudJsonMap> attachments;
   final List<CloudJsonMap> mentions;
+  final List<String> entityRefs;
+  final String? primaryHomepageId;
+  final String? canonicalEntityId;
+  final bool assistantMentioned;
+  final String? assistantReplySource;
+  final String? assistantCorrectionStatus;
   final int replyCount;
   final List<CommentDto> replyPreview;
   final String? replyNextCursor;
@@ -88,6 +100,12 @@ class CommentDto {
       attachmentMediaIds: _commentStringList(m['attachmentMediaIds']),
       attachments: _commentMapList(m['attachments']),
       mentions: _commentMapList(m['mentions']),
+      entityRefs: _commentStringList(m['entityRefs']),
+      primaryHomepageId: m['primaryHomepageId']?.toString(),
+      canonicalEntityId: m['canonicalEntityId']?.toString(),
+      assistantMentioned: m['assistantMentioned'] == true,
+      assistantReplySource: m['assistantReplySource']?.toString(),
+      assistantCorrectionStatus: m['assistantCorrectionStatus']?.toString(),
       replyCount: (m['replyCount'] as num?)?.toInt() ?? 0,
       replyPreview: _commentMapList(m['replyPreview'])
           .map(CommentDto.fromMap)
@@ -125,6 +143,12 @@ class CommentDto {
         'attachmentMediaIds': attachmentMediaIds,
         'attachments': attachments,
         'mentions': mentions,
+        'entityRefs': entityRefs,
+        'primaryHomepageId': primaryHomepageId,
+        'canonicalEntityId': canonicalEntityId,
+        'assistantMentioned': assistantMentioned,
+        'assistantReplySource': assistantReplySource,
+        'assistantCorrectionStatus': assistantCorrectionStatus,
         'replyCount': replyCount,
         'replyPreview': replyPreview.map((e) => e.toMap()).toList(growable: false),
         'replyNextCursor': replyNextCursor,
@@ -167,6 +191,12 @@ class CommentDto {
       attachmentMediaIds: attachmentMediaIds,
       attachments: attachments,
       mentions: mentions,
+      entityRefs: entityRefs,
+      primaryHomepageId: primaryHomepageId,
+      canonicalEntityId: canonicalEntityId,
+      assistantMentioned: assistantMentioned,
+      assistantReplySource: assistantReplySource,
+      assistantCorrectionStatus: assistantCorrectionStatus,
       replyCount: replyCount ?? this.replyCount,
       replyPreview: replyPreview ?? this.replyPreview,
       replyNextCursor:

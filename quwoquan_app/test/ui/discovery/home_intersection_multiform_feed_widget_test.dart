@@ -119,9 +119,7 @@ void main() {
     expect(overflow, isNull);
   });
 
-  testWidgets('交集 spotlight 只展示可行动对象（等高关系封面卡：名字+最强证据组）', (
-    tester,
-  ) async {
+  testWidgets('交集 spotlight 只展示可行动对象（高保横滑头像卡：名字+主副交集）', (tester) async {
     var opened = false;
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -136,8 +134,11 @@ void main() {
               dimension: 'interest',
               intersectionClass: 'affinity',
               relationKind: 'circle',
+              objectKind: 'circle',
               displayName: '摄影圈',
               displayText: '共同关注摄影内容',
+              primaryText: '共同关注摄影内容',
+              secondaryText: '12 位摄影同好在这里',
               confidenceLabel: '推荐',
               actionType: 'join_circle',
               actionTargetId: 'circle_photo',
@@ -161,11 +162,19 @@ void main() {
       ),
     );
 
-    // 等高封面卡：对象名 + 最强证据组短句；概率推荐显示「推荐」角标；
+    // 高保头像卡：对象名 + 云侧主交集结论句（蓝）+ 副交集说明（灰）；
+    // 对象角标以语义 label 暴露，推荐状态只显示新鲜小蓝点，不新增文字事实。
     // 零内部词、零空数字（count=0 不显示「0」）。
     expect(find.text('摄影圈'), findsOneWidget);
     expect(find.text('共同关注摄影内容'), findsOneWidget);
-    expect(find.text('推荐'), findsWidgets);
+    expect(find.text('12 位摄影同好在这里'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.label == '圈',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('推荐'), findsNothing);
     expect(find.textContaining('个推荐交集点'), findsNothing);
     expect(find.text('0 共同点'), findsNothing);
     expect(find.text('仅解释无目标'), findsNothing);
@@ -199,8 +208,11 @@ void main() {
               IntersectionReason(
                 dimension: 'relationship',
                 relationKind: 'circle',
+                objectKind: 'circle',
                 displayName: '摄影圈摄影圈摄影圈',
                 displayText: '共同关注摄影内容',
+                primaryText: '共同关注特别多并且最近一起活跃',
+                secondaryText: '老同学 李航和周屿都在这里',
                 actionType: 'join_circle',
                 actionTargetId: 'circle_photo',
                 intersectionId: 'ix_circle_photo',
@@ -236,7 +248,9 @@ void main() {
     IntersectionReason cover(String id, String name) => IntersectionReason(
       dimension: 'relationship',
       relationKind: 'person',
+      objectKind: 'person',
       displayName: name,
+      primaryText: '共同关注 3 人',
       actionType: 'view_object',
       actionTargetId: id,
       intersectionId: 'ix_$id',

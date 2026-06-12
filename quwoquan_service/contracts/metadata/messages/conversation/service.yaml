@@ -53,6 +53,14 @@ api_routes:
       anonymous_policy: deny
       visibility: private
 
+  - method: PATCH
+    path: /v1/chat/conversations/{conversationId}
+    operation: UpdateConversationTitle
+    description: 更新会话展示标题。商用路径只允许更新标题；群来源、成员数、头像和绑定对象由服务端投影维护。
+    writable_fields: [title]
+    response_entity: Conversation
+    auth: required
+
   # ── 消息 ──────────────────────────────────────
   - method: GET
     path: /v1/chat/conversations/{conversationId}/messages
@@ -163,9 +171,17 @@ api_routes:
   - method: GET
     path: /v1/chat/inbox
     operation: ListInbox
-    description: 用户收件箱（基于 ChatInbox per-user 投影，返回最近会话列表 + unreadCount + mentionUnreadCount + 头像拼图）
+    description: 用户收件箱（基于 ChatInbox per-user 投影，返回最近会话列表 + unreadCount + mentionUnreadCount + 服务端预合成头像）
     query_params: [cursor, limit]
     response_entity: ChatInbox
+    auth: required
+
+  - method: GET
+    path: /v1/chat/message-home
+    operation: ListMessageHome
+    description: 商用消息首页聚合行。conversation 行来自 ChatInboxProjection/read watermark，MarkAsRead 后 all/unread/group/direct 中同一会话的 unreadCount 必须一致；notification 行来自 notification-service/AppMessage inbox；App 不得自行拼接通知。
+    query_params: [filter, cursor, limit]
+    response_entity: MessageHomeRow
     auth: required
 
   # ── 聊天媒体上传 ──────────────────────────────
@@ -193,6 +209,21 @@ api_routes:
     operation: ListContacts
     description: 联系人列表
     response_entity: ChatContactListRow
+
+  - method: GET
+    path: /v1/chat/contact-home
+    operation: ListContactHome
+    description: 商用联系首页聚合行，覆盖全部/互关/圈子/群聊。来源、交集、成员数、最近互动均由云端 read model 提供。
+    query_params: [filter, cursor, limit]
+    response_entity: ContactHomeRow
+    auth: required
+
+  - method: GET
+    path: /v1/chat/groups/{conversationId}/home
+    operation: GetGroupHome
+    description: 商用群主页 / 聊天信息页统一事实源，供聊天页顶部和聊天信息页消费。
+    response_entity: GroupHome
+    auth: required
 
   - method: GET
     path: /v1/chat/group-candidates
@@ -228,7 +259,7 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [list_conversations, list_inbox, create_conversation, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts, search_contacts, search_conversations, search_messages]
+    capabilities: [list_conversations, list_inbox, list_message_home, list_contact_home, get_group_home, create_conversation, update_conversation_title, send_message, recall_message, sync_messages, mark_as_read, get_receipts, list_members, manage_members, update_settings, invite_assistant, remove_assistant, list_contacts, search_contacts, search_conversations, search_messages]
   - name: platform-ops
     capabilities: [read_conversation, read_messages, read_members]
   - name: assistant-service

@@ -110,6 +110,28 @@ void main() {
       expect(bundle.rolloutContext?.relationEvidenceEnabled, isTrue);
     });
 
+    test(
+      'getHomepageDetail 支持 homepageId / canonicalEntityId / 数据工程 entityRef',
+      () async {
+        const homepageId = 'homepage_sight_emeishan';
+        final byHomepageId = await repo.getHomepageDetail(homepageId);
+        expect(byHomepageId.title, '峨眉山');
+
+        final byCanonical = await repo.getHomepageDetail(
+          'entity:homepage:$homepageId',
+        );
+        expect(byCanonical.id, homepageId);
+
+        final byEntityRef = await repo.getHomepageDetail('Entity/旅行/景区/峨眉山');
+        expect(byEntityRef.id, homepageId);
+
+        final bundle = await repo.getObjectPageBundle('Entity/旅行/景区/峨眉山');
+        expect(bundle.objectId, homepageId);
+        expect(bundle.highlightItems, isNotEmpty);
+        expect(bundle.relatedObjects, isNotEmpty);
+      },
+    );
+
     test('getHomepageRelatedGroups 缺省 groups 时返回空列表', () async {
       final r = MockHomepageRepository();
       final created = await r.intakeHomepageCandidate(

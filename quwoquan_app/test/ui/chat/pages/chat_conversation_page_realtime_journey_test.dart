@@ -40,6 +40,7 @@ void main() {
           ),
         ],
         child: MaterialApp(
+          navigatorObservers: <NavigatorObserver>[chatRouteObserver],
           home: ChatConversationPage(conversationId: 'conv_001', onBack: _noop),
         ),
       ),

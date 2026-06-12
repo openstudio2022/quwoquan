@@ -53,6 +53,7 @@ _OBJECT_CHILD_ALLOW = set(OBJECT_STAGES) | {"assets"}
 _TASK_SHARED_ALLOW = {
     *TASK_SHARED_LEDGER_FILENAMES,
     "baseline_freeze_packet.json",
+    "baseline_report.json",
     "explore_packet.json",
     "discovery_adopt",
 }
@@ -220,6 +221,45 @@ _POST_REQUIRED_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.r
 _ENTITY_REQUIRED_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
 
 
+def _orphan_post_object_issues(task_id: str, batch_id: str, batch: Path) -> list[str]:
+    """孤儿内容对象门：posts/ 下出现阶段残骸/manifest/成品，但未登记到当前路由，即 BLOCK。"""
+    from _common import content_object  # 延迟导入避免循环依赖
+
+    issues: list[str] = []
+    post_root = batch / "posts"
+    if not post_root.is_dir():
+        return issues
+    registered = {
+        content_object.content_object_rel(task_id, batch_id, ref)
+        for ref in content_object.iter_content_refs(task_id, batch_id)
+    }
+    for obj in sorted(post_root.rglob("*")):
+        if not obj.is_dir():
+            continue
+        rel = obj.relative_to(batch)
+        parts = rel.parts
+        if not parts or parts[0] != "posts":
+            continue
+        if len(parts) < 4:
+            continue
+        has_stage = any((obj / stage).is_dir() for stage in OBJECT_STAGES)
+        has_manifest = (obj / "manifest.json").is_file()
+        has_final = (obj / "article.md").is_file() or (obj / "gallery.md").is_file()
+        if not (has_stage or has_manifest or has_final):
+            continue
+        if len(parts) != 5 or not parts[4].isdigit():
+            issues.append(
+                f"{rel}: 孤儿内容对象残骸（含阶段/manifest/成品，但不符合 posts/{{type}}/{{angle}}/{{title}}/{{seq}} 命名）"
+            )
+            continue
+        rel_posix = rel.as_posix()
+        if rel_posix not in registered:
+            issues.append(
+                f"{rel}: 孤儿内容对象残骸（当前 content_object_index 未登记该对象，需清理旧坐标/旧批次残留）"
+            )
+    return issues
+
+
 def stage_completeness_issues(batch: Path) -> list[str]:
     """阶段树完整性门（opt-in）：成品对象必须物化完整 1-5 过程阶段证据。
 
@@ -322,7 +362,7 @@ def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
                         issues.append(f"{rel}: {px}")
 
 
-def scan_batch(task_id: str, batch_id: str, *, require_stage_tree: bool = False) -> list[str]:
+def scan_batch(task_id: str, batch_id: str, *, require_stage_tree: bool = True) -> list[str]:
     batch = batch_root(task_id, batch_id)
     issues: list[str] = []
     if not batch.is_dir():
@@ -332,6 +372,7 @@ def scan_batch(task_id: str, batch_id: str, *, require_stage_tree: bool = False)
     issues.extend(_top_level_issues(batch))
     issues.extend(_regression_issues(batch))
     issues.extend(_sync_issues(task_id, batch_id, batch))
+    issues.extend(_orphan_post_object_issues(task_id, batch_id, batch))
     issues.extend(scan_asset_ids(task_id, batch_id))
     if require_stage_tree:
         issues.extend(stage_completeness_issues(batch))
@@ -355,7 +396,9 @@ def scan_all() -> list[str]:
             issues.extend(_regression_issues(batch))
             current_task_id, batch_id = _task_batch_from_path(batch)
             issues.extend(_sync_issues(current_task_id, batch_id, batch))
+            issues.extend(_orphan_post_object_issues(current_task_id, batch_id, batch))
             issues.extend(scan_asset_ids(current_task_id, batch_id))
+            issues.extend(stage_completeness_issues(batch))
     return issues
 
 
@@ -364,15 +407,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--task", default="")
     parser.add_argument("--batch", default="")
     parser.add_argument(
-        "--require-stage-tree",
+        "--no-require-stage-tree",
         action="store_true",
-        help="额外校验对象 1-5 阶段树完整性（新批次收口用；存量批次默认不开启避免误伤）",
+        help="关闭对象 1-5 阶段树完整性校验（默认开启；仅兼容历史批次排障时使用）",
     )
     args = parser.parse_args(argv)
     if args.task and args.batch:
         normalized_task = normalize_task_id(args.task)
         issues = scan_task(normalized_task)
-        issues.extend(scan_batch(normalized_task, args.batch, require_stage_tree=args.require_stage_tree))
+        issues.extend(scan_batch(normalized_task, args.batch, require_stage_tree=not args.no_require_stage_tree))
     elif args.task:
         issues = scan_task(normalize_task_id(args.task))
     else:

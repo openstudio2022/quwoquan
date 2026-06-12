@@ -33,6 +33,7 @@ enum AuthGateReason {
   personaManage,
   settingsAccount,
   mediaUpload,
+  deletePost,
   report,
   joinCircle,
   addContact,
@@ -162,6 +163,12 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
         title: UITextConstants.authGateTitleMediaUpload,
         prompt: UITextConstants.authGatePromptMediaUpload,
         requiredOperations: <String>['CreatePost'],
+      ),
+      AuthGateReason.deletePost: AuthGateEntry(
+        reason: AuthGateReason.deletePost,
+        title: UITextConstants.authGateTitleDeletePost,
+        prompt: UITextConstants.authGatePromptDeletePost,
+        requiredOperations: <String>['DeletePost'],
       ),
       AuthGateReason.report: AuthGateEntry(
         reason: AuthGateReason.report,

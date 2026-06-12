@@ -95,6 +95,10 @@ func (s *MemberService) ListMembers(ctx context.Context, req ListMembersRequest)
 	return s.repo.ListMembers(ctx, req.ConversationId, req.Limit, req.Cursor, req.Role, sort)
 }
 
+func (s *MemberService) GetMember(ctx context.Context, conversationId, userId string) (*model.ConversationMember, error) {
+	return s.repo.FindMember(ctx, conversationId, userId)
+}
+
 func (s *MemberService) scheduleRosterUpdatedPublish(conversationId string) {
 	if s.rosterDebounce <= 0 {
 		s.flushRosterUpdated(context.Background(), conversationId)
@@ -493,19 +497,19 @@ func (s *MemberService) ListGroupCandidates(
 		}
 		seen[contactID] = struct{}{}
 		item := map[string]any{
-			"contactId":      contactID,
-			"userId":         contactID,
-			"displayName":    hit.DisplayName,
-			"avatarUrl":      hit.AvatarURL,
-			"bio":            hit.Bio,
-			"metFrom":        hit.MetFrom,
+			"contactId":       contactID,
+			"userId":          contactID,
+			"displayName":     hit.DisplayName,
+			"avatarUrl":       hit.AvatarURL,
+			"bio":             hit.Bio,
+			"metFrom":         hit.MetFrom,
 			"lastInteraction": hit.LastInteraction,
-			"relationState":  hit.RelationState,
-			"source":         hit.Source,
-			"subtitle":       hit.Subtitle,
-			"highlightText":  hit.HighlightText,
-			"matchedField":   hit.MatchedField,
-			"isStarred":      hit.IsStarred,
+			"relationState":   hit.RelationState,
+			"source":          hit.Source,
+			"subtitle":        hit.Subtitle,
+			"highlightText":   hit.HighlightText,
+			"matchedField":    hit.MatchedField,
+			"isStarred":       hit.IsStarred,
 			"candidateSource": "server_group_candidates",
 		}
 		items = append(items, item)

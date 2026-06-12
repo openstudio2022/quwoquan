@@ -3,10 +3,12 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	rterr "quwoquan_service/runtime/errors"
 	runtimesync "quwoquan_service/runtime/sync"
@@ -46,6 +48,10 @@ func (h *ChatHandler) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/user/sync", h.handlePullUserSync)
 	mux.HandleFunc("GET /v1/chat/conversations/search", h.handleSearchConversations)
 	mux.HandleFunc("GET /v1/chat/messages/search", h.handleSearchMessages)
+	mux.HandleFunc("PATCH /v1/chat/conversations/{conversationId}", h.handleUpdateConversationTitle)
+	mux.HandleFunc("GET /v1/chat/message-home", h.handleListMessageHome)
+	mux.HandleFunc("GET /v1/chat/contact-home", h.handleListContactHome)
+	mux.HandleFunc("GET /v1/chat/groups/{conversationId}/home", h.handleGetGroupHome)
 	mux.HandleFunc("PATCH /v1/chat/conversations/{conversationId}/owner", h.handleTransferOwnership)
 	mux.HandleFunc("PUT /v1/chat/conversations/{conversationId}/admins", h.handleUpdateGroupAdmins)
 	mux.HandleFunc("DELETE /v1/chat/conversations/{conversationId}", h.handleDissolveConversation)
@@ -127,6 +133,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 		Title            string   `json:"title"`
 		CircleId         string   `json:"circleId"`
 		CircleGroupId    string   `json:"circleGroupId"`
+		EntityId         string   `json:"entityId"`
 		OriginType       string   `json:"originType"`
 		BindingType      string   `json:"bindingType"`
 		LifecyclePolicy  string   `json:"lifecyclePolicy"`
@@ -139,7 +146,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 	}
 
 	conv, err := h.conversationService.CreateConversation(r.Context(), application.CreateConversationRequest{
-		Type: body.Type, Title: body.Title, CircleId: body.CircleId, CircleGroupId: body.CircleGroupId,
+		Type: body.Type, Title: body.Title, CircleId: body.CircleId, CircleGroupId: body.CircleGroupId, EntityId: body.EntityId,
 		OriginType: body.OriginType, BindingType: body.BindingType, LifecyclePolicy: body.LifecyclePolicy,
 		MaxGroupSize: body.MaxGroupSize, CreatorId: resolveUserID(r), InitialMemberIds: body.InitialMemberIds,
 	})
@@ -155,6 +162,27 @@ func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Reque
 	conv, err := h.conversationService.GetConversation(r.Context(), convId)
 	if err != nil {
 		writeHTTPError(w, r, newNotFound("会话", convId))
+		return
+	}
+	writeJSON(w, http.StatusOK, h.conversationToWire(r.Context(), *conv))
+}
+
+func (h *ChatHandler) handleUpdateConversationTitle(w http.ResponseWriter, r *http.Request) {
+	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}", "conversationId")
+	var body struct {
+		Title string `json:"title"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		return
+	}
+	conv, err := h.conversationService.UpdateConversationTitle(r.Context(), application.UpdateConversationTitleRequest{
+		ConversationId: convId,
+		OperatorId:     resolveUserID(r),
+		Title:          body.Title,
+	})
+	if err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, h.conversationToWire(r.Context(), *conv))
@@ -479,6 +507,29 @@ func (h *ChatHandler) handleListInbox(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": h.flattenInboxItems(r.Context(), items)})
 }
 
+func (h *ChatHandler) handleListMessageHome(w http.ResponseWriter, r *http.Request) {
+	userId := resolveUserID(r)
+	cursor := r.URL.Query().Get("cursor")
+	limit := queryInt(r, "limit", 50)
+	filter := normalizeMessageHomeFilter(r.URL.Query().Get("filter"))
+
+	items, err := h.inboxService.ListInbox(r.Context(), application.ListInboxRequest{
+		UserId: userId, Cursor: cursor, Limit: limit,
+	})
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	rows := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		if !messageHomeMatchesFilter(item, filter) {
+			continue
+		}
+		rows = append(rows, h.messageHomeRowToWire(r.Context(), item))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": rows})
+}
+
 // ── Contacts ─────────────────────────────────────────────────────────────────
 
 func (h *ChatHandler) handleListContacts(w http.ResponseWriter, r *http.Request) {
@@ -491,6 +542,67 @@ func (h *ChatHandler) handleListContacts(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": contacts})
+}
+
+func (h *ChatHandler) handleListContactHome(w http.ResponseWriter, r *http.Request) {
+	cursor := r.URL.Query().Get("cursor")
+	limit := queryInt(r, "limit", 50)
+	filter := normalizeContactHomeFilter(r.URL.Query().Get("filter"))
+	userID := resolveUserID(r)
+
+	rows := make([]map[string]any, 0, limit)
+	if filter == "all" || filter == "mutual" {
+		contacts, err := h.memberService.ListContacts(r.Context(), userID, limit, cursor)
+		if err != nil {
+			writeHTTPError(w, r, err)
+			return
+		}
+		for _, contact := range contacts {
+			if filter == "mutual" && stringFromMap(contact, "relationState") != "mutual" {
+				continue
+			}
+			rows = append(rows, contactHomeUserRowToWire(contact))
+			if len(rows) >= limit {
+				writeJSON(w, http.StatusOK, map[string]any{"items": rows})
+				return
+			}
+		}
+	}
+	if filter == "all" || filter == "group" {
+		conversations, err := h.conversationService.ListConversations(r.Context(), application.ListConversationsRequest{
+			UserId: userID,
+			Limit:  limit,
+			Cursor: cursor,
+		})
+		if err != nil {
+			writeHTTPError(w, r, err)
+			return
+		}
+		for _, conversation := range conversations {
+			if conversation.Type != "group" {
+				continue
+			}
+			rows = append(rows, h.contactHomeGroupRowToWire(r.Context(), conversation))
+			if len(rows) >= limit {
+				break
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": rows})
+}
+
+func (h *ChatHandler) handleGetGroupHome(w http.ResponseWriter, r *http.Request) {
+	convId := extractPathParam(r.URL.Path, "/v1/chat/groups/{conversationId}/home", "conversationId")
+	conv, err := h.conversationService.GetConversation(r.Context(), convId)
+	if err != nil {
+		writeHTTPError(w, r, newNotFound("会话", convId))
+		return
+	}
+	if conv.Type != "group" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "不是群聊会话", "conversation is not a group"))
+		return
+	}
+	writeJSON(w, http.StatusOK, h.groupHomeToWire(r.Context(), *conv, resolveUserID(r)))
 }
 
 func (h *ChatHandler) handleListGroupCandidates(w http.ResponseWriter, r *http.Request) {
@@ -661,6 +773,219 @@ func (h *ChatHandler) inboxItemToWire(ctx context.Context, item application.Inbo
 	return conv
 }
 
+func (h *ChatHandler) messageHomeRowToWire(ctx context.Context, item application.InboxItem) map[string]any {
+	conv := h.inboxItemToWire(ctx, item)
+	return map[string]any{
+		"id":                 item.Conversation.ID,
+		"kind":               "conversation",
+		"conversationId":     item.Conversation.ID,
+		"notificationId":     "",
+		"conversationType":   item.Conversation.Type,
+		"title":              item.Conversation.Title,
+		"summary":            item.Conversation.LastMessagePreview,
+		"avatarUrl":          conv["avatarUrl"],
+		"groupAvatarVersion": item.Conversation.GroupAvatarVersion,
+		"lastActiveAt":       item.Conversation.LastMessageTime,
+		"unreadCount":        item.UserState.UnreadCount,
+		"mentionUnreadCount": 0,
+		"muted":              item.UserState.Muted,
+		"pinned":             item.UserState.Pinned,
+		"notificationType":   "",
+		"read":               item.UserState.UnreadCount == 0,
+	}
+}
+
+func contactHomeUserRowToWire(contact map[string]any) map[string]any {
+	contactID := firstStringFromMap(contact, "contactId", "userId", "id")
+	displayName := firstStringFromMap(contact, "displayName", "name")
+	metFrom := stringFromMap(contact, "metFrom")
+	bio := stringFromMap(contact, "bio")
+	lastInteraction := stringFromMap(contact, "lastInteraction")
+	return map[string]any{
+		"id":                   contactID,
+		"kind":                 "user",
+		"objectId":             contactID,
+		"userId":               contactID,
+		"conversationId":       stringFromMap(contact, "conversationId"),
+		"title":                displayName,
+		"subtitle":             stringFromMap(contact, "subtitle"),
+		"avatarUrl":            stringFromMap(contact, "avatarUrl"),
+		"relationState":        stringFromMap(contact, "relationState"),
+		"summaryIntersections": firstTwoNonEmpty(metFrom, bio),
+		"lastActiveAt":         parseOptionalRFC3339(lastInteraction),
+		"sortKey":              lastInteraction,
+		"isStarred":            boolFromMap(contact, "isStarred"),
+	}
+}
+
+func (h *ChatHandler) contactHomeGroupRowToWire(ctx context.Context, conv model.Conversation) map[string]any {
+	sourceSummary := joinNonEmpty(" · ", conv.CircleId, conv.EntityId)
+	return map[string]any{
+		"id":                   conv.ID,
+		"kind":                 "group",
+		"objectId":             conv.ID,
+		"conversationId":       conv.ID,
+		"circleId":             conv.CircleId,
+		"circleGroupId":        conv.CircleGroupId,
+		"entityId":             conv.EntityId,
+		"title":                conv.Title,
+		"subtitle":             sourceSummary,
+		"avatarUrl":            h.resolveConversationAvatarURL(ctx, conv),
+		"summaryIntersections": firstTwoNonEmpty(conv.CircleId, conv.EntityId),
+		"sourceEntityTitle":    conv.EntityId,
+		"sourceCircleTitle":    conv.CircleId,
+		"memberCount":          conv.MemberCount,
+		"lastActiveAt":         conv.LastMessageTime,
+		"sortKey":              conv.LastMessageTime.UTC().Format(time.RFC3339),
+	}
+}
+
+func (h *ChatHandler) groupHomeToWire(ctx context.Context, conv model.Conversation, userID string) map[string]any {
+	role := ""
+	if userID != "" && h.memberService != nil {
+		if member, err := h.memberService.GetMember(ctx, conv.ID, userID); err == nil {
+			role = member.Role
+		}
+	}
+	canManage := role == "owner" || role == "admin"
+	canDissolve := role == "owner" && !application.IsCircleBoundConversation(conv)
+	return map[string]any{
+		"conversationId":     conv.ID,
+		"title":              conv.Title,
+		"avatarUrl":          h.resolveConversationAvatarURL(ctx, conv),
+		"groupAvatarVersion": conv.GroupAvatarVersion,
+		"circleId":           conv.CircleId,
+		"circleGroupId":      conv.CircleGroupId,
+		"entityId":           conv.EntityId,
+		"sourceEntityTitle":  conv.EntityId,
+		"sourceCircleTitle":  conv.CircleId,
+		"memberCount":        conv.MemberCount,
+		"announcement":       "",
+		"capabilities":       []string{"album", "file", "event", "member"},
+		"originType":         conv.OriginType,
+		"bindingType":        conv.BindingType,
+		"lifecyclePolicy":    conv.LifecyclePolicy,
+		"canManageMembers":   canManage,
+		"canDissolve":        canDissolve,
+	}
+}
+
+func normalizeMessageHomeFilter(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "unread", "group", "direct", "notification":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return "all"
+	}
+}
+
+func messageHomeMatchesFilter(item application.InboxItem, filter string) bool {
+	switch filter {
+	case "unread":
+		return item.UserState.UnreadCount > 0
+	case "group":
+		return item.Conversation.Type == "group"
+	case "direct":
+		return item.Conversation.Type == "direct" || item.Conversation.Type == "encrypted"
+	case "notification":
+		return false
+	default:
+		return true
+	}
+}
+
+func normalizeContactHomeFilter(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "mutual", "circle", "group":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return "all"
+	}
+}
+
+func firstTwoNonEmpty(values ...string) []string {
+	out := make([]string, 0, 2)
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+		if len(out) == 2 {
+			break
+		}
+	}
+	return out
+}
+
+func joinNonEmpty(sep string, values ...string) string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return strings.Join(out, sep)
+}
+
+func stringFromMap(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	value, ok := m[key]
+	if !ok || value == nil {
+		return ""
+	}
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case []byte:
+		return strings.TrimSpace(string(typed))
+	default:
+		return strings.TrimSpace(fmt.Sprint(value))
+	}
+}
+
+func firstStringFromMap(m map[string]any, keys ...string) string {
+	for _, key := range keys {
+		value := stringFromMap(m, key)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func boolFromMap(m map[string]any, key string) bool {
+	if m == nil {
+		return false
+	}
+	value, ok := m[key]
+	if !ok {
+		return false
+	}
+	result, ok := value.(bool)
+	return ok && result
+}
+
+func parseOptionalRFC3339(value string) *time.Time {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	parsed, err := time.Parse(time.RFC3339, trimmed)
+	if err != nil {
+		return nil
+	}
+	return &parsed
+}
+
 func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Conversation) map[string]any {
 	avatarURL := h.resolveConversationAvatarURL(ctx, conv)
 	return map[string]any{
@@ -674,6 +999,7 @@ func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Convers
 		"creatorId":             conv.CreatorId,
 		"circleId":              conv.CircleId,
 		"circleGroupId":         conv.CircleGroupId,
+		"entityId":              conv.EntityId,
 		"originType":            conv.OriginType,
 		"bindingType":           conv.BindingType,
 		"lifecyclePolicy":       conv.LifecyclePolicy,

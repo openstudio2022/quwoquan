@@ -73,8 +73,12 @@ def build_intersection_hints(manifest: Mapping[str, Any]) -> list[dict[str, Any]
                 "label": ref.strip("/").split("/")[-1],
             }
         )
-    topic_tags = [t for t in tag_refs if t.startswith("Topic/")]
-    for tag in topic_tags[:3]:
+    interest_tags = [
+        t
+        for t in tag_refs
+        if t and not t.startswith("地理/")
+    ]
+    for tag in interest_tags[:3]:
         hints.append(
             {
                 "dimension": "interest",

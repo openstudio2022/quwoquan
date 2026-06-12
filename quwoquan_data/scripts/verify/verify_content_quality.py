@@ -125,6 +125,8 @@ def _semantic_gate_issues(article_path: Path, article: str, manifest: dict) -> l
     heading_extra = manifest.get("mechanicalHeadingTerms") if isinstance(manifest.get("mechanicalHeadingTerms"), list) else []
     for msg in qg.mechanical_heading_issues(article, extra_terms=[str(t) for t in heading_extra]):
         out.append(f"{article_path}: {msg}")
+    for msg in qg.intra_doc_repetition_issues(article):
+        out.append(f"{article_path}: {msg}")
     return out
 
 

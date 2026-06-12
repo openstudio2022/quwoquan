@@ -26,24 +26,15 @@ class ContentPostDetailPayload {
   final Map<String, dynamic> _canonicalWire;
 
   /// 与详情页/沉浸式 [projectArticleDetailView] 兼容的 wire：由 [detailWire] + [post]
-  /// 具名字段合并，嵌套 `cards` / `circleSummaries` 经 DTO `.toMap()`。
+  /// 具名字段合并，嵌套 `circleSummaries` 经 DTO `.toMap()`。文章正文真相源为
+  /// `articleMarkdown`（已在 `_canonicalWire` 中），不再回写旧 articleBlocks /
+  /// articlePages / cards 竞争内容源。
   Map<String, dynamic> get mergedArticleWireMap {
     final out = Map<String, dynamic>.from(_canonicalWire);
     final d = detailWire;
-    out['cards'] = d.cards.map((c) => c.toMap()).toList(growable: false);
     out['circleSummaries'] = d.circleSummaries
         .map((c) => c.toMap())
         .toList(growable: false);
-    final blocks = d.articleBlocks;
-    if (blocks != null) {
-      out['articleBlocks'] = blocks
-          .map((b) => b.toMap())
-          .toList(growable: false);
-    }
-    final pages = d.articlePages;
-    if (pages != null) {
-      out['articlePages'] = pages.map((p) => p.toMap()).toList(growable: false);
-    }
     return out;
   }
 

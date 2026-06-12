@@ -18,10 +18,8 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
-import 'package:quwoquan_app/ui/content/pages/article_detail_page.dart';
-import 'package:quwoquan_app/ui/content/pages/photo_detail_page.dart';
 import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
-import 'package:quwoquan_app/ui/content/pages/video_detail_page.dart';
+import 'package:quwoquan_app/ui/content/pages/work_browser_entry_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
@@ -32,6 +30,7 @@ import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dar
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/developer_settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
@@ -91,7 +90,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     refreshListenable: refreshListenable,
-    observers: <NavigatorObserver>[AppPageAccessNavigatorObserver.instance],
+    observers: <NavigatorObserver>[
+      AppPageAccessNavigatorObserver.instance,
+      chatRouteObserver,
+    ],
     initialLocation: ref.read(welcomeCompletedProvider)
         ? AppRoutePaths.home
         : AppRoutePaths.welcome,
@@ -517,24 +519,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
-        path: AppRoutePaths.articleDetailPathTemplate.replaceAll('{id}', ':id'),
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id'] ?? '0';
-          final extra = state.extra is ArticleDetailPageRouteExtra
-              ? state.extra! as ArticleDetailPageRouteExtra
-              : null;
-          return appRoutePage<void>(
-            state: state,
-            child: ArticleDetailPage(
-              articleId: id,
-              referralSource:
-                  extra?.referralSource ?? ReferralSource.organicFeed,
-              feedRequestId: extra?.feedRequestId,
-            ),
-          );
-        },
-      ),
-      GoRoute(
         path: AppRoutePaths.userProfilePathTemplate.replaceAll(
           '{username}',
           ':username',
@@ -600,56 +584,40 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: AppRoutePaths.mediaViewerPathTemplate
-            .replaceAll('{category}', ':category')
-            .replaceAll('{index}', ':index'),
-        pageBuilder: (context, state) {
-          final category = state.pathParameters['category'] ?? 'images';
-          final indexStr = state.pathParameters['index'] ?? '0';
-          final index = int.tryParse(indexStr) ?? 0;
-          final extra = state.extra is MediaViewerExtra
-              ? state.extra! as MediaViewerExtra
-              : null;
-
-          if (extra != null && extra.dtoPosts.isNotEmpty) {
-            return appRoutePage<void>(
-              state: state,
-              child: UnifiedMediaViewerPage(extra: extra),
-            );
-          }
-
-          return appRoutePage<void>(
-            state: state,
-            child: PhotoDetailPage(
-              category: category,
-              initialIndex: index,
-              initialExtra: extra,
-            ),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutePaths.videoViewerPathTemplate.replaceAll(
-          '{index}',
-          ':index',
+        path: AppRoutePaths.workBrowserPathTemplate.replaceAll(
+          '{workId}',
+          ':workId',
         ),
         pageBuilder: (context, state) {
-          final indexStr = state.pathParameters['index'] ?? '0';
-          final index = int.tryParse(indexStr) ?? 0;
+          final commentContext = MediaViewerCommentContext.fromQueryParameters(
+            state.uri.queryParameters,
+          );
           final extra = state.extra is MediaViewerExtra
               ? state.extra! as MediaViewerExtra
               : null;
 
-          if (extra != null && extra.dtoPosts.isNotEmpty) {
+          if (extra != null &&
+              (extra.dtoPosts.isNotEmpty || extra.posts.isNotEmpty)) {
             return appRoutePage<void>(
               state: state,
-              child: UnifiedMediaViewerPage(extra: extra),
+              child: UnifiedMediaViewerPage(
+                extra: extra.copyWith(commentContext: commentContext),
+              ),
             );
           }
 
+          // 直达 / 深链 / 评论跳原文：只有 :workId、无预置列表。按 id 直拉该帖
+          // 组装单帖 viewer，避免丢弃 workId 回退到发现页推荐流（先前断点）。
+          final workId = Uri.decodeComponent(
+            state.pathParameters['workId'] ?? '',
+          );
           return appRoutePage<void>(
             state: state,
-            child: VideoDetailPage(initialIndex: index, initialExtra: extra),
+            child: WorkBrowserEntryPage(
+              workId: workId,
+              source: state.uri.queryParameters['source'] ?? 'workBrowser',
+              commentContext: commentContext,
+            ),
           );
         },
       ),

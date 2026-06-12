@@ -103,10 +103,10 @@ scenarios:
     patrol_flow: test/patrol/content/error_empty_state_test.dart
     # 补充 L3 error_state_displayed_correctly 中无法通过 HTTP 验证的 UI 渲染层
     actors:
-      app: lib/ui/content/pages/photo_detail_page.dart
+      app: lib/ui/content/pages/work_browser_entry_page.dart
       service: content-service GET /v1/content/posts/{nonExistentId}
     steps:
-      - app navigates to photo detail with nonexistent postId
+      - app direct-opens work browser with nonexistent postId
       - service returns 404 CONTENT.USER.post_not_found
       - app receives CloudException with errorCode=postNotFound
     assertions:
@@ -144,11 +144,11 @@ scenarios:
     test_type: ui_journey
     patrol_flow: test/patrol/content/comment_post_test.dart
     actors:
-      app: lib/ui/content/pages/photo_detail_page.dart
+      app: lib/ui/content/pages/unified_media_viewer_page.dart
       service: content-service POST /v1/content/posts/{postId}/comments
       storage: MongoDB comments collection + posts.commentCount
     steps:
-      - user opens post detail (photo)
+      - user opens work browser (photo)
       - user taps comment input bar
       - user types comment text
       - user submits comment

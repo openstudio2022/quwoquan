@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -249,6 +250,179 @@ def _drafts_authored(ctx: PipelineContext) -> tuple[bool, list[str]]:
         if is_placeholder(art.read_text(encoding="utf-8")):
             pending.append(ref)
     return (not pending), pending
+
+
+def _content_issue_matchers(ctx: PipelineContext) -> dict[str, set[str]]:
+    from _common import content_object
+
+    matchers: dict[str, set[str]] = {}
+    for ref in content_object.iter_content_refs(ctx.task_id, ctx.batch_id):
+        tokens = {ref}
+        try:
+            rel = content_object.content_object_rel(ctx.task_id, ctx.batch_id, ref)
+        except KeyError:
+            matchers[ref] = tokens
+            continue
+        tokens.add(rel)
+        if rel.startswith("posts/"):
+            tokens.add(rel[len("posts/"):])
+        matchers[ref] = {token for token in tokens if token}
+    return matchers
+
+
+def _produce_review_retry_refs(ctx: PipelineContext, issues: list[str]) -> tuple[list[str], dict[str, list[str]]]:
+    """把 produce_review 的批次级问题尽量映射回受影响 ref；无法精确定位时保守回退全批。"""
+    from _common import content_object
+    from _common.stage_reports import iter_stage_envelopes
+
+    matchers = _content_issue_matchers(ctx)
+    affected: set[str] = set()
+    for ref, env in iter_stage_envelopes(ctx.task_id, ctx.batch_id, "produce", "review_gate"):
+        payload = env.get("payload") or {}
+        if payload.get("passed") is False:
+            affected.add(ref)
+
+    issue_map: dict[str, list[str]] = {}
+    unmatched: list[str] = []
+    for raw_issue in issues or []:
+        issue = str(raw_issue)
+        matched_refs = [
+            ref
+            for ref, tokens in matchers.items()
+            if any(token and token in issue for token in tokens)
+        ]
+        if not matched_refs:
+            unmatched.append(issue)
+            continue
+        for ref in matched_refs:
+            affected.add(ref)
+            issue_map.setdefault(ref, []).append(issue)
+
+    if not affected:
+        affected = set(content_object.iter_content_refs(ctx.task_id, ctx.batch_id))
+
+    refs = sorted(affected)
+    for ref in refs:
+        issue_map.setdefault(ref, [])
+    if unmatched:
+        for ref in refs:
+            issue_map[ref].extend(unmatched)
+    return refs, issue_map
+
+
+def _invalidate_ref_for_retry(ctx: PipelineContext, ref: str) -> bool:
+    """清理旧草稿/旧成品，让 rewound workflow 真正回到待重写状态。"""
+    from _common import content_object
+    from _common.draft_io import draft_package_dir, write_placeholder_draft
+
+    try:
+        obj_dir = content_object.content_object_dir(ctx.task_id, ctx.batch_id, ref)
+        draft_dir = draft_package_dir(ctx.task_id, ctx.batch_id, ref)
+    except KeyError:
+        return False
+
+    write_placeholder_draft(ctx.task_id, ctx.batch_id, ref)
+
+    author_self_check = draft_dir / "author_self_check.json"
+    if author_self_check.is_file():
+        author_self_check.unlink()
+
+    review_dir = obj_dir / "5.review"
+    for name in ("ref_review_gate.json", "provenance.json", "review_ledger.json", "review_entities.json"):
+        path = review_dir / name
+        if path.is_file():
+            path.unlink()
+
+    for name in ("article.md", "gallery.md", "manifest.json", "_object.json"):
+        path = obj_dir / name
+        if path.is_file():
+            path.unlink()
+
+    assets_dir = obj_dir / "assets"
+    if assets_dir.is_dir():
+        shutil.rmtree(assets_dir)
+
+    content_object.write_content_object_index(ctx.task_id, ctx.batch_id, ref)
+    return True
+
+
+def _purge_author_queue_for_stale_workflow(
+    ctx: PipelineContext,
+    *,
+    refs: list[str] | None = None,
+    reason: str,
+) -> None:
+    from task import object_queue as oq
+
+    result = oq.purge_jobs(ctx.task_id, ctx.batch_id, stage="author", refs=refs)
+    removed = result.get("removed") or []
+    if removed:
+        print(
+            f"[task run] 已清理过期 author queue ({reason}): "
+            + ", ".join(removed[:12])
+            + (" ..." if len(removed) > 12 else "")
+        )
+
+
+def _write_retry_reports_for_refs(
+    ctx: PipelineContext,
+    *,
+    refs: list[str],
+    issue_map: dict[str, list[str]],
+    target_stage: str,
+) -> None:
+    from _common.stage_reports import write_repair_report
+
+    fallback_stage = "download" if target_stage == "download_plan" else "agent_compose"
+    rerun_chain = (
+        ["download", "quality_analysis", "compose-brief", "review", "materialize"]
+        if fallback_stage == "download"
+        else ["agent_compose", "review", "materialize"]
+    )
+    for ref in refs:
+        write_repair_report(
+            task_id=ctx.task_id,
+            batch_id=ctx.batch_id,
+            command="produce",
+            ref=ref,
+            failed_stage="review",
+            failed_gate="post_verify",
+            issues=issue_map.get(ref) or ["produce_review gate failed; inspect current batch issues"],
+            fallback_stage=fallback_stage,
+            rerun_chain=rerun_chain,
+        )
+
+
+def _prepare_produce_review_retry(ctx: PipelineContext, result: StageResult, target_stage: str) -> None:
+    from task import object_queue as oq
+    from _common.draft_io import read_writing_pack
+
+    refs, issue_map = _produce_review_retry_refs(ctx, result.issues)
+    if not refs:
+        return
+    _write_retry_reports_for_refs(ctx, refs=refs, issue_map=issue_map, target_stage=target_stage)
+    if target_stage == "download_plan":
+        _purge_author_queue_for_stale_workflow(ctx, reason="produce_review->download_plan")
+        return
+    _purge_author_queue_for_stale_workflow(ctx, refs=refs, reason="produce_review->produce_compose")
+    reset = [ref for ref in refs if _invalidate_ref_for_retry(ctx, ref)]
+    requeued = oq.requeue_refs(ctx.task_id, ctx.batch_id, reset, "author", reason="produce_review_retry") if reset else []
+    missing = [ref for ref in reset if ref not in set(requeued)]
+    for ref in missing:
+        pack = read_writing_pack(ctx.task_id, ctx.batch_id, ref) or {}
+        oq.enqueue_ref_job(
+            ctx.task_id,
+            ctx.batch_id,
+            ref,
+            "author",
+            mutex_key=str(pack.get("baseSourceRef") or ref),
+        )
+    if reset:
+        print(
+            "[task run] 已为 produce_review 回退重置待重写 ref: "
+            + ", ".join(reset[:12])
+            + (" ..." if len(reset) > 12 else "")
+        )
 
 
 # ─── 确定性 stage 执行（复用既有 handler）─────────────────────────────
@@ -513,7 +687,7 @@ def _checkpoint_produce_author(ctx: PipelineContext) -> StageResult:
     hint = (
         f"[CHECKPOINT produce_author] Agent 逐篇创作正文(generator=agent)：\n"
         f"  草稿目录: posts/<type>/<angle>/<title>/<seq>/4.draft/\n"
-        f"  读 <ref>/prompt.md + <ref>/writing_pack.json，写回 <ref>/article.md\n"
+        f"  读 <ref>/prompt.md + <ref>/writing_pack.json，写回 <ref>/draft.article.md\n"
         f"  draft_meta 记 model/styleFamily/openingStrategy/extractedEntities\n"
         f"  待创作: {pending}\n"
         f"  完成后: qwq-data data workflow run --task {ctx.task_id} --batch {ctx.batch_id} --resume"
@@ -618,6 +792,8 @@ def _react_rewind(ctx: PipelineContext, state: dict, completed: set[str],
         issues=result.issues or [result.message], fallback_stage=target,
         rerun_chain=STAGE_NAMES[STAGE_NAMES.index(target):STAGE_NAMES.index(result.stage) + 1],
     )
+    if result.stage == "produce_review":
+        _prepare_produce_review_retry(ctx, result, target)
     new_completed = _rewind_to(completed, target)
     state["reactRewinds"] = rewinds
     state["completed"] = sorted(new_completed)
@@ -796,6 +972,15 @@ def handle_run(args: argparse.Namespace) -> None:
         if p.exists():
             p.unlink()
             print(f"[task run] reset workflow state: {p}")
+        _purge_author_queue_for_stale_workflow(
+            PipelineContext(
+                task_id=task_id,
+                batch_id=batch_id,
+                entity_ids=[],
+                spec={},
+            ),
+            reason="reset_state",
+        )
 
     until = args.until if getattr(args, "until", None) else None
     if until and until not in STAGE_NAMES:

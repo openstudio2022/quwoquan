@@ -156,6 +156,49 @@ jobs:
             artifacts/ecs-onebox/deploy-report.json
             artifacts/stackctl/gamma/deploy-direct/**
           if-no-files-found: ignore
+      - name: Echo deploy failure reports
+        if: failure()
+        run: |
+          set +e
+          echo "::group::stackctl gamma deploy summary"
+          if [ -f artifacts/stackctl/gamma/deploy-direct/summary.md ]; then
+            sed -n '1,200p' artifacts/stackctl/gamma/deploy-direct/summary.md
+          else
+            echo "missing artifacts/stackctl/gamma/deploy-direct/summary.md"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::stackctl gamma deploy report.json"
+          if [ -f artifacts/stackctl/gamma/deploy-direct/report.json ]; then
+            sed -n '1,260p' artifacts/stackctl/gamma/deploy-direct/report.json
+          else
+            echo "missing artifacts/stackctl/gamma/deploy-direct/report.json"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::gamma ecs deploy report"
+          if [ -f artifacts/ecs-onebox/deploy-report.json ]; then
+            sed -n '1,260p' artifacts/ecs-onebox/deploy-report.json
+          else
+            echo "missing artifacts/ecs-onebox/deploy-report.json"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::gamma ecs deploy phases"
+          if [ -f artifacts/ecs-onebox/deploy-phases.json ]; then
+            sed -n '1,260p' artifacts/ecs-onebox/deploy-phases.json
+          else
+            echo "missing artifacts/ecs-onebox/deploy-phases.json"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::stackctl gamma deploy stdout"
+          if [ -f artifacts/stackctl/gamma/deploy-direct/stdout.md ]; then
+            tail -n 1200 artifacts/stackctl/gamma/deploy-direct/stdout.md
+          else
+            echo "missing artifacts/stackctl/gamma/deploy-direct/stdout.md"
+          fi
+          echo "::endgroup::"
       - name: Probe hosted content flow
         env:
           BASE_URL: ${{ steps.urls.outputs.base_url }}

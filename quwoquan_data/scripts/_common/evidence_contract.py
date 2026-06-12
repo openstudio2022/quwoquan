@@ -37,6 +37,11 @@ POST_MANIFEST_FORBIDDEN_KEYS = {
     "articleMarkdownDigest",
 }
 
+POST_MANIFEST_REQUIRED_TIME_KEYS = {
+    "createdAt",
+    "updatedAt",
+}
+
 # 阶段输入/输出路径以内容对象树为真相源（规格 §15.1）：实体对象在 entities/…，
 # 内容对象在 posts/{contentType}/{angle}/{title}/{seq}/，过程阶段统一编号挂对象目录下。
 STAGE_EVIDENCE_CONTRACT = {
@@ -80,8 +85,13 @@ def quality_payload_contract_issues(payload: Mapping[str, Any]) -> list[str]:
 
 
 def post_manifest_contract_issues(manifest: Mapping[str, Any]) -> list[str]:
-    return [
+    issues = [
         f"post manifest must not contain intermediate field {key}"
         for key in sorted(POST_MANIFEST_FORBIDDEN_KEYS)
         if key in manifest
     ]
+    for key in sorted(POST_MANIFEST_REQUIRED_TIME_KEYS):
+        value = str(manifest.get(key) or "").strip()
+        if not value:
+            issues.append(f"post manifest missing required time fact {key}")
+    return issues

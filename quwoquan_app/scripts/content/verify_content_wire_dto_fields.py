@@ -180,8 +180,17 @@ def main() -> int:
     report = yaml.safe_load(FIELDS_REPORT.read_text(encoding="utf-8"))
     report_body = _report_create_body_keys(report)
     report_dart = REPORT_DART.read_text(encoding="utf-8")
-    tomap = report_dart.split("Map<String, dynamic> toMap()")[1]
-    tomap_keys = set(re.findall(r"'([a-zA-Z0-9_]+)'\s*:", tomap.split("};")[0]))
+    report_match = re.search(
+        r"(?:CloudJsonMap|Map<String,\s*dynamic>)\s+toMap\(\)\s*=>\s*<String,\s*dynamic>\{([\s\S]*?)\};",
+        report_dart,
+    )
+    if not report_match:
+        print(
+            "verify_content_wire_dto_fields: CreateReportRequestWire.toMap signature not found",
+            file=sys.stderr,
+        )
+        return 1
+    tomap_keys = set(re.findall(r"'([a-zA-Z0-9_]+)'\s*:", report_match.group(1)))
     if not report_body <= tomap_keys:
         print(
             "verify_content_wire_dto_fields: CreateReportRequestWire.toMap missing keys:\n  "

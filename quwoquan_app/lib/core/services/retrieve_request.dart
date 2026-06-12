@@ -92,7 +92,7 @@ class RetrieveRequest {
     };
   }
 
-  /// Compatibility bridge: convert a legacy [SearchRequest] into the unified
+  /// Compatibility bridge: convert an earlier [SearchRequest] into the unified
   /// retrieve contract. No forbidden field (mode/objectTypes/contentTypes/
   /// conversationType/categoryId) ever leaks; they only influence target
   /// selection and term derivation.

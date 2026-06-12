@@ -1,3 +1,5 @@
+part 'ui_text_constants_content_labels.dart';
+
 class UITextConstants {
   // ==================== 导航 ====================
   static const String home = '首页';
@@ -233,10 +235,16 @@ class UITextConstants {
   static const String creationFilterAll = '全部';
   static const String creationFilterMoment = '点滴';
   static const String creationFilterWork = '作品';
-  static const String workFormatFilterAll = '全部';
+  static const String workFormatFilterAll = '全部作品';
   static const String workFormatFilterImage = '图片';
   static const String workFormatFilterVideo = '视频';
-  static const String workFormatFilterNote = '文章';
+  static const String workFormatFilterArticle = '文章';
+  static const String articlePaperThemeSystem = '系统适配';
+  static const String articlePaperThemeDarkPaper = '深色纸';
+  static const String articlePaperThemeCoolGray = '冷灰纸';
+  static const String articlePaperThemeWarmBlack = '暖黑纸';
+  static const String articlePaperThemeInkGreen = '墨绿纸';
+  static const String articlePaperThemeDeepBrown = '深棕纸';
 
   /// 发现页 V1：帮读/美图/视频
   static const String discoveryTabHelperRead = '帮读';
@@ -364,6 +372,7 @@ class UITextConstants {
   static const String authGateTitlePersona = '登录后管理分身';
   static const String authGateTitleSettingsAccount = '登录后管理账号';
   static const String authGateTitleMediaUpload = '登录后上传素材';
+  static const String authGateTitleDeletePost = '登录后删除内容';
   static const String authGateTitleReport = '登录后提交举报';
   static const String authGateTitleJoinCircle = '登录后加入圈子';
   static const String authGateTitleAddContact = '登录后添加联系人';
@@ -386,6 +395,7 @@ class UITextConstants {
   static const String authGatePromptPersona = '登录后即可管理分身';
   static const String authGatePromptSettingsAccount = '登录后即可管理账号';
   static const String authGatePromptMediaUpload = '登录后即可上传素材';
+  static const String authGatePromptDeletePost = '登录后即可删除自己的内容';
   static const String authGatePromptReport = '登录后即可提交举报';
   static const String authGatePromptJoinCircle = '登录后即可加入圈子';
   static const String authGatePromptAddContact = '登录后即可添加联系人';
@@ -503,36 +513,12 @@ class UITextConstants {
   static const String profileReportReasonHarassment = '骚扰辱骂';
   static const String profileReportReasonPornography = '色情低俗';
   static const String profileReportReasonOther = '其他';
-  // Creator Impact（双向可解释性·生产端 v0：仅用真实聚合总数，无估算）
-  static const String creatorImpactTitle = '你的影响力';
-  static const String creatorImpactSubtitle = '你的内容真实促成的连接';
-  static const String creatorImpactEmpty = '发布内容后，这里会显示你帮到了谁';
-  static const String creatorImpactRelationshipLabel = '关注你的人';
-  static const String creatorImpactAppreciationLabel = '收获的赞同';
-  static const String creatorImpactContributionLabel = '贡献的内容';
-  static const String creatorImpactCommunityLabel = '参与的圈子';
-  static const String creatorImpactCommunityHelpLabel = '促成进圈';
-  static const String creatorImpactDecisionLabel = '帮助决策';
-  static const String creatorImpactKnowledgeLabel = '知识帮助';
-  static const String creatorImpactSpreadLabel = '传播回流';
-  static const String creatorImpactAudienceLabel = '触达同好';
-  static String creatorImpactRelationshipNarrative(int count) =>
-      '$count 人因为你的内容关注了你';
-  static String creatorImpactAppreciationNarrative(int count) =>
-      '你的内容累计获得 $count 次赞同';
-  static String creatorImpactContributionNarrative(int count) =>
-      '你已贡献 $count 篇内容';
-  static String creatorImpactCommunityNarrative(int count) => '你活跃在 $count 个圈子';
-  static String creatorImpactCommunityHelpNarrative(int count) =>
-      '你的内容促成 $count 次进圈或圈内互动';
-  static String creatorImpactDecisionNarrative(int count) =>
-      '你的内容帮助 $count 次查看、收藏或深度消费';
-  static String creatorImpactKnowledgeNarrative(int count) =>
-      '你的内容被用于 $count 次知识回应';
-  static String creatorImpactSpreadNarrative(int count) =>
-      '你的内容带来 $count 次分享或回流';
-  static String creatorImpactAudienceNarrative(int count) =>
-      '你的内容触达 $count 次同维度兴趣人群';
+  // 影响力摘要模块（「TA的影响 / 我的影响力」；displayText 云侧产出，端只读直出 G2）
+  static const String profileImpactTitleMine = '我的影响力';
+  static const String profileImpactTitleOther = 'TA的影响';
+  static const String profileImpactSubtitleMine = '我的内容真实促成的连接';
+  static const String profileImpactSubtitleOther = 'TA的内容真实促成的连接';
+  static const String profileImpactEmptyMine = '发布内容后，这里会显示我帮到了谁';
   static const String shareComingSoon = '分享功能即将上线';
   static const String notInterested = '不感兴趣';
   static const String shareTo = '分享到';
@@ -588,17 +574,26 @@ class UITextConstants {
   /// 评论平铺区：回复某人占位。
   static const String commentReplyToTemplate = '回复 %s';
 
-  // 对象页统一交集卡标题（你和对象的交集，由各壳按对象类型传入）
-  static const String profileMutualIntersectionTitle = '你们的交集';
+  // 对象页统一交集卡标题（你和对象的连接，由各壳按对象类型传入）
+  static const String profileMutualIntersectionTitle = '你们的连接';
   static const String homepageIntersectionTitle = '你和这里的交集';
   static const String circleIntersectionTitle = '你认识的人在这';
   static const String intersectionMoreLabel = '全部交集';
-  // 我的主页「我的交集」聚合入口
-  static const String myIntersectionsTitle = '我的交集';
-  static const String myIntersectionsSubtitle = '谁和你产生了新的交集';
+  // Work Browser 作者区交集入口与详情解释层（V1.0：N 个交集 › → 弹出推荐解释）
+  static String intersectionEntrySummary(int count) => '$count 个交集';
+  static const String intersectionDetailTitle = '为什么推荐给你';
+  // Work Browser 视频集进度（时间轴下方、标题上方）
+  static String videoSeriesProgress(int current, int total) =>
+      '视频集 · $current/$total';
+  // Work Browser 文章页码（正文下方、作者工具栏上方）
+  static String workArticlePageProgress(int current, int total) =>
+      '$current / $total';
+  // 我的主页「我的连接」聚合入口
+  static const String myIntersectionsTitle = '我的连接';
+  static const String myIntersectionsSubtitle = '谁和你产生了新的连接';
   static const String intersectionExpandMore = '展开更多';
   static const String intersectionCollapse = '收起';
-  static const String myIntersectionsEmpty = '还没有新的交集，去发现更多有交集的人和圈子';
+  static const String myIntersectionsEmpty = '还没有新的连接，去发现更多有交集的人和圈子';
   static const String intersectionNewBadgeSuffix = '条新增';
   // 推荐（概率）交集标签：不伪装事实
   static const String intersectionAffinityLabel = '推荐';
@@ -626,6 +621,19 @@ class UITextConstants {
 
   /// 首页/频道交集推荐「换一批」入口（候选窗内轮转，强调保鲜）。
   static const String intersectionShuffle = '换一批';
+
+  /// 交集对象类型统一品牌蓝角标文字（闭集 person|circle|school|place|enterprise）。
+  static const Map<String, String> intersectionObjectKindBadgeLabels =
+      <String, String>{
+        'person': '人',
+        'circle': '圈',
+        'school': '校',
+        'place': '地',
+        'enterprise': '企',
+      };
+
+  static String intersectionObjectKindBadgeLabel(String objectKindName) =>
+      intersectionObjectKindBadgeLabels[objectKindName] ?? '';
   static const String intersectionRecommendSpotlightTitle = '与你有关的新对象';
   static const String intersectionCampusSpotlightTitle = '校园里与你有关的人和圈子';
   static const String intersectionTravelSpotlightTitle = '和你有相同足迹的人与地点';
@@ -766,6 +774,8 @@ class UITextConstants {
   static const String secretMessage = '密信';
   static const String friends = '联系人';
   static const String groupChat = '群聊';
+  static const String chatPrivateMessages = '私聊';
+  static const String chatNotifications = '通知';
   static const String secretLockedTitle = '密信已锁定';
   static const String secretUnlockButton = '解锁密信';
   static const String secretPasswordHint = '请输入密信密码';
@@ -796,6 +806,7 @@ class UITextConstants {
   static const String chatPreviewCard = '[卡片]';
   static const String chatPreviewRecalled = '[消息已撤回]';
   static const String contactsTabAll = '全部';
+  static const String chatPrimaryContacts = '联系';
   static const String contactsTabCircles = '圈子';
 
   /// 联系人一级 Tab 下的二级：互相关注
@@ -917,6 +928,13 @@ class UITextConstants {
   static const String groupName = '群聊名称';
   static const String qrCode = '二维码';
   static const String groupAnnouncement = '群公告';
+  static const String groupAnnouncementEmpty = '未设置';
+  static const String groupSourcePrefix = '来自：';
+  static const String groupMemberCountSuffix = '成员';
+  static const String groupCapabilityAlbum = '相册';
+  static const String groupCapabilityFile = '文件';
+  static const String groupCapabilityActivity = '活动';
+  static const String groupCapabilityMembers = '成员';
   static const String muteNotifications = '消息免打扰';
   static const String pinChat = '置顶聊天';
   static const String privacyShield = '隐私屏障(禁截屏、禁转发)';
@@ -1184,6 +1202,12 @@ class UITextConstants {
   static const String personaDeleteBlocked = '当前分身暂不可删除';
   static const String personaRetireBlocked = '当前分身暂不可退役';
 
+  /// 内容时间展示（创作时间 / 更新时间）。
+  /// 规则：更新时间不晚于创作时间（或相等）只显示创作时间；更晚才显示更新时间。
+  static const String contentCreatedAtPrefix = '创作于';
+  static const String contentUpdatedAtPrefix = '更新于';
+  static const String contentEditedSuffix = '已编辑';
+
   /// 我的主页统计与子页（关注数用 follow，此处为统计栏标题）
   static const String profileEditLabel = '资料编辑';
   static const String profilePersonasLabel = '分身管理';
@@ -1210,6 +1234,7 @@ class UITextConstants {
   static const String profileSubAccountDeleteTitle = '删除子账号';
   static const String profileSubAccountDeleteConfirmTemplate =
       '确定要删除「%s」吗？此操作不可撤销。';
+  static const String contentDeleteSuccess = '内容已删除';
   static const String profileSubAccountCreateTitle = '创建子账号';
   static const String profileSubAccountNamePlaceholder = '账号名称（如：职业号、匿名号）';
   static const String profileSubAccountOpen = '公开';
@@ -1622,78 +1647,6 @@ class UITextConstants {
   static const String shareTemplateWorkTitle = '分享作品';
   static const String shareTemplateWorkSubtitle = '突出标题、摘要与收藏价值';
 
-  static String contentLabelForKey(String labelKey) {
-    switch (labelKey) {
-      case 'discovery_rail_moment':
-        return discoveryRailMoment;
-      case 'discovery_rail_work':
-        return discoveryRailWorks;
-      case 'creation_filter_all':
-        return creationFilterAll;
-      case 'creation_filter_moment':
-        return creationFilterMoment;
-      case 'creation_filter_work':
-        return creationFilterWork;
-      case 'profile_tab_creations':
-        return profileTabCreations;
-      case 'profile_tab_circles':
-        return profileTabCircles;
-      case 'profile_tab_interaction':
-        return profileTabInteraction;
-      case 'profile_tab_lifestyle':
-        return profileTabLifestyle;
-      case 'lifestyle_sub_footprint':
-        return lifestyleSubFootprint;
-      case 'lifestyle_sub_soul':
-        return lifestyleSubSoul;
-      case 'lifestyle_sub_taste':
-        return lifestyleSubTaste;
-      case 'lifestyle_sub_private':
-        return lifestyleSubPrivate;
-      case 'creation_sub_all':
-        return creationSubAll;
-      case 'creation_sub_micro':
-        return creationSubMicro;
-      case 'creation_sub_image':
-        return creationSubImage;
-      case 'creation_sub_video':
-        return creationSubVideo;
-      case 'creation_sub_article':
-        return creationSubArticle;
-      case 'creation_sub_text':
-        return creationSubText;
-      case 'interaction_sub_likes':
-        return interactionSubLikes;
-      case 'interaction_sub_comments':
-        return interactionSubComments;
-      case 'interaction_sub_shares':
-        return interactionSubShares;
-      case 'work_format_all':
-        return workFormatFilterAll;
-      case 'work_format_image':
-        return workFormatFilterImage;
-      case 'work_format_video':
-        return workFormatFilterVideo;
-      case 'work_format_note':
-        return workFormatFilterNote;
-      case 'share_template_moment_title':
-        return shareTemplateMomentTitle;
-      case 'share_template_moment_subtitle':
-        return shareTemplateMomentSubtitle;
-      case 'share_template_work_title':
-        return shareTemplateWorkTitle;
-      case 'share_template_work_subtitle':
-        return shareTemplateWorkSubtitle;
-      case 'tab_photo':
-        return discoveryTabPhoto;
-      case 'tab_video':
-        return discoveryTabVideo;
-      case 'tab_moment':
-        return discoveryTabMoment;
-      case 'tab_article':
-        return discoveryTabArticle;
-      default:
-        return labelKey;
-    }
-  }
+  static String contentLabelForKey(String labelKey) =>
+      _contentLabelForKey(labelKey);
 }

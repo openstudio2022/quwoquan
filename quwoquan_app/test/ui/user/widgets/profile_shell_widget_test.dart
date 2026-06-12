@@ -15,6 +15,8 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+
+import '../../../support/harness/profile_shell_scroll_utils.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 
@@ -163,10 +165,12 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.text('作品'), findsOneWidget);
+      await revealProfilePrimaryTabs(tester);
+      // 统计行也有「作品」标签，主 Tab 断言一律限定在 inline tabs 容器内。
+      expect(_inlinePrimaryTab('作品'), findsOneWidget);
       expect(_inlinePrimaryTab('圈子'), findsOneWidget);
-      expect(find.text('互动'), findsOneWidget);
-      expect(find.text('看点'), findsOneWidget);
+      expect(_inlinePrimaryTab('互动'), findsOneWidget);
+      expect(_inlinePrimaryTab('看点'), findsOneWidget);
     });
 
     testWidgets('用户主页主区块表面使用更多功能同源语义 token', (tester) async {
@@ -176,6 +180,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
+      await revealProfilePrimaryTabs(tester);
 
       final tabsSurface = tester.widget<Container>(
         find.byKey(const ValueKey<String>('profile-shell-primary-tabs-inline')),
@@ -331,7 +336,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      await tester.tap(_inlinePrimaryTab('圈子'));
+      await tapProfilePrimaryTab(tester, '圈子');
       await _pumpFrames(tester, count: 20);
       expect(find.byType(ProfileCirclesTab), findsOneWidget);
     });
@@ -343,7 +348,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      await tester.tap(_inlinePrimaryTab('互动'));
+      await tapProfilePrimaryTab(tester, '互动');
       await _pumpFrames(tester, count: 20);
       expect(find.byType(ProfileInteractionTab), findsOneWidget);
     });
@@ -380,7 +385,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      await tester.tap(_inlinePrimaryTab('互动'));
+      await tapProfilePrimaryTab(tester, '互动');
       await _pumpFrames(tester, count: 20);
 
       final subTabFinder = find.descendant(
@@ -409,8 +414,15 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester, count: 20);
+      // 左滑切二级 Tab 需要 fling 落在创作列表区（works grid），先滚到其可见。
+      await revealProfileSummaryWidget(
+        tester,
+        find.byKey(const ValueKey<String>('profile-works-grid')),
+      );
 
-      final swipeSurface = find.byType(CustomScrollView);
+      final swipeSurface = find.byKey(
+        const ValueKey<String>('profile-works-grid'),
+      );
 
       for (var i = 0; i < UserProfileUIConfig.creationSubTabs.length - 1; i++) {
         await tester.fling(
@@ -477,6 +489,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester, count: 20);
+      await revealProfilePrimaryTabs(tester);
 
       final tabsFinder = find.byKey(
         const ValueKey<String>('profile-works-secondary-tabs'),

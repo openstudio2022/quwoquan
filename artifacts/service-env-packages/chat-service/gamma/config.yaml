@@ -15,7 +15,7 @@ redis:
 
 runtime:
   media:
-    group_avatar_cdn_base_url: "https://gamma-avatar.quwoquan-env.test"
+    group_avatar_cdn_base_url: "http://118.31.239.122:19100"
     group_avatar_local_media_root: "/var/lib/quwoquan/chat-media"
   sync:
     patch_ttl_hours: 720

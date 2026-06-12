@@ -17,7 +17,6 @@ import yaml
 from _common.io import read_json, write_json
 from _common.paths import (
     COMMITTED_TASKS_ROOT,
-    NOW_ISO,
     committed_task_notes,
     committed_task_progress,
     committed_task_root,
@@ -70,7 +69,7 @@ def build_task_id(vertical: str, organize_by: str, key: str, category: str | Non
 
 
 def now_iso() -> str:
-    return NOW_ISO
+    return _dt.datetime.now(_dt.timezone.utc).isoformat()
 
 
 def _prune_empty(value: Any) -> Any:

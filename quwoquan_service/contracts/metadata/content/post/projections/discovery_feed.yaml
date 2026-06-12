@@ -37,6 +37,8 @@ fields:
   - { name: favoriteCount, type: int }
   - { name: viewCount, type: int }
   - { name: publishedAt, type: timestamp }
+  - { name: createdAt, type: timestamp, description: "内容首次进入系统时间（仅插入时写一次，永不变）" }
+  - { name: updatedAt, type: timestamp, description: "内容最后实质变更时间（无实质变更不推进）" }
   - { name: recScore, type: float, description: 推荐分（实时计算） }
   - { name: authorNickname, type: string, description: 作者昵称（反范式） }
   - { name: authorAvatarUrl, type: string, description: 作者头像（反范式） }
@@ -219,9 +221,26 @@ client_projection:
     - name: createdAt
       dart_type: DateTime
       nullable: false
-      source: publishedAt
-      aliases: [publishedAt, createdAt, created_at]
+      source: createdAt
+      aliases: [createdAt, created_at]
       default: "DateTime(0)"
+      description: "创作时间（首次进入系统）。唯一源为 createdAt/created_at；不再以 publishedAt 借壳。"
+
+    - name: updatedAt
+      dart_type: DateTime
+      nullable: true
+      source: updatedAt
+      aliases: [updatedAt, updated_at]
+      default: "null"
+      description: "最后实质更新时间；与 createdAt 相等或更早时 UI 只显示创作时间，更晚时显示创作+更新。"
+
+    - name: publishedAt
+      dart_type: DateTime
+      nullable: true
+      source: publishedAt
+      aliases: [publishedAt, published_at]
+      default: "null"
+      description: "首次公开时间（仅首次发布置位）。"
 
     # Mock / 沉浸器扩展（OpenAPI FeedItem.metadata 可承载；此处为 App 强类型投影）
     - name: circleSummaries
@@ -313,6 +332,27 @@ client_projection:
       nullable: true
       source: articleRenderProfile
       aliases: [articleRenderProfile]
+      default: "null"
+
+    - name: contentVertical
+      dart_type: String
+      nullable: true
+      source: contentVertical
+      aliases: [contentVertical, categoryId, category, vertical]
+      default: "null"
+
+    - name: paperThemeMode
+      dart_type: String
+      nullable: true
+      source: paperThemeMode
+      aliases: [paperThemeMode]
+      default: "null"
+
+    - name: paperTexture
+      dart_type: String
+      nullable: true
+      source: paperTexture
+      aliases: [paperTexture, articlePaperTexture]
       default: "null"
 
     - name: cards

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
+import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 
 /// 交集统一体验 · Mock 契约（T1/T2）：
 /// - 我的交集聚合摘要：总数 / 5 维度 / 自上次新增（freshAt > 已读水位）。
@@ -81,6 +82,23 @@ void main() {
       expect(items.map((r) => r.displayName), contains('大理'));
     });
 
+    test('实体类频道交集的目标 ID 可被主页仓库直接打开', () async {
+      final repo = MockIntersectionRepository();
+      final homepageRepo = MockHomepageRepository();
+      final items = await repo.getFeedIntersections(channel: 'recommend');
+      final entityItems = items.where((reason) {
+        return reason.objectKind == 'school' || reason.objectKind == 'place';
+      });
+
+      for (final reason in entityItems) {
+        final targetId = reason.relationObjectId.trim().isNotEmpty
+            ? reason.relationObjectId.trim()
+            : reason.actionTargetId.trim();
+        final detail = await homepageRepo.getHomepageDetail(targetId);
+        expect(detail.id, isNotEmpty, reason: '实体交集目标必须可达: $targetId');
+      }
+    });
+
     test('未知频道回退 recommend 池', () async {
       final repo = MockIntersectionRepository();
       final items = await repo.getFeedIntersections(channel: 'unknown_x');
@@ -108,13 +126,13 @@ void main() {
     test('曝光上报后同对象仍保留但降权为 seen', () async {
       final repo = MockIntersectionRepository();
       final before = await repo.getFeedIntersections(channel: 'campus');
-      expect(before.map((r) => r.actionTargetId), contains('u_su'));
+      expect(before.map((r) => r.actionTargetId), contains('fixture_user_su'));
 
-      await repo.reportExposure(objectIds: <String>['u_su']);
+      await repo.reportExposure(objectIds: <String>['fixture_user_su']);
 
       final after = await repo.getFeedIntersections(channel: 'campus');
-      expect(after.map((r) => r.actionTargetId), contains('u_su'));
-      expect(after.last.actionTargetId, 'u_su');
+      expect(after.map((r) => r.actionTargetId), contains('fixture_user_su'));
+      expect(after.last.actionTargetId, 'fixture_user_su');
       expect(after.last.rankState, 'seen');
       expect(after.last.seenAt, isNotEmpty);
     });

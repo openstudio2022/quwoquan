@@ -81,7 +81,10 @@ class DualColumnDiscoveryPostCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (reasonText != null) ...[
-                      IntersectionReasonChip(text: reasonText, isDark: isDark),
+                      IntersectionReasonChip.fromReasons(
+                        item.intersectionReasons,
+                        isDark: isDark,
+                      )!,
                       SizedBox(height: AppSpacing.intraGroupXs),
                     ],
                     Text(
@@ -90,7 +93,6 @@ class DualColumnDiscoveryPostCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
                         color: fg,
                         height: AppSpacing.textLineHeightDense,
                         letterSpacing: -0.16,

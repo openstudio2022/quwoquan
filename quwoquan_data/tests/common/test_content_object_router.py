@@ -43,6 +43,15 @@ def test_compute_coords_from_brief_is_deterministic():
     assert c["angle"] == "深度探险", c  # templateId 含「深度」→ 深度探险
 
 
+def test_compute_coords_rejects_empty_title_hint():
+    try:
+        co.compute_content_coords({"titleHint": "   ", "templateId": "景区环线攻略"}, "article")
+    except ValueError as exc:
+        assert "titleHint missing or empty" in str(exc)
+        return
+    raise AssertionError("expected ValueError for empty titleHint")
+
+
 def test_register_and_resolve_object_dirs():
     brief = {"titleHint": "峨眉山·攻略", "templateId": "景区环线攻略"}
     ref = "地点_景区__峨眉山"
@@ -87,6 +96,15 @@ def test_unregistered_ref_raises():
     except KeyError:
         return
     raise AssertionError("expected KeyError for unregistered ref")
+
+
+def test_register_content_object_rejects_empty_title():
+    try:
+        co.register_content_object(_TASK, _BATCH, "bad_ref", content_type="article", angle="攻略", title=" ")
+    except ValueError as exc:
+        assert "title missing or empty" in str(exc)
+        return
+    raise AssertionError("expected ValueError for empty title")
 
 
 def _run_all() -> None:

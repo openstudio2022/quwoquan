@@ -17,19 +17,9 @@ client_projection:
   base_class: ""
   output_path: cloud/runtime/generated/content/content_post_detail_wire_dto.g.dart
   dart_imports:
-    - package:quwoquan_app/cloud/runtime/models/article_document_wire_dto.dart
-    - content_post_detail_card_wire_dto.g.dart
+    - article_entity_mention_dto.g.dart
     - content_post_detail_circle_summary_wire_dto.g.dart
-    - content_post_detail_article_block_wire_dto.g.dart
-    - content_post_detail_article_page_wire_dto.g.dart
   fields:
-    - name: cards
-      dart_type: List<ContentPostDetailCardWireDto>
-      nullable: false
-      source: cards
-      aliases: [cards]
-      list_element_dart_class: ContentPostDetailCardWireDto
-
     - name: isOfficial
       dart_type: bool
       nullable: true
@@ -93,21 +83,34 @@ client_projection:
       aliases: [articleRenderProfile]
       default: "null"
 
-    - name: articleBlocks
-      dart_type: List<ContentPostDetailArticleBlockWireDto>
+    - name: contentVertical
+      dart_type: String
       nullable: true
-      source: articleBlocks
-      aliases: [articleBlocks]
+      source: contentVertical
+      aliases: [contentVertical, categoryId, category, vertical]
       default: "null"
-      list_element_dart_class: ContentPostDetailArticleBlockWireDto
 
-    - name: articlePages
-      dart_type: List<ContentPostDetailArticlePageWireDto>
+    - name: paperThemeMode
+      dart_type: String
       nullable: true
-      source: articlePages
-      aliases: [articlePages]
+      source: paperThemeMode
+      aliases: [paperThemeMode]
       default: "null"
-      list_element_dart_class: ContentPostDetailArticlePageWireDto
+
+    - name: paperTexture
+      dart_type: String
+      nullable: true
+      source: paperTexture
+      aliases: [paperTexture, articlePaperTexture]
+      default: "null"
+
+    - name: entityMentions
+      dart_type: List<ArticleEntityMentionDto>
+      nullable: false
+      source: entityMentions
+      aliases: [entityMentions]
+      list_element_dart_class: ArticleEntityMentionDto
+      default: "<ArticleEntityMentionDto>[]"
 
     - name: coverUrlWire
       dart_type: String

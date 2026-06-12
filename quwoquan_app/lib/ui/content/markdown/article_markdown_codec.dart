@@ -80,22 +80,22 @@ class ArticleMarkdownCodec {
           break;
         case ArticleDocumentNodeType.headingMajor:
           orderedIndex = 0;
-          _writeTextBlock(buffer, '##', node.text);
+          _writeTextBlock(buffer, '##', node.text, spans: node.spans);
           break;
         case ArticleDocumentNodeType.headingMinor:
           orderedIndex = 0;
-          _writeTextBlock(buffer, '###', node.text);
+          _writeTextBlock(buffer, '###', node.text, spans: node.spans);
           break;
         case ArticleDocumentNodeType.paragraph:
           orderedIndex = 0;
-          _writeParagraph(buffer, node.text);
+          _writeParagraph(buffer, node.text, spans: node.spans);
           break;
         case ArticleDocumentNodeType.orderedItem:
           orderedIndex += 1;
           if (node.text.trim().isNotEmpty) {
             buffer
               ..write('$orderedIndex. ')
-              ..writeln(node.text.trim())
+              ..writeln(_serializeInlineText(node.text.trim(), node.spans))
               ..writeln();
           }
           break;
@@ -104,7 +104,7 @@ class ArticleMarkdownCodec {
           if (node.text.trim().isNotEmpty) {
             buffer
               ..write('- ')
-              ..writeln(node.text.trim())
+              ..writeln(_serializeInlineText(node.text.trim(), node.spans))
               ..writeln();
           }
           break;
@@ -133,10 +133,8 @@ class ArticleMarkdownCodec {
     final parsed = const QwqMarkdownParser().parse(markdown).document;
     final mediaAssetsById = resolveArticleAssetManifestVariants(assetManifest);
     final assetsById = mediaAssetsById.map(
-      (assetId, variants) => MapEntry(
-        assetId,
-        variants.urlFor(MediaAssetVariantProfile.display),
-      ),
+      (assetId, variants) =>
+          MapEntry(assetId, variants.urlFor(MediaAssetVariantProfile.display)),
     )..removeWhere((_, url) => url.isEmpty);
     final nodes = <ArticleDocumentNode>[];
     final title = parsed.frontMatter.title.trim();
@@ -154,7 +152,8 @@ class ArticleMarkdownCodec {
     for (final block in parsed.blocks) {
       switch (block.kind) {
         case QwqMarkdownBlockKind.heading:
-          final text = block.text.trim();
+          final inline = _parseEntityInlineText(block.text);
+          final text = inline.text.trim();
           if (block.level <= 1 && text == title) {
             break;
           }
@@ -164,7 +163,8 @@ class ArticleMarkdownCodec {
               type: block.level >= 3
                   ? ArticleDocumentNodeType.headingMinor
                   : ArticleDocumentNodeType.headingMajor,
-              text: block.text,
+              text: inline.text,
+              spans: inline.spans,
             ),
           );
           break;
@@ -172,31 +172,37 @@ class ArticleMarkdownCodec {
         case QwqMarkdownBlockKind.quote:
         case QwqMarkdownBlockKind.callout:
         case QwqMarkdownBlockKind.card:
-          if (block.text.trim().isNotEmpty) {
+          final inline = _parseEntityInlineText(block.text);
+          if (inline.text.trim().isNotEmpty) {
             nodes.add(
               ArticleDocumentNode(
                 id: block.id.isNotEmpty ? block.id : 'paragraph_${seed++}',
                 type: ArticleDocumentNodeType.paragraph,
-                text: block.text,
+                text: inline.text,
+                spans: inline.spans,
               ),
             );
           }
           break;
         case QwqMarkdownBlockKind.orderedItem:
+          final inline = _parseEntityInlineText(block.text);
           nodes.add(
             ArticleDocumentNode(
               id: block.id.isNotEmpty ? block.id : 'ordered_${seed++}',
               type: ArticleDocumentNodeType.orderedItem,
-              text: block.text,
+              text: inline.text,
+              spans: inline.spans,
             ),
           );
           break;
         case QwqMarkdownBlockKind.bulletItem:
+          final inline = _parseEntityInlineText(block.text);
           nodes.add(
             ArticleDocumentNode(
               id: block.id.isNotEmpty ? block.id : 'bullet_${seed++}',
               type: ArticleDocumentNodeType.bulletItem,
-              text: block.text,
+              text: inline.text,
+              spans: inline.spans,
             ),
           );
           break;
@@ -242,6 +248,44 @@ class ArticleMarkdownCodec {
         orElse: () => ArticleDocumentTitleStyle.major,
       ),
     );
+  }
+
+  static _EntityInlineParseResult _parseEntityInlineText(String source) {
+    final pattern = RegExp(r'@\[(.+?)\]\(entity:([A-Za-z0-9_/-]+)\)');
+    final buffer = StringBuffer();
+    final spans = <ArticleInlineSpan>[];
+    var cursor = 0;
+    for (final match in pattern.allMatches(source)) {
+      buffer.write(source.substring(cursor, match.start));
+      final label = match.group(1) ?? '';
+      final target = match.group(2) ?? '';
+      final targetParts = target.split('/');
+      final targetType = targetParts.isNotEmpty ? targetParts.first : '';
+      final targetId = targetParts.length > 1
+          ? targetParts.sublist(1).join('/')
+          : '';
+      final start = buffer.length;
+      buffer.write(label);
+      final end = buffer.length;
+      if (label.isNotEmpty && targetType.isNotEmpty && targetId.isNotEmpty) {
+        spans.add(
+          ArticleInlineSpan(
+            start: start,
+            end: end,
+            kind: 'entity',
+            targetType: targetType,
+            targetId: targetId,
+            displayText: label,
+          ),
+        );
+      }
+      cursor = match.end;
+    }
+    if (cursor == 0) {
+      return _EntityInlineParseResult(text: source, spans: const []);
+    }
+    buffer.write(source.substring(cursor));
+    return _EntityInlineParseResult(text: buffer.toString(), spans: spans);
   }
 
   static Map<String, String> resolveArticleAssetManifestUrls(
@@ -296,25 +340,62 @@ class ArticleMarkdownCodec {
     return trimmed;
   }
 
-  static void _writeTextBlock(StringBuffer buffer, String marker, String text) {
+  static void _writeTextBlock(
+    StringBuffer buffer,
+    String marker,
+    String text, {
+    List<ArticleInlineSpan> spans = const <ArticleInlineSpan>[],
+  }) {
     final value = text.trim();
     if (value.isEmpty) {
       return;
     }
     buffer
       ..write('$marker ')
-      ..writeln(value)
+      ..writeln(_serializeInlineText(value, spans))
       ..writeln();
   }
 
-  static void _writeParagraph(StringBuffer buffer, String text) {
+  static void _writeParagraph(
+    StringBuffer buffer,
+    String text, {
+    List<ArticleInlineSpan> spans = const <ArticleInlineSpan>[],
+  }) {
     final value = text.trim();
     if (value.isEmpty) {
       return;
     }
     buffer
-      ..writeln(value)
+      ..writeln(_serializeInlineText(value, spans))
       ..writeln();
+  }
+
+  static String _serializeInlineText(
+    String text,
+    List<ArticleInlineSpan> spans,
+  ) {
+    final entitySpans = spans.where((span) => span.isEntity).toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+    if (entitySpans.isEmpty) return text;
+    final buffer = StringBuffer();
+    var cursor = 0;
+    for (final span in entitySpans) {
+      final start = span.start.clamp(0, text.length);
+      final end = span.end.clamp(start, text.length);
+      if (start < cursor) continue;
+      buffer.write(text.substring(cursor, start));
+      final label = (span.displayText ?? text.substring(start, end)).trim();
+      final targetType = span.targetType?.trim() ?? '';
+      final targetId = span.targetId?.trim() ?? '';
+      if (label.isEmpty || targetType.isEmpty || targetId.isEmpty) {
+        buffer.write(text.substring(start, end));
+      } else {
+        buffer.write('@[$label](entity:$targetType/$targetId)');
+      }
+      cursor = end;
+    }
+    buffer.write(text.substring(cursor));
+    return buffer.toString();
   }
 
   static void _writeFigure(
@@ -348,4 +429,11 @@ class ArticleMarkdownCodec {
   static String _escapeAttribute(String value) {
     return value.replaceAll('"', '\\"');
   }
+}
+
+class _EntityInlineParseResult {
+  const _EntityInlineParseResult({required this.text, required this.spans});
+
+  final String text;
+  final List<ArticleInlineSpan> spans;
 }

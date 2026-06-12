@@ -1,0 +1,57 @@
+version: 1
+read_model: WorkBrowserMediaItem
+description: |
+  Work Browser 统一媒体序列单元（Post.mediaItems 元素的端侧投影）。
+  kind 闭集：image | video。视频集（一个作品多段视频）由该序列表达，
+  禁止端侧按同作者从队列临时拼集合。
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: WorkBrowserMediaItemDto
+  base_class: ""
+  output_path: cloud/runtime/generated/content/work_browser_media_item_dto.g.dart
+  fields:
+    - name: kind
+      dart_type: String
+      nullable: false
+      source: kind
+      aliases: [kind, type]
+      default: "''"
+    - name: url
+      dart_type: String
+      nullable: false
+      source: url
+      aliases: [url, videoUrl, imageUrl]
+      default: "''"
+    - name: coverUrl
+      dart_type: String
+      nullable: true
+      source: coverUrl
+      aliases: [coverUrl, thumbnailUrl]
+      default: "null"
+    - name: durationMs
+      dart_type: int
+      nullable: true
+      source: durationMs
+      aliases: [durationMs, duration_ms]
+      default: "null"
+    - name: width
+      dart_type: int
+      nullable: true
+      source: width
+      aliases: [width]
+      default: "null"
+    - name: height
+      dart_type: int
+      nullable: true
+      source: height
+      aliases: [height]
+      default: "null"
+    - name: title
+      dart_type: String
+      nullable: true
+      source: title
+      aliases: [title]
+      default: "null"

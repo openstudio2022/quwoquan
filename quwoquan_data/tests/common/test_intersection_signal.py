@@ -2,7 +2,7 @@
 
 覆盖：
 - 契约字段对齐：hint 字段集 ⊆ intersection_reason.yaml 的 client_projection.fields。
-- build_intersection_hints：entityRefs→content、Topic tag→interest、region→location。
+- build_intersection_hints：entityRefs→content、非地理 tag→interest、region→location。
 - 完备性门：缺维度/不足条数/枚举非法/锚点悬空/off-contract 字段均报。
 - materialize 端到端：产出 manifest.intersectionHints 且完备性门全绿。
 
@@ -42,7 +42,7 @@ from produce.materialize import materialize_posts  # noqa: E402
 
 _MANIFEST = {
     "entityRefs": ["/entity/地点/景区/九寨沟"],
-    "tagRefs": ["Topic/旅行/景区", "Format/内容角度/攻略"],
+    "tagRefs": ["主题/山水风光", "Format/内容角度/攻略"],
     "conditionContext": {"region": "四川"},
 }
 
@@ -61,7 +61,7 @@ def test_build_hints_covers_content_interest_location():
 
 
 def test_missing_interest_dimension_flagged():
-    manifest = {"entityRefs": ["/entity/地点/景区/九寨沟"], "tagRefs": ["Format/内容角度/攻略"]}
+    manifest = {"entityRefs": ["/entity/地点/景区/九寨沟"], "tagRefs": ["地理/行政区/四川省"]}
     hints = build_intersection_hints(manifest)
     issues = intersection_hint_issues(hints, manifest)
     assert any("dimension missing: interest" in i for i in issues), issues
@@ -113,7 +113,7 @@ def _seed_and_materialize() -> Path:
             "publishTitle": "九寨沟看水攻略",
             "carrier": "article",
             "entityRefs": ["/entity/地点/景区/九寨沟"],
-            "tagRefs": ["Topic/旅行/景区", "Format/内容角度/攻略"],
+            "tagRefs": ["主题/山水风光", "Format/内容角度/攻略"],
             "conditionContext": {"region": "四川"},
             "assets": [],
         },

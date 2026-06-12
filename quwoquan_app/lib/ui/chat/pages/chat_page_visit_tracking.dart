@@ -20,7 +20,9 @@ mixin ChatPageVisitTrackingMixin<T extends ConsumerStatefulWidget>
   }
 
   void recordChatPageVisit() {
-    ref.read(visitRecorderServiceProvider).recordVisit(
+    ref
+        .read(visitRecorderServiceProvider)
+        .recordVisit(
           VisitTarget.page(
             _chatPageVisitTargetId(chatPageMainTabIndex, chatPageSubTabIndex),
           ),
@@ -34,31 +36,31 @@ mixin ChatPageVisitTrackingMixin<T extends ConsumerStatefulWidget>
     return mainTabIndex == 0
         ? switch (subTabIndex) {
             0 => 'chat_messages_all',
-            1 => 'chat_messages_at_me',
-            2 => 'chat_messages_at_xiaoqu',
-            3 => 'chat_messages_unread',
-            _ => 'chat_messages_reminders',
+            1 => 'chat_messages_unread',
+            2 => 'chat_messages_group',
+            3 => 'chat_messages_direct',
+            _ => 'chat_messages_notification',
           }
         : switch (subTabIndex) {
             0 => 'chat_contacts_all',
-            1 => 'chat_contacts_circles',
-            2 => 'chat_contacts_mutual',
+            1 => 'chat_contacts_mutual',
+            2 => 'chat_contacts_circles',
             _ => 'chat_contacts_groups',
           };
   }
 
   static const List<String> _messageSubTabs = [
     UITextConstants.contactsTabAll,
-    UITextConstants.atMe,
-    UITextConstants.atXiaoqu,
     UITextConstants.unread,
-    UITextConstants.reminders,
+    UITextConstants.groupChat,
+    UITextConstants.chatPrivateMessages,
+    UITextConstants.chatNotifications,
   ];
 
   static const List<String> _contactsSubTabs = [
     UITextConstants.contactsTabAll,
-    UITextConstants.contactsTabCircles,
     UITextConstants.contactsTabMutualFollow,
-    UITextConstants.contactsTabFunGroup,
+    UITextConstants.contactsTabCircles,
+    UITextConstants.contactsTabGroups,
   ];
 }

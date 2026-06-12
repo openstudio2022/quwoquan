@@ -107,7 +107,15 @@ def test_completion_status_done_vs_pending():
     _prepare(refs)
     write_placeholder_draft(TASK, BATCH, "九寨沟")
     write_agent_draft(
-        TASK, BATCH, "都江堰", "# 都江堰\n\n正文。", model="cursor-agent", cited_source_paths=[], covered_facts=[]
+        TASK,
+        BATCH,
+        "都江堰",
+        "# 都江堰\n\n正文。",
+        model="cursor-agent",
+        cited_source_paths=[],
+        covered_facts=[],
+        agent_run_id="run-dujiangyan",
+        agent_id="agent-dujiangyan",
     )
     status = batch_completion_status(TASK, BATCH, refs)
     assert status["done"] == ["都江堰"]

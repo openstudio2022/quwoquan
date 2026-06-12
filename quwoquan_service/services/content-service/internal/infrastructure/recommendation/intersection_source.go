@@ -136,6 +136,12 @@ func (s *MongoIntersectionSource) ObjectReasons(ctx context.Context, viewerID, o
 		reasons = append(reasons, relReason)
 	}
 
+	kind := objectKindForObjectType(objectType)
+	for i := range reasons {
+		if reasons[i].ObjectKind == "" {
+			reasons[i].ObjectKind = kind
+		}
+	}
 	return reasons, nil
 }
 
@@ -498,5 +504,23 @@ func relationActionType(objectType string) string {
 		return "view_object"
 	default:
 		return "open_profile"
+	}
+}
+
+// objectKindForObjectType 将开放 objectType 收口到闭集 objectKind（人/圈/校/地/企角标真相源）。
+func objectKindForObjectType(objectType string) string {
+	switch strings.TrimSpace(objectType) {
+	case "user", "person":
+		return "person"
+	case "circle":
+		return "circle"
+	case "university", "school":
+		return "school"
+	case "sight", "travel_photo", "place", "entity", "homepage":
+		return "place"
+	case "brand", "enterprise", "company":
+		return "enterprise"
+	default:
+		return ""
 	}
 }

@@ -316,14 +316,17 @@ class _HomePageState extends ConsumerState<HomePage>
   /// 发现交集对象卡跳转：按对象类型路由到对应对象/聚合页。
   /// 路由全部来自 metadata codegen（[AppRoutePaths]），不在此硬编码 path。
   void _openIntersectionObject(IntersectionReason reason) {
-    final targetId = reason.actionTargetId.trim();
-    if (targetId.isEmpty) return;
+    final actionTargetId = reason.actionTargetId.trim();
+    final entityTargetId = reason.relationObjectId.trim().isNotEmpty
+        ? reason.relationObjectId.trim()
+        : actionTargetId;
+    if (actionTargetId.isEmpty && entityTargetId.isEmpty) return;
     // 交集漏斗归因（点击）：携带 intersectionId/dimension/class，闭合曝光→点击→转化。
     if (reason.intersectionId.isNotEmpty) {
       ref
           .read(contentBehaviorTrackerProvider)
           .trackClick(
-            targetId,
+            actionTargetId.isEmpty ? entityTargetId : actionTargetId,
             referralSource: ReferralSource.organicFeed,
             intersectionId: reason.intersectionId,
             intersectionDimension: reason.dimension,
@@ -331,15 +334,23 @@ class _HomePageState extends ConsumerState<HomePage>
             intersectionTagRefs: reason.tagRefs,
           );
     }
-    final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);
+    final kind = UnifiedObjectKind.resolve(
+      objectKind: reason.objectKind,
+      relationKind: reason.relationKind,
+    );
     switch (kind) {
       case UnifiedObjectKind.person:
-        context.push(AppRoutePaths.userProfile(username: targetId));
+        if (actionTargetId.isNotEmpty) {
+          context.push(AppRoutePaths.userProfile(username: actionTargetId));
+        }
       case UnifiedObjectKind.circle:
-        context.push(AppRoutePaths.circleDetail(id: targetId));
+        if (actionTargetId.isNotEmpty) {
+          context.push(AppRoutePaths.circleDetail(id: actionTargetId));
+        }
       case UnifiedObjectKind.place:
-      case UnifiedObjectKind.org:
-        context.push(AppRoutePaths.homepageDetail(id: targetId));
+      case UnifiedObjectKind.school:
+      case UnifiedObjectKind.enterprise:
+        context.push(AppRoutePaths.homepageDetail(id: entityTargetId));
     }
   }
 

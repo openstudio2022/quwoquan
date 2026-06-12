@@ -155,6 +155,69 @@ def _entity_condition_profile(entity_ref: str) -> dict[str, Any] | None:
     return None
 
 
+def hydrate_entity_condition_context(brief: dict[str, Any]) -> dict[str, Any]:
+    """为缺失 conditionContext 的实体 brief 自动回填实体条件画像。
+
+    content_plan checkpoint 下的 agent brief 可能只写标题/事实/主线，不携带
+    `conditionContext`。对实体内容而言，这会让后续 writing_pack/prompt/materialize
+    丢失由实体主页产出的 region/season/altitude 条件，从而把本应由代码补齐的地域授权
+    误判成作者正文问题。
+
+    这里按实体画像主值补齐：
+    - `conditionContext.entityProfile`
+    - 顶层 `conditionContext.region/season`（供 prompt 与 manifest 授权消费）
+    """
+    refs = [str(r) for r in (brief.get("entityRefs") or []) if r]
+    if not refs:
+        return dict(brief)
+
+    raw_context = brief.get("conditionContext")
+    if raw_context is None:
+        context: dict[str, Any] = {}
+    elif isinstance(raw_context, dict):
+        context = dict(raw_context)
+    else:
+        return dict(brief)
+
+    profile = _entity_condition_profile(refs[0])
+    if not isinstance(profile, dict):
+        return dict(brief)
+
+    changed = False
+    regions = [str(v) for v in (profile.get("regions") or []) if v]
+    seasons = [str(v) for v in (profile.get("seasons") or []) if v]
+    if "entityProfile" not in context:
+        context["entityProfile"] = {
+            "entityRef": refs[0],
+            "regions": regions,
+            "seasons": seasons,
+            "altitudeMeters": profile.get("altitudeMeters"),
+            "notes": profile.get("notes"),
+            "conditionSource": "entityConditionProfile",
+        }
+        changed = True
+    if regions and not context.get("region"):
+        context["region"] = {
+            "name": regions[0],
+            "label": regions[0],
+            "source": "entityProfile",
+        }
+        changed = True
+    if seasons and not context.get("season"):
+        context["season"] = {
+            "name": seasons[0],
+            "label": seasons[0],
+            "source": "entityProfile",
+        }
+        changed = True
+
+    if not changed and raw_context is not None:
+        return dict(brief)
+    merged = dict(brief)
+    merged["conditionContext"] = context
+    return merged
+
+
 def _resolve_condition(
     registry: TemplateRegistry,
     blueprint: dict[str, Any],

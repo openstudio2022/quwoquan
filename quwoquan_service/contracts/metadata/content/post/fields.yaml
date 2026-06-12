@@ -138,6 +138,18 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: mediaItems
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: |
+          统一媒体序列（Work Browser 真相源）：[{kind:image|video, url, coverUrl?, durationMs?, width?, height?, title?}]。
+          视频集（一个作品多段视频）唯一契约表达；禁止端侧按同作者从队列临时拼集合。
+          为空时端按 mediaUrls/videoUrl 派生单一序列。
+
       - name: coverUrl
         type: string
         constraints: [NULLABLE]
@@ -146,17 +158,6 @@ entities:
         api_exposure: read_write
         ops_exposure: read
         description: 作者显式设置的文章封面；分发卡与阅读器扉页共享同一真相源
-
-      - name: articleDocument
-        type: object
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: internal
-        ops_exposure: internal
-        description: |
-          已废弃的旧文章显示快照。当前应用尚未正式上线，不提供兼容读取、
-          兼容转换、双写或回滚语义；新长文唯一持久化真相源是 articleMarkdown。
 
       - name: articleMarkdown
         type: string
@@ -202,7 +203,31 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: 模板、字体、版心能力与 wrap/gallery 小屏降级策略
+        description: |
+          文章渲染画像。Work Browser V1.0 消费字段：
+          template/fontPreset、paperThemeMode(system|manual)、paperTexture
+          (darkPaper|coolGray|warmBlack|inkGreen|deepBrown)、contentVertical
+          (photography|travel|history|tech|nature)。
+          旧模板只保留为版心/排版气质输入，不再决定浏览器默认纸张亮度。
+
+      - name: contentVertical
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: "内容垂类：photography/travel/history/tech/nature 等；Work Browser 文章纸张系统适配的唯一垂类输入。"
+
+      - name: entityMentions
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: "文章行内实体标签列表 [{subjectType,subjectId,displayName,rangeStart,rangeEnd}]，由 QWQ Rich Markdown 派生。"
 
       - name: articleTemplate
         type: enum

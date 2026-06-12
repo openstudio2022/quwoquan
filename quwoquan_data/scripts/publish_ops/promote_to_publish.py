@@ -18,6 +18,7 @@ from __future__ import annotations
 
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -38,8 +39,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.article_package import infer_format_angle  # noqa: E402
 from _common.paths import (  # noqa: E402
     PUBLISH_ROOT,
-    NOW_ISO,
     batch_root,
+    now_iso,
     publish_data,
     publish_meta_path,
     release_root,
@@ -91,6 +92,43 @@ def _copy_post_tree(src: Path, dst: Path) -> None:
         dst,
         ignore=lambda _dir, names: [n for n in names if n in _PROCESS_STAGE_DIRS],
     )
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _manifest_published_at(manifest_path: Path) -> str | None:
+    if not manifest_path.is_file():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    value = str(manifest.get("publishedAt") or "").strip()
+    return value or None
+
+
+def _load_existing_published_at(
+    pd_root: Path,
+    content_type: str,
+    angle: str,
+    title: str,
+    seq: int,
+) -> str | None:
+    direct = _manifest_published_at(_publish_post_dir(pd_root, content_type, angle, title, seq) / "manifest.json")
+    if direct:
+        return direct
+    type_root = pd_root / "posts" / content_type
+    if not type_root.is_dir():
+        return None
+    for angle_dir in type_root.iterdir():
+        if not angle_dir.is_dir():
+            continue
+        published_at = _manifest_published_at(angle_dir / title / str(seq) / "manifest.json")
+        if published_at:
+            return published_at
+    return None
 
 
 def _resolve_publish_target(manifest: dict, src_name: str) -> tuple[str, str, str, int]:
@@ -158,8 +196,16 @@ def promote_from_posts_root(posts_root: Path, dry_run: bool) -> tuple[int, int]:
         if dry_run:
             print(f"[promote] would copy {topic_dir} -> {dst}")
         else:
+            published_at = _load_existing_published_at(
+                pd.root,
+                resolved_type or content_type,
+                angle,
+                title,
+                seq,
+            ) or _now_iso()
             _remove_stale_publish_post(pd.root, resolved_type or content_type, title, seq, angle)
             _copy_post_tree(topic_dir, dst)
+            verdict.manifest["publishedAt"] = published_at
             verdict.write_into(dst)
         count += 1
 
@@ -240,8 +286,8 @@ def main() -> None:
 
     meta = {
         "schemaVersion": "quwoquan.publish.meta",
-        "publishedAt": NOW_ISO,
-        "lastPromote": NOW_ISO,
+        "publishedAt": now_iso(),
+        "lastPromote": now_iso(),
         "lastShip": None,
     }
     if args.release_id:

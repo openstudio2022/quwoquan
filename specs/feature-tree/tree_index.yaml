@@ -246,6 +246,56 @@ features:
               domain: ""
               status: specified
               tags: []
+        - id: commercial-message-system
+          name: commercial-message-system
+          level: L2_business_capability
+          path: chat-conversation/commercial-message-system
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: message-home-commercial-ia
+              name: message-home-commercial-ia
+              level: L3_story
+              path: chat-conversation/commercial-message-system/message-home-commercial-ia
+              domain: ""
+              status: specified
+              tags: []
+            - id: contact-home-commercial-ia
+              name: contact-home-commercial-ia
+              level: L3_story
+              path: chat-conversation/commercial-message-system/contact-home-commercial-ia
+              domain: ""
+              status: specified
+              tags: []
+            - id: message-home-filter-contract
+              name: message-home-filter-contract
+              level: L3_story
+              path: chat-conversation/commercial-message-system/message-home-filter-contract
+              domain: ""
+              status: specified
+              tags: []
+            - id: contact-home-relationship-projection
+              name: contact-home-relationship-projection
+              level: L3_story
+              path: chat-conversation/commercial-message-system/contact-home-relationship-projection
+              domain: ""
+              status: specified
+              tags: []
+            - id: group-home-chat-info-contract
+              name: group-home-chat-info-contract
+              level: L3_story
+              path: chat-conversation/commercial-message-system/group-home-chat-info-contract
+              domain: ""
+              status: specified
+              tags: []
+            - id: commercial-remote-only-message-system
+              name: commercial-remote-only-message-system
+              level: L3_story
+              path: chat-conversation/commercial-message-system/commercial-remote-only-message-system
+              domain: ""
+              status: specified
+              tags: []
         - id: group-creation-member-management
           name: group-creation-member-management
           level: L2_business_capability

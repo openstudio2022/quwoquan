@@ -80,15 +80,6 @@ class AppRoutePaths {
   }
   static const String circleStatsSegment = 'stats';
 
-  static const String articleDetailPathTemplate = '/article/{id}';
-  static String articleDetail({required String id}) {
-    return _buildPath(articleDetailPathTemplate, <String, String>{
-      'id': id,
-    }, <String, String?>{
-    });
-  }
-  static const String articleDetailSegment = '{id}';
-
   static const String userProfilePathTemplate = '/user/{username}';
   static String userProfile({required String username}) {
     return _buildPath(userProfilePathTemplate, <String, String>{
@@ -98,24 +89,17 @@ class AppRoutePaths {
   }
   static const String userProfileSegment = '{username}';
 
-  static const String mediaViewerPathTemplate = '/media-viewer/{category}/{index}';
-  static String mediaViewer({required String category, required String index}) {
-    return _buildPath(mediaViewerPathTemplate, <String, String>{
-      'category': category,
-      'index': index,
+  static const String workBrowserPathTemplate = '/works/browser/{workId}';
+  static String workBrowser({required String workId, String? filter, String? source, String? index}) {
+    return _buildPath(workBrowserPathTemplate, <String, String>{
+      'workId': workId,
     }, <String, String?>{
+      'filter': filter,
+      'source': source,
+      'index': index,
     });
   }
-  static const String mediaViewerSegment = '{index}';
-
-  static const String videoViewerPathTemplate = '/video-viewer/{index}';
-  static String videoViewer({required String index}) {
-    return _buildPath(videoViewerPathTemplate, <String, String>{
-      'index': index,
-    }, <String, String?>{
-    });
-  }
-  static const String videoViewerSegment = '{index}';
+  static const String workBrowserSegment = '{workId}';
 
   static const String assistant = '/assistant';
   static const String assistantSegment = 'assistant';

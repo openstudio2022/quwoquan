@@ -1,0 +1,39 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/成都平原/景区/四川三景点真实并发实跑
+title: 成都平原景区四川三景点真实并发实跑
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 成都平原
+entityCategory: 景区
+parentTaskId: null
+status: draft
+scope:
+  region: 成都平原
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 都江堰
+provenance:
+  createdAt: '2026-06-11T14:05:46.802263+00:00'
+  createdBy: task run --mode fanout
+content:
+  angles:
+  - 攻略
+  audiences:
+  - leisureTraveler
+  - familyTraveler
+  - selfDriveTraveler
+  carriers:
+  - article
+  - gallery
+  quotas:
+    entityArticles: 1
+    galleryPosts: 1
+  conditionAxes:
+    seasons:
+    - 春
+    - 夏
+    - 秋
+    - 冬

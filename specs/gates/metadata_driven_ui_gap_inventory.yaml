@@ -52,7 +52,7 @@ policy:
     - quwoquan_app/lib/ui/content/post_view_projection.dart
     - quwoquan_app/lib/ui/circle/services/home_circles_hub_wire.dart
   non_assistant_weak_typing_p1_tranche_note: |
-    里程碑「ContentRepository / UserProfileRepository 对外全 DTO 化」已完成：ContentPostDetailWireDto 嵌套子 projection（cards、circleSummaries、articleDocument、articleBlocks、articlePages）、
+    里程碑「ContentRepository / UserProfileRepository 对外全 DTO 化」已完成：ContentPostDetailWireDto 嵌套子 projection（cards、circleSummaries）、
     ContentPostDetailPayload.mergedArticleWireMap、ContentAppConfigWire.wireRoot；Mock/Remote 仓库以 wire DTO / PostBaseDto / CommentDto 为会话态，profile ViewData.fromMap 已标 Deprecated。
     存量弱类型边界见各 Repository 类注释与 HTTP decode 窄区间（session_c §1.1）。
   non_assistant_weak_typing_p3_tranche_note: |
@@ -108,8 +108,8 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/chat/pages/chat_page.dart
         status: compliant
-        note: 趣聊 ChatInboxDto；联系人 Tab FutureProvider + ChatContactsRow；listContacts 用 Prototype 对齐 ChatContactRowDto
-        target_dto: ChatInboxDto
+        note: 商用消息体系入口；消息页消费 MessageHomeRowDto/ListMessageHome 与 AppMessage/notification inbox，联系页消费 ContactHomeRowDto/ListContactHome/交集摘要 read model；App 不在 UI/Provider 拼来源、交集、成员数或最近互动；会话已读后统一失效全部消息筛选引用，Mock 仅为 contract fixture
+        target_dto: MessageHomeRowDto
       - path: quwoquan_app/lib/ui/chat/pages/chat_detail_page.dart
         status: compliant
         note: 委托 ChatConversationPage；消息链路与子页一致，ListMessages 已为 ChatMessageDto
@@ -120,8 +120,8 @@ domains:
         target_dto: ChatMessageDto
       - path: quwoquan_app/lib/ui/chat/pages/chat_settings_page.dart
         status: compliant
-        note: 成员 ChatConversationMemberDto；群开关 ChatGroupSettingsDto；群名 updateConversationTitle
-        target_dto: ChatConversationMemberDto
+        note: 群主页 GroupHomeDto/GetGroupHome 承载来源、公告、成员数与能力；成员 ChatConversationMemberDto；群开关 ChatGroupSettingsDto；群名 updateConversationTitle
+        target_dto: GroupHomeDto
       - path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
         status: compliant
         note: 收件箱 circleId + ChatConversationCreatedDto；群/圈选择 ChatInboxDto/CircleDto；成员 ChatConversationMemberDto + 页面 ViewModel；圈成员 wire 仅在 Repository 边界 parse
@@ -176,28 +176,16 @@ domains:
         target_dto: PostBaseDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
-      - path: quwoquan_app/lib/ui/content/pages/article_detail_page.dart
-        status: compliant
-        note: getPost 后 PostReadUiBundle(PostReadSurfaceId.detailArticle, wireForArticleProjection) + projectArticleDetailView 同 wire
-        target_dto: PostBaseDto
-        target_read_projection: PostReadPresentation
-        target_edit_draft: N/A
-      - path: quwoquan_app/lib/ui/content/pages/photo_detail_page.dart
-        status: compliant
-        note: PostSummaryView.fromDto(..., PostReadSurfaceId.detailPhoto)
-        target_dto: PostBaseDto
-        target_read_projection: PostReadPresentation
-        target_edit_draft: N/A
-      - path: quwoquan_app/lib/ui/content/pages/video_detail_page.dart
-        status: compliant
-        note: PostSummaryView.fromDto(..., PostReadSurfaceId.detailVideo)
-        target_dto: PostBaseDto
-        target_read_projection: PostReadPresentation
-        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/content/pages/unified_media_viewer_page.dart
         status: compliant
         note: 薄壳→WorksImmersiveViewer；posts 上 readPresentation + rawPostsById wire；P6 仍 exempt，P2 语义见页面 doc 与 post_projection_spec §2
         target_dto: PostBaseDto
+        target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
+      - path: quwoquan_app/lib/ui/content/pages/work_browser_entry_page.dart
+        status: compliant
+        note: workBrowser 统一深链入口；无 extra 时经 ContentRepository 拉取/定位队列，有 extra 时复用 WorkBrowserItemDto/PostReadPresentation 沉浸壳。
+        target_dto: WorkBrowserItemDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/content/entry/pages/create_page.dart
@@ -208,7 +196,7 @@ domains:
         target_edit_draft: ContentPublishDraftComposite
       - path: quwoquan_app/lib/ui/content/entry/pages/article_typography_page.dart
         status: compliant
-        note: 导航标题/投影与 postReadPreviewBundleFromCreateEditorState（draftPreview）对齐；书页仍 articleDocument 分页
+        note: 导航标题/投影与 postReadPreviewBundleFromCreateEditorState（draftPreview）对齐；编辑器内存文档仍由 ArticleDocumentData 分页
         target_dto: ContentPublishDraftComposite
         target_read_projection: PostReadPresentation
         target_edit_draft: ContentPublishDraftComposite

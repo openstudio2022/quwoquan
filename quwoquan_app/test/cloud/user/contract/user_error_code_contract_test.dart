@@ -24,7 +24,7 @@ void main() {
     });
 
     test('user/**/errors.yaml 聚合错误码均已覆盖', () {
-      expect(UserErrorCode.values.length, 41);
+      expect(UserErrorCode.values.length, 42);
       expect(
         UserErrorCode.contactDiscoveryRateLimited.code,
         'USER.CONTACT.rate_limited',

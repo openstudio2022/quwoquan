@@ -52,9 +52,15 @@ func samplePosts() []PostDoc {
 					{AssetID: "cover", ObjectKey: "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", CDNURL: "https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", Sha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 				},
 			},
-			SourceTaskId:         "旅行/环线/川西环线/川西大环线自驾"},
+			SourceTaskId: "旅行/环线/川西环线/川西大环线自驾",
+			CreatedAt:    time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC),
+			UpdatedAt:    time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC),
+			PublishedAt:  time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)},
 		{PostRef: "posts/article/攻略/色达攻略/1", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
-			EntityRefs: []string{"地点/景区/色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444"},
+			EntityRefs: []string{"地点/景区/色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+			CreatedAt: time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
+			UpdatedAt: time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
+			PublishedAt: time.Date(2026, 4, 2, 8, 0, 0, 0, time.UTC)},
 	}
 }
 
@@ -104,6 +110,7 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 		SourceTaskId         string         `bson:"sourceTaskId"`
 		CreatedAt            time.Time      `bson:"createdAt"`
 		UpdatedAt            time.Time      `bson:"updatedAt"`
+		PublishedAt          time.Time      `bson:"publishedAt"`
 	}
 	if err := coll.FindOne(ctx, bson.M{"postRef": "posts/article/体验/甲居藏寨体验/1"}).Decode(&got); err != nil {
 		t.Fatal(err)
@@ -141,6 +148,15 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	if got.CreatedAt.IsZero() || got.UpdatedAt.IsZero() {
 		t.Fatalf("createdAt/updatedAt must be set: %+v", got)
 	}
+	if !got.CreatedAt.Equal(time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("createdAt must come from manifest fact: %+v", got.CreatedAt)
+	}
+	if !got.UpdatedAt.Equal(time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("updatedAt must come from manifest fact: %+v", got.UpdatedAt)
+	}
+	if !got.PublishedAt.Equal(time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("publishedAt must come from manifest fact: %+v", got.PublishedAt)
+	}
 }
 
 func TestMongoUpsertIsIdempotent(t *testing.T) {
@@ -163,7 +179,7 @@ func TestMongoUpsertIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 重跑同一批（更晚时间）：文档数不变；createdAt 不变；updatedAt 刷新。
+	// 重跑同一批（更晚时间）但内容未变：文档数不变；三类时间事实都保持 manifest 真值。
 	t2 := t1.Add(2 * time.Second)
 	if _, err := UpsertPosts(ctx, coll, samplePosts(), t2); err != nil {
 		t.Fatal(err)
@@ -182,8 +198,35 @@ func TestMongoUpsertIsIdempotent(t *testing.T) {
 	if !second.CreatedAt.Equal(first.CreatedAt) {
 		t.Fatalf("createdAt must be stable: %v vs %v", first.CreatedAt, second.CreatedAt)
 	}
-	if !second.UpdatedAt.After(first.UpdatedAt) {
-		t.Fatalf("updatedAt must advance: %v -> %v", first.UpdatedAt, second.UpdatedAt)
+	if !second.UpdatedAt.Equal(first.UpdatedAt) {
+		t.Fatalf("updatedAt must stay on manifest fact on unchanged re-run: %v -> %v", first.UpdatedAt, second.UpdatedAt)
+	}
+
+	// 内容发生实质变更时，只有上游 manifest.updatedAt 变化才应反映到运行库；
+	// importer 不再用导入时刻自行推进更新时间。
+	t3 := t2.Add(2 * time.Second)
+	changed := samplePosts()
+	changed[1].ArticleMarkdown = "# 色达攻略\n新增更新段落\n"
+	changed[1].UpdatedAt = time.Date(2026, 4, 5, 8, 0, 0, 0, time.UTC)
+	if _, err := UpsertPosts(ctx, coll, changed, t3); err != nil {
+		t.Fatal(err)
+	}
+	var third struct {
+		CreatedAt time.Time `bson:"createdAt"`
+		UpdatedAt time.Time `bson:"updatedAt"`
+		PublishedAt time.Time `bson:"publishedAt"`
+	}
+	if err := coll.FindOne(ctx, filter).Decode(&third); err != nil {
+		t.Fatal(err)
+	}
+	if !third.CreatedAt.Equal(first.CreatedAt) {
+		t.Fatalf("createdAt must stay stable across content change: %v vs %v", first.CreatedAt, third.CreatedAt)
+	}
+	if !third.UpdatedAt.Equal(time.Date(2026, 4, 5, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("updatedAt must track manifest fact when content changes: %v", third.UpdatedAt)
+	}
+	if !third.PublishedAt.Equal(time.Date(2026, 4, 2, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("publishedAt must stay on first public time: %v", third.PublishedAt)
 	}
 }
 

@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 
@@ -25,7 +26,13 @@ TASKS_ROOT = RUNTIME_ROOT / "tasks"
 # committed 任务规格根（受版本控制；与 runtime/tasks 同 taskId 对应）
 COMMITTED_TASKS_ROOT = Path(os.environ.get("QWQ_COMMITTED_TASKS_ROOT", DATA_ROOT / "tasks"))
 COMMANDS = ("explore", "build", "download", "produce", "publish")
-NOW_ISO = "2026-05-15T00:00:00+08:00"
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+NOW_ISO = now_iso()
 TASK_SHARED_LEDGER_FILENAMES = (
     "catalog.ndjson",
     "dedup_ledger.json",
@@ -273,6 +280,11 @@ def fanout_dispatch_state_path(plan_id: str) -> Path:
 
 def fanout_rollup_path(plan_id: str) -> Path:
     return fanout_plan_dir(plan_id) / "rollup.json"
+
+
+def fanout_run_matrix_path(plan_id: str) -> Path:
+    """fanout 运行矩阵：每个 ref/worker/orchestrator 的运行证据账本。"""
+    return fanout_plan_dir(plan_id) / "run_matrix.json"
 
 
 # ─── publish 同构（单一主线）─────────────────────────────────────

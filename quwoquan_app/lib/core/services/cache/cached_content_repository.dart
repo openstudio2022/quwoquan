@@ -145,8 +145,10 @@ class CachedContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> deletePost({required String postId}) {
-    return _delegate.deletePost(postId: postId);
+  Future<void> deletePost({required String postId}) async {
+    await _delegate.deletePost(postId: postId);
+    _postCache.removePost(postId);
+    _querySnapshotStore.invalidatePost(postId);
   }
 
   @override

@@ -300,10 +300,6 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                   )
                   .toList(growable: false),
             ),
-            SizedBox(height: AppSpacing.containerSm),
-            _HomepageStatsRow(stats: stats),
-            _buildIntersectionCard(isDark),
-            _buildRelationRibbon(isDark),
             if (!widget.selectionMode) ...<Widget>[
               SizedBox(height: AppSpacing.containerSm),
               _HomepageActionBar(
@@ -316,6 +312,72 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                 onCreateContent: _handlePrimaryAction,
               ),
             ],
+            SizedBox(height: AppSpacing.containerSm),
+            _buildIntersectionCard(isDark),
+            _buildEntityIntroCard(context),
+            _buildRelationRibbon(isDark),
+            SizedBox(height: AppSpacing.containerSm),
+            _HomepageStatsRow(stats: stats),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEntityIntroCard(BuildContext context) {
+    final intro = <String>[
+      if ((_reference?.subtitle ?? '').trim().isNotEmpty)
+        _reference!.subtitle!.trim(),
+      if ((widget.detail?.categoryTags ?? const <String>[]).isNotEmpty)
+        widget.detail!.categoryTags.take(3).join(' · '),
+      if ((widget.detail?.city ?? '').trim().isNotEmpty)
+        widget.detail!.city!.trim(),
+    ].join(' · ');
+    final body = intro.isEmpty ? '更多资料正在完善，后续会接入实体生产体系。' : intro;
+    return Padding(
+      padding: EdgeInsets.only(top: AppSpacing.containerSm),
+      child: ProfileIosSectionCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    '实体介绍',
+                    style: TextStyle(
+                      fontSize: AppTypography.iosSubheadline,
+                      fontWeight: AppTypography.semiBold,
+                      color: AppColors.iosLabel(context),
+                    ),
+                  ),
+                ),
+                Text(
+                  '查看详情',
+                  style: TextStyle(
+                    fontSize: AppTypography.iosFootnote,
+                    color: AppColors.iosAccent(context),
+                  ),
+                ),
+                SizedBox(width: AppSpacing.two),
+                Icon(
+                  CupertinoIcons.chevron_forward,
+                  size: AppSpacing.iconXSmall,
+                  color: AppColors.iosTertiaryLabel(context),
+                ),
+              ],
+            ),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            Text(
+              body,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: AppColors.iosSecondaryLabel(context),
+                height: AppSpacing.textLineHeightDense,
+              ),
+            ),
           ],
         ),
       ),

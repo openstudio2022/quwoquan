@@ -119,19 +119,29 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 		// 由绑定实体（canonicalEntityId→entity.conditionProfile）派生后注入；冷启动 cmd/import 路径直接冗余。
 		"conditionProfile": anyMap(event.Payload, "conditionProfile"),
 	}
+	setOnInsert := bson.M{
+		"likeCount":     int64(0),
+		"commentCount":  int64(0),
+		"favoriteCount": int64(0),
+		"viewCount":     int64(0),
+		"recScore":      0.0,
+	}
+	// 时间语义：createdAt 仅首次插入置位（来自 Post.CreatedAt，永不被后续事件覆盖）；
+	// publishedAt 由首次发布事件携带（PostPublished 仅触发一次，值来自 set-once 的 Post.PublishedAt）；
+	// updatedAt 随每次内容事件单调推进。feed 卡片据此展示「创作 vs 更新」。
 	if publishedAt := parseEventTime(strVal(event.Payload, "publishedAt"), event.OccurredAt); !publishedAt.IsZero() {
 		set["publishedAt"] = publishedAt
 	}
+	if createdAt := parseEventTime(strVal(event.Payload, "createdAt"), event.OccurredAt); !createdAt.IsZero() {
+		setOnInsert["createdAt"] = createdAt
+	}
+	if updatedAt := parseEventTime(strVal(event.Payload, "updatedAt"), event.OccurredAt); !updatedAt.IsZero() {
+		set["updatedAt"] = updatedAt
+	}
 
 	update := bson.M{
-		"$set": set,
-		"$setOnInsert": bson.M{
-			"likeCount":     int64(0),
-			"commentCount":  int64(0),
-			"favoriteCount": int64(0),
-			"viewCount":     int64(0),
-			"recScore":      0.0,
-		},
+		"$set":         set,
+		"$setOnInsert": setOnInsert,
 	}
 	opts := options.UpdateOne().SetUpsert(true)
 	_, err := p.coll.UpdateOne(ctx, bson.M{"postId": postID}, update, opts)

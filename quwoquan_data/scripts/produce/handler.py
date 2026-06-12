@@ -2,7 +2,7 @@
 
 正文由会话模型（Agent）创作，CLI 不再拼接任何句子：
   --stage compose-brief : 准备写作契约 writing_pack.json + prompt.md + 占位草稿（posts/.../4.draft/）。
-  （人/Agent 据 prompt.md 创作正文写回 4.draft/article.md，generator=agent）
+  （人/Agent 据 prompt.md 创作正文写回 4.draft/draft.article.md，generator=agent）
   --stage review        : 读 agent 草稿，过模板指纹/事实可回溯/出处三道门 + 质量门；--materialize 落地 approved。
 """
 from __future__ import annotations
@@ -25,6 +25,7 @@ from _common.entity_annotation import (
 )
 from _common.batch_orchestration import batch_dir, plan_batches, write_batch
 from _common.batch_manifest import write_batch_manifest
+from _common.content_object import content_type_from_brief, write_brief_object
 from _common.io import write_json
 from _common.paths import ensure_batch_layout, batch_command_root
 from produce.materialize import materialize_posts
@@ -88,6 +89,7 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
     for ref, brief in routes:
         brief = _apply_writing_intent_override(brief, overrides.get(ref))
         brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        write_brief_object(task_id, batch_id, ref, brief, content_type=content_type_from_brief(brief))
         if warn:
             base_draft_warnings.append(warn)
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
@@ -100,6 +102,7 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
     for ref, brief in entities:
         brief = _apply_writing_intent_override(brief, overrides.get(ref))
         brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        write_brief_object(task_id, batch_id, ref, brief, content_type=content_type_from_brief(brief))
         if warn:
             base_draft_warnings.append(warn)
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
@@ -202,6 +205,7 @@ def _stage_review(task_id: str, batch_id: str, refs, *, materialize: bool, allow
     print(f"[produce] review handled {len(statuses)} ref(s); approved={approved} failed={len(failed)}")
     if materialize and approved:
         paths = materialize_posts(task_id, batch_id, "article")
+        paths += materialize_posts(task_id, batch_id, "image")
         print(f"[produce] Materialized {len(paths)} approved post package(s).")
     if failed:
         for row in failed[:10]:

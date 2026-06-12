@@ -985,10 +985,35 @@ Future<void> _handleNativeLoginAction({
       rememberedLoginMaskedIdentifier: nativeResult.maskedAccount,
     );
     onLoggedIn();
-  } catch (_) {
-    if (context.mounted) {
-      AppToast.show(context, UITextConstants.loginFailed);
+  } catch (error) {
+    if (!context.mounted) {
+      return;
     }
+    final resolved = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.submit,
+      scope: UiErrorScope.global,
+    );
+    final semantic = UiErrorSemantic(
+      category: resolved.category,
+      scope: resolved.scope,
+      title: UITextConstants.loginFailed,
+      message: resolved.message,
+      secondaryMessage: resolved.secondaryMessage,
+      primaryAction: const UiErrorAction(
+        type: UiErrorActionType.dismiss,
+        label: UITextConstants.confirm,
+      ),
+      secondaryAction: resolved.secondaryAction,
+      dismissible: resolved.dismissible,
+      sourceCode: resolved.sourceCode,
+      failureKind: resolved.failureKind,
+      recoveryAction: resolved.recoveryAction,
+      presentation: resolved.presentation,
+      tone: resolved.tone,
+    );
+    await AppActionErrorFeedback.show(context, semantic: semantic);
   }
 }
 

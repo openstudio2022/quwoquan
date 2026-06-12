@@ -10,6 +10,8 @@ import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
+import '../../../support/harness/profile_shell_scroll_utils.dart';
+
 /// 圈子 Tab：切换后经 Repository 取数渲染 ProfileCirclesTab，展示 mock 圈子。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
 
@@ -54,13 +56,6 @@ Future<void> _pumpFrames(WidgetTester tester, {int count = 20}) async {
   }
 }
 
-Finder _inlinePrimaryTab(String label) {
-  return find.descendant(
-    of: find.byKey(const ValueKey<String>('profile-shell-primary-tabs-inline')),
-    matching: find.text(label),
-  );
-}
-
 void main() {
   setUp(() {
     HttpOverrides.global = _NoNetworkHttpOverrides();
@@ -73,7 +68,7 @@ void main() {
 
     await tester.pumpWidget(_scopedApp());
     await _pumpFrames(tester);
-    await tester.tap(_inlinePrimaryTab('圈子'));
+    await tapProfilePrimaryTab(tester, '圈子');
     await _pumpFrames(tester);
 
     expect(find.byType(ProfileCirclesTab), findsOneWidget);

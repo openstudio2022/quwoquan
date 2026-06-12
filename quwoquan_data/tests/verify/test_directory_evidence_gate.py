@@ -61,7 +61,7 @@ def test_gate_flags_loose_images():
     (obj / "images").mkdir(parents=True, exist_ok=True)
     (obj / "images" / "img_01.jpg").write_bytes(b"\xff\xd8\xff\x00data")
     write_json(obj / "_entity.json", {"label": "海螺沟", "domain": "地点", "type": "景区"})
-    issues = scan_batch(TASK, batch)
+    issues = scan_batch(TASK, batch, require_stage_tree=False)
     assert any("散落 images/" in i for i in issues), issues
 
 
@@ -93,7 +93,7 @@ def test_gate_flags_absolute_path_and_mechanical_and_weather():
         title="天气",
         target_ref="/entity/地点/景区/九寨沟",
     )
-    issues = scan_batch(TASK, batch)
+    issues = scan_batch(TASK, batch, require_stage_tree=False)
     assert any("绝对路径" in i for i in issues), issues
     assert any("机械收尾标题" in i for i in issues), issues
     assert any("天气类来源" in i for i in issues), issues
@@ -118,6 +118,8 @@ def test_gate_passes_clean_object():
     write_json(ent / "_entity.json", {"label": "峨眉山", "domain": "地点", "type": "景区"})
     (ent / "page.md").write_text("# 峨眉山\n\n概述与体验。\n\n## 出发前\n\n值得一去。", encoding="utf-8")
     write_json(ent / "manifest.json", {"assets": [], "citedSourceRefs": ["entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md"]})
+    for stage in ("2.quality", "3.compose", "4.draft", "5.review"):
+        (ent / stage).mkdir(parents=True, exist_ok=True)
     issues = scan_batch(TASK, batch)
     assert not issues, issues
 
@@ -130,7 +132,7 @@ def test_gate_flags_stage_first_regression():
     d = batch_root(TASK, batch) / "task_produce" / "results" / "compose"
     d.mkdir(parents=True, exist_ok=True)
     write_json(d / "九寨沟.json", {"payload": {"generator": "agent"}})
-    issues = scan_batch(TASK, batch)
+    issues = scan_batch(TASK, batch, require_stage_tree=False)
     assert any("stage-first 回退" in i for i in issues), issues
 
 
@@ -142,7 +144,7 @@ def test_gate_flags_illegal_top_level_entry():
     b.mkdir(parents=True, exist_ok=True)
     # 旧 produce_trace.json 散在批次顶层 → 顶层结构门拦截。
     (b / "produce_trace.json").write_text("{}", encoding="utf-8")
-    issues = scan_batch(TASK, batch)
+    issues = scan_batch(TASK, batch, require_stage_tree=False)
     assert any("非法批次顶层条目" in i for i in issues), issues
 
 
@@ -153,7 +155,7 @@ def test_gate_flags_illegal_object_child_dir():
     ent = batch_entity_object_dir(TASK, batch, "地点", "景区", "贡嘎")
     (ent / "weird_stage").mkdir(parents=True, exist_ok=True)
     write_json(ent / "_entity.json", {"label": "贡嘎", "domain": "地点", "type": "景区"})
-    issues = scan_batch(TASK, batch)
+    issues = scan_batch(TASK, batch, require_stage_tree=False)
     assert any("非法对象子目录" in i for i in issues), issues
 
 
@@ -166,7 +168,7 @@ def test_gate_flags_unregistered_post_object_drift():
     post.mkdir(parents=True, exist_ok=True)
     (post / "article.md").write_text("# 贡嘎\n\n正文\n\n## 出发前\n\n值得。", encoding="utf-8")
     write_json(post / "manifest.json", {"assets": [], "citedSourceRefs": []})
-    issues = scan_batch(TASK, batch)
+    issues = scan_batch(TASK, batch, require_stage_tree=False)
     assert any("未登记内容路由" in i for i in issues), issues
 
 
@@ -180,16 +182,18 @@ def test_gate_passes_registered_post_object():
     post.mkdir(parents=True, exist_ok=True)
     (post / "article.md").write_text("# 贡嘎\n\n正文\n\n## 出发前\n\n值得一去。", encoding="utf-8")
     write_json(post / "manifest.json", {"assets": [], "citedSourceRefs": []})
+    for stage in ("1.download", "2.quality", "3.compose", "4.draft", "5.review"):
+        (post / stage).mkdir(parents=True, exist_ok=True)
     issues = scan_batch(TASK, batch)
     assert not any("未登记内容路由" in i for i in issues), issues
     assert not any("命名违规" in i for i in issues), issues
 
 
-def test_stage_tree_completeness_opt_in():
+def test_stage_tree_completeness_default_on():
     batch = "gate_stage_tree"
     _seed_batch_manifest(batch)
     ensure_task_layout(TASK)
-    # 内容对象只有成品但缺过程阶段 → require_stage_tree 下被拦截，默认不拦。
+    # 内容对象只有成品但缺过程阶段 → 默认即被拦截。
     ref = "四姑娘山_体验"
     register_content_object(TASK, batch, ref, content_type="article", angle="攻略", title="四姑娘山两日")
     post = content_object_dir(TASK, batch, ref)
@@ -197,15 +201,27 @@ def test_stage_tree_completeness_opt_in():
     (post / "article.md").write_text("# 四姑娘山\n\n正文\n\n## 出发前\n\n值得。", encoding="utf-8")
     write_json(post / "manifest.json", {"assets": [], "citedSourceRefs": []})
 
-    assert not scan_batch(TASK, batch), "默认（不开 stage-tree）应通过"
-    strict = scan_batch(TASK, batch, require_stage_tree=True)
-    assert any("阶段树不完整" in i for i in strict), strict
+    issues = scan_batch(TASK, batch)
+    assert any("阶段树不完整" in i for i in issues), issues
+    relaxed = scan_batch(TASK, batch, require_stage_tree=False)
+    assert not any("阶段树不完整" in i for i in relaxed), relaxed
 
     # 补齐 1-5 阶段后通过
     for stage in ("1.download", "2.quality", "3.compose", "4.draft", "5.review"):
         (post / stage).mkdir(parents=True, exist_ok=True)
-    strict2 = scan_batch(TASK, batch, require_stage_tree=True)
+    strict2 = scan_batch(TASK, batch)
     assert not any("阶段树不完整" in i for i in strict2), strict2
+
+
+def test_gate_flags_orphan_post_object_residue():
+    batch = "gate_orphan"
+    _seed_batch_manifest(batch)
+    ensure_task_layout(TASK)
+    orphan = batch_post_object_dir(TASK, batch, "article", "攻略", "1", 1)
+    (orphan / "2.quality").mkdir(parents=True, exist_ok=True)
+    write_json(orphan / "manifest.json", {"assets": [], "citedSourceRefs": []})
+    issues = scan_batch(TASK, batch, require_stage_tree=False)
+    assert any("孤儿内容对象残骸" in i for i in issues), issues
 
 
 def test_task_gate_flags_legacy_root_entries():

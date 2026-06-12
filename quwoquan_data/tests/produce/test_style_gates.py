@@ -82,7 +82,15 @@ _BATCH = "pilot"
 def _seed_draft(ref: str, article: str) -> None:
     register_content_object(_TASK, _BATCH, ref, content_type="article", angle="体验", title=ref)
     write_agent_draft(
-        _TASK, _BATCH, ref, article, model="test-agent/style-gate", cited_source_paths=[], covered_facts=[]
+        _TASK,
+        _BATCH,
+        ref,
+        article,
+        model="test-agent/style-gate",
+        cited_source_paths=[],
+        covered_facts=[],
+        agent_run_id=f"run-{ref}",
+        agent_id=f"agent-{ref}",
     )
 
 
@@ -105,6 +113,37 @@ def test_cross_article_similarity_passes_distinct_opening():
     c = "先说结论：这条线淡季来最划算，预算能省一半，还完全避开了排队和人挤人的扫兴时刻。\n\n## 正文\n稻城亚丁的完全不同的展开内容与判断。"
     _seed_draft("稻城亚丁_攻略", c)
     res = _check_cross_article_similarity(_TASK, _BATCH, "稻城亚丁_攻略", c)
+    assert res["passed"], res["issues"]
+
+
+def test_cross_article_similarity_ignores_frontmatter_only_overlap():
+    ensure_task_layout(_TASK)
+    ensure_batch_layout(_TASK, _BATCH, "produce")
+    article = (
+        "---\n"
+        "title: 峨眉山·攻略\n"
+        "template: journal\n"
+        "fontPreset: clean\n"
+        "articleMarkdownVersion: qwq-rich-md/1\n"
+        "---\n\n"
+        "先说结论：报国寺到清音阁适合作为第一天，金顶放到第二天清晨更稳妥。\n\n"
+        "## 正文\n"
+        "攻略展开。"
+    )
+    gallery = (
+        "---\n"
+        "title: 峨眉山·金顶图集\n"
+        "template: journal\n"
+        "fontPreset: clean\n"
+        "articleMarkdownVersion: qwq-rich-md/1\n"
+        "---\n\n"
+        "站上金顶时，先撞进视线的是华藏寺、普贤像和被风推开的云海。\n\n"
+        "## 正文\n"
+        "图集展开。"
+    )
+    _seed_draft("峨眉山_攻略_frontmatter", article)
+    _seed_draft("峨眉山_画报_frontmatter", gallery)
+    res = _check_cross_article_similarity(_TASK, _BATCH, "峨眉山_攻略_frontmatter", article)
     assert res["passed"], res["issues"]
 
 

@@ -12,9 +12,11 @@ generator 只有 'agent' 能进入交付面；'template'（脚本拼接）与 'p
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
+from _common.article_package import compute_document_sha256, sha256_file, sha256_text
 from _common.io import read_json, write_json
 from _common.paths import STAGE_COMPOSE, STAGE_DRAFT
 
@@ -25,6 +27,22 @@ GENERATOR_PENDING = "pending"
 PLACEHOLDER_MARKER = "<!-- QWQ_AWAITING_AGENT_DRAFT -->"
 DRAFT_ARTICLE_FILE = "draft.article.md"
 _ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _normalized_iso(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def _file_mtime_iso(path: Path) -> str | None:
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
+    except OSError:
+        return None
 
 
 def _object_stage_dir(task_id: str, batch_id: str, ref: str, stage: str) -> Path | None:
@@ -154,6 +172,42 @@ def read_draft_meta(task_id: str, batch_id: str, ref: str) -> dict[str, Any] | N
     return read_json(path) if path.exists() else None
 
 
+def _source_bundle_sha256(cited_source_paths: Sequence[str]) -> str | None:
+    if not cited_source_paths:
+        return None
+    bundle = []
+    for raw in cited_source_paths:
+        path = Path(str(raw))
+        if not path.is_file():
+            continue
+        bundle.append({"path": str(raw), "sha256": sha256_file(path)})
+    if not bundle:
+        return None
+    return sha256_text(
+        __import__("json").dumps(bundle, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    )
+
+
+def compute_draft_provenance_facts(
+    task_id: str,
+    batch_id: str,
+    ref: str,
+    *,
+    article_markdown: str,
+    cited_source_paths: Sequence[str],
+) -> dict[str, str | None]:
+    prompt_digest = sha256_file(prompt_path(task_id, batch_id, ref)) if prompt_path(task_id, batch_id, ref).is_file() else None
+    writing_pack_digest = (
+        sha256_file(writing_pack_path(task_id, batch_id, ref)) if writing_pack_path(task_id, batch_id, ref).is_file() else None
+    )
+    return {
+        "promptSha256": prompt_digest,
+        "writingPackSha256": writing_pack_digest,
+        "sourceBundleSha256": _source_bundle_sha256(cited_source_paths),
+        "draftSha256": compute_document_sha256(article_markdown),
+    }
+
+
 def write_agent_draft(
     task_id: str,
     batch_id: str,
@@ -164,6 +218,8 @@ def write_agent_draft(
     cited_source_paths: Sequence[str],
     covered_facts: Sequence[str],
     session_trace: str | None = None,
+    agent_run_id: str | None = None,
+    agent_id: str | None = None,
     extracted_entities: Sequence[dict[str, Any]] | None = None,
     style_family: str | None = None,
     opening_strategy: str | None = None,
@@ -176,8 +232,21 @@ def write_agent_draft(
     供 review 开篇门按所选 styleFamily 的 allowedOpenings markers 语义化校验，避免千篇一律开头。
     """
     article = draft_article_path(task_id, batch_id, ref)
+    existing_meta = read_draft_meta(task_id, batch_id, ref) or {}
+    existing_article = article.read_text(encoding="utf-8") if article.exists() else None
+    created_at = _normalized_iso(existing_meta.get("createdAt"))
+    if created_at is None and existing_article and not is_placeholder(existing_article):
+        created_at = _file_mtime_iso(article)
+    now_iso = _now_iso()
     article.parent.mkdir(parents=True, exist_ok=True)
     article.write_text(article_markdown, encoding="utf-8")
+    facts = compute_draft_provenance_facts(
+        task_id,
+        batch_id,
+        ref,
+        article_markdown=article_markdown,
+        cited_source_paths=cited_source_paths,
+    )
     write_json(
         draft_meta_path(task_id, batch_id, ref),
         {
@@ -185,10 +254,18 @@ def write_agent_draft(
             "generator": GENERATOR_AGENT,
             "model": model,
             "sessionTrace": session_trace,
+            "agentRunId": agent_run_id or existing_meta.get("agentRunId"),
+            "agentId": agent_id or existing_meta.get("agentId"),
             "styleFamily": style_family,
             "openingStrategy": opening_strategy,
             "citedSourcePaths": list(cited_source_paths),
             "coveredFacts": list(covered_facts),
             "extractedEntities": list(extracted_entities or []),
+            "promptSha256": facts.get("promptSha256"),
+            "writingPackSha256": facts.get("writingPackSha256"),
+            "sourceBundleSha256": facts.get("sourceBundleSha256"),
+            "draftSha256": facts.get("draftSha256"),
+            "createdAt": created_at or now_iso,
+            "updatedAt": now_iso,
         },
     )

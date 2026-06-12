@@ -258,7 +258,30 @@ class MockRelationshipCapabilityRepository
       isFollowing: UserProfileMockData.viewerFollowsTarget(targetUserId),
       isFollowedBy: UserProfileMockData.targetFollowsViewer(targetUserId),
       isSelf: relationState == MockProfileRelationState.self,
+      hasFormalConversation: _hasFormalDirectConversation(targetUserId),
     );
+  }
+
+  /// 与目标用户已存在正式单聊会话时，发送能力保持开启（对齐云侧语义）。
+  bool _hasFormalDirectConversation(String targetUserId) {
+    for (final conversation in ChatMockData.conversations) {
+      if (conversation['type'] != 'direct' ||
+          conversation['status'] == 'blocked') {
+        continue;
+      }
+      final conversationId = (conversation['id'] ?? '').toString();
+      if (conversationId.isEmpty) {
+        continue;
+      }
+      final members = ChatMockData.membersFor(conversationId);
+      final isMember = members.any(
+        (member) => (member['userId'] ?? '').toString() == targetUserId,
+      );
+      if (isMember) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 

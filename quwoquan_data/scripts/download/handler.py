@@ -26,11 +26,17 @@ from _common.image_rules import (  # noqa: E402
     pixel_size_issue,
     relevance_issue,
 )
+from _common.image_safety import assess_image  # noqa: E402
 from _common.image_variants import image_dimensions  # noqa: E402
 from _common.image_safety import dedupe_image_payloads  # noqa: E402
 from _common.stage_reports import write_gate_report, write_stage_result  # noqa: E402
 from download.gate import gate_download  # noqa: E402
-from download.source_inputs import curated_sources_for_entity, curated_images_for_entity, source_frontmatter  # noqa: E402
+from download.source_inputs import (
+    curated_sources_for_entity,
+    curated_images_for_entity,
+    manual_body_note,
+    source_frontmatter,
+)  # noqa: E402
 from download.fetch import fetch_image_payload, fetch_source_payload  # noqa: E402
 from download.prepare import prepare_source_plan, prepare_source_screen  # noqa: E402
 from vertical.license import normalize_rights_payload, validate_image_rights  # noqa: E402
@@ -115,6 +121,7 @@ def handle_download(args: argparse.Namespace) -> None:
     domain, etype = resolve_domain_etype(entity_type)
     fetched_sources: list[dict] = []
     quality_by_entity: dict[str, list[dict]] = defaultdict(list)
+    failed_image_entities: list[str] = []
     for entity_id in entity_ids:
         # 对象同构目录：来源写成来源单元（编号 + 类目 + assets/），禁对象级散 images/。
         object_dir = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
@@ -144,6 +151,15 @@ def handle_download(args: argparse.Namespace) -> None:
             px_issue = pixel_size_issue(width, height, asset_id=asset_label)
             if px_issue:
                 image_quality_issues.append(px_issue)
+                continue
+            temp_path = batch_root(task_id, batch_id) / "_shared" / "tmp_image_checks" / f"{entity_id}_{idx_img}{payload['ext']}"
+            temp_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path.write_bytes(payload["bytes"])
+            verdict = assess_image(temp_path)
+            if verdict.blocks_image_publish:
+                image_quality_issues.append(
+                    f"imageSafety: {asset_label} blocked ({verdict.status}) reasons={list(verdict.reasons)}"
+                )
                 continue
             # 相关性门：必须有与检索对象的真实相关性说明（来自 source_plan，禁通用模板串）。
             relevance = str(spec.get("relevance") or spec.get("caption") or "")
@@ -184,16 +200,22 @@ def handle_download(args: argparse.Namespace) -> None:
             ]
 
         for ordinal, source in enumerate(sources, start=1):
-            curated_body = str(source.get("body") or "").strip()
             html_bytes: bytes | None = None
             status_code = 0
+            fetched_text = ""
             try:
                 fetched = fetch_source_payload(source["url"])
                 html_bytes = fetched["htmlBytes"]
                 status_code = fetched["statusCode"]
-                source_md = source_frontmatter(source, entity_id) if curated_body else fetched["text"]
+                fetched_text = str(fetched.get("text") or "").strip()
+                source_md = source_frontmatter(source, entity_id)
+                if fetched_text:
+                    source_md += fetched_text
             except Exception:
                 source_md = source_frontmatter(source, entity_id)
+            note = manual_body_note(source)
+            if note:
+                source_md = source_md.rstrip() + f"\n\n{note}\n"
             clean_md = anonymize_source_markdown(source_md)
             assessment = score_source_markdown(source["source_id"], source_md, entity_name=entity_id)
             quality = {
@@ -205,6 +227,8 @@ def handle_download(args: argparse.Namespace) -> None:
                 "excerpt": assessment.excerpt,
                 "url": source["url"],
                 "statusCode": status_code,
+                "fetchSucceeded": bool(fetched_text),
+                "taskProvidedBodyPresent": bool(str(source.get("body") or "").strip()),
             }
             write_source_unit(
                 object_dir,
@@ -280,6 +304,8 @@ def handle_download(args: argparse.Namespace) -> None:
             next_step="quality_analysis",
             fallback_stage="source_plan" if fetch_issues else None,
         )
+        if fetch_issues:
+            failed_image_entities.append(entity_id)
 
     prepare_source_screen(task_id, batch_id, fetched_sources)
     for source in fetched_sources:
@@ -323,6 +349,8 @@ def handle_download(args: argparse.Namespace) -> None:
         issues: list[str] = []
         if len(retained) < 1:
             issues.append("sourceScreen: no retained source for entity")
+        if any(row["quality"] == "Reject" for row in rows):
+            issues.append("sourceScreen: reject source present in entity bundle; must re-plan/fetch before produce")
         # 受控类目门：阻断无类别的 weather_* 散来源（天气应作为百科/官方/攻略来源内事实）。
         for source in curated_sources_for_entity(task_id, batch_id, entity_id, entity_type):
             issues.extend(source_unit_category_issues(source["source_id"], source.get("platform") or ""))
@@ -344,6 +372,10 @@ def handle_download(args: argparse.Namespace) -> None:
         )
     print(f"[download] Planned {len(entities)} entity/entities and fetched {len(fetched_sources)} source bundle(s)")
     gate_issues = gate_download(task_id, batch_id)
+    gate_issues.extend(
+        f"{entity_id}: image gates failed (rights/fetch/safety/min-count); unsafe or unauthorized images must not enter assets"
+        for entity_id in failed_image_entities
+    )
     if gate_issues:
         print(f"[download] Gate FAILED ({len(gate_issues)} issue(s)):", file=sys.stderr)
         for issue in gate_issues:

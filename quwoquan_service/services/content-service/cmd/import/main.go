@@ -239,6 +239,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 	opts = NormalizeImportOptions(opts)
 	n := 0
 	for _, p := range posts {
+		newHash := sourceHash(p)
 		doc := bson.M{
 			"postRef": p.PostRef, "contentType": p.ContentType, "title": p.Title,
 			"angle": p.Angle, "seq": p.Seq, "entityRefs": p.EntityRefs, "tagRefs": p.TagRefs,
@@ -247,20 +248,21 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			"articleMarkdown": p.ArticleMarkdown, "articleDigest": p.ArticleDigest, "articleMarkdownDigest": p.ArticleDigest,
 			"articleAssetManifest": p.ArticleAssetManifest,
 			"sourceTaskId":         p.SourceTaskId,
+			"createdAt":            p.CreatedAt,
+			"updatedAt":            p.UpdatedAt,
+			"publishedAt":          p.PublishedAt,
 			// Path A 导入的 publish 主线文章默认视为已公开发布，保证
 			// 在线 search/feed 与 rm_discovery_feed 的 discoverability 口径一致。
-			"status":      "published",
-			"visibility":  "public",
-			"publishedAt": now,
-			"updatedAt":   now,
-			"sourceHash":  sourceHash(p),
+			"status":     "published",
+			"visibility": "public",
+			"sourceHash": newHash,
 		}
 		for k, v := range releaseFields(opts, now, "active") {
 			doc[k] = v
 		}
 		if _, err := coll.UpdateOne(ctx,
 			bson.M{"postRef": p.PostRef},
-			bson.M{"$set": doc, "$setOnInsert": bson.M{"_id": p.PostRef, "createdAt": now}},
+			bson.M{"$set": doc, "$setOnInsert": bson.M{"_id": p.PostRef}},
 			options.UpdateOne().SetUpsert(true),
 		); err != nil {
 			return n, err
@@ -268,6 +270,22 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 		n++
 	}
 	return n, nil
+}
+
+// contentSourceChanged 判断目标文档相对新内容 hash 是否发生实质变更。
+// 文档不存在（首次插入）视为变更；已存在且 sourceHash 相同视为未变更。
+func contentSourceChanged(ctx context.Context, coll *mongo.Collection, filter bson.M, newHash string) (bool, error) {
+	var existing struct {
+		SourceHash string `bson:"sourceHash"`
+	}
+	err := coll.FindOne(ctx, filter, options.FindOne().SetProjection(bson.M{"sourceHash": 1})).Decode(&existing)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return true, nil
+		}
+		return false, err
+	}
+	return existing.SourceHash != newHash, nil
 }
 
 // UpsertEntities 幂等 upsert 实体到运行库。
@@ -380,6 +398,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 				break
 			}
 		}
+		newHash := sourceHash(p)
 		set := bson.M{
 			"postId":               p.PostRef,
 			"title":                p.Title,
@@ -392,9 +411,10 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"conditionProfile":     cond,
 			"status":               "published",
 			"visibility":           "public",
-			"publishedAt":          now,
-			"updatedAt":            now,
-			"sourceHash":           sourceHash(p),
+			"sourceHash":           newHash,
+			"createdAt":            p.CreatedAt,
+			"updatedAt":            p.UpdatedAt,
+			"publishedAt":          p.PublishedAt,
 		}
 		for k, v := range releaseFields(opts, now, "active") {
 			set[k] = v

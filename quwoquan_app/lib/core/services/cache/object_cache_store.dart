@@ -88,6 +88,16 @@ class ObjectCacheStore<T> {
     return ids.length;
   }
 
+  bool remove(String id) {
+    final normalized = id.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final removedDisk = _disk.remove(normalized) != null;
+    final removedMemory = _memory.remove(normalized) != null;
+    return removedDisk || removedMemory;
+  }
+
   int clearAllRebuildable() {
     return clearWhere((entry) => entry.cacheClass != CacheClass.pinned);
   }

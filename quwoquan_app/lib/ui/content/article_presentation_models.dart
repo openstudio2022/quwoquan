@@ -64,48 +64,37 @@ ArticleTemplatePreset articleTemplatePresetFromString(String? value) {
 
 // ── 纸张质感系统（替代模版） ──
 
-enum ArticlePaperTexture {
-  white,
-  cream,
-  sepia,
-  parchment,
-  eyeCare,
-  quiet,
-  night,
-}
+enum ArticlePaperTexture { darkPaper, coolGray, warmBlack, inkGreen, deepBrown }
 
 extension ArticlePaperTextureX on ArticlePaperTexture {
   String get label => switch (this) {
-    ArticlePaperTexture.white => '纯白',
-    ArticlePaperTexture.cream => '柔纸',
-    ArticlePaperTexture.sepia => '暖黄',
-    ArticlePaperTexture.parchment => '羊皮纸',
-    ArticlePaperTexture.eyeCare => '护眼',
-    ArticlePaperTexture.quiet => '宁静',
-    ArticlePaperTexture.night => '夜间',
+    ArticlePaperTexture.darkPaper => '深色纸',
+    ArticlePaperTexture.coolGray => '冷灰纸',
+    ArticlePaperTexture.warmBlack => '暖黑纸',
+    ArticlePaperTexture.inkGreen => '墨绿纸',
+    ArticlePaperTexture.deepBrown => '深棕纸',
   };
 }
 
 ArticlePaperTexture articlePaperTextureFromString(String? value) {
   return switch ((value ?? '').trim()) {
-    'cream' => ArticlePaperTexture.cream,
-    'sepia' => ArticlePaperTexture.sepia,
-    'parchment' => ArticlePaperTexture.parchment,
-    'eyeCare' => ArticlePaperTexture.eyeCare,
-    'quiet' => ArticlePaperTexture.quiet,
-    'night' => ArticlePaperTexture.night,
-    _ => ArticlePaperTexture.white,
+    'coolGray' || 'quiet' => ArticlePaperTexture.coolGray,
+    'warmBlack' || 'cream' || 'sepia' => ArticlePaperTexture.warmBlack,
+    'inkGreen' || 'eyeCare' => ArticlePaperTexture.inkGreen,
+    'deepBrown' || 'parchment' => ArticlePaperTexture.deepBrown,
+    'darkPaper' || 'night' || 'white' => ArticlePaperTexture.darkPaper,
+    _ => ArticlePaperTexture.darkPaper,
   };
 }
 
 /// 旧模版 → 纸张质感的兼容映射。
 ArticlePaperTexture paperTextureFromTemplate(ArticleTemplatePreset template) {
   return switch (template) {
-    ArticleTemplatePreset.gentle => ArticlePaperTexture.cream,
-    ArticleTemplatePreset.ritual => ArticlePaperTexture.sepia,
-    ArticleTemplatePreset.diffuse => ArticlePaperTexture.parchment,
-    ArticleTemplatePreset.journal => ArticlePaperTexture.eyeCare,
-    ArticleTemplatePreset.tech => ArticlePaperTexture.white,
+    ArticleTemplatePreset.gentle => ArticlePaperTexture.warmBlack,
+    ArticleTemplatePreset.ritual => ArticlePaperTexture.deepBrown,
+    ArticleTemplatePreset.diffuse => ArticlePaperTexture.darkPaper,
+    ArticleTemplatePreset.journal => ArticlePaperTexture.inkGreen,
+    ArticleTemplatePreset.tech => ArticlePaperTexture.coolGray,
   };
 }
 

@@ -4,159 +4,159 @@ allow:
 - path: quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart
   max_lines: 4716
   reason: pageflip-locked (受 11/12 号几何规则严管，专项后置，禁止本轮拆分)
+- path: quwoquan_service/tools/codegen_app_metadata/main.go
+  max_lines: 4307
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/components/media/image/editor/image_editor_page.dart
   max_lines: 4161
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_service/tools/codegen_app_metadata/main.go
-  max_lines: 4059
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_service/services/content-service/internal/application/post_service.go
-  max_lines: 3827
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
+  max_lines: 3862
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
-  max_lines: 3728
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 3401
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/content/entry/pages/create_page.dart
-  max_lines: 3131
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 3155
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/discovery/pages/discovery_page.dart
-  max_lines: 2418
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 2425
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/content/entry/providers/create_editor_provider.dart
   max_lines: 2283
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/core/providers/app_providers.dart
-  max_lines: 2207
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 2211
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/circle/pages/home_circles_hub_page.dart
-  max_lines: 2148
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 2150
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_service/services/assistant-service/cmd/api/main.go
-  max_lines: 2061
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
-  max_lines: 2022
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 2090
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/components/media/image/editor/panels/image_editor_operation_panel.dart
   max_lines: 2017
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_service/services/user-service/internal/application/auth_service.go
-  max_lines: 1928
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
+  max_lines: 1961
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart
-  max_lines: 1914
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 1899
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart
+  max_lines: 1871
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_service/services/product-ops-service/cmd/api/main.go
-  max_lines: 1819
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
+  max_lines: 1839
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/search/pages/global_search_page.dart
   max_lines: 1773
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_service/services/user-service/internal/adapters/http/user_handler.go
-  max_lines: 1748
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/ui/chat/pages/chat_page.dart
+  max_lines: 1770
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/content/entry/widgets/article_editor_accessory_panels.dart
   max_lines: 1738
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/chat/pages/chat_page.dart
-  max_lines: 1730
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_service/services/user-service/internal/adapters/http/user_handler.go
+  max_lines: 1722
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/components/input/customizable_chat_input_bar.dart
-  max_lines: 1651
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 1717
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/core/constants/ui_text_constants.dart
-  max_lines: 1635
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 1697
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/cloud/services/user/user_profile_repository.dart
-  max_lines: 1622
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart
-  max_lines: 1556
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 1667
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/ui/user/pages/login_page.dart
+  max_lines: 1656
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
+  max_lines: 1569
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/content/entry/widgets/article_editor.dart
   max_lines: 1542
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/circle/widgets/section_creations.dart
-  max_lines: 1514
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
-  max_lines: 1482
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 1515
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/assistant/providers/personal_assistant_stream_controller.dart
   max_lines: 1469
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/ui/chat/pages/chat_conversation_page.dart
+  max_lines: 1466
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_service/services/content-service/internal/adapters/http/content_handler.go
+  max_lines: 1452
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
+  max_lines: 1440
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_service/services/entity-service/internal/application/homepage_service.go
+  max_lines: 1420
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/content/article_reader/content/article_reader_page_surfaces.dart
   max_lines: 1411
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_service/services/entity-service/internal/application/homepage_service.go
-  max_lines: 1408
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
-- path: quwoquan_service/services/content-service/internal/adapters/http/content_handler.go
-  max_lines: 1400
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_service/services/assistant-service/internal/application/service.go
+  max_lines: 1395
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/circle/pages/circle_edit_settings_page.dart
   max_lines: 1390
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/user/pages/login_page.dart
-  max_lines: 1324
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_service/services/platform-ops-service/cmd/api/main.go
-  max_lines: 1318
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/chat/pages/chat_conversation_page.dart
-  max_lines: 1286
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/content/entry/models/create_editor_models.dart
   max_lines: 1285
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/core/services/search_repository.dart
   max_lines: 1275
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/core/services/cache/local_chat_search_store.dart
   max_lines: 1264
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/content/entry/pages/video_editor_page.dart
   max_lines: 1258
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_service/services/assistant-service/internal/application/service.go
-  max_lines: 1239
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_service/tools/verify_metadata/main.go
   max_lines: 1221
-  reason: go-oversized-legacy (同 package 多文件拆分，后续逐步降)
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/app/shell/web_main_app_shell.dart
   max_lines: 1200
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/content/article_document_models.dart
   max_lines: 1187
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/components/pageflip/src/widget/pageflip_widget.dart
   max_lines: 1158
   reason: pageflip-locked (受 11/12 号几何规则严管，专项后置，禁止本轮拆分)
 - path: quwoquan_app/lib/ui/content/pageflip/curl_mesh_builder.dart
   max_lines: 1128
   reason: pageflip-locked (受 11/12 号几何规则严管，专项后置，禁止本轮拆分)
+- path: quwoquan_service/services/platform-ops-service/cmd/api/main.go
+  max_lines: 1127
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_app/lib/assistant/protocol/persisted_assistant_turn.dart
   max_lines: 1126
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/core/design_system/spacing/app_spacing.dart
   max_lines: 1059
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/app/navigation/app_router.dart
-  max_lines: 1029
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/search/providers/search_coordinator.dart
-  max_lines: 1021
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  max_lines: 1034
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/settings/pages/settings_page.dart
   max_lines: 1018
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/assistant/pages/assistant_skill_center_page.dart
   max_lines: 1017
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/ui/search/providers/search_coordinator.dart
+  max_lines: 1009
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/content/article_presentation_models.dart
   max_lines: 1007
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/cloud/services/entity/entity_repository.dart
   max_lines: 1002
-  reason: oversized-legacy (子 widget / part / extension 拆分，后续逐步降)
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)

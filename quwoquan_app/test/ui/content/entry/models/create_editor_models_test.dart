@@ -25,47 +25,47 @@ void main() {
       expect(draft.state.imagePaths, hasLength(1));
     });
 
-    test('从文章块恢复正文与图片索引', () {
+    test('从 articleMarkdown 恢复正文与图片索引', () {
       final draft = CreateDraft.fromStorageMap({
-        'id': 'draft_blocks',
+        'id': 'draft_markdown',
         'updatedAt': 456,
         'type': 'text',
         'editorKind': 'text',
         'mediaKind': 'none',
         'title': '块编辑器',
         'body': '',
-        'articleBlocks': [
-          {
-            'id': 'p1',
-            'type': 'paragraph',
-            'text': '第一段',
-            'imagePath': '',
-          },
-          {
-            'id': 'o1',
-            'type': 'orderedItem',
-            'text': '第二条',
-            'imagePath': '',
-          },
-          {
-            'id': 'i1',
-            'type': 'image',
-            'text': '',
-            'imagePath': 'inline.png',
-          },
-        ],
+        'articleMarkdown':
+            '---\n'
+            'title: 块编辑器\n'
+            '---\n\n'
+            '# 块编辑器\n\n'
+            '第一段\n\n'
+            '1. 第二条\n\n'
+            ':::figure id="i1" layout="fullWidth"\n'
+            'inline.png\n'
+            ':::\n',
+        'articleAssetManifest': <String, dynamic>{
+          'assets': <Map<String, dynamic>>[
+            {
+              'assetId': 'i1',
+              'localPath': 'inline.png',
+              'role': 'figure',
+            },
+          ],
+        },
         'activeArticleBlockId': 'o1',
         'settings': const <String, dynamic>{},
       });
 
-      expect(draft.state.body, '第一段\n1. 第二条');
-      expect(draft.state.imagePaths, <String>['inline.png']);
-      expect(draft.state.activeArticleBlockId, 'o1');
+      expect(draft.state.body, contains('第一段'));
+      expect(draft.state.imagePaths, <String>['asset://inline.png']);
 
       final storage = draft.toStorageMap();
       expect(storage['articleMarkdown'], contains('第一段'));
+      expect(storage.containsKey('articleDocument'), isFalse);
+      expect(storage.containsKey('articleBlocks'), isFalse);
       final restored = CreateDraft.fromStorageMap(storage);
-      expect(restored.state.body, '第一段\n1. 第二条');
+      expect(restored.state.body, contains('第一段'));
     });
 
     test('图片块布局样式可序列化恢复', () {

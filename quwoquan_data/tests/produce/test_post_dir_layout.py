@@ -25,6 +25,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+import json
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
@@ -33,6 +34,7 @@ os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp()
 from _common.content_object import register_content_object  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
+    PUBLISH_ROOT,
     batch_command_root,
     batch_root,
     ensure_batch_layout,
@@ -40,6 +42,7 @@ from _common.paths import (  # noqa: E402
 )
 from _common.stage_reports import write_stage_result  # noqa: E402
 from produce.materialize import materialize_posts  # noqa: E402
+from publish_ops.promote_to_publish import promote_task_batch  # noqa: E402
 
 TASK = "目录布局_gwt"
 BATCH = "pilot"
@@ -149,6 +152,27 @@ def test_promote_rglob_locates_object_layout():
         assert len(rel.parts) == 4, rel  # <type>/<angle>/<title>/<seq>
         assert rel.parts[1] == ANGLE, rel
         assert rel.parts[3].isdigit(), rel
+
+
+def test_promote_injects_and_preserves_published_at():
+    posts, _ = _materialize()
+    manifest_path = posts / "article" / ANGLE / "都江堰一日游怎么玩" / "1" / "manifest.json"
+    raw = read_json(manifest_path)
+    assert "publishedAt" not in raw
+
+    count, skipped = promote_task_batch(TASK, BATCH, dry_run=False)
+    assert count == 3
+    assert skipped == 0
+
+    publish_manifest = PUBLISH_ROOT / "posts" / "article" / ANGLE / "都江堰一日游怎么玩" / "1" / "manifest.json"
+    first = json.loads(publish_manifest.read_text(encoding="utf-8"))
+    assert first["publishedAt"]
+
+    count2, skipped2 = promote_task_batch(TASK, BATCH, dry_run=False)
+    assert count2 == 3
+    assert skipped2 == 0
+    second = json.loads(publish_manifest.read_text(encoding="utf-8"))
+    assert second["publishedAt"] == first["publishedAt"]
 
 
 def _run_all() -> None:

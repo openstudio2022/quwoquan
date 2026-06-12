@@ -33,7 +33,7 @@
 .PHONY: probe-avatar-user-pool-gateway
 .PHONY: verify-business-env-data-inventory
 .PHONY: verify-quwoquan-data
-.PHONY: verify-markdown-article-no-article-document
+.PHONY: verify-markdown-article-no-article-document verify-article-contract-purity
 .PHONY: verify-app-env-package
 .PHONY: verify-service-env-package
 .PHONY: verify-env-topology
@@ -151,6 +151,9 @@ verify-sms-otp-fail-open-gate:
 
 verify-markdown-article-no-article-document:
 	@python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py
+
+verify-article-contract-purity:
+	@python3 quwoquan_app/scripts/content/verify_article_contract_purity.py
 
 .PHONY: verify-quwoquan-data-stages
 verify-quwoquan-data-stages:
@@ -393,6 +396,7 @@ gate:
 	@$(MAKE) verify-avatar-user-pool
 	@$(MAKE) probe-avatar-user-pool-gateway
 	@$(MAKE) verify-markdown-article-no-article-document
+	@$(MAKE) verify-article-contract-purity
 	@bash quwoquan_service/scripts/deploy/report_deployment_mapping_impact.sh
 	@bash agent_ops/gate/gate_repo.sh
 

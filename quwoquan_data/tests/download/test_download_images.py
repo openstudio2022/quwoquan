@@ -136,15 +136,23 @@ def test_handle_download_fetches_images_into_source_unit():
         "imageUrls": [
             {
                 "url": "https://img.invalid/a.jpg",
-                "license": "CC BY-SA 4.0",
+                "platform": "景区官网",
+                "license": "CC-BY-SA 4.0",
                 "credit": "Ann",
+                "sourceUrl": "https://img.invalid/a.jpg",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "usageScope": "app_publish",
                 "caption": "稻城亚丁仙乃日雪山主峰",
                 "relevance": "支撑仙乃日核心徒步段落的雪山实景",
             },
             {
                 "url": "https://img.invalid/b.jpg",
-                "license": "CC BY-SA 4.0",
+                "platform": "景区官网",
+                "license": "CC-BY-SA 4.0",
                 "credit": "Bob",
+                "sourceUrl": "https://img.invalid/b.jpg",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "usageScope": "app_publish",
                 "caption": "牛奶海与五色海高山湖泊",
                 "relevance": "对应高山湖泊体验段落的实景细节",
             },
@@ -168,12 +176,28 @@ def test_handle_download_fetches_images_into_source_unit():
             "sha256": _h.sha256(body).hexdigest(),
         }
 
+    def _fake_source_fetch(url: str):
+        return {
+            "url": url,
+            "statusCode": 200,
+            "htmlBytes": b"<html></html>",
+            "text": (
+                f"{_EID} 景区当天开放时间会随天气变化，门票和观光车最好提前确认。"
+                f"上午进山更适合先走主景段，再看体力决定是否加长徒步，午后排队和返程压力都会更大。"
+                f"雨后栈道湿滑、风口偏冷，补给点和返程时间都要在出发前预留。"
+            ),
+            "sha256": "sha-source",
+        }
+
     orig = handler_mod.fetch_image_payload
+    orig_source = handler_mod.fetch_source_payload
     try:
         handler_mod.fetch_image_payload = _fake_payload
+        handler_mod.fetch_source_payload = _fake_source_fetch
         handle_download(argparse.Namespace(task=_TASK, batch=batch, entity_ids=_EID, entity_type="景区"))
     finally:
         handler_mod.fetch_image_payload = orig
+        handler_mod.fetch_source_payload = orig_source
 
     obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
     units = iter_source_units(obj)
@@ -195,10 +219,110 @@ def test_handle_download_fetches_images_into_source_unit():
     assert {"thumbnail", "display"}.issubset(variant_profiles), variant_profiles
     for v in first["variants"]:
         assert (unit / "assets" / v["fileName"]).is_file(), v
-    assert data["assets"][1]["license"] == "CC BY-SA 4.0"
+    assert data["assets"][1]["license"] == "CC-BY-SA 4.0"
     assert data["assets"][1]["credit"] == "Bob"
     # 不再有对象级散落 images/
     assert not (obj / "images").exists()
+
+
+def test_handle_download_blocks_unsafe_images_before_persist():
+    from _common.source_unit import iter_source_units, resolve_entity_object_dir
+
+    batch = "b_img_handler_unsafe"
+    ensure_batch_layout(_TASK, batch, "download")
+    doc = {
+        "sources": [
+            {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/g", "body": "正文兜底"},
+            {"source_id": "s2", "platform": "官网", "url": "https://x.invalid/h", "body": "官方兜底"},
+        ],
+        "imageUrls": [
+            {
+                "url": "https://img.invalid/a.jpg",
+                "platform": "景区官网",
+                "license": "scenic_official_authorized",
+                "credit": "景区官方",
+                "sourceUrl": "https://img.invalid/a.jpg",
+                "termsUrl": "https://img.invalid/terms",
+                "usageScope": "app_publish",
+                "caption": "稻城亚丁主峰",
+                "relevance": "支撑稻城亚丁主峰段落",
+            },
+            {
+                "url": "https://img.invalid/b.jpg",
+                "platform": "景区官网",
+                "license": "scenic_official_authorized",
+                "credit": "景区官方",
+                "sourceUrl": "https://img.invalid/b.jpg",
+                "termsUrl": "https://img.invalid/terms",
+                "usageScope": "app_publish",
+                "caption": "牛奶海",
+                "relevance": "支撑牛奶海段落",
+            },
+        ],
+    }
+    obj_plan = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区") / "1.download" / "source_plan.json"
+    write_json(obj_plan, doc)
+
+    img_a = _real_jpeg(21)
+    img_b = _real_jpeg(22)
+
+    def _fake_payload(url, *, min_bytes=3000):
+        body = img_a if url.endswith("a.jpg") else img_b
+        import hashlib as _h
+
+        return {
+            "url": url,
+            "ext": ".jpg",
+            "bytes": body,
+            "contentType": "image/jpeg",
+            "sha256": _h.sha256(body).hexdigest(),
+        }
+
+    class _Verdict:
+        def __init__(self, status: str):
+            self.status = status
+            self.reasons = ("watermark_or_platform_text",)
+
+        @property
+        def blocks_image_publish(self):
+            return True
+
+    def _fake_source_fetch(url: str):
+        return {
+            "url": url,
+            "statusCode": 200,
+            "htmlBytes": b"<html></html>",
+            "text": (
+                f"{_EID} 景区当天开放时间会随天气变化，门票和观光车最好提前确认。"
+                f"上午进山更适合先走主景段，再看体力决定是否加长徒步，午后排队和返程压力都会更大。"
+                f"雨后栈道湿滑、风口偏冷，补给点和返程时间都要在出发前预留。"
+            ),
+            "sha256": "sha-source",
+        }
+
+    orig_fetch = handler_mod.fetch_image_payload
+    orig_assess = handler_mod.assess_image
+    orig_source = handler_mod.fetch_source_payload
+    try:
+        handler_mod.fetch_image_payload = _fake_payload
+        handler_mod.assess_image = lambda path: _Verdict("unsafe")
+        handler_mod.fetch_source_payload = _fake_source_fetch
+        try:
+            handle_download(argparse.Namespace(task=_TASK, batch=batch, entity_ids=_EID, entity_type="景区"))
+        except SystemExit as exc:
+            assert exc.code == 1
+        else:
+            raise AssertionError("expected download gate to fail for unsafe images")
+    finally:
+        handler_mod.fetch_image_payload = orig_fetch
+        handler_mod.assess_image = orig_assess
+        handler_mod.fetch_source_payload = orig_source
+
+    obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
+    units = iter_source_units(obj)
+    assert units, f"no source unit under {obj}"
+    assets_dir = units[0] / "assets"
+    assert not assets_dir.exists(), f"unsafe images should not persist into assets: {assets_dir}"
 
 
 def _run_all() -> None:

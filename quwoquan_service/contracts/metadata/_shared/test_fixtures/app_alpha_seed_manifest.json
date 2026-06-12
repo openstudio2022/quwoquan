@@ -30,7 +30,8 @@
         "content_detail_core",
         "comment_thread_v2_core",
         "search_core",
-        "publish_core"
+        "publish_core",
+        "intersection_core"
       ],
       "resetScope": "fixture_content_*",
       "targetStore": "alpha-local-mock+content-service:test_store",

@@ -3,7 +3,6 @@ import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -24,6 +23,7 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/articl
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/backward_article_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/forward_article_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/texture/article_reader_texture_capture_layer.dart';
+import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
 import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
@@ -612,6 +612,8 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
     this.onPageCurlAborted,
     this.onSceneChanged,
     this.onDebugStateChanged,
+    this.onEntityTap,
+    this.headerLabel,
     this.showFooterPageLabel = true,
     this.paperTexture,
     this.presentationStyle = ArticleReadOnlyBookDeckPresentationStyle.book,
@@ -639,6 +641,8 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
   final ValueChanged<ArticleReaderPageCurlAbort>? onPageCurlAborted;
   final ValueChanged<StPageFlipScene>? onSceneChanged;
   final ValueChanged<ArticleReadOnlyBookDebugState>? onDebugStateChanged;
+  final ValueChanged<ArticleInlineSpan>? onEntityTap;
+  final String? headerLabel;
   final bool showFooterPageLabel;
   final ArticlePaperTexture? paperTexture;
   final ArticleReadOnlyBookDeckPresentationStyle presentationStyle;
@@ -787,6 +791,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         widget.coverUrl != oldWidget.coverUrl ||
         widget.enablePageCurl != oldWidget.enablePageCurl ||
         widget.forceDegradedPager != oldWidget.forceDegradedPager ||
+        widget.headerLabel != oldWidget.headerLabel ||
         widget.showFooterPageLabel != oldWidget.showFooterPageLabel ||
         widget.paperTexture != oldWidget.paperTexture ||
         widget.presentationStyle != oldWidget.presentationStyle) {
@@ -3470,6 +3475,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           ? ArticlePageShellVariant.plainEdit
           : ArticlePageShellVariant.readerSheet,
       showIndicator: false,
+      headerLabel: widget.headerLabel,
       footerLabel: widget.showFooterPageLabel
           ? '${index + 1}/${widget.pages.length}'
           : null,
@@ -3480,6 +3486,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         fontPreset: widget.fontPreset,
         metrics: widget.metrics,
         paperTexture: widget.paperTexture,
+        onEntityTap: widget.onEntityTap,
       ),
     );
   }
@@ -3679,7 +3686,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     required ArticlePageSurfaceKind kind,
   }) {
     final cacheKey =
-        '${kind.name}:$pageIndex:${pageSize.width.toStringAsFixed(2)}:${pageSize.height.toStringAsFixed(2)}:${widget.template.name}:${widget.fontPreset.name}:${widget.coverUrl.trim().isNotEmpty ? 1 : 0}:${widget.showFooterPageLabel ? 1 : 0}:${widget.paperTexture?.name ?? 'none'}:${widget.debugPageSurfaceBuilder == null ? 'normal' : 'debug'}:${widget.debugBackPageSurfaceBuilder == null ? 'normalBack' : 'debugBack'}';
+        '${kind.name}:$pageIndex:${pageSize.width.toStringAsFixed(2)}:${pageSize.height.toStringAsFixed(2)}:${widget.template.name}:${widget.fontPreset.name}:${widget.coverUrl.trim().isNotEmpty ? 1 : 0}:${widget.headerLabel ?? ''}:${widget.showFooterPageLabel ? 1 : 0}:${widget.paperTexture?.name ?? 'none'}:${widget.debugPageSurfaceBuilder == null ? 'normal' : 'debug'}:${widget.debugBackPageSurfaceBuilder == null ? 'normalBack' : 'debugBack'}';
     return _pageSurfaceCache.putIfAbsent(cacheKey, () {
       switch (kind) {
         case ArticlePageSurfaceKind.front:
@@ -3718,7 +3725,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           ? Transform.flip(flipX: true, child: sizedDebugSurface)
           : sizedDebugSurface;
     }
-    final palette = resolveArticleTemplatePalette(context, widget.template);
+    final palette = widget.paperTexture != null
+        ? resolveArticlePaperPalette(context, widget.paperTexture!)
+        : resolveArticleTemplatePalette(context, widget.template);
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(

@@ -42,5 +42,37 @@ coverImage: asset://cover
       expect(figure.imageUrl, 'https://cdn.example.com/cover-display.webp');
       expect(figure.imageUrl, isNot(contains('original')));
     });
+
+    test('parses entity labels into structured inline spans', () {
+      final document = ArticleMarkdownCodec.parseDocument('''
+---
+title: 杭州一日游
+---
+# 杭州一日游
+
+清晨从@[灵隐寺](entity:homepage/homepage_sight_west_lake)出发，再去@[河坊街](entity:homepage/homepage_restaurant_night_market)。
+''');
+
+      final paragraph = document.nodes
+          .where((node) => node.text.contains('灵隐寺'))
+          .single;
+      expect(paragraph.text, contains('清晨从灵隐寺出发'));
+      expect(paragraph.text, isNot(contains('entity:homepage')));
+      expect(paragraph.spans, hasLength(2));
+      expect(paragraph.spans.first.kind, 'entity');
+      expect(paragraph.spans.first.targetType, 'homepage');
+      expect(paragraph.spans.first.targetId, 'homepage_sight_west_lake');
+      expect(paragraph.spans.first.displayText, '灵隐寺');
+
+      final serialized = ArticleMarkdownCodec.serializeDocument(document);
+      expect(
+        serialized,
+        contains('@[灵隐寺](entity:homepage/homepage_sight_west_lake)'),
+      );
+      expect(
+        serialized,
+        contains('@[河坊街](entity:homepage/homepage_restaurant_night_market)'),
+      );
+    });
   });
 }

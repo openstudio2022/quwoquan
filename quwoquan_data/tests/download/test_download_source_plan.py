@@ -1,6 +1,7 @@
-"""download 默认零源 bug 回归：预置 source_plan(含 body) → handle_download 产出 ≥1 source.md。
+"""download 原文诚实评价回归：source_plan.body 不再冒充真实原文正文。
 
-裸 GET 对 .invalid 域必失败，走 source_frontmatter(body) 离线兜底，不依赖联网。
+裸 GET 对 .invalid 域必失败；source.md 只保留 fetch 元信息 + manual_source_plan_note，
+不得把 task/source_plan.body 当成真实抓取正文。
 覆盖两种 source_plan 形态：顶层 sources / envelope payload.sources。
 可直接运行 python3 quwoquan_data/tests/download/test_download_source_plan.py
 """
@@ -17,10 +18,14 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 import argparse
+import io
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+import numpy as np
+from PIL import Image
 
 _TMP = Path(tempfile.mkdtemp(prefix="dl_srcplan_"))
 os.environ["QWQ_DATA_ROOT"] = str(_TMP)
@@ -36,6 +41,7 @@ from _common.paths import (  # noqa: E402
     ensure_batch_layout,
 )
 from _common.source_unit import iter_source_units, resolve_entity_object_dir  # noqa: E402
+import download.handler as handler_mod  # noqa: E402
 from download.handler import handle_download  # noqa: E402
 from download.source_inputs import curated_sources_for_entity  # noqa: E402
 
@@ -43,6 +49,14 @@ _TASK = "旅行/地域/四川省/景区/景区全覆盖"
 _BATCH = "test_batch"
 _EID = "稻城亚丁"
 _BODY_MARK = "离线兜底正文：亚丁三神山与牛奶海"
+
+
+def _real_jpeg(seed: int, *, size=(800, 600)) -> bytes:
+    rng = np.random.default_rng(seed)
+    arr = rng.integers(0, 256, size=(size[1], size[0], 3), dtype="uint8")
+    buf = io.BytesIO()
+    Image.fromarray(arr, "RGB").save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
 
 
 def _doc(top_level: bool, source_count: int = 1) -> dict:
@@ -66,9 +80,36 @@ def _doc(top_level: bool, source_count: int = 1) -> dict:
             "body": "离线兜底正文：亚丁官方开放与预约信息。",
         },
     ][:source_count]
-    return {"sources": entries} if top_level else {
+    payload = {
+        "sources": entries,
+        "imageUrls": [
+            {
+                "url": "https://img.invalid/a.jpg",
+                "platform": "景区官网",
+                "license": "CC-BY-SA 4.0",
+                "credit": "景区官方",
+                "sourceUrl": "https://img.invalid/a.jpg",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "usageScope": "app_publish",
+                "caption": "稻城亚丁主峰",
+                "relevance": "支撑稻城亚丁主峰段落",
+            },
+            {
+                "url": "https://img.invalid/b.jpg",
+                "platform": "景区官网",
+                "license": "CC-BY-SA 4.0",
+                "credit": "景区官方",
+                "sourceUrl": "https://img.invalid/b.jpg",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "usageScope": "app_publish",
+                "caption": "牛奶海",
+                "relevance": "支撑牛奶海段落",
+            },
+        ],
+    }
+    return payload if top_level else {
         "schemaVersion": "quwoquan_data.stage_envelope", "ref": _EID,
-        "payload": {"entityId": _EID, "sources": entries},
+        "payload": {"entityId": _EID, **payload},
     }
 
 
@@ -102,15 +143,60 @@ def test_handle_download_produces_source_unit_from_preset_plan():
     # 对象同构新布局：来源写成 entities/{domain}/{type}/{name}/1.download/sources/01.s1/。
     _seed_object_plan(top_level=True, source_count=3)
     args = argparse.Namespace(task=_TASK, batch=_BATCH, entity_ids=_EID, entity_type="景区")
-    handle_download(args)
+    original_fetch = handler_mod.fetch_source_payload
+    original_image_fetch = handler_mod.fetch_image_payload
+    try:
+        img_a = _real_jpeg(31)
+        img_b = _real_jpeg(32)
+
+        def _fake_fetch(url: str):
+            return {
+                "url": url,
+                "statusCode": 200,
+                "htmlBytes": b"<html></html>",
+                "text": (
+                    f"{_EID} 景区当天开放时间会随天气调整，进山前最好先确认门票、观光车和预约规则。"
+                    f"从游客中心到核心步道之间转场时间不短，如果上午抵达，通常更适合先看主景点再安排长距离徒步。"
+                    f"雨后栈道湿滑、午后风大，带老人或孩子同行时要优先考虑体力分配、补给点位置和返程排队。"
+                ),
+                "sha256": "sha",
+            }
+
+        def _fake_image_fetch(url, *, min_bytes=3000):
+            body = img_a if url.endswith("a.jpg") else img_b
+            import hashlib as _h
+
+            return {
+                "url": url,
+                "ext": ".jpg",
+                "bytes": body,
+                "contentType": "image/jpeg",
+                "sha256": _h.sha256(body).hexdigest(),
+            }
+
+        handler_mod.fetch_source_payload = _fake_fetch
+        handler_mod.fetch_image_payload = _fake_image_fetch
+        handle_download(args)
+    finally:
+        handler_mod.fetch_source_payload = original_fetch
+        handler_mod.fetch_image_payload = original_image_fetch
     obj = resolve_entity_object_dir(_TASK, _BATCH, _EID, etype_hint="景区")
     units = iter_source_units(obj)
     assert units, f"no source unit under {obj}"
     assert [unit.name for unit in units] == ["01.s1", "02.s2", "03.s3"], units
     src_md = units[0] / "source.md"
+    clean_md = units[0] / "source.clean.md"
     assert src_md.is_file(), f"missing {src_md}"
+    assert clean_md.is_file(), f"missing {clean_md}"
     assert (units[0] / "meta.json").is_file()
-    assert _BODY_MARK in src_md.read_text(encoding="utf-8")
+    source_text = src_md.read_text(encoding="utf-8")
+    clean_text = clean_md.read_text(encoding="utf-8")
+    assert _BODY_MARK in source_text
+    assert "manual_source_plan_note:" in source_text
+    assert "开放时间" in source_text and "门票" in source_text and "返程排队" in source_text
+    assert _BODY_MARK not in clean_text
+    assert "manual_source_plan_note:" not in clean_text
+    assert "开放时间" in clean_text and "门票" in clean_text and "返程排队" in clean_text
     # 不再产生对象级散落 images/
     assert not (obj / "images").exists()
 

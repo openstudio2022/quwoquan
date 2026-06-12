@@ -7,7 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart
 /// 默认带上对象主页 / 圈子关联，降低用户绑定的心智成本。
 ///
 /// 兼容性：`/create` 路由同时接受裸 [HomepageCanonicalReference] 作为 extra
-/// （对象页历史入口），本类型用于需要携带圈子锚点的入口。
+/// （对象页既往入口），本类型用于需要携带圈子锚点的入口。
 class CreateEntryArguments {
   const CreateEntryArguments({this.homepage, this.circleId, this.circleName});
 

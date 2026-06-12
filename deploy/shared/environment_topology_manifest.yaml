@@ -292,9 +292,6 @@
         "mediaImage": "http://118.31.239.122:19100",
         "mediaVideo": "http://118.31.239.122:19100",
         "mediaUpload": "http://118.31.239.122:19100"
-      },
-      "origins": {
-        "mediaOrigin": "http://118.31.239.122:19110"
       }
     },
     "prod-sim": {
@@ -326,9 +323,6 @@
         "mediaImage": "http://118.31.239.122:19100",
         "mediaVideo": "http://118.31.239.122:19100",
         "mediaUpload": "http://118.31.239.122:19100"
-      },
-      "origins": {
-        "mediaOrigin": "http://118.31.239.122:19110"
       }
     }
   }

@@ -13,6 +13,7 @@ from _common.paths import (
 from _common.io import write_json, write_assistant_task
 from _common.source_catalog import source_plan_guidance, vertical_from_task_id
 from _common.source_unit import resolve_entity_object_dir
+from vertical.source_registry import build_travel_source_guidance
 
 
 def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Path:
@@ -22,6 +23,8 @@ def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Pa
     会话任务清单落 _shared/assistant_tasks（批次工作区，可清理可重投）。
     """
     guidance = source_plan_guidance(vertical_from_task_id(task_id))
+    vertical = vertical_from_task_id(task_id)
+    registry_guidance = build_travel_source_guidance() if vertical == "travel" else {}
     refs = []
     for ent in entities:
         ref = ent.get("entityId", ent.get("id"))
@@ -40,6 +43,7 @@ def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Pa
                     "entityType": ent.get("entityType", ""),
                     # 源类别引导（「全」）：agent 据此按类别全面采源、按 examplePlatforms 标 platform
                     "sourceCategoryGuidance": guidance,
+                    "sourceRegistryGuidance": registry_guidance,
                     "sources": ent.get("sources", []),
                 },
             })

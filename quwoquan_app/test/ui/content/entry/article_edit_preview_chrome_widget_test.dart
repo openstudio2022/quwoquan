@@ -76,7 +76,7 @@ void main() {
       activeArticlePageId: pages.first.id,
       activeArticleBlockId: blocks.first.id,
       articleTemplate: ArticleTemplatePreset.journal,
-      articlePaperTexture: ArticlePaperTexture.white,
+      articlePaperTexture: ArticlePaperTexture.darkPaper,
       articleFontPreset: ArticleFontPreset.clean,
       articleCoverImagePath: '',
       titlePresentation: TitlePresentation.collapsed,

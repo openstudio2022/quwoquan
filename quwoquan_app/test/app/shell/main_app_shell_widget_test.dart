@@ -979,7 +979,7 @@ void main() {
       expect(find.text(UITextConstants.workFormatFilterAll), findsWidgets);
       expect(find.text(UITextConstants.workFormatFilterVideo), findsWidgets);
       expect(find.text(UITextConstants.workFormatFilterImage), findsOneWidget);
-      expect(find.text(UITextConstants.workFormatFilterNote), findsOneWidget);
+      expect(find.text(UITextConstants.workFormatFilterArticle), findsOneWidget);
       expect(
         find.text(UITextConstants.webPcSearchHintFeatured),
         findsOneWidget,

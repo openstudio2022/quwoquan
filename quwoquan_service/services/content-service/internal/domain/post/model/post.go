@@ -123,8 +123,8 @@ type Post struct {
 	Rating                    int64          `json:"rating" bson:"rating"`
 	ReviewAspects             any            `json:"reviewAspects" bson:"reviewAspects"`
 	MediaUrls                 []string       `json:"mediaUrls" bson:"mediaUrls"`
+	MediaItems                any            `json:"mediaItems" bson:"mediaItems"`
 	CoverUrl                  string         `json:"coverUrl" bson:"coverUrl"`
-	ArticleDocument           map[string]any `json:"articleDocument" bson:"articleDocument"`
 	ArticleMarkdown           string         `json:"articleMarkdown" bson:"articleMarkdown"`
 	ArticleMarkdownVersion    string         `json:"articleMarkdownVersion" bson:"articleMarkdownVersion"`
 	ArticleMarkdownDigest     string         `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`

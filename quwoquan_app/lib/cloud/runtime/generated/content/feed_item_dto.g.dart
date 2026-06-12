@@ -25,6 +25,8 @@ class FeedItemDto {
   final int favoriteCount;
   final int shareCount;
   final DateTime createdAt;
+  final DateTime? updatedAt;
+  final DateTime? publishedAt;
   final List<Map<String, dynamic>>? circleSummaries;
   final List<String>? circleIds;
   final List<String>? circleNames;
@@ -38,6 +40,9 @@ class FeedItemDto {
   final String? articleFontPreset;
   final String? articleMarkdownDigest;
   final Map<String, dynamic>? articleRenderProfile;
+  final String? contentVertical;
+  final String? paperThemeMode;
+  final String? paperTexture;
   final List<Map<String, dynamic>>? cards;
   final int? articlePresentationVersion;
   final List<IntersectionReason>? intersectionReasons;
@@ -66,6 +71,8 @@ class FeedItemDto {
     required this.favoriteCount,
     required this.shareCount,
     required this.createdAt,
+    this.updatedAt,
+    this.publishedAt,
     this.circleSummaries,
     this.circleIds,
     this.circleNames,
@@ -79,6 +86,9 @@ class FeedItemDto {
     this.articleFontPreset,
     this.articleMarkdownDigest,
     this.articleRenderProfile,
+    this.contentVertical,
+    this.paperThemeMode,
+    this.paperTexture,
     this.cards,
     this.articlePresentationVersion,
     this.intersectionReasons,
@@ -108,7 +118,9 @@ class FeedItemDto {
       commentCount: (m['commentCount'] as num?)?.toInt() ?? (m['commentsCount'] as num?)?.toInt() ?? (m['comments'] as num?)?.toInt() ?? (m['comment_count'] as num?)?.toInt() ?? 0,
       favoriteCount: (m['favoriteCount'] as num?)?.toInt() ?? (m['savesCount'] as num?)?.toInt() ?? (m['bookmarks'] as num?)?.toInt() ?? (m['favorite_count'] as num?)?.toInt() ?? 0,
       shareCount: (m['shareCount'] as num?)?.toInt() ?? (m['shares'] as num?)?.toInt() ?? (m['share_count'] as num?)?.toInt() ?? 0,
-      createdAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
+      createdAt: _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
+      updatedAt: _parseDateTime(m['updatedAt']) ?? _parseDateTime(m['updated_at']) ?? null,
+      publishedAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['published_at']) ?? null,
       circleSummaries: _parseMapList(m['circleSummaries']),
       circleIds: _parseStringList(m['circleIds']) ?? null,
       circleNames: _parseStringList(m['circleNames']) ?? null,
@@ -122,6 +134,9 @@ class FeedItemDto {
       articleFontPreset: m['articleFontPreset']?.toString() ?? null,
       articleMarkdownDigest: m['articleMarkdownDigest']?.toString() ?? null,
       articleRenderProfile: _parseStringKeyMap(m['articleRenderProfile']) ?? null,
+      contentVertical: m['contentVertical']?.toString() ?? m['categoryId']?.toString() ?? m['category']?.toString() ?? m['vertical']?.toString() ?? null,
+      paperThemeMode: m['paperThemeMode']?.toString() ?? null,
+      paperTexture: m['paperTexture']?.toString() ?? m['articlePaperTexture']?.toString() ?? null,
       cards: _parseMapList(m['cards']),
       articlePresentationVersion: (m['articlePresentationVersion'] as num?)?.toInt() ?? null,
       intersectionReasons: m['intersectionReasons'] == null ? null : _parseProjectionDtoList(m['intersectionReasons'], IntersectionReason.fromMap),
@@ -153,6 +168,8 @@ class FeedItemDto {
       'favoriteCount': favoriteCount,
       'shareCount': shareCount,
       'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      'publishedAt': publishedAt,
       'circleSummaries': circleSummaries,
       'circleIds': circleIds,
       'circleNames': circleNames,
@@ -166,6 +183,9 @@ class FeedItemDto {
       'articleFontPreset': articleFontPreset,
       'articleMarkdownDigest': articleMarkdownDigest,
       'articleRenderProfile': articleRenderProfile,
+      'contentVertical': contentVertical,
+      'paperThemeMode': paperThemeMode,
+      'paperTexture': paperTexture,
       'cards': cards,
       'articlePresentationVersion': articlePresentationVersion,
       'intersectionReasons': intersectionReasons,
@@ -196,6 +216,8 @@ class FeedItemDto {
     int? favoriteCount,
     int? shareCount,
     DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? publishedAt,
     List<Map<String, dynamic>>? circleSummaries,
     List<String>? circleIds,
     List<String>? circleNames,
@@ -209,6 +231,9 @@ class FeedItemDto {
     String? articleFontPreset,
     String? articleMarkdownDigest,
     Map<String, dynamic>? articleRenderProfile,
+    String? contentVertical,
+    String? paperThemeMode,
+    String? paperTexture,
     List<Map<String, dynamic>>? cards,
     int? articlePresentationVersion,
     List<IntersectionReason>? intersectionReasons,
@@ -237,6 +262,8 @@ class FeedItemDto {
       favoriteCount: favoriteCount ?? this.favoriteCount,
       shareCount: shareCount ?? this.shareCount,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      publishedAt: publishedAt ?? this.publishedAt,
       circleSummaries: circleSummaries ?? this.circleSummaries,
       circleIds: circleIds ?? this.circleIds,
       circleNames: circleNames ?? this.circleNames,
@@ -250,6 +277,9 @@ class FeedItemDto {
       articleFontPreset: articleFontPreset ?? this.articleFontPreset,
       articleMarkdownDigest: articleMarkdownDigest ?? this.articleMarkdownDigest,
       articleRenderProfile: articleRenderProfile ?? this.articleRenderProfile,
+      contentVertical: contentVertical ?? this.contentVertical,
+      paperThemeMode: paperThemeMode ?? this.paperThemeMode,
+      paperTexture: paperTexture ?? this.paperTexture,
       cards: cards ?? this.cards,
       articlePresentationVersion: articlePresentationVersion ?? this.articlePresentationVersion,
       intersectionReasons: intersectionReasons ?? this.intersectionReasons,

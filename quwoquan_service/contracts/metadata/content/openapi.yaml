@@ -296,7 +296,7 @@ components:
           type: object
           additionalProperties: true
           description: |
-            圈子/tagRefs/visibility/articleDocument 等扩展可放此对象；亦允许与扁平 FeedItemDto 字段并存（见 discovery_feed projection）。
+            圈子/tagRefs/visibility 等扩展可放此对象；亦允许与扁平 FeedItemDto 字段并存（见 discovery_feed projection）。
     BehaviorEvent:
       type: object
       required: [contentId, eventType, timestamp]

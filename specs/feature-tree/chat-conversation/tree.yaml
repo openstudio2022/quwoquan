@@ -93,4 +93,12 @@ l2:
           - feature: session-log-metric-schema
             l5:
               - feature: anomaly-alert-guard
+  - feature: commercial-message-system
+    l3:
+      - feature: message-home-commercial-ia
+      - feature: contact-home-commercial-ia
+      - feature: message-home-filter-contract
+      - feature: contact-home-relationship-projection
+      - feature: group-home-chat-info-contract
+      - feature: commercial-remote-only-message-system
 

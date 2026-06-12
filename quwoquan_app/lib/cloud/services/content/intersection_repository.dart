@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_api_query_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
@@ -139,7 +140,10 @@ class MockIntersectionRepository implements IntersectionRepository {
     int limit = CloudApiQueryDefaults.intersectionFeedLimit,
   }) async {
     final wanted = (channel ?? '').trim();
-    final pool = _channelReasons[wanted] ?? _channelReasons['recommend']!;
+    final pool =
+        _fixtureReasons(channel: wanted.isEmpty ? 'recommend' : wanted) ??
+        _channelReasons[wanted] ??
+        _channelReasons['recommend']!;
     final items = pool.map(_withExposureState).toList(growable: false);
     items.sort((a, b) {
       final aSeen = a.rankState == 'seen' ? 1 : 0;
@@ -213,10 +217,7 @@ class MockIntersectionRepository implements IntersectionRepository {
   }
 
   /// 云侧实例化连接说明（mock 模拟云端下发，端不在 UI 拼装）。
-  String _connectionSummaryFor(
-    String objectType,
-    List<_EvidenceSeed> groups,
-  ) {
+  String _connectionSummaryFor(String objectType, List<_EvidenceSeed> groups) {
     final samples = groups
         .where((g) => g.sampleText.trim().isNotEmpty)
         .take(2)
@@ -535,15 +536,54 @@ class MockIntersectionRepository implements IntersectionRepository {
     return reasons.map(_withDefaultPointSummary).toList(growable: false);
   }
 
+  /// Contract fixture（intersection_core）优先：与 alpha/beta/gamma seed 同源。
+  /// `freshAgoHours` 为相对小时数，运行时转 freshAt，保证「新增」语义稳定。
+  static List<IntersectionReason>? _fixtureReasons({String? channel}) {
+    final seed = ContractFixtureRuntimeLoader.contentSeedSet(
+      'intersection_core',
+    );
+    if (seed == null) return null;
+    Object? raw;
+    if (channel == null) {
+      raw = seed['inboxReasons'];
+    } else {
+      final channels = seed['channelReasons'];
+      if (channels is! Map) return null;
+      raw = channels[channel] ?? channels['recommend'];
+    }
+    if (raw is! List) return null;
+    final reasons = raw
+        .whereType<Map>()
+        .map((entry) {
+          final map = Map<String, dynamic>.from(entry);
+          final agoHours = map.remove('freshAgoHours');
+          var reason = IntersectionReason.fromMap(map);
+          if (agoHours is num) {
+            reason = reason.copyWith(freshAt: _isoMinusHours(agoHours.toInt()));
+          }
+          return reason;
+        })
+        .toList(growable: false);
+    return reasons.isEmpty ? null : _withDefaultPointSummaries(reasons);
+  }
+
   /// canonical 我的交集 inbox（覆盖 5 维度，含事实/概率混样、头像/名字/新鲜度）。
+  /// Contract fixture 可用时与 seed 同源；否则回退行内 canonical 数据。
+  static List<IntersectionReason> get _inboxReasons =>
+      _fixtureReasons() ?? _fallbackInboxReasons;
+
   static List<IntersectionReason>
-  get _inboxReasons => _withDefaultPointSummaries(<IntersectionReason>[
+  get _fallbackInboxReasons => _withDefaultPointSummaries(<IntersectionReason>[
     IntersectionReason(
       dimension: 'relationship',
       intersectionId: 'ix_rel_1',
       intersectionClass: 'fact',
       label: '共同关注',
       displayName: '林清越',
+      objectKind: 'person',
+      primaryText: '4位共同好友',
+      secondaryText: '都在黄金投资圈',
+      weightTier: 'heavy',
       displayText: '4 位共同关注',
       avatarUrl:
           'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
@@ -561,6 +601,9 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionClass: 'fact',
       label: '互相关注',
       displayName: '周屿',
+      objectKind: 'person',
+      primaryText: '你们互相关注',
+      weightTier: 'light',
       displayText: '你们互相关注',
       avatarUrl:
           'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
@@ -578,6 +621,10 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionClass: 'fact',
       label: '同校',
       displayName: '新东方校友',
+      objectKind: 'school',
+      primaryText: '同校校友',
+      secondaryText: '3位校友最近活跃',
+      weightTier: 'light',
       displayText: '同校校友',
       avatarUrl:
           'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=100',
@@ -585,7 +632,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       strength: 0.82,
       relationKind: 'org',
       actionType: 'view',
-      actionTargetId: 'hp_xdf_alumni',
+      actionTargetId: 'fixture_homepage_university_pku',
       source: 'identity',
       freshAt: _isoMinusHours(10),
     ),
@@ -595,6 +642,9 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionClass: 'fact',
       label: '共看内容',
       displayName: '黄金投资圈',
+      objectKind: 'circle',
+      primaryText: '8人和你共看黄金内容',
+      weightTier: 'heavy',
       displayText: '共看黄金内容',
       avatarUrl:
           'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=100',
@@ -612,6 +662,9 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionClass: 'fact',
       label: '同游',
       displayName: '西湖',
+      objectKind: 'place',
+      primaryText: '5人有相同旅行足迹',
+      weightTier: 'light',
       displayText: '有相同旅行足迹',
       avatarUrl:
           'https://images.unsplash.com/photo-1606767341197-3d8e6f0a2a9b?w=100',
@@ -619,7 +672,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       strength: 0.76,
       relationKind: 'place',
       actionType: 'view',
-      actionTargetId: 'hp_west_lake',
+      actionTargetId: 'homepage_sight_west_lake',
       source: 'location',
       freshAt: _isoMinusHours(2),
     ),
@@ -629,6 +682,10 @@ class MockIntersectionRepository implements IntersectionRepository {
       intersectionClass: 'affinity',
       label: '可能合得来',
       displayName: '陆衡',
+      objectKind: 'person',
+      primaryText: '可能合得来',
+      secondaryText: '兴趣相似',
+      weightTier: 'light',
       displayText: '可能合得来',
       avatarUrl:
           'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
@@ -644,13 +701,13 @@ class MockIntersectionRepository implements IntersectionRepository {
     ),
   ]);
 
-  /// 各频道交集推荐（事实优先 + 概率补充），补齐 campus/travel。
+  /// 各频道交集推荐（事实优先 + 概率补充），补齐 campus/travel；fixture 缺位时回退。
   static Map<String, List<IntersectionReason>>
   get _channelReasons => <String, List<IntersectionReason>>{
     'recommend': <IntersectionReason>[
-      _inboxReasons[0],
-      _inboxReasons[3],
-      _inboxReasons[5],
+      _fallbackInboxReasons[0],
+      _fallbackInboxReasons[3],
+      _fallbackInboxReasons[5],
     ],
     'campus': _withDefaultPointSummaries(<IntersectionReason>[
       IntersectionReason(
@@ -659,6 +716,9 @@ class MockIntersectionRepository implements IntersectionRepository {
         intersectionClass: 'fact',
         label: '同专业',
         displayName: '苏黎',
+        objectKind: 'person',
+        primaryText: '同专业同校',
+        weightTier: 'light',
         displayText: '同专业同校',
         avatarUrl:
             'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
@@ -676,6 +736,9 @@ class MockIntersectionRepository implements IntersectionRepository {
         intersectionClass: 'affinity',
         label: '同社团可能',
         displayName: '吉他社',
+        objectKind: 'circle',
+        primaryText: '推荐加入社团',
+        weightTier: 'light',
         displayText: '推荐加入社团',
         avatarUrl:
             'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100',
@@ -697,6 +760,9 @@ class MockIntersectionRepository implements IntersectionRepository {
         intersectionClass: 'fact',
         label: '同目的地',
         displayName: '大理',
+        objectKind: 'place',
+        primaryText: '7人有相同目的地',
+        weightTier: 'light',
         displayText: '有相同目的地',
         avatarUrl:
             'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=100',
@@ -704,7 +770,7 @@ class MockIntersectionRepository implements IntersectionRepository {
         strength: 0.81,
         relationKind: 'place',
         actionType: 'view',
-        actionTargetId: 'hp_dali',
+        actionTargetId: 'fixture_homepage_travel_photo_dali',
         source: 'location',
         freshAt: _isoMinusHours(8),
       ),
@@ -714,6 +780,9 @@ class MockIntersectionRepository implements IntersectionRepository {
         intersectionClass: 'affinity',
         label: '兴趣相近',
         displayName: '徒步旅人',
+        objectKind: 'person',
+        primaryText: '可能喜欢相同路线',
+        weightTier: 'light',
         displayText: '可能喜欢相同路线',
         avatarUrl:
             'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=100',

@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -66,7 +67,9 @@ abstract class ProfileReadRepository {
     int limit = CloudApiDefaults.userCirclesLimit,
   });
   Future<UserProfileStatsViewData> getUserStats(String userId);
-  Future<CreatorImpactReadModel> getCreatorImpact(String userId);
+
+  /// 创作者影响力摘要（GetAuthorImpact，codegen DTO；displayText 云侧产出端只读直出）。
+  Future<AuthorImpactSummary> getAuthorImpact(String userId);
 
   Future<List<SocialRelationSearchItemView>> searchSocialRelations({
     required String query,
@@ -426,38 +429,21 @@ class MockUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<CreatorImpactReadModel> getCreatorImpact(String userId) async {
-    final stats = await getUserStats(userId);
-    return CreatorImpactReadModel.fromMap(<String, dynamic>{
-      'authorId': userId,
-      'total': stats.followerCount + stats.likeCount + stats.circleCount,
-      'items': <Map<String, dynamic>>[
-        if (stats.followerCount > 0)
-          <String, dynamic>{
-            'helpType': 'relationship_help',
-            'action': 'follow',
-            'intersectionDimension': 'relationship',
-            'count': stats.followerCount,
-            'source': 'mock',
-          },
-        if (stats.circleCount > 0)
-          <String, dynamic>{
-            'helpType': 'community_help',
-            'action': 'join_circle',
-            'intersectionDimension': 'interest',
-            'count': stats.circleCount,
-            'source': 'mock',
-          },
-        if (stats.likeCount > 0)
-          <String, dynamic>{
-            'helpType': 'decision_help',
-            'action': 'like',
-            'intersectionDimension': 'content',
-            'count': stats.likeCount,
-            'source': 'mock',
-          },
-      ],
-    });
+  Future<AuthorImpactSummary> getAuthorImpact(String userId) async {
+    // Contract seed（intersection_core.authorImpact）驱动；无 seed/未登记作者时返回空摘要（不造假）。
+    final seed = ContractFixtureRuntimeLoader.contentSeedSet(
+      'intersection_core',
+    );
+    final impactByAuthor = seed?['authorImpact'];
+    if (impactByAuthor is Map) {
+      final entry = impactByAuthor[userId];
+      if (entry is Map) {
+        return AuthorImpactSummary.fromMap(
+          entry.cast<String, dynamic>(),
+        );
+      }
+    }
+    return AuthorImpactSummary(authorId: userId);
   }
 
   @override
@@ -1193,7 +1179,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<CreatorImpactReadModel> getCreatorImpact(String userId) async {
+  Future<AuthorImpactSummary> getAuthorImpact(String userId) async {
     final url = _uri(
       ContentApiMetadata.getAuthorImpactPath(subAccountId: userId),
       queryParameters: const <String, String>{'limit': '12'},
@@ -1205,9 +1191,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       ),
     );
     if (resp.statusCode != 200) {
-      throw Exception('getCreatorImpact failed: ${resp.statusCode}');
+      throw Exception('getAuthorImpact failed: ${resp.statusCode}');
     }
-    return CreatorImpactReadModel.fromMap(
+    return AuthorImpactSummary.fromMap(
       _decodeObject(resp, ContentRequestPageIds.getAuthorImpact),
     );
   }

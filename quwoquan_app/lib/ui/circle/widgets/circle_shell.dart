@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -76,15 +75,14 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         ? visible.map((section) => section.sectionType).toSet()
         : <String>{'works', 'interaction', 'chat', 'storage'};
     final tabs = <_TabSpec>[];
-    tabs.add(const _TabSpec(type: 'home', label: '首页'));
     if (available.contains('works')) {
       tabs.add(const _TabSpec(type: 'content', label: '内容'));
     }
     if (available.contains('interaction')) {
-      tabs.add(const _TabSpec(type: 'members', label: '成员'));
+      tabs.add(const _TabSpec(type: 'groups', label: '讨论'));
     }
     if (available.contains('chat') || available.contains('storage')) {
-      tabs.add(const _TabSpec(type: 'groups', label: '群或组织'));
+      tabs.add(const _TabSpec(type: 'members', label: '成员'));
     }
     if (tabs.isNotEmpty) return tabs;
     return _defaultSections
@@ -92,9 +90,8 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           (type) => _TabSpec(
             type: type,
             label: switch (type) {
-              'home' => '首页',
               'content' => '内容',
-              'groups' => '群或组织',
+              'groups' => '讨论',
               'members' => '成员',
               _ => type,
             },
