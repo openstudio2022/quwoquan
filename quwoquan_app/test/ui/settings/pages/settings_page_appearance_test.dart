@@ -14,6 +14,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
+import 'package:quwoquan_app/ui/settings/widgets/settings_commercial_account_text.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 
 class _AssistantRepo implements AssistantRepository {
@@ -279,27 +280,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text(UITextConstants.accountCommercialSectionTitle),
+        find.text(SettingsCommercialAccountText.sectionTitle),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.accountCommercialCredentials),
+        find.text(SettingsCommercialAccountText.credentials),
+        findsOneWidget,
+      );
+      expect(find.text(SettingsCommercialAccountText.devices), findsOneWidget);
+      expect(find.text(SettingsCommercialAccountText.delete), findsOneWidget);
+      expect(
+        find.text(SettingsCommercialAccountText.dataRights),
         findsOneWidget,
       );
       expect(
-        find.text(UITextConstants.accountCommercialDevices),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.accountCommercialDelete),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.accountCommercialDataRights),
-        findsOneWidget,
-      );
-      expect(
-        find.text(UITextConstants.accountCommercialDevicesBlocked),
+        find.text(SettingsCommercialAccountText.devicesBlocked),
         findsWidgets,
       );
     });
@@ -342,12 +337,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text(UITextConstants.accountCommercialLoginRequired),
+        find.text(SettingsCommercialAccountText.loginRequired),
         findsOneWidget,
       );
-      await tester.tap(
-        find.text(UITextConstants.accountCommercialLoginRequired),
-      );
+      await tester.tap(find.text(SettingsCommercialAccountText.loginRequired));
       await tester.pumpAndSettle();
 
       expect(find.text(AuthGateReason.settingsAccount.title), findsOneWidget);
