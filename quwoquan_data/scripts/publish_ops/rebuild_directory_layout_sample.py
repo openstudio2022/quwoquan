@@ -173,6 +173,16 @@ def _build_entity(
         f"值不值得专程跑一趟，于我是值的，慢慢来即可。\n"
     )
     (obj / "page.md").write_text(page_md, encoding="utf-8")
+    (obj / "4.draft" / "page.md").write_text(page_md, encoding="utf-8")
+    page_digest = compute_document_sha256(page_md)
+    write_json(obj / "2.quality" / "quality_analysis.json", {
+        "sourcePaths": [source_ref],
+        "recommendation": "proceed",
+        "baseDraft": {
+            "sourceRef": source_ref,
+            "mode": "factual_reference_only",
+        },
+    })
     write_json(obj / "_entity.json", {
         "label": name,
         "domain": "地点",
@@ -192,6 +202,34 @@ def _build_entity(
         "entityRef": f"/entity/地点/景区/{name}",
         "assets": manifest_assets,
         "citedSourceRefs": [source_ref],
+    })
+    review_dir = obj / "5.review"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    write_json(review_dir / "review.json", {
+        "decision": "approved",
+        "checks": {
+            "sourceReadiness": {"passed": True},
+            "entityPageQuality": {"passed": True},
+        },
+    })
+    write_json(review_dir / "provenance.json", {
+        "schemaVersion": "quwoquan_data.entity_provenance",
+        "final": {
+            "entityRef": f"/entity/地点/景区/{name}",
+            "generator": "agent",
+            "pageDigest": page_digest,
+        },
+        "agentInput": {
+            "writingPack": "3.compose/entity_page_input.json",
+            "prompt": "4.draft/page.md",
+        },
+        "originalSources": [{"path": source_ref, "url": f"https://zh.wikipedia.org/wiki/{name}"}],
+    })
+    write_json(review_dir / "finalization_report.json", {
+        "draftArticleRef": "4.draft/page.md",
+        "finalArticleRef": "page.md",
+        "draftSha256": page_digest,
+        "finalSha256": page_digest,
     })
     return obj
 
@@ -254,9 +292,23 @@ def _build_post(task: str, batch: str, *, global_batch_seq: int, asset_registry)
         "若有两天、愿意为风景吃点苦，就把观景台留给状态最好的清晨。于我，这趟是值的。\n"
     )
     (post / "article.md").write_text(article_md, encoding="utf-8")
+    (post / "4.draft" / "draft.article.md").write_text(article_md, encoding="utf-8")
     render_profile = {"template": "journal", "fontPreset": "handwritten"}
     article_digest = compute_document_sha256(article_md)
     source_ref = relative_batch_ref(ent / "1.download" / "sources" / "01.overview_baike" / "source.md", task, batch)
+    source_unit_ref = relative_batch_ref(ent / "1.download" / "sources" / "01.overview_baike", task, batch)
+    write_json(post / "1.download" / "source_refs.json", {
+        "baseSourceRef": source_ref,
+        "citedSourceRefs": [source_ref],
+        "sourcePaths": [source_ref],
+        "sources": [
+            {
+                "sourceRef": source_ref,
+                "sourceUnitRef": source_unit_ref,
+                "role": "base",
+            }
+        ],
+    })
     manifest = {
         "schemaVersion": "quwoquan_data.post_manifest",
         "topicId": "海螺沟_体验",
@@ -292,6 +344,12 @@ def _build_post(task: str, batch: str, *, global_batch_seq: int, asset_registry)
         "originalSources": [{"path": source_ref, "url": "https://zh.wikipedia.org/wiki/海螺沟"}],
         "gateResults": {"decision": "approved", "checks": {}},
         "citedSourcePaths": [source_ref],
+    })
+    write_json(review_dir / "finalization_report.json", {
+        "draftArticleRef": "4.draft/draft.article.md",
+        "finalArticleRef": "article.md",
+        "draftSha256": article_digest,
+        "finalSha256": article_digest,
     })
     # 对象索引 _object.json（§14.3）：与真实 materialize 一致。
     content_object.write_content_object_index(task, batch, ref)
