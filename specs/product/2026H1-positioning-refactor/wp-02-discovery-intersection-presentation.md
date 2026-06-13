@@ -35,9 +35,9 @@
 ### 2.2 weightTier 轻重分化
 
 - `heavy`：完整理由行（图标 + 蓝色 primaryText）。
-- `light`：弱化形态（仅小图标 + 灰色短文案，或并入作者行尾），具体形态在细化会话内定稿，但必须满足「内容优先」原则（§20.6）。
+- `light`：弱化形态（小图标 + 次级灰短文案），满足「内容优先」原则（§20.6）。
 - `weightTier` 为空时按 `heavy` 兜底（向后兼容现状）。
-- 四口径理由位（单列/双列/沉浸/详情，`lib/ui/content/widgets/intersection_reason_chip.dart`）同源消费，禁止只改其一。
+- 本轮实现口径修正：`intersection_reason_chip.dart` 作为 chip 形态的同源消费点，覆盖双列卡与首页多形态 feed 的结构测试；沉浸式浏览器 / 详情页继续从云侧 reasons 直出解释层，不强行改造成 chip，从而避免把详情解释文案压缩为卡片理由位。
 
 ### 2.3 颜色与语言统一
 
@@ -65,7 +65,7 @@
 
 ## 5. 准出要求
 
-1. T2：四口径理由位 widget 测试 + 双列卡/单列卡/spotlight 结构断言测试全绿（含「理由不在封面 Stack 内」反断言）。
+1. T2：chip 双口径 widget 测试 + 双列卡/首页多形态 feed/spotlight 结构断言测试全绿（含「理由不在封面 Stack 内」反断言）。
 2. T2：weightTier heavy/light/空 三态渲染测试。
 3. 曝光/点击埋点回归测试绿（reportExposure / trackImpression / 归因透传）。
 4. `dart analyze` 0 error；`bash agent_ops/gate/gate_repo.sh --scope app` 全绿（含 `verify_dart_semantic.py` 颜色语义化）。
@@ -77,3 +77,10 @@
 - Given spotlight 候选 ≥6 条，When 渲染交集发现区，Then 单屏可见 3~3.5 张卡，每卡 名称/主交集(蓝)/副交集(灰) 三行以内。
 - Given reason.weightTier=light，Then 内容卡展示弱化形态；=heavy 或空，Then 展示完整理由行。
 - Given reason 无 primaryText 且无 displayText，Then 理由位整体不渲染（无空壳）。
+
+## 7. C0 收口证据（2026-06-12）
+
+- 已落地：`IntersectionReasonChip` 消费 `weightTier`，双列卡与首页多形态 feed 通过同一 chip 管线展示 heavy/light/空三态；spotlight 保持主交集品牌蓝、副交集次级灰，并保留曝光/点击归因路径。
+- 边界登记：原规格「四口径同源」修正为「卡片 chip 双口径同源 + 沉浸/详情 reasons 直出」，避免把详情解释层降格为卡片理由位。
+- 本地证据：`cd quwoquan_app && flutter test test/ui/content/widgets/intersection_reason_chip_widget_test.dart test/ui/discovery/home_intersection_multiform_feed_widget_test.dart`。
+- 仍需集成证据：gamma T3 spotlight 非空窗与真实推荐流曝光/点击归因留证，纳入 `90-integration-acceptance.md` C5。

@@ -75,12 +75,12 @@ gwt_acceptance:
   GWT3:
     title: Markdown 实体标签进入实体主页
     given:
-    - QWQ Rich Markdown 中包含实体标签，例如 `@[灵隐寺](entity:homepage/hp_lingyin)`。
+    - QWQ Rich Markdown 中包含实体标签，例如 `@[灵隐寺](entity:homepage/homepage_sight_west_lake)`。
     when:
     - 用户点击正文实体标签。
     then:
     - 标签以行内样式显示。
-    - "点击进入 `AppRoutePaths.homepageDetail(id: 'hp_lingyin')`。"
+    - "点击进入 `AppRoutePaths.homepageDetail(id: 'homepage_sight_west_lake')`。"
     done_when:
     - codec 与 widget/navigation 测试通过。
     edge_cases:

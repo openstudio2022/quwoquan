@@ -5,13 +5,13 @@
 
 ## 0. 一句话定义
 
-以商用发布为目标，重构消息模块的信息架构和端云数据边界：`消息` 回答“最近发生了什么”，`联系` 回答“我和谁建立了连接”，并通过 `Entity ⇄ Circle ⇄ Group ⇄ Message` 的真实云端 read model 打通实体、圈子、群、交集和通知。
+以商用发布为目标，重构消息模块的信息架构和端云数据边界：`消息` 回答“最近发生了什么”，`联系` 回答“我和谁建立了连接”，并通过 `Entity ⇄ Circle ⇄ Discussion ⇄ Message` 的真实云端 read model 打通实体、圈子、讨论、交集和通知。
 
 本能力不保留旧 IA 和旧 Mock 拼接路径。App 只消费 metadata/codegen 产生的 Remote DTO；业务事实由云端聚合服务提供。
 
 ## 1. 背景
 
-当前消息体系继承微信式“消息/联系人/聊天/群聊”心智，导致五类商用风险：
+当前消息体系继承微信式“消息/联系人/聊天/群聊”心智，导致五类商用风险；2026H1 商用口径中，用户前台统一称为「讨论」，机器契约继续使用 `group`。
 
 1. 联系人与趣我圈核心关系“交集”割裂。
 2. 群被理解为聊天容器，而不是协作单元。
@@ -23,10 +23,10 @@
 
 | 对象 | 回答的问题 | 商用边界 |
 |---|---|---|
-| `Entity/Homepage` | 什么值得关注 | 对象页不直接拥有 `Conversation`，只通过相关 `CircleGroup.conversationId` 进入群聊。 |
+| `Entity/Homepage` | 什么值得关注 | 对象页不直接拥有 `Conversation`，只通过相关 `CircleGroup.conversationId` 进入讨论。 |
 | `Circle` | 哪些人因共同兴趣聚在一起 | 圈子是成员池、内容和活动聚合，不是聊天群。 |
-| `Group/CircleGroup` | 这些人一起做什么 | 群是协作单元，承载公告、相册、文件、活动、成员，并绑定一个 chat `Conversation`。 |
-| `Conversation` | 消息如何收发 | 只负责消息、成员、已读、会话状态、群头像预合成，不定义兴趣或组织语义。 |
+| `Discussion/CircleGroup` | 这些人一起做什么 | 讨论是协作单元，承载公告、相册、文件、活动、成员，并绑定一个 chat `Conversation`。 |
+| `Conversation` | 消息如何收发 | 只负责消息、成员、已读、会话状态、讨论头像预合成，不定义兴趣或组织语义。 |
 | `Contact` | 我和谁建立了连接 | 由 `FollowEdge`、`BlockEdge`、`GreetingRequest`、`ContactDiscovery`、`ConversationMember`、`CircleMember` 聚合生成。 |
 | `Intersection` | 我们有什么具体交集 | 输出最多 2 个可展示交集点和证据来源，不输出“ N 个交集”。 |
 | `Notification/AppMessage` | 有哪些非聊天动态 | 持久化 inbox，支持类型、已读水位、未读计数和 dismiss/read 状态。 |
@@ -62,7 +62,7 @@
 二级胶囊：
 
 ```text
-全部 / 未读 / 群聊 / 私聊 / 通知
+全部 / 未读 / 讨论 / 私聊 / 通知
 ```
 
 列表规范：
@@ -71,8 +71,8 @@
 - 未读数字显示在头像右上角。
 - 不显示复杂业务标签。
 - `通知` 行必须来自 notification / app message 云端 inbox。
-- 高保中的“小趣发现新圈子和新群聊”必须是 `AppMessage` 或 assistant insight 类型的真实通知行，不得硬编码运营卡。
-- 任一会话从 `全部 / 未读 / 群聊 / 私聊` 任一筛选入口打开并完成已读回执后，所有 `MessageHome` filter 中该会话的未读计数必须同步清零；App 端需失效同一会话的所有聚合引用，服务端以 `MarkAsRead` / read watermark 驱动下一次 `ListMessageHome` 返回一致状态。
+- 高保中的“小趣发现新圈子和新讨论”必须是 `AppMessage` 或 assistant insight 类型的真实通知行，不得硬编码运营卡。
+- 任一会话从 `全部 / 未读 / 讨论 / 私聊` 任一筛选入口打开并完成已读回执后，所有 `MessageHome` filter 中该会话的未读计数必须同步清零；App 端需失效同一会话的所有聚合引用，服务端以 `MarkAsRead` / read watermark 驱动下一次 `ListMessageHome` 返回一致状态。
 
 ### 3.3 联系页
 
@@ -86,15 +86,15 @@
 二级胶囊：
 
 ```text
-全部 / 互关 / 圈子 / 群聊
+全部 / 互相关注 / 圈子 / 讨论
 ```
 
 列表规范：
 
-- 全部：人 + 群混排，按最近互动时间倒序。
+- 全部：人 + 讨论混排，按最近互动时间倒序。
 - 互关：仅展示互相关注用户；超过 20 人显示 A-Z 索引，小于等于 20 人不显示。
 - 圈子：展示圈子列表，不展示联系人列表；点击进入圈子联系人页。
-- 群聊：仅展示已加入群，不展示聊天内容或公告，按最近活跃排序。
+- 讨论：仅展示已加入的讨论，不展示聊天内容或公告，按最近活跃排序。
 - 所有摘要最多展示 2 个具体交集点，如 `摄影圈 · 九寨沟`。
 
 ## 4. 云端契约
@@ -130,18 +130,18 @@
 
 App 不得在 UI/Provider 中拼接来源、成员数、最近互动或交集文案。
 
-### 4.3 群主页与聊天信息
+### 4.3 讨论主页与聊天信息
 
-群聊天页和聊天信息页必须消费同一个 `GroupHome` 事实源：
+讨论页和聊天信息页必须消费同一个 `GroupHome` 事实源（技术对象名保持 `GroupHome`，用户前台显示「讨论」）：
 
-- 群名称
+- 讨论名称
 - 来源实体
 - 来源圈子
 - 成员数
-- 群公告
+- 公告
 - 能力入口：相册、文件、活动、成员
-- 群治理能力：加成员、移除成员、管理员、转让群主、退出或解散
-- 群头像资产：云端预合成 `avatarUrl`
+- 讨论治理能力：加成员、移除成员、管理员、转让群主、退出或解散
+- 讨论头像资产：云端预合成 `avatarUrl`
 
 ### 4.4 交集与通知
 
@@ -154,7 +154,7 @@ App 不得在 UI/Provider 中拼接来源、成员数、最近互动或交集文
 以下不得作为商用主路径：
 
 - App 端依赖 `MockChatRepository`、`MockIntersectionRepository`、`MockAppMessageRepository` 或本地 prototype bundle 拼业务列表。
-- Remote 返回空的联系人圈子/群聊后由 App 自行拼接。
+- Remote 返回空的联系人圈子/讨论后由 App 自行拼接。
 - 服务端生产默认使用 `mock-user`、memory store、noop resolver 或 baseURL 为空返回空。
 - App 消费退役字段 `Circle.conversationId`、`ChatInbox.avatarCompositeUrls`。
 - 旧消息筛选 `@我 / @小趣 / 提醒` 作为新首页主 IA。
@@ -164,7 +164,7 @@ App 不得在 UI/Provider 中拼接来源、成员数、最近互动或交集文
 - 生产包默认 Remote，无 Mock/Remote 切换入口。
 - 页面首屏 p95 <= 300ms；本地已有缓存时先展示缓存，再用 Remote 刷新。
 - 关系门禁必须服务端强校验，不信任 App 筛选。
-- 群头像新建后可见前必须有非空 `avatarUrl` 或稳定服务端 fallback 资产。
+- 讨论头像新建后可见前必须有非空 `avatarUrl` 或稳定服务端 fallback 资产。
 - 所有新增路径、operation、surface、error code 均 metadata-first。
 
 ## 7. 测试映射
@@ -173,7 +173,7 @@ App 不得在 UI/Provider 中拼接来源、成员数、最近互动或交集文
 |---|---|---|
 | SIT | T2/T3 | 消息页、联系页、群主页、通知、交集聚合协同。 |
 | contract | T1/T3 | metadata、DTO、Remote/Mock、真实服务 contract 一致。 |
-| UAT | T4 | 商用真机旅程：消息、联系、群聊天、聊天信息、通知已读。 |
+| UAT | T4 | 商用真机旅程：消息、联系、讨论、聊天信息、通知已读。 |
 
 ## 8. 关联文档
 

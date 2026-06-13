@@ -69,6 +69,7 @@
 - 圈子 feed 排序、推荐与召回策略。
 - profile 壳层、背景拉伸、Tab 吸顶等已有 story 的视觉重构。
 - 新增独立聚合后端或新路由形态。
+- Web 精品不恢复独立「精品队列」hero/rail；当前商用口径为复用发现内容流的宽屏多列墙 + 统一 `workBrowser` 落点。
 
 ## 约束
 
@@ -80,6 +81,21 @@
 - 所有 Repository 必须支持 `appDataSourceModeProvider` 的 Mock/Remote 切换。
 - 运行时同步参数属于 `sys.*`，不得落到 `ops.*`、业务 feature flag 或 `ui_config.yaml`。
 - 不允许再以 `username / userId / authorId / subAccountId` 混合作为状态 key。
+
+## Web 精品定稿规格（WP7 Core）
+
+> 2026-06-12 WP7 刷新：Web 宽屏「精品」不再作为未定义退化态，也不再维护独立精品队列。它是本 L2 的正式宽屏降级规格，目标是与移动端共用内容来源、筛选真相源、埋点语义与沉浸浏览落点。
+
+- `MainTabDestination.featured` 的 context tabs 消费 `ContentUIConfig.workFormatFilters`，唯一 metadata 真相源为 `contracts/metadata/content/post/ui_config.yaml#work_format_filters`。
+- Web Featured filter 到 discovery channel 的映射固定为：
+  - `all -> work`
+  - `image -> photo`
+  - `video -> video`
+  - `article -> article`
+- Web 内容区复用 `HomeMultiFormFeed` 宽屏多列墙；post 点击统一调用 `openHomeFeedPost(...)`，进入 `AppRoutePaths.workBrowser(...)` 与 `WorksImmersiveViewer`。
+- 禁止回退到旧「精品队列」hero/rail、右侧说明 rail 或独立精品壳；如未来要重启独立 Web 精品容器，必须另起 CR 并同步页面矩阵、测试和本 L2 规格。
+- 当前 `work_format_filters` 闭集冻结为 `all / image / video / article`；长文细分与垂类筛选不属于 WP7 Core。
+- 「专题 / 圈子精选」卡位尚未纳入 Core，作为 convergence item；若启用 WP7 Plus，必须 metadata 驱动、配置开关可测、点击跳已有对象/圈子 route。
 
 ## 对标输入与吸收结论
 

@@ -47,8 +47,9 @@ gwt_acceptance:
     tests:
       planned:
       - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: completed
   GWT2:
     title: 旧内容深链入口收敛到 workBrowser
     given:
@@ -118,8 +119,9 @@ gwt_acceptance:
     tests:
       planned:
       - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: completed
   GWT4:
     title: 媒体筛选进入更多菜单
     given:
@@ -144,8 +146,10 @@ gwt_acceptance:
     tests:
       planned:
       - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - cd quwoquan_app && flutter test test/ui/content/post/contract/post_ui_config_contract_test.dart
+    status: completed
   GWT5:
     title: 交集作为推荐解释层
     given:
@@ -171,8 +175,9 @@ gwt_acceptance:
     tests:
       planned:
       - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: completed
   GWT6:
     title: WorkBrowserItem 端云契约一致
     given:
@@ -226,8 +231,9 @@ gwt_acceptance:
     tests:
       planned:
       - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: completed
   GWT8:
     title: 文章实体标签跳转实体主页
     given:
@@ -256,8 +262,9 @@ gwt_acceptance:
       planned:
       - flutter test test/ui/content/markdown/article_markdown_codec_test.dart
       - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/content/markdown/article_markdown_codec_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: completed
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

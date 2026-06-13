@@ -40,8 +40,17 @@ domain_acceptance:
         - quwoquan_app/test/ui/circle/circle_object_homepage_widget_test.dart
         - quwoquan_app/test/ui/entity/entity_object_homepage_widget_test.dart
         - quwoquan_app/test/patrol/object_homepage_network_journey_test.dart
-      recorded: []
-    status: pending
+      recorded:
+        - quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+        - quwoquan_app/test/components/object_page/object_intersection_section_test.dart
+        - quwoquan_app/test/components/object_page/object_page_shell_test.dart
+        - quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
+        - quwoquan_app/test/ui/user/author_impact_card_test.dart
+        - quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+        - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+        - quwoquan_data/tests/produce/test_homepage_introduction_seed.py
+        - quwoquan_service/services/entity-service/tests/homepage_handler_test.go
+    status: implemented
   DA2:
     title: 对象关系契约与硬债验收
     done_when:
@@ -66,8 +75,13 @@ domain_acceptance:
         - quwoquan_service/tests/entity/homepage_type_fixture_contract_test.go
         - quwoquan_service/tests/content/comment_entity_relation_contract_test.go
         - quwoquan_app/test/cloud/runtime/generated/object_page_dto_contract_test.dart
-      recorded: []
-    status: pending
+      recorded:
+        - quwoquan_app/test/cloud/services/content/intersection_object_evidence_test.dart
+        - quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+        - quwoquan_service/contracts/metadata/entity/homepage/projections/homepage_introduction.yaml
+        - quwoquan_service/contracts/metadata/entity/homepage/projections/homepage_introduction_section.yaml
+        - quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+    status: implemented
   DA3:
     title: 运营灰度与回滚验收
     done_when:

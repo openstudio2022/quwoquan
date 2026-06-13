@@ -143,3 +143,4 @@
 
 - 排序：rank 越小越靠前；同 rank 内按云侧返回顺序，端侧不重排。
 - 图标列仅描述「语义槽位」，具体 icon 资源由 WP3 在 `evidence_group.dart` 选定；person/circle/place 等 objectKind 闭集图标与既有 `intersection_entity.dart` 降级逻辑保持一致。
+- 同源防漂移：云侧契约测试 `TestEvidenceKindRank_MatchesWP1AppendixA`（`intersection_service_test.go`）逐项断言本清单 rank 数值与 `evidenceKindRank` 一致；改任一侧必须同步另一侧。

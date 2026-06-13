@@ -30,3 +30,20 @@
 - A6 治理闭环：内容级与用户级举报 / 拉黑可真实提交并进入处置队列（用户级已接 Remote）。
 - A7 审计留痕：危险/双签/放量动作可在审计视图检索，保留 actor / env / 时间。
 - A8 发行纯净：生产包无 Mock 切换入口、无 test_fixtures、默认 Remote。
+
+## 登录与账号商用 Go/No-Go 口径
+
+当前状态：`No-Go`，除非下列阻断项均形成端云实现与 T1-T4 证据，否则不得进入商用发布：
+
+- 账号注销 / 恢复申诉 / 锁定态：必须具备 App 可达入口、后端状态机、冷静期或立即注销策略、撤销路径、客服 handoff 与结构化错误。
+- 数据主体权利：数据导出、撤回同意、隐私设置留痕必须可达且可审计；设置页可以展示阻断说明，但 release 包不得只保留“待接入”空壳。
+- 法律文本与同意记录：登录页携带的 `agreementVersion/privacyVersion` 必须落 consent record，并能按 owner 查询；法律 URL 与版本必须通过发布前探测。
+- 账号安全审计：凭证绑定/解绑、最后一个凭证保护、多设备退出、异常登录、账号注销/恢复、拉黑/举报等危险动作必须产生统一审计事件。
+- 发行纯净：prod 包默认 Remote，无 Mock 切换入口，无 test fixtures、seed/reset 或调试开关泄漏。
+
+最小证据包：
+
+- T1：`make verify-app-auth-policy`、错误码/法律版本/权限清单静态校验。
+- T2：`quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart`、登录门/会话恢复 Widget 与 Provider 测试。
+- T3：user-service `auth_contract_test.go` / `credential_contract_test.go` / `persona_contract_test.go` 以及 App RemoteRepository contract。
+- T4：Patrol 或真机证据覆盖首次登录、OTP/一键登录、退出登录、会话过期重登、账号注销/撤销、数据导出/撤回同意。

@@ -190,7 +190,7 @@ domains:
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/content/entry/pages/create_page.dart
         status: compliant
-        note: 发布确认摘要经 postReadPreviewBundleFromPublishConfirmSummary（draftPreview）；上传仍 buildCreatePostPayloadMap
+        note: 发布确认摘要经 postReadPreviewBundleFromPublishConfirmSummary（draftPreview）；buildCreatePostPayloadMap 使用 codegen CreatePostRequestWire 写入 summary/tagRefs/entityRefs/assistantUsePolicy，行内对象提及经 Markdown span 派生 entityRefs。
         target_dto: ContentPublishDraftComposite
         target_read_projection: PostReadPresentation
         target_edit_draft: ContentPublishDraftComposite
@@ -289,6 +289,12 @@ domains:
         target_dto: IntersectionReason
         target_read_projection: IntersectionInboxSummary
         target_edit_draft: N/A
+      - path: quwoquan_app/lib/ui/user/pages/my_footprint_page.dart
+        status: compliant
+        note: 我的足迹私有只读列表，消费 GET /v1/content/footprint（type 过滤 + cursor 分页）；FootprintRepository 三层，footprintRepositoryProvider 切换；type 枚举由云侧定义、端侧只透传
+        target_dto: FootprintEntry
+        target_read_projection: N/A
+        target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/login_page.dart
         status: compliant
         note: AuthRepository.loginOneTap / AuthLoginResultDto；协议勾选前不调用一键登录 SDK
@@ -342,6 +348,10 @@ domains:
         status: compliant
         note: HomepageDetail/HomepageShellData/ObjectPageBundle；首屏 IntersectionReason + ObjectRelationEdge + ObjectPageContext；ActivePersonaContextViewData 无 dynamic
         target_dto: ObjectPageBundle
+      - path: quwoquan_app/lib/ui/entity/pages/homepage_introduction_page.dart
+        status: compliant
+        note: HomepageIntroduction/HomepageIntroductionSection；通过 HomepageIntroductionRepository 获取完整介绍页，route/surface/path 均由 metadata codegen 生成
+        target_dto: HomepageIntroduction
       - path: quwoquan_app/lib/ui/entity/pages/suggest_homepage_page.dart
         status: compliant
         note: HomepageSuggestionDraft + HomepageRepository

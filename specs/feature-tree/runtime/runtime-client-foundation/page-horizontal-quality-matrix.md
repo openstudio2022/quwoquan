@@ -100,7 +100,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/content/entry/pages/create_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`postReadPreviewBundleFromPublishConfirmSummary`（draftPreview）；P6 full。P7/P8：reader host 口径不变 |
+| `lib/ui/content/entry/pages/create_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`postReadPreviewBundleFromPublishConfirmSummary`（draftPreview）+ `CreatePostRequestWire` 写入 `summary/tagRefs/entityRefs/assistantUsePolicy`；P6 full。P7/P8：reader host 与发布 sheet token 口径不变 |
 | `lib/ui/content/entry/pages/article_typography_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`postReadPreviewBundleFromCreateEditorState` 标题/投影；书页分页不变；2026-05-19 黑场顶栏 safeTop/按钮尺寸接入 appChrome |
 | `lib/ui/content/entry/pages/publish_location_selector_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：帖子投影 N/A；`LocationPoiDto`+Settings；主预览在 create 链 |
 | `lib/ui/content/entry/pages/video_editor_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：回写草稿；与 draftPreview 桥一致（类注释） |
@@ -118,6 +118,7 @@
 | `lib/ui/entity/pages/homepage_maintenance_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageBasicDraft` |
 | `lib/ui/entity/pages/homepage_status_report_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageStatusReportDraft` |
 | `lib/ui/entity/pages/homepage_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageDetail`/`HomepageShellData`/`ObjectPageBundle`；对象页网络 IA 为 `首页/内容/口碑/关联`，首屏消费 `IntersectionReason`/`ObjectRelationEdge`/`ObjectPageContext`；2026-05-19 overlay 顶栏 safeTop/按钮节奏接入资料页 appChrome token |
+| `lib/ui/entity/pages/homepage_introduction_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageIntroduction`/`HomepageIntroductionSection`；完整介绍页，P5 非设置/半屏表单 |
 
 ---
 
@@ -160,6 +161,7 @@
 | `lib/ui/user/pages/legal_document_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 远端 WebView 展示用户协议/隐私政策；P2/P3 —，内容来自配置 URL；禁用 JS，保留返回与失败重试 |
 | `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：同 my_profile；other 模式展示真实交集卡 |
 | `lib/ui/user/pages/my_intersection_inbox_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：我的交集分维度列表，消费 `GET /v1/content/intersections`（list）+ `POST /v1/content/intersections/visit`（打开即推进已读水位清零）；强类型 `IntersectionReason`；统一原子 `IntersectionEntity`（头像+名字+维度chip，概率标「推荐」）；P3 Mock/Remote 经 `intersectionRepositoryProvider` 切换；空/错误兜底；点条目带 `relationKind` 进对象页 |
+| `lib/ui/user/pages/my_footprint_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：我的足迹私有只读列表，消费 `GET /v1/content/footprint`（type 过滤 + cursor 分页）；强类型 `FootprintEntry`；P3 Mock/Remote 经 `footprintRepositoryProvider` 切换；type 枚举由云侧定义、端侧只透传；空/错误/分页兜底；点条目按 R21 带 referralSource 进作品浏览器 |
 | `lib/ui/user/pages/edit_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ProfileEditUpdatePayload |
 | `lib/ui/user/pages/persona_management_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | UserRepository summary / PersonaDtoSurface |
 | `lib/ui/user/pages/profile_stats_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | ProfileCircleViewData / ProfileSocialRelationRowViewData |

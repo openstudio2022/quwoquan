@@ -6,16 +6,14 @@
 
 ## 1. 背景与现状
 
-- 三段式已达标：块式编辑器（`entry/widgets/article_editor.dart`，图文混排 + 三种图片环绕）→ 排版页（`article_typography_page.dart`，书页预览 + 纸张/字体）→ 发布确认 sheet（`_CreatePublishConfirmSheet`）。
-- 发布确认页已有：可见范围、单实体挂载（`primaryHomepage*`）、多圈子选择、身份模式（作品/点滴）。
-- 缺口（云侧契约已就绪、端侧未接）：
-  - `tagRefs`：CreatePost writable 已含，端侧 payload 不写、无选择 UI；
-  - `entityRefs`（多实体）：同上；
-  - `GenerateArticleSummary`（`/v1/content/articles/summary:generate`）：API + repository 已实现，UI 零调用；摘要现为自动截断 120 字、不可编辑；
-  - 行内实体提及：`entityMentions` 仅读侧消费（`ArticleEntityMentionDto`），编辑器 AST（`qwq_markdown_ast.dart`）无 mention 节点；
-  - 小趣创作辅助：零入口（`assistantUsePolicy: 'inherit'` 硬写）。
-- 技债：`create_page.dart` 3155 行（基线修正收口后复核值），超 R03 红线（>1000 行 GATE_BLOCK 口径），本包内拆分。
-- 基线注记（基线修正已落地）：云侧契约就绪结论复核不变——`CreatePost` writable（`entityRefs/tagRefs/summary`）与 `GenerateArticleSummary` 均在 content 域 metadata/实现中就绪；小趣创作辅助契约在 assistant metadata 中**尚不存在**，确认归 WP8 定稿（本包仅按 §3 冻结形状写适配层与降级）。
+- 三段式已达标：块式编辑器（`entry/widgets/article_editor.dart`，图文混排 + 三种图片环绕）→ 排版页（`article_typography_page.dart`，书页预览 + 纸张/字体）→ 发布确认组件（`entry/widgets/create_publish_confirm_sheet.dart`）。
+- 富语义发布闭环已接通：`PublishSettings` 承载并恢复 `summary/tagRefs/entityRefs/assistantUsePolicy`；`ArticleMarkdownCodec` 将这些字段写入 QWQ Rich Markdown front matter；`buildCreatePostPayloadMap()` 写入 `CreatePost` payload。
+- `CreatePostRequestWire.tagRefs/entityRefs` 已经从 `String?` 风险修正为 `List<String>?`，修正来自 app metadata codegen 规则与重新生成的 wire，未手改 generated。
+- 发布确认组件已具备摘要编辑、小趣摘要生成、标签搜索/添加/删除、关联主页选择/删除、`assistantUsePolicy` 选择；用户文案使用「标签 / 关联主页 / 关联地点和事物」，不暴露「实体」内部词。
+- 行内对象提及已使用 `ArticleInlineSpan(kind: 'entity')` 接入编辑器工具栏「提及对象」入口，复用 `HomepagePicker`；样式切换、切段、插图、草稿/Markdown 往返均由 provider/codec/payload 测试守护。
+- 读侧 `ArticlePageReadOnlyView` 已按 `ArticleInlineSpan.isEntity` 渲染可点击 rich text，并通过 `onEntityTap` 交给宿主跳转对象主页。
+- 小趣推荐标签/对象依赖 WP8 `creation-suggest` metadata，本包不硬编码 assistant path/operation；WP8 未上线时仅保留摘要生成与手动选择能力。
+- 技债：`create_page.dart` 已从发布确认 sheet 与行内提及 picker 中抽离部分逻辑，但当前仍约 2646 行，未降到 <1000；已登记到 `CR-20260611-033` convergence item，后续按 article-editor-refactor 继续拆分。
 
 ## 2. 功能规格
 
@@ -27,21 +25,23 @@
 
 ### 2.1 发布确认页增强
 
-- **标签选择**：新增标签选择入口（路径制 `tagRef`，来源数据工程 taxonomy；选择器复用/对齐既有 tag 域端侧能力），payload 写入 `tagRefs`。
-- **多实体绑定**：在 `primaryHomepage`（主挂载，保留）之外支持附加实体引用，payload 写入 `entityRefs`；前台文案用「关联主页 / 关联地点和事物」，不出现「实体」。
-- **摘要可编辑 + AI 摘要**：摘要字段开放编辑；新增「小趣生成摘要」按钮调用 `GenerateArticleSummary`，结果填入可再编辑；保留 120 字自动截断为缺省兜底。
-- **小趣推荐标签和实体**：入口消费 WP8 的创作辅助契约（见 §3）；WP8 未合入时入口隐藏（feature 探测），不阻塞本包准出。
-- `assistantUsePolicy` 开放用户选择（front matter 写入），缺省 `inherit`。
+- **标签选择**：发布确认组件使用 tag repository 搜索结果生成路径制 `tagRef`，不接受未解析成路径的裸标签；payload 写入 `tagRefs`。
+- **多对象绑定**：在 `primaryHomepage`（主挂载，保留）之外支持附加关联主页/地点和事物，payload 写入 `entityRefs`；前台文案不出现「实体」。
+- **摘要可编辑 + AI 摘要**：摘要字段开放编辑；「小趣生成摘要」调用 content `GenerateArticleSummary`，成功填入摘要框且用户可继续修改，失败不覆盖当前摘要。
+- **小趣推荐标签和对象**：入口消费 WP8 的创作辅助契约（见 §3）；WP8 未合入时入口隐藏/不出现，不阻塞发布。
+- `assistantUsePolicy` 开放用户选择并写入 payload 与 Markdown front matter，缺省 `inherit`。
 
-### 2.2 编辑器行内实体提及
+### 2.2 编辑器行内对象提及
 
-- `qwq_markdown_ast.dart` 新增 mention 节点（`subjectType/subjectId/displayName`），`article_markdown_codec.dart` 编解码往返无损；语法形态经 metadata 登记（与读侧 `entityMentions` 派生规则同源）。
-- 编辑器工具栏新增「提及对象」入口（搜索 picker 复用 `HomepagePicker` 能力），插入行内 mention；就近浮层原则不变。
-- 发布后读侧 `entityMentions` 可点跳对象主页（读侧已具备，补端到端测试）。
+- 行内对象提及的端侧真相源为 `ArticleInlineSpan(kind: 'entity', targetType, targetId, displayText)`；Markdown 语法为 `@[对象名](entity:homepage/id)`。
+- `article_markdown_codec.dart` 编解码往返无损；`CreateEditorProvider.attachArticleEntityMention()` 写入 span；`toggleArticleInlineStyle` 与切段/插图相关路径保留对象提及 span 元数据。
+- 编辑器工具栏新增「提及对象」入口，复用 `HomepagePicker` 选择目标对象后将当前选区标注为对象提及。
+- 发布后读侧 rich text 已通过 `onEntityTap` 支持点击跳对象主页；gamma 端到端仍作为集成验收旅程留证。
 
 ### 2.3 结构拆分（R03）
 
-- `create_page.dart` 拆分为 ≤1000 行的协调层 + 子组件/子控制器文件；行为不变，以既有测试守护。
+- 本轮新增能力不得继续堆入 `create_page.dart`：发布确认页已拆到 `create_publish_confirm_sheet.dart`，行内提及 picker 已拆到 `article_entity_mention_picker.dart`。
+- `create_page.dart` 仍未降到 ≤1000 行，作为本 CR convergence item 继续拆分，后续目标是保留协调层，媒体处理、草稿调度、发布 orchestration、编辑器 adapter 分离。
 
 ## 3. 周边契约
 
@@ -52,20 +52,20 @@
 
 ## 4. 改动范围
 
-- `quwoquan_app/lib/ui/content/entry/`（create_page 拆分、发布确认 sheet、publish_settings_models、create_page_remote_helpers、新标签/实体选择组件）
-- `quwoquan_app/lib/ui/content/markdown/`（AST mention 节点 + codec）
-- `quwoquan_app/lib/cloud/services/content/`（payload 组装、summary API 调用接线）
-- 对应测试（codec 往返、payload 契约、widget）
+- `quwoquan_app/lib/ui/content/entry/`（create_page 协调层、发布确认组件、publish_settings_models、create_page_remote_helpers、行内提及 picker）
+- `quwoquan_app/lib/ui/content/markdown/`（front matter 与 entity inline span codec）
+- `quwoquan_app/lib/cloud/services/content/`（summary API 与 CreatePost wire 出口）
+- 对应测试（codec 往返、payload 契约、provider/editor/widget）
 - **禁止**改 `lib/ui/discovery/**`、`works_immersive_viewer.dart`、`lib/components/object_page/**`
 
 ## 5. 准出要求
 
-1. T1：发布 payload 契约测试——选择了标签/实体/摘要后 `CreatePost` 请求体含 `tagRefs/entityRefs/summary` 且与 service.yaml writable 对齐。
-2. T1：mention 节点 markdown 编解码往返测试（含嵌套/边界）。
+1. T1：发布 payload 契约测试——选择了标签/关联对象/摘要后 `CreatePost` 请求体含 `tagRefs/entityRefs/summary/assistantUsePolicy` 且与 service.yaml writable 对齐。
+2. T1：entity inline span markdown 编解码往返测试（含 front matter 与 inline mention）。
 3. T2：发布确认页 widget 测试（标签选择、多实体、摘要编辑、AI 摘要按钮三态：加载/成功/失败结构化错误）。
 4. T3：gamma 发布一篇带 实体提及+多实体+圈子+标签+AI 摘要 的长文，读侧 entityMentions 可点。
-5. `create_page.dart` 拆分后所有创作相关文件 ≤1000 行；既有创作/草稿测试全绿。
-6. `bash agent_ops/gate/gate_repo.sh --scope app` 全绿。
+5. 新增发布 UI 与提及 picker 均为独立文件；`create_page.dart` 未降至 <1000 的剩余拆分登记到 CR convergence item。
+6. `bash agent_ops/gate/gate_repo.sh --scope app` 全绿；若本地只跑子集，必须在 CR dev_log 记录未跑项/阻断。
 
 ## 6. 验收标准（GWT 样例）
 

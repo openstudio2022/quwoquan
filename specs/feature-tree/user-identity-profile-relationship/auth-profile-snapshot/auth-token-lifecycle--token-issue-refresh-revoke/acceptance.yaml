@@ -49,8 +49,12 @@ gwt_acceptance:
       - quwoquan_app/test/core/auth/auth_session_store_test.dart
       - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
       - quwoquan_app/test/core/platform/native_auth_bridge_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - make verify-app-auth-policy
+      - quwoquan_app/test/cloud/runtime/cloud_http_client_refresh_test.dart
+      - quwoquan_app/test/core/auth/auth_session_controller_test.dart
+      - quwoquan_app/test/app/app_startup_welcome_test.dart
+    status: partial
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
