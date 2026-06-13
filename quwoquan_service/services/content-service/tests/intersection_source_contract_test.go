@@ -165,7 +165,7 @@ func TestIntersectionSource_PersonReasonBackfillsDisplayProfile(t *testing.T) {
 		"authorId":                  ixObject,
 		"status":                    "published",
 		"authorDisplayNameSnapshot": "陆衡",
-		"authorAvatarUrlSnapshot":   "https://cdn.example.com/luheng.png",
+		"authorAvatarUrlSnapshot":   "https://static.quwoquan.test/luheng.png",
 		"updatedAt":                 time.Now(),
 	}); err != nil {
 		t.Fatalf("seed posts snapshot: %v", err)
@@ -188,7 +188,7 @@ func TestIntersectionSource_PersonReasonBackfillsDisplayProfile(t *testing.T) {
 	if relation.DisplayName != "陆衡" {
 		t.Fatalf("displayName must backfill from posts snapshot, got %q", relation.DisplayName)
 	}
-	if relation.AvatarURL != "https://cdn.example.com/luheng.png" {
+	if relation.AvatarURL != "https://static.quwoquan.test/luheng.png" {
 		t.Fatalf("avatarUrl must backfill from posts snapshot, got %q", relation.AvatarURL)
 	}
 }

@@ -265,7 +265,7 @@ func TestIntersectionService_SpotlightFiltersIncompleteDisplay(t *testing.T) {
 		// 人级且头像完备 → 进候选窗。
 		{IntersectionID: "person_ok", Dimension: "relationship", Strength: 0.7,
 			ActionTargetID: "u2", ObjectKind: "person", DisplayText: "2位共同关注的人",
-			DisplayName: "林清越", AvatarURL: "https://cdn.example.com/a.png"},
+			DisplayName: "林清越", AvatarURL: "https://static.quwoquan.test/a.png"},
 		// 非人对象无需头像，但要有结论句 → 进候选窗。
 		{IntersectionID: "place_ok", Dimension: "location", Strength: 0.6,
 			ActionTargetID: "e1", ObjectKind: "place", DisplayText: "1位你关注的人来过这里"},
