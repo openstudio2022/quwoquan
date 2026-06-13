@@ -43,6 +43,41 @@ List<Map<String, dynamic>> _contractRelationshipRows() {
       .toList(growable: false);
 }
 
+Map<String, dynamic> _contractProfileWire(Map<String, dynamic> item) {
+  final stats =
+      (item['stats'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final userId = item['userId'].toString();
+  return <String, dynamic>{
+    'subAccountId': userId,
+    'ownerUserId': userId,
+    'subjectType': 'user',
+    'userHandle': userId,
+    'username': userId,
+    'displayName': item['displayName']?.toString() ?? userId,
+    'nickname': item['displayName']?.toString() ?? userId,
+    'avatarUrl': item['avatarUrl']?.toString() ?? '',
+    'backgroundUrl': item['backgroundUrl']?.toString() ?? '',
+    'bio': item['bio']?.toString() ?? '',
+    'followerCount': (stats['followerCount'] as num?)?.toInt() ?? 0,
+    'followingCount': (stats['followingCount'] as num?)?.toInt() ?? 0,
+    'postCount': (stats['postCount'] as num?)?.toInt() ?? 0,
+    'circleCount': (stats['circleCount'] as num?)?.toInt() ?? 0,
+    'likeCount': (stats['likeCount'] as num?)?.toInt() ?? 0,
+    'isolationLevel': 'normal',
+    'profileVisibility': 'public',
+    'inheritsFromOwner': false,
+    'overriddenFields': const <String>[],
+  };
+}
+
+final Map<String, SubAccountProfileWireDto> _contractProfileWireByUserId = {
+  for (final item in _contractProfileRows())
+    item['userId'].toString(): SubAccountProfileWireDto.fromMap(
+      _contractProfileWire(item),
+    ),
+};
+
 bool _isContractFixtureUser(String userId) {
   return _contractProfileWireByUserId.containsKey(userId);
 }
