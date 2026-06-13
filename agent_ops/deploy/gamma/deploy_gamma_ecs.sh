@@ -548,6 +548,68 @@ if [[ "$DEPLOY_MODE_RESOLVED" == "restart" && -n "$CURRENT_REMOTE_IMAGE_VERSION"
   IMAGE_VERSION="$CURRENT_REMOTE_IMAGE_VERSION"
 fi
 
+if [[ "$DEPLOY_MODE_RESOLVED" == "restart" && "$SKIP_UPLOAD" == "1" ]]; then
+  echo "[gamma-ecs] restart+skip_upload=1 — restarting existing remote compose tree without fixture bootstrap"
+  remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") CONFIG_VERSION=$(printf '%q' "$CONFIG_VERSION") STAGE=$(printf '%q' "$STAGE") LOCAL_GAMMA_HTTP_PORT=$(printf '%q' "$LOCAL_GAMMA_HTTP_PORT") LOCAL_GAMMA_PRODUCT_OPS_PORT=$(printf '%q' "$LOCAL_GAMMA_PRODUCT_OPS_PORT") LOCAL_GAMMA_MEDIA_EDGE_PORT=$(printf '%q' "$LOCAL_GAMMA_MEDIA_EDGE_PORT") LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS=$(printf '%q' "$DEFAULT_HOST_READY_TIMEOUT_SECONDS") && bash -s" <<'REMOTE_RESTART_SCRIPT'
+set -euo pipefail
+COMPOSE_FILE="quwoquan_service/docker-compose.gamma-local.yaml"
+if [[ ! -f "$COMPOSE_FILE" ]]; then
+  echo "::error::missing $COMPOSE_FILE in existing remote tree" >&2
+  exit 2
+fi
+python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+from datetime import datetime, timezone
+
+remote_dir = Path.cwd()
+path = remote_dir / ".gamma_deploy_state.json"
+prev = os.environ.get("PREV_IMAGE_VERSION", "").strip() or None
+data = {
+    "previousImageVersion": prev,
+    "imageVersion": os.environ["IMAGE_VERSION"],
+    "configVersion": os.environ["CONFIG_VERSION"],
+    "stage": os.environ["STAGE"],
+    "deployMode": "restart",
+    "updatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+}
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+if ! command -v docker >/dev/null 2>&1; then
+  echo "::error::docker is required to restart existing gamma tree" >&2
+  exit 2
+fi
+if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose >/dev/null 2>&1; then
+  podman-compose -f "$COMPOSE_FILE" --podman-run-args=--pull=never up -d --no-build
+else
+  docker compose -f "$COMPOSE_FILE" up -d --no-build --remove-orphans
+fi
+python3 - <<'PY'
+import os
+import sys
+import time
+import urllib.request
+
+url = f"http://127.0.0.1:{os.environ.get('LOCAL_GAMMA_HTTP_PORT', '19000')}/healthz"
+deadline = time.time() + int(os.environ.get("LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS", "360"))
+last = ""
+while time.time() < deadline:
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            body = resp.read(600).decode("utf-8", "replace")
+            if 200 <= resp.status < 300:
+                print(f"[gamma-ecs] gateway ready: http {resp.status}")
+                raise SystemExit(0)
+            last = f"http {resp.status}: {body}"
+    except Exception as exc:
+        last = repr(exc)
+    time.sleep(5)
+print(f"[gamma-ecs] gateway did not become ready: {last}", file=sys.stderr)
+raise SystemExit(1)
+PY
+REMOTE_RESTART_SCRIPT
+else
 remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") CONFIG_VERSION=$(printf '%q' "$CONFIG_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "$TEST_AUTH_TOKEN_DEFAULT") PROD_TEST_AUTH_TOKEN=$(printf '%q' "${PROD_TEST_AUTH_TOKEN:-}") TEST_AUTH_TOKEN=$(printf '%q' "${TEST_AUTH_TOKEN:-}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL=$(printf '%q' "${MEDIA_ORIGIN_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_HOST_READY_TIMEOUT_SECONDS}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") PERSONAL_ASSISTANT_MIMO_API_KEY=$(printf '%q' "${ASSISTANT_MIMO_API_KEY}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_COMPOSE_TIMEOUT_SECONDS}") GAMMA_ECS_SKIP_IMAGE_PREPULL=$(printf '%q' "${DEFAULT_SKIP_IMAGE_PREPULL}") GAMMA_ECS_SKIP_IMAGE_REBUILD=$(printf '%q' "${GAMMA_ECS_SKIP_IMAGE_REBUILD:-0}") GAMMA_ECS_DEPLOY_MODE=$(printf '%q' "${DEPLOY_MODE_RESOLVED}") GAMMA_ECS_IMAGE_REPOSITORY_ROOT=$(printf '%q' "${RUNTIME_IMAGE_REPOSITORY_ROOT}") GAMMA_ECS_IMAGE_REGISTRY=$(printf '%q' "${IMAGE_REGISTRY}") GAMMA_ECS_REGISTRY_USERNAME=$(printf '%q' "${REGISTRY_USERNAME}") GAMMA_ECS_REGISTRY_PASSWORD=$(printf '%q' "${REGISTRY_PASSWORD}") LOCAL_GAMMA_SKIP_FIXTURE_SEEDS=$(printf '%q' "${REMOTE_SKIP_FIXTURE_SEEDS}") LOCAL_GAMMA_FORCE_CLEAN_RECREATE=$(printf '%q' "${LOCAL_GAMMA_FORCE_CLEAN_RECREATE:-1}") LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME=$(printf '%q' "${LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME:-0}") && bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 python3 - <<'PY'
@@ -899,6 +961,7 @@ else
   echo "[gamma-ecs] WARN: skip run_local_gamma_t3.py on remote host because python3 < 3.10; local mirror started, but remote T3 evidence is unavailable for this run" >&2
 fi
 REMOTE_SCRIPT
+fi
 record_phase "remote_compose" "$phase_started"
 
 FAILURE_STAGE="public_health"
