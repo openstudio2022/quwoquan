@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 
 /// A4：内容卡交集理由位 / post 作者信任徽标口径一致（云侧主结论句直出，G2 端不本地拼装）。
@@ -10,12 +12,17 @@ Widget _wrap(Widget child) {
   );
 }
 
-IntersectionReason _reason({String primaryText = '', String displayText = ''}) {
+IntersectionReason _reason({
+  String primaryText = '',
+  String displayText = '',
+  String weightTier = '',
+}) {
   return IntersectionReason(
     dimension: 'relationship',
     source: 'relationship',
     primaryText: primaryText,
     displayText: displayText,
+    weightTier: weightTier,
   );
 }
 
@@ -77,6 +84,76 @@ void main() {
 
     test('无来源 → 返回 null（调用方不插入，保证四口径一致）', () {
       expect(IntersectionReasonChip.fromReasons(null, isDark: false), isNull);
+    });
+  });
+
+  group('IntersectionReasonChip.weightTier 轻重分化', () {
+    testWidgets('heavy 展示完整蓝色理由行', (tester) async {
+      final widget = IntersectionReasonChip.fromReasons(<IntersectionReason>[
+        _reason(primaryText: '共同关注的人', weightTier: 'heavy'),
+      ], isDark: false);
+
+      await tester.pumpWidget(_wrap(widget!));
+
+      final text = tester.widget<Text>(
+        find.byKey(IntersectionReasonChip.textKey),
+      );
+      expect(
+        text.style?.color,
+        AppColors.iosAccent(tester.element(find.text('共同关注的人'))),
+      );
+      expect(text.style?.fontWeight, AppTypography.medium);
+    });
+
+    testWidgets('空 weightTier 按 heavy 兜底', (tester) async {
+      final widget = IntersectionReasonChip.fromReasons(<IntersectionReason>[
+        _reason(primaryText: '共同圈子'),
+      ], isDark: false);
+
+      await tester.pumpWidget(_wrap(widget!));
+
+      final text = tester.widget<Text>(
+        find.byKey(IntersectionReasonChip.textKey),
+      );
+      expect(
+        text.style?.color,
+        AppColors.iosAccent(tester.element(find.text('共同圈子'))),
+      );
+      expect(text.style?.fontWeight, AppTypography.medium);
+    });
+
+    testWidgets('未知 weightTier 按 heavy 兜底', (tester) async {
+      final widget = IntersectionReasonChip.fromReasons(<IntersectionReason>[
+        _reason(primaryText: '共同讨论', weightTier: 'future-tier'),
+      ], isDark: false);
+
+      await tester.pumpWidget(_wrap(widget!));
+
+      final text = tester.widget<Text>(
+        find.byKey(IntersectionReasonChip.textKey),
+      );
+      expect(
+        text.style?.color,
+        AppColors.iosAccent(tester.element(find.text('共同讨论'))),
+      );
+      expect(text.style?.fontWeight, AppTypography.medium);
+    });
+
+    testWidgets('light 展示灰色弱化形态', (tester) async {
+      final widget = IntersectionReasonChip.fromReasons(<IntersectionReason>[
+        _reason(primaryText: '共同地点', weightTier: 'light'),
+      ], isDark: false);
+
+      await tester.pumpWidget(_wrap(widget!));
+
+      final text = tester.widget<Text>(
+        find.byKey(IntersectionReasonChip.textKey),
+      );
+      expect(
+        text.style?.color,
+        AppColors.iosSecondaryLabel(tester.element(find.text('共同地点'))),
+      );
+      expect(text.style?.fontWeight, AppTypography.regular);
     });
   });
 

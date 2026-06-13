@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
-/// 影响力摘要模块（「TA的影响 / 我的影响力」，双向可解释性）。
+/// 影响力摘要模块（他人主页 / 我的主页双视角，可解释）。
 ///
 /// 只读直出 [AuthorImpactSummary] 的前 [maxItems] 条云侧 displayText 结论句
 /// （如「23人加入相关圈子」），端不本地拼装文案（G2）；
@@ -22,7 +22,7 @@ class AuthorImpactCard extends StatelessWidget {
   final AuthorImpactSummary summary;
   final bool isDark;
 
-  /// true = 我的主页「我的影响力」；false = 用户主页「TA的影响」。
+  /// true = 我的主页；false = 他人主页。
   final bool isMine;
   final int maxItems;
 
@@ -119,6 +119,7 @@ class AuthorImpactCard extends StatelessWidget {
                 count: visible[i].count,
                 displayText: visible[i].displayText.trim(),
                 helpType: visible[i].helpType,
+                source: visible[i].source,
                 fg: fg,
                 isMine: isMine,
               ),
@@ -134,6 +135,7 @@ class _ImpactRow extends StatelessWidget {
     required this.count,
     required this.displayText,
     required this.helpType,
+    required this.source,
     required this.fg,
     required this.isMine,
   });
@@ -141,62 +143,94 @@ class _ImpactRow extends StatelessWidget {
   final int count;
   final String displayText;
   final String helpType;
+  final String source;
   final Color fg;
   final bool isMine;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return CupertinoButton(
       key: ValueKey<String>('author-impact-fact-$helpType'),
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        Container(
-          width: AppSpacing.buttonHeightMd,
-          height: AppSpacing.buttonHeightMd,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.primaryColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.minInteractiveSize,
+      ),
+      onPressed: () => _showEvidence(context),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          Container(
+            width: AppSpacing.buttonHeightMd,
+            height: AppSpacing.buttonHeightMd,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.primaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+            ),
+            child: Icon(
+              _icon,
+              size: AppSpacing.iconSmall,
+              color: AppColors.primaryColor,
+            ),
           ),
-          child: Icon(
-            _icon,
-            size: AppSpacing.iconSmall,
-            color: AppColors.primaryColor,
-          ),
-        ),
-        SizedBox(width: AppSpacing.containerSm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                displayText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosSubheadline,
-                  color: fg,
-                ),
-              ),
-              if (count > 0)
+          SizedBox(width: AppSpacing.containerSm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
                 Text(
-                  isMine ? '因为你的内容产生连接' : '因为TA的内容产生连接',
+                  displayText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: AppTypography.iosCaption1,
-                    color: AppColors.iosSecondaryLabel(context),
+                    fontSize: AppTypography.iosSubheadline,
+                    color: fg,
                   ),
                 ),
-            ],
+                if (count > 0)
+                  Text(
+                    isMine
+                        ? UITextConstants.impactEnumerableHintMine
+                        : UITextConstants.impactEnumerableHintOther,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosCaption1,
+                      color: AppColors.iosSecondaryLabel(context),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-        Icon(
-          CupertinoIcons.chevron_forward,
-          size: AppSpacing.iconXSmall,
-          color: AppColors.iosTertiaryLabel(context),
-        ),
-      ],
+          Icon(
+            CupertinoIcons.chevron_forward,
+            size: AppSpacing.iconXSmall,
+            color: AppColors.iosTertiaryLabel(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEvidence(BuildContext context) {
+    final sourceLabel = source.trim().isEmpty
+        ? (isMine
+              ? UITextConstants.profileImpactTitleMine
+              : UITextConstants.profileImpactTitleOther)
+        : source.trim();
+    final hint = isMine
+        ? UITextConstants.impactEnumerableHintMine
+        : UITextConstants.impactEnumerableHintOther;
+    final message = count > 0
+        ? '$hint\n$sourceLabel · $count'
+        : '$hint\n$sourceLabel';
+    return showAppActionSheet<void>(
+      context,
+      title: displayText,
+      message: message,
+      sections: const <AppActionSheetSection<void>>[],
+      cancelLabel: UITextConstants.confirm,
     );
   }
 

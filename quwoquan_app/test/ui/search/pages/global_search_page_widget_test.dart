@@ -256,7 +256,7 @@ void main() {
     expect(find.text('更多聊天记录'), findsNothing);
   });
 
-  testWidgets('指定搜索对象可切换到群聊', (tester) async {
+  testWidgets('指定搜索对象可切换到讨论', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
@@ -270,7 +270,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
     await tester.pumpAndSettle();
 
-    expect(find.text('更多群聊'), findsOneWidget);
+    expect(find.text('更多讨论'), findsOneWidget);
     expect(find.text('更多联系人'), findsNothing);
   });
 
@@ -343,7 +343,7 @@ void main() {
     expect(find.text('chat:conv_grid_3'), findsOneWidget);
   });
 
-  testWidgets('聊天记录群聊缺失 avatarUrl 时显示稳定群占位', (tester) async {
+  testWidgets('聊天记录讨论缺失 avatarUrl 时显示稳定群占位', (tester) async {
     _suppressImageErrors();
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
@@ -364,7 +364,7 @@ void main() {
     expect(avatar.imageUrl, isNull);
   });
 
-  testWidgets('联系人没有单聊时回退到已存在群聊会话', (tester) async {
+  testWidgets('联系人没有单聊时回退到已存在讨论会话', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 

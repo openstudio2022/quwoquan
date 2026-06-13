@@ -38,7 +38,7 @@ void main() {
     expect(find.text('写文字'), findsOneWidget);
     expect(find.text('从草稿继续'), findsOneWidget);
     expect(find.text('相机'), findsOneWidget);
-    expect(find.text('发起群聊'), findsOneWidget);
+    expect(find.text('发起讨论'), findsOneWidget);
     expect(find.text('添加联系人'), findsOneWidget);
     expect(find.text('创作'), findsNothing);
     expect(find.text('连接'), findsNothing);

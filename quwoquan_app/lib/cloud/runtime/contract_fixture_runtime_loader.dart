@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+
 /// 本地/测试态 contract fixture 加载器。
 ///
 /// 生产包不会挂载 `contracts/metadata/**/test_fixtures`，因此移动端运行时通常
@@ -23,6 +25,7 @@ class ContractFixtureRuntimeLoader {
     String ref = 'content_discovery_core',
   ]) {
     return _seedSet(
+      'content',
       'content/test_fixtures/scenarios/content_scenarios.json',
       ref,
     );
@@ -30,6 +33,7 @@ class ContractFixtureRuntimeLoader {
 
   static Map<String, dynamic>? circleSeedSet([String ref = 'circle_core']) {
     return _seedSet(
+      'circle',
       'social/circle/test_fixtures/scenarios/circle_scenarios.json',
       ref,
     );
@@ -37,6 +41,7 @@ class ContractFixtureRuntimeLoader {
 
   static Map<String, dynamic>? chatSeedSet([String ref = 'chat_core']) {
     return _seedSet(
+      'chat',
       'messages/chat/test_fixtures/scenarios/chat_scenarios.json',
       ref,
     );
@@ -46,51 +51,48 @@ class ContractFixtureRuntimeLoader {
     String ref = 'entity_homepage_core',
   ]) {
     return _seedSet(
+      'entity',
       'entity/test_fixtures/scenarios/entity_scenarios.json',
       ref,
     );
   }
 
   static Map<String, dynamic>? userSeedSet([String ref = 'user_profile_core']) {
-    return _seedSet('user/test_fixtures/scenarios/user_scenarios.json', ref);
+    return _seedSet(
+      'user',
+      'user/test_fixtures/scenarios/user_scenarios.json',
+      ref,
+    );
   }
 
   static Map<String, dynamic>? followingSubjectSeedSet([
     String ref = 'following_subject_core',
   ]) {
-    final decoded = _loadMetadataJson(
-      'user/following_subject/test_fixtures/scenarios/following_subject_scenarios.json',
+    return userSeedSet(ref);
+  }
+
+  static Map<String, dynamic>? seedManifest([
+    String env = CloudRuntimeConfig.appRuntimeEnv,
+  ]) {
+    return _loadMetadataJson(_seedManifestPath(env), env: env);
+  }
+
+  static Map<String, dynamic>? _seedSet(
+    String domain,
+    String fallbackFixturePath,
+    String ref,
+  ) {
+    final env = CloudRuntimeConfig.appRuntimeEnv;
+    final fixturePath = _fixturePathForDomain(
+      domain,
+      fallbackFixturePath,
+      env: env,
     );
-    final scenarios = decoded?['scenarios'];
-    if (scenarios is! List) {
-      return null;
-    }
-    for (final scenario in scenarios.whereType<Map>()) {
-      final casted = scenario.cast<String, dynamic>();
-      if (casted['name'] == 'list_three_subject_types') {
-        final response = casted['response'];
-        if (response is Map) {
-          return response.cast<String, dynamic>();
-        }
-      }
-    }
-    return null;
-  }
-
-  static Map<String, dynamic>? seedManifest([String env = 'alpha']) {
-    final preferredPath =
-        env == 'alpha' && _fixtureProfile == 'lite'
-        ? '_shared/test_fixtures/app_alpha_dev_lite_seed_manifest.json'
-        : '_shared/test_fixtures/app_${env}_seed_manifest.json';
-    return _loadMetadataJson(preferredPath);
-  }
-
-  static Map<String, dynamic>? _seedSet(String fixturePath, String ref) {
-    final cacheKey = '$_fixtureProfile::$fixturePath::$ref';
+    final cacheKey = '$env::$_fixtureProfile::$fixturePath::$ref';
     if (_seedCache.containsKey(cacheKey)) {
       return _seedCache[cacheKey];
     }
-    final decoded = _loadMetadataJson(fixturePath);
+    final decoded = _loadMetadataJson(fixturePath, env: env);
     final seedSets = decoded?['seedSets'];
     if (seedSets is! Map) {
       _seedCache[cacheKey] = null;
@@ -106,8 +108,39 @@ class ContractFixtureRuntimeLoader {
     return null;
   }
 
-  static Map<String, dynamic>? _loadMetadataJson(String metadataRelativePath) {
-    final cacheKey = '$_fixtureProfile::$metadataRelativePath';
+  static String _seedManifestPath(String env) {
+    return env == 'alpha' && _fixtureProfile == 'lite'
+        ? '_shared/test_fixtures/app_alpha_dev_lite_seed_manifest.json'
+        : '_shared/test_fixtures/app_${env}_seed_manifest.json';
+  }
+
+  static String _fixturePathForDomain(
+    String domain,
+    String fallbackFixturePath,
+    {String env = CloudRuntimeConfig.appRuntimeEnv}
+  ) {
+    final manifest = seedManifest(env);
+    final entries = manifest?['seedRefs'];
+    if (entries is List) {
+      for (final entry in entries.whereType<Map>()) {
+        final casted = entry.cast<String, dynamic>();
+        if ((casted['domain'] ?? '').toString().trim() != domain) {
+          continue;
+        }
+        final fixturePath = (casted['fixturePath'] ?? '').toString().trim();
+        if (fixturePath.isNotEmpty) {
+          return fixturePath;
+        }
+      }
+    }
+    return fallbackFixturePath;
+  }
+
+  static Map<String, dynamic>? _loadMetadataJson(
+    String metadataRelativePath, {
+    String env = CloudRuntimeConfig.appRuntimeEnv,
+  }) {
+    final cacheKey = '$env::$_fixtureProfile::$metadataRelativePath';
     if (_metadataCache.containsKey(cacheKey)) {
       return _metadataCache[cacheKey];
     }
@@ -132,7 +165,6 @@ class ContractFixtureRuntimeLoader {
 
   static List<File> _candidateFiles(String metadataRelativePath) {
     final relativeCandidates = <String>[
-      ..._profileAwarePaths(metadataRelativePath),
       metadataRelativePath,
     ];
     final suffixes = relativeCandidates
@@ -151,20 +183,5 @@ class ContractFixtureRuntimeLoader {
       ]);
     }
     return files;
-  }
-
-  static List<String> _profileAwarePaths(String metadataRelativePath) {
-    if (_fixtureProfile != 'lite') {
-      return const <String>[];
-    }
-    if (metadataRelativePath.endsWith('_seed_manifest.json')) {
-      return const <String>[];
-    }
-    if (!metadataRelativePath.endsWith('.json')) {
-      return const <String>[];
-    }
-    return <String>[
-      metadataRelativePath.replaceFirst('.json', '.lite.json'),
-    ];
   }
 }

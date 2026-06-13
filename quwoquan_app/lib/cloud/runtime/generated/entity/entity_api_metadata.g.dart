@@ -15,6 +15,7 @@ class EntityApiMetadata {
     'CreateHomepageClaimRequest': '/v1/homepages/{homepageId}/claim-requests',
     'CreateHomepageStatusReport': '/v1/homepages/{homepageId}/status-reports',
     'GetHomepageDetail': '/v1/homepages/{homepageId}',
+    'GetHomepageIntroduction': '/v1/homepages/{homepageId}/introduction',
     'GetHomepageRelatedGroups': '/v1/homepages/{homepageId}/related-groups',
     'GetHomepageReviewSummary': '/v1/homepages/{homepageId}/review-summary',
     'GetHomepageShell': '/v1/homepages/{homepageId}/shell',
@@ -32,6 +33,7 @@ class EntityApiMetadata {
     'CreateHomepageClaimRequest': 'POST',
     'CreateHomepageStatusReport': 'POST',
     'GetHomepageDetail': 'GET',
+    'GetHomepageIntroduction': 'GET',
     'GetHomepageRelatedGroups': 'GET',
     'GetHomepageReviewSummary': 'GET',
     'GetHomepageShell': 'GET',
@@ -50,6 +52,7 @@ class EntityApiMetadata {
     'CreateHomepageClaimRequest': 'required',
     'CreateHomepageStatusReport': 'required',
     'GetHomepageDetail': 'public',
+    'GetHomepageIntroduction': 'public',
     'GetHomepageRelatedGroups': 'public',
     'GetHomepageReviewSummary': 'public',
     'GetHomepageShell': 'public',
@@ -66,6 +69,7 @@ class EntityApiMetadata {
   static const String createHomepageClaimRequestOperation = 'CreateHomepageClaimRequest';
   static const String createHomepageStatusReportOperation = 'CreateHomepageStatusReport';
   static const String getHomepageDetailOperation = 'GetHomepageDetail';
+  static const String getHomepageIntroductionOperation = 'GetHomepageIntroduction';
   static const String getHomepageRelatedGroupsOperation = 'GetHomepageRelatedGroups';
   static const String getHomepageReviewSummaryOperation = 'GetHomepageReviewSummary';
   static const String getHomepageShellOperation = 'GetHomepageShell';
@@ -93,6 +97,12 @@ class EntityApiMetadata {
   static const String getHomepageDetailPathTemplate = '/v1/homepages/{homepageId}';
   static String getHomepageDetailPath({required String homepageId}) {
     return _fillPath(getHomepageDetailPathTemplate, <String, String>{
+      'homepageId': homepageId,
+    });
+  }
+  static const String getHomepageIntroductionPathTemplate = '/v1/homepages/{homepageId}/introduction';
+  static String getHomepageIntroductionPath({required String homepageId}) {
+    return _fillPath(getHomepageIntroductionPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }

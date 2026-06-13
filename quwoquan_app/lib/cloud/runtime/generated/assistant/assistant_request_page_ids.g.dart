@@ -27,6 +27,7 @@ class AssistantRequestPageIds {
     'RevokeSkillConsent': 'assistant.skills.consent.revoke',
     'SearchXiaoquResults': 'assistant.search.xiaoqu',
     'StreamAssistantTurn': 'assistant.stream.assistant.turn',
+    'SuggestCreationAssistance': 'assistant.suggest.creation.assistance',
     'TickSkillSubscriptionCron': 'assistant.tick.skill.subscription.cron',
     'UpdateSkillSubscriptionStatus': 'assistant.update.skill.subscription.status',
   };
@@ -53,6 +54,7 @@ class AssistantRequestPageIds {
   static const String revokeSkillConsent = 'assistant.skills.consent.revoke';
   static const String searchXiaoquResults = 'assistant.search.xiaoqu';
   static const String streamAssistantTurn = 'assistant.stream.assistant.turn';
+  static const String suggestCreationAssistance = 'assistant.suggest.creation.assistance';
   static const String tickSkillSubscriptionCron = 'assistant.tick.skill.subscription.cron';
   static const String updateSkillSubscriptionStatus = 'assistant.update.skill.subscription.status';
 }

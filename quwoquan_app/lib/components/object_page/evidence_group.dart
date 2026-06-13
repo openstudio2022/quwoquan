@@ -19,7 +19,7 @@ class EvidenceGroup {
     required this.isRecommended,
   });
 
-  /// 开放字符串：dimension 或证据组 kind（如 mutualFriend / coVisitedEntity）。
+  /// 开放字符串：dimension 或证据组 kind（如 sharedFollowees / coVisitedEntity）。
   final String kind;
 
   /// 用户语言短句名词（如「共同关注」），云侧 displayText/label 真相源。
@@ -37,6 +37,12 @@ class EvidenceGroup {
   /// 推荐类（概率），必带「推荐」标识且排在事实之后，不伪装事实。
   final bool isRecommended;
 
+  /// 展示降级排序。只用于 UI 排序，不用于拼装事实文案。
+  int get rank => isRecommended ? 900 : evidenceKindRank(kind);
+
+  /// 无头像时的语义图标槽位。只用于 fallback 图标，不用于事实文案。
+  String get fallbackIconKind => fallbackIconKindFor(kind);
+
   /// 是否有可展示的有价值事实（必读要求 2 简洁：无价值不展示）。
   bool get hasMeaning => label.trim().isNotEmpty || sampleText.trim().isNotEmpty;
 
@@ -46,8 +52,9 @@ class EvidenceGroup {
     final label = p.displayText.trim().isNotEmpty
         ? p.displayText.trim()
         : p.label.trim();
+    final sourceRef = p.sourceRef.trim();
     return EvidenceGroup._(
-      kind: p.dimension.trim(),
+      kind: sourceRef.isNotEmpty ? sourceRef : p.dimension.trim(),
       label: label,
       count: p.count < 0 ? 0 : p.count,
       sampleText: p.sampleText.trim(),
@@ -57,49 +64,103 @@ class EvidenceGroup {
   }
 
   /// 解析一条 reason 下的可见证据组，事实在前、推荐在后（挖掘强度排序）。
-  ///
-  /// 交集点是首选真相源；当云侧暂未下发结构化 intersectionPoints（过渡期 / 仅
-  /// displayText 的 reason）时，回落为单个证据组（label=displayText、count=sharedCount），
-  /// 保证旧契约不掉链；维度仍取 reason.dimension 开放字符串。
   static List<EvidenceGroup> fromReason(IntersectionReason reason) {
-    final groups = reason.intersectionPoints
+    final resolved = reason.intersectionPoints
         .where((p) => p.visibility != 'hidden')
         .map(EvidenceGroup.fromPoint)
         .where((g) => g.hasMeaning)
         .toList(growable: false);
-    final resolved = groups.isNotEmpty
-        ? groups
-        : _fallbackFromReason(reason);
-    final ordered = [...resolved]
+    final indexed = resolved.asMap().entries.toList(growable: false)
       ..sort((a, b) {
-        if (a.isRecommended != b.isRecommended) {
-          return a.isRecommended ? 1 : -1;
-        }
-        return b.count.compareTo(a.count);
+        final byRank = a.value.rank.compareTo(b.value.rank);
+        if (byRank != 0) return byRank;
+        // 同 rank 内保留云侧返回顺序，避免端侧重排语义事实。
+        return a.key.compareTo(b.key);
       });
-    return ordered;
-  }
-
-  static List<EvidenceGroup> _fallbackFromReason(IntersectionReason reason) {
-    final label = reason.displayText.trim().isNotEmpty
-        ? reason.displayText.trim()
-        : reason.label.trim();
-    if (label.isEmpty) return const <EvidenceGroup>[];
-    return <EvidenceGroup>[
-      EvidenceGroup._(
-        kind: reason.dimension.trim(),
-        label: label,
-        count: reason.sharedCount < 0 ? 0 : reason.sharedCount,
-        sampleText: reason.displayName.trim(),
-        sampleAvatarUrls: reason.avatarUrl.trim().isNotEmpty
-            ? <String>[reason.avatarUrl.trim()]
-            : const <String>[],
-        isRecommended: reason.intersectionClass == 'affinity',
-      ),
-    ];
+    return indexed.map((entry) => entry.value).toList(growable: false);
   }
 
   /// 数字 single-source：可见证据组 count 之和（端展示总数唯一来源）。
   static int totalCount(List<EvidenceGroup> groups) =>
       groups.fold<int>(0, (sum, g) => sum + g.count);
+
+  static int evidenceKindRank(String kind) {
+    switch (kind.trim()) {
+      case 'sharedFollowees':
+      case 'commonFollower':
+      case 'commonContact':
+      case 'followeeInObject':
+      case 'followeeVisited':
+      case 'followeeViewing':
+      case 'followeeDiscussedThis':
+        return 10;
+      case 'coMemberCircle':
+      case 'sharedCircle':
+      case 'sameCompany':
+      case 'sameTeam':
+      case 'sameIndustry':
+      case 'sharedEntityAttention':
+      case 'coWishlistedEntity':
+        return 20;
+      case 'coVisitedEntity':
+        return 30;
+      case 'coCommented':
+      case 'coSharedContent':
+      case 'coCreatedContent':
+      case 'sharedDiscussion':
+        return 40;
+      case 'sameSchool':
+      case 'sameDepartment':
+      case 'sameMajor':
+      case 'sameCohort':
+      case 'alumni':
+      case 'alumniHere':
+      case 'colleagueHere':
+        return 50;
+      case 'sharedTagSample':
+        return 60;
+      default:
+        return 500;
+    }
+  }
+
+  static String fallbackIconKindFor(String kind) {
+    switch (kind.trim()) {
+      case 'sharedFollowees':
+      case 'commonFollower':
+      case 'commonContact':
+      case 'followeeInObject':
+      case 'followeeVisited':
+      case 'followeeViewing':
+      case 'followeeDiscussedThis':
+        return 'person';
+      case 'coMemberCircle':
+      case 'sharedCircle':
+      case 'sameCompany':
+      case 'sameTeam':
+      case 'sameIndustry':
+      case 'sharedEntityAttention':
+      case 'coWishlistedEntity':
+        return 'circle';
+      case 'coVisitedEntity':
+        return 'place';
+      case 'coCommented':
+      case 'coSharedContent':
+      case 'coCreatedContent':
+      case 'sharedDiscussion':
+        return 'discussion';
+      case 'sameSchool':
+      case 'sameDepartment':
+      case 'sameMajor':
+      case 'sameCohort':
+      case 'alumni':
+      case 'alumniHere':
+      case 'colleagueHere':
+        return 'school';
+      case 'sharedTagSample':
+        return 'tag';
+      default:
+        return 'link';
+    }
+  }
 }

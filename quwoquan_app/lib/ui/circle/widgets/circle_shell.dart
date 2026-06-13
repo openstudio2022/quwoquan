@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_ui_config.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
@@ -19,6 +20,8 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
+import 'package:quwoquan_app/ui/circle/providers/circle_impact_provider.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_page_tab.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_header.dart';
@@ -26,6 +29,7 @@ import 'package:quwoquan_app/ui/circle/widgets/circle_stats_row.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_interaction.dart';
+import 'package:quwoquan_app/ui/circle/widgets/section_members.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_entry_arguments.dart';
 
@@ -45,12 +49,6 @@ class CircleShell extends ConsumerStatefulWidget {
 }
 
 class _CircleShellState extends ConsumerState<CircleShell> {
-  static const List<String> _defaultSections = <String>[
-    'home',
-    'content',
-    'groups',
-    'members',
-  ];
   static const double _cardRadius = AppSpacing.radiusTwenty;
   static const double _surfaceBridge = _cardRadius;
 
@@ -73,28 +71,23 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           ..sort((a, b) => a.order.compareTo(b.order));
     final available = visible.isNotEmpty
         ? visible.map((section) => section.sectionType).toSet()
-        : <String>{'works', 'interaction', 'chat', 'storage'};
+        : CircleUIConfig.sections.map((section) => section.sectionType).toSet();
     final tabs = <_TabSpec>[];
-    if (available.contains('works')) {
-      tabs.add(const _TabSpec(type: 'content', label: '内容'));
-    }
-    if (available.contains('interaction')) {
-      tabs.add(const _TabSpec(type: 'groups', label: '讨论'));
-    }
-    if (available.contains('chat') || available.contains('storage')) {
-      tabs.add(const _TabSpec(type: 'members', label: '成员'));
+    for (final tab in CircleUIConfig.tabs) {
+      final hasVisibleSection = tab.sectionTypes.any(available.contains);
+      if (!hasVisibleSection) {
+        continue;
+      }
+      tabs.add(
+        _TabSpec(type: tab.id, label: circleTabLabelForKey(tab.labelKey)),
+      );
     }
     if (tabs.isNotEmpty) return tabs;
-    return _defaultSections
+    return CircleUIConfig.tabs
         .map(
-          (type) => _TabSpec(
-            type: type,
-            label: switch (type) {
-              'content' => '内容',
-              'groups' => '讨论',
-              'members' => '成员',
-              _ => type,
-            },
+          (tab) => _TabSpec(
+            type: tab.id,
+            label: circleTabLabelForKey(tab.labelKey),
           ),
         )
         .toList(growable: false);
@@ -241,7 +234,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         semantic: UiErrorSemantic(
           category: UiErrorCategory.sectionLoad,
           scope: UiErrorScope.global,
-          title: '圈子信息暂不可用',
+          title: UITextConstants.circleInfoUnavailableTitle,
           message: UITextConstants.contentLoadSoftFailed,
         ),
       );

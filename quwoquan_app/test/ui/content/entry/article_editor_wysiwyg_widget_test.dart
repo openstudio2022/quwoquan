@@ -151,6 +151,7 @@ class _EditorHarness extends StatefulWidget {
     this.seedDocument,
     this.onInsertImageAfter,
     this.onInsertImageAtSelection,
+    this.onInsertEntityMention,
     this.onInsertTextNodeAfter,
     this.onStateReady,
   });
@@ -159,6 +160,7 @@ class _EditorHarness extends StatefulWidget {
   final ArticleDocumentData? seedDocument;
   final Future<void> Function(String?)? onInsertImageAfter;
   final Future<void> Function(String, int)? onInsertImageAtSelection;
+  final Future<void> Function(String, int, int)? onInsertEntityMention;
   final String Function(String, {String initialText})? onInsertTextNodeAfter;
   final ValueChanged<CreateEditorState>? onStateReady;
 
@@ -497,6 +499,9 @@ class _EditorHarnessState extends State<_EditorHarness> {
         },
         onToggleInlineStyle:
             (_, _, _, {bold, italic, underline, strikethrough}) {},
+        onInsertEntityMention: (nodeId, start, end) async {
+          await widget.onInsertEntityMention?.call(nodeId, start, end);
+        },
         onCommitTextEdit: () {},
       ),
     );
@@ -549,8 +554,51 @@ void main() {
     expect(find.byKey(TestKeys.createMediaAddButton), findsOneWidget);
     expect(find.byKey(TestKeys.createAccessoryEmojiButton), findsOneWidget);
     expect(find.byKey(TestKeys.createAccessoryStructureButton), findsOneWidget);
+    expect(find.byKey(TestKeys.createAccessoryMentionButton), findsOneWidget);
     // 空文档时显示占位正文输入框
     expect(find.byKey(TestKeys.createMomentInput), findsOneWidget);
+  });
+
+  testWidgets('选中文本后点击提及对象按钮触发行内对象提及回调', (tester) async {
+    String? capturedNodeId;
+    int? capturedStart;
+    int? capturedEnd;
+
+    await tester.pumpWidget(
+      _EditorHarness(
+        seedDocument: _buildDocumentWithNodes(<ArticleDocumentNode>[
+          const ArticleDocumentNode(
+            id: 'p1',
+            type: ArticleDocumentNodeType.paragraph,
+            text: '露营地很好玩',
+          ),
+        ]),
+        onInsertEntityMention: (nodeId, start, end) async {
+          capturedNodeId = nodeId;
+          capturedStart = start;
+          capturedEnd = end;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final field = _fieldContainingText('露营地很好玩');
+    await tester.tap(field);
+    await tester.pump();
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: '露营地很好玩',
+        selection: TextSelection(baseOffset: 0, extentOffset: 3),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(TestKeys.createAccessoryMentionButton));
+    await tester.pumpAndSettle();
+
+    expect(capturedNodeId, 'p1');
+    expect(capturedStart, 0);
+    expect(capturedEnd, 3);
   });
 
   testWidgets('点击序号面板后展示列表选项', (tester) async {

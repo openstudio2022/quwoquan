@@ -38,7 +38,7 @@ enum SearchScope {
     SearchScope.content => '内容',
     SearchScope.socialRelation => '社交关系',
     SearchScope.messages => '聊天',
-    SearchScope.circles => '群组',
+    SearchScope.circles => '讨论',
   };
 
   static SearchScope fromWire(String? raw) {
@@ -74,8 +74,8 @@ enum SearchObjectTarget {
   String get label => switch (this) {
     SearchObjectTarget.contacts => '联系人',
     SearchObjectTarget.directChats => '单聊',
-    SearchObjectTarget.groupChats => '群聊',
-    SearchObjectTarget.circles => '群组',
+    SearchObjectTarget.groupChats => '讨论',
+    SearchObjectTarget.circles => '讨论',
   };
 
   static SearchObjectTarget? fromWire(String raw) {
@@ -673,7 +673,7 @@ enum SearchSuggestionSectionKind {
     SearchSuggestionSectionKind.mostUsed => '最常使用',
     SearchSuggestionSectionKind.contacts => '联系人',
     SearchSuggestionSectionKind.chatRecords => '聊天记录',
-    SearchSuggestionSectionKind.circles => '群组',
+    SearchSuggestionSectionKind.circles => '讨论',
     SearchSuggestionSectionKind.network => '搜索网络结果',
   };
 }

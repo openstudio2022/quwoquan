@@ -15,6 +15,8 @@ class ArticleMarkdownCodec {
   static String serializeDocument(
     ArticleDocumentData document, {
     String summary = '',
+    List<String> tagRefs = const <String>[],
+    List<String> entityRefs = const <String>[],
     String visibility = '',
     String assistantUsePolicy = '',
     String coverAssetId = '',
@@ -34,6 +36,8 @@ class ArticleMarkdownCodec {
     if (coverAssetId.trim().isNotEmpty) {
       buffer.writeln('coverImage: asset://${coverAssetId.trim()}');
     }
+    _writeFrontMatterStringList(buffer, 'tag_refs', tagRefs);
+    _writeFrontMatterStringList(buffer, 'entity_refs', entityRefs);
     if (visibility.trim().isNotEmpty) {
       buffer.writeln('visibility: ${visibility.trim()}');
     }
@@ -251,7 +255,7 @@ class ArticleMarkdownCodec {
   }
 
   static _EntityInlineParseResult _parseEntityInlineText(String source) {
-    final pattern = RegExp(r'@\[(.+?)\]\(entity:([A-Za-z0-9_/-]+)\)');
+    final pattern = RegExp(r'@\[(.+?)\]\(entity:([A-Za-z0-9_:/-]+)\)');
     final buffer = StringBuffer();
     final spans = <ArticleInlineSpan>[];
     var cursor = 0;
@@ -259,11 +263,8 @@ class ArticleMarkdownCodec {
       buffer.write(source.substring(cursor, match.start));
       final label = match.group(1) ?? '';
       final target = match.group(2) ?? '';
-      final targetParts = target.split('/');
-      final targetType = targetParts.isNotEmpty ? targetParts.first : '';
-      final targetId = targetParts.length > 1
-          ? targetParts.sublist(1).join('/')
-          : '';
+      final targetId = target.startsWith('entity:') ? target : 'entity:$target';
+      final targetType = 'entity';
       final start = buffer.length;
       buffer.write(label);
       final end = buffer.length;
@@ -385,12 +386,18 @@ class ArticleMarkdownCodec {
       if (start < cursor) continue;
       buffer.write(text.substring(cursor, start));
       final label = (span.displayText ?? text.substring(start, end)).trim();
-      final targetType = span.targetType?.trim() ?? '';
       final targetId = span.targetId?.trim() ?? '';
-      if (label.isEmpty || targetType.isEmpty || targetId.isEmpty) {
+      if (label.isEmpty || targetId.isEmpty) {
         buffer.write(text.substring(start, end));
       } else {
-        buffer.write('@[$label](entity:$targetType/$targetId)');
+        final wireTarget = targetId.startsWith('entity:')
+            ? targetId.substring('entity:'.length)
+            : targetId;
+        if (wireTarget.isEmpty) {
+          buffer.write(text.substring(start, end));
+        } else {
+          buffer.write('@[$label](entity:$wireTarget)');
+        }
       }
       cursor = end;
     }
@@ -424,6 +431,23 @@ class ArticleMarkdownCodec {
   static String _frontMatterScalar(String value) {
     final escaped = value.replaceAll('"', '\\"');
     return '"$escaped"';
+  }
+
+  static void _writeFrontMatterStringList(
+    StringBuffer buffer,
+    String key,
+    List<String> values,
+  ) {
+    final normalized = values
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (normalized.isEmpty) return;
+    buffer.writeln('$key:');
+    for (final value in normalized) {
+      buffer.writeln('  - ${_frontMatterScalar(value)}');
+    }
   }
 
   static String _escapeAttribute(String value) {

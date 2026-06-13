@@ -69,8 +69,8 @@ class CreatePostRequestWire {
   final String? title;
   final String? body;
   final String? summary;
-  final String? tagRefs;
-  final String? entityRefs;
+  final List<String>? tagRefs;
+  final List<String>? entityRefs;
   final String? rating;
   final String? reviewAspects;
   final List<String>? mediaUrls;
@@ -107,8 +107,8 @@ class CreatePostRequestWire {
     _mutationPutOpt(m, 'title', title);
     _mutationPutOpt(m, 'body', body);
     _mutationPutOpt(m, 'summary', summary);
-    _mutationPutOpt(m, 'tagRefs', tagRefs);
-    _mutationPutOpt(m, 'entityRefs', entityRefs);
+    if (tagRefs != null) m['tagRefs'] = tagRefs!;
+    if (entityRefs != null) m['entityRefs'] = entityRefs!;
     _mutationPutOpt(m, 'rating', rating);
     _mutationPutOpt(m, 'reviewAspects', reviewAspects);
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
@@ -147,8 +147,8 @@ class CreatePostRequestWire {
       title: m['title']?.toString(),
       body: m['body']?.toString(),
       summary: m['summary']?.toString(),
-      tagRefs: m['tagRefs']?.toString(),
-      entityRefs: m['entityRefs']?.toString(),
+      tagRefs: _mutationStringList(m['tagRefs']),
+      entityRefs: _mutationStringList(m['entityRefs']),
       rating: m['rating']?.toString(),
       reviewAspects: m['reviewAspects']?.toString(),
       mediaUrls: _mutationStringList(m['mediaUrls']),
@@ -217,8 +217,8 @@ class UpdatePostRequestWire {
   final String? title;
   final String? body;
   final String? summary;
-  final String? tagRefs;
-  final String? entityRefs;
+  final List<String>? tagRefs;
+  final List<String>? entityRefs;
   final String? rating;
   final String? reviewAspects;
   final List<String>? mediaUrls;
@@ -247,8 +247,8 @@ class UpdatePostRequestWire {
     _mutationPutOpt(m, 'title', title);
     _mutationPutOpt(m, 'body', body);
     _mutationPutOpt(m, 'summary', summary);
-    _mutationPutOpt(m, 'tagRefs', tagRefs);
-    _mutationPutOpt(m, 'entityRefs', entityRefs);
+    if (tagRefs != null) m['tagRefs'] = tagRefs!;
+    if (entityRefs != null) m['entityRefs'] = entityRefs!;
     _mutationPutOpt(m, 'rating', rating);
     _mutationPutOpt(m, 'reviewAspects', reviewAspects);
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
@@ -279,8 +279,8 @@ class UpdatePostRequestWire {
       title: m['title']?.toString(),
       body: m['body']?.toString(),
       summary: m['summary']?.toString(),
-      tagRefs: m['tagRefs']?.toString(),
-      entityRefs: m['entityRefs']?.toString(),
+      tagRefs: _mutationStringList(m['tagRefs']),
+      entityRefs: _mutationStringList(m['entityRefs']),
       rating: m['rating']?.toString(),
       reviewAspects: m['reviewAspects']?.toString(),
       mediaUrls: _mutationStringList(m['mediaUrls']),
@@ -435,8 +435,8 @@ class PromotePostToWorkRequestWire {
   final String? contentType;
   final String? title;
   final String? summary;
-  final String? tagRefs;
-  final String? entityRefs;
+  final List<String>? tagRefs;
+  final List<String>? entityRefs;
   final String? rating;
   final String? reviewAspects;
   final String? coverUrl;
@@ -458,8 +458,8 @@ class PromotePostToWorkRequestWire {
     _mutationPutOpt(m, 'contentType', contentType);
     _mutationPutOpt(m, 'title', title);
     _mutationPutOpt(m, 'summary', summary);
-    _mutationPutOpt(m, 'tagRefs', tagRefs);
-    _mutationPutOpt(m, 'entityRefs', entityRefs);
+    if (tagRefs != null) m['tagRefs'] = tagRefs!;
+    if (entityRefs != null) m['entityRefs'] = entityRefs!;
     _mutationPutOpt(m, 'rating', rating);
     _mutationPutOpt(m, 'reviewAspects', reviewAspects);
     _mutationPutOpt(m, 'coverUrl', coverUrl);
@@ -483,8 +483,8 @@ class PromotePostToWorkRequestWire {
       contentType: m['contentType']?.toString(),
       title: m['title']?.toString(),
       summary: m['summary']?.toString(),
-      tagRefs: m['tagRefs']?.toString(),
-      entityRefs: m['entityRefs']?.toString(),
+      tagRefs: _mutationStringList(m['tagRefs']),
+      entityRefs: _mutationStringList(m['entityRefs']),
       rating: m['rating']?.toString(),
       reviewAspects: m['reviewAspects']?.toString(),
       coverUrl: m['coverUrl']?.toString(),

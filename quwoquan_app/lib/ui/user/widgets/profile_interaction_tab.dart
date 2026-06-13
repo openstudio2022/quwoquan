@@ -329,17 +329,8 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
     );
   }
 
-  InteractionSubTab _interactionSubTabForId(String id) {
-    switch (id) {
-      case 'comments':
-        return InteractionSubTab.comments;
-      case 'shares':
-        return InteractionSubTab.shares;
-      case 'likes':
-      default:
-        return InteractionSubTab.likes;
-    }
-  }
+  InteractionSubTab _interactionSubTabForId(String id) =>
+      interactionSubTabFromId(id);
 
   String _activityTypeForSubTab(InteractionSubTab subTab) {
     switch (subTab) {

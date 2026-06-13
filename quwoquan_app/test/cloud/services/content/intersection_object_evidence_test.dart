@@ -24,10 +24,10 @@ void main() {
       final labels = groups.map((g) => g.label).toList();
 
       // 三层关系分别独立呈现，禁止用「好友」指代「关注」。
-      expect(labels, contains('共同关注'));
+      expect(labels, contains('共同关注的人'));
       expect(labels, contains('共同联系人'));
       // 不出现把关注混称为好友的错误文案。
-      expect(labels.where((l) => l == '共同关注').length, 2);
+      expect(labels.where((l) => l.contains('共同关注')).length, 1);
     });
 
     test('圈子对象：关注的人在这/联系人在这/关注的人常来 分层', () async {
@@ -88,8 +88,10 @@ void main() {
       final firstRecommendedIndex = groups.indexWhere((g) => g.isRecommended);
       // 存在推荐组时，其前面至少有一个事实组（事实优先）。
       if (firstRecommendedIndex >= 0) {
-        expect(groups.take(firstRecommendedIndex).every((g) => !g.isRecommended),
-            isTrue);
+        expect(
+          groups.take(firstRecommendedIndex).every((g) => !g.isRecommended),
+          isTrue,
+        );
       }
     });
 

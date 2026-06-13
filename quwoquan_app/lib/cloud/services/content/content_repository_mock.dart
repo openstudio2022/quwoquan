@@ -863,6 +863,7 @@ class MockContentRepository implements ContentRepository {
   String _mockCategoryForCircleIds(Iterable<String> circleIds) {
     for (final circleId in circleIds) {
       switch (circleId) {
+        case 'fixture_circle_photo':
         case 'circle_photo_01':
         case 'c1':
         case 'c-human-1':

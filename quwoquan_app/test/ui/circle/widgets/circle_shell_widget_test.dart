@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_item.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_summary.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
@@ -75,7 +77,7 @@ Widget _scopedApp({CircleRepository? mock, VoidCallback? onBack}) {
           GoRoute(
             path: '/',
             builder: (_, _) => Scaffold(
-              body: CircleShell(circleId: 'circle_photo_01', onBack: onBack),
+              body: CircleShell(circleId: 'fixture_circle_photo', onBack: onBack),
             ),
           ),
           GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
@@ -158,6 +160,43 @@ void main() {
       );
     });
 
+    testWidgets('圈子影响展示云侧 displayText，最多三条且不本地拼装', (tester) async {
+      await _pumpShell(tester, mock: _ImpactCircleRepository());
+
+      expect(find.text(UITextConstants.circleImpactTitle), findsOneWidget);
+      expect(find.text('12人在这里建立了新连接'), findsOneWidget);
+      expect(find.text('5个讨论正在这里发生'), findsOneWidget);
+      expect(find.text('3人最近参与了这里'), findsOneWidget);
+      expect(find.text('第4条不应显示'), findsNothing);
+      expect(find.textContaining('条内容正在沉淀经验'), findsNothing);
+    });
+
+    testWidgets('圈子影响事实行可点开查看来源说明', (tester) async {
+      await _pumpShell(tester, mock: _ImpactCircleRepository());
+
+      await tester.tap(find.text('12人在这里建立了新连接'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('12人在这里建立了新连接'), findsWidgets);
+      expect(
+        find.textContaining(UITextConstants.impactEnumerableHintCircle),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('圈子影响为空时整体收起', (tester) async {
+      await _pumpShell(tester, mock: _EmptyImpactCircleRepository());
+
+      expect(find.text(UITextConstants.circleImpactTitle), findsNothing);
+    });
+
+    testWidgets('圈子影响错误时不阻塞主页并收起影响卡', (tester) async {
+      await _pumpShell(tester, mock: _ImpactErrorCircleRepository());
+
+      expect(find.byType(CircleShell), findsOneWidget);
+      expect(find.text(UITextConstants.circleImpactTitle), findsNothing);
+    });
+
     testWidgets('私密圈子游客访问时显示内容门禁', (tester) async {
       await _pumpShell(tester, mock: _PrivateVisitorCircleRepository());
 
@@ -172,7 +211,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(
-        find.byKey(const ValueKey<String>('circle-shell-gate-groups')),
+        find.byKey(const ValueKey<String>('circle-shell-gate-discussion')),
         findsOneWidget,
       );
     });
@@ -221,7 +260,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 3));
 
-      expect(copiedText, equals('circle_photo_01'));
+      expect(copiedText, equals('fixture_circle_photo'));
     });
 
     testWidgets('审批加入后切换为待审核状态', (tester) async {
@@ -289,6 +328,64 @@ class _ApprovalVisitorCircleRepository extends MockCircleRepository {
       'joinStatus': 'none',
       'isFollowed': false,
     });
+  }
+}
+
+class _ImpactCircleRepository extends MockCircleRepository {
+  @override
+  Future<CircleImpactSummary> getCircleImpact(String circleId) async {
+    return CircleImpactSummary(
+      circleId: circleId,
+      total: 21,
+      items: <CircleImpactItem>[
+        CircleImpactItem(
+          helpType: 'relationship',
+          action: 'establish_connection',
+          intersectionDimension: 'relationship',
+          source: 'test',
+          count: 12,
+          displayText: '12人在这里建立了新连接',
+        ),
+        CircleImpactItem(
+          helpType: 'community',
+          action: 'start_discussion',
+          intersectionDimension: 'content',
+          source: 'test',
+          count: 5,
+          displayText: '5个讨论正在这里发生',
+        ),
+        CircleImpactItem(
+          helpType: 'spread',
+          action: 'active_participation',
+          intersectionDimension: 'interest',
+          source: 'test',
+          count: 3,
+          displayText: '3人最近参与了这里',
+        ),
+        CircleImpactItem(
+          helpType: 'spread',
+          action: 'hidden',
+          intersectionDimension: 'interest',
+          source: 'test',
+          count: 1,
+          displayText: '第4条不应显示',
+        ),
+      ],
+    );
+  }
+}
+
+class _EmptyImpactCircleRepository extends MockCircleRepository {
+  @override
+  Future<CircleImpactSummary> getCircleImpact(String circleId) async {
+    return CircleImpactSummary(circleId: circleId);
+  }
+}
+
+class _ImpactErrorCircleRepository extends MockCircleRepository {
+  @override
+  Future<CircleImpactSummary> getCircleImpact(String circleId) async {
+    throw Exception('impact failed');
   }
 }
 

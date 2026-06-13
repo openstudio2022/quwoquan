@@ -18,13 +18,17 @@ class IntersectionReasonChip extends StatelessWidget {
     required this.text,
     required this.isDark,
     this.kind,
+    this.weightTier = '',
   });
 
   static const Key chipKey = ValueKey<String>('intersection-reason-chip');
+  static const Key iconKey = ValueKey<String>('intersection-reason-chip-icon');
+  static const Key textKey = ValueKey<String>('intersection-reason-chip-text');
 
   final String text;
   final bool isDark;
   final UnifiedObjectKind? kind;
+  final String weightTier;
 
   /// 交集理由位口径真相源：云侧主交集结论句 [IntersectionReason.primaryText] 直出，
   /// 缺省回退整句 displayText；端不本地拼装事实（G2）。
@@ -63,6 +67,7 @@ class IntersectionReasonChip extends StatelessWidget {
       key: key,
       text: text,
       isDark: isDark,
+      weightTier: first?.weightTier ?? '',
       kind: first == null
           ? null
           : UnifiedObjectKind.resolve(
@@ -74,31 +79,41 @@ class IntersectionReasonChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = isDark ? AppColors.iosAccentDark : AppColors.primaryColor;
+    final resolvedTier = _resolveWeightTier(weightTier);
+    final isLight = resolvedTier == _IntersectionReasonWeightTier.light;
+    final accent = AppColors.iosAccent(context);
+    final foreground = isLight ? AppColors.iosSecondaryLabel(context) : accent;
+    final iconBackground = isLight
+        ? AppColors.iosSecondaryFill(context)
+        : accent.withValues(alpha: isDark ? 0.2 : 0.12);
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
+          key: iconKey,
           width: AppSpacing.iconSmall,
           height: AppSpacing.iconSmall,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: accent.withValues(alpha: isDark ? 0.2 : 0.12),
+            color: iconBackground,
             shape: BoxShape.circle,
           ),
-          child: Icon(_icon, size: AppSpacing.iconXSmall, color: accent),
+          child: Icon(_icon, size: AppSpacing.iconXSmall, color: foreground),
         ),
         SizedBox(width: AppSpacing.intraGroupXs),
         Flexible(
           child: Text(
+            key: textKey,
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: AppTypography.iosCaption1,
-              fontWeight: AppTypography.medium,
-              color: accent,
+              fontWeight: isLight
+                  ? AppTypography.regular
+                  : AppTypography.medium,
+              color: foreground,
               letterSpacing: -0.04,
             ),
           ),
@@ -123,4 +138,17 @@ class IntersectionReasonChip extends StatelessWidget {
         return CupertinoIcons.link;
     }
   }
+
+  static _IntersectionReasonWeightTier _resolveWeightTier(String raw) {
+    switch (raw.trim().toLowerCase()) {
+      case 'light':
+        return _IntersectionReasonWeightTier.light;
+      case 'heavy':
+      case '':
+      default:
+        return _IntersectionReasonWeightTier.heavy;
+    }
+  }
 }
+
+enum _IntersectionReasonWeightTier { heavy, light }

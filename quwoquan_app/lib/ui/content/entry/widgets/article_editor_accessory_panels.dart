@@ -31,6 +31,7 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
     required this.onImageTap,
     required this.onEmojiTap,
     required this.onStyleTap,
+    this.onMentionTap,
     required this.onUndo,
     required this.onRedo,
     required this.canUndo,
@@ -54,6 +55,7 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
   final VoidCallback onImageTap;
   final VoidCallback onEmojiTap;
   final VoidCallback onStyleTap;
+  final VoidCallback? onMentionTap;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final bool canUndo;
@@ -108,15 +110,15 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
                 constraints: const BoxConstraints(
                   maxWidth: AppSpacing.feedMaxContentWidth,
                 ),
-                // 工具栏：固定 5 个 44 触控区 + 竖线；剩余宽度均分为 7 段（左缘、5 处
+                // 工具栏：固定 6 个 44 触控区 + 竖线；剩余宽度均分为 8 段（左缘、6 处
                 // 相邻间隔、右缘），与下方样式面板同宽（feedMaxContentWidth），左右对称。
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     const fixedToolbarWidth =
-                        5 * AppSpacing.minInteractiveSize + AppSpacing.hairline;
+                        6 * AppSpacing.minInteractiveSize + AppSpacing.hairline;
                     final maxW = constraints.maxWidth;
                     final gap = maxW > fixedToolbarWidth
-                        ? (maxW - fixedToolbarWidth) / 7.0
+                        ? (maxW - fixedToolbarWidth) / 8.0
                         : 0.0;
                     Widget gapBox() => SizedBox(width: gap);
                     return Row(
@@ -159,6 +161,13 @@ class ArticleEditorAccessoryHost extends StatelessWidget {
                           selected:
                               panelType ==
                               ArticleEditorAccessoryPanelType.emoji,
+                        ),
+                        gapBox(),
+                        ArticleEditorAccessoryButton(
+                          buttonKey: TestKeys.createAccessoryMentionButton,
+                          glyph: ArticleEditorAccessoryGlyph.at,
+                          semanticLabel: '提及对象',
+                          onPressed: onMentionTap ?? () {},
                         ),
                         gapBox(),
                         SizedBox(
@@ -479,6 +488,10 @@ class ArticleEditorStylePanel extends StatelessWidget {
           spacing: cellSpacing,
           children: <Widget>[
             _StyleCell(
+              selected:
+                  activeAction == ArticleEditorStructureAction.headingMajor,
+              onTap: () =>
+                  _onExclusiveTap(ArticleEditorStructureAction.headingMajor),
               child: Text(
                 '大标题',
                 style: TextStyle(
@@ -487,12 +500,12 @@ class ArticleEditorStylePanel extends StatelessWidget {
                   fontWeight: AppTypography.semiBold,
                 ),
               ),
-              selected:
-                  activeAction == ArticleEditorStructureAction.headingMajor,
-              onTap: () =>
-                  _onExclusiveTap(ArticleEditorStructureAction.headingMajor),
             ),
             _StyleCell(
+              selected:
+                  activeAction == ArticleEditorStructureAction.headingMinor,
+              onTap: () =>
+                  _onExclusiveTap(ArticleEditorStructureAction.headingMinor),
               child: Text(
                 '小标题',
                 style: TextStyle(
@@ -501,12 +514,11 @@ class ArticleEditorStylePanel extends StatelessWidget {
                   fontWeight: AppTypography.medium,
                 ),
               ),
-              selected:
-                  activeAction == ArticleEditorStructureAction.headingMinor,
-              onTap: () =>
-                  _onExclusiveTap(ArticleEditorStructureAction.headingMinor),
             ),
             _StyleCell(
+              selected: activeAction == ArticleEditorStructureAction.blockquote,
+              onTap: () =>
+                  _onExclusiveTap(ArticleEditorStructureAction.blockquote),
               child: Text(
                 '引用',
                 style: TextStyle(
@@ -515,9 +527,6 @@ class ArticleEditorStylePanel extends StatelessWidget {
                   fontWeight: AppTypography.regular,
                 ),
               ),
-              selected: activeAction == ArticleEditorStructureAction.blockquote,
-              onTap: () =>
-                  _onExclusiveTap(ArticleEditorStructureAction.blockquote),
             ),
           ],
         ),
@@ -527,30 +536,30 @@ class ArticleEditorStylePanel extends StatelessWidget {
           spacing: cellSpacing,
           children: <Widget>[
             _StyleCell(
+              selected: activeAction == ArticleEditorStructureAction.bulletList,
+              onTap: () =>
+                  _onExclusiveTap(ArticleEditorStructureAction.bulletList),
               child: Icon(
                 CupertinoIcons.list_bullet,
                 size: AppSpacing.iconMedium,
                 color: labelColor,
               ),
-              selected: activeAction == ArticleEditorStructureAction.bulletList,
-              onTap: () =>
-                  _onExclusiveTap(ArticleEditorStructureAction.bulletList),
             ),
             _StyleCell(
+              selected:
+                  activeAction == ArticleEditorStructureAction.orderedList,
+              onTap: () =>
+                  _onExclusiveTap(ArticleEditorStructureAction.orderedList),
               child: Icon(
                 CupertinoIcons.list_number,
                 size: AppSpacing.iconMedium,
                 color: labelColor,
               ),
-              selected:
-                  activeAction == ArticleEditorStructureAction.orderedList,
-              onTap: () =>
-                  _onExclusiveTap(ArticleEditorStructureAction.orderedList),
             ),
             _StyleCell(
-              child: _CnListIcon(color: labelColor),
               selected: false, // 占位：中文数字序号暂不支持
               onTap: () {},
+              child: _CnListIcon(color: labelColor),
             ),
           ],
         ),
@@ -560,36 +569,36 @@ class ArticleEditorStylePanel extends StatelessWidget {
           spacing: cellSpacing,
           children: <Widget>[
             _StyleCell(
+              selected: activeAlignment == 'left',
+              onTap: () => onAlignmentSelected?.call(
+                activeAlignment == 'left' ? '' : 'left',
+              ),
               child: Icon(
                 CupertinoIcons.text_alignleft,
                 size: AppSpacing.twenty,
                 color: labelColor,
               ),
-              selected: activeAlignment == 'left',
-              onTap: () => onAlignmentSelected?.call(
-                activeAlignment == 'left' ? '' : 'left',
-              ),
             ),
             _StyleCell(
+              selected: activeAlignment == 'center',
+              onTap: () => onAlignmentSelected?.call(
+                activeAlignment == 'center' ? 'left' : 'center',
+              ),
               child: Icon(
                 CupertinoIcons.text_aligncenter,
                 size: AppSpacing.twenty,
                 color: labelColor,
               ),
-              selected: activeAlignment == 'center',
-              onTap: () => onAlignmentSelected?.call(
-                activeAlignment == 'center' ? 'left' : 'center',
-              ),
             ),
             _StyleCell(
+              selected: activeAlignment == 'right',
+              onTap: () => onAlignmentSelected?.call(
+                activeAlignment == 'right' ? 'left' : 'right',
+              ),
               child: Icon(
                 CupertinoIcons.text_alignright,
                 size: AppSpacing.twenty,
                 color: labelColor,
-              ),
-              selected: activeAlignment == 'right',
-              onTap: () => onAlignmentSelected?.call(
-                activeAlignment == 'right' ? 'left' : 'right',
               ),
             ),
           ],
@@ -600,6 +609,8 @@ class ArticleEditorStylePanel extends StatelessWidget {
           spacing: cellSpacing,
           children: <Widget>[
             _StyleCell(
+              selected: isBoldActive,
+              onTap: onToggleBold ?? () {},
               child: Text(
                 '加粗',
                 style: TextStyle(
@@ -608,10 +619,10 @@ class ArticleEditorStylePanel extends StatelessWidget {
                   fontWeight: AppTypography.bold,
                 ),
               ),
-              selected: isBoldActive,
-              onTap: onToggleBold ?? () {},
             ),
             _StyleCell(
+              selected: isItalicActive,
+              onTap: onToggleItalic ?? () {},
               child: Text(
                 '斜体',
                 style: TextStyle(
@@ -621,10 +632,10 @@ class ArticleEditorStylePanel extends StatelessWidget {
                   fontStyle: FontStyle.italic,
                 ),
               ),
-              selected: isItalicActive,
-              onTap: onToggleItalic ?? () {},
             ),
             _StyleCell(
+              selected: isUnderlineActive,
+              onTap: onToggleUnderline ?? () {},
               child: Text(
                 '下划线',
                 style: TextStyle(
@@ -634,8 +645,6 @@ class ArticleEditorStylePanel extends StatelessWidget {
                   decoration: TextDecoration.underline,
                 ),
               ),
-              selected: isUnderlineActive,
-              onTap: onToggleUnderline ?? () {},
             ),
           ],
         ),
@@ -1362,6 +1371,7 @@ enum ArticleEditorAccessoryGlyph {
   image,
   emoji,
   keyboard,
+  at,
   structure,
   template,
   font,
@@ -1411,6 +1421,16 @@ class ArticleEditorAccessoryButton extends StatelessWidget {
         Icons.sentiment_satisfied_alt,
         size: iconSize + 2,
         color: color,
+      );
+    } else if (glyph == ArticleEditorAccessoryGlyph.at) {
+      glyphWidget = Text(
+        '@',
+        style: TextStyle(
+          color: color,
+          fontSize: iconSize,
+          fontWeight: AppTypography.semiBold,
+          height: AppSpacing.textLineHeightSingle,
+        ),
       );
     } else {
       glyphWidget = SizedBox(
@@ -1495,6 +1515,9 @@ class _AccessoryGlyphPainter extends CustomPainter {
         canvas.drawPath(mountainPath, stroke);
       case ArticleEditorAccessoryGlyph.emoji:
         // emoji 由 ArticleEditorAccessoryButton 直接用 Icon 渲染
+        break;
+      case ArticleEditorAccessoryGlyph.at:
+        // @ 由 ArticleEditorAccessoryButton 直接用 Text 渲染
         break;
       case ArticleEditorAccessoryGlyph.keyboard:
         final rect = RRect.fromRectAndRadius(
@@ -1595,7 +1618,7 @@ class _PaperTextureSelector extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
       itemCount: ArticlePaperTexture.values.length,
-      separatorBuilder: (_, __) =>
+      separatorBuilder: (_, _) =>
           SizedBox(width: AppSpacing.filterTemplateItemGap),
       itemBuilder: (context, index) {
         final texture = ArticlePaperTexture.values[index];
@@ -1674,7 +1697,7 @@ class _FontPresetSelector extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
       itemCount: ArticleFontPreset.values.length,
-      separatorBuilder: (_, __) =>
+      separatorBuilder: (_, _) =>
           SizedBox(width: AppSpacing.filterTemplateItemGap),
       itemBuilder: (context, index) {
         final preset = ArticleFontPreset.values[index];

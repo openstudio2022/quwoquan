@@ -1,5 +1,14 @@
 part of 'ui_text_constants.dart';
 
+String _footprintTypeLabel(String type) =>
+    const {
+      'viewed': '看过',
+      'liked': '赞过',
+      'commented': '评论过',
+      'shared': '转发过',
+    }[type] ??
+    type;
+
 String _contentLabelForKey(String labelKey) {
   switch (labelKey) {
     case 'discovery_rail_moment':
@@ -20,6 +29,26 @@ String _contentLabelForKey(String labelKey) {
       return UITextConstants.profileTabInteraction;
     case 'profile_tab_lifestyle':
       return UITextConstants.profileTabLifestyle;
+    case 'homepage_tab_content':
+      return UITextConstants.objectTabContent;
+    case 'homepage_tab_discussion':
+      return UITextConstants.objectTabDiscussion;
+    case 'homepage_tab_interest_circles':
+      return UITextConstants.objectTabInterestCircles;
+    case 'circle_tab_content':
+      return UITextConstants.objectTabContent;
+    case 'circle_tab_discussion':
+      return UITextConstants.objectTabDiscussion;
+    case 'circle_tab_members':
+      return UITextConstants.objectTabMembers;
+    case 'circle_section_works':
+      return UITextConstants.circleWorksTab;
+    case 'circle_section_interaction':
+      return UITextConstants.circleInteractionTab;
+    case 'circle_section_chat':
+      return UITextConstants.circleGroups;
+    case 'circle_section_storage':
+      return UITextConstants.circleAssetsTab;
     case 'lifestyle_sub_footprint':
       return UITextConstants.lifestyleSubFootprint;
     case 'lifestyle_sub_soul':

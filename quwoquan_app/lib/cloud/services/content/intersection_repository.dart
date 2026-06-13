@@ -235,7 +235,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       case 'circle':
         return const <_EvidenceSeed>[
           _EvidenceSeed(
-            kind: 'friendInCircle',
+            kind: 'followeeInObject',
             dimension: 'relationship',
             label: '关注的人在这',
             count: 6,
@@ -246,7 +246,7 @@ class MockIntersectionRepository implements IntersectionRepository {
             ],
           ),
           _EvidenceSeed(
-            kind: 'contactInCircle',
+            kind: 'commonContact',
             dimension: 'relationship',
             label: '联系人在这',
             count: 3,
@@ -256,7 +256,7 @@ class MockIntersectionRepository implements IntersectionRepository {
             ],
           ),
           _EvidenceSeed(
-            kind: 'friendActiveHere',
+            kind: 'followeeInObject',
             dimension: 'relationship',
             label: '关注的人常来',
             count: 3,
@@ -285,7 +285,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       case 'homepage':
         return const <_EvidenceSeed>[
           _EvidenceSeed(
-            kind: 'friendVisited',
+            kind: 'followeeVisited',
             dimension: 'location',
             label: '关注的人来过',
             count: 9,
@@ -297,7 +297,7 @@ class MockIntersectionRepository implements IntersectionRepository {
             ],
           ),
           _EvidenceSeed(
-            kind: 'contactVisited',
+            kind: 'followeeVisited',
             dimension: 'location',
             label: '联系人来过',
             count: 4,
@@ -307,7 +307,7 @@ class MockIntersectionRepository implements IntersectionRepository {
             ],
           ),
           _EvidenceSeed(
-            kind: 'friendJoinedRelatedCircle',
+            kind: 'followeeInObject',
             dimension: 'relationship',
             label: '关注的人加入',
             count: 6,
@@ -315,13 +315,6 @@ class MockIntersectionRepository implements IntersectionRepository {
             avatars: <String>[
               'https://images.unsplash.com/photo-1499952127939-9bbf5af6c51c?w=100',
             ],
-          ),
-          _EvidenceSeed(
-            kind: 'youInteracted',
-            dimension: 'location',
-            label: '你来过',
-            count: 3,
-            sampleText: '',
           ),
           _EvidenceSeed(
             kind: 'affinity',
@@ -335,9 +328,9 @@ class MockIntersectionRepository implements IntersectionRepository {
       case 'user':
         return const <_EvidenceSeed>[
           _EvidenceSeed(
-            kind: 'mutualFriend',
+            kind: 'sharedFollowees',
             dimension: 'relationship',
-            label: '共同关注',
+            label: '共同关注的人',
             count: 4,
             sampleText: '林清越',
             avatars: <String>[
@@ -356,19 +349,9 @@ class MockIntersectionRepository implements IntersectionRepository {
             ],
           ),
           _EvidenceSeed(
-            kind: 'commonFollow',
-            dimension: 'relationship',
-            label: '共同关注',
-            count: 6,
-            sampleText: '摄影师 陈漫',
-            avatars: <String>[
-              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
-            ],
-          ),
-          _EvidenceSeed(
-            kind: 'coLiked',
+            kind: 'coCommented',
             dimension: 'content',
-            label: '都赞过',
+            label: '共同讨论',
             count: 3,
             sampleText: '故宫夜景',
           ),
@@ -561,10 +544,14 @@ class MockIntersectionRepository implements IntersectionRepository {
           if (agoHours is num) {
             reason = reason.copyWith(freshAt: _isoMinusHours(agoHours.toInt()));
           }
-          return reason;
+          // fixture 自带 point 级 sourceRef（注册表标准 kind）时直接消费，
+          // 仅缺省时回退合成单 point（防旧 fixture 漂移）。
+          return reason.intersectionPoints.isNotEmpty
+              ? _withPoints(reason, reason.intersectionPoints)
+              : _withDefaultPointSummary(reason);
         })
         .toList(growable: false);
-    return reasons.isEmpty ? null : _withDefaultPointSummaries(reasons);
+    return reasons.isEmpty ? null : reasons;
   }
 
   /// canonical 我的交集 inbox（覆盖 5 维度，含事实/概率混样、头像/名字/新鲜度）。

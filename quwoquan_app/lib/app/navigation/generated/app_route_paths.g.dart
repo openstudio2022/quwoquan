@@ -147,6 +147,16 @@ class AppRoutePaths {
   }
   static const String homepageDetailSegment = '{id}';
 
+  static const String homepageIntroductionPathTemplate = '/homepages/{id}/introduction';
+  static String homepageIntroduction({required String id, String? source}) {
+    return _buildPath(homepageIntroductionPathTemplate, <String, String>{
+      'id': id,
+    }, <String, String?>{
+      'source': source,
+    });
+  }
+  static const String homepageIntroductionSegment = 'introduction';
+
   static const String homepageClaimPathTemplate = '/homepages/{id}/claim';
   static String homepageClaim({required String id}) {
     return _buildPath(homepageClaimPathTemplate, <String, String>{

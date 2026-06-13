@@ -2546,13 +2546,13 @@ void main() {
               'fontPreset: clean\n'
               '---\n\n'
               '# 杭州一日游\n\n'
-              '@[灵隐寺](entity:homepage/homepage_sight_west_lake)\n',
+              '@[灵隐寺](entity:sight:west_lake)\n',
               extra: const <String, dynamic>{
                 'contentVertical': 'travel',
                 'entityMentions': <Map<String, dynamic>>[
                   {
-                    'subjectType': 'homepage',
-                    'subjectId': 'homepage_sight_west_lake',
+                    'subjectType': 'entity',
+                    'subjectId': 'entity:sight:west_lake',
                     'displayName': '灵隐寺',
                     'rangeStart': 3,
                     'rangeEnd': 6,

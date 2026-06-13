@@ -254,7 +254,7 @@ void main() {
       expect(rows.first.circleId, isNotEmpty);
     });
 
-    test('listContactTabFunGroups Mock 返回趣群占位行', () async {
+    test('listContactTabFunGroups Mock 返回讨论占位行', () async {
       final rows = await repo.listContactTabFunGroups();
       expect(rows, isNotEmpty);
       expect(rows.first, isA<ChatContactTabFunGroupRowDto>());

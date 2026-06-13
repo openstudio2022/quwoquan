@@ -1465,6 +1465,63 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     _applyArticleDocument(doc.copyWith(nodes: nextNodes));
   }
 
+  /// 在指定文本 node 的 [start, end) 范围内插入对象提及元数据。
+  void attachArticleEntityMention(
+    String nodeId,
+    int start,
+    int end, {
+    required String targetType,
+    required String targetId,
+    required String displayText,
+  }) {
+    final id = nodeId.trim();
+    final normalizedTargetType = targetType.trim();
+    final normalizedTargetId = targetId.trim();
+    final normalizedDisplay = displayText.trim();
+    if (id.isEmpty ||
+        normalizedTargetType.isEmpty ||
+        normalizedTargetId.isEmpty ||
+        normalizedDisplay.isEmpty) {
+      return;
+    }
+    final doc = state.articleDocument;
+    final node = doc.nodes.firstWhere(
+      (n) => n.id == id,
+      orElse: () => const ArticleDocumentNode(
+        id: '',
+        type: ArticleDocumentNodeType.paragraph,
+      ),
+    );
+    if (node.id.isEmpty || node.isFigure || node.isDocumentTitle) return;
+    final clampedStart = start.clamp(0, node.text.length);
+    final clampedEnd = end.clamp(clampedStart, node.text.length);
+    if (clampedStart >= clampedEnd) return;
+    final nextSpan = ArticleInlineSpan(
+      start: clampedStart,
+      end: clampedEnd,
+      kind: 'entity',
+      targetType: normalizedTargetType,
+      targetId: normalizedTargetId,
+      displayText: normalizedDisplay,
+    );
+    final nextNodes = doc.nodes
+        .map((n) {
+          if (n.id != id) return n;
+          final spans = <ArticleInlineSpan>[
+            ...n.spans.where(
+              (span) =>
+                  !(span.isEntity &&
+                      span.start == clampedStart &&
+                      span.end == clampedEnd),
+            ),
+            nextSpan,
+          ]..sort((left, right) => left.start.compareTo(right.start));
+          return n.copyWith(spans: spans);
+        })
+        .toList(growable: false);
+    _applyArticleDocument(doc.copyWith(nodes: nextNodes));
+  }
+
   /// 合并/拆分 spans 以在 [start, end) 范围内 toggle 指定样式。
   static List<ArticleInlineSpan> _toggleSpansInRange(
     List<ArticleInlineSpan> existing,
@@ -1515,6 +1572,25 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     }
     // 从逐字符数组重建 spans（合并相邻同样式区间）
     final result = <ArticleInlineSpan>[];
+    result.addAll(
+      existing
+          .where((span) => span.isEntity)
+          .map((span) {
+            return ArticleInlineSpan(
+              start: span.start.clamp(0, maxOffset),
+              end: span.end.clamp(span.start.clamp(0, maxOffset), maxOffset),
+              bold: span.bold,
+              italic: span.italic,
+              underline: span.underline,
+              strikethrough: span.strikethrough,
+              kind: span.kind,
+              targetType: span.targetType,
+              targetId: span.targetId,
+              displayText: span.displayText,
+            );
+          })
+          .where((span) => span.start < span.end),
+    );
     var i = 0;
     while (i < maxOffset) {
       final b = bolds[i];
@@ -1813,6 +1889,10 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
           italic: span.italic,
           underline: span.underline,
           strikethrough: span.strikethrough,
+          kind: span.kind,
+          targetType: span.targetType,
+          targetId: span.targetId,
+          displayText: span.displayText,
         ),
       );
     }

@@ -8,6 +8,7 @@ class EntityRequestPageIds {
     'CreateHomepageClaimRequest': 'entity.homepage.claim.create',
     'CreateHomepageStatusReport': 'entity.homepage.status_report.create',
     'GetHomepageDetail': 'entity.homepage.detail',
+    'GetHomepageIntroduction': 'entity.homepage.introduction',
     'GetHomepageRelatedGroups': 'entity.homepage.related_groups',
     'GetHomepageReviewSummary': 'entity.homepage.review_summary',
     'GetHomepageShell': 'entity.homepage.shell',
@@ -24,6 +25,7 @@ class EntityRequestPageIds {
   static const String createHomepageClaimRequest = 'entity.homepage.claim.create';
   static const String createHomepageStatusReport = 'entity.homepage.status_report.create';
   static const String getHomepageDetail = 'entity.homepage.detail';
+  static const String getHomepageIntroduction = 'entity.homepage.introduction';
   static const String getHomepageRelatedGroups = 'entity.homepage.related_groups';
   static const String getHomepageReviewSummary = 'entity.homepage.review_summary';
   static const String getHomepageShell = 'entity.homepage.shell';

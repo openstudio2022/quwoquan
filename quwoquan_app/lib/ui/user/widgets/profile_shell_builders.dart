@@ -23,7 +23,49 @@ extension _ProfileShellBuilders on _ProfileShellState {
     );
   }
 
-  /// 影响力摘要模块（other =「TA的影响」/ mine =「我的影响力」）。
+  /// 「我的足迹」入口行（仅 mine）：私有只读消费轨迹，进入足迹列表页。
+  Widget _buildMyFootprintEntry(BuildContext context, bool isDark) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: () => context.push(AppRoutePaths.myFootprint()),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm + AppSpacing.xs,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.iosGroupedSurface(context),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              CupertinoIcons.clock,
+              size: AppSpacing.iconSmall,
+              color: AppColors.iosSecondaryLabel(context),
+            ),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                UITextConstants.myFootprintTitle,
+                style: TextStyle(
+                  fontSize: AppTypography.iosSubheadline,
+                  color: AppColors.iosLabel(context),
+                ),
+              ),
+            ),
+            Icon(
+              CupertinoIcons.chevron_forward,
+              size: AppSpacing.iconXSmall,
+              color: AppColors.iosTertiaryLabel(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 影响力摘要模块（他人主页 / 我的主页双视角）。
   ///
   /// async 三态：loading / error 不占位；data 由 [AuthorImpactCard] 决定
   /// （other 无事实收起，mine 空态展示鼓励发布文案）。
@@ -247,6 +289,8 @@ extension _ProfileShellBuilders on _ProfileShellState {
             SizedBox(height: AppSpacing.md),
             if (widget.mode == ProfileMode.mine) ...[
               MyIntersectionInboxCard(isDark: isDark),
+              SizedBox(height: AppSpacing.md),
+              _buildMyFootprintEntry(context, isDark),
               SizedBox(height: AppSpacing.md),
             ] else ...[
               _buildIntersectionCard(isDark),
@@ -557,13 +601,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
   }
 
   String _profileObjectTabLabel(String tabId) {
-    return switch (tabId) {
-      'creations' => '作品',
-      'circles' => '圈子',
-      'interaction' => '互动',
-      'lifestyle' => '看点',
-      _ => UITextConstants.contentLabelForKey(tabId),
-    };
+    return profileTabLabelForId(tabId);
   }
 
   Widget _buildInlineTabContent(BuildContext context, bool isDark) {

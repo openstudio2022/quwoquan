@@ -1166,6 +1166,11 @@ class CreateDraft {
   String _articleMarkdownForStorage() {
     return ArticleMarkdownCodec.serializeDocument(
       state.articleDocument,
+      summary: state.settings.summary,
+      tagRefs: state.settings.tagRefs,
+      entityRefs: state.settings.entityRefs,
+      visibility: state.settings.isPublic ? 'public' : 'private',
+      assistantUsePolicy: state.settings.assistantUsePolicy,
       coverAssetId: state.articleCoverImagePath.trim().isNotEmpty
           ? 'cover'
           : '',

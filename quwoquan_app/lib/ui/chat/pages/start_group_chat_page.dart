@@ -134,7 +134,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _handleCreateConversationSuccess(String conversationId) {
-    AppToast.show(context, '群聊已创建');
+    AppToast.show(context, '讨论已创建');
     if (conversationId.isEmpty) {
       context.go(AppRoutePaths.chat);
     } else {
@@ -154,7 +154,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     final semantic = UiErrorSemantic(
       category: UiErrorCategory.submit,
       scope: UiErrorScope.global,
-      title: widget.isCreateMode ? '发起群聊未完成' : '添加成员未完成',
+      title: widget.isCreateMode ? '发起讨论未完成' : '添加成员未完成',
       message: widget.isCreateMode
           ? '这次没有发起成功，稍后可以再试一次。'
           : '这次没有添加成功，稍后可以再试一次。',
@@ -659,7 +659,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                     ? const CupertinoActivityIndicator()
                     : Text(
                         widget.isCreateMode
-                            ? '发起群聊（${selectedMembers.length}）'
+                            ? '发起讨论（${selectedMembers.length}）'
                             : '${UITextConstants.addMember}（${selectedMembers.length}）',
                         style: TextStyle(
                           fontSize: AppTypography.lg,

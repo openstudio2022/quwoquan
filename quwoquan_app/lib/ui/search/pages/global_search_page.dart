@@ -781,7 +781,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
               MostUsedTargetKind.contact => '联系人',
               MostUsedTargetKind.chatRecord =>
                 mostUsed.conversationType?.trim().toLowerCase() == 'group'
-                    ? '群聊'
+                    ? '讨论'
                     : '单聊',
               MostUsedTargetKind.circle => '圈子',
             },

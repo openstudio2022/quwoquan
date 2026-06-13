@@ -1245,7 +1245,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
     final templateId = (item['articleTemplate'] ?? '').toString().trim();
     if (templateId.isNotEmpty && recommended.contains(templateId)) {
-      return '频道推荐 · ${articleTemplatePresetFromString(templateId).label}';
+      return '讨论推荐 · ${articleTemplatePresetFromString(templateId).label}';
     }
     final labels = recommended
         .take(2)
@@ -1254,7 +1254,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     if (labels.isEmpty) {
       return '';
     }
-    return '频道推荐 · $labels';
+    return '讨论推荐 · $labels';
   }
 
   int _rawLikeCount(Map<String, dynamic> item) {

@@ -28,7 +28,7 @@ void main() {
         ],
         'entityRefs': <String>['entity:poi:westlake'],
         'primaryHomepageId': 'homepage_westlake',
-        'canonicalEntityId': 'entity:homepage:westlake',
+        'canonicalEntityId': 'entity:poi:westlake',
         'assistantMentioned': true,
         'assistantReplySource': 'user_mention',
         'assistantCorrectionStatus': 'pending',
@@ -69,7 +69,7 @@ void main() {
       expect(dto.avatarUrl, equals('https://example.com/avatar.jpg'));
       expect(dto.entityRefs, equals(<String>['entity:poi:westlake']));
       expect(dto.primaryHomepageId, equals('homepage_westlake'));
-      expect(dto.canonicalEntityId, equals('entity:homepage:westlake'));
+      expect(dto.canonicalEntityId, equals('entity:poi:westlake'));
       expect(dto.assistantMentioned, isTrue);
       expect(dto.assistantReplySource, equals('user_mention'));
       expect(dto.assistantCorrectionStatus, equals('pending'));
@@ -86,7 +86,7 @@ void main() {
         'content': 'round trip',
         'entityRefs': <String>['entity:poi:westlake'],
         'primaryHomepageId': 'homepage_westlake',
-        'canonicalEntityId': 'entity:homepage:westlake',
+        'canonicalEntityId': 'entity:poi:westlake',
         'assistantMentioned': true,
         'assistantReplySource': 'quality_boost',
         'assistantCorrectionStatus': 'corrected',
@@ -97,7 +97,7 @@ void main() {
 
       expect(map['entityRefs'], equals(<String>['entity:poi:westlake']));
       expect(map['primaryHomepageId'], equals('homepage_westlake'));
-      expect(map['canonicalEntityId'], equals('entity:homepage:westlake'));
+      expect(map['canonicalEntityId'], equals('entity:poi:westlake'));
       expect(map['assistantMentioned'], isTrue);
       expect(map['assistantReplySource'], equals('quality_boost'));
       expect(map['assistantCorrectionStatus'], equals('corrected'));

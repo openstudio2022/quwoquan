@@ -17,6 +17,7 @@ IntersectionPoint _point({
   required int count,
   String pointClass = 'fact',
   String sampleText = '',
+  String sourceRef = '',
 }) {
   return IntersectionPoint(
     pointId: '$dimension-$label',
@@ -26,6 +27,7 @@ IntersectionPoint _point({
     displayText: label,
     count: count,
     sampleText: sampleText,
+    sourceRef: sourceRef,
   );
 }
 
@@ -74,6 +76,105 @@ void main() {
       );
       final groups = EvidenceGroup.fromReason(reason);
       expect(EvidenceGroup.totalCount(groups), 6);
+    });
+
+    test('WP1 附录A：按 standard kind rank 排序，同 rank 保持云侧顺序', () {
+      final reason = IntersectionReason(
+        dimension: 'relationship',
+        intersectionPoints: <IntersectionPoint>[
+          _point(
+            dimension: 'content',
+            sourceRef: 'coCommented',
+            label: '共同讨论',
+            count: 2,
+          ),
+          _point(
+            dimension: 'relationship',
+            sourceRef: 'sharedFollowees',
+            label: '共同关注的人',
+            count: 1,
+          ),
+          _point(
+            dimension: 'interest',
+            sourceRef: 'sharedTagSample',
+            label: '共同兴趣',
+            count: 99,
+          ),
+          _point(
+            dimension: 'relationship',
+            sourceRef: 'commonContact',
+            label: '共同联系人',
+            count: 3,
+          ),
+          _point(
+            dimension: 'future',
+            sourceRef: 'futureKind',
+            label: '未来交集',
+            count: 100,
+          ),
+          _point(
+            dimension: 'interest',
+            sourceRef: 'affinityBucket',
+            label: '可能合得来',
+            count: 4,
+            pointClass: 'recommended',
+          ),
+        ],
+      );
+
+      final groups = EvidenceGroup.fromReason(reason);
+      expect(
+        groups.map((g) => g.kind).toList(),
+        <String>[
+          'sharedFollowees',
+          'commonContact',
+          'coCommented',
+          'sharedTagSample',
+          'futureKind',
+          'affinityBucket',
+        ],
+      );
+      expect(groups.last.isRecommended, isTrue);
+      expect(groups.map((g) => g.label), contains('共同关注的人'));
+    });
+
+    test('WP1 附录A：fallback icon 仅使用 kind 语义槽位，不影响文案', () {
+      final reason = IntersectionReason(
+        dimension: 'content',
+        intersectionPoints: <IntersectionPoint>[
+          _point(
+            dimension: 'content',
+            sourceRef: 'coCommented',
+            label: '共同讨论',
+            count: 2,
+          ),
+          _point(
+            dimension: 'identity',
+            sourceRef: 'sameSchool',
+            label: '共同校友',
+            count: 1,
+          ),
+          _point(
+            dimension: 'interest',
+            sourceRef: 'sharedTagSample',
+            label: '共同兴趣',
+            count: 1,
+          ),
+          _point(
+            dimension: 'future',
+            sourceRef: 'futureKind',
+            label: '未来交集',
+            count: 1,
+          ),
+        ],
+      );
+
+      final groups = EvidenceGroup.fromReason(reason);
+      expect(groups[0].fallbackIconKind, 'discussion');
+      expect(groups[1].fallbackIconKind, 'school');
+      expect(groups[2].fallbackIconKind, 'tag');
+      expect(groups[3].fallbackIconKind, 'link');
+      expect(groups.map((g) => g.label), contains('共同讨论'));
     });
 
     testWidgets('抽屉列表行：短句 + 计数 + 实例；顶部总数与逐项一致；零内部词', (tester) async {

@@ -13,7 +13,7 @@ Widget _scopedApp({CircleRepository? mock}) {
     child: MaterialApp(
       home: Scaffold(
         body: CircleDetailPage(
-          circleId: 'circle_photo_01',
+          circleId: 'fixture_circle_photo',
           onBack: () {},
         ),
       ),

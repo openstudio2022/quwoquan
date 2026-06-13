@@ -240,59 +240,59 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       child: Stack(
         children: [
           ColoredBox(
-        color: shellBackground,
-        child: Column(
-          children: [
-            if (showInstallBanner) const WebAppInstallBanner(),
-            ActiveCallBar(onTap: _returnToActiveCall),
-            Expanded(
-              child: useWebWideShell
-                  ? Stack(
-                      children: [
-                        WebMainAppShell(
-                          currentDestination: mainTabFromBottomNavIndex(
-                            _currentIndex,
-                          ),
-                          currentLocation: _currentLocation,
-                          backgroundColor: shellBackground,
-                          onPrimarySelected: _handleWebPrimaryTap,
-                        ),
-                      ],
-                    )
-                  : _ShellContentFrame(
-                      constrained: capabilities.wideScreenLayout,
-                      child: Stack(
-                        children: [
-                          IndexedStack(
-                            index: _currentIndex,
-                            children: [
-                              HomePage(routeLocation: _currentLocation),
-                              HomeFeaturedImmersivePage(
-                                onExitToHome: () =>
-                                    _selectMainTab(MainTabDestination.home),
+            color: shellBackground,
+            child: Column(
+              children: [
+                if (showInstallBanner) const WebAppInstallBanner(),
+                ActiveCallBar(onTap: _returnToActiveCall),
+                Expanded(
+                  child: useWebWideShell
+                      ? Stack(
+                          children: [
+                            WebMainAppShell(
+                              currentDestination: mainTabFromBottomNavIndex(
+                                _currentIndex,
                               ),
-                              const SizedBox.shrink(),
-                              const ChatPage(),
-                              const MyProfilePage(),
+                              currentLocation: _currentLocation,
+                              backgroundColor: shellBackground,
+                              onPrimarySelected: _handleWebPrimaryTap,
+                            ),
+                          ],
+                        )
+                      : _ShellContentFrame(
+                          constrained: capabilities.wideScreenLayout,
+                          child: Stack(
+                            children: [
+                              IndexedStack(
+                                index: _currentIndex,
+                                children: [
+                                  HomePage(routeLocation: _currentLocation),
+                                  HomeFeaturedImmersivePage(
+                                    onExitToHome: () =>
+                                        _selectMainTab(MainTabDestination.home),
+                                  ),
+                                  const SizedBox.shrink(),
+                                  const ChatPage(),
+                                  const MyProfilePage(),
+                                ],
+                              ),
+                              if (!bottomNavHidden)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  child: BottomNavigationWidget(
+                                    currentIndex: _currentIndex,
+                                    onTap: _handleBottomNavTap,
+                                  ),
+                                ),
                             ],
                           ),
-                          if (!bottomNavHidden)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              child: BottomNavigationWidget(
-                                currentIndex: _currentIndex,
-                                onTap: _handleBottomNavTap,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                        ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
           PipCallOverlay(
             onReturnToCall: _returnToActiveCall,
             onHangup: _hangupActiveCall,
@@ -359,18 +359,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     }
 
     if (nextTab == MainTabDestination.chat &&
-        !ref.read(authSessionControllerProvider).isAuthenticated) {
-      setState(() {
-        _currentIndex = nextTab.bottomNavIndex;
-      });
+        !_ensureLoggedInFor(AuthGateReason.openChat, AppRoutePaths.chat)) {
       return;
     }
 
     if (nextTab == MainTabDestination.profile &&
-        !ref.read(authSessionControllerProvider).isAuthenticated) {
-      setState(() {
-        _currentIndex = nextTab.bottomNavIndex;
-      });
+        !_ensureLoggedInFor(AuthGateReason.profileTab, AppRoutePaths.profile)) {
       return;
     }
 

@@ -9,6 +9,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_order.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
@@ -50,13 +51,6 @@ class _SearchNetworkResultsPageState
   static const String _tabGroups = 'groups';
   static const String _tabMessages = 'messages';
   static const String _tabContacts = 'contacts';
-  static const List<String> _businessCategoryOrder = <String>[
-    'campus',
-    'travel',
-    'photography',
-    'tech',
-    'car',
-  ];
 
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
@@ -253,7 +247,7 @@ class _SearchNetworkResultsPageState
       const _SearchNetworkTab(
         id: _tabHomepages,
         label: '主页',
-        description: '搜索共享主页并进入详情',
+        description: '搜索主页并进入详情',
       ),
       const _SearchNetworkTab(
         id: _tabMessages,
@@ -306,10 +300,10 @@ class _SearchNetworkResultsPageState
         return;
       }
       final extra = <_SearchNetworkTab>[];
-      for (final id in _businessCategoryOrder) {
-        final CircleCategoryTabConfigDto? value =
-            cfg[id] ?? CircleCategoryTabDefaults.remoteStyleFallback[id];
-        if (value == null) continue;
+      for (final entry in resolveCircleCategoryTabEntries(cfg)) {
+        final id = entry.key;
+        final CircleCategoryTabConfigDto value =
+            cfg[id] ?? CircleCategoryTabDefaults.remoteStyleFallback[id]!;
         final label = value.label.isNotEmpty ? value.label : id;
         extra.add(
           _SearchNetworkTab(
@@ -406,7 +400,7 @@ class _SearchNetworkResultsPageState
           isDark: isDark,
         ),
         if (_isLoading)
-          _StatusMessage(text: '正在加载共享主页', isDark: isDark, loading: true)
+          _StatusMessage(text: '正在加载主页', isDark: isDark, loading: true)
         else if (_homepageResults.isEmpty)
           _StatusMessage(text: '没有找到相关主页', isDark: isDark)
         else
@@ -423,9 +417,9 @@ class _SearchNetworkResultsPageState
           isDark: isDark,
         ),
         if (_isLoading)
-          _StatusMessage(text: '正在加载群组结果', isDark: isDark, loading: true)
+          _StatusMessage(text: '正在加载讨论结果', isDark: isDark, loading: true)
         else if (_groupResults.isEmpty)
-          _StatusMessage(text: '没有找到相关群组', isDark: isDark)
+          _StatusMessage(text: '没有找到相关讨论', isDark: isDark)
         else
           ..._buildGroupResultTiles(isDark: isDark, fgSecondary: fgSecondary),
       ]);
@@ -565,7 +559,7 @@ class _SearchNetworkResultsPageState
     );
     addSection(
       title: UITextConstants.contactsTabCircles,
-      description: '圈子与群组结果',
+      description: '圈子与讨论结果',
       count: _groupResults.length,
       tiles: _buildGroupResultTiles(
         isDark: isDark,
@@ -1355,7 +1349,7 @@ class _XiaoquSummaryCard extends StatelessWidget {
             Text(
               (result?.summary?.trim().isNotEmpty == true)
                   ? result!.summary!.trim()
-                  : '先按圈子频道分类聚合内容，再把最相关的创作和讨论铺开，方便继续筛选。',
+                  : '先按圈子讨论分类聚合内容，再把最相关的创作和讨论铺开，方便继续筛选。',
               style: TextStyle(
                 fontSize: AppTypography.iosFootnote,
                 color: fgSecondary,
@@ -1562,8 +1556,8 @@ class _GroupResultCardModel {
                 ? hit.subtitle!.trim()
                 : '打开相关圈子'),
       coverUrl: view.coverUrl ?? '',
-      footerLabel: footerSegments.isEmpty ? '群组结果' : footerSegments.join(' · '),
-      eyebrowText: isCircle ? '圈子' : '群组',
+      footerLabel: footerSegments.isEmpty ? '讨论结果' : footerSegments.join(' · '),
+      eyebrowText: isCircle ? '圈子' : '讨论',
     );
   }
 }

@@ -14,7 +14,7 @@ Widget _app({
   CircleMediaPickerController? mediaPicker,
 }) {
   final circle = CircleDto(
-    id: 'circle_photo_01',
+    id: 'fixture_circle_photo',
     name: '光影摄影社',
     description: '一群热爱光影的人',
     coverUrl: 'https://example.com/cover.jpg',

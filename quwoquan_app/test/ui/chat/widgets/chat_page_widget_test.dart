@@ -128,6 +128,8 @@ void main() {
       expect(find.text(UITextConstants.groupChat), findsOneWidget);
       expect(find.text(UITextConstants.chatPrivateMessages), findsOneWidget);
       expect(find.text(UITextConstants.chatNotifications), findsOneWidget);
+      expect(find.text('群聊'), findsNothing);
+      expect(find.text('趣群'), findsNothing);
       expect(find.text(UITextConstants.atXiaoqu), findsNothing);
       expect(find.text(UITextConstants.reminders), findsNothing);
     });

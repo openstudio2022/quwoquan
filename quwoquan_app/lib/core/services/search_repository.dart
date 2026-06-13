@@ -783,7 +783,7 @@ class AppSearchRepository implements SearchRepository {
     return _SectionBuildResult(
       section: SearchSection(
         id: 'groups',
-        title: _sectionTitle('groups', '群组'),
+        title: _sectionTitle('groups', '讨论'),
         objectTypes: <SearchObjectType>[
           if (includeCircleGroups) SearchObjectType.circleGroup,
           if (includeCircles) SearchObjectType.circleCircle,

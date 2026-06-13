@@ -71,7 +71,7 @@ abstract class TagRepository {
 
   // ── 交集核心（V3 对象页交集卡对象对直打）──────────────────────
   /// 计算两个对象的共享 tagRef（交集锚点 + 强度 + 来源）。
-  /// 对象页「你和这里的交集 / 你们的交集」消费此结果（先 Mock 后真打 tag-service）。
+  /// 对象页连接卡消费此结果（先 Mock 后真打 tag-service）。
   Future<List<SharedTagView>> sharedTags({
     required String objectAId,
     required String objectAType,

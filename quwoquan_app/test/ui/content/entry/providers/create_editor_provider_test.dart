@@ -527,8 +527,12 @@ void main() {
 
     final notifier = container.read(createEditorProvider.notifier);
     notifier.insertArticleImageAtBodyOffset('a.png', bodyInsertOffset: 0);
-    final assetId =
-        container.read(createEditorProvider).articleDocument.assets.first.id;
+    final assetId = container
+        .read(createEditorProvider)
+        .articleDocument
+        .assets
+        .first
+        .id;
 
     final binding = ArticlePageBinding(
       insertOffset: 0,
@@ -549,8 +553,12 @@ void main() {
 
     final notifier = container.read(createEditorProvider.notifier);
     notifier.insertArticleImageAtBodyOffset('a.png', bodyInsertOffset: 0);
-    final assetId =
-        container.read(createEditorProvider).articleDocument.assets.first.id;
+    final assetId = container
+        .read(createEditorProvider)
+        .articleDocument
+        .assets
+        .first
+        .id;
 
     notifier.syncParagraphDraftBeforeAsset(assetId, 'hello');
     var doc = container.read(createEditorProvider).articleDocument;
@@ -573,7 +581,10 @@ void main() {
     // 初始化为文章编辑器
     notifier.setEditorKind(CreateEditorKind.text);
     notifier.updateTitle('测试');
-    notifier.insertTextNodeAfter(kArticleEditorStartAnchorId, initialText: '第一段');
+    notifier.insertTextNodeAfter(
+      kArticleEditorStartAnchorId,
+      initialText: '第一段',
+    );
 
     final stateBefore = container.read(createEditorProvider);
     final nodesBefore = stateBefore.articleDocument.nodes;
@@ -687,17 +698,21 @@ void main() {
     final figId = notifier.insertImageAfterNode(anchorId, '/img.jpg');
 
     expect(
-      container.read(createEditorProvider).articleDocument.nodes.any(
-        (n) => n.id == figId,
-      ),
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
+          .any((n) => n.id == figId),
       isTrue,
     );
 
     notifier.removeArticleNode(figId);
     expect(
-      container.read(createEditorProvider).articleDocument.nodes.any(
-        (n) => n.id == figId,
-      ),
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
+          .any((n) => n.id == figId),
       isFalse,
     );
   });
@@ -733,7 +748,10 @@ void main() {
     final paraId = notifier.insertTextNodeAfter(anchorId, initialText: '正文');
 
     // 切换为 headingMajor
-    notifier.updateArticleNodeType(paraId, ArticleDocumentNodeType.headingMajor);
+    notifier.updateArticleNodeType(
+      paraId,
+      ArticleDocumentNodeType.headingMajor,
+    );
     final state1 = container.read(createEditorProvider);
     // 类型切换会生成新 id
     final h2Node = state1.articleDocument.nodes.firstWhere(
@@ -872,6 +890,125 @@ void main() {
     expect(node.spans[2].italic, isTrue);
   });
 
+  test('toggleArticleInlineStyle 保留对象提及 span 元数据', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final notifier = container.read(createEditorProvider.notifier);
+    notifier.setEditorKind(CreateEditorKind.text);
+    notifier.updateTitle('测试');
+    final doc = container.read(createEditorProvider).articleDocument;
+    final anchorId = doc.nodes.first.id;
+    final paraId = notifier.insertTextNodeAfter(
+      anchorId,
+      initialText: '灵隐寺值得一去',
+    );
+    notifier.attachArticleEntityMention(
+      paraId,
+      0,
+      3,
+      targetType: 'homepage',
+      targetId: 'homepage_sight_lingyin',
+      displayText: '灵隐寺',
+    );
+
+    notifier.toggleArticleInlineStyle(paraId, 0, 3, bold: true);
+
+    final node = container
+        .read(createEditorProvider)
+        .articleDocument
+        .nodes
+        .firstWhere((n) => n.id == paraId);
+    final entity = node.spans.where((span) => span.isEntity).single;
+    expect(entity.targetType, 'homepage');
+    expect(entity.targetId, 'homepage_sight_lingyin');
+    expect(entity.displayText, '灵隐寺');
+    expect(node.spans.where((span) => span.bold), isNotEmpty);
+  });
+
+  test('prepareTextNodeForImageInsertion 切段后保留对象提及 span 元数据', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final notifier = container.read(createEditorProvider.notifier);
+    notifier.setEditorKind(CreateEditorKind.text);
+    notifier.updateTitle('测试');
+    final anchorId = container
+        .read(createEditorProvider)
+        .articleDocument
+        .nodes
+        .first
+        .id;
+    final paraId = notifier.insertTextNodeAfter(
+      anchorId,
+      initialText: '灵隐寺值得一去',
+    );
+    notifier.attachArticleEntityMention(
+      paraId,
+      0,
+      3,
+      targetType: 'homepage',
+      targetId: 'homepage_sight_lingyin',
+      displayText: '灵隐寺',
+    );
+
+    final imageAnchorId = notifier.prepareTextNodeForImageInsertion(paraId, 2);
+    notifier.insertImageAfterNode(imageAnchorId, '/img.jpg');
+
+    final nodes = container.read(createEditorProvider).articleDocument.nodes;
+    final left = nodes.firstWhere((n) => n.id == paraId);
+    final right = nodes.firstWhere((n) => n.text == '寺值得一去');
+    final leftEntity = left.spans.where((span) => span.isEntity).single;
+    final rightEntity = right.spans.where((span) => span.isEntity).single;
+    expect(leftEntity.targetId, 'homepage_sight_lingyin');
+    expect(leftEntity.displayText, '灵隐寺');
+    expect(leftEntity.start, 0);
+    expect(leftEntity.end, 2);
+    expect(rightEntity.targetId, 'homepage_sight_lingyin');
+    expect(rightEntity.displayText, '灵隐寺');
+    expect(rightEntity.start, 0);
+    expect(rightEntity.end, 1);
+  });
+
+  test('环绕图补组后保留 narrow 段对象提及 span 元数据', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final notifier = container.read(createEditorProvider.notifier);
+    notifier.setEditorKind(CreateEditorKind.text);
+    notifier.updateTitle('测试');
+    final anchorId = container
+        .read(createEditorProvider)
+        .articleDocument
+        .nodes
+        .first
+        .id;
+    final figId = notifier.insertImageAfterNode(anchorId, '/wrap.jpg');
+    final paraId = notifier.insertTextNodeAfter(figId, initialText: '灵隐寺值得一去');
+    notifier.attachArticleEntityMention(
+      paraId,
+      0,
+      3,
+      targetType: 'homepage',
+      targetId: 'homepage_sight_lingyin',
+      displayText: '灵隐寺',
+    );
+
+    notifier.updateArticleNodeImageLayout(figId, 'wrapLeft');
+    final group = notifier.ensureArticleWrapNodeGroup(figId);
+
+    expect(group, isNotNull);
+    final narrowEntity = group!.narrowParagraph!.spans
+        .where((span) => span.isEntity)
+        .single;
+    expect(narrowEntity.targetType, 'homepage');
+    expect(narrowEntity.targetId, 'homepage_sight_lingyin');
+    expect(narrowEntity.displayText, '灵隐寺');
+    expect(narrowEntity.start, 0);
+    expect(narrowEntity.end, 3);
+    expect(group.belowParagraph!.spans.where((span) => span.isEntity), isEmpty);
+  });
+
   test('commitArticleTextEdit 记录 undo 点使文本可撤销', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -886,7 +1023,10 @@ void main() {
 
     // 验证初始状态
     expect(
-      container.read(createEditorProvider).articleDocument.nodes
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
           .firstWhere((n) => n.id == paraId)
           .text,
       'ABC',
@@ -898,7 +1038,10 @@ void main() {
     // 继续输入（不记录 undo）
     notifier.updateArticleNodeText(paraId, 'ABCDE');
     expect(
-      container.read(createEditorProvider).articleDocument.nodes
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
           .firstWhere((n) => n.id == paraId)
           .text,
       'ABCDE',
@@ -945,9 +1088,11 @@ void main() {
 
     notifier.redoArticle();
     expect(
-      container.read(createEditorProvider).articleDocument.nodes.any(
-        (n) => n.isFigure && n.id == figId && n.imageUrl == '/img.jpg',
-      ),
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
+          .any((n) => n.isFigure && n.id == figId && n.imageUrl == '/img.jpg'),
       isTrue,
     );
   });
@@ -966,17 +1111,21 @@ void main() {
 
     notifier.removeArticleNode(figId);
     expect(
-      container.read(createEditorProvider).articleDocument.nodes.any(
-        (n) => n.id == figId,
-      ),
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
+          .any((n) => n.id == figId),
       isFalse,
     );
 
     notifier.undoArticle();
     expect(
-      container.read(createEditorProvider).articleDocument.nodes.any(
-        (n) => n.id == figId,
-      ),
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
+          .any((n) => n.id == figId),
       isTrue,
     );
   });
@@ -995,7 +1144,10 @@ void main() {
 
     notifier.updateArticleNodeImageLayout(figId, 'wrapLeft');
     expect(
-      container.read(createEditorProvider).articleDocument.nodes
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
           .firstWhere((n) => n.id == figId)
           .imageLayout,
       'wrapLeft',
@@ -1003,7 +1155,10 @@ void main() {
 
     notifier.undoArticle();
     expect(
-      container.read(createEditorProvider).articleDocument.nodes
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
           .firstWhere((n) => n.id == figId)
           .imageLayout,
       'fullWidth',
@@ -1022,13 +1177,22 @@ void main() {
     final anchorId = doc.nodes.first.id;
     final paraId = notifier.insertTextNodeAfter(anchorId, initialText: '正文');
 
-    notifier.updateArticleNodeType(paraId, ArticleDocumentNodeType.headingMajor);
-    final h2Node = container.read(createEditorProvider).articleDocument.nodes
+    notifier.updateArticleNodeType(
+      paraId,
+      ArticleDocumentNodeType.headingMajor,
+    );
+    final h2Node = container
+        .read(createEditorProvider)
+        .articleDocument
+        .nodes
         .firstWhere((n) => n.text == '正文');
     expect(h2Node.type, ArticleDocumentNodeType.headingMajor);
 
     notifier.undoArticle();
-    final restored = container.read(createEditorProvider).articleDocument.nodes
+    final restored = container
+        .read(createEditorProvider)
+        .articleDocument
+        .nodes
         .firstWhere((n) => n.id == paraId);
     expect(restored.type, ArticleDocumentNodeType.paragraph);
   });
@@ -1050,7 +1214,10 @@ void main() {
 
     notifier.toggleArticleInlineStyle(paraId, 0, 5, bold: true);
     expect(
-      container.read(createEditorProvider).articleDocument.nodes
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
           .firstWhere((n) => n.id == paraId)
           .spans
           .isNotEmpty,
@@ -1059,7 +1226,10 @@ void main() {
 
     notifier.undoArticle();
     expect(
-      container.read(createEditorProvider).articleDocument.nodes
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
           .firstWhere((n) => n.id == paraId)
           .spans
           .isEmpty,
@@ -1068,7 +1238,10 @@ void main() {
 
     notifier.redoArticle();
     expect(
-      container.read(createEditorProvider).articleDocument.nodes
+      container
+          .read(createEditorProvider)
+          .articleDocument
+          .nodes
           .firstWhere((n) => n.id == paraId)
           .spans
           .isNotEmpty,

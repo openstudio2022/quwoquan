@@ -51,6 +51,7 @@ void main() {
             helpType: 'community',
             action: 'join',
             intersectionDimension: 'interest',
+            source: 'source:circle_join',
             count: 23,
             displayText: '23人加入相关圈子',
           ),
@@ -81,6 +82,36 @@ void main() {
       );
       expect(find.text('23人加入相关圈子'), findsOneWidget);
       expect(find.text('12人转发了TA的内容'), findsOneWidget);
+    });
+
+    testWidgets('影响事实行可点开查看可枚举来源说明', (tester) async {
+      final summary = AuthorImpactSummary(
+        authorId: 'u2',
+        total: 23,
+        items: <AuthorImpactItem>[
+          AuthorImpactItem(
+            helpType: 'community',
+            action: 'join',
+            intersectionDimension: 'interest',
+            source: 'source:circle_join',
+            count: 23,
+            displayText: '23人加入相关圈子',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(_host(summary, isMine: false));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('author-impact-fact-community')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('23人加入相关圈子'), findsWidgets);
+      expect(find.textContaining('source:circle_join'), findsOneWidget);
+      expect(
+        find.textContaining(UITextConstants.impactEnumerableHintOther),
+        findsWidgets,
+      );
     });
 
     testWidgets('摘要区最多渲染前 3 条（规格：取前 3 条 displayText）', (tester) async {

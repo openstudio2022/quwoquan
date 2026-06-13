@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_ui_config.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
@@ -15,6 +16,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 
 part 'homepage_detail_shell_components.dart';
 part 'homepage_detail_shell_components2.dart';
@@ -30,12 +32,14 @@ class HomepageDetailShell extends StatefulWidget {
     required this.detail,
     required this.shell,
     required this.objectPageBundle,
+    required this.introductionSummary,
     required this.viewerOwnerUserId,
     required this.onBack,
     required this.onClaim,
     required this.onMaintain,
     required this.onReport,
     required this.onCreateContent,
+    required this.onOpenIntroduction,
     required this.onAttach,
     this.onIntersectionReasonTap,
   });
@@ -47,12 +51,14 @@ class HomepageDetailShell extends StatefulWidget {
   final HomepageDetail? detail;
   final HomepageShellData? shell;
   final ObjectPageBundle? objectPageBundle;
+  final String? introductionSummary;
   final String? viewerOwnerUserId;
   final VoidCallback onBack;
   final VoidCallback onClaim;
   final VoidCallback onMaintain;
   final VoidCallback onReport;
   final ValueChanged<HomepageCanonicalReference> onCreateContent;
+  final VoidCallback onOpenIntroduction;
   final ValueChanged<HomepageCanonicalReference> onAttach;
   final ValueChanged<IntersectionReason>? onIntersectionReasonTap;
 
@@ -62,13 +68,16 @@ class HomepageDetailShell extends StatefulWidget {
 
 class _HomepageDetailShellState extends State<HomepageDetailShell> {
   static const double _cardRadius = AppSpacing.radiusTwenty;
-  static const List<_HomepagePrimaryTabSpec> _tabs = <_HomepagePrimaryTabSpec>[
-    _HomepagePrimaryTabSpec(id: 'content', label: '内容'),
-    _HomepagePrimaryTabSpec(id: 'reviews', label: '讨论'),
-    _HomepagePrimaryTabSpec(id: 'related', label: '兴趣圈'),
-  ];
+  static final List<_HomepagePrimaryTabSpec> _tabs = HomepageUIConfig.tabs
+      .map(
+        (tab) => _HomepagePrimaryTabSpec(
+          id: tab.id,
+          label: homepageTabLabelForKey(tab.labelKey),
+        ),
+      )
+      .toList(growable: false);
 
-  String _activeTabId = _tabs.first.id;
+  String _activeTabId = HomepageUIConfig.defaultTabId;
 
   HomepageCanonicalReference? get _reference =>
       widget.detail?.canonicalReference ??
@@ -231,7 +240,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         child: _HomepageEmptyState(
           icon: CupertinoIcons.square_stack_3d_up,
           title: '还没有内容沉淀',
-          description: '后续围绕该主页发布的内容与提问会按频道沉淀在这里。',
+          description: '后续围绕该主页发布的内容与提问会按讨论沉淀在这里。',
         ),
       );
     }
@@ -344,7 +353,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         child: _HomepageEmptyState(
           icon: CupertinoIcons.chat_bubble_2_fill,
           title: '还没有口碑沉淀',
-          description: '评论、评分和与实体相关的讨论会按对象维度沉淀在这里。',
+          description: '评论、评分和与对象相关的讨论会按对象维度沉淀在这里。',
         ),
       );
     }
@@ -363,10 +372,10 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
   }
 
   Widget _buildActiveTabContent(BuildContext context) {
-    return switch (_activeTabId) {
+    return switch (homepageTabBodySlotForId(_activeTabId)) {
       'content' => _buildContentTab(context),
-      'reviews' => _buildReviewsTab(context),
-      'related' => _buildRelatedTab(context),
+      'discussion' => _buildReviewsTab(context),
+      'interest_circles' => _buildRelatedTab(context),
       _ => _buildOverviewTab(context),
     };
   }

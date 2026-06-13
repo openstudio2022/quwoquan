@@ -442,12 +442,12 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
           collapsedItemCount: _collapsedChatRecordsCount,
           moreLabel: switch (objectTarget) {
             SearchObjectTarget.directChats => '更多单聊',
-            SearchObjectTarget.groupChats => '更多群聊',
+            SearchObjectTarget.groupChats => '更多讨论',
             _ => '更多聊天记录',
           },
           titleOverride: switch (objectTarget) {
             SearchObjectTarget.directChats => '单聊',
-            SearchObjectTarget.groupChats => '群聊',
+            SearchObjectTarget.groupChats => '讨论',
             _ => null,
           },
         ),
@@ -737,7 +737,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
           itemId: 'circle:${circle.circleId}',
           targetKind: MostUsedTargetKind.circle,
           title: circle.name,
-          subtitle: circle.description ?? circle.subCategory ?? '群组',
+          subtitle: circle.description ?? circle.subCategory ?? '讨论',
           avatarUrl: circle.coverUrl,
           circleId: circle.circleId,
           usageScore: 160 + (circle.memberCount ~/ 100) - (i * 4),
@@ -757,13 +757,13 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
       NetworkSearchSuggestion(
         query: query,
         title: '$query 相关主页',
-        subtitle: '搜索 $query 的共享主页',
+        subtitle: '搜索 $query 的主页',
         initialTabId: 'homepages',
       ),
       NetworkSearchSuggestion(
         query: query,
-        title: '$query 相关群组',
-        subtitle: '搜索 $query 的圈子与群组',
+        title: '$query 相关讨论',
+        subtitle: '搜索 $query 的圈子与讨论',
         initialTabId: 'groups',
       ),
       NetworkSearchSuggestion(

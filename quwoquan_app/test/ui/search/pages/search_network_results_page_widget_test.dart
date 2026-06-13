@@ -169,7 +169,7 @@ void main() {
     expect(find.byType(HomepageSummaryCard), findsWidgets);
   });
 
-  testWidgets('综合 tab 汇总圈子与群组结果', (tester) async {
+  testWidgets('综合 tab 汇总圈子与讨论结果', (tester) async {
     await tester.pumpWidget(
       _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
@@ -337,7 +337,7 @@ class _FakeNetworkSearchRepository implements SearchRepository {
         sections: <SearchSection>[
           SearchSection(
             id: 'groups',
-            title: '群组',
+            title: '讨论',
             objectTypes: const <SearchObjectType>[
               SearchObjectType.circleGroup,
               SearchObjectType.circleCircle,
@@ -350,7 +350,7 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 subtitle: '圈子主群',
                 resolvedFrom: SearchResolvedFrom.remote,
                 payload: SearchHitPayloadWireMap(<String, dynamic>{
-                  'circleId': 'circle_photo_01',
+                  'circleId': 'fixture_circle_photo',
                   'groupId': 'group_light_photo',
                   'name': '光影摄影社主群',
                   'description': '圈子主群',

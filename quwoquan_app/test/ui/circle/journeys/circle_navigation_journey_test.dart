@@ -66,7 +66,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -102,7 +102,7 @@ void main() {
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
 
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await tester.pump(const Duration(milliseconds: 200));
       router.go('/circles');
       await tester.pump(const Duration(milliseconds: 200));

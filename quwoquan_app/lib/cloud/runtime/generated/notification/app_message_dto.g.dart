@@ -33,27 +33,43 @@ class AppMessageTargetWire {
   const AppMessageTargetWire({
     this.targetType = "assistant_turn",
     this.targetId = "",
+    this.routeId = "",
+    this.routePath = "",
+    this.query = const <String, dynamic>{},
   });
 
   final String targetType;
   final String targetId;
+  final String routeId;
+  final String routePath;
+  final Map<String, dynamic> query;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'targetType': targetType,
         'targetId': targetId,
+        'routeId': routeId,
+        'routePath': routePath,
+        'query': query,
       };
 
   factory AppMessageTargetWire.fromJson(Map<String, dynamic> json) {
     return AppMessageTargetWire(
       targetType: (json['targetType'] as String?)?.trim() ?? "assistant_turn",
       targetId: (json['targetId'] as String?)?.trim() ?? "",
+      routeId: (json['routeId'] as String?)?.trim() ?? "",
+      routePath: (json['routePath'] as String?)?.trim() ?? "",
+      query: (json['query'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
     );
   }
+
 }
 
 class AppMessageTargetWireFields {
   static const String targetType = 'targetType';
   static const String targetId = 'targetId';
+  static const String routeId = 'routeId';
+  static const String routePath = 'routePath';
+  static const String query = 'query';
 }
 
 class AppMessageWire {

@@ -106,7 +106,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    _detail?.title ?? '共享主页',
+                    _detail?.title ?? '主页',
                     style: const TextStyle(
                       fontSize: AppTypography.iosTitle3,
                       fontWeight: AppTypography.semiBold,

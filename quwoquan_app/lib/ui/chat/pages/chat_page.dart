@@ -472,8 +472,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
       title = UITextConstants.noUnreadMessages;
       subtitle = UITextConstants.noUnreadHint;
     } else if (subTab == UITextConstants.groupChat) {
-      title = '暂无群聊消息';
-      subtitle = '加入群聊后的最近动态会出现在这里';
+      title = '暂无讨论消息';
+      subtitle = '加入讨论后的最近动态会出现在这里';
     } else if (subTab == UITextConstants.chatPrivateMessages) {
       title = '暂无私聊消息';
       subtitle = '与互关用户或已建立连接的人交流后会出现在这里';

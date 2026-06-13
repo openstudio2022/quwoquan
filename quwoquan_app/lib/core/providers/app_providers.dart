@@ -36,6 +36,7 @@ import 'package:quwoquan_app/cloud/services/integration/integration_repository.d
 import 'package:quwoquan_app/cloud/services/notification/app_message_repository.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_visit_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/footprint_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
@@ -75,7 +76,6 @@ import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/models/user_models.dart';
-
 // 跨平台防腐层 Provider（平台目标、能力契约、文件存储网关、原生桥）统一从
 // app_providers 再导出，业务层经同一入口消费能力位，禁止直接判断平台。
 export 'package:quwoquan_app/core/platform/platform_providers.dart'
@@ -85,6 +85,9 @@ export 'package:quwoquan_app/core/platform/platform_providers.dart'
         fileStorageGatewayProvider,
         assistantLocalContextBridgeProvider,
         nativeAuthBridgeProvider;
+
+part 'app_providers_content_extras.dart';
+part 'app_providers_entity_extras.dart';
 
 /// 主题相关的便捷Provider
 final isDarkProvider = Provider<bool>((ref) {
@@ -1707,7 +1710,7 @@ final contentConfigRepositoryProvider = Provider<ContentConfigRepository>(
   (ref) => ref.watch(contentRepositoryProvider),
 );
 
-/// Homepage Repository（共享主页搜索、详情、认领与治理）
+/// Homepage Repository（主页搜索、详情、认领与治理）
 final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
@@ -1980,7 +1983,6 @@ final blockRepositoryProvider = Provider<BlockRepository>((ref) {
   );
 });
 
-/// Report Repository（内容举报）
 final reportRepositoryProvider = Provider<ReportRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
@@ -1991,17 +1993,16 @@ final reportRepositoryProvider = Provider<ReportRepository>((ref) {
   );
 });
 
-/// Intersection Repository（我的交集聚合 / 列表 / 已读水位 / 频道交集 / 曝光冷却）
-final intersectionRepositoryProvider = Provider<IntersectionRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
+/// Intersection Repository
+final intersectionRepositoryProvider = Provider<IntersectionRepository>(
+  (ref) => cloudRepositoryImplForMode(
+    ref.watch(appDataSourceModeProvider),
     remote: () => RemoteIntersectionRepository(
       httpClient: ref.watch(cloudHttpClientProvider),
     ),
     mock: MockIntersectionRepository.new,
-  );
-});
+  ),
+);
 
 /// KeywordBlock Repository（屏蔽词设置）
 final keywordBlockRepositoryProvider = Provider<KeywordBlockRepository>((ref) {

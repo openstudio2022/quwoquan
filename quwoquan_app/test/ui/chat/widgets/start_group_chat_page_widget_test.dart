@@ -127,14 +127,14 @@ void main() {
     await _pumpStartGroupChatPage(tester, container: container);
 
     expect(find.byType(StartGroupChatPage), findsOneWidget);
-    expect(find.text('发起群聊（1）'), findsNothing);
+    expect(find.text('发起讨论（1）'), findsNothing);
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
 
-    expect(find.text('发起群聊（1）'), findsOneWidget);
+    expect(find.text('发起讨论（1）'), findsOneWidget);
 
-    await tester.tap(find.text('发起群聊（1）'));
+    await tester.tap(find.text('发起讨论（1）'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('chat:conv_new_'), findsOneWidget);
@@ -197,7 +197,7 @@ void main() {
     expect(find.text('${UITextConstants.addMember}（1）'), findsOneWidget);
   });
 
-  testWidgets('建群成功后同时刷新消息列表与趣群列表', (tester) async {
+  testWidgets('建讨论成功后同时刷新消息列表与讨论列表', (tester) async {
     _suppressImageErrors();
 
     final container = _buildContainer(MockChatRepository());
@@ -219,7 +219,7 @@ void main() {
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('发起群聊（1）'));
+    await tester.tap(find.text('发起讨论（1）'));
     await tester.pumpAndSettle();
 
     final inboxItems = container.read(chatInboxListProvider).items;

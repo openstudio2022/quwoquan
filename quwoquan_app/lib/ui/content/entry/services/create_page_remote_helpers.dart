@@ -54,14 +54,45 @@ String coverAssetPathForPayload(CreateEditorState state) {
 
 String buildArticleMarkdownForPayload(CreateEditorState state) {
   final cover = coverAssetPathForPayload(state);
+  final summary = state.settings.summary.trim().isNotEmpty
+      ? state.settings.summary.trim()
+      : articleSummaryForPayload(state);
+  final entityRefs = entityRefsForPayload(state);
   return ArticleMarkdownCodec.serializeDocument(
     state.articleDocument,
-    summary: articleSummaryForPayload(state),
+    summary: summary,
+    tagRefs: state.settings.tagRefs,
+    entityRefs: entityRefs,
     visibility: state.settings.isPublic ? 'public' : 'private',
-    assistantUsePolicy: 'inherit',
+    assistantUsePolicy: state.settings.assistantUsePolicy.trim().isNotEmpty
+        ? state.settings.assistantUsePolicy.trim()
+        : 'inherit',
     coverAssetId: cover.trim().isNotEmpty ? 'cover' : '',
     coverImageUrl: cover,
   );
+}
+
+List<String> entityRefsForPayload(CreateEditorState state) {
+  final refs = <String>{
+    ...state.settings.entityRefs
+        .map((ref) => ref.trim())
+        .where((ref) => ref.isNotEmpty),
+  };
+  final homepage = state.settings.homepage;
+  if (homepage != null) {
+    final ref = homepageEntityRef(homepage);
+    if (ref.isNotEmpty) refs.add(ref);
+  }
+  for (final node in state.articleDocument.nodes) {
+    for (final span in node.spans) {
+      if (!span.isEntity) continue;
+      final id = span.targetId?.trim() ?? '';
+      if (id.startsWith('entity:') && id.isNotEmpty) {
+        refs.add(id);
+      }
+    }
+  }
+  return refs.toList(growable: false);
 }
 
 Map<String, dynamic> buildArticleAssetManifestForPayload(
@@ -137,6 +168,13 @@ Map<String, Object?> _assetManifestRow(
 /// 再 [attachActivePersonaToCreatePayload]，最后 [repositoryCreatePost] 内 [CreatePostRequestWire.fromMap]。
 Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
   final settings = state.settings.toPayloadFields();
+  final summary = state.settings.summary.trim().isNotEmpty
+      ? state.settings.summary.trim()
+      : articleSummaryForPayload(state);
+  final entityRefs = entityRefsForPayload(state);
+  if (entityRefs.isNotEmpty) {
+    settings['entityRefs'] = entityRefs;
+  }
   final coverAssetPath = coverAssetPathForPayload(state);
   if (state.editorKind == CreateEditorKind.media) {
     if (state.hasVideo) {
@@ -145,6 +183,7 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
         'contentType': 'video',
         'title': state.title.trim(),
         'body': state.body.trim(),
+        if (summary.isNotEmpty) 'summary': summary,
         'videoUrl': state.videoPath,
         'mediaUrls': <String>[state.videoPath],
         'coverUrl': coverAssetPath,
@@ -156,6 +195,7 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
       'contentType': 'image',
       'title': state.title.trim(),
       'body': state.body.trim(),
+      if (summary.isNotEmpty) 'summary': summary,
       'mediaUrls': state.imagePaths,
       'coverUrl': coverAssetPath,
       ...settings,
@@ -167,7 +207,7 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
       'type': 'article',
       'contentType': 'article',
       'title': state.title.trim(),
-      'summary': articleSummaryForPayload(state),
+      'summary': summary,
       'coverUrl': coverAssetPath,
       'articleMarkdown': buildArticleMarkdownForPayload(state),
       'articleMarkdownVersion': qwqRichMarkdownVersion,
@@ -181,6 +221,7 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
     'contentType': 'micro',
     'title': state.title.trim(),
     'body': state.body.trim(),
+    if (summary.isNotEmpty) 'summary': summary,
     'mediaUrls': state.imagePaths,
     'coverUrl': coverAssetPath,
     ...settings,

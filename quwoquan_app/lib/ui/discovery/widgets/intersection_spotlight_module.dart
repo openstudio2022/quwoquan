@@ -29,6 +29,12 @@ class IntersectionSpotlightModule extends StatefulWidget {
   static const Key shuffleKey = ValueKey<String>(
     'home-intersection-spotlight-shuffle',
   );
+  static const Key primaryTextKey = ValueKey<String>(
+    'home-intersection-spotlight-primary-text',
+  );
+  static const Key secondaryTextKey = ValueKey<String>(
+    'home-intersection-spotlight-secondary-text',
+  );
 
   /// 体验规格：单屏可见 3~3.5 张卡（半露暗示横滑）。
   static const double visibleCardsPerViewport = 3.35;
@@ -297,11 +303,7 @@ class _RelationCoverCard extends StatelessWidget {
                 reason.intersectionClass == 'affinity',
               ),
               SizedBox(height: AppSpacing.containerSm),
-              Expanded(
-                child: Center(
-                  child: _buildInfo(context),
-                ),
-              ),
+              Expanded(child: Center(child: _buildInfo(context))),
             ],
           ),
         ),
@@ -440,6 +442,7 @@ class _RelationCoverCard extends StatelessWidget {
               Padding(
                 padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
                 child: Text(
+                  key: IntersectionSpotlightModule.primaryTextKey,
                   primaryText,
                   maxLines: 1,
                   textAlign: TextAlign.center,
@@ -456,6 +459,7 @@ class _RelationCoverCard extends StatelessWidget {
               Padding(
                 padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
                 child: Text(
+                  key: IntersectionSpotlightModule.secondaryTextKey,
                   secondaryText,
                   maxLines: 1,
                   textAlign: TextAlign.center,

@@ -46,11 +46,7 @@ void main() {
             ':::\n',
         'articleAssetManifest': <String, dynamic>{
           'assets': <Map<String, dynamic>>[
-            {
-              'assetId': 'i1',
-              'localPath': 'inline.png',
-              'role': 'figure',
-            },
+            {'assetId': 'i1', 'localPath': 'inline.png', 'role': 'figure'},
           ],
         },
         'activeArticleBlockId': 'o1',
@@ -127,6 +123,26 @@ void main() {
       expect(settings.isPublic, isFalse);
       expect(settings.circleIds, isEmpty);
       expect(settings.locationName, isEmpty);
+    });
+
+    test('toMap/fromMap 保留 WP6 富语义发布字段', () {
+      const settings = PublishSettings(
+        summary: '用户确认摘要',
+        tagRefs: <String>['Topic/旅行/城市漫步'],
+        tagLabels: <String>['城市漫步'],
+        entityRefs: <String>['entity:sight:west_lake'],
+        entityNames: <String>['西湖景区'],
+        assistantUsePolicy: 'allow_summary',
+      );
+
+      final restored = PublishSettings.fromMap(settings.toMap());
+
+      expect(restored.summary, '用户确认摘要');
+      expect(restored.tagRefs, <String>['Topic/旅行/城市漫步']);
+      expect(restored.tagLabels, <String>['城市漫步']);
+      expect(restored.entityRefs, <String>['entity:sight:west_lake']);
+      expect(restored.entityNames, <String>['西湖景区']);
+      expect(restored.assistantUsePolicy, 'allow_summary');
     });
   });
 }

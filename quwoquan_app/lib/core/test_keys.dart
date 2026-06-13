@@ -253,6 +253,30 @@ class TestKeys {
   static const createPublishConfirmButton = ValueKey<String>(
     'create_publish_confirm_button',
   );
+  static const createPublishSummaryField = ValueKey<String>(
+    'create_publish_summary_field',
+  );
+  static const createPublishGenerateSummaryButton = ValueKey<String>(
+    'create_publish_generate_summary_button',
+  );
+  static const createPublishTagInput = ValueKey<String>(
+    'create_publish_tag_input',
+  );
+  static const createPublishAddTagButton = ValueKey<String>(
+    'create_publish_add_tag_button',
+  );
+  static const createPublishEntityInput = ValueKey<String>(
+    'create_publish_entity_input',
+  );
+  static const createPublishAddEntityButton = ValueKey<String>(
+    'create_publish_add_entity_button',
+  );
+  static const createPublishAssistantSuggestButton = ValueKey<String>(
+    'create_publish_assistant_suggest_button',
+  );
+  static const createPublishAssistantSuggestError = ValueKey<String>(
+    'create_publish_assistant_suggest_error',
+  );
   static const homepagePickerPage = ValueKey<String>('homepage_picker_page');
   static const homepagePickerSearchField = ValueKey<String>(
     'homepage_picker_search_field',
@@ -337,6 +361,9 @@ class TestKeys {
   );
   static const createAccessoryEmojiButton = ValueKey<String>(
     'create_accessory_emoji_button',
+  );
+  static const createAccessoryMentionButton = ValueKey<String>(
+    'create_accessory_mention_button',
   );
   static const createAccessoryStructureButton = ValueKey<String>(
     'create_accessory_structure_button',

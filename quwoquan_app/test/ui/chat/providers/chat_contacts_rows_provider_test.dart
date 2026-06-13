@@ -52,7 +52,7 @@ void main() {
       expect(rows.single.isMutualFollow, isTrue);
     });
 
-    test('圈子和群聊 tab 使用 ContactHome kind', () async {
+    test('圈子和讨论 tab 使用 ContactHome kind，讨论仍请求 group filter', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
         overrides: [chatRepositoryProvider.overrideWithValue(repo)],
@@ -71,6 +71,7 @@ void main() {
       );
 
       expect(repo.requestedFilters, <String>['circle', 'group']);
+      expect(UITextConstants.contactsTabGroups, '讨论');
       expect(circleRows, hasLength(1));
       expect(circleRows.single.kind, ChatContactsRowKind.circle);
       expect(circleRows.single.id, 'circle_01');
@@ -126,7 +127,7 @@ final class _FakeChatRepository extends MockChatRepository {
           kind: 'group',
           objectId: 'group_01',
           conversationId: 'group_01',
-          title: '测试群聊',
+          title: '测试讨论',
           subtitle: '来自：九寨沟 · 摄影圈 · 368成员',
           avatarUrl:
               'media/avatar/s/archived-avatar/group/group_01/v1/composite.png',
@@ -157,7 +158,7 @@ final class _FakeChatRepository extends MockChatRepository {
           kind: 'group',
           objectId: 'group_01',
           conversationId: 'group_01',
-          title: '测试群聊',
+          title: '测试讨论',
           subtitle: '来自：九寨沟 · 摄影圈 · 368成员',
         ),
       ],

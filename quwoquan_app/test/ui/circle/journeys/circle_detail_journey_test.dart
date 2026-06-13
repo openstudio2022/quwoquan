@@ -106,7 +106,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleDetailPage), findsOneWidget);
@@ -122,7 +122,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);
@@ -134,7 +134,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleDetailPage), findsOneWidget);
@@ -169,7 +169,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 
       expect(find.byType(CircleDetailPage), findsOneWidget);
@@ -194,11 +194,11 @@ void main() {
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
 
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _pumpIgnoringTabPaintErrors(tester, frames: 2);
       router.go('/circles');
       await _pumpIgnoringTabPaintErrors(tester, frames: 2);
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _pumpIgnoringTabPaintErrors(tester, frames: 3);
 
       expect(find.byType(Scaffold), findsWidgets);
@@ -210,14 +210,14 @@ void main() {
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
 
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
       expect(find.byType(CircleDetailPage), findsOneWidget);
 
       router.go('/circles');
       await _settleIgnoringTabPaintErrors(tester);
 
-      router.push('/circle/circle_photo_02');
+      router.push('/circle/fixture_circle_photography_01');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
       expect(find.byType(CircleDetailPage), findsOneWidget);
     });
@@ -231,7 +231,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);

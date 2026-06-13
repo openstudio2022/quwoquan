@@ -212,18 +212,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     );
   }
 
-  CreationSubTab _creationSubTabForId(String id) {
-    switch (id) {
-      case 'image':
-        return CreationSubTab.image;
-      case 'video':
-        return CreationSubTab.video;
-      case 'article':
-        return CreationSubTab.article;
-      default:
-        return CreationSubTab.all;
-    }
-  }
+  CreationSubTab _creationSubTabForId(String id) => creationSubTabFromId(id);
 
   bool _matchesCreationFilter(PostBaseDto post, CreationSubTab tab) {
     switch (tab) {

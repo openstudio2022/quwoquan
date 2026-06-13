@@ -35,7 +35,9 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
@@ -1274,9 +1276,60 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     showCupertinoModalPopup<void>(
       context: context,
       barrierColor: AppColors.transparent,
-      builder: (sheetContext) =>
-          _WorksIntersectionDetailSheet(reasons: reasons),
+      builder: (sheetContext) => _WorksIntersectionDetailSheet(
+        reasons: reasons,
+        onAskAssistant: () {
+          Navigator.pop(sheetContext);
+          _openAssistantForIntersectionReason(context, post, reasons);
+        },
+      ),
     );
+  }
+
+  void _openAssistantForIntersectionReason(
+    BuildContext context,
+    PostBaseDto post,
+    List<IntersectionReason> reasons,
+  ) {
+    if (reasons.isEmpty) return;
+    final primary = reasons.first;
+    final target = VisitTarget.page('work_intersection_${post.id}');
+    final openContext = AssistantOpenContext(
+      source: AssistantSource.article,
+      tab: 'work_intersection',
+      dimension: primary.dimension,
+      entityId: post.id,
+      objectType: 'post',
+      intersectionRefs: _intersectionRefsForReasons(reasons),
+      visitTarget: target,
+      experienceLevel: ref
+          .read(visitRecorderServiceProvider)
+          .getExperience(target),
+      hints: <String, dynamic>{
+        'postId': post.id,
+        'contentType': post.type,
+        'primaryText': primary.primaryText,
+        'reasonCount': reasons.length,
+      },
+    );
+    context.push(AppRoutePaths.assistantPersonal, extra: openContext);
+  }
+
+  List<String> _intersectionRefsForReasons(List<IntersectionReason> reasons) {
+    final refs = <String>{};
+    for (final reason in reasons) {
+      final id = reason.intersectionId.trim();
+      if (id.isNotEmpty) {
+        refs.add('intersection:$id');
+      }
+      for (final tag in reason.tagRefs) {
+        final normalized = tag.trim();
+        if (normalized.isNotEmpty) {
+          refs.add(normalized);
+        }
+      }
+    }
+    return refs.toList(growable: false);
   }
 
   /// 视频画布上报当前激活的播放控制器（stageKey = postId-episodeIndex）。
@@ -3511,9 +3564,13 @@ class _WorksArticlePageChevron extends StatelessWidget {
 /// 交集详情解释层（V1.0）：贴底弹层列出全部交集证据组；
 /// 定位为「推荐解释」，不打断浏览、不遮挡正文以外区域。
 class _WorksIntersectionDetailSheet extends StatelessWidget {
-  const _WorksIntersectionDetailSheet({required this.reasons});
+  const _WorksIntersectionDetailSheet({
+    required this.reasons,
+    this.onAskAssistant,
+  });
 
   final List<IntersectionReason> reasons;
+  final VoidCallback? onAskAssistant;
 
   @override
   Widget build(BuildContext context) {
@@ -3545,6 +3602,32 @@ class _WorksIntersectionDetailSheet extends StatelessWidget {
             for (var i = 0; i < reasons.length; i++) ...[
               if (i > 0) SizedBox(height: AppSpacing.intraGroupSm),
               _WorksIntersectionReasonRow(reason: reasons[i]),
+            ],
+            if (onAskAssistant != null) ...[
+              SizedBox(height: AppSpacing.interGroupSm),
+              SizedBox(
+                width: double.infinity,
+                child: CupertinoButton(
+                  key: const ValueKey<String>(
+                    'works-intersection-ask-assistant-button',
+                  ),
+                  color: AppColors.iosAccent(context),
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                  padding: EdgeInsets.symmetric(
+                    vertical: AppSpacing.intraGroupSm,
+                    horizontal: AppSpacing.containerMd,
+                  ),
+                  onPressed: onAskAssistant,
+                  child: Text(
+                    UITextConstants.objectIntersectionCtaAskAssistant,
+                    style: TextStyle(
+                      fontSize: AppTypography.base,
+                      fontWeight: AppTypography.semiBold,
+                      color: CupertinoColors.white,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ],
         ),

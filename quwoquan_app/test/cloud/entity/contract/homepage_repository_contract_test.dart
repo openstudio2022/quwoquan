@@ -55,8 +55,13 @@ void main() {
         expect(h.homepageType, 'sight');
         expect(h.city, '杭州');
         expect(h.status, 'published');
+        expect(h.canonicalEntityId, isNotEmpty);
       }
       expect(rows.any((h) => h.id == 'homepage_sight_west_lake'), isTrue);
+      expect(
+        rows.any((h) => h.canonicalEntityId == 'entity:sight:west_lake'),
+        isTrue,
+      );
     });
 
     test('getHomepageDetail / Shell / ReviewSummary / RelatedGroups', () async {
@@ -93,7 +98,7 @@ void main() {
 
       expect(bundle.objectType, 'homepage');
       expect(bundle.objectId, id);
-      expect(bundle.canonicalEntityId, 'entity:homepage:$id');
+      expect(bundle.canonicalEntityId, 'entity:sight:west_lake');
       expect(bundle.objectPageTemplate, isNotEmpty);
       expect(bundle.tagRefs, isNotEmpty);
       expect(bundle.intersectionReasons, isNotEmpty);
@@ -118,7 +123,7 @@ void main() {
         expect(byHomepageId.title, '峨眉山');
 
         final byCanonical = await repo.getHomepageDetail(
-          'entity:homepage:$homepageId',
+          'entity:sight:homepage_sight_emeishan',
         );
         expect(byCanonical.id, homepageId);
 

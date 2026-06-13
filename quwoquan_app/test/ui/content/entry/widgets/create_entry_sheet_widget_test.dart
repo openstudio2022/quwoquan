@@ -35,7 +35,7 @@ void main() {
     expect(find.text('从相册选择'), findsOneWidget);
     expect(find.text('写文字'), findsOneWidget);
     expect(find.text('相机'), findsOneWidget);
-    expect(find.text('发起群聊'), findsOneWidget);
+    expect(find.text('发起讨论'), findsOneWidget);
     expect(find.text('添加联系人'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
     expect(find.text('作品'), findsNothing);
@@ -73,9 +73,9 @@ void main() {
     );
     await tester.pump();
 
-    final groupChatY = tester.getCenter(find.text('发起群聊')).dy;
+    final discussionY = tester.getCenter(find.text('发起讨论')).dy;
     final galleryY = tester.getCenter(find.text('从相册选择')).dy;
-    expect(groupChatY, lessThan(galleryY));
+    expect(discussionY, lessThan(galleryY));
   });
 
   testWidgets('社交动作组支持新建圈子入口', (tester) async {

@@ -152,7 +152,7 @@ extension _CircleShellBuilders on _CircleShellState {
                 semantic: UiErrorSemantic(
                   category: UiErrorCategory.sectionLoad,
                   scope: UiErrorScope.section,
-                  title: '圈子信息暂不可用',
+                  title: UITextConstants.circleInfoUnavailableTitle,
                   message: state.error!,
                   primaryAction: const UiErrorAction(
                     type: UiErrorActionType.retry,
@@ -174,7 +174,7 @@ extension _CircleShellBuilders on _CircleShellState {
     );
   }
 
-  /// 圈子交集卡「你认识的人在这」：当前用户 × 圈子的事实交集（relationship/identity 优先）。
+  /// 圈子连接卡：当前用户 × 圈子的事实交集（relationship/identity 优先）。
   /// 无可解析交集（空/异步未就绪）则不占位（G2 不造假）。
   Widget _buildIntersectionCard(bool isDark) {
     final query = ObjectIntersectionQuery(
@@ -196,27 +196,25 @@ extension _CircleShellBuilders on _CircleShellState {
     required bool isDark,
     required CircleState state,
   }) {
-    final circle = state.circleData;
-    final memberCount = state.circleStats.members != 0
-        ? state.circleStats.members
-        : circle?.memberCount ?? 0;
-    final postCount = state.circleStats.posts != 0
-        ? state.circleStats.posts
-        : circle?.postCount ?? 0;
-    final rows = <_CircleImpactRowData>[
-      _CircleImpactRowData(
-        icon: CupertinoIcons.person_2_fill,
-        text: '${_formatCount(memberCount)} 人在这里建立连接',
-      ),
-      _CircleImpactRowData(
-        icon: CupertinoIcons.doc_text_fill,
-        text: '${_formatCount(postCount)} 条内容正在沉淀经验',
-      ),
-      const _CircleImpactRowData(
-        icon: CupertinoIcons.chat_bubble_2_fill,
-        text: '相关讨论会持续连接同趣的人',
-      ),
-    ];
+    final asyncImpact = ref.watch(circleImpactProvider(widget.circleId));
+    final rows = asyncImpact.maybeWhen(
+      data: (summary) => summary.items
+          .where((item) => item.displayText.trim().isNotEmpty)
+          .take(3)
+          .map(
+            (item) => _CircleImpactRowData(
+              icon: _circleImpactIcon(item.helpType),
+              text: item.displayText.trim(),
+              source: item.source.trim(),
+              count: item.count,
+            ),
+          )
+          .toList(growable: false),
+      orElse: () => const <_CircleImpactRowData>[],
+    );
+    if (rows.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.sm),
       child: _SectionSurface(
@@ -225,7 +223,7 @@ extension _CircleShellBuilders on _CircleShellState {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              '圈子影响',
+              UITextConstants.circleImpactTitle,
               style: TextStyle(
                 fontSize: AppTypography.iosSubheadline,
                 fontWeight: AppTypography.semiBold,
@@ -246,43 +244,98 @@ extension _CircleShellBuilders on _CircleShellState {
                     ).withValues(alpha: isDark ? 0.18 : 0.12),
                   ),
                 ),
-              Row(
-                children: <Widget>[
-                  Container(
-                    width: AppSpacing.buttonHeightMd,
-                    height: AppSpacing.buttonHeightMd,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.radiusNinetyNine,
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(
+                  AppSpacing.minInteractiveSize,
+                  AppSpacing.minInteractiveSize,
+                ),
+                onPressed: () =>
+                    _showCircleImpactEvidence(context, rows[i], isDark),
+                child: Row(
+                  children: <Widget>[
+                    Container(
+                      width: AppSpacing.buttonHeightMd,
+                      height: AppSpacing.buttonHeightMd,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusNinetyNine,
+                        ),
+                      ),
+                      child: Icon(
+                        rows[i].icon,
+                        size: AppSpacing.iconSmall,
+                        color: AppColors.primaryColor,
                       ),
                     ),
-                    child: Icon(
-                      rows[i].icon,
-                      size: AppSpacing.iconSmall,
-                      color: AppColors.primaryColor,
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.containerSm),
-                  Expanded(
-                    child: Text(
-                      rows[i].text,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        color: AppColors.iosLabel(context),
+                    SizedBox(width: AppSpacing.containerSm),
+                    Expanded(
+                      child: Text(
+                        rows[i].text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosSubheadline,
+                          color: AppColors.iosLabel(context),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: AppSpacing.iconXSmall,
+                      color: AppColors.iosTertiaryLabel(context),
+                    ),
+                  ],
+                ),
               ),
             ],
           ],
         ),
       ),
     );
+  }
+
+  IconData _circleImpactIcon(String helpType) {
+    switch (helpType.trim()) {
+      case 'relationship':
+        return CupertinoIcons.person_2_fill;
+      case 'community':
+        return CupertinoIcons.chat_bubble_2_fill;
+      case 'spread':
+        return CupertinoIcons.arrowshape_turn_up_right_fill;
+      case 'knowledge':
+        return CupertinoIcons.lightbulb_fill;
+      case 'decision':
+        return CupertinoIcons.check_mark_circled_solid;
+      default:
+        return CupertinoIcons.link;
+    }
+  }
+
+  Future<void> _showCircleImpactEvidence(
+    BuildContext context,
+    _CircleImpactRowData row,
+    bool isDark,
+  ) {
+    return showAppActionSheet<void>(
+      context,
+      title: row.text,
+      message: _circleImpactEvidenceMessage(row),
+      sections: const <AppActionSheetSection<void>>[],
+      cancelLabel: UITextConstants.confirm,
+    );
+  }
+
+  String _circleImpactEvidenceMessage(_CircleImpactRowData row) {
+    final source = row.source.isEmpty
+        ? UITextConstants.circleImpactTitle
+        : row.source;
+    if (row.count > 0) {
+      return '${UITextConstants.impactEnumerableHintCircle}\n$source · ${row.count}';
+    }
+    return '${UITextConstants.impactEnumerableHintCircle}\n$source';
   }
 
   Widget _buildBackgroundLayer({required Color bg, required String? coverUrl}) {
@@ -544,15 +597,16 @@ extension _CircleShellBuilders on _CircleShellState {
     final circle = state.circleData;
     final contentLocked = !_canAccessPrimaryContent(state);
     final memberLocked = !_canAccessMemberSpaces(state);
+    final bodySlot = circleTabById(_activeTabId)?.bodySlot ?? 'creations';
 
-    final child = switch (_activeTabId) {
-      'home' =>
+    final child = switch (bodySlot) {
+      'creations' =>
         contentLocked
             ? _buildGateCard(
                 context,
                 title: UITextConstants.visibilityPrivate,
                 description: UITextConstants.circleVisibilityMembersDescription,
-                keySuffix: 'home',
+                keySuffix: _activeTabId,
               )
             : SectionCreations(
                 circleId: widget.circleId,
@@ -560,21 +614,7 @@ extension _CircleShellBuilders on _CircleShellState {
                 role: state.role,
                 inlineScroll: true,
               ),
-      'content' =>
-        contentLocked
-            ? _buildGateCard(
-                context,
-                title: UITextConstants.visibilityPrivate,
-                description: UITextConstants.circleVisibilityMembersDescription,
-                keySuffix: 'content',
-              )
-            : SectionCreations(
-                circleId: widget.circleId,
-                isDark: isDark,
-                role: state.role,
-                inlineScroll: true,
-              ),
-      'groups' =>
+      'discussion' =>
         memberLocked
             ? _buildGateCard(
                 context,
@@ -582,7 +622,7 @@ extension _CircleShellBuilders on _CircleShellState {
                 description: circle?.joinPolicy == 'approval'
                     ? UITextConstants.circleJoinApprovalDescription
                     : UITextConstants.circleJoinOpenDescription,
-                keySuffix: 'groups',
+                keySuffix: _activeTabId,
               )
             : Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -617,12 +657,14 @@ extension _CircleShellBuilders on _CircleShellState {
                 ),
               ),
       'members' =>
-        contentLocked
+        memberLocked
             ? _buildGateCard(
                 context,
-                title: UITextConstants.visibilityPrivate,
-                description: UITextConstants.circleVisibilityMembersDescription,
-                keySuffix: 'members',
+                title: UITextConstants.visibilityMembers,
+                description: circle?.joinPolicy == 'approval'
+                    ? UITextConstants.circleJoinApprovalDescription
+                    : UITextConstants.circleJoinOpenDescription,
+                keySuffix: _activeTabId,
               )
             : Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -633,7 +675,7 @@ extension _CircleShellBuilders on _CircleShellState {
                 ),
                 child: _SectionSurface(
                   isDark: isDark,
-                  child: SectionInteraction(
+                  child: SectionMembers(
                     circleId: widget.circleId,
                     isDark: isDark,
                   ),
@@ -650,8 +692,15 @@ extension _CircleShellBuilders on _CircleShellState {
 }
 
 class _CircleImpactRowData {
-  const _CircleImpactRowData({required this.icon, required this.text});
+  const _CircleImpactRowData({
+    required this.icon,
+    required this.text,
+    required this.source,
+    required this.count,
+  });
 
   final IconData icon;
   final String text;
+  final String source;
+  final int count;
 }

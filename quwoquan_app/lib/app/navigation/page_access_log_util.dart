@@ -316,6 +316,10 @@ String pageNameFromRouteLocation(String location) {
   if (path == AppRoutePaths.profilePersonas) return 'profile_personas';
   if (path == AppRoutePaths.profileComments) return 'profile_comments';
   if (path.startsWith('/profile/stats')) return 'profile_stats';
+  if (path == AppRoutePaths.myIntersectionsPathTemplate) {
+    return 'my_intersections';
+  }
+  if (path == AppRoutePaths.myFootprintPathTemplate) return 'my_footprint';
   if (path.startsWith('/rtc/outgoing/')) return 'rtc_outgoing';
   if (path.startsWith('/rtc/incoming/')) return 'rtc_incoming';
   if (path.startsWith('/rtc/voice/')) return 'rtc_voice';

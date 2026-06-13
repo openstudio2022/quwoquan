@@ -16,7 +16,7 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show ReferralSource;
+    show ReferralSource, ReferralSourceExt;
 import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
 import 'package:quwoquan_app/ui/content/pages/work_browser_entry_page.dart';
@@ -44,6 +44,7 @@ import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_claim_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
+import 'package:quwoquan_app/ui/entity/pages/homepage_introduction_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_maintenance_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_status_report_page.dart';
@@ -53,6 +54,7 @@ import 'package:quwoquan_app/ui/user/pages/legal_document_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
+import 'package:quwoquan_app/ui/user/pages/my_footprint_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_intersection_inbox_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
@@ -67,6 +69,8 @@ import 'package:quwoquan_app/ui/rtc/pages/video_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
+
+part 'app_router_create_entry_route.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshListenable = ValueNotifier<int>(0);
@@ -336,6 +340,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               recommendationTraceId: extra?.recommendationTraceId ?? '',
               experimentBucket: extra?.experimentBucket ?? '',
               rolloutCohort: extra?.rolloutCohort ?? '',
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.homepageIntroductionPathTemplate.replaceAll(
+          '{id}',
+          ':id',
+        ),
+        pageBuilder: (context, state) {
+          final homepageId = state.pathParameters['id'] ?? '';
+          final source = state.uri.queryParameters['source'] ?? '';
+          return appRoutePage<void>(
+            state: state,
+            child: HomepageIntroductionPage(
+              homepageId: homepageId,
+              referralSource: _referralSourceFromRoute(source),
             ),
           );
         },
@@ -695,30 +716,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutePaths.profileEdit,
-        pageBuilder: (context, state) {
-          return appRoutePage<void>(
-            state: state,
-            child: const EditProfilePage(),
-          );
-        },
+        pageBuilder: (context, state) =>
+            appRoutePage<void>(state: state, child: const EditProfilePage()),
       ),
       GoRoute(
         path: AppRoutePaths.profilePersonas,
-        pageBuilder: (context, state) {
-          return appRoutePage<void>(
-            state: state,
-            child: const PersonaManagementPage(),
-          );
-        },
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: const PersonaManagementPage(),
+        ),
       ),
       GoRoute(
         path: AppRoutePaths.profileComments,
-        pageBuilder: (context, state) {
-          return appRoutePage<void>(
-            state: state,
-            child: const ProfileCommentsPage(),
-          );
-        },
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: const ProfileCommentsPage(),
+        ),
       ),
       GoRoute(
         path: AppRoutePaths.profileStatsPathTemplate,
@@ -733,13 +746,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutePaths.myIntersectionsPathTemplate,
-        pageBuilder: (context, state) {
-          final dimension = state.uri.queryParameters['dimension'] ?? '';
-          return appRoutePage<void>(
-            state: state,
-            child: MyIntersectionInboxPage(dimension: dimension),
-          );
-        },
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: MyIntersectionInboxPage(
+            dimension: state.uri.queryParameters['dimension'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.myFootprintPathTemplate,
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: MyFootprintPage(type: state.uri.queryParameters['type'] ?? ''),
+        ),
       ),
       GoRoute(
         path: AppRoutePaths.chatDetailPathTemplate.replaceAll('{id}', ':id'),
@@ -972,34 +991,14 @@ void _completeWelcome(WidgetRef ref) {
   );
 }
 
-/// 创作入口抽屉的独立路由页（避免在 Shell 内 setState 导致 build scope 断言）
-class _CreateEntryRoutePage extends ConsumerWidget {
-  const _CreateEntryRoutePage();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return CreateEntrySheet(
-      isOpen: true,
-      onClose: () => context.pop(),
-      onSelect: (EditorStartAction action) {
-        context.pop();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!context.mounted) {
-            return;
-          }
-          context.go(AppRoutePaths.create(type: action.name));
-        });
-      },
-      onContinueFromDraft: () {
-        final router = GoRouter.of(context);
-        context.pop();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final navContext = router.routerDelegate.navigatorKey.currentContext;
-          if (navContext != null) {
-            unawaited(presentCreateDraftPickerAndGo(navContext, router));
-          }
-        });
-      },
-    );
+ReferralSource _referralSourceFromRoute(String value) {
+  if (value.trim().isEmpty) {
+    return ReferralSource.deepLink;
   }
+  for (final source in ReferralSource.values) {
+    if (source.value == value) {
+      return source;
+    }
+  }
+  return ReferralSource.deepLink;
 }

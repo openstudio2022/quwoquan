@@ -82,7 +82,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   }
 
   Future<void> _startCall(BuildContext context, String callType) async {
-    final profileNotifier = ref.read(profileNotifierProvider(widget.userId).notifier);
+    final profileNotifier = ref.read(
+      profileNotifierProvider(widget.userId).notifier,
+    );
     final currentState = ref.read(profileNotifierProvider(widget.userId));
     final capability = currentState.displayCapability;
     if (capability != null &&
@@ -101,7 +103,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       return;
     }
     if (!ref.read(authSessionControllerProvider).isAuthenticated) {
-      ref.read(authContinuationProvider.notifier).set(
+      ref
+          .read(authContinuationProvider.notifier)
+          .set(
             StartDirectCallContinuation(
               targetUserId: widget.userId,
               callType: callType,
@@ -238,30 +242,10 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     return bottom > viewportTop + 1 && top < viewportBottom - 1;
   }
 
-  CreationSubTab _creationSubTabForId(String id) {
-    switch (id) {
-      case 'image':
-        return CreationSubTab.image;
-      case 'video':
-        return CreationSubTab.video;
-      case 'article':
-        return CreationSubTab.article;
-      default:
-        return CreationSubTab.all;
-    }
-  }
+  CreationSubTab _creationSubTabForId(String id) => creationSubTabFromId(id);
 
-  InteractionSubTab _interactionSubTabForId(String id) {
-    switch (id) {
-      case 'comments':
-        return InteractionSubTab.comments;
-      case 'shares':
-        return InteractionSubTab.shares;
-      case 'likes':
-      default:
-        return InteractionSubTab.likes;
-    }
-  }
+  InteractionSubTab _interactionSubTabForId(String id) =>
+      interactionSubTabFromId(id);
 
   double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
     final painter = TextPainter(
@@ -464,7 +448,10 @@ enum _ProfileMoreAction { share, block, report }
 /// 用户举报原因（与 content/report 后端 reason code 对齐）。
 enum _ProfileReportReason {
   spam('spam', UITextConstants.profileReportReasonSpam),
-  misinformation('misinformation', UITextConstants.profileReportReasonMisinformation),
+  misinformation(
+    'misinformation',
+    UITextConstants.profileReportReasonMisinformation,
+  ),
   harassment('harassment', UITextConstants.profileReportReasonHarassment),
   pornography('pornography', UITextConstants.profileReportReasonPornography),
   other('other', UITextConstants.profileReportReasonOther);

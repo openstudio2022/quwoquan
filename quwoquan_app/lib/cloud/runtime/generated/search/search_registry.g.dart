@@ -113,7 +113,7 @@ class SearchRegistry {
     ),
     SearchObjectRegistryEntry(
       type: SearchObjectType.circleGroup,
-      label: '群组',
+      label: '讨论',
       domain: 'circle',
       executionStrategy: SearchExecutionStrategy.hybridRemoteFallbackLocal,
       provider: 'circle_remote_local',
@@ -175,7 +175,7 @@ class SearchRegistry {
     ),
     SearchSectionRegistryEntry(
       id: 'groups',
-      title: '群组',
+      title: '讨论',
       defaultObjectTypes: <SearchObjectType>[SearchObjectType.circleGroup, SearchObjectType.circleCircle],
     ),
     SearchSectionRegistryEntry(
@@ -327,7 +327,7 @@ class RetrieveTargetRegistry {
     ),
     RetrieveTargetEntry(
       target: RetrieveTarget.group,
-      label: '群组',
+      label: '讨论',
       objectType: SearchObjectType.circleGroup,
       contentType: '',
     ),

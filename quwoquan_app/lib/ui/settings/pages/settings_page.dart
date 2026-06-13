@@ -7,6 +7,8 @@ import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
+import 'package:quwoquan_app/ui/settings/widgets/settings_account_commercial_section.dart';
+import 'package:quwoquan_app/ui/settings/widgets/settings_appearance_labels.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -82,6 +84,13 @@ class SettingsPage extends ConsumerWidget {
                     ),
                   ],
                 ),
+              ),
+              SizedBox(
+                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+              ),
+              SettingsAccountCommercialSection(
+                isDark: isDark,
+                isAuthenticated: authSession.isAuthenticated,
               ),
               SizedBox(
                 height: SettingsSemanticConstants.insetFormSectionVerticalGap,
@@ -172,8 +181,8 @@ class SettingsPage extends ConsumerWidget {
     AppearanceSettingsState state,
   ) {
     final base =
-        '${_themeModeLabel(snapshot.themeMode)} · '
-        '${_fontSizePresetLabel(snapshot.fontSizePreset)}';
+        '${settingsThemeModeLabel(snapshot.themeMode)} · '
+        '${settingsFontSizePresetLabel(snapshot.fontSizePreset)}';
     return state.hasPendingSync ? '$base · 待同步' : base;
   }
 
@@ -377,7 +386,7 @@ class _AppearanceSettingsSheetState
                   children: AppearanceThemeMode.values
                       .map(
                         (mode) => _SelectionRow(
-                          label: _themeModeLabel(mode),
+                          label: settingsThemeModeLabel(mode),
                           selected: snapshot.themeMode == mode,
                           onTap: () => controller.updateSettings(
                             themeMode: mode,
@@ -396,8 +405,8 @@ class _AppearanceSettingsSheetState
                   children: AppearanceFontSizePreset.values
                       .map(
                         (preset) => _SelectionRow(
-                          label: _fontSizePresetLabel(preset),
-                          subtitle: _fontSizePresetDescription(preset),
+                          label: settingsFontSizePresetLabel(preset),
+                          subtitle: settingsFontSizePresetDescription(preset),
                           selected: snapshot.fontSizePreset == preset,
                           onTap: () => controller.updateSettings(
                             themeMode: snapshot.themeMode,
@@ -437,7 +446,10 @@ class _AppearanceSettingsSheetState
                 _SettingsGroup(
                   title: '当前状态',
                   children: <Widget>[
-                    _InfoRow(label: '来源', value: _sourceLabel(snapshot.source)),
+                    _InfoRow(
+                      label: '来源',
+                      value: settingsSourceLabel(snapshot.source),
+                    ),
                     _InfoRow(
                       label: '同步状态',
                       value: state.hasPendingSync ? '待同步，将在恢复时重试' : '已同步',
@@ -979,40 +991,4 @@ class _InfoRow extends StatelessWidget {
       ),
     );
   }
-}
-
-String _themeModeLabel(AppearanceThemeMode mode) {
-  return switch (mode) {
-    AppearanceThemeMode.system => '跟随系统',
-    AppearanceThemeMode.light => '浅色',
-    AppearanceThemeMode.dark => '深色',
-  };
-}
-
-String _fontSizePresetLabel(AppearanceFontSizePreset preset) {
-  return switch (preset) {
-    AppearanceFontSizePreset.xs => '特小',
-    AppearanceFontSizePreset.sm => '偏小',
-    AppearanceFontSizePreset.md => '标准',
-    AppearanceFontSizePreset.lg => '偏大',
-    AppearanceFontSizePreset.xl => '特大',
-  };
-}
-
-String _fontSizePresetDescription(AppearanceFontSizePreset preset) {
-  return switch (preset) {
-    AppearanceFontSizePreset.xs => '适合高信息密度浏览',
-    AppearanceFontSizePreset.sm => '比默认更紧凑',
-    AppearanceFontSizePreset.md => '推荐默认设置',
-    AppearanceFontSizePreset.lg => '更适合长时间阅读',
-    AppearanceFontSizePreset.xl => '最大字号，适合远距或弱视场景',
-  };
-}
-
-String _sourceLabel(AppearanceSettingsSource source) {
-  return switch (source) {
-    AppearanceSettingsSource.ownerDefault => 'Owner 默认',
-    AppearanceSettingsSource.subOverride => '当前子账号覆盖',
-    AppearanceSettingsSource.systemDefault => '系统默认',
-  };
 }

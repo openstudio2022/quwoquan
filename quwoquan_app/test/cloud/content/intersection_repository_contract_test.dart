@@ -15,7 +15,8 @@ void main() {
       final repo = MockIntersectionRepository();
       final summary = await repo.getMyIntersectionSummary();
 
-      expect(summary.totalCount, 6);
+      // fixture 六类母表达样本（含 sharedCircle / sharedTagSample）共 8 条。
+      expect(summary.totalCount, 8);
       expect(summary.dimensions.length, 5);
       // 无已读水位时，所有带 freshAt 的交集都算新增。
       expect(summary.totalNewCount, greaterThan(0));
@@ -48,7 +49,7 @@ void main() {
     test('分维度列表：自上次新增在前', () async {
       final repo = MockIntersectionRepository();
       final items = await repo.listMyIntersections(dimension: 'relationship');
-      expect(items.length, 2);
+      expect(items.length, 3);
       expect(items.every((r) => r.dimension == 'relationship'), isTrue);
     });
 

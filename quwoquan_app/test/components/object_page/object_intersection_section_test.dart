@@ -140,7 +140,7 @@ void main() {
         .set(
           const IntersectionHighlightIntent(
             objectId: 'u_lin',
-            kind: 'mutualFriend',
+            kind: 'sharedFollowees',
           ),
         );
     await tester.pumpAndSettle();

@@ -8,9 +8,8 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 /// 对象页统一交集卡（V4 · 人脸抽屉列表）。
 ///
 /// 三对象页共用同一结构与口径：
-/// - 用户主页：`你们的交集`
-/// - 地点和事物页：`你和这里的交集`
-/// - 圈子/组织页：`你认识的人在这`
+/// - 用户主页：`你们的连接`
+/// - 地点和事物页 / 圈子页：`与你的连接`
 ///
 /// 设计（专业设计师视角：精致 / 美观 / 事实清晰 / 简洁）：
 /// - 去火花图标；标题右侧总数为中性大字，非彩色；
@@ -747,16 +746,16 @@ class _IntersectionCta extends StatelessWidget {
 String _ctaLabelFor(IntersectionReason reason) {
   switch (reason.actionType.trim()) {
     case 'follow_author':
-      return '关注作者';
+      return UITextConstants.objectIntersectionCtaFollowAuthor;
     case 'join_circle':
-      return '加入圈子';
+      return UITextConstants.objectIntersectionCtaJoinCircle;
     case 'add_contact':
-      return '加为联系人';
+      return UITextConstants.objectIntersectionCtaAddContact;
     case 'ask_xiaoqu':
-      return '问问小趣';
+      return UITextConstants.objectIntersectionCtaAskAssistant;
     case 'view_object':
     default:
-      return '查看这个交集';
+      return UITextConstants.objectIntersectionCtaView;
   }
 }
 
@@ -800,7 +799,7 @@ class _EvidenceRow extends StatelessWidget {
           children: <Widget>[
             _AvatarCluster(
               urls: group.sampleAvatarUrls,
-              fallbackKind: row.reason.relationKind,
+              fallbackKind: group.fallbackIconKind,
               isDark: isDark,
             ),
             SizedBox(width: AppSpacing.intraGroupSm),
@@ -960,7 +959,14 @@ class _AvatarCluster extends StatelessWidget {
         return CupertinoIcons.location_solid;
       case 'org':
       case 'organization':
+      case 'school':
         return CupertinoIcons.building_2_fill;
+      case 'discussion':
+        return CupertinoIcons.bubble_left_bubble_right_fill;
+      case 'tag':
+        return CupertinoIcons.tag_fill;
+      case 'link':
+        return CupertinoIcons.link;
       default:
         return CupertinoIcons.person_crop_circle_fill;
     }

@@ -17,3 +17,5 @@ export 'circle_category_tab_config_dto.dart';
 export 'circle_category_tab_defaults.dart';
 export 'circle_category_tabs_loader.dart';
 export 'circle_group_wire_normalize.dart';
+export 'circle_impact_item.g.dart';
+export 'circle_impact_summary.g.dart';

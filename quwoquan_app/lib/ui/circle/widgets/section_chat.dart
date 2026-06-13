@@ -159,7 +159,7 @@ class _SectionChatState extends ConsumerState<SectionChat> {
         semantic: const UiErrorSemantic(
           category: UiErrorCategory.sectionLoad,
           scope: UiErrorScope.section,
-          title: '群聊暂时没加载出来',
+          title: '讨论暂时没加载出来',
           message: UITextConstants.contentLoadSoftFailed,
           primaryAction: UiErrorAction(
             type: UiErrorActionType.retry,

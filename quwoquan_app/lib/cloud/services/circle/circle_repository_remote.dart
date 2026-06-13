@@ -506,6 +506,18 @@ class RemoteCircleRepository implements CircleRepository {
     return CircleStatsWireDto.fromMap(_decodeObject(resp));
   }
 
+  @override
+  Future<CircleImpactSummary> getCircleImpact(String circleId) async {
+    final uri = _uri(CircleApiMetadata.getCircleImpactPath(circleId: circleId));
+    final resp = await _httpClient.get(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        CircleRequestPageIds.getCircleImpact,
+      ),
+    );
+    return CircleImpactSummary.fromMap(_decodeObject(resp));
+  }
+
   // -- Files -----------------------------------------------------------------
 
   @override

@@ -51,7 +51,7 @@ List<HomepageRelatedGroupSummary> _mockDefaultRelatedGroups(
   return <HomepageRelatedGroupSummary>[
     HomepageRelatedGroupSummary(
       circleId: '${id}_group_1',
-      name: '$title 讨论群',
+      name: '$title 讨论',
       memberCount: 12,
       linkedHomepageId: id,
       linkedHomepageTitle: title,
@@ -76,6 +76,7 @@ HomepageDetail _mergeBasicDraft(HomepageDetail h, HomepageBasicDraft d) {
     status: h.status,
     sourceType: h.sourceType,
     claimStatus: h.claimStatus,
+    canonicalEntityId: h.canonicalEntityId,
     categoryTags: d.categoryTags ?? h.categoryTags,
     address: d.address != null && d.address!.trim().isNotEmpty
         ? d.address!.trim()

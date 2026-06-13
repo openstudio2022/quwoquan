@@ -43,7 +43,7 @@ class AppUiSurfaces {
     owner: 'chat',
     routeId: 'startGroupChat',
     pathTemplate: '/chat/start-group',
-    description: '全局添加入口的发起群聊页',
+    description: '全局添加入口的发起讨论页',
     operationIds: <String>[
       'CreateConversation',
       'ListConversations',
@@ -87,7 +87,7 @@ class AppUiSurfaces {
     owner: 'chat',
     routeId: 'chatManage',
     pathTemplate: '/chat/{id}/manage',
-    description: '群聊管理页',
+    description: '讨论管理页',
     operationIds: <String>[
       'GetConversation',
       'ListMembers',
@@ -282,7 +282,7 @@ class AppUiSurfaces {
     owner: 'entity',
     routeId: 'homepagePicker',
     pathTemplate: '/homepages/picker',
-    description: '共享主页搜索与选择器',
+    description: '主页搜索与选择器',
     operationIds: <String>[
       'SearchHomepages',
       'SuggestHomepageCandidate',
@@ -294,7 +294,7 @@ class AppUiSurfaces {
     owner: 'entity',
     routeId: 'suggestHomepage',
     pathTemplate: '/homepages/suggest',
-    description: '补充缺失共享主页',
+    description: '补充缺失主页',
     operationIds: <String>[
       'SuggestHomepageCandidate',
     ],
@@ -305,7 +305,7 @@ class AppUiSurfaces {
     owner: 'entity',
     routeId: 'homepageDetail',
     pathTemplate: '/homepages/{id}',
-    description: '共享主页详情与阅读壳层',
+    description: '主页详情与阅读壳层',
     operationIds: <String>[
       'GetHomepageDetail',
       'GetHomepageShell',
@@ -314,12 +314,23 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface homepageIntroduction = AppUiSurface(
+    id: 'homepageIntroduction',
+    owner: 'entity',
+    routeId: 'homepageIntroduction',
+    pathTemplate: '/homepages/{id}/introduction',
+    description: '主页完整介绍页（前台「认识{对象名}」）',
+    operationIds: <String>[
+      'GetHomepageIntroduction',
+    ],
+  );
+
   static const AppUiSurface homepageClaim = AppUiSurface(
     id: 'homepageClaim',
     owner: 'entity',
     routeId: 'homepageClaim',
     pathTemplate: '/homepages/{id}/claim',
-    description: '共享主页认领申请页',
+    description: '主页认领申请页',
     operationIds: <String>[
       'GetHomepageDetail',
       'CreateHomepageClaimRequest',
@@ -331,7 +342,7 @@ class AppUiSurfaces {
     owner: 'entity',
     routeId: 'homepageMaintenance',
     pathTemplate: '/homepages/{id}/manage',
-    description: '已认领共享主页基础维护页',
+    description: '已认领主页基础维护页',
     operationIds: <String>[
       'GetHomepageDetail',
       'UpdateClaimedHomepageBasics',
@@ -343,7 +354,7 @@ class AppUiSurfaces {
     owner: 'entity',
     routeId: 'homepageStatusReport',
     pathTemplate: '/homepages/{id}/status-report',
-    description: '共享主页下线与纠错上报页',
+    description: '主页下线与纠错上报页',
     operationIds: <String>[
       'GetHomepageDetail',
       'CreateHomepageStatusReport',
@@ -417,6 +428,7 @@ class AppUiSurfaces {
     homepagePicker,
     suggestHomepage,
     homepageDetail,
+    homepageIntroduction,
     homepageClaim,
     homepageMaintenance,
     homepageStatusReport,
@@ -446,6 +458,7 @@ class AppUiSurfaces {
     'homepagePicker': homepagePicker,
     'suggestHomepage': suggestHomepage,
     'homepageDetail': homepageDetail,
+    'homepageIntroduction': homepageIntroduction,
     'homepageClaim': homepageClaim,
     'homepageMaintenance': homepageMaintenance,
     'homepageStatusReport': homepageStatusReport,

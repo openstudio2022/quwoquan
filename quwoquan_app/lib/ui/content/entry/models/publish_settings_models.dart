@@ -11,6 +11,12 @@ class PublishSettings {
     this.circleIds = const <String>[],
     this.circleNames = const <String>[],
     this.homepage,
+    this.summary = '',
+    this.tagRefs = const <String>[],
+    this.tagLabels = const <String>[],
+    this.entityRefs = const <String>[],
+    this.entityNames = const <String>[],
+    this.assistantUsePolicy = 'inherit',
   });
 
   final bool isPublic;
@@ -21,6 +27,12 @@ class PublishSettings {
   final List<String> circleIds;
   final List<String> circleNames;
   final HomepageCanonicalReference? homepage;
+  final String summary;
+  final List<String> tagRefs;
+  final List<String> tagLabels;
+  final List<String> entityRefs;
+  final List<String> entityNames;
+  final String assistantUsePolicy;
 
   /// 从 Map（如 _tabData）解析
   factory PublishSettings.fromMap(Map<String, dynamic> map) {
@@ -30,11 +42,10 @@ class PublishSettings {
     if (locRaw is Map && locRaw.isNotEmpty) {
       final m = Map<String, dynamic>.from(locRaw);
       final parsed = LocationPoiDto.fromMap(m);
-      final hasCoords =
-          parsed.latitude != 0 || parsed.longitude != 0;
+      final hasCoords = parsed.latitude != 0 || parsed.longitude != 0;
       final hasLabel =
           parsed.name.trim().isNotEmpty ||
-              (map['locationName'] as String? ?? '').trim().isNotEmpty;
+          (map['locationName'] as String? ?? '').trim().isNotEmpty;
       if (hasCoords || hasLabel) {
         final ln = (map['locationName'] as String? ?? '').trim();
         poi = parsed.name.trim().isEmpty && ln.isNotEmpty
@@ -57,6 +68,19 @@ class PublishSettings {
               Map<String, dynamic>.from(map['homepage'] as Map),
             )
           : null,
+      summary: (map['summary'] as String? ?? '').trim(),
+      tagRefs: List<String>.from(map['tagRefs'] as List? ?? const <String>[]),
+      tagLabels: List<String>.from(
+        map['tagLabels'] as List? ?? const <String>[],
+      ),
+      entityRefs: vis == 'public'
+          ? List<String>.from(map['entityRefs'] as List? ?? const <String>[])
+          : const <String>[],
+      entityNames: vis == 'public'
+          ? List<String>.from(map['entityNames'] as List? ?? const <String>[])
+          : const <String>[],
+      assistantUsePolicy: (map['assistantUsePolicy'] as String? ?? 'inherit')
+          .trim(),
     );
   }
 
@@ -67,6 +91,12 @@ class PublishSettings {
     'circleIds': circleIds,
     'circleNames': circleNames,
     'homepage': homepage?.toMap(),
+    'summary': summary,
+    'tagRefs': tagRefs,
+    'tagLabels': tagLabels,
+    'entityRefs': entityRefs,
+    'entityNames': entityNames,
+    'assistantUsePolicy': assistantUsePolicy,
   };
 
   /// 生成发布 payload 字段
@@ -85,6 +115,12 @@ class PublishSettings {
     if (homepage != null) {
       payload.addAll(homepage!.toPayloadFields());
     }
+    if (summary.trim().isNotEmpty) payload['summary'] = summary.trim();
+    if (tagRefs.isNotEmpty) payload['tagRefs'] = tagRefs;
+    if (entityRefs.isNotEmpty) payload['entityRefs'] = entityRefs;
+    if (assistantUsePolicy.trim().isNotEmpty) {
+      payload['assistantUsePolicy'] = assistantUsePolicy.trim();
+    }
     return payload;
   }
 
@@ -95,18 +131,33 @@ class PublishSettings {
     List<String>? circleIds,
     List<String>? circleNames,
     HomepageCanonicalReference? homepage,
+    String? summary,
+    List<String>? tagRefs,
+    List<String>? tagLabels,
+    List<String>? entityRefs,
+    List<String>? entityNames,
+    String? assistantUsePolicy,
     bool clearHomepage = false,
     bool clearLocationPoi = false,
   }) => PublishSettings(
     isPublic: isPublic ?? this.isPublic,
     locationName: locationName ?? this.locationName,
-    locationPoi: clearLocationPoi
-        ? null
-        : (locationPoi ?? this.locationPoi),
+    locationPoi: clearLocationPoi ? null : (locationPoi ?? this.locationPoi),
     circleIds: circleIds ?? this.circleIds,
     circleNames: circleNames ?? this.circleNames,
     homepage: clearHomepage ? null : (homepage ?? this.homepage),
+    summary: summary ?? this.summary,
+    tagRefs: tagRefs ?? this.tagRefs,
+    tagLabels: tagLabels ?? this.tagLabels,
+    entityRefs: entityRefs ?? this.entityRefs,
+    entityNames: entityNames ?? this.entityNames,
+    assistantUsePolicy: assistantUsePolicy ?? this.assistantUsePolicy,
   );
+}
+
+String homepageEntityRef(HomepageCanonicalReference reference) {
+  final canonical = reference.canonicalEntityId?.trim() ?? '';
+  return canonical;
 }
 
 class CreateLocationOption {

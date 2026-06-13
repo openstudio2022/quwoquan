@@ -61,7 +61,7 @@ void main() {
           namespace: ownerNamespace,
           groups: const <Map<String, dynamic>>[
             <String, dynamic>{
-              'circleId': 'circle_photo_01',
+              'circleId': 'fixture_circle_photo',
               'groupId': 'group_photo',
               'name': '光影摄影社主群',
               'description': '摄影讨论',

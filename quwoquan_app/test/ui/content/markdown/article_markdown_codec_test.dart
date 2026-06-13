@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/markdown/article_markdown_codec.dart';
 
 void main() {
@@ -50,7 +51,7 @@ title: 杭州一日游
 ---
 # 杭州一日游
 
-清晨从@[灵隐寺](entity:homepage/homepage_sight_west_lake)出发，再去@[河坊街](entity:homepage/homepage_restaurant_night_market)。
+清晨从@[灵隐寺](entity:sight:west_lake)出发，再去@[河坊街](entity:restaurant:night_market)。
 ''');
 
       final paragraph = document.nodes
@@ -60,19 +61,57 @@ title: 杭州一日游
       expect(paragraph.text, isNot(contains('entity:homepage')));
       expect(paragraph.spans, hasLength(2));
       expect(paragraph.spans.first.kind, 'entity');
-      expect(paragraph.spans.first.targetType, 'homepage');
-      expect(paragraph.spans.first.targetId, 'homepage_sight_west_lake');
+      expect(paragraph.spans.first.targetType, 'entity');
+      expect(paragraph.spans.first.targetId, 'entity:sight:west_lake');
       expect(paragraph.spans.first.displayText, '灵隐寺');
 
       final serialized = ArticleMarkdownCodec.serializeDocument(document);
       expect(
         serialized,
-        contains('@[灵隐寺](entity:homepage/homepage_sight_west_lake)'),
+        contains('@[灵隐寺](entity:sight:west_lake)'),
       );
       expect(
         serialized,
-        contains('@[河坊街](entity:homepage/homepage_restaurant_night_market)'),
+        contains('@[河坊街](entity:restaurant:night_market)'),
       );
     });
+
+    test(
+      'front matter preserves summary tag refs entity refs and assistant policy',
+      () {
+        final markdown = ArticleMarkdownCodec.serializeDocument(
+          ArticleDocumentData(
+            nodes: <ArticleDocumentNode>[
+              ArticleDocumentNode(
+                id: 'document_title',
+                type: ArticleDocumentNodeType.documentTitle,
+                text: '西湖一日游',
+              ),
+              ArticleDocumentNode(
+                id: 'p1',
+                type: ArticleDocumentNodeType.paragraph,
+                text: '正文内容',
+              ),
+            ],
+          ),
+          summary: '用户确认摘要',
+          tagRefs: const <String>['Topic/旅行/城市漫步'],
+          entityRefs: const <String>['entity:sight:west_lake'],
+          visibility: 'public',
+          assistantUsePolicy: 'allow_summary',
+        );
+
+        expect(markdown, contains('summary: "用户确认摘要"'));
+        expect(markdown, contains('tag_refs:'));
+        expect(markdown, contains('- "Topic/旅行/城市漫步"'));
+        expect(markdown, contains('entity_refs:'));
+        expect(markdown, contains('- "entity:sight:west_lake"'));
+        expect(markdown, contains('assistantUsePolicy: allow_summary'));
+
+        final parsed = ArticleMarkdownCodec.parseDocument(markdown);
+        expect(parsed.title, '西湖一日游');
+        expect(parsed.body, contains('正文内容'));
+      },
+    );
   });
 }

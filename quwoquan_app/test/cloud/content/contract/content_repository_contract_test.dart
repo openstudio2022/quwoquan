@@ -118,7 +118,7 @@ void main() {
 
     test('listUserPosts 支持按 identity 过滤', () async {
       final page = await repo.listUserPosts(
-        userId: 'nature_photographer',
+        userId: 'fixture_user_photo',
         identity: 'work',
       );
       expect(page.items, isNotEmpty);

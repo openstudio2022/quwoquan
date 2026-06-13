@@ -37,9 +37,13 @@ void main() {
     expect(
       messages.any(
         (message) =>
-            message.type == 'system' && message.content == '契约新成员加入了群聊',
+            message.type == 'system' && message.content == '契约新成员加入了讨论',
       ),
       isTrue,
+    );
+    expect(
+      messages.any((message) => (message.content ?? '').contains('群聊')),
+      isFalse,
     );
 
     await tester.pumpWidget(const SizedBox.shrink());

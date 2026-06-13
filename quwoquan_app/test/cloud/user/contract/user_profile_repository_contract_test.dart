@@ -4,6 +4,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request
 import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 
+const _fixtureCurrentUserId = 'fixture_user_current';
+const _fixtureProfileUserId = 'fixture_user_photo';
+
 void main() {
   // ── 常规契约 ──────────────────────────────────────────────────────────────
 
@@ -17,8 +20,8 @@ void main() {
     // ── 档案 ────────────────────────────────────────────────────────────────
 
     test('getUserProfile 返回完整档案', () async {
-      final profile = await repo.getUserProfile('nature_photographer');
-      expect(profile.subAccountId, 'nature_photographer');
+      final profile = await repo.getUserProfile(_fixtureProfileUserId);
+      expect(profile.subAccountId, _fixtureProfileUserId);
       expect(profile.displayName, isNotEmpty);
       expect(profile.avatarUrl, isNotEmpty);
       expect(profile.followerCount, greaterThan(0));
@@ -44,15 +47,17 @@ void main() {
     // ── 主页 Tab 数据 ──────────────────────────────────────────────────────
 
     test('listUserPosts 返回非空帖子列表', () async {
-      final posts = await repo.listUserPosts('nature_photographer');
+      final posts = await repo.listUserPosts(_fixtureProfileUserId);
       expect(posts, isNotEmpty);
-      expect(posts.length, 4);
-      final types = posts.map((p) => p.type).toSet();
-      expect(types, containsAll(['photo', 'video', 'article', 'micro']));
+      expect(
+        posts.every((post) => post.authorId == _fixtureProfileUserId),
+        isTrue,
+      );
+      expect(posts.every((post) => post.identity == 'work'), isTrue);
     });
 
     test('listUserWorks 返回作品集列表', () async {
-      final works = await repo.listUserWorks('nature_photographer');
+      final works = await repo.listUserWorks(_fixtureProfileUserId);
       expect(works, isNotEmpty);
       for (final w in works) {
         expect(w.id, isNotEmpty);
@@ -64,7 +69,7 @@ void main() {
 
     test('listUserLifeItems 返回生活记录列表（字段对齐 UserLifeItemDto）', () async {
       const lifeCategories = {'footprint', 'soul', 'taste', 'private'};
-      final items = await repo.listUserLifeItems('nature_photographer');
+      final items = await repo.listUserLifeItems(_fixtureCurrentUserId);
       expect(items, isNotEmpty);
       for (final item in items) {
         expect(item.id, isNotEmpty);
@@ -76,7 +81,7 @@ void main() {
     });
 
     test('listUserCircles 返回圈子列表', () async {
-      final circles = await repo.listUserCircles('nature_photographer');
+      final circles = await repo.listUserCircles(_fixtureProfileUserId);
       expect(circles, isNotEmpty);
       for (final c in circles) {
         expect(c.id, isNotEmpty);
@@ -86,7 +91,7 @@ void main() {
     });
 
     test('getUserStats 返回统计数据', () async {
-      final stats = await repo.getUserStats('nature_photographer');
+      final stats = await repo.getUserStats(_fixtureProfileUserId);
       expect(stats.followingCount, greaterThan(0));
       expect(stats.circleCount, greaterThan(0));
       expect(stats.followerCount, greaterThan(0));
@@ -104,7 +109,7 @@ void main() {
     });
 
     test('listFollowing 返回用户列表', () async {
-      final following = await repo.listFollowing('nature_photographer');
+      final following = await repo.listFollowing(_fixtureCurrentUserId);
       expect(following, isList);
       expect(following, isNotEmpty);
       for (final u in following) {
@@ -115,7 +120,7 @@ void main() {
     });
 
     test('listFollowers 返回用户列表', () async {
-      final followers = await repo.listFollowers('nature_photographer');
+      final followers = await repo.listFollowers(_fixtureProfileUserId);
       expect(followers, isList);
       expect(followers, isNotEmpty);
       for (final u in followers) {
@@ -132,7 +137,7 @@ void main() {
     });
 
     test('listUserLikes 返回获赞列表', () async {
-      final likes = await repo.listUserLikes('nature_photographer');
+      final likes = await repo.listUserLikes(_fixtureProfileUserId);
       expect(likes, isList);
       expect(likes, isNotEmpty);
       for (final item in likes) {
@@ -210,33 +215,36 @@ void main() {
     });
 
     test('listUserPosts limit 参数限制条数', () async {
-      final posts = await repo.listUserPosts('nature_photographer', limit: 2);
+      final posts = await repo.listUserPosts(_fixtureProfileUserId, limit: 2);
       expect(posts.length, lessThanOrEqualTo(2));
     });
 
     test('listUserCircles limit 参数限制条数', () async {
-      final circles = await repo.listUserCircles('nature_photographer', limit: 1);
+      final circles = await repo.listUserCircles(
+        _fixtureProfileUserId,
+        limit: 1,
+      );
       expect(circles.length, lessThanOrEqualTo(1));
     });
 
     test('listFollowing limit 参数限制条数', () async {
-      final following = await repo.listFollowing('nature_photographer', limit: 2);
+      final following = await repo.listFollowing(_fixtureCurrentUserId, limit: 2);
       expect(following.length, lessThanOrEqualTo(2));
     });
 
     test('listFollowers limit 参数限制条数', () async {
-      final followers = await repo.listFollowers('nature_photographer', limit: 2);
+      final followers = await repo.listFollowers(_fixtureProfileUserId, limit: 2);
       expect(followers.length, lessThanOrEqualTo(2));
     });
 
     test('listUserLikes limit 参数限制条数', () async {
-      final likes = await repo.listUserLikes('nature_photographer', limit: 1);
+      final likes = await repo.listUserLikes(_fixtureProfileUserId, limit: 1);
       expect(likes.length, lessThanOrEqualTo(1));
     });
 
     test('getUserProfile 统计字段与 getUserStats 一致', () async {
-      final profile = await repo.getUserProfile('nature_photographer');
-      final stats = await repo.getUserStats('nature_photographer');
+      final profile = await repo.getUserProfile(_fixtureProfileUserId);
+      final stats = await repo.getUserStats(_fixtureProfileUserId);
       expect(profile.followingCount, stats.followingCount);
       expect(profile.followerCount, stats.followerCount);
       expect(profile.circleCount, stats.circleCount);
@@ -277,7 +285,7 @@ void main() {
     });
 
     test('getUserStats 所有计数为非负 int', () async {
-      final stats = await repo.getUserStats('nature_photographer');
+      final stats = await repo.getUserStats(_fixtureProfileUserId);
       expect(stats.followingCount, isNonNegative);
       expect(stats.circleCount, isNonNegative);
       expect(stats.followerCount, isNonNegative);
@@ -285,8 +293,8 @@ void main() {
       expect(stats.postCount, isNonNegative);
     });
 
-    test('帖子各类型 DTO 正确分发', () async {
-      final posts = await repo.listUserPosts('nature_photographer');
+    test('帖子 DTO 字段分发正确', () async {
+      final posts = await repo.listUserPosts(_fixtureProfileUserId);
       for (final post in posts) {
         expect(post.id, isNotEmpty);
         expect(post.authorId, isNotEmpty);
@@ -331,12 +339,18 @@ void main() {
     });
 
     test('listFollowing cursor 参数不崩溃', () async {
-      final list = await repo.listFollowing('nature_photographer', cursor: 'some_cursor');
+      final list = await repo.listFollowing(
+        _fixtureCurrentUserId,
+        cursor: 'some_cursor',
+      );
       expect(list, isList);
     });
 
     test('listFollowers cursor 参数不崩溃', () async {
-      final list = await repo.listFollowers('nature_photographer', cursor: 'some_cursor');
+      final list = await repo.listFollowers(
+        _fixtureProfileUserId,
+        cursor: 'some_cursor',
+      );
       expect(list, isList);
     });
   });

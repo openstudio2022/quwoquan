@@ -3,6 +3,7 @@ part of 'circle_repository.dart';
 /// Mock 详情 wire：在 [CircleDto.toMap] 上补齐 UI/Mock 仍消费的别名键与主圈视角字段。
 Map<String, dynamic> _mockCircleDetailWireFromDto(CircleDto d) {
   final w = Map<String, dynamic>.from(d.toMap());
+  final contractRow = CircleContractSeedHelpers.circleRowById(d.id);
   w['categoryId'] = d.category;
   final cover = (d.coverUrl ?? '').trim();
   if (cover.isNotEmpty) {
@@ -13,18 +14,35 @@ Map<String, dynamic> _mockCircleDetailWireFromDto(CircleDto d) {
   if (d.description != null && d.description!.isNotEmpty) {
     w['desc'] = d.description;
   }
-  if (d.id == CircleMockData.primaryCircleId) {
-    final p = CircleMockData.circleInfo;
-    w['stats'] = p['stats'];
-    w['hasNewMessages'] = p['hasNewMessages'];
-    w['role'] = p['role'];
-    w['joinStatus'] = p['joinStatus'];
-    w['isFollowed'] = p['isFollowed'];
+  if (contractRow != null) {
+    final role = (contractRow['role'] ?? '').toString().trim();
+    final joinStatus = (contractRow['joinStatus'] ?? '').toString().trim();
+    if (role.isNotEmpty) {
+      w['role'] = role;
+    }
+    if (joinStatus.isNotEmpty) {
+      w['joinStatus'] = joinStatus;
+    }
+    if (contractRow['isFollowed'] is bool) {
+      w['isFollowed'] = contractRow['isFollowed'] as bool;
+    }
   } else {
     w.putIfAbsent('role', () => 'member');
     w.putIfAbsent('joinStatus', () => 'none');
     w.putIfAbsent('isFollowed', () => false);
   }
+  final sectionConfig = w['sectionConfig'];
+  if (sectionConfig is! List || sectionConfig.isEmpty) {
+    w['sectionConfig'] = const <Map<String, dynamic>>[
+      {'sectionType': 'works', 'visible': true, 'order': 0},
+      {'sectionType': 'interaction', 'visible': true, 'order': 1},
+      {'sectionType': 'chat', 'visible': true, 'order': 2},
+      {'sectionType': 'storage', 'visible': true, 'order': 3},
+    ];
+  }
+  w.putIfAbsent('storageUsedBytes', () => 0);
+  w.putIfAbsent('storageQuotaBytes', () => 1073741824);
+  w.putIfAbsent('autoSyncChat', () => true);
   return w;
 }
 
@@ -34,38 +52,12 @@ Map<String, dynamic> _mockCircleDetailWireFromDto(CircleDto d) {
 
 class MockCircleRepository implements CircleRepository {
   MockCircleRepository({List<CircleDto>? seedCircles})
-    : _circles = seedCircles ?? _repositorySeedCircles();
+    : _circles =
+          seedCircles ?? CircleContractSeedHelpers.repositorySeedCircles();
 
   final List<CircleDto> _circles;
   final Map<String, List<CircleGroupDto>> _groupCache = {};
   final Map<String, List<CircleGroupMemberDto>> _groupMembersCache = {};
-
-  static List<CircleDto>? _contractSeedCircles() {
-    final seed = ContractFixtureRuntimeLoader.circleSeedSet();
-    final circles = seed?['circles'];
-    if (circles is! List) {
-      return null;
-    }
-    return circles
-        .whereType<Map>()
-        .map((item) => CircleDto.fromMap(item.cast<String, dynamic>()))
-        .toList(growable: true);
-  }
-
-  static List<CircleDto> _repositorySeedCircles() {
-    final byId = <String, CircleDto>{};
-    void put(CircleDto circle) {
-      byId[circle.id] = circle;
-    }
-
-    for (final circle in _contractSeedCircles() ?? const <CircleDto>[]) {
-      put(circle);
-    }
-    for (final circle in CircleMockData.buildRepositorySeedCircleDtos()) {
-      put(circle);
-    }
-    return byId.values.toList(growable: true);
-  }
 
   List<CircleDto> _copyCircleDtos() {
     return List<CircleDto>.from(_circles, growable: false);
@@ -83,20 +75,43 @@ class MockCircleRepository implements CircleRepository {
     if (existing != null) {
       return existing;
     }
+    final contractGroups = CircleContractSeedHelpers.groupsForCircle(circleId);
+    if (contractGroups.isNotEmpty) {
+      final now = DateTime.now().toIso8601String();
+      final groups = <CircleGroupDto>[];
+      for (var i = 0; i < contractGroups.length; i++) {
+        final raw = contractGroups[i];
+        final groupId =
+            (raw['_id'] ?? raw['id'] ?? '${circleId}_group_contract_$i')
+                .toString();
+        groups.add(
+          CircleGroupDto.fromMap(
+            CircleContractSeedHelpers.normalizedCircleGroup(
+              raw,
+              circleId: circleId,
+              groupId: groupId,
+              fallbackUpdatedAt: now,
+            ),
+          ),
+        );
+      }
+      _groupCache[circleId] = groups;
+      return groups;
+    }
     final circle = _findCircle(circleId);
     if (circle == null) {
       _groupCache[circleId] = <CircleGroupDto>[];
       return _groupCache[circleId]!;
     }
     final now = DateTime.now().toIso8601String();
-    final circleName = circle.name.trim().isEmpty ? '群组' : circle.name.trim();
+    final circleName = circle.name.trim().isEmpty ? '讨论' : circle.name.trim();
     final description = (circle.description ?? '').trim();
     final ownerUserId = circle.ownerId.trim().isEmpty
         ? 'owner_user'
         : circle.ownerId.trim();
     final groups = <CircleGroupDto>[
       CircleGroupDto.fromMap(
-        _normalizedCircleGroup(
+        CircleContractSeedHelpers.normalizedCircleGroup(
           <String, dynamic>{
             'name': '$circleName主群',
             'description': description.isEmpty
@@ -121,7 +136,7 @@ class MockCircleRepository implements CircleRepository {
     if (displaySubjectType != 'circle') {
       groups.add(
         CircleGroupDto.fromMap(
-          _normalizedCircleGroup(
+          CircleContractSeedHelpers.normalizedCircleGroup(
             <String, dynamic>{
               'name': circleName,
               'description': description,
@@ -152,6 +167,41 @@ class MockCircleRepository implements CircleRepository {
     final existing = _groupMembersCache[key];
     if (existing != null) {
       return existing;
+    }
+    final contractGroupIds = CircleContractSeedHelpers.groupsForCircle(
+      circleId,
+    ).map((item) => (item['_id'] ?? item['id'] ?? '').toString()).toSet();
+    final contractMembers = CircleContractSeedHelpers.membersForCircle(
+      circleId,
+    );
+    if (contractMembers.isNotEmpty && contractGroupIds.contains(groupId)) {
+      final now = DateTime.now().toIso8601String();
+      final members = <CircleGroupMemberDto>[];
+      for (var i = 0; i < contractMembers.length; i++) {
+        final raw = contractMembers[i];
+        final userId = (raw['userId'] ?? '').toString();
+        final joinedAt = (raw['joinedAt'] ?? now).toString();
+        final updatedAt = (raw['lastActiveAt'] ?? raw['updatedAt'] ?? joinedAt)
+            .toString();
+        final memberId = (raw['_id'] ?? raw['id'] ?? '${groupId}_${userId}_$i')
+            .toString();
+        members.add(
+          CircleGroupMemberDto.fromMap(<String, dynamic>{
+            ...raw,
+            '_id': memberId,
+            'id': memberId,
+            'groupId': groupId,
+            'circleId': circleId,
+            'role': (raw['role'] ?? 'member').toString(),
+            'status': (raw['status'] ?? 'joined').toString(),
+            'joinedAt': joinedAt,
+            'createdAt': raw['createdAt'] ?? joinedAt,
+            'updatedAt': updatedAt,
+          }),
+        );
+      }
+      _groupMembersCache[key] = members;
+      return members;
     }
     CircleGroupDto? group;
     for (final g in _ensureGroupCache(circleId)) {
@@ -184,91 +234,6 @@ class MockCircleRepository implements CircleRepository {
     ];
     _groupMembersCache[key] = members;
     return members;
-  }
-
-  Map<String, dynamic> _normalizedCircle(
-    Map<String, dynamic> data, {
-    required String circleId,
-    String? fallbackUpdatedAt,
-  }) {
-    final now = DateTime.now().toIso8601String();
-    final coverUrl = (data['coverUrl'] ?? data['cover'] ?? '')
-        .toString()
-        .trim();
-    final avatarUrl = (data['avatarUrl'] ?? data['avatar'] ?? coverUrl)
-        .toString()
-        .trim();
-    final description = (data['description'] ?? data['desc'] ?? '')
-        .toString()
-        .trim();
-    return <String, dynamic>{
-      ...data,
-      'id': circleId,
-      'description': description,
-      'desc': description,
-      'coverUrl': coverUrl,
-      'cover': (data['cover'] ?? coverUrl).toString(),
-      'avatar': avatarUrl,
-      'avatarUrl': avatarUrl,
-      'memberCount': (data['memberCount'] as num?)?.toInt() ?? 1,
-      'postCount': (data['postCount'] as num?)?.toInt() ?? 0,
-      'weeklyActiveCount': (data['weeklyActiveCount'] as num?)?.toInt() ?? 0,
-      'status': (data['status'] ?? 'active').toString(),
-      'visibility': (data['visibility'] ?? 'public').toString(),
-      'joinPolicy': (data['joinPolicy'] ?? 'open').toString(),
-      'kind': (data['kind'] ?? 'interest').toString(),
-      'displaySubjectType': (data['displaySubjectType'] ?? 'circle').toString(),
-      'followEnabled': data['followEnabled'] as bool? ?? true,
-      'defaultPublicGroupId':
-          (data['defaultPublicGroupId'] ?? '${circleId}_group_default')
-              .toString(),
-      'autoSyncChat': data['autoSyncChat'] as bool? ?? true,
-      'tags': ((data['tags'] as List?) ?? const <Object?>[])
-          .map((Object? item) => item.toString())
-          .toList(growable: false),
-      'createdAt': data['createdAt'] ?? fallbackUpdatedAt ?? now,
-      'updatedAt': data['updatedAt'] ?? fallbackUpdatedAt ?? now,
-      'role': (data['role'] ?? 'owner').toString(),
-      'joinStatus': (data['joinStatus'] ?? 'joined').toString(),
-      'isFollowed': data['isFollowed'] as bool? ?? true,
-    };
-  }
-
-  Map<String, dynamic> _normalizedCircleGroup(
-    Map<String, dynamic> data, {
-    required String circleId,
-    required String groupId,
-    String? fallbackUpdatedAt,
-  }) {
-    final now = fallbackUpdatedAt ?? DateTime.now().toIso8601String();
-    return <String, dynamic>{
-      ...data,
-      '_id': groupId,
-      'id': groupId,
-      'circleId': circleId,
-      if (data['parentGroupId'] != null)
-        'parentGroupId': data['parentGroupId'].toString(),
-      'groupType': (data['groupType'] ?? 'public_group').toString(),
-      if (data['nodeType'] != null) 'nodeType': data['nodeType'].toString(),
-      'name': (data['name'] ?? '未命名群组').toString(),
-      'description': (data['description'] ?? '').toString(),
-      'visibility': (data['visibility'] ?? 'public').toString(),
-      'joinPolicy': (data['joinPolicy'] ?? 'apply_only').toString(),
-      'ownerUserId': (data['ownerUserId'] ?? 'owner_user').toString(),
-      'managerIds': ((data['managerIds'] as List?) ?? const <Object?>[])
-          .map((Object? item) => item.toString())
-          .toList(growable: false),
-      'memberCount': (data['memberCount'] as num?)?.toInt() ?? 0,
-      if (data['conversationId'] != null)
-        'conversationId': data['conversationId'].toString(),
-      'storageEnabled': data['storageEnabled'] as bool? ?? true,
-      'noticeEnabled': data['noticeEnabled'] as bool? ?? true,
-      'isDefaultPublicGroup': data['isDefaultPublicGroup'] as bool? ?? false,
-      'lastActiveAt': data['lastActiveAt'] ?? now,
-      'status': (data['status'] ?? 'active').toString(),
-      'createdAt': data['createdAt'] ?? now,
-      'updatedAt': data['updatedAt'] ?? now,
-    };
   }
 
   @override
@@ -395,7 +360,10 @@ class MockCircleRepository implements CircleRepository {
     final circleId = (merge['id']?.toString().trim().isNotEmpty ?? false)
         ? merge['id'].toString().trim()
         : 'local_${DateTime.now().millisecondsSinceEpoch}';
-    final created = _normalizedCircle(merge, circleId: circleId);
+    final created = CircleContractSeedHelpers.normalizedCircle(
+      merge,
+      circleId: circleId,
+    );
     final dto = CircleDto.fromMap(created);
     _circles.removeWhere((circle) => circle.id == circleId);
     _circles.insert(0, dto);
@@ -409,7 +377,7 @@ class MockCircleRepository implements CircleRepository {
   ) async {
     final existing = (await getCircle(circleId)).repositoryMergeBase();
     final updatedAt = DateTime.now().toIso8601String();
-    final merged = _normalizedCircle(
+    final merged = CircleContractSeedHelpers.normalizedCircle(
       <String, dynamic>{...existing, ...data.toMap(), 'updatedAt': updatedAt},
       circleId: circleId,
       fallbackUpdatedAt: updatedAt,
@@ -449,15 +417,21 @@ class MockCircleRepository implements CircleRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return CircleMockData.members
-        .take(limit)
-        .map(
-          (m) => CircleMemberRosterItemDto.fromMap(
-            Map<String, dynamic>.from(m),
-            circleId: circleId,
-          ),
-        )
-        .toList(growable: false);
+    final contractMembers = CircleContractSeedHelpers.membersForCircle(
+      circleId,
+    );
+    if (contractMembers.isNotEmpty) {
+      return contractMembers
+          .take(limit)
+          .map(
+            (m) => CircleMemberRosterItemDto.fromMap(
+              Map<String, dynamic>.from(m),
+              circleId: circleId,
+            ),
+          )
+          .toList(growable: false);
+    }
+    return const <CircleMemberRosterItemDto>[];
   }
 
   @override
@@ -548,7 +522,7 @@ class MockCircleRepository implements CircleRepository {
     final groupId = (d['id']?.toString().trim().isNotEmpty ?? false)
         ? d['id'].toString().trim()
         : 'local_group_${DateTime.now().millisecondsSinceEpoch}';
-    final groupWire = _normalizedCircleGroup(
+    final groupWire = CircleContractSeedHelpers.normalizedCircleGroup(
       <String, dynamic>{...d, 'createdAt': now, 'updatedAt': now},
       circleId: circleId,
       groupId: groupId,
@@ -584,7 +558,7 @@ class MockCircleRepository implements CircleRepository {
   ) async {
     final existing = (await getCircleGroup(circleId, groupId)).toMap();
     final now = DateTime.now().toIso8601String();
-    final mergedWire = _normalizedCircleGroup(
+    final mergedWire = CircleContractSeedHelpers.normalizedCircleGroup(
       <String, dynamic>{...existing, ...data.toMap(), 'updatedAt': now},
       circleId: circleId,
       groupId: groupId,
@@ -674,7 +648,7 @@ class MockCircleRepository implements CircleRepository {
     if (groupIndex >= 0) {
       final g = groups[groupIndex];
       groups[groupIndex] = CircleGroupDto.fromMap(
-        _normalizedCircleGroup(
+        CircleContractSeedHelpers.normalizedCircleGroup(
           <String, dynamic>{
             ...g.toMap(),
             'memberCount': g.memberCount + 1,
@@ -720,7 +694,8 @@ class MockCircleRepository implements CircleRepository {
     String sort = 'latest',
   }) async {
     final normalizedType = _normalizeCircleFeedType(type);
-    final maps = CircleMockData.circleFeedItems
+    final source = CircleContractSeedHelpers.circleFeedRows(circleId);
+    final maps = source
         .where((item) => item['circleId'] == circleId)
         .where((item) {
           if (identity != null && identity.isNotEmpty) {
@@ -758,7 +733,101 @@ class MockCircleRepository implements CircleRepository {
 
   @override
   Future<CircleStatsWireDto> getCircleStats(String circleId) async {
-    return CircleMockData.catalogCircleStatsWire;
+    final contractStats = CircleContractSeedHelpers.statsForCircle(circleId);
+    if (contractStats != null) {
+      final memberCount = CircleContractSeedHelpers.intValue(
+        contractStats['memberCount'],
+      );
+      final postCount = CircleContractSeedHelpers.intValue(
+        contractStats['postCount'],
+      );
+      final weeklyActive = CircleContractSeedHelpers.intValue(
+        contractStats['weeklyActiveCount'],
+      );
+      return CircleStatsWireDto.fromMap(<String, dynamic>{
+        'circleId': circleId,
+        'members': memberCount,
+        'totalMembers': memberCount,
+        'posts': postCount,
+        'totalPosts': postCount,
+        'weeklyActive': weeklyActive,
+        'active': weeklyActive,
+        'likes': 0,
+        'totalLikes': 0,
+      });
+    }
+    final circle = _findCircle(circleId);
+    if (circle != null) {
+      return CircleStatsWireDto.fromMap(<String, dynamic>{
+        'circleId': circleId,
+        'members': circle.memberCount,
+        'totalMembers': circle.memberCount,
+        'posts': circle.postCount,
+        'totalPosts': circle.postCount,
+        'weeklyActive': circle.weeklyActiveCount,
+        'active': circle.weeklyActiveCount,
+        'likes': 0,
+        'totalLikes': 0,
+      });
+    }
+    return CircleStatsWireDto.fromMap(<String, dynamic>{
+      'circleId': circleId,
+      'members': 0,
+      'totalMembers': 0,
+      'posts': 0,
+      'totalPosts': 0,
+      'weeklyActive': 0,
+      'active': 0,
+      'likes': 0,
+      'totalLikes': 0,
+    });
+  }
+
+  @override
+  Future<CircleImpactSummary> getCircleImpact(String circleId) async {
+    final stats = (await getCircleStats(circleId)).raw;
+    final memberCount = CircleContractSeedHelpers.intValue(
+      stats['totalMembers'] ?? stats['members'],
+    );
+    final postCount = CircleContractSeedHelpers.intValue(
+      stats['totalPosts'] ?? stats['posts'],
+    );
+    final weeklyActive = CircleContractSeedHelpers.intValue(
+      stats['weeklyActive'] ?? stats['active'],
+    );
+    return CircleImpactSummary(
+      circleId: circleId,
+      total: memberCount + postCount + weeklyActive,
+      items: <CircleImpactItem>[
+        if (memberCount > 0)
+          CircleImpactItem(
+            helpType: 'relationship',
+            action: 'establish_connection',
+            intersectionDimension: 'relationship',
+            source: 'circle_members',
+            count: memberCount,
+            displayText: '$memberCount人在这里建立了新连接',
+          ),
+        if (postCount > 0)
+          CircleImpactItem(
+            helpType: 'community',
+            action: 'start_discussion',
+            intersectionDimension: 'content',
+            source: 'circle_posts',
+            count: postCount,
+            displayText: '$postCount个讨论正在这里发生',
+          ),
+        if (weeklyActive > 0)
+          CircleImpactItem(
+            helpType: 'spread',
+            action: 'active_participation',
+            intersectionDimension: 'interest',
+            source: 'circle_weekly_active',
+            count: weeklyActive,
+            displayText: '$weeklyActive人最近参与了这里',
+          ),
+      ],
+    );
   }
 
   @override
@@ -769,7 +838,7 @@ class MockCircleRepository implements CircleRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    var result = CircleMockData.files;
+    var result = CircleContractSeedHelpers.filesForCircle(circleId);
     if (parentId != null) {
       result = result
           .where((f) => f['parentId'] == parentId)
@@ -810,8 +879,11 @@ class MockCircleRepository implements CircleRepository {
 
   @override
   Future<CircleFileDto> getFile(String circleId, String fileId) async {
-    final match = CircleMockData.files.firstWhere(
-      (f) => f['id'] == fileId,
+    final contractFiles = CircleContractSeedHelpers.filesForCircle(circleId);
+    final match = contractFiles.firstWhere(
+      (f) =>
+          (f['id'] ?? '').toString() == fileId ||
+          (f['_id'] ?? '').toString() == fileId,
       orElse: () => <String, dynamic>{},
     );
     if (match.isEmpty) {
@@ -862,11 +934,13 @@ class MockCircleRepository implements CircleRepository {
   Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
     int limit = kHomeCircleDiscoveryFeedDefaultLimit,
   }) async {
-    return _decodeCircleFeedMaps(
-      CircleMockData.circleFeedItems
-          .take(limit)
-          .map((e) => Map<String, dynamic>.from(e)),
-    );
+    final contractRows = CircleContractSeedHelpers.homeFeedRows();
+    if (contractRows.isNotEmpty) {
+      return _decodeCircleFeedMaps(
+        contractRows.take(limit).map((e) => Map<String, dynamic>.from(e)),
+      );
+    }
+    return const <PostBaseDto>[];
   }
 
   @override

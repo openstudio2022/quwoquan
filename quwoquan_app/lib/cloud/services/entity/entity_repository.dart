@@ -7,6 +7,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage_mutation_wires.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_section.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
@@ -18,9 +20,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/object_relation_edge
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
 
 part 'entity_object_page_bundle_mock.dart';
+part 'entity_introduction_repository.dart';
 part 'entity_repository_homepage_helpers.dart';
 
 abstract class HomepageRepository {
@@ -110,7 +112,7 @@ class MockHomepageRepository implements HomepageRepository {
         .whereType<Map>()
         .map((item) {
           final map = item.cast<String, dynamic>();
-          return HomepageDetail.fromMap(<String, dynamic>{
+          final homepage = HomepageDetail.fromMap(<String, dynamic>{
             ...map,
             'id': map['id'] ?? map['homepageId'],
             'homepageType': map['homepageType'] ?? map['type'],
@@ -120,24 +122,56 @@ class MockHomepageRepository implements HomepageRepository {
             'categoryTags': map['categoryTags'] ?? const <String>['契约'],
             if (map['geo'] is Map) 'location': map['geo'],
           });
+          return _withContractShellDefaults(homepage, map);
         })
         .toList(growable: true);
   }
 
-  static List<HomepageDetail> _repositorySeedHomepages() {
-    final byId = <String, HomepageDetail>{};
-    void put(HomepageDetail homepage) {
-      byId[homepage.id] = homepage;
+  static HomepageDetail _withContractShellDefaults(
+    HomepageDetail homepage,
+    Map<String, dynamic> raw,
+  ) {
+    final intro = raw['introduction'];
+    final introMap = intro is Map ? intro.cast<String, dynamic>() : null;
+    final introRelated = introMap?['relatedObjects'];
+    final relatedGroups = homepage.relatedGroups.isNotEmpty
+        ? homepage.relatedGroups
+        : introRelated is List
+        ? introRelated
+              .whereType<Map>()
+              .map(
+                (item) => HomepageRelatedGroupSummary.fromMap(
+                  item.cast<String, dynamic>(),
+                ),
+              )
+              .toList(growable: false)
+        : _mockDefaultRelatedGroups(homepage);
+    final coverUrl =
+        homepage.coverUrl ?? introMap?['coverUrl']?.toString().trim();
+    if ((homepage.status ?? '').trim() != 'published') {
+      return homepage.copyWith(
+        coverUrl: coverUrl,
+        relatedGroups: relatedGroups,
+      );
     }
+    return homepage.copyWith(
+      coverUrl: coverUrl,
+      reviewSummary: homepage.reviewSummary ?? _mockDefaultReviewSummary(homepage),
+      contentPreview: homepage.contentPreview.isNotEmpty
+          ? homepage.contentPreview
+          : _mockDefaultContentPreview(homepage),
+      questionPreview: homepage.questionPreview.isNotEmpty
+          ? homepage.questionPreview
+          : _mockDefaultQuestionPreview(homepage),
+      relatedGroups: relatedGroups,
+    );
+  }
 
-    for (final homepage
-        in _contractSeedHomepages() ?? const <HomepageDetail>[]) {
-      put(homepage);
-    }
-    for (final homepage in HomepageMockData.cloneHomepageSeeds()) {
-      put(homepage);
-    }
-    return byId.values.toList(growable: true);
+  static List<HomepageDetail> _repositorySeedHomepages() {
+    return List<HomepageDetail>.from(
+      _contractSeedHomepages() ?? const <HomepageDetail>[],
+      growable: true,
+    );
   }
 
   void _putHomepage(HomepageDetail next) {
@@ -470,6 +504,10 @@ class MockHomepageRepository implements HomepageRepository {
         normalized.substring('entity/'.length),
       if (normalized.startsWith('entities/'))
         normalized.substring('entities/'.length),
+      if (normalized.startsWith('entity:') && normalized.contains(':homepage:'))
+        normalized.substring(normalized.lastIndexOf(':homepage:') + ':homepage:'.length),
+      if (normalized.startsWith('entity:') && normalized.contains(':'))
+        normalized.substring(normalized.lastIndexOf(':') + 1),
       if (normalized.startsWith('entity:homepage:'))
         normalized.substring('entity:homepage:'.length),
     }.where((item) => item.trim().isNotEmpty).toSet();
@@ -973,4 +1011,3 @@ class RemoteHomepageRepository implements HomepageRepository {
     );
   }
 }
-

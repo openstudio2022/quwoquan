@@ -17,6 +17,7 @@ class CircleRequestPageIds {
     'GetCircleFeed': 'circle.feed.list',
     'GetCircleFile': 'circle.files.get',
     'GetCircleGroup': 'circle.get.circle.group',
+    'GetCircleImpact': 'circle.get.circle.impact',
     'GetCircleStats': 'circle.stats',
     'JoinCircle': 'circle.join',
     'LeaveCircle': 'circle.leave',
@@ -50,6 +51,7 @@ class CircleRequestPageIds {
   static const String getCircleFeed = 'circle.feed.list';
   static const String getCircleFile = 'circle.files.get';
   static const String getCircleGroup = 'circle.get.circle.group';
+  static const String getCircleImpact = 'circle.get.circle.impact';
   static const String getCircleStats = 'circle.stats';
   static const String joinCircle = 'circle.join';
   static const String leaveCircle = 'circle.leave';

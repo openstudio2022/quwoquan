@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
+import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 
 class _AssistantRepo implements AssistantRepository {
   _AssistantRepo(this._granted);
@@ -255,5 +261,156 @@ void main() {
 
       expect(find.text(UITextConstants.personaSettingsEntry), findsNothing);
     });
+
+    testWidgets('登录态展示账号安全与隐私商用收口区块', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appearanceSettingsRepositoryProvider.overrideWithValue(
+              MockAppearanceSettingsRepository(),
+            ),
+            authSessionStoreProvider.overrideWithValue(
+              const _AuthenticatedStore(),
+            ),
+          ],
+          child: const MaterialApp(home: SettingsPage()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(UITextConstants.accountCommercialSectionTitle),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.accountCommercialCredentials),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.accountCommercialDevices),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.accountCommercialDelete),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.accountCommercialDataRights),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.accountCommercialDevicesBlocked),
+        findsWidgets,
+      );
+    });
+
+    testWidgets('游客态账号安全入口复用 settingsAccount 登录门', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appearanceSettingsRepositoryProvider.overrideWithValue(
+              MockAppearanceSettingsRepository(),
+            ),
+            authSessionStoreProvider.overrideWithValue(const _GuestStore()),
+          ],
+          child: MaterialApp.router(
+            routerConfig: GoRouter(
+              initialLocation: AppRoutePaths.settings,
+              routes: [
+                GoRoute(
+                  path: AppRoutePaths.settings,
+                  builder: (context, state) => const SettingsPage(),
+                ),
+                GoRoute(
+                  path: AppRoutePaths.loginPathTemplate,
+                  builder: (context, state) => LoginPage(
+                    reason: state.uri.queryParameters['reason'],
+                    redirect: state.uri.queryParameters['redirect'],
+                    dismissFallback: state
+                        .uri
+                        .queryParameters[loginDismissFallbackQueryParam],
+                    allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+                      state.uri.queryParameters[loginGuestDismissPopQueryParam],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(UITextConstants.accountCommercialLoginRequired),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.text(UITextConstants.accountCommercialLoginRequired),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(AuthGateReason.settingsAccount.title), findsOneWidget);
+    });
   });
+}
+
+class _GuestStore implements AuthSessionStore {
+  const _GuestStore();
+
+  @override
+  Future<StoredAuthSession> read() async => const StoredAuthSession(
+    accessToken: '',
+    refreshToken: '',
+    ownerId: '',
+    activeSubAccountId: '',
+    accountState: '',
+    identityOrigin: '',
+    installId: 'install-id',
+    manualLoggedOut: false,
+    launchPromptDismissed: true,
+  );
+
+  @override
+  Future<void> saveLoginResult(
+    AuthLoginResultDto result, {
+    AuthRememberedLoginMethod rememberedLoginMethod =
+        AuthRememberedLoginMethod.unknown,
+    String? rememberedLoginMaskedIdentifier,
+  }) async {}
+
+  @override
+  Future<void> saveRefreshedTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {}
+
+  @override
+  Future<void> updateActiveSubAccount(String subAccountId) async {}
+
+  @override
+  Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> markLaunchPromptDismissed() async {}
+
+  @override
+  Future<void> markForegroundAuthCheckNow() async {}
+}
+
+class _AuthenticatedStore extends _GuestStore {
+  const _AuthenticatedStore();
+
+  @override
+  Future<StoredAuthSession> read() async => const StoredAuthSession(
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    ownerId: 'owner-id',
+    activeSubAccountId: 'sub-id',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'install-id',
+    manualLoggedOut: false,
+    launchPromptDismissed: true,
+  );
 }
