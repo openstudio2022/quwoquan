@@ -91,6 +91,9 @@ case "$STAGE" in
     exit 2
     ;;
 esac
+if [[ "${LOCAL_GAMMA_SKIP_FIXTURE_SEEDS:-0}" == "1" ]]; then
+  ENABLE_FIXTURE_SEEDS=0
+fi
 LOCAL_GAMMA_READY_INDEX_STREAM="${LOCAL_GAMMA_READY_INDEX_STREAM:-reliabletask:chat:avatar:ready:${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_GROUP="${LOCAL_GAMMA_READY_INDEX_GROUP:-chat.group_avatar_worker.${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_QUEUE="${LOCAL_GAMMA_READY_INDEX_QUEUE:-reliabletask.chat.avatar}"
@@ -121,6 +124,53 @@ export LOCAL_GAMMA_CADDY_IMAGE="${LOCAL_GAMMA_CADDY_IMAGE:-$(library_image caddy
 export LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-$(library_image golang:1.24-bookworm)}"
 export LOCAL_GAMMA_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-$(library_image alpine:3.19)}"
 export LOCAL_GAMMA_PYTHON_BASE_IMAGE="${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-$(library_image python:3.11-slim)}"
+
+local_gamma_service_default_image_ref() {
+  case "$1" in
+    rec-model-service) echo "localhost/quwoquan_service_rec-model-service:latest" ;;
+    content-service) echo "localhost/quwoquan_service_content-service:latest" ;;
+    chat-service) echo "localhost/quwoquan_service_chat-service:latest" ;;
+    user-service) echo "localhost/quwoquan_service_user-service:latest" ;;
+    assistant-service) echo "localhost/quwoquan_service_assistant-service:latest" ;;
+    product-ops-service) echo "localhost/quwoquan_service_product-ops-service:latest" ;;
+    tag-service) echo "localhost/quwoquan_service_tag-service:latest" ;;
+    rtc-service) echo "localhost/quwoquan_service_rtc-service:latest" ;;
+    *) return 1 ;;
+  esac
+}
+
+local_gamma_service_repository_name() {
+  case "$1" in
+    rec-model-service) echo "recommendation-service" ;;
+    content-service|chat-service|user-service|assistant-service|product-ops-service|tag-service|rtc-service) echo "$1" ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_local_gamma_service_image_ref() {
+  local service="$1"
+  local default_ref=""
+  default_ref="$(local_gamma_service_default_image_ref "$service")" || return 1
+  local root="${LOCAL_GAMMA_IMAGE_REPOSITORY_ROOT:-}"
+  local tag="${IMAGE_VERSION:-${LOCAL_GAMMA_IMAGE_VERSION:-}}"
+  if [[ -n "$root" && -n "$tag" ]]; then
+    printf '%s/%s:%s\n' \
+      "${root%/}" \
+      "$(local_gamma_service_repository_name "$service")" \
+      "$tag"
+    return 0
+  fi
+  printf '%s\n' "$default_ref"
+}
+
+export LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE="${LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref rec-model-service)}"
+export LOCAL_GAMMA_CONTENT_SERVICE_IMAGE="${LOCAL_GAMMA_CONTENT_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref content-service)}"
+export LOCAL_GAMMA_CHAT_SERVICE_IMAGE="${LOCAL_GAMMA_CHAT_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref chat-service)}"
+export LOCAL_GAMMA_USER_SERVICE_IMAGE="${LOCAL_GAMMA_USER_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref user-service)}"
+export LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE="${LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref assistant-service)}"
+export LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE="${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref product-ops-service)}"
+export LOCAL_GAMMA_TAG_SERVICE_IMAGE="${LOCAL_GAMMA_TAG_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref tag-service)}"
+export LOCAL_GAMMA_RTC_SERVICE_IMAGE="${LOCAL_GAMMA_RTC_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref rtc-service)}"
 
 skip_build=0
 skip_up=0
@@ -601,9 +651,14 @@ YAML
 prepare_media_root() {
   local media="${LOCAL_GAMMA_MEDIA_ROOT}"
   local canonical_media_root="$ROOT/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
+  local required_sample="$media/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
   if [[ -d "$media/media" ]]; then
-    echo "[local-gamma] reuse pre-synced gamma curated media bundle: $media"
-    return 0
+    if [[ -f "$required_sample" ]]; then
+      echo "[local-gamma] reuse pre-synced gamma curated media bundle: $media"
+      return 0
+    fi
+    echo "[local-gamma] gamma media root exists but key sample is missing; rebuilding bundle: $required_sample" >&2
+    rm -rf "$media"
   fi
   if [[ "$ENABLE_FIXTURE_SEEDS" != "1" ]]; then
     echo "[local-gamma] FAIL: STAGE=${STAGE} requires an existing media root at ${media}/media" >&2
@@ -895,17 +950,7 @@ ensure_local_gamma_base_images() {
 }
 
 expected_local_gamma_built_image_ref() {
-  case "$1" in
-    rec-model-service) echo "localhost/quwoquan_service_rec-model-service:latest" ;;
-    content-service) echo "localhost/quwoquan_service_content-service:latest" ;;
-    chat-service) echo "localhost/quwoquan_service_chat-service:latest" ;;
-    user-service) echo "localhost/quwoquan_service_user-service:latest" ;;
-    assistant-service) echo "localhost/quwoquan_service_assistant-service:latest" ;;
-    product-ops-service) echo "localhost/quwoquan_service_product-ops-service:latest" ;;
-    tag-service) echo "localhost/quwoquan_service_tag-service:latest" ;;
-    rtc-service) echo "localhost/quwoquan_service_rtc-service:latest" ;;
-    *) return 1 ;;
-  esac
+  local_gamma_service_default_image_ref "$1"
 }
 
 validate_local_gamma_built_images() {
@@ -1012,6 +1057,9 @@ if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose
 else
   compose_cmd=(docker compose -f "$COMPOSE_FILE")
   compose_up_args=(up -d --remove-orphans --force-recreate)
+  if [[ "$skip_build" == "1" ]]; then
+    compose_up_args+=(--no-build)
+  fi
 fi
 
 compose_build_services=(
@@ -1168,7 +1216,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_REC_MODEL_PORT:-19240}:8000" \
     --healthcheck-command "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 5 \
-    localhost/quwoquan_service_rec-model-service:latest >/dev/null
+    "$LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_rec-model-service_1
 
   podman run --pull=never --name quwoquan_service_product-ops-service_1 -d \
@@ -1183,7 +1231,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}:18086" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    localhost/quwoquan_service_product-ops-service:latest >/dev/null
+    "$LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_product-ops-service_1
 
   podman run --pull=never --name quwoquan_service_content-service_1 -d \
@@ -1198,7 +1246,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_CONTENT_PORT:-19220}:18080" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    localhost/quwoquan_service_content-service:latest >/dev/null
+    "$LOCAL_GAMMA_CONTENT_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_content-service_1
 
   podman run --pull=never --name quwoquan_service_chat-service_1 -d \
@@ -1221,7 +1269,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_CHAT_PORT:-19200}:18081" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    localhost/quwoquan_service_chat-service:latest >/dev/null
+    "$LOCAL_GAMMA_CHAT_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_chat-service_1
 
   podman run --pull=never --name quwoquan_service_user-service_1 -d \
@@ -1238,7 +1286,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_USER_PORT:-19210}:18082" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    localhost/quwoquan_service_user-service:latest >/dev/null
+    "$LOCAL_GAMMA_USER_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_user-service_1
 
   podman run --pull=never --name quwoquan_service_assistant-service_1 -d \
@@ -1257,7 +1305,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_ASSISTANT_PORT:-19230}:18087" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    localhost/quwoquan_service_assistant-service:latest >/dev/null
+    "$LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_assistant-service_1
 
   podman run --pull=never --name quwoquan_service_tag-service_1 -d \
@@ -1270,7 +1318,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_TAG_PORT:-19270}:18092" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18092/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    localhost/quwoquan_service_tag-service:latest >/dev/null
+    "$LOCAL_GAMMA_TAG_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_tag-service_1
 
   podman run --pull=never --name quwoquan_service_gamma-proxy_1 -d \
@@ -1286,7 +1334,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019" \
     --healthcheck-command "wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 5s --healthcheck-retries 10 \
-    docker.io/library/caddy:2.8.4-alpine >/dev/null
+    "$LOCAL_GAMMA_CADDY_IMAGE" >/dev/null
   wait_healthy quwoquan_service_gamma-proxy_1
 else
   echo "[local-gamma] startup mode: compose-up"

@@ -1,6 +1,20 @@
 {
   "version": 1,
   "totalBudgetSeconds": 900,
+  "modeScope": {
+    "gamma-hosted": {
+      "supportedModes": [
+        "restart",
+        "rollout",
+        "cold-build"
+      ],
+      "notes": "Three-mode repeatable budgets currently map to gamma-hosted. Use stackctl roll for repeatable restart/rollout, and stackctl deploy for versioned or cold-build runs."
+    },
+    "prod-hosted": {
+      "supportedModes": [],
+      "notes": "prod-hosted currently remains gray rollout stage driven via stackctl deploy --target prod-hosted with service/image/config/step/SLO inputs; do not infer restart|rollout|cold-build commands for prod."
+    }
+  },
   "gates": {
     "02.service_pipeline": {
       "budgetSeconds": 180,
@@ -45,6 +59,18 @@
       }
     },
     "04.gamma_restart_repeatable": {
+      "appliesToTarget": "gamma-hosted",
+      "recommendedCommand": "python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart --stage prod",
+      "budgetTarget": "<= 5min",
+      "targetWindowSeconds": {
+        "max": 300
+      },
+      "modeSemantics": {
+        "reuseRemoteTree": true,
+        "reuseServiceImages": true,
+        "skipImagePrepull": true,
+        "preservePostgresVolume": true
+      },
       "budgetSeconds": 300,
       "criticalPath": "gamma_restart_roll + health_checks",
       "phaseBudgetsSeconds": {
@@ -53,6 +79,18 @@
       }
     },
     "04.gamma_rollout_repeatable": {
+      "appliesToTarget": "gamma-hosted",
+      "recommendedCommand": "python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode rollout --stage prod",
+      "budgetTarget": "<= 10min",
+      "targetWindowSeconds": {
+        "max": 600
+      },
+      "modeSemantics": {
+        "reuseRemoteTree": true,
+        "reuseServiceImages": true,
+        "skipImagePrepull": false,
+        "preservePostgresVolume": true
+      },
       "budgetSeconds": 600,
       "criticalPath": "gamma_rollout_deploy + health_checks",
       "phaseBudgetsSeconds": {
@@ -61,6 +99,19 @@
       }
     },
     "04.gamma_cold_build_repeatable": {
+      "appliesToTarget": "gamma-hosted",
+      "recommendedCommand": "python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --mode cold-build --stage pre --image-version <version> --previous-image-version <prev>",
+      "budgetTarget": "30-45min",
+      "targetWindowSeconds": {
+        "min": 1800,
+        "max": 2700
+      },
+      "modeSemantics": {
+        "uploadRepositorySnapshot": true,
+        "rebuildServiceImages": true,
+        "forceCleanRecreate": true,
+        "preservePostgresVolume": false
+      },
       "budgetSeconds": 2700,
       "criticalPath": "gamma_cold_build_deploy + health_checks",
       "phaseBudgetsSeconds": {

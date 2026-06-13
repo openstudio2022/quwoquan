@@ -76,6 +76,7 @@ run_app() {
   # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
   if command -v python3 >/dev/null 2>&1; then
     python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_concept_naming.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_cloud_tag_strict_typing.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_unified_error_semantics_ratchet.py || exit 1

@@ -21,6 +21,8 @@ env:
   GAMMA_ECS_REMOTE_DIR: ${{ vars.GAMMA_ECS_REMOTE_DIR || '/opt/quwoquan/gamma' }}
   ASSISTANT_MODEL_PROVIDER: deterministic
   ALLOW_DETERMINISTIC_BETA: "1"
+  GAMMA_IMAGE_REGISTRY: ${{ secrets.DOCKER_REGISTRY || vars.DOCKER_REGISTRY || 'ghcr.io' }}
+  GAMMA_IMAGE_REPOSITORY_ROOT: ${{ vars.GAMMA_IMAGE_REPOSITORY_ROOT || format('{0}/{1}/gamma', secrets.DOCKER_REGISTRY || vars.DOCKER_REGISTRY || 'ghcr.io', github.repository) }}
 
 jobs:
   required_checks_preflight:
@@ -140,7 +142,11 @@ jobs:
             --image-version "0.0.${{ github.run_number }}" \
             --previous-image-version "0.0.${{ github.run_number }}" \
             --base-url "${GAMMA_BASE_URL}" \
-            --product-ops-base-url "${GAMMA_PRODUCT_OPS_BASE_URL}"
+            --product-ops-base-url "${GAMMA_PRODUCT_OPS_BASE_URL}" \
+            --image-repository-root "${GAMMA_ECS_IMAGE_REPOSITORY_ROOT}" \
+            --image-registry "${GAMMA_ECS_IMAGE_REGISTRY}" \
+            --registry-username "${GAMMA_ECS_REGISTRY_USERNAME}" \
+            --registry-password "${GAMMA_ECS_REGISTRY_PASSWORD}"
         env:
           GAMMA_ECS_STAGE: prod
           GAMMA_ECS_SKIP_UPLOAD: "1"
@@ -150,6 +156,10 @@ jobs:
           GAMMA_BASE_URL: ${{ steps.urls.outputs.base_url }}
           GAMMA_PRODUCT_OPS_BASE_URL: ${{ steps.urls.outputs.product_ops_base_url }}
           GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+          GAMMA_ECS_IMAGE_REPOSITORY_ROOT: ${{ env.GAMMA_IMAGE_REPOSITORY_ROOT }}
+          GAMMA_ECS_IMAGE_REGISTRY: ${{ env.GAMMA_IMAGE_REGISTRY }}
+          GAMMA_ECS_REGISTRY_USERNAME: ${{ secrets.DOCKER_USERNAME || github.actor }}
+          GAMMA_ECS_REGISTRY_PASSWORD: ${{ secrets.DOCKER_PASSWORD || secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
           GAMMA_ECS_CONTAINER_REGISTRY_MIRROR: ${{ vars.GAMMA_ECS_CONTAINER_REGISTRY_MIRROR }}
           GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS: ${{ vars.GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS }}
           GAMMA_ECS_SKIP_IMAGE_PREPULL: "1"

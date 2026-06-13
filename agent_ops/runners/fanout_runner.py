@@ -375,6 +375,7 @@ def _load_run_matrix(plan_id: str) -> dict[str, Any]:
             "planId": plan_id,
             "orchestrators": [],
             "refs": {},
+            "workers": [],
         }
     data = read_json(path)
     if not isinstance(data, dict):
@@ -383,11 +384,13 @@ def _load_run_matrix(plan_id: str) -> dict[str, Any]:
             "planId": plan_id,
             "orchestrators": [],
             "refs": {},
+            "workers": [],
         }
     data.setdefault("schemaVersion", "quwoquan_data.fanout_run_matrix/1")
     data.setdefault("planId", plan_id)
     data.setdefault("orchestrators", [])
     data.setdefault("refs", {})
+    data.setdefault("workers", [])
     return data
 
 
@@ -424,6 +427,15 @@ def _append_orchestrator_record(
         rows = list(matrix.get("orchestrators") or [])
         rows.append(dict(record))
         matrix["orchestrators"] = rows
+        _save_run_matrix(plan_id, matrix)
+
+
+def _replace_worker_records(plan_id: str, records: list[Mapping[str, Any]]) -> None:
+    if not plan_id:
+        return
+    with _RUN_MATRIX_LOCK:
+        matrix = _load_run_matrix(plan_id)
+        matrix["workers"] = [dict(record) for record in records]
         _save_run_matrix(plan_id, matrix)
 
 
@@ -938,7 +950,26 @@ def run_fanout(
         "startupFailures": total_startup_failures,
         "orchestrated": total_orchestrated,
         "orchestrationFailed": total_orchestration_failed,
+        "startupFailureRate": round((total_startup_failures / max(1, total_completed + total_failed)), 4),
+        "retryConvergence": round((total_completed / max(1, total_completed + total_failed)), 4),
+        "spilloverRate": 0.0,
     }
+    worker_records = [
+        {
+            "worker": r.worker,
+            "leased": r.leased,
+            "completed": len(r.refs_completed),
+            "failed": len(r.refs_failed),
+            "refsCompleted": sorted(r.refs_completed),
+            "refsFailed": sorted(r.refs_failed),
+            "attemptFailures": r.attempt_failures,
+            "startupFailures": r.startup_failures,
+            "orchestrated": r.orchestrated,
+            "orchestrationFailed": r.orchestration_failed,
+        }
+        for r in results
+    ]
+    final_matrix["workers"] = worker_records
     _save_run_matrix(plan_id, final_matrix)
     return {
         "planId": plan_id,
@@ -959,11 +990,7 @@ def run_fanout(
         "refsCompleted": final_refs_completed,
         "refsFailed": final_refs_failed,
         "perWorker": [
-            {"worker": r.worker, "leased": r.leased, "completed": len(r.refs_completed), "failed": len(r.refs_failed),
-             "refsCompleted": sorted(r.refs_completed), "refsFailed": sorted(r.refs_failed),
-             "attemptFailures": r.attempt_failures,
-             "orchestrated": r.orchestrated, "orchestrationFailed": r.orchestration_failed}
-            for r in results
+            dict(record) for record in worker_records
         ],
         "runMatrixPath": str(fanout_run_matrix_path(plan_id)),
     }

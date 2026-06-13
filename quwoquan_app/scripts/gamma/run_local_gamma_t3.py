@@ -11,18 +11,48 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 ROOT = Path(__file__).resolve().parents[3]
 MANIFEST = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
 METADATA_ROOT = ROOT / "quwoquan_service/contracts/metadata"
 COMPOSE_FILE = ROOT / "quwoquan_service/docker-compose.gamma-local.yaml"
+CONTENT_SERVICE_YAML = METADATA_ROOT / "content/post/service.yaml"
 
 
 def http_get(url: str, timeout: int = 5) -> Tuple[int, bytes]:
     ctx = ssl._create_unverified_context()
     req = urllib.request.Request(url, headers={"X-Test-Local-Gamma": "true"})
+    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+        return resp.status, resp.read()
+
+
+def http_request(
+    url: str,
+    *,
+    method: str = "GET",
+    body: Optional[Dict[str, Any]] = None,
+    timeout: int = 5,
+    headers: Optional[Dict[str, str]] = None,
+) -> Tuple[int, bytes]:
+    ctx = ssl._create_unverified_context()
+    request_headers = {
+        "X-Test-Local-Gamma": "true",
+        "X-Client-User-Id": "fixture_user_current",
+    }
+    if headers:
+        request_headers.update(headers)
+    data = None
+    if body is not None:
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        request_headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers=request_headers,
+        method=method,
+    )
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
         return resp.status, resp.read()
 
@@ -182,8 +212,120 @@ printjson({insertedCount: docs.length});
     }
 
 
-def endpoint_checks(base_url: str, enabled_domains: Set[str]) -> List[Dict[str, Any]]:
+def setup_comment_thread(base_url: str) -> Dict[str, Any]:
+    """Create runtime-only comment fixtures through the public API.
+
+    The local gamma mirror hydrates posts from Mongo, while comments live in the
+    content-service process. Creating the thread via API keeps T3 aligned with
+    runtime behavior instead of writing private in-process state.
+    """
+    try:
+        status, body = http_request(
+            base_url.rstrip() + "/v1/content/posts/fixture_photo_001/comments",
+            method="POST",
+            body={"content": "主评论示例"},
+            headers={"X-Client-User-Id": "fixture_user_current"},
+            timeout=8,
+        )
+        parent_resp = json.loads(body.decode("utf-8"))
+        parent = parent_resp.get("comment") or {}
+        parent_id = str(parent.get("_id") or parent.get("commentId") or "").strip()
+        if not parent_id:
+            return {
+                "status": "failed",
+                "httpStatus": status,
+                "error": "CreateComment did not return parent comment id",
+            }
+        reply_status, reply_body = http_request(
+            base_url.rstrip() + "/v1/content/posts/fixture_photo_001/comments",
+            method="POST",
+            body={"content": "回复示例", "replyToCommentId": parent_id},
+            headers={"X-Client-User-Id": "fixture_user_commenter"},
+            timeout=8,
+        )
+        reply_resp = json.loads(reply_body.decode("utf-8"))
+        reply = reply_resp.get("comment") or {}
+        reply_id = str(reply.get("_id") or reply.get("commentId") or "").strip()
+        if not reply_id:
+            return {
+                "status": "failed",
+                "httpStatus": reply_status,
+                "error": "CreateComment did not return reply comment id",
+            }
+        return {
+            "status": "passed",
+            "parentCommentId": parent_id,
+            "replyCommentId": reply_id,
+        }
+    except urllib.error.HTTPError as exc:
+        return {"status": "failed", "httpStatus": exc.code, "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "failed", "error": str(exc)}
+
+
+def content_route_methods() -> Dict[str, List[str]]:
+    methods: Dict[str, List[str]] = {}
+    current_method = ""
+    for raw_line in CONTENT_SERVICE_YAML.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line.startswith("- method:"):
+            current_method = line.split(":", 1)[1].strip().upper()
+            continue
+        if current_method and line.startswith("path:"):
+            path = line.split(":", 1)[1].strip()
+            methods.setdefault(path, [])
+            if current_method not in methods[path]:
+                methods[path].append(current_method)
+            current_method = ""
+    return methods
+
+
+def route_method_for_path(path: str, route_methods: Dict[str, List[str]]) -> str:
+    probe_path = path.split("?", 1)[0]
+    for template, methods in route_methods.items():
+        template_parts = template.strip("/").split("/")
+        probe_parts = probe_path.strip("/").split("/")
+        if len(template_parts) != len(probe_parts):
+            continue
+        matched = True
+        for left, right in zip(template_parts, probe_parts):
+            if left.startswith("{") and left.endswith("}"):
+                continue
+            if left != right:
+                matched = False
+                break
+        if matched:
+            if "GET" in methods:
+                return "GET"
+            if "POST" in methods:
+                return "POST"
+            return methods[0] if methods else "GET"
+    return "GET"
+
+
+def resolve_probe_path(path: str, runtime_refs: Dict[str, str]) -> str:
+    resolved = path
+    for fixture_id, runtime_id in runtime_refs.items():
+        if runtime_id:
+            resolved = resolved.replace(fixture_id, runtime_id)
+    return resolved
+
+
+def probe_body_for_path(path: str) -> Dict[str, Any]:
+    if path.endswith("/reaction"):
+        return {"reaction": "like"}
+    if path.endswith("/media:bind"):
+        return {}
+    return {}
+
+
+def endpoint_checks(
+    base_url: str,
+    enabled_domains: Set[str],
+    runtime_refs: Dict[str, str],
+) -> List[Dict[str, Any]]:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    route_methods = content_route_methods()
     checks = []  # type: List[Dict[str, Any]]
     for item in manifest.get("seedRefs", []):
         domain = item.get("domain", "")
@@ -193,8 +335,21 @@ def endpoint_checks(base_url: str, enabled_domains: Set[str]) -> List[Dict[str, 
                 check["status"] = "not_ready"
                 checks.append(check)
                 continue
+            resolved_path = resolve_probe_path(path, runtime_refs) if domain == "content" else path
+            method = route_method_for_path(resolved_path, route_methods) if domain == "content" else "GET"
+            check["method"] = method
+            if resolved_path != path:
+                check["resolvedPath"] = resolved_path
             try:
-                status, body = http_get(base_url.rstrip("/") + path, timeout=8)
+                if method == "GET":
+                    status, body = http_get(base_url.rstrip("/") + resolved_path, timeout=8)
+                else:
+                    status, body = http_request(
+                        base_url.rstrip("/") + resolved_path,
+                        method=method,
+                        body=probe_body_for_path(resolved_path),
+                        timeout=8,
+                    )
                 check["httpStatus"] = status
                 check["bytes"] = len(body)
                 check["status"] = "passed" if 200 <= status < 300 else "failed"
@@ -294,6 +449,7 @@ def main() -> int:
         "health": {},
         "productOpsHealth": {},
         "seed": {},
+        "runtimeSetup": {},
         "endpoints": [],
         "apiContracts": [],
     }
@@ -311,7 +467,17 @@ def main() -> int:
             report["status"] = "gate_block"
         else:
             report["seed"] = {"status": "skipped"} if args.skip_seed else seed_content()
-            report["endpoints"] = endpoint_checks(args.base_url, enabled_domains)
+            if report["seed"].get("status") == "failed":
+                report["runtimeSetup"] = {"status": "skipped"}
+                report["endpoints"] = []
+            else:
+                setup = setup_comment_thread(args.base_url)
+                report["runtimeSetup"] = setup
+                runtime_refs = {
+                    "fixture_comment_v2_parent_001": str(setup.get("parentCommentId") or ""),
+                    "fixture_comment_v2_reply_001": str(setup.get("replyCommentId") or ""),
+                }
+                report["endpoints"] = endpoint_checks(args.base_url, enabled_domains, runtime_refs)
             report["apiContracts"] = (
                 [{"name": "flutter_contracts", "status": "skipped"}]
                 if args.skip_flutter_contracts
@@ -324,7 +490,8 @@ def main() -> int:
             failed = any(item.get("status") == "failed" for item in report["endpoints"])
             contract_failed = any(item.get("status") == "failed" for item in report["apiContracts"])
             not_ready = any(item.get("status") == "not_ready" for item in report["endpoints"])
-            if report["seed"].get("status") == "failed" or failed or contract_failed:
+            runtime_setup_failed = report["runtimeSetup"].get("status") == "failed"
+            if report["seed"].get("status") == "failed" or runtime_setup_failed or failed or contract_failed:
                 report["status"] = "failed"
             elif args.strict_all and not_ready:
                 report["status"] = "gate_block"

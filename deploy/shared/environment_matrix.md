@@ -161,9 +161,10 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 | 环境 | 命令 / 条件 | 通过判据 |
 |------|-------------|----------|
 | `alpha` | 单服务 `APP_ENV=alpha go test ./...`；端侧 `flutter test` | 单实例用例绿 |
-| `beta` | `python3 agent_ops/deploy/stackctl.py up --target beta-local`；App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 本地 Android/iOS 设备矩阵通过，且新启动前会 stop 旧 beta 栈 |
-| `gamma` | `python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --mode cold-build ...`；日常重复执行用 `python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart|rollout ...`；或 `health --target gamma-hosted` | `mainline_auto_prod` / `manual_full` / `nightly_full` 对应 hosted 与 self-hosted 证据全绿 |
-| `prod` | `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted ...` | `prod initial -> checks -> full` 全自动通过，失败自动回滚，关键路径不超过 900 秒 |
+| `beta` | `python3 agent_ops/deploy/stackctl.py up --env beta`；App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 本地 Android/iOS 设备矩阵通过，且新启动前会 stop 旧 beta 栈 |
+| `gamma-local` | `python3 agent_ops/deploy/stackctl.py up --env gamma` | local-gamma mirror + App 达到 steady state，并生成 `artifacts/local-gamma/report.json` / `artifacts/stackctl/gamma/**` |
+| `gamma-hosted` | 首次或大改动用 `python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --mode cold-build --stage pre --image-version <version> --previous-image-version <prev>`；重复执行优先 `python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart|rollout --stage <pre|prod>`；只读复核用 `python3 agent_ops/deploy/stackctl.py health --target gamma-hosted --scope full` | `mainline_auto_prod` / `manual_full` / `nightly_full` 对应 hosted 证据全绿，且 `roll` / `deploy` 报告自带 `health + inspect + doctor` |
+| `prod-hosted` | `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>` | `prod initial -> checks -> full` 按 rollout stage 自动推进；失败自动回滚；关键路径不超过 900 秒 |
 
 ### 4.1 开发者一键启动
 
@@ -179,21 +180,29 @@ make dev-up ENV=<alpha|beta|gamma|prod-sim|prod> [DEVICE_ID=<flutter-device-id>]
 python3 agent_ops/deploy/stackctl.py up --env <alpha|beta|gamma|prod-sim|prod> [--device-id <id>]
 ```
 
-### 4.2 Hosted gamma / prod 三模式预算
+### 4.2 三模式预算（当前作用于 `gamma-hosted`）
+
+当前实现下，`restart / rollout / cold-build` 是 `gamma-hosted` 的重复执行模式；`prod-hosted` 仍走 `gray-initial / carry-on / full` rollout stage，不暴露三模式命令。
 
 统一约束：
 
-- `restart`：仅重启远端既有树和既有服务镜像，优先保留 Postgres volume，目标 `<= 5min`
-- `rollout`：复用远端代码树并复用既有服务镜像，允许更新配置与轻量重拉，目标 `<= 10min`
-- `cold-build`：完整上传并远端重建，作为最慢但最稳的兜底路径，目标 `<= 45min`
+- `restart`：复用远端代码树、复用既有服务镜像、跳过镜像预拉，优先保留 Postgres volume；目标 `<= 5min`
+- `rollout`：复用远端代码树、复用既有服务镜像，但允许重新预拉基础镜像并执行更完整的远端 compose；目标 `<= 10min`
+- `cold-build`：完整上传仓库快照、远端重建镜像并走全量 clean recreate；这是最慢但最稳的兜底路径，目标窗口 `30-45min`
 
 推荐命令：
 
 ```bash
 python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart --stage prod
-python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode rollout --stage pre
+python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode rollout --stage prod
 python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --mode cold-build --stage pre --image-version <version> --previous-image-version <prev>
 ```
+
+说明：
+
+- `roll --target gamma-hosted` 在成功后会自动串联 `health --scope full`、`inspect --scope all`、`doctor`，适合 restart / rollout 的重复执行验收。
+- `deploy --target gamma-hosted` 适合 cold-build 或显式版本化部署；`stage=pre` 用于 gamma pre/夜间/发布前复验，`stage=prod` 用于 onebox prod 复验。
+- `08. Deploy Gamma ECS` 当前 prod onebox 复验走的是 `deploy --target gamma-hosted --mode restart --stage prod`，即“通过 deploy 入口显式带版本，但动作语义仍是 restart”。
 
 重复执行验收脚本：
 
@@ -204,15 +213,15 @@ bash agent_ops/deploy/gamma/verify_deploy_repeatable.sh
 约束：
 
 - 用户面只允许选择 **环境** 与 **端侧设备**；gateway / media / seed / host 不作为一键启动独立参数暴露。
-- `gamma` 的一键启动默认指 `gamma-local` mirror；`gamma-hosted` 仍走 `stackctl deploy/health`。
+- `gamma` 的一键启动默认指 `gamma-local` mirror；`gamma-hosted` 仍走 `stackctl roll/deploy/health`。
 - `prod` 的一键启动不在本地 `up` 服务栈，只做 `prod-hosted` edge health 检查后拉起本地 App/浏览器连接已部署云端。
-- `--target` 保留给 CI / runbook / 高级调试；开发者优先使用 `--env`。
+- `--target` 保留给 hosted 运维、CI / runbook / 高级调试；开发者本地联调优先使用 `--env`。
 
 提交前本地左移：
 
 | 范围 | 命令 / 条件 | 通过判据 |
 |------|-------------|----------|
-| `local-gamma mirror` | `make gate-local-gamma` / `python3 agent_ops/deploy/stackctl.py up --target gamma-local` | `T1/T2` 本地门禁、`T3` 本地真实 API/存储、`T4` 共享 gamma patrol/chat-avatar 旅程通过并生成 `artifacts/local-gamma/report.json` |
+| `local-gamma mirror` | `make gate-local-gamma` / `python3 agent_ops/deploy/stackctl.py up --env gamma` | `T1/T2` 本地门禁、`T3` 本地真实 API/存储、`T4` 共享 gamma patrol/chat-avatar 旅程通过并生成 `artifacts/local-gamma/report.json` |
 
 ## 5. 相关文件索引
 

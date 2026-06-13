@@ -40,7 +40,7 @@
 ```bash
 make gate-local-gamma
 # 或统一入口
-python3 agent_ops/deploy/stackctl.py up --target gamma-local
+python3 agent_ops/deploy/stackctl.py up --env gamma
 ```
 
 通过判据：
@@ -107,7 +107,7 @@ python3 agent_ops/deploy/stackctl.py up --target gamma-local
 ```bash
 gh workflow run "08. Deploy Gamma ECS"
 # 或统一入口
-python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --stage pre --image-version <new> --previous-image-version <old>
+python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --mode cold-build --stage pre --image-version <new> --previous-image-version <old>
 ```
 
 2) hosted pre core 执行：
@@ -195,7 +195,10 @@ python3 agent_ops/deploy/stackctl.py deploy \
   --service seed-box \
   --from-image <old> --to-image <new> \
   --from-config <old> --to-config <new> \
-  --step 50
+  --step 50 \
+  --error-rate <rate> \
+  --p95-ms <ms> \
+  --redis-error-rate <rate>
 ```
 
 ### 6.2 SLO 卡点（每步后）
@@ -214,6 +217,33 @@ python3 agent_ops/deploy/stackctl.py doctor --target prod-hosted
 ```
 
 阈值见 `deploy/service/config-release/slo_thresholds.yaml`。
+
+### 6.2.1 登录与账号商用卡点
+
+触及登录、会话、账号安全、隐私权利、Web 登录入口时，进入 G5c 前必须额外归档：
+
+- `make verify-app-auth-policy`
+- `make verify-app-login-entry-loop-contract`
+- `flutter test test/cloud/runtime/cloud_http_client_refresh_test.dart test/core/auth/auth_session_controller_test.dart test/app/app_startup_welcome_test.dart`
+- `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/app/shell/web_auth_entry_contract_test.dart`
+- user-service `auth_contract_test.go`、`credential_contract_test.go`、`persona_contract_test.go` 的 gamma 证据
+
+认证账号链路 SLO：
+
+- 欢迎页到首页 P95 <= 2s
+- OTP 发码 P95 <= 1.5s
+- 登录成功到目标页 P95 <= 2s
+- token refresh + retry P95 <= 800ms
+- 设置账号安全首屏 P95 <= 1.5s
+- 凭证绑定/解绑、注销/恢复、拉黑/举报等危险动作 P95 <= 2s
+
+No-Go 条件：
+
+- 账号注销、数据导出、撤回同意、恢复申诉仍只有“待接入”入口或无后端闭环。
+- 法律文本 URL / 版本 / consent record 不可审计。
+- `Logout` / `BindCredential` / `UnbindCredential` / 设置类 owner API 在 metadata 或生成鉴权快照中不是 `required`。
+- 会话过期后无法 refresh once + retry，或 refresh 401 后不能清 session 并进入安全重登。
+- Web 宽屏消息/我的入口与移动端强入口登录契约不一致。
 
 ### 6.3 异常回滚
 

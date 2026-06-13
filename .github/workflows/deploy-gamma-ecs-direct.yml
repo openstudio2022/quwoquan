@@ -39,6 +39,8 @@ env:
   GAMMA_ECS_REMOTE_DIR: ${{ vars.GAMMA_ECS_REMOTE_DIR || '/opt/quwoquan/gamma' }}
   ASSISTANT_MODEL_PROVIDER: deterministic
   ALLOW_DETERMINISTIC_BETA: "1"
+  GAMMA_IMAGE_REGISTRY: ${{ secrets.DOCKER_REGISTRY || vars.DOCKER_REGISTRY || 'ghcr.io' }}
+  GAMMA_IMAGE_REPOSITORY_ROOT: ${{ vars.GAMMA_IMAGE_REPOSITORY_ROOT || format('{0}/{1}/gamma', secrets.DOCKER_REGISTRY || vars.DOCKER_REGISTRY || 'ghcr.io', github.repository) }}
 
 jobs:
   deploy_direct:
@@ -51,6 +53,34 @@ jobs:
       media_base_url: ${{ steps.urls.outputs.media_base_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Login registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GAMMA_IMAGE_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME || github.actor }}
+          password: ${{ secrets.DOCKER_PASSWORD || secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Build and push gamma images
+        env:
+          IMAGE_VERSION: ${{ inputs.image_version || format('0.0.{0}', github.run_number) }}
+        run: |
+          services=(
+            "recommendation-service|.|quwoquan_service/services/rec-model-service/Dockerfile"
+            "content-service|quwoquan_service|deploy/service/content-service/Dockerfile"
+            "chat-service|quwoquan_service|deploy/service/chat-service/Dockerfile"
+            "user-service|quwoquan_service|quwoquan_service/services/user-service/Dockerfile"
+            "assistant-service|quwoquan_service|deploy/service/assistant-service/Dockerfile"
+            "product-ops-service|quwoquan_service|deploy/service/product-ops-service/Dockerfile"
+            "tag-service|quwoquan_service|deploy/service/tag-service/Dockerfile"
+          )
+          for spec in "${services[@]}"; do
+            IFS='|' read -r service context dockerfile <<<"${spec}"
+            docker buildx build \
+              --file "${dockerfile}" \
+              --tag "${GAMMA_IMAGE_REPOSITORY_ROOT}/${service}:${IMAGE_VERSION}" \
+              --push \
+              "${context}"
+          done
       - name: Resolve gamma URLs
         id: urls
         run: |
@@ -89,30 +119,23 @@ jobs:
       - name: Create minimal ECS bundle
         if: ${{ !inputs.skip_upload }}
         run: |
-          mkdir -p "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_app"
-          mkdir -p "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_data/data"
-          mkdir -p "${RUNNER_TEMP}/gamma-minimal-bundle/releases"
-          cp -R agent_ops "${RUNNER_TEMP}/gamma-minimal-bundle/agent_ops"
-          cp -R deploy "${RUNNER_TEMP}/gamma-minimal-bundle/deploy"
-          cp -R releases/config "${RUNNER_TEMP}/gamma-minimal-bundle/releases/config"
-          cp -R quwoquan_app/scripts "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_app/scripts"
-          cp -R quwoquan_data/scripts "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_data/scripts"
-          cp -R quwoquan_data/data/admin_regions "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_data/data/admin_regions"
-          cp -R quwoquan_service "${RUNNER_TEMP}/gamma-minimal-bundle/quwoquan_service"
-          tar \
-            --exclude='.git' \
-            --exclude='.dart_tool' \
-            --exclude='build' \
-            --exclude='node_modules' \
-            --exclude='.venv' \
-            --exclude='__pycache__' \
-            --exclude='.pytest_cache' \
-            --exclude='.mypy_cache' \
-            --exclude='quwoquan_app/.dart_tool' \
-            --exclude='quwoquan_app/build' \
-            --exclude='apps/ops-portal/node_modules' \
-            -C "${RUNNER_TEMP}/gamma-minimal-bundle" \
-            -czf "${RUNNER_TEMP}/gamma-ecs-bundle.tgz" .
+          if [ "${{ inputs.mode }}" = "rollout" ]; then
+            python3 agent_ops/deploy/gamma/build_gamma_upload_bundle.py --output "${RUNNER_TEMP}/gamma-ecs-bundle.tgz"
+          else
+            tar \
+              --exclude='.git' \
+              --exclude='.dart_tool' \
+              --exclude='build' \
+              --exclude='node_modules' \
+              --exclude='.venv' \
+              --exclude='__pycache__' \
+              --exclude='.pytest_cache' \
+              --exclude='.mypy_cache' \
+              --exclude='quwoquan_app/.dart_tool' \
+              --exclude='quwoquan_app/build' \
+              --exclude='apps/ops-portal/node_modules' \
+              -czf "${RUNNER_TEMP}/gamma-ecs-bundle.tgz" .
+          fi
           ls -lh "${RUNNER_TEMP}/gamma-ecs-bundle.tgz"
       - name: Deploy to ECS via stackctl
         run: |
@@ -127,7 +150,11 @@ jobs:
             --previous-image-version "${GAMMA_PREVIOUS_IMAGE_VERSION:-bootstrap}" \
             --base-url "${GAMMA_BASE_URL}" \
             --product-ops-base-url "${GAMMA_PRODUCT_OPS_BASE_URL}" \
-            --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}"
+            --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
+            --image-repository-root "${GAMMA_ECS_IMAGE_REPOSITORY_ROOT}" \
+            --image-registry "${GAMMA_ECS_IMAGE_REGISTRY}" \
+            --registry-username "${GAMMA_ECS_REGISTRY_USERNAME}" \
+            --registry-password "${GAMMA_ECS_REGISTRY_PASSWORD}"
         env:
           GAMMA_ECS_STAGE: ${{ inputs.stage }}
           DEPLOY_MODE: ${{ inputs.mode }}
@@ -140,6 +167,10 @@ jobs:
           GAMMA_PRODUCT_OPS_BASE_URL: ${{ steps.urls.outputs.product_ops_base_url }}
           MEDIA_AVATAR_CDN_BASE_URL: ${{ steps.urls.outputs.media_base_url }}
           GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+          GAMMA_ECS_IMAGE_REPOSITORY_ROOT: ${{ env.GAMMA_IMAGE_REPOSITORY_ROOT }}
+          GAMMA_ECS_IMAGE_REGISTRY: ${{ env.GAMMA_IMAGE_REGISTRY }}
+          GAMMA_ECS_REGISTRY_USERNAME: ${{ secrets.DOCKER_USERNAME || github.actor }}
+          GAMMA_ECS_REGISTRY_PASSWORD: ${{ secrets.DOCKER_PASSWORD || secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
           GAMMA_ECS_CONTAINER_REGISTRY_MIRROR: ${{ vars.GAMMA_ECS_CONTAINER_REGISTRY_MIRROR }}
           GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS: ${{ vars.GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS }}
           GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS: ${{ vars.GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS }}

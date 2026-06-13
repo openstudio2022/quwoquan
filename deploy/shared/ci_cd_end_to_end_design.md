@@ -50,13 +50,15 @@ feature / dev1.0
 | 能力 | 统一入口 |
 |---|---|
 | 环境包 | `stackctl package --env <env> [--include-services]` |
-| 本地起停 | `stackctl up/down/status --target alpha-local|beta-local|gamma-local` |
+| 本地起停 | `stackctl up --env <alpha|beta|gamma|prod-sim|prod>`；底层 target 仍为 `alpha-local|beta-local|gamma-local|prod-hosted` |
 | 拓扑/打包/纯度校验 | `stackctl verify --env <env>` |
 | 健康检查 | `stackctl health --target <target>` |
 | 巡检 | `stackctl inspect --target <target> --scope logs|network|data|metrics|config|security|all` |
 | 聚合诊断 | `stackctl doctor --target <target>` |
 | 修复 | `stackctl repair --target <target> --fix <class>` |
-| hosted/prod 发布 | `stackctl deploy --target gamma-hosted|prod-hosted ...` |
+| hosted gamma 重复执行 | `stackctl roll --target gamma-hosted --mode restart|rollout --stage <pre|prod>` |
+| hosted gamma 版本化/冷构建 | `stackctl deploy --target gamma-hosted --mode cold-build --stage <pre|prod> ...` |
+| hosted prod rollout | `stackctl deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>` |
 
 ## 4. `04` / `05` / `08` / `09` 的职责分工
 
@@ -90,7 +92,7 @@ PR 轻量 gamma preflight（默认 `pr_light` profile）：
 - 调用 `gamma-ecs-pre-hosted-core.yml`（完整 ECS deploy + readiness + API contract + smoke）
 - pre 门禁通过后执行 ECS prod 就地升级
 - prod 后运行 T3 API contract + chat avatar probe + self-hosted 设备矩阵（`manual_full` profile）
-- 等价 CLI 入口：`stackctl deploy --target gamma-hosted --stage pre ...`
+- 等价 CLI 入口：`stackctl deploy --target gamma-hosted --mode cold-build --stage pre ...`
 
 ### 4.4 `09. Gamma Full Validation`
 

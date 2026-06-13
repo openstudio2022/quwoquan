@@ -5,6 +5,7 @@
 .PHONY: verify-chat-avatar-commercial-matrix
 .PHONY: run-chat-avatar-commercial-matrix-local
 .PHONY: verify-app-mock-isolation
+.PHONY: verify-app-concept-naming
 .PHONY: verify-app-auth-policy
 .PHONY: verify-app-login-entry-loop-contract
 .PHONY: verify-app-lib-no-test-import
@@ -81,6 +82,9 @@
 # 客户端：UI/App/Core 不得直连 cloud/services/*/mock（过渡期见 specs/gates/ui_mock_isolation_allowlist.yaml）
 verify-app-mock-isolation:
 	@python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
+
+verify-app-concept-naming:
+	@python3 quwoquan_app/scripts/runtime/verify_concept_naming.py
 
 # API 鉴权契约：security.auth_mode 真相源与端侧鉴权快照一致，核心受限入口必须 required
 verify-app-auth-policy:

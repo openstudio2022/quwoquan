@@ -22,7 +22,8 @@ MEDIA_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-http://${ECS_HOST}:${LOCAL_GAMMA_ME
 MEDIA_ORIGIN_BASE_URL="${GAMMA_ECS_MEDIA_ORIGIN_BASE_URL:-}"
 STAGE="${GAMMA_ECS_STAGE:-pre}"
 SKIP_UPLOAD="${GAMMA_ECS_SKIP_UPLOAD:-0}"
-IMAGE_VERSION="${GAMMA_DEPLOY_IMAGE_VERSION:-0.0.$(date +%Y%m%d%H%M%S)}"
+REQUESTED_IMAGE_VERSION="${GAMMA_DEPLOY_IMAGE_VERSION:-}"
+IMAGE_VERSION="${REQUESTED_IMAGE_VERSION:-0.0.$(date +%Y%m%d%H%M%S)}"
 CONFIG_VERSION="${GAMMA_DEPLOY_CONFIG_VERSION:-local-gamma-v1}"
 DEPLOY_MODE="${GAMMA_ECS_DEPLOY_MODE:-}"
 LOCAL_TARBALL="${GAMMA_ECS_LOCAL_TARBALL:-}"
@@ -36,6 +37,10 @@ DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS="${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}
 DEFAULT_COMPOSE_TIMEOUT_SECONDS="${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-3600}"
 DEFAULT_HOST_READY_TIMEOUT_SECONDS="${GAMMA_ECS_HOST_READY_TIMEOUT_SECONDS:-360}"
 DEFAULT_SKIP_IMAGE_PREPULL="${GAMMA_ECS_SKIP_IMAGE_PREPULL:-0}"
+IMAGE_REPOSITORY_ROOT="${GAMMA_ECS_IMAGE_REPOSITORY_ROOT:-}"
+IMAGE_REGISTRY="${GAMMA_ECS_IMAGE_REGISTRY:-}"
+REGISTRY_USERNAME="${GAMMA_ECS_REGISTRY_USERNAME:-}"
+REGISTRY_PASSWORD="${GAMMA_ECS_REGISTRY_PASSWORD:-}"
 TEST_AUTH_TOKEN_DEFAULT="${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}"
 if [[ "$STAGE" == "prod" ]]; then
   TEST_AUTH_TOKEN_DEFAULT="${PROD_TEST_AUTH_TOKEN:-${TEST_AUTH_TOKEN:-$TEST_AUTH_TOKEN_DEFAULT}}"
@@ -157,6 +162,61 @@ fi
 UPLOAD_STAGE_SUFFIX="${GAMMA_ECS_UPLOAD_STAGE_SUFFIX:-$(date +%Y%m%d%H%M%S)}"
 REMOTE_STAGE_DIR="${REMOTE_DIR}.incoming-${UPLOAD_STAGE_SUFFIX}"
 REMOTE_PREV_DIR="${REMOTE_DIR}.prev"
+REMOTE_OVERLAY_DIR="${REMOTE_DIR}.overlay-${UPLOAD_STAGE_SUFFIX}"
+
+effective_deploy_mode() {
+  if [[ -n "${DEPLOY_MODE:-}" ]]; then
+    printf '%s\n' "$DEPLOY_MODE"
+    return 0
+  fi
+  if [[ "$SKIP_UPLOAD" == "1" ]]; then
+    printf 'restart\n'
+    return 0
+  fi
+  printf 'cold-build\n'
+}
+
+DEPLOY_MODE_RESOLVED="$(effective_deploy_mode)"
+REMOTE_SKIP_FIXTURE_SEEDS="1"
+RUNTIME_IMAGE_REPOSITORY_ROOT=""
+if [[ "$DEPLOY_MODE_RESOLVED" == "cold-build" ]]; then
+  REMOTE_SKIP_FIXTURE_SEEDS="0"
+elif [[ "$DEPLOY_MODE_RESOLVED" == "rollout" ]]; then
+  RUNTIME_IMAGE_REPOSITORY_ROOT="$IMAGE_REPOSITORY_ROOT"
+fi
+
+service_repository_name() {
+  case "$1" in
+    rec-model-service) echo "recommendation-service" ;;
+    content-service|chat-service|user-service|assistant-service|product-ops-service|tag-service|rtc-service) echo "$1" ;;
+    *) return 1 ;;
+  esac
+}
+
+service_local_image_ref() {
+  case "$1" in
+    rec-model-service) echo "localhost/quwoquan_service_rec-model-service:latest" ;;
+    content-service) echo "localhost/quwoquan_service_content-service:latest" ;;
+    chat-service) echo "localhost/quwoquan_service_chat-service:latest" ;;
+    user-service) echo "localhost/quwoquan_service_user-service:latest" ;;
+    assistant-service) echo "localhost/quwoquan_service_assistant-service:latest" ;;
+    product-ops-service) echo "localhost/quwoquan_service_product-ops-service:latest" ;;
+    tag-service) echo "localhost/quwoquan_service_tag-service:latest" ;;
+    rtc-service) echo "localhost/quwoquan_service_rtc-service:latest" ;;
+    *) return 1 ;;
+  esac
+}
+
+service_remote_image_ref() {
+  local service="$1"
+  if [[ -z "$IMAGE_REPOSITORY_ROOT" ]]; then
+    return 1
+  fi
+  printf '%s/%s:%s\n' \
+    "${IMAGE_REPOSITORY_ROOT%/}" \
+    "$(service_repository_name "$service")" \
+    "$IMAGE_VERSION"
+}
 
 SSH_OPTS=(
   -p "$ECS_PORT"
@@ -249,7 +309,8 @@ echo "[gamma-ecs] media_origin_base_url=${MEDIA_ORIGIN_BASE_URL:-<none>}"
 echo "[gamma-ecs] image_version=${IMAGE_VERSION}"
 echo "[gamma-ecs] config_version=${CONFIG_VERSION}"
 echo "[gamma-ecs] skip_upload=${SKIP_UPLOAD}"
-echo "[gamma-ecs] deploy_mode=${DEPLOY_MODE:-auto}"
+echo "[gamma-ecs] deploy_mode=${DEPLOY_MODE_RESOLVED}"
+echo "[gamma-ecs] image_repository_root=${IMAGE_REPOSITORY_ROOT:-<none>}"
 
 FAILURE_STAGE=""
 record_phase() {
@@ -346,47 +407,73 @@ PY
   remote_exec "mkdir -p '$BACKUP_REMOTE'"
   remote_exec "if [ -f '$REMOTE_DIR/quwoquan_service/docker-compose.gamma-local.yaml' ]; then ts=\$(date +%Y%m%d%H%M%S); tar -czf '$BACKUP_REMOTE/backup-\${ts}.tgz' -C '$REMOTE_DIR' .; echo '[gamma-ecs] backup saved to $BACKUP_REMOTE/backup-'\$ts'.tgz'; fi"
 
-  echo "[gamma-ecs] uploading repository snapshot"
+  echo "[gamma-ecs] uploading ${DEPLOY_MODE_RESOLVED} payload"
   FAILURE_STAGE="upload"
-  remote_exec "rm -rf '$REMOTE_STAGE_DIR' && mkdir -p '$REMOTE_STAGE_DIR'"
-  if [[ -n "$LOCAL_TARBALL" ]]; then
-    if [[ ! -f "$LOCAL_TARBALL" ]]; then
-      echo "::error::GAMMA_ECS_LOCAL_TARBALL not found: $LOCAL_TARBALL" >&2
+  if [[ "$DEPLOY_MODE_RESOLVED" == "cold-build" ]]; then
+    remote_exec "rm -rf '$REMOTE_STAGE_DIR' && mkdir -p '$REMOTE_STAGE_DIR'"
+    if [[ -n "$LOCAL_TARBALL" ]]; then
+      if [[ ! -f "$LOCAL_TARBALL" ]]; then
+        echo "::error::GAMMA_ECS_LOCAL_TARBALL not found: $LOCAL_TARBALL" >&2
+        exit 2
+      fi
+      if [[ -n "${TMP_KEY_FILE:-}" ]]; then
+        scp "${SCP_OPTS[@]}" -i "$TMP_KEY_FILE" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_STAGE_DIR/.incoming-repo.tgz"
+      else
+        sshpass -e scp "${SCP_OPTS[@]}" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_STAGE_DIR/.incoming-repo.tgz"
+      fi
+      remote_exec "tar -xzf '$REMOTE_STAGE_DIR/.incoming-repo.tgz' -C '$REMOTE_STAGE_DIR' && rm -f '$REMOTE_STAGE_DIR/.incoming-repo.tgz'"
+    else
+      tar \
+        --exclude='.git' \
+        --exclude='.dart_tool' \
+        --exclude='build' \
+        --exclude='node_modules' \
+        --exclude='quwoquan_app/.dart_tool' \
+        --exclude='quwoquan_app/build' \
+        --exclude='apps/ops-portal/node_modules' \
+        --exclude='quwoquan_service/contracts/metadata/_shared/test_fixtures/media' \
+        --exclude='quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media' \
+        --exclude='state/local/gamma/media' \
+        -czf - . | remote_tar_extract_into "$REMOTE_STAGE_DIR"
+    fi
+    activate_remote_stage_dir
+  else
+    remote_exec "test -d '$REMOTE_DIR'"
+    remote_exec "rm -rf '$REMOTE_OVERLAY_DIR' && mkdir -p '$REMOTE_OVERLAY_DIR'"
+    if [[ -z "$LOCAL_TARBALL" || ! -f "$LOCAL_TARBALL" ]]; then
+      echo "::error::rollout/restart requires GAMMA_ECS_LOCAL_TARBALL overlay bundle" >&2
       exit 2
     fi
     if [[ -n "${TMP_KEY_FILE:-}" ]]; then
-      scp "${SCP_OPTS[@]}" -i "$TMP_KEY_FILE" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_STAGE_DIR/.incoming-repo.tgz"
+      scp "${SCP_OPTS[@]}" -i "$TMP_KEY_FILE" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_OVERLAY_DIR/.incoming-overlay.tgz"
     else
-      sshpass -e scp "${SCP_OPTS[@]}" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_STAGE_DIR/.incoming-repo.tgz"
+      sshpass -e scp "${SCP_OPTS[@]}" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_OVERLAY_DIR/.incoming-overlay.tgz"
     fi
-    remote_exec "tar -xzf '$REMOTE_STAGE_DIR/.incoming-repo.tgz' -C '$REMOTE_STAGE_DIR' && rm -f '$REMOTE_STAGE_DIR/.incoming-repo.tgz'"
-  else
-    tar \
-      --exclude='.git' \
-      --exclude='.dart_tool' \
-      --exclude='build' \
-      --exclude='node_modules' \
-      --exclude='quwoquan_app/.dart_tool' \
-      --exclude='quwoquan_app/build' \
-      --exclude='apps/ops-portal/node_modules' \
-      --exclude='quwoquan_service/contracts/metadata/_shared/test_fixtures/media' \
-      --exclude='quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media' \
-      --exclude='state/local/gamma/media' \
-      -czf - . | remote_tar_extract_into "$REMOTE_STAGE_DIR"
+    remote_exec "tar -xzf '$REMOTE_OVERLAY_DIR/.incoming-overlay.tgz' -C '$REMOTE_OVERLAY_DIR' && rm -f '$REMOTE_OVERLAY_DIR/.incoming-overlay.tgz'"
+    remote_exec "cd '$REMOTE_OVERLAY_DIR' && tar -czf - . | tar -xzf - -C '$REMOTE_DIR'; rm -rf '$REMOTE_OVERLAY_DIR'"
   fi
-  activate_remote_stage_dir
 
   if [[ "$STAGE" != "prod" ]]; then
-    echo "[gamma-ecs] uploading curated gamma media bundle"
-    FAILURE_STAGE="upload_curated_media"
-    remote_exec "rm -rf '$REMOTE_DIR/state/local/gamma/media' && mkdir -p '$REMOTE_DIR/state/local/gamma'"
-    tar -czf - -C "$ROOT/state/local/gamma" media | remote_tar_extract_into "$REMOTE_DIR/state/local/gamma"
+    if [[ "$DEPLOY_MODE_RESOLVED" == "cold-build" ]]; then
+      echo "[gamma-ecs] uploading curated gamma media bundle"
+      FAILURE_STAGE="upload_curated_media"
+      remote_exec "rm -rf '$REMOTE_DIR/state/local/gamma/media' && mkdir -p '$REMOTE_DIR/state/local/gamma'"
+      tar -czf - -C "$ROOT/state/local/gamma" media | remote_tar_extract_into "$REMOTE_DIR/state/local/gamma"
+    else
+      echo "[gamma-ecs] ${DEPLOY_MODE_RESOLVED}: reusing existing remote curated media bundle"
+    fi
   else
-    echo "[gamma-ecs] stage=prod — restoring existing remote media root from previous tree"
-    FAILURE_STAGE="restore_prod_media_root"
-    remote_exec "if [ ! -d '$REMOTE_PREV_DIR/state/local/gamma/media' ]; then echo '::error::missing previous remote media root at $REMOTE_PREV_DIR/state/local/gamma/media' >&2; exit 2; fi; mkdir -p '$REMOTE_DIR/state/local/gamma'; rm -rf '$REMOTE_DIR/state/local/gamma/media'; cp -a '$REMOTE_PREV_DIR/state/local/gamma/media' '$REMOTE_DIR/state/local/gamma/'"
+    if [[ "$DEPLOY_MODE_RESOLVED" == "cold-build" ]]; then
+      echo "[gamma-ecs] stage=prod — restoring existing remote media root from previous tree"
+      FAILURE_STAGE="restore_prod_media_root"
+      remote_exec "if [ ! -d '$REMOTE_PREV_DIR/state/local/gamma/media' ]; then echo '::error::missing previous remote media root at $REMOTE_PREV_DIR/state/local/gamma/media' >&2; exit 2; fi; mkdir -p '$REMOTE_DIR/state/local/gamma'; rm -rf '$REMOTE_DIR/state/local/gamma/media'; cp -a '$REMOTE_PREV_DIR/state/local/gamma/media' '$REMOTE_DIR/state/local/gamma/'"
+    else
+      echo "[gamma-ecs] ${DEPLOY_MODE_RESOLVED}: preserving existing remote media root"
+    fi
   fi
-  remote_exec "rm -rf '$REMOTE_PREV_DIR'"
+  if [[ "$DEPLOY_MODE_RESOLVED" == "cold-build" ]]; then
+    remote_exec "rm -rf '$REMOTE_PREV_DIR'"
+  fi
   record_phase "upload" "$phase_started"
 else
   echo "[gamma-ecs] skip_upload=1 — using existing tree at ${REMOTE_DIR}"
@@ -447,14 +534,21 @@ PY
 )"
 echo "[gamma-ecs] persisting deploy state & starting stack (LOCAL_GAMMA_IMAGE_VERSION=${IMAGE_VERSION})"
 
-PREV_IMAGE_VERSION="${GAMMA_PREVIOUS_IMAGE_VERSION:-${PREV_IMAGE_VERSION:-}}"
-if [[ -z "$PREV_IMAGE_VERSION" ]] && remote_exec "test -f '${REMOTE_DIR}/.gamma_deploy_state.json'"; then
-  PREV_IMAGE_VERSION="$(
+CURRENT_REMOTE_IMAGE_VERSION=""
+if remote_exec "test -f '${REMOTE_DIR}/.gamma_deploy_state.json'"; then
+  CURRENT_REMOTE_IMAGE_VERSION="$(
     remote_exec "python3 -c \"import json, pathlib; p=pathlib.Path('${REMOTE_DIR}/.gamma_deploy_state.json'); print(json.loads(p.read_text(encoding='utf-8')).get('imageVersion',''))\"" 2>/dev/null || true
   )"
 fi
+PREV_IMAGE_VERSION="${GAMMA_PREVIOUS_IMAGE_VERSION:-${PREV_IMAGE_VERSION:-}}"
+if [[ -z "$PREV_IMAGE_VERSION" ]]; then
+  PREV_IMAGE_VERSION="$CURRENT_REMOTE_IMAGE_VERSION"
+fi
+if [[ "$DEPLOY_MODE_RESOLVED" == "restart" && -n "$CURRENT_REMOTE_IMAGE_VERSION" ]]; then
+  IMAGE_VERSION="$CURRENT_REMOTE_IMAGE_VERSION"
+fi
 
-remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") CONFIG_VERSION=$(printf '%q' "$CONFIG_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "$TEST_AUTH_TOKEN_DEFAULT") PROD_TEST_AUTH_TOKEN=$(printf '%q' "${PROD_TEST_AUTH_TOKEN:-}") TEST_AUTH_TOKEN=$(printf '%q' "${TEST_AUTH_TOKEN:-}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL=$(printf '%q' "${MEDIA_ORIGIN_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_HOST_READY_TIMEOUT_SECONDS}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") PERSONAL_ASSISTANT_MIMO_API_KEY=$(printf '%q' "${ASSISTANT_MIMO_API_KEY}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_COMPOSE_TIMEOUT_SECONDS}") GAMMA_ECS_SKIP_IMAGE_PREPULL=$(printf '%q' "${DEFAULT_SKIP_IMAGE_PREPULL}") GAMMA_ECS_SKIP_IMAGE_REBUILD=$(printf '%q' "${GAMMA_ECS_SKIP_IMAGE_REBUILD:-0}") GAMMA_ECS_DEPLOY_MODE=$(printf '%q' "${DEPLOY_MODE:-}") LOCAL_GAMMA_FORCE_CLEAN_RECREATE=$(printf '%q' "${LOCAL_GAMMA_FORCE_CLEAN_RECREATE:-1}") LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME=$(printf '%q' "${LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME:-0}") && bash -s" <<'REMOTE_SCRIPT'
+remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") CONFIG_VERSION=$(printf '%q' "$CONFIG_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "$TEST_AUTH_TOKEN_DEFAULT") PROD_TEST_AUTH_TOKEN=$(printf '%q' "${PROD_TEST_AUTH_TOKEN:-}") TEST_AUTH_TOKEN=$(printf '%q' "${TEST_AUTH_TOKEN:-}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL=$(printf '%q' "${MEDIA_ORIGIN_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_HOST_READY_TIMEOUT_SECONDS}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") PERSONAL_ASSISTANT_MIMO_API_KEY=$(printf '%q' "${ASSISTANT_MIMO_API_KEY}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_COMPOSE_TIMEOUT_SECONDS}") GAMMA_ECS_SKIP_IMAGE_PREPULL=$(printf '%q' "${DEFAULT_SKIP_IMAGE_PREPULL}") GAMMA_ECS_SKIP_IMAGE_REBUILD=$(printf '%q' "${GAMMA_ECS_SKIP_IMAGE_REBUILD:-0}") GAMMA_ECS_DEPLOY_MODE=$(printf '%q' "${DEPLOY_MODE_RESOLVED}") GAMMA_ECS_IMAGE_REPOSITORY_ROOT=$(printf '%q' "${RUNTIME_IMAGE_REPOSITORY_ROOT}") GAMMA_ECS_IMAGE_REGISTRY=$(printf '%q' "${IMAGE_REGISTRY}") GAMMA_ECS_REGISTRY_USERNAME=$(printf '%q' "${REGISTRY_USERNAME}") GAMMA_ECS_REGISTRY_PASSWORD=$(printf '%q' "${REGISTRY_PASSWORD}") LOCAL_GAMMA_SKIP_FIXTURE_SEEDS=$(printf '%q' "${REMOTE_SKIP_FIXTURE_SEEDS}") LOCAL_GAMMA_FORCE_CLEAN_RECREATE=$(printf '%q' "${LOCAL_GAMMA_FORCE_CLEAN_RECREATE:-1}") LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME=$(printf '%q' "${LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME:-0}") && bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 python3 - <<'PY'
 import json
@@ -470,6 +564,8 @@ data = {
     "imageVersion": os.environ["IMAGE_VERSION"],
     "configVersion": os.environ["CONFIG_VERSION"],
     "stage": os.environ["STAGE"],
+    "deployMode": os.environ.get("GAMMA_ECS_DEPLOY_MODE", "").strip() or None,
+    "imageRepositoryRoot": os.environ.get("GAMMA_ECS_IMAGE_REPOSITORY_ROOT", "").strip() or None,
     "updatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
 }
 path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -599,6 +695,75 @@ pre_pull_local_gamma_images() {
   done
 }
 
+registry_login_if_needed() {
+  local registry="${GAMMA_ECS_IMAGE_REGISTRY:-}"
+  local username="${GAMMA_ECS_REGISTRY_USERNAME:-}"
+  local password="${GAMMA_ECS_REGISTRY_PASSWORD:-}"
+  if [[ -z "$registry" || -z "$username" || -z "$password" ]]; then
+    return 0
+  fi
+  echo "[gamma-ecs] docker login ${registry}"
+  printf '%s' "$password" | docker login "$registry" --username "$username" --password-stdin >/dev/null
+}
+
+pull_gamma_service_images() {
+  if [[ "${GAMMA_ECS_DEPLOY_MODE:-}" != "rollout" ]]; then
+    return 0
+  fi
+  local root="${GAMMA_ECS_IMAGE_REPOSITORY_ROOT:-}"
+  if [[ -z "$root" ]]; then
+    echo "::error::rollout requires GAMMA_ECS_IMAGE_REPOSITORY_ROOT" >&2
+    exit 2
+  fi
+  local timeout_seconds="${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}"
+  service_repository_name_remote() {
+    case "$1" in
+      rec-model-service) echo "recommendation-service" ;;
+      content-service|chat-service|user-service|assistant-service|product-ops-service|tag-service|rtc-service) echo "$1" ;;
+      *) return 1 ;;
+    esac
+  }
+  service_local_image_ref_remote() {
+    case "$1" in
+      rec-model-service) echo "localhost/quwoquan_service_rec-model-service:latest" ;;
+      content-service) echo "localhost/quwoquan_service_content-service:latest" ;;
+      chat-service) echo "localhost/quwoquan_service_chat-service:latest" ;;
+      user-service) echo "localhost/quwoquan_service_user-service:latest" ;;
+      assistant-service) echo "localhost/quwoquan_service_assistant-service:latest" ;;
+      product-ops-service) echo "localhost/quwoquan_service_product-ops-service:latest" ;;
+      tag-service) echo "localhost/quwoquan_service_tag-service:latest" ;;
+      rtc-service) echo "localhost/quwoquan_service_rtc-service:latest" ;;
+      *) return 1 ;;
+    esac
+  }
+  local services=(
+    rec-model-service
+    content-service
+    chat-service
+    user-service
+    assistant-service
+    product-ops-service
+    tag-service
+  )
+  if [[ ",${COMPOSE_PROFILES:-}," == *,edge-media,* ]]; then
+    services+=(rtc-service)
+  fi
+  local service=""
+  local remote_ref=""
+  local local_ref=""
+  for service in "${services[@]}"; do
+    remote_ref="${root%/}/$(service_repository_name_remote "$service"):${IMAGE_VERSION}"
+    local_ref="$(service_local_image_ref_remote "$service")"
+    echo "[gamma-ecs] pulling ${remote_ref}"
+    timeout "$timeout_seconds" docker pull "$remote_ref"
+    if command -v podman >/dev/null 2>&1; then
+      podman tag "$remote_ref" "$local_ref"
+    else
+      docker tag "$remote_ref" "$local_ref"
+    fi
+  done
+}
+
 print_compose_diagnostics() {
   docker compose -f quwoquan_service/docker-compose.gamma-local.yaml ps || true
   docker ps -a || true
@@ -639,10 +804,12 @@ reclaim_remote_disk_if_needed() {
 
 install_docker_if_needed
 configure_container_registry_mirror
+registry_login_if_needed
 docker --version
 docker compose version
 reclaim_remote_disk_if_needed
 pre_pull_local_gamma_images
+pull_gamma_service_images
 
 export LOCAL_GAMMA_IMAGE_VERSION="${IMAGE_VERSION}"
 export LOCAL_GAMMA_CONFIG_VERSION="${CONFIG_VERSION}"
@@ -691,6 +858,10 @@ if [[ "${GAMMA_ECS_SKIP_IMAGE_REBUILD:-0}" == "1" ]] && command -v podman >/dev/
     export LOCAL_GAMMA_FORCE_CLEAN_RECREATE=0
   fi
 fi
+if [[ "${GAMMA_ECS_DEPLOY_MODE:-}" == "rollout" ]]; then
+  start_args=(--skip-build)
+  export LOCAL_GAMMA_FORCE_CLEAN_RECREATE=0
+fi
 
 set +e
 timeout "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-3600}" bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh "${start_args[@]}"
@@ -714,11 +885,16 @@ import sys
 raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
 PY
 then
-  python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py \
-    --base-url "http://127.0.0.1:${GW_LOCAL_PORT}" \
-    --product-ops-base-url "http://127.0.0.1:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}" \
-    --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-${TEST_AUTH_TOKEN:-gamma-ecs-token}}" \
+  t3_args=(
+    --base-url "http://127.0.0.1:${GW_LOCAL_PORT}"
+    --product-ops-base-url "http://127.0.0.1:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
+    --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-${TEST_AUTH_TOKEN:-gamma-ecs-token}}"
     --skip-flutter-contracts
+  )
+  if [[ "${LOCAL_GAMMA_SKIP_FIXTURE_SEEDS:-0}" == "1" ]]; then
+    t3_args+=(--skip-seed)
+  fi
+  python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py "${t3_args[@]}"
 else
   echo "[gamma-ecs] WARN: skip run_local_gamma_t3.py on remote host because python3 < 3.10; local mirror started, but remote T3 evidence is unavailable for this run" >&2
 fi

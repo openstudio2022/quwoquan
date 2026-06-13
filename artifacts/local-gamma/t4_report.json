@@ -1,8 +1,8 @@
 {
   "suiteId": "content_feed_patrol",
   "status": "passed",
-  "startedAt": "2026-06-08T23:34:59.986705Z",
-  "endedAt": "2026-06-08T23:35:00.211549Z",
+  "startedAt": "2026-06-13T00:10:11.676086Z",
+  "endedAt": "2026-06-13T00:10:12.042675Z",
   "environmentAlias": "local-gamma",
   "target": "test/patrol/discovery/feed_load_test.dart",
   "platform": "all",

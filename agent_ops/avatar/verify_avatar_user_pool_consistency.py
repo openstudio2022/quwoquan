@@ -48,6 +48,10 @@ GAMMA_CURATED_EXPECTATIONS = {
         "fixturePath": "user/test_fixtures/scenarios/user_scenarios.gamma-curated.json",
         "refs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core"],
     },
+    "entity": {
+        "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.gamma-curated.json",
+        "refs": ["entity_homepage_core", "entity_claim_core", "entity_picker_core"],
+    },
 }
 MEDIA_FIELD_NAMES = {
     "avatarUrl",
@@ -509,7 +513,7 @@ def collect_media_refs(value: Any, field_name: str = "") -> set[str]:
 
 def verify_manifests(errors: list[str]) -> dict[str, dict[str, Any]]:
     manifests = {env: load_json(path) for env, path in MANIFESTS.items()}
-    domains = ["content", "circle", "chat", "user"]
+    domains = ["content", "circle", "chat", "user", "entity"]
     for domain in domains:
         alpha_item = next((item for item in manifests["alpha"]["seedRefs"] if item.get("domain") == domain), None)
         beta_item = next((item for item in manifests["beta"]["seedRefs"] if item.get("domain") == domain), None)
@@ -681,7 +685,7 @@ def main() -> int:
             for item in manifests["gamma"]["seedRefs"]
             if item.get("domain") == domain
         )))
-        for domain in ("content", "circle", "chat", "user")
+        for domain in ("content", "circle", "chat", "user", "entity")
     }
     verify_user_fixture(errors, users, gamma_docs["user"])
     verify_content_fixture(errors, users, pool, posts_by_id, gamma_docs["content"])

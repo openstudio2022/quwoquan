@@ -23,9 +23,9 @@ def utc_now() -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run readonly integration probes for beta/gamma/prod environments.",
+        description="Run readonly integration probes for alpha/beta/gamma/prod environments.",
     )
-    parser.add_argument("--env", required=True, choices=("beta", "gamma", "prod"))
+    parser.add_argument("--env", required=True, choices=("alpha", "beta", "gamma", "prod"))
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--product-ops-base-url", default="")
     parser.add_argument("--media-base-url", default="")

@@ -161,6 +161,10 @@ def build_parser() -> argparse.ArgumentParser:
     roll_parser.add_argument("--product-ops-base-url", default="")
     roll_parser.add_argument("--media-base-url", default="")
     roll_parser.add_argument("--media-origin-base-url", default="")
+    roll_parser.add_argument("--image-repository-root", default="")
+    roll_parser.add_argument("--image-registry", default="")
+    roll_parser.add_argument("--registry-username", default="")
+    roll_parser.add_argument("--registry-password", default="")
 
     deploy_parser = subparsers.add_parser("deploy")
     deploy_parser.add_argument("--target", choices=("gamma-hosted", "prod-hosted"), required=True)
@@ -172,6 +176,10 @@ def build_parser() -> argparse.ArgumentParser:
     deploy_parser.add_argument("--product-ops-base-url", default="")
     deploy_parser.add_argument("--media-base-url", default="")
     deploy_parser.add_argument("--media-origin-base-url", default="")
+    deploy_parser.add_argument("--image-repository-root", default="")
+    deploy_parser.add_argument("--image-registry", default="")
+    deploy_parser.add_argument("--registry-username", default="")
+    deploy_parser.add_argument("--registry-password", default="")
     deploy_parser.add_argument("--service", default="")
     deploy_parser.add_argument("--from-image", default="")
     deploy_parser.add_argument("--to-image", default="")
@@ -869,6 +877,8 @@ def _script_probe_plan_for_target(
     target_name: str,
 ) -> list[dict[str, Any]]:
     target = get_target(topology, target_name)
+    if target_name == "alpha-local":
+        return [{"name": "integration-readonly", "kind": "readonly-http"}]
     if target_name == "beta-local":
         return [{"name": "integration-readonly", "kind": "readonly-http"}]
     if target_name == "gamma-hosted":
@@ -911,7 +921,7 @@ def _script_probes_for_target(
             findings.extend(probe_findings)
         return statuses, stdout_sections, findings
 
-    if target_name in {"beta-local", "gamma-local", "prod-hosted"}:
+    if target_name in {"alpha-local", "beta-local", "gamma-local", "prod-hosted"}:
         status, output, probe_findings = _run_environment_integration_probe(
             topology,
             target_name,
@@ -1358,6 +1368,54 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                 "tail": background_tail,
             }
         )
+        if result.returncode == 0:
+            beta_ready_tail = _tail_file_for_startup(
+                ROOT / "state" / "local" / "beta_stack" / "app-beta.log",
+                prefix="[beta app-beta] ",
+                idle_timeout_seconds=8.0,
+                max_follow_seconds=180.0,
+                ready_patterns=(
+                    "[app-beta-manual] beta environment is ready.",
+                    "[app-beta-manual] --skip-app set; beta cloud stack keeps running until Ctrl-C.",
+                ),
+                failure_patterns=(
+                    "GATE_BLOCK:",
+                    " unavailable:",
+                    "colima start failed",
+                    "docker daemon still unavailable",
+                    "docker daemon unavailable and colima is not installed",
+                    "assistant log:",
+                    "chat log:",
+                    "chat seed log:",
+                    "gateway log:",
+                    "media edge log:",
+                    "media origin log:",
+                ),
+                ready_idle_timeout_seconds=3.0,
+            )
+            steps.append(
+                {
+                    "kind": "beta-backend-ready-wait",
+                    "exitCode": 0,
+                    "stdout": "waited for beta backend ready sentinel",
+                    "stderr": "",
+                    "tail": beta_ready_tail,
+                }
+            )
+            beta_ready_failure = None
+            if bool(beta_ready_tail.get("failureSeen")):
+                beta_ready_failure = str(
+                    beta_ready_tail.get("failureLine") or "beta backend startup failed"
+                )
+            elif not bool(beta_ready_tail.get("readySeen")):
+                beta_ready_failure = "beta backend did not reach ready state before timeout"
+            if beta_ready_failure is not None:
+                result = subprocess.CompletedProcess(
+                    cmd,
+                    1,
+                    stdout="",
+                    stderr=beta_ready_failure,
+                )
         if result.returncode == 0 and not args.skip_app:
             try:
                 app_launch = start_app_process("beta", args.device_id)
@@ -2202,6 +2260,10 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
             product_ops_base_url=args.product_ops_base_url,
             media_base_url=args.media_base_url,
             media_origin_base_url=args.media_origin_base_url,
+            image_repository_root=args.image_repository_root,
+            image_registry=args.image_registry,
+            registry_username=args.registry_username,
+            registry_password=args.registry_password,
         )
         result = run(cmd, env=env)
     else:
@@ -2508,6 +2570,10 @@ def _gamma_mode_env(
     product_ops_base_url: str,
     media_base_url: str,
     media_origin_base_url: str,
+    image_repository_root: str,
+    image_registry: str,
+    registry_username: str,
+    registry_password: str,
 ) -> dict[str, str]:
     env: dict[str, str] = {}
     for key, value in {
@@ -2518,6 +2584,10 @@ def _gamma_mode_env(
         "GAMMA_PRODUCT_OPS_BASE_URL": product_ops_base_url,
         "MEDIA_AVATAR_CDN_BASE_URL": media_base_url,
         "GAMMA_ECS_MEDIA_ORIGIN_BASE_URL": media_origin_base_url,
+        "GAMMA_ECS_IMAGE_REPOSITORY_ROOT": image_repository_root,
+        "GAMMA_ECS_IMAGE_REGISTRY": image_registry,
+        "GAMMA_ECS_REGISTRY_USERNAME": registry_username,
+        "GAMMA_ECS_REGISTRY_PASSWORD": registry_password,
     }.items():
         if value:
             env[key] = value
@@ -2535,8 +2605,9 @@ def _gamma_mode_env(
     elif mode == "rollout":
         env.update(
             {
-                "GAMMA_ECS_SKIP_UPLOAD": "1",
+                "GAMMA_ECS_SKIP_UPLOAD": "0",
                 "GAMMA_ECS_SKIP_IMAGE_REBUILD": "1",
+                "GAMMA_ECS_SKIP_IMAGE_PREPULL": "1",
                 "LOCAL_GAMMA_FORCE_CLEAN_RECREATE": "0",
                 "LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME": "1",
             }
@@ -2584,6 +2655,10 @@ def command_roll(args: argparse.Namespace) -> dict[str, Any]:
         product_ops_base_url=args.product_ops_base_url,
         media_base_url=args.media_base_url,
         media_origin_base_url=args.media_origin_base_url,
+        image_repository_root=args.image_repository_root,
+        image_registry=args.image_registry,
+        registry_username=args.registry_username,
+        registry_password=args.registry_password,
     )
     result = run(["bash", "agent_ops/deploy/gamma/deploy_gamma_ecs.sh"], env=env)
     timing = _finish_timing(started_monotonic, started_at)
