@@ -77,8 +77,6 @@ class UITextConstants {
   static const String followingSubjectEmptySubtitle =
       '去推荐、校园、旅行里关注感兴趣的对象，回来这里查看它们的新动态。';
 
-  /// 对象行动按钮文案解析：actionType（IntersectionReason 真相源）→ 动词。
-  /// 无匹配回退「查看」。
   static String homeObjectActionLabel(String actionType) {
     switch (actionType) {
       case 'follow':
@@ -430,8 +428,6 @@ class UITextConstants {
   // ==================== 欢迎页 ====================
   static const String welcomeTitle = '趣我圈';
 
-  /// 欢迎页主 slogan：品牌视角（第三人称），与全局基线 slogan 一致。
-  /// 「绽放热爱」承接花瓣视觉，强化轻快、明亮的品牌记忆。
   static const String welcomeMainSlogan = '遇见同趣，绽放热爱';
   static const String welcomeButtonLabel = '开启发现之旅';
   static const String welcomeLoginPromptTitle = '登录后，趣我圈更懂你的热爱';
@@ -439,12 +435,8 @@ class UITextConstants {
   static String welcomeLoginSkipWithCountdown(int seconds) =>
       '先不登录 · $seconds秒后进入';
 
-  /// 欢迎页底部「小趣寄语」署名 chip 中的发言人名（与 `✨` 一起出现）。
-  /// 与中央 slogan 形成「品牌口吻 → 小趣口吻」的双层结构。
   static const String assistantWhisperSignature = '小趣';
 
-  /// 欢迎页底部「小趣寄语」第一人称承诺一句话。
-  /// 由小趣以「我」直接对用户说话，呈现 AI Native 的主动感。
   static const String assistantWhisperLine = '专注你的热爱，剩下的交给我';
 
   // ==================== 通用 ====================
@@ -569,7 +561,6 @@ class UITextConstants {
   /// 评论平铺区：回复某人占位。
   static const String commentReplyToTemplate = '回复 %s';
 
-  // 对象页统一交集卡标题（你和对象的连接，由各壳按对象类型传入）
   static const String profileMutualIntersectionTitle = '你们的连接';
   static const String homepageIntersectionTitle = objectConnectionWithYou;
   static const String circleIntersectionTitle = objectConnectionWithYou;
@@ -583,7 +574,6 @@ class UITextConstants {
   // Work Browser 文章页码（正文下方、作者工具栏上方）
   static String workArticlePageProgress(int current, int total) =>
       '$current / $total';
-  // 我的主页「我的连接」聚合入口
   static const String myIntersectionsTitle = '我的连接';
   static const String myIntersectionsSubtitle = '谁和你产生了新的连接';
   static const String intersectionExpandMore = '展开更多';
@@ -614,7 +604,6 @@ class UITextConstants {
   static String objectIntroTitle(String objectName) => '认识$objectName';
   static const String myIntersectionsEmpty = '还没有新的连接，去发现更多有交集的人和圈子';
   static const String intersectionNewBadgeSuffix = '条新增';
-  // 推荐（概率）交集标签：不伪装事实
   static const String intersectionAffinityLabel = '推荐';
   // 交集维度短标签（端展示用，真相源仍为服务端 dimension 枚举）
   static const Map<String, String> intersectionDimensionShortLabels =
