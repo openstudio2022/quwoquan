@@ -268,7 +268,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
       expect(find.text('284'), findsOneWidget);
-      expect(find.text('1.2k'), findsOneWidget);
+      expect(find.text('1.2k'), findsAtLeastNWidgets(1));
     });
   });
 

@@ -87,7 +87,7 @@ void main() {
     await _pumpFrames(tester);
     expect(find.byType(ProfileInteractionTab), findsOneWidget);
 
-    await tapProfilePrimaryTab(tester, '看点');
+    await tapProfilePrimaryTab(tester, '生活');
     await _pumpFrames(tester);
     expect(find.byType(ProfileLifestyleTab), findsOneWidget);
     expect(find.text('足迹'), findsOneWidget);
