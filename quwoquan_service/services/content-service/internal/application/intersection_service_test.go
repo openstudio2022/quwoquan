@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,8 +75,8 @@ func TestIntersectionService_SummaryNewCountAndVisitClears(t *testing.T) {
 func TestIntersectionService_ExposureRetainsButDemotesSeen(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{facts: []IntersectionReasonView{
-		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1"},
-		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "p1"},
+		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1", DisplayText: "同校校友"},
+		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "p1", DisplayText: "共同讨论"},
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -115,6 +116,7 @@ func TestIntersectionService_PointSummaryDerivedFromVisiblePoints(t *testing.T) 
 			IntersectionID: "multi",
 			Dimension:      "relationship",
 			Strength:       0.8,
+			DisplayText:    "共同关注的人",
 			FreshAt:        now.Add(-time.Hour).Format(time.RFC3339),
 			ActionTargetID: "u1",
 			IntersectionPoints: []IntersectionPointView{
@@ -154,11 +156,11 @@ func TestIntersectionService_FeedFactBeforeAffinityAndFreshness(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{
 		facts: []IntersectionReasonView{
-			{IntersectionID: "f1", IntersectionClass: "fact", Dimension: "identity", Strength: 0.5, ActionTargetID: "u1"},
-			{IntersectionID: "stale", IntersectionClass: "fact", Dimension: "content", Strength: 0.99, ActionTargetID: "u9", ExpiresAt: now.Add(-time.Hour).Format(time.RFC3339)},
+			{IntersectionID: "f1", IntersectionClass: "fact", Dimension: "identity", Strength: 0.5, ActionTargetID: "u1", DisplayText: "同校校友"},
+			{IntersectionID: "stale", IntersectionClass: "fact", Dimension: "content", Strength: 0.99, ActionTargetID: "u9", DisplayText: "过期交集", ExpiresAt: now.Add(-time.Hour).Format(time.RFC3339)},
 		},
 		affinities: []IntersectionReasonView{
-			{IntersectionID: "p1", IntersectionClass: "affinity", Dimension: "interest", Strength: 0.95, ActionTargetID: "u2"},
+			{IntersectionID: "p1", IntersectionClass: "affinity", Dimension: "interest", Strength: 0.95, ActionTargetID: "u2", DisplayText: "可能合得来"},
 		},
 	}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
@@ -182,9 +184,9 @@ func TestIntersectionService_FeedFactBeforeAffinityAndFreshness(t *testing.T) {
 func TestIntersectionService_MaxCandidateWindowCapsBeforeLimit(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{facts: []IntersectionReasonView{
-		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1"},
-		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "u2"},
-		{IntersectionID: "c", Dimension: "relationship", Strength: 0.7, ActionTargetID: "u3"},
+		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1", DisplayText: "同校校友"},
+		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "u2", DisplayText: "共同讨论"},
+		{IntersectionID: "c", Dimension: "relationship", Strength: 0.7, ActionTargetID: "u3", DisplayText: "共同关注的人"},
 	}}
 	svc := NewIntersectionService(
 		newTestRouter(t),
@@ -204,7 +206,7 @@ func TestIntersectionService_MaxCandidateWindowCapsBeforeLimit(t *testing.T) {
 
 func TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
-	// 单对象多证据组：内容(coLiked) 先给、人物(mutualFriend) 后给，
+	// 单对象多证据组：内容(coCommented) 先给、人物(sharedFollowees) 后给，
 	// 期望 hydrate 后按锚强度（人物 > 内容）重排，事实在前、推荐殿后。
 	src := stubSource{object: []IntersectionReasonView{
 		{
@@ -213,9 +215,9 @@ func TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength(t *testing
 			ActionTargetID:   "u_lin",
 			RelationObjectID: "u_lin",
 			IntersectionPoints: []IntersectionPointView{
-				{PointID: "p_content", PointClass: "fact", Dimension: "content", SourceRef: "coLiked", Label: "都赞过", DisplayText: "都赞过", Count: 3},
+				{PointID: "p_content", PointClass: "fact", Dimension: "content", SourceRef: "coCommented", Label: "共同讨论过", DisplayText: "共同讨论过", Count: 3},
 				{PointID: "p_aff", PointClass: "recommended", Dimension: "interest", SourceRef: "affinity", Label: "可能合得来", DisplayText: "可能合得来"},
-				{PointID: "p_friend", PointClass: "fact", Dimension: "relationship", SourceRef: "mutualFriend", Label: "共同好友", DisplayText: "共同好友", Count: 4},
+				{PointID: "p_friend", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", DisplayText: "共同关注的人", Count: 4},
 			},
 		},
 	}}
@@ -233,12 +235,12 @@ func TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength(t *testing
 	if len(pts) != 3 {
 		t.Fatalf("want 3 points, got %d", len(pts))
 	}
-	// §9.8：人物(mutualFriend) 排第一，内容(coLiked) 次之，recommended 殿后。
-	if pts[0].SourceRef != "mutualFriend" {
-		t.Fatalf("want mutualFriend first, got %s", pts[0].SourceRef)
+	// §9.8：人物(sharedFollowees) 排第一，内容(coCommented) 次之，recommended 殿后。
+	if pts[0].SourceRef != "sharedFollowees" {
+		t.Fatalf("want sharedFollowees first, got %s", pts[0].SourceRef)
 	}
-	if pts[1].SourceRef != "coLiked" {
-		t.Fatalf("want coLiked second, got %s", pts[1].SourceRef)
+	if pts[1].SourceRef != "coCommented" {
+		t.Fatalf("want coCommented second, got %s", pts[1].SourceRef)
 	}
 	if pts[2].PointClass != "recommended" {
 		t.Fatalf("want recommended last, got %s", pts[2].PointClass)
@@ -250,6 +252,46 @@ func TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength(t *testing
 	}
 }
 
+// TestIntersectionService_SpotlightFiltersIncompleteDisplay（WP1·T3）：
+// 进入候选窗的 reason 必须 primaryText 非空；人级 reason 必须带 avatarUrl。
+func TestIntersectionService_SpotlightFiltersIncompleteDisplay(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	src := stubSource{facts: []IntersectionReasonView{
+		// 无任何展示语言 → 不得进候选窗。
+		{IntersectionID: "no_text", Dimension: "content", Strength: 0.9, ActionTargetID: "p0"},
+		// 人级但缺头像 → 不得进候选窗。
+		{IntersectionID: "person_no_avatar", Dimension: "relationship", Strength: 0.8,
+			ActionTargetID: "u1", ObjectKind: "person", DisplayText: "3位共同关注的人"},
+		// 人级且头像完备 → 进候选窗。
+		{IntersectionID: "person_ok", Dimension: "relationship", Strength: 0.7,
+			ActionTargetID: "u2", ObjectKind: "person", DisplayText: "2位共同关注的人",
+			DisplayName: "林清越", AvatarURL: "https://cdn.example.com/a.png"},
+		// 非人对象无需头像，但要有结论句 → 进候选窗。
+		{IntersectionID: "place_ok", Dimension: "location", Strength: 0.6,
+			ActionTargetID: "e1", ObjectKind: "place", DisplayText: "1位你关注的人来过这里"},
+	}}
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
+	fixedNow(svc, now)
+
+	feed, err := svc.Feed(context.Background(), "viewer1", "recommend", 10)
+	if err != nil {
+		t.Fatalf("feed: %v", err)
+	}
+	got := map[string]bool{}
+	for _, r := range feed {
+		got[r.IntersectionID] = true
+		if strings.TrimSpace(r.PrimaryText) == "" {
+			t.Fatalf("candidate window reason %s missing primaryText", r.IntersectionID)
+		}
+	}
+	if got["no_text"] || got["person_no_avatar"] {
+		t.Fatalf("incomplete reasons must not enter candidate window, got %v", got)
+	}
+	if !got["person_ok"] || !got["place_ok"] {
+		t.Fatalf("complete reasons must enter candidate window, got %v", got)
+	}
+}
+
 func TestIntersectionService_ObjectIntersectionsEmptyObjectID(t *testing.T) {
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(stubSource{}))
 	items, err := svc.ObjectIntersections(context.Background(), "viewer1", "", "user", 8)
@@ -258,5 +300,43 @@ func TestIntersectionService_ObjectIntersectionsEmptyObjectID(t *testing.T) {
 	}
 	if len(items) != 0 {
 		t.Fatalf("want empty for blank objectId, got %d", len(items))
+	}
+}
+
+// TestEvidenceKindRank_MatchesWP1AppendixA 把 WP1 附录 A（kind → rank 映射清单，
+// 交接 WP3 的正式交接物）固化为契约断言：rank 数值与清单同源，防止双方漂移。
+// 清单位置：specs/product/2026H1-positioning-refactor/wp-01-intersection-data-and-expression.md 附录 A。
+func TestEvidenceKindRank_MatchesWP1AppendixA(t *testing.T) {
+	appendixA := map[string]int{
+		// rank 10 · 人
+		"sharedFollowees": 10, "commonFollower": 10, "commonContact": 10,
+		"followeeInObject": 10, "followeeVisited": 10, "followeeViewing": 10,
+		"followeeDiscussedThis": 10,
+		// rank 20 · 事物
+		"coMemberCircle": 20, "sharedCircle": 20, "sameCompany": 20, "sameTeam": 20,
+		"sameIndustry": 20, "sharedEntityAttention": 20, "coWishlistedEntity": 20,
+		// rank 30 · 地点
+		"coVisitedEntity": 30,
+		// rank 40 · 内容
+		"coCommented": 40, "coSharedContent": 40, "coCreatedContent": 40,
+		"sharedDiscussion": 40,
+		// rank 50 · 身份
+		"sameSchool": 50, "sameDepartment": 50, "sameMajor": 50, "sameCohort": 50,
+		"alumni": 50, "alumniHere": 50, "colleagueHere": 50,
+		// rank 60 · 兴趣 fact
+		"sharedTagSample": 60,
+	}
+	for kind, want := range appendixA {
+		if got := evidenceKindRank(kind, "fact"); got != want {
+			t.Fatalf("kind %s rank = %d, appendix A wants %d", kind, got, want)
+		}
+	}
+	// 未知 kind 兜底 rank 500（开放字符串优雅降级，不写死闭集）。
+	if got := evidenceKindRank("someFutureKind", "fact"); got != 500 {
+		t.Fatalf("unknown kind rank = %d, want 500", got)
+	}
+	// recommended 点恒为 rank 900，与 kind 无关。
+	if got := evidenceKindRank("sharedFollowees", "recommended"); got != 900 {
+		t.Fatalf("recommended rank = %d, want 900", got)
 	}
 }

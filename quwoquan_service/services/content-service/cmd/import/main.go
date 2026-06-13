@@ -240,9 +240,13 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 	n := 0
 	for _, p := range posts {
 		newHash := sourceHash(p)
+		runtimeEntityRefs := p.NormalizedEntityRefs
+		if len(runtimeEntityRefs) == 0 {
+			runtimeEntityRefs = p.EntityRefs
+		}
 		doc := bson.M{
 			"postRef": p.PostRef, "contentType": p.ContentType, "title": p.Title,
-			"angle": p.Angle, "seq": p.Seq, "entityRefs": p.EntityRefs, "tagRefs": p.TagRefs,
+			"angle": p.Angle, "seq": p.Seq, "entityRefs": runtimeEntityRefs, "tagRefs": p.TagRefs,
 			"template": p.Template, "generatorModel": p.GeneratorModel, "articleTemplate": p.Template,
 			"body": p.ArticleMarkdown, "summary": p.ArticleDigest,
 			"articleMarkdown": p.ArticleMarkdown, "articleDigest": p.ArticleDigest, "articleMarkdownDigest": p.ArticleDigest,
@@ -392,7 +396,11 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 	n := 0
 	for _, p := range posts {
 		var cond map[string]any
-		for _, er := range p.EntityRefs {
+		runtimeEntityRefs := p.NormalizedEntityRefs
+		if len(runtimeEntityRefs) == 0 {
+			runtimeEntityRefs = p.EntityRefs
+		}
+		for _, er := range runtimeEntityRefs {
 			if c, ok := condByEntity[er]; ok {
 				cond = c
 				break
@@ -405,7 +413,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"contentType":          p.ContentType,
 			"contentIdentity":      "work",
 			"tagRefs":              p.TagRefs,
-			"entityRefs":           p.EntityRefs,
+			"entityRefs":           runtimeEntityRefs,
 			"articleAssetManifest": p.ArticleAssetManifest,
 			"sourceTaskId":         p.SourceTaskId,
 			"conditionProfile":     cond,

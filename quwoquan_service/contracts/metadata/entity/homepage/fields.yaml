@@ -244,6 +244,14 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: canonicalEntityId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
       - name: title
         type: string
         constraints: [NOT_NULL]

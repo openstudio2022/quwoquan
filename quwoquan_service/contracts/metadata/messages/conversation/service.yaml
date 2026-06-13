@@ -5,7 +5,7 @@ service:
   name: chat-service
   domain: chat
   owner: backend-team
-  description: 会话管理、消息收发（seq 有序 + clientMsgId 幂等）、群聊成员、离线同步、已读回执、小趣助手会话内参与
+  description: 会话管理、消息收发（seq 有序 + clientMsgId 幂等）、讨论成员、离线同步、已读回执、小趣助手会话内参与
 
 api_routes:
   # ── 会话 ──────────────────────────────────────
@@ -164,7 +164,7 @@ api_routes:
   - method: DELETE
     path: /v1/chat/conversations/{conversationId}
     operation: DissolveConversation
-    description: 解散群聊
+    description: 解散讨论
     auth: required
 
   # ── 收件箱 ──────────────────────────────────
@@ -213,7 +213,7 @@ api_routes:
   - method: GET
     path: /v1/chat/contact-home
     operation: ListContactHome
-    description: 商用联系首页聚合行，覆盖全部/互关/圈子/群聊。来源、交集、成员数、最近互动均由云端 read model 提供。
+    description: 商用联系首页聚合行，覆盖全部/互关/圈子/讨论。来源、交集、成员数、最近互动均由云端 read model 提供；wire filter 仍为 group。
     query_params: [filter, cursor, limit]
     response_entity: ContactHomeRow
     auth: required
@@ -221,14 +221,14 @@ api_routes:
   - method: GET
     path: /v1/chat/groups/{conversationId}/home
     operation: GetGroupHome
-    description: 商用群主页 / 聊天信息页统一事实源，供聊天页顶部和聊天信息页消费。
+    description: 商用讨论主页 / 聊天信息页统一事实源，供聊天页顶部和聊天信息页消费。
     response_entity: GroupHome
     auth: required
 
   - method: GET
     path: /v1/chat/group-candidates
     operation: ListGroupCandidates
-    description: 发起群聊/添加成员候选源，由 chat-service 聚合互关联系人、可复用群会话成员，并排除当前会话已有成员；前端不得再自行拼装 inbox + contacts + circles
+    description: 发起讨论/添加成员候选源，由 chat-service 聚合互关联系人、可复用 group 会话成员，并排除当前会话已有成员；前端不得再自行拼装 inbox + contacts + circles
     query_params: [conversationId, cursor, limit]
     response_entity: ChatContactListRow
     auth: required

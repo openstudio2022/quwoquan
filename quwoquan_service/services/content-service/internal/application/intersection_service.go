@@ -538,6 +538,11 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 			continue
 		}
 		r = hydratePointSummary(r)
+		// T3 空窗治理：展示语言不完备的 reason 不进 spotlight 候选窗
+		// （primaryText 必备；人级 reason 必须有头像，物级由对象头图承载）。
+		if !isSpotlightDisplayComplete(r) {
+			continue
+		}
 		r.LastRecommendedAt = now
 		if _, ok := seen[r.coolKey()]; ok {
 			r.RankState = "seen"
@@ -571,6 +576,19 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 		return merged[:limit], nil
 	}
 	return merged, nil
+}
+
+// isSpotlightDisplayComplete 候选窗完备性（WP1·T3）：primaryText 非空，
+// 且人级 reason（objectKind==person）必须带 avatarUrl；非人对象的头图由
+// 端侧对象卡承载，不在 reason 上强制。
+func isSpotlightDisplayComplete(r IntersectionReasonView) bool {
+	if strings.TrimSpace(r.PrimaryText) == "" {
+		return false
+	}
+	if r.ObjectKind == "person" && strings.TrimSpace(r.AvatarURL) == "" {
+		return false
+	}
+	return true
 }
 
 // evidenceKindRank 证据组 kind 的挖掘强度（§9.8）：值越小越靠前；

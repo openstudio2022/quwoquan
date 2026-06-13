@@ -454,6 +454,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 		CreatedAt:            now,
 		UpdatedAt:            now,
 	}
+	normalizePostObjectAnchors(post, payload)
 	if post.AuthorId == "" {
 		return nil, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
@@ -617,6 +618,7 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 	if articleRenderProfile, exists := payload["articleRenderProfile"]; exists {
 		post.ArticleRenderProfile = asMap(articleRenderProfile)
 	}
+	normalizePostObjectAnchors(post, payload)
 	post.UpdatedAt = time.Now().UTC()
 	s.syncArticleMarkdownSnapshot(post)
 	if err := validateCreatePostPayload(post); err != nil {
@@ -834,6 +836,9 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if tags, exists := payload["tagRefs"]; exists {
 		post.TagRefs = asStringSlice(tags)
 	}
+	if entityRefs, exists := payload["entityRefs"]; exists {
+		post.EntityRefs = asStringSlice(entityRefs)
+	}
 	if coverURL, exists := payload["coverUrl"]; exists {
 		post.CoverUrl = strings.TrimSpace(asString(coverURL))
 	}
@@ -852,6 +857,7 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if articleRenderProfile, exists := payload["articleRenderProfile"]; exists {
 		post.ArticleRenderProfile = asMap(articleRenderProfile)
 	}
+	normalizePostObjectAnchors(post, payload)
 	if err := applyPostSettingsPayload(post, promoteSettingsPayload(payload)); err != nil {
 		return nil, err
 	}
@@ -3240,6 +3246,9 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
 		"tagRefs":            asStringSlice(post.TagRefs),
+		"entityRefs":         asStringSlice(post.EntityRefs),
+		"primaryHomepageId":  strings.TrimSpace(post.PrimaryHomepageId),
+		"canonicalEntityId":  strings.TrimSpace(post.CanonicalEntityId),
 	}
 }
 
@@ -3275,6 +3284,120 @@ func behaviorTagsFromPost(p *postmodel.Post) []string {
 		tags = []string{p.ContentType}
 	}
 	return tags
+}
+
+func normalizePostObjectAnchors(post *postmodel.Post, payload map[string]any) {
+	if post == nil {
+		return
+	}
+	if primaryHomepageID, exists := payload["primaryHomepageId"]; exists {
+		post.PrimaryHomepageId = strings.TrimSpace(asString(primaryHomepageID))
+	}
+	if primaryHomepageType, exists := payload["primaryHomepageType"]; exists {
+		post.PrimaryHomepageType = strings.TrimSpace(asString(primaryHomepageType))
+	}
+	if primaryHomepageSnapshot, exists := payload["primaryHomepageSnapshot"]; exists {
+		post.PrimaryHomepageSnapshot = asMap(primaryHomepageSnapshot)
+	}
+	if entityRefs, exists := payload["entityRefs"]; exists {
+		post.EntityRefs = normalizeRuntimeEntityRefs(asStringSlice(entityRefs))
+	} else {
+		post.EntityRefs = normalizeRuntimeEntityRefs(post.EntityRefs)
+	}
+	if canonicalEntityID := strings.TrimSpace(canonicalEntityIDFromPayload(payload)); canonicalEntityID != "" {
+		post.CanonicalEntityId = canonicalEntityID
+	} else if canonicalEntityID := strings.TrimSpace(canonicalEntityIDFromHomepage(post.PrimaryHomepageId, post.PrimaryHomepageType)); canonicalEntityID != "" {
+		post.CanonicalEntityId = canonicalEntityID
+	} else {
+		post.CanonicalEntityId = strings.TrimSpace(post.CanonicalEntityId)
+	}
+	if post.CanonicalEntityId != "" && !containsString(post.EntityRefs, post.CanonicalEntityId) {
+		post.EntityRefs = append([]string{post.CanonicalEntityId}, post.EntityRefs...)
+	}
+}
+
+func canonicalEntityIDFromPayload(payload map[string]any) string {
+	if payload == nil {
+		return ""
+	}
+	if explicit := strings.TrimSpace(asString(payload["canonicalEntityId"])); explicit != "" {
+		return explicit
+	}
+	snapshot := asMap(payload["primaryHomepageSnapshot"])
+	return strings.TrimSpace(asString(snapshot["canonicalEntityId"]))
+}
+
+func canonicalEntityIDFromHomepage(homepageID, homepageType string) string {
+	id := strings.TrimSpace(homepageID)
+	if id == "" {
+		return ""
+	}
+	normalizedType := strings.TrimSpace(homepageType)
+	if normalizedType == "" {
+		normalizedType = inferHomepageTypeFromID(id)
+	}
+	if normalizedType == "" {
+		return ""
+	}
+	trimmedID := strings.TrimSpace(strings.TrimPrefix(id, "homepage_"))
+	prefix := normalizedType + "_"
+	if strings.HasPrefix(trimmedID, prefix) {
+		trimmedID = strings.TrimPrefix(trimmedID, prefix)
+	}
+	trimmedID = strings.Trim(trimmedID, "_")
+	if trimmedID == "" {
+		return ""
+	}
+	return "entity:" + normalizedType + ":" + trimmedID
+}
+
+func inferHomepageTypeFromID(homepageID string) string {
+	id := strings.TrimSpace(homepageID)
+	switch {
+	case strings.HasPrefix(id, "homepage_sight_"):
+		return "sight"
+	case strings.HasPrefix(id, "homepage_restaurant_"):
+		return "restaurant"
+	case strings.HasPrefix(id, "homepage_hotel_"):
+		return "hotel"
+	case strings.HasPrefix(id, "homepage_vehicle_"):
+		return "vehicle"
+	case strings.HasPrefix(id, "fixture_homepage_travel_photo_"):
+		return "travel_photo"
+	case strings.HasPrefix(id, "fixture_homepage_university_"):
+		return "university"
+	default:
+		return ""
+	}
+}
+
+func normalizeRuntimeEntityRefs(refs []string) []string {
+	out := make([]string, 0, len(refs))
+	seen := map[string]struct{}{}
+	for _, ref := range refs {
+		normalized := strings.TrimSpace(ref)
+		if normalized == "" {
+			continue
+		}
+		if strings.Contains(normalized, "/") && !strings.HasPrefix(normalized, "entity:") {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	return out
+}
+
+func containsString(items []string, want string) bool {
+	for _, item := range items {
+		if strings.TrimSpace(item) == want {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeContentIdentity(contentType, requested string) string {
@@ -3412,6 +3535,7 @@ func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) erro
 			strings.TrimSpace(asString(assistantUsePolicy)),
 		)
 	}
+	normalizePostObjectAnchors(post, payload)
 	if post.ContentIdentity == "" {
 		post.ContentIdentity = normalizeContentIdentity(post.ContentType, "")
 	}

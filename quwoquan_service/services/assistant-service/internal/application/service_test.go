@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,6 +100,69 @@ func TestListSkillsIncludesP0CloudManagedSkills(t *testing.T) {
 		if !seen[skillID] {
 			t.Fatalf("missing P0 skill %q in catalog: %#v", skillID, view.Items)
 		}
+	}
+	if !seen["creation_assistant"] {
+		t.Fatalf("missing creation assistant skill in catalog: %#v", view.Items)
+	}
+}
+
+func TestSuggestCreationAssistanceRequiresEnabledSkill(t *testing.T) {
+	service := NewAssistantService(
+		persistence.NewMemoryEventStore(),
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
+	)
+
+	resp, err := service.SuggestCreationAssistance(context.Background(), "user_1", assistant.AssistantCreationSuggestRequest{
+		BodyDigest: "九寨沟旅行路线和摄影点整理",
+	})
+	if err != nil {
+		t.Fatalf("SuggestCreationAssistance error: %v", err)
+	}
+	if resp.Available || resp.UnavailableReason != "skill_not_enabled" {
+		t.Fatalf("resp=%+v, want unavailable skill_not_enabled", resp)
+	}
+}
+
+func TestSuggestCreationAssistanceReturnsTraceableSuggestions(t *testing.T) {
+	service := NewAssistantService(
+		persistence.NewMemoryEventStore(),
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+		WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
+	)
+	if _, err := service.CreateSkillSubscription(context.Background(), "user_1", assistant.CreateSkillSubscriptionInput{
+		SkillID:  "creation_assistant",
+		DomainID: "content_creation",
+		Trigger:  assistant.SkillSubscriptionTrigger{Type: "cron", Cron: "0 8 * * *"},
+	}); err != nil {
+		t.Fatalf("CreateSkillSubscription error: %v", err)
+	}
+
+	resp, err := service.SuggestCreationAssistance(context.Background(), "user_1", assistant.AssistantCreationSuggestRequest{
+		BodyDigest:        "峨眉山旅行路线和摄影点整理",
+		PrimaryHomepageID: "homepage_sight_emeishan",
+	})
+	if err != nil {
+		t.Fatalf("SuggestCreationAssistance error: %v", err)
+	}
+	if !resp.Available {
+		t.Fatalf("resp unavailable: %+v", resp)
+	}
+	if len(resp.SuggestedTagRefs) == 0 {
+		t.Fatalf("expected tag suggestions, got %+v", resp)
+	}
+	for _, tag := range resp.SuggestedTagRefs {
+		if strings.Contains(tag, "收藏") || strings.Contains(tag, "稍后看") {
+			t.Fatalf("forbidden content-long-action tag suggestion: %q", tag)
+		}
+	}
+	if len(resp.SuggestedHomepages) != 1 || resp.SuggestedHomepages[0].ID != "homepage_sight_emeishan" {
+		t.Fatalf("homepages=%+v", resp.SuggestedHomepages)
+	}
+	if resp.SuggestedHomepages[0].CanonicalEntityID != "" {
+		t.Fatalf("fallback homepages should not fabricate canonical entity ids: %+v", resp.SuggestedHomepages)
 	}
 }
 

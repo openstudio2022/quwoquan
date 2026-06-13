@@ -1,0 +1,43 @@
+version: 1
+read_model: HomepageIntroductionAsset
+
+description: |
+  主页完整介绍页中的图片/媒体资产。由数据工程实体主页三件套 page.md / manifest.json
+  映射而来，sourceRef 保留事实与授权来源，端侧只读展示。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: HomepageIntroductionAsset
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/homepage_introduction_asset.g.dart
+  fields:
+    - name: assetId
+      dart_type: String
+      nullable: false
+      source: assetId
+      aliases: [assetId, id]
+      default: "''"
+
+    - name: url
+      dart_type: String
+      nullable: false
+      source: url
+      aliases: [url, imageUrl]
+      default: "''"
+
+    - name: caption
+      dart_type: String
+      nullable: true
+      source: caption
+      aliases: [caption]
+
+    - name: sourceRef
+      dart_type: String
+      nullable: true
+      source: sourceRef
+      aliases: [sourceRef]

@@ -139,6 +139,17 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, shell)
+	case "introduction":
+		if r.Method != http.MethodGet || len(segments) != 2 {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		introduction, err := h.service.GetHomepageIntroduction(r.Context(), homepageID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, introduction)
 	case "review-summary":
 		if r.Method != http.MethodGet || len(segments) != 2 {
 			writeRuntimeNotFound(w, r)

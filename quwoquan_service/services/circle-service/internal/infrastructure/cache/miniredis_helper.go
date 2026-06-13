@@ -1,8 +1,8 @@
 package cache
 
-import "github.com/redis/go-redis/v9"
+import rtredis "quwoquan_service/runtime/redis"
 
 // NewMiniredisClient creates a redis.Client suitable for miniredis in tests.
-func NewMiniredisClient(addr string) *redis.Client {
-	return redis.NewClient(&redis.Options{Addr: addr})
+func NewMiniredisClient(_ string) rtredis.Client {
+	return rtredis.NewMemoryClient()
 }

@@ -134,8 +134,9 @@ func main() {
 		log.Fatalf("postgres ping: %v", err)
 	}
 
-	// 2. Run migrations
-	if err := persistence.RunMigrations(ctx, pgPool); err != nil {
+	// 2. Run startup migrations with a persisted ledger so restart/rollout can
+	// safely keep the existing Postgres volume.
+	if err := persistence.RunManagedMigrations(ctx, pgPool); err != nil {
 		log.Fatalf("migration: %v", err)
 	}
 

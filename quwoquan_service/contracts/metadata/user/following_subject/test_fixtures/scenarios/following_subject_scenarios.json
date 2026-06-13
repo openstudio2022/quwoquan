@@ -48,14 +48,14 @@
             "latestChangeReason": ""
           },
           {
-            "subjectId": "homepage_jiuzhaigou",
+            "subjectId": "homepage_sight_emeishan",
             "subjectType": "homepage",
-            "displayName": "九寨沟",
+            "displayName": "峨眉山",
             "avatarUrl": "",
             "coverUrl": "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=240",
             "subtitle": "地点动态有更新",
             "targetRouteId": "homepage_detail",
-            "targetObjectId": "homepage_jiuzhaigou",
+            "targetObjectId": "homepage_sight_emeishan",
             "followedAt": "2026-05-24T08:00:00Z",
             "lastVisitedAt": "2026-05-30T08:00:00Z",
             "latestChangedAt": "2026-06-01T12:20:00Z",
@@ -71,13 +71,13 @@
       "name": "mark_visited_clears_unread",
       "viewerSubAccountId": "user_001",
       "request": {
-        "subjectId": "homepage_jiuzhaigou",
+        "subjectId": "homepage_sight_emeishan",
         "subjectType": "homepage",
         "visitedAt": "2026-06-02T08:00:00Z",
         "clientRequestId": "client-request-001"
       },
       "response": {
-        "subjectId": "homepage_jiuzhaigou",
+        "subjectId": "homepage_sight_emeishan",
         "subjectType": "homepage",
         "lastVisitedAt": "2026-06-02T08:00:00Z",
         "hasUnreadChanges": false

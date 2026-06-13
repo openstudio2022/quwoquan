@@ -39,7 +39,7 @@ func testDB(t *testing.T) (*mongo.Database, func()) {
 func samplePosts() []PostDoc {
 	return []PostDoc{
 		{PostRef: "posts/article/体验/甲居藏寨体验/1", ContentType: "article", Title: "甲居藏寨体验", Angle: "体验", Seq: 1,
-			EntityRefs: []string{"地点/景区/甲居藏寨"}, TagRefs: []string{"Topic/旅行"}, Template: "journal",
+			EntityRefs: []string{"地点/景区/甲居藏寨"}, NormalizedEntityRefs: []string{"entity:景区:甲居藏寨"}, TagRefs: []string{"Topic/旅行"}, Template: "journal",
 			GeneratorModel: "agent/x", ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
 			ArticleAssetManifest: &ArticleAssetManifestDoc{
 				SchemaVersion:          1,
@@ -57,7 +57,7 @@ func samplePosts() []PostDoc {
 			UpdatedAt:    time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC),
 			PublishedAt:  time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)},
 		{PostRef: "posts/article/攻略/色达攻略/1", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
-			EntityRefs: []string{"地点/景区/色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+			EntityRefs: []string{"地点/景区/色达"}, NormalizedEntityRefs: []string{"entity:景区:色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
 			CreatedAt: time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
 			UpdatedAt: time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
 			PublishedAt: time.Date(2026, 4, 2, 8, 0, 0, 0, time.UTC)},
@@ -121,7 +121,7 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	if got.ID != "posts/article/体验/甲居藏寨体验/1" {
 		t.Fatalf("post _id must use stable postRef, got %q", got.ID)
 	}
-	if len(got.EntityRefs) != 1 || got.EntityRefs[0] != "地点/景区/甲居藏寨" {
+	if len(got.EntityRefs) != 1 || got.EntityRefs[0] != "entity:景区:甲居藏寨" {
 		t.Fatalf("entityRefs wrong: %+v", got.EntityRefs)
 	}
 	if len(got.TagRefs) != 1 || got.TagRefs[0] != "Topic/旅行" {

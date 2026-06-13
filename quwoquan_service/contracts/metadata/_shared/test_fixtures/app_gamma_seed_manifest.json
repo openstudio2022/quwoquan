@@ -72,17 +72,19 @@
         "user_profile_core",
         "persona_core",
         "profile_feed_core",
-        "relationship_core"
+        "relationship_core",
+        "following_subject_core"
       ],
       "resetScope": "fixture_user_*",
       "targetStore": "user-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/user/profile"
+        "/v1/user/profile",
+        "/v1/user/following-subjects"
       ]
     },
     {
       "domain": "entity",
-      "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.json",
+      "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.gamma-curated.json",
       "refs": [
         "entity_homepage_core",
         "entity_claim_core",
@@ -92,7 +94,8 @@
       "targetStore": "entity-service:gamma_test_namespace",
       "verifiedEndpoints": [
         "/v1/homepages/search",
-        "/v1/homepages/{homepageId}/object-page-bundle"
+        "/v1/homepages/{homepageId}/object-page-bundle",
+        "/v1/homepages/{homepageId}/introduction"
       ]
     },
     {

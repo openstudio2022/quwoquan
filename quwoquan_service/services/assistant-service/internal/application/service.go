@@ -58,22 +58,26 @@ type ProjectorEvent struct {
 }
 
 type AssistantService struct {
-	events            EventStore
-	profiles          LearningProfileStore
-	consents          ConsentStore
-	cache             rtredis.Client
-	publisher         repository.EventPublisher
-	projector         Projector
-	appMessages       AppMessageStore
-	subscriptions     SkillSubscriptionStore
-	proactiveInterest ProactiveInterestReader
-	chatGrounding     ChatGroundingClient
-	agentLoop         *AgentLoop
-	mu                sync.RWMutex
-	conversations     map[string]assistant.AssistantConversation
-	turns             map[string]assistant.AssistantTurn
-	cronClaims        map[string]bool
-	now               func() time.Time
+	events                     EventStore
+	profiles                   LearningProfileStore
+	consents                   ConsentStore
+	cache                      rtredis.Client
+	publisher                  repository.EventPublisher
+	projector                  Projector
+	appMessages                AppMessageStore
+	subscriptions              SkillSubscriptionStore
+	proactiveInterest          ProactiveInterestReader
+	creationGrounding          CreationSuggestGrounding
+	intersectionInbox          IntersectionInboxReader
+	chatGrounding              ChatGroundingClient
+	agentLoop                  *AgentLoop
+	mu                         sync.RWMutex
+	conversations              map[string]assistant.AssistantConversation
+	turns                      map[string]assistant.AssistantTurn
+	cronClaims                 map[string]bool
+	intersectionClaims         map[string]bool
+	intersectionReminderPolicy IntersectionReminderPolicy
+	now                        func() time.Time
 }
 
 type AssistantServiceOption func(*AssistantService)
@@ -105,14 +109,30 @@ func WithProactiveInterestReader(reader ProactiveInterestReader) AssistantServic
 	return func(s *AssistantService) { s.proactiveInterest = reader }
 }
 
+func WithCreationSuggestGrounding(grounding CreationSuggestGrounding) AssistantServiceOption {
+	return func(s *AssistantService) { s.creationGrounding = grounding }
+}
+
+func WithIntersectionInboxReader(reader IntersectionInboxReader) AssistantServiceOption {
+	return func(s *AssistantService) { s.intersectionInbox = reader }
+}
+
+func WithIntersectionReminderPolicy(policy IntersectionReminderPolicy) AssistantServiceOption {
+	return func(s *AssistantService) {
+		s.intersectionReminderPolicy = normalizeIntersectionReminderPolicy(policy)
+	}
+}
+
 func NewAssistantService(events EventStore, consents ConsentStore, cache rtredis.Client, opts ...AssistantServiceOption) *AssistantService {
 	svc := &AssistantService{
-		events:        events,
-		consents:      consents,
-		cache:         cache,
-		conversations: map[string]assistant.AssistantConversation{},
-		turns:         map[string]assistant.AssistantTurn{},
-		cronClaims:    map[string]bool{},
+		events:                     events,
+		consents:                   consents,
+		cache:                      cache,
+		conversations:              map[string]assistant.AssistantConversation{},
+		turns:                      map[string]assistant.AssistantTurn{},
+		cronClaims:                 map[string]bool{},
+		intersectionClaims:         map[string]bool{},
+		intersectionReminderPolicy: defaultIntersectionReminderPolicy(),
 		now: func() time.Time {
 			return time.Now().UTC()
 		},

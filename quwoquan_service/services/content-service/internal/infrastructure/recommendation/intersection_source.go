@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	app "quwoquan_service/services/content-service/internal/application"
@@ -49,6 +50,7 @@ func (s *MongoIntersectionSource) FactReasons(ctx context.Context, userID, chann
 			"圈子兴趣",
 			"你在圈子里常见这些主题",
 			"circleTag",
+			"sharedTagSample",
 			"view_object",
 			circleTags,
 			7*24*time.Hour,
@@ -63,6 +65,7 @@ func (s *MongoIntersectionSource) FactReasons(ctx context.Context, userID, chann
 			"社交交集",
 			"你关注的人也更常讨论这些主题",
 			"followEdge",
+			"followeeDiscussedThis",
 			"view_object",
 			friendTags,
 			7*24*time.Hour,
@@ -90,6 +93,7 @@ func (s *MongoIntersectionSource) AffinityReasons(ctx context.Context, userID, c
 				"圈子热看",
 				"圈子里最近更热的内容",
 				"social_circle",
+				"sharedCircle",
 				"open_object",
 				candidates,
 				7*24*time.Hour,
@@ -117,7 +121,7 @@ func (s *MongoIntersectionSource) ObjectReasons(ctx context.Context, viewerID, o
 		objectTags = nil
 	}
 
-	reasons := make([]app.IntersectionReasonView, 0, 2)
+	reasons := make([]app.IntersectionReasonView, 0, 3)
 	if len(objectTags) > 0 {
 		reasons = append(reasons, buildTagReason(
 			now,
@@ -126,6 +130,7 @@ func (s *MongoIntersectionSource) ObjectReasons(ctx context.Context, viewerID, o
 			objectLabel(objectType),
 			objectDisplayText(objectType, objectTags),
 			"tagRef",
+			"sharedTagSample",
 			"view_object",
 			objectTags,
 			30*24*time.Hour,
@@ -134,6 +139,12 @@ func (s *MongoIntersectionSource) ObjectReasons(ctx context.Context, viewerID, o
 
 	if relReason, ok := s.viewerRelationReason(ctx, now, viewerID, objectID, objectType); ok {
 		reasons = append(reasons, relReason)
+	}
+
+	if objectKindForObjectType(objectType) != "person" {
+		if visitReason, ok := s.followeeVisitedReason(ctx, now, viewerID, objectID, objectType); ok {
+			reasons = append(reasons, visitReason)
+		}
 	}
 
 	kind := objectKindForObjectType(objectType)
@@ -174,9 +185,10 @@ func (s *MongoIntersectionSource) friendContentReason(ctx context.Context, now t
 		now,
 		"content",
 		"friend_content",
-		"好友在看",
+		"关注的人在看",
 		"你关注的人最近看过这些内容",
 		"social_friend",
+		"followeeViewing",
 		"open_object",
 		candidates,
 		7*24*time.Hour,
@@ -184,6 +196,94 @@ func (s *MongoIntersectionSource) friendContentReason(ctx context.Context, now t
 	), true
 }
 
+// 真实数据源查询上限：限制单次交集计算扫描的边数，保证对象页拉取 P99 可控。
+const (
+	maxFolloweeScan      = 200
+	maxBehaviorScan      = 300
+	maxIntersectionPoint = 3
+)
+
+// followeeSet 读取 follow_edges 中 userID 关注的人（上限 maxFolloweeScan）。
+func (s *MongoIntersectionSource) followeeSet(ctx context.Context, userID string) map[string]struct{} {
+	out := map[string]struct{}{}
+	if s.social == nil || s.social.db == nil || strings.TrimSpace(userID) == "" {
+		return out
+	}
+	cur, err := s.social.db.Collection("follow_edges").Find(ctx,
+		bson.M{"followerId": userID}, mongoFindLimit(maxFolloweeScan))
+	if err != nil {
+		return out
+	}
+	defer cur.Close(ctx)
+	for cur.Next(ctx) {
+		var doc struct {
+			FolloweeID string `bson:"followeeId"`
+		}
+		if err := cur.Decode(&doc); err == nil && strings.TrimSpace(doc.FolloweeID) != "" {
+			out[doc.FolloweeID] = struct{}{}
+		}
+	}
+	return out
+}
+
+// behaviorRefs 读取 rm_behavior_events 中 userID 指定 action 的目标引用集合。
+// useEntityRefs=true 时取 entityRefs（实体到访），否则取 contentId（内容互动）。
+func (s *MongoIntersectionSource) behaviorRefs(ctx context.Context, userID, action string, useEntityRefs bool) map[string]struct{} {
+	out := map[string]struct{}{}
+	if s.social == nil || s.social.db == nil || strings.TrimSpace(userID) == "" {
+		return out
+	}
+	cur, err := s.social.db.Collection("rm_behavior_events").Find(ctx,
+		bson.M{"userId": userID, "action": action}, mongoFindLimit(maxBehaviorScan))
+	if err != nil {
+		return out
+	}
+	defer cur.Close(ctx)
+	for cur.Next(ctx) {
+		var doc struct {
+			ContentID  string   `bson:"contentId"`
+			EntityRefs []string `bson:"entityRefs"`
+		}
+		if err := cur.Decode(&doc); err != nil {
+			continue
+		}
+		if useEntityRefs {
+			for _, ref := range doc.EntityRefs {
+				if strings.TrimSpace(ref) != "" {
+					out[ref] = struct{}{}
+				}
+			}
+		} else if strings.TrimSpace(doc.ContentID) != "" {
+			out[doc.ContentID] = struct{}{}
+		}
+	}
+	return out
+}
+
+// intersectKeys 返回两集合交集（排除 exclude 中的 key），结果排序保证幂等。
+func intersectKeys(a, b map[string]struct{}, exclude ...string) []string {
+	skip := map[string]struct{}{}
+	for _, e := range exclude {
+		skip[e] = struct{}{}
+	}
+	out := make([]string, 0)
+	for k := range a {
+		if _, ok := b[k]; !ok {
+			continue
+		}
+		if _, ok := skip[k]; ok {
+			continue
+		}
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// viewerRelationReason 产出 viewer↔object（人）之间的事实交集证据组：
+// sharedFollowees（共同关注的人）/ sharedCircle（共同圈子）/
+// coCommented（共同讨论）/ coVisitedEntity（共同到访实体）。
+// 关注状态本身（互关/单向）不再作为交集点，由 relationKind 承载。
 func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now time.Time, viewerID, objectID, objectType string) (app.IntersectionReasonView, bool) {
 	if s.social == nil || s.social.db == nil {
 		return app.IntersectionReasonView{}, false
@@ -196,58 +296,75 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 	viewerFollows := followColl.FindOne(ctx, bson.M{"followerId": viewerID, "followeeId": objectID}).Decode(&follow) == nil
 	objectFollows := followColl.FindOne(ctx, bson.M{"followerId": objectID, "followeeId": viewerID}).Decode(&follow) == nil
 
-	circleCount := s.sharedCircleCount(ctx, viewerID, objectID)
-	if !viewerFollows && !objectFollows && circleCount == 0 {
-		return app.IntersectionReasonView{}, false
+	points := make([]app.IntersectionPointView, 0, 4)
+
+	// sharedFollowees：双方共同关注的第三方集合（排除彼此）。
+	sharedFollowees := intersectKeys(
+		s.followeeSet(ctx, viewerID), s.followeeSet(ctx, objectID), viewerID, objectID)
+	if n := len(sharedFollowees); n > 0 {
+		points = append(points, app.IntersectionPointView{
+			PointID:     objectID + "_shared_followees",
+			PointClass:  "fact",
+			Dimension:   "relationship",
+			Label:       "共同关注的人",
+			DisplayText: strconv.Itoa(n) + "位共同关注的人",
+			SourceRef:   "sharedFollowees",
+			Visibility:  "public",
+			Count:       n,
+			SampleText:  strings.Join(headKeys(sharedFollowees, maxIntersectionPoint), "、"),
+		})
 	}
 
-	points := make([]app.IntersectionPointView, 0, 2)
-	if viewerFollows && objectFollows {
-		points = append(points, app.IntersectionPointView{
-			PointID:     objectID + "_mutual",
-			PointClass:  "fact",
-			Dimension:   "relationship",
-			Label:       "互相关注",
-			DisplayText: "你们互相关注",
-			SourceRef:   "mutualFriend",
-			Visibility:  "public",
-			Count:       1,
-		})
-	} else if viewerFollows {
-		points = append(points, app.IntersectionPointView{
-			PointID:     objectID + "_follow",
-			PointClass:  "fact",
-			Dimension:   "relationship",
-			Label:       "已关注",
-			DisplayText: "你已关注对方",
-			SourceRef:   "commonFollow",
-			Visibility:  "public",
-			Count:       1,
-		})
-	} else if objectFollows {
-		points = append(points, app.IntersectionPointView{
-			PointID:     objectID + "_followed_by",
-			PointClass:  "fact",
-			Dimension:   "relationship",
-			Label:       "被关注",
-			DisplayText: "对方关注了你",
-			SourceRef:   "commonFollow",
-			Visibility:  "public",
-			Count:       1,
-		})
-	}
-	if circleCount > 0 {
+	// sharedCircle：共同圈子。
+	if circleCount := s.sharedCircleCount(ctx, viewerID, objectID); circleCount > 0 {
 		points = append(points, app.IntersectionPointView{
 			PointID:     objectID + "_circle",
 			PointClass:  "fact",
 			Dimension:   "relationship",
 			Label:       "共同圈子",
-			DisplayText: "你们在同一个圈子里",
-			SourceRef:   "friendJoinedRelatedCircle",
+			DisplayText: strconv.Itoa(circleCount) + "个共同圈子",
+			SourceRef:   "sharedCircle",
 			Visibility:  "public",
 			Count:       circleCount,
 		})
 	}
+
+	// coCommented：双方都评论过的内容。
+	coCommented := intersectKeys(
+		s.behaviorRefs(ctx, viewerID, "comment", false),
+		s.behaviorRefs(ctx, objectID, "comment", false))
+	if n := len(coCommented); n > 0 {
+		points = append(points, app.IntersectionPointView{
+			PointID:     objectID + "_co_commented",
+			PointClass:  "fact",
+			Dimension:   "content",
+			Label:       "共同讨论",
+			DisplayText: "讨论过" + strconv.Itoa(n) + "篇相同内容",
+			SourceRef:   "coCommented",
+			Visibility:  "public",
+			Count:       n,
+			SampleText:  strings.Join(headKeys(coCommented, maxIntersectionPoint), "、"),
+		})
+	}
+
+	// coVisitedEntity：双方都到访过的实体（实体页浏览行为的 entityRefs 交集）。
+	coVisited := intersectKeys(
+		s.behaviorRefs(ctx, viewerID, "entity_page_view", true),
+		s.behaviorRefs(ctx, objectID, "entity_page_view", true))
+	if n := len(coVisited); n > 0 {
+		points = append(points, app.IntersectionPointView{
+			PointID:     objectID + "_co_visited",
+			PointClass:  "fact",
+			Dimension:   "location",
+			Label:       "共同去过",
+			DisplayText: "都去过" + strconv.Itoa(n) + "个相同的地方",
+			SourceRef:   "coVisitedEntity",
+			Visibility:  "public",
+			Count:       n,
+			SampleText:  strings.Join(headKeys(coVisited, maxIntersectionPoint), "、"),
+		})
+	}
+
 	if len(points) == 0 {
 		return app.IntersectionReasonView{}, false
 	}
@@ -256,15 +373,23 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 		relationKind = "followed_by"
 	} else if viewerFollows && !objectFollows {
 		relationKind = "following"
+	} else if !viewerFollows && !objectFollows {
+		relationKind = "none"
+	}
+	primary := points[0]
+	// T3 空窗治理：人级 reason 回填对方真实展示资料，避免 spotlight 空头像。
+	displayName, avatarURL := s.userDisplayProfile(ctx, objectID)
+	if displayName == "" {
+		displayName = objectLabel(objectType)
 	}
 	return app.IntersectionReasonView{
 		IntersectionID:     objectID + "_relationship",
 		IntersectionClass:  "fact",
 		Dimension:          "relationship",
-		DisplayName:        objectLabel(objectType),
-		AvatarURL:          "",
-		Label:              "关系证据",
-		DisplayText:        "你和这个对象存在真实社交关系证据",
+		DisplayName:        displayName,
+		AvatarURL:          avatarURL,
+		Label:              primary.Label,
+		DisplayText:        primary.DisplayText,
 		SharedCount:        len(points),
 		Strength:           scoreFromCount(len(points), 4),
 		ConfidenceLabel:    "",
@@ -279,6 +404,116 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 		FactPointCount:     len(points),
 		TotalPointCount:    len(points),
 	}, true
+}
+
+// followeeVisitedReason 桥接型交集：viewer 关注的人里有谁到访过该对象（实体/地点页）。
+func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now time.Time, viewerID, objectID, objectType string) (app.IntersectionReasonView, bool) {
+	if s.social == nil || s.social.db == nil || strings.TrimSpace(viewerID) == "" {
+		return app.IntersectionReasonView{}, false
+	}
+	followees := s.followeeSet(ctx, viewerID)
+	if len(followees) == 0 {
+		return app.IntersectionReasonView{}, false
+	}
+	followeeIDs := make([]string, 0, len(followees))
+	for id := range followees {
+		followeeIDs = append(followeeIDs, id)
+	}
+	cur, err := s.social.db.Collection("rm_behavior_events").Find(ctx, bson.M{
+		"userId":     bson.M{"$in": followeeIDs},
+		"action":     "entity_page_view",
+		"entityRefs": objectID,
+	}, mongoFindLimit(maxBehaviorScan))
+	if err != nil {
+		return app.IntersectionReasonView{}, false
+	}
+	defer cur.Close(ctx)
+	visitors := map[string]struct{}{}
+	for cur.Next(ctx) {
+		var doc struct {
+			UserID string `bson:"userId"`
+		}
+		if err := cur.Decode(&doc); err == nil && strings.TrimSpace(doc.UserID) != "" {
+			visitors[doc.UserID] = struct{}{}
+		}
+	}
+	if len(visitors) == 0 {
+		return app.IntersectionReasonView{}, false
+	}
+	visitorIDs := make([]string, 0, len(visitors))
+	for id := range visitors {
+		visitorIDs = append(visitorIDs, id)
+	}
+	sort.Strings(visitorIDs)
+	n := len(visitorIDs)
+	displayText := strconv.Itoa(n) + "位你关注的人来过这里"
+	points := make([]app.IntersectionPointView, 0, maxIntersectionPoint)
+	for i, id := range headKeys(visitorIDs, maxIntersectionPoint) {
+		points = append(points, app.IntersectionPointView{
+			PointID:     objectID + "_followee_visited_" + strconv.Itoa(i),
+			PointClass:  "fact",
+			Dimension:   "relationship",
+			Label:       "你关注的人来过",
+			DisplayText: "你关注的人来过这里",
+			SourceRef:   "followeeVisited",
+			Visibility:  "public",
+			Count:       1,
+			SampleText:  id,
+		})
+	}
+	return app.IntersectionReasonView{
+		IntersectionID:     objectID + "_followee_visited",
+		IntersectionClass:  "fact",
+		Dimension:          "relationship",
+		DisplayName:        objectLabel(objectType),
+		Label:              "你关注的人来过",
+		DisplayText:        displayText,
+		SharedCount:        n,
+		Strength:           scoreFromCount(n, 4),
+		RelationKind:       "bridge",
+		RelationObjectID:   objectID,
+		ActionType:         relationActionType(objectType),
+		ActionTargetID:     objectID,
+		Source:             "followEdge",
+		FreshAt:            now.Format(time.RFC3339),
+		ExpiresAt:          now.Add(7 * 24 * time.Hour).Format(time.RFC3339),
+		IntersectionPoints: points,
+		FactPointCount:     len(points),
+		TotalPointCount:    len(points),
+	}, true
+}
+
+// userDisplayProfile 从 posts 集合的作者快照回填用户展示资料（T3 空窗治理：
+// content-service 域内唯一的用户展示读模型；无发布内容的用户回退空，由
+// 候选窗完备性过滤兜底，不下发空头像的人级 reason 进 spotlight）。
+func (s *MongoIntersectionSource) userDisplayProfile(ctx context.Context, userID string) (displayName, avatarURL string) {
+	if s.social == nil || s.social.db == nil || strings.TrimSpace(userID) == "" {
+		return "", ""
+	}
+	var doc struct {
+		AuthorDisplayNameSnapshot string `bson:"authorDisplayNameSnapshot"`
+		AuthorAvatarUrlSnapshot   string `bson:"authorAvatarUrlSnapshot"`
+	}
+	err := s.social.db.Collection("posts").FindOne(ctx,
+		bson.M{"authorId": userID, "status": "published"},
+		mongoopts.FindOne().SetSort(bson.M{"updatedAt": -1}),
+	).Decode(&doc)
+	if err != nil {
+		return "", ""
+	}
+	return strings.TrimSpace(doc.AuthorDisplayNameSnapshot), strings.TrimSpace(doc.AuthorAvatarUrlSnapshot)
+}
+
+// headKeys 取有序切片前 limit 个。
+func headKeys(keys []string, limit int) []string {
+	if limit <= 0 || limit >= len(keys) {
+		return keys
+	}
+	return keys[:limit]
+}
+
+func mongoFindLimit(limit int64) *mongoopts.FindOptionsBuilder {
+	return mongoopts.Find().SetLimit(limit)
 }
 
 func (s *MongoIntersectionSource) sharedCircleCount(ctx context.Context, viewerID, objectID string) int {
@@ -328,6 +563,7 @@ func buildTagReason(
 	label string,
 	displayText string,
 	source string,
+	pointKind string,
 	actionType string,
 	values []string,
 	ttl time.Duration,
@@ -340,7 +576,7 @@ func buildTagReason(
 			Dimension:   dimension,
 			Label:       value,
 			DisplayText: value,
-			SourceRef:   source,
+			SourceRef:   pointKind,
 			Visibility:  "public",
 			Count:       1,
 			SampleText:  value,
@@ -374,6 +610,7 @@ func buildContentReason(
 	label string,
 	displayText string,
 	source string,
+	pointKind string,
 	actionType string,
 	candidates []rtrec.ContentCandidate,
 	ttl time.Duration,
@@ -392,7 +629,7 @@ func buildContentReason(
 			Dimension:   dimension,
 			Label:       c.Title,
 			DisplayText: c.Title,
-			SourceRef:   source,
+			SourceRef:   pointKind,
 			Visibility:  "public",
 			Count:       1,
 			SampleText:  c.Title,

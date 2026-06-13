@@ -18,7 +18,7 @@ surfaces:
     owner: chat
     route_id: startGroupChat
     path_template: /chat/start-group
-    description: 全局添加入口的发起群聊页
+    description: 全局添加入口的发起讨论页
     operation_ids:
       - CreateConversation
       - ListConversations
@@ -53,7 +53,7 @@ surfaces:
     owner: chat
     route_id: chatManage
     path_template: /chat/{id}/manage
-    description: 群聊管理页
+    description: 讨论管理页
     operation_ids:
       - GetConversation
       - ListMembers
@@ -209,7 +209,7 @@ surfaces:
     owner: entity
     route_id: homepagePicker
     path_template: /homepages/picker
-    description: 共享主页搜索与选择器
+    description: 主页搜索与选择器
     operation_ids:
       - SearchHomepages
       - SuggestHomepageCandidate
@@ -218,7 +218,7 @@ surfaces:
     owner: entity
     route_id: suggestHomepage
     path_template: /homepages/suggest
-    description: 补充缺失共享主页
+    description: 补充缺失主页
     operation_ids:
       - SuggestHomepageCandidate
 
@@ -226,18 +226,26 @@ surfaces:
     owner: entity
     route_id: homepageDetail
     path_template: /homepages/{id}
-    description: 共享主页详情与阅读壳层
+    description: 主页详情与阅读壳层
     operation_ids:
       - GetHomepageDetail
       - GetHomepageShell
       - GetHomepageReviewSummary
       - GetHomepageRelatedGroups
 
+  - id: homepageIntroduction
+    owner: entity
+    route_id: homepageIntroduction
+    path_template: /homepages/{id}/introduction
+    description: 主页完整介绍页（前台「认识{对象名}」）
+    operation_ids:
+      - GetHomepageIntroduction
+
   - id: homepageClaim
     owner: entity
     route_id: homepageClaim
     path_template: /homepages/{id}/claim
-    description: 共享主页认领申请页
+    description: 主页认领申请页
     operation_ids:
       - GetHomepageDetail
       - CreateHomepageClaimRequest
@@ -246,7 +254,7 @@ surfaces:
     owner: entity
     route_id: homepageMaintenance
     path_template: /homepages/{id}/manage
-    description: 已认领共享主页基础维护页
+    description: 已认领主页基础维护页
     operation_ids:
       - GetHomepageDetail
       - UpdateClaimedHomepageBasics
@@ -255,7 +263,7 @@ surfaces:
     owner: entity
     route_id: homepageStatusReport
     path_template: /homepages/{id}/status-report
-    description: 共享主页下线与纠错上报页
+    description: 主页下线与纠错上报页
     operation_ids:
       - GetHomepageDetail
       - CreateHomepageStatusReport

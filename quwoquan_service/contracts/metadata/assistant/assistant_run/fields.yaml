@@ -823,6 +823,132 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+  AssistantSuggestedHomepageView:
+    description: 创作辅助建议的关联主页候选；前台不暴露「实体」词。
+    fields:
+      - name: id
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: type
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: homepage 类型或 objectTypeRef，由对象读模型校验。
+      - name: canonicalEntityId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: runtime 对象归一键；若可解析则优先返回，供创作链直接写 canonical entityRefs。
+      - name: displayName
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: reason
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  AssistantCreationSuggestRequest:
+    description: 创作辅助建议请求。bodyDigest 为草稿正文摘要，不上传完整私密草稿。
+    fields:
+      - name: draftTitle
+        type: string
+        constraints: [NULLABLE]
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: write
+        ops_exposure: none
+      - name: draftSummary
+        type: string
+        constraints: [NULLABLE]
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: write
+        ops_exposure: none
+      - name: bodyDigest
+        type: string
+        constraints: [NULLABLE]
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: write
+        ops_exposure: none
+      - name: boundCircleIds
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+      - name: primaryHomepageId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+
+  AssistantCreationSuggestResponse:
+    description: 创作辅助建议响应。所有 tagRef 与 homepage 均须可溯源；无建议返回空数组。
+    fields:
+      - name: suggestedTagRefs
+        type: "[]string"
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: suggestedHomepages
+        type: "[]AssistantSuggestedHomepageView"
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: suggestedTitle
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: suggestedSummary
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: available
+        type: bool
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: unavailableReason
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
   AssistantConversation:
     description: 助手会话 wire 响应体（与 assistant_conversation 契约字段对齐）
     fields:

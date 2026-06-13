@@ -56,6 +56,9 @@ routes:
     query_params: [query]
   - id: homepageDetail
     path: /homepages/{id}
+  - id: homepageIntroduction
+    path: /homepages/{id}/introduction
+    query_params: [source]
   - id: homepageClaim
     path: /homepages/{id}/claim
   - id: homepageMaintenance

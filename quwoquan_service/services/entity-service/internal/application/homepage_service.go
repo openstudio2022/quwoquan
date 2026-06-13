@@ -75,16 +75,17 @@ type Homepage struct {
 }
 
 type HomepageSearchItemView struct {
-	HomepageID    string   `json:"homepageId"`
-	Title         string   `json:"title"`
-	Subtitle      string   `json:"subtitle,omitempty"`
-	HomepageType  string   `json:"homepageType"`
-	CoverURL      string   `json:"coverUrl,omitempty"`
-	City          string   `json:"city,omitempty"`
-	Address       string   `json:"address,omitempty"`
-	Status        string   `json:"status"`
-	AverageRating *float64 `json:"averageRating,omitempty"`
-	RatingCount   int      `json:"ratingCount"`
+	HomepageID        string   `json:"homepageId"`
+	CanonicalEntityID string   `json:"canonicalEntityId"`
+	Title             string   `json:"title"`
+	Subtitle          string   `json:"subtitle,omitempty"`
+	HomepageType      string   `json:"homepageType"`
+	CoverURL          string   `json:"coverUrl,omitempty"`
+	City              string   `json:"city,omitempty"`
+	Address           string   `json:"address,omitempty"`
+	Status            string   `json:"status"`
+	AverageRating     *float64 `json:"averageRating,omitempty"`
+	RatingCount       int      `json:"ratingCount"`
 }
 
 type HomepageShellView struct {
@@ -325,16 +326,17 @@ func (s *HomepageService) SearchHomepages(
 			continue
 		}
 		items = append(items, HomepageSearchItemView{
-			HomepageID:    homepage.ID,
-			Title:         homepage.Title,
-			Subtitle:      homepage.Subtitle,
-			HomepageType:  homepage.HomepageType,
-			CoverURL:      homepage.CoverURL,
-			City:          homepage.City,
-			Address:       homepage.Address,
-			Status:        homepage.Status,
-			AverageRating: homepage.AverageRating,
-			RatingCount:   homepage.RatingCount,
+			HomepageID:        homepage.ID,
+			CanonicalEntityID: homepage.CanonicalEntityID,
+			Title:             homepage.Title,
+			Subtitle:          homepage.Subtitle,
+			HomepageType:      homepage.HomepageType,
+			CoverURL:          homepage.CoverURL,
+			City:              homepage.City,
+			Address:           homepage.Address,
+			Status:            homepage.Status,
+			AverageRating:     homepage.AverageRating,
+			RatingCount:       homepage.RatingCount,
 		})
 	}
 	return items
@@ -392,7 +394,7 @@ func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepage
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	homepage, ok := s.homepages[homepageID]
+	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
@@ -402,6 +404,12 @@ func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepage
 	homepage.SourceType = "official_seed"
 	homepage.UpdatedAt = now
 	homepage.PublishedAt = &now
+	if strings.TrimSpace(homepage.CanonicalEntityID) == "" {
+		homepage.CanonicalEntityID = canonicalEntityIDFromTypeAndTitle(
+			homepage.HomepageType,
+			homepage.Title,
+		)
+	}
 	applyDefaultShellData(homepage)
 	if err = s.persistLocked(ctx); err != nil {
 		return nil, err
@@ -418,7 +426,7 @@ func (s *HomepageService) GetHomepage(ctx context.Context, homepageID string) (*
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	homepage, ok := s.homepages[homepageID]
+	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
@@ -523,7 +531,7 @@ func (s *HomepageService) CreateHomepageClaimRequest(
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	homepage, ok := s.homepages[homepageID]
+	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
@@ -543,7 +551,7 @@ func (s *HomepageService) CreateHomepageClaimRequest(
 	now := time.Now().UTC()
 	request := &HomepageClaimRequest{
 		ID:                   s.nextID("claim"),
-		HomepageID:           homepageID,
+		HomepageID:           homepage.ID,
 		RequesterUserID:      strings.TrimSpace(input.RequesterUserID),
 		ClaimTier:            strings.TrimSpace(input.ClaimTier),
 		BusinessLicenseURL:   strings.TrimSpace(input.BusinessLicenseURL),
@@ -578,16 +586,17 @@ func (s *HomepageService) ReviewHomepageClaimRequest(
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	request, ok := s.claimRequests[claimRequestID]
-	if !ok || request.HomepageID != homepageID {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "claim request not found")
-		return nil, err
-	}
-	homepage, ok := s.homepages[homepageID]
+	resolvedHomepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
 	}
+	request, ok := s.claimRequests[claimRequestID]
+	if !ok || request.HomepageID != resolvedHomepage.ID {
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "claim request not found")
+		return nil, err
+	}
+	homepage := resolvedHomepage
 	now := time.Now().UTC()
 	status := normalize(input.Status)
 	switch status {
@@ -624,7 +633,7 @@ func (s *HomepageService) UpdateClaimedHomepageBasics(
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	homepage, ok := s.homepages[homepageID]
+	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
@@ -674,13 +683,14 @@ func (s *HomepageService) CreateHomepageStatusReport(
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.homepages[homepageID]; !ok {
+	homepage, ok := s.resolveHomepageLocked(homepageID)
+	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
 	}
 	report := &HomepageStatusReport{
 		ID:             s.nextID("report"),
-		HomepageID:     homepageID,
+		HomepageID:     homepage.ID,
 		ReporterUserID: strings.TrimSpace(input.ReporterUserID),
 		Reason:         strings.TrimSpace(input.Reason),
 		Description:    strings.TrimSpace(input.Description),
@@ -710,16 +720,17 @@ func (s *HomepageService) ReviewHomepageStatusReport(
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	report, ok := s.statusReports[reportID]
-	if !ok || report.HomepageID != homepageID {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "status report not found")
-		return nil, err
-	}
-	homepage, ok := s.homepages[homepageID]
+	resolvedHomepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
 	}
+	report, ok := s.statusReports[reportID]
+	if !ok || report.HomepageID != resolvedHomepage.ID {
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "status report not found")
+		return nil, err
+	}
+	homepage := resolvedHomepage
 	now := time.Now().UTC()
 	switch normalize(input.Status) {
 	case "confirmed_offline":
@@ -753,6 +764,55 @@ func (s *HomepageService) seed() {
 	pubA := now.Add(-72 * time.Hour)
 	pubB := now.Add(-48 * time.Hour)
 	pubC := now.Add(-96 * time.Hour)
+	add(&Homepage{
+		ID:                 "fixture_homepage_author",
+		Title:              "契约摄影师主页",
+		HomepageType:       "author",
+		CanonicalEntityID:  "entity:author:fixture_user_photo",
+		ObjectPageTemplate: "standard",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		OwnerUserID:        "fixture_user_photo",
+		CategoryTags:       []string{"作者", "摄影", "契约"},
+		RatingCount:        32,
+		CreatedAt:          now.Add(-6 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
+	add(&Homepage{
+		ID:                 "fixture_homepage_circle",
+		Title:              "契约摄影社主页",
+		HomepageType:       "circle",
+		CanonicalEntityID:  "entity:circle:fixture_circle_photo",
+		ObjectPageTemplate: "standard",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		OwnerUserID:        "fixture_circle_photo",
+		CategoryTags:       []string{"圈子", "摄影", "契约"},
+		RatingCount:        24,
+		CreatedAt:          now.Add(-6 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
+	add(&Homepage{
+		ID:                 "fixture_homepage_poi",
+		Title:              "杭州西湖契约主页",
+		HomepageType:       "poi",
+		CanonicalEntityID:  "entity:poi:west_lake_contract",
+		ObjectPageTemplate: "standard",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"地点", "西湖", "契约"},
+		City:               "杭州",
+		Location:           &GeoPoint{Latitude: 30.2431, Longitude: 120.1505},
+		RatingCount:        18,
+		CreatedAt:          now.Add(-6 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
 	add(&Homepage{
 		ID:                 "homepage_sight_west_lake",
 		Title:              "西湖景区",
@@ -851,79 +911,20 @@ func (s *HomepageService) seed() {
 		PublishedAt:        &pubA,
 	})
 	add(&Homepage{
-		ID:                 "fixture_homepage_xdf_alumni",
-		Title:              "新东方校友会",
-		Subtitle:           "校友组织主页模板样本",
-		HomepageType:       "university",
-		CanonicalEntityID:  "entity:homepage:fixture_homepage_xdf_alumni",
-		ObjectPageTemplate: "campus",
-		Status:             "published",
-		SourceType:         "official_seed",
-		ClaimStatus:        "unclaimed",
-		CategoryTags:       []string{"校友", "组织", "北京"},
-		City:               "北京",
-		RatingCount:        420,
-		CreatedAt:          now.Add(-8 * 24 * time.Hour),
-		UpdatedAt:          now.Add(-2 * time.Hour),
-		PublishedAt:        &pubA,
-	})
-	add(&Homepage{
-		ID:                 "hp_duanqiao",
-		Title:              "断桥残雪",
-		Subtitle:           "西湖十景之一与白堤漫步起点",
+		ID:                 "homepage_sight_emeishan",
+		Title:              "峨眉山",
+		Subtitle:           "世界遗产与川西南山地旅行代表目的地",
 		HomepageType:       "sight",
-		CanonicalEntityID:  "entity:homepage:hp_duanqiao",
+		CanonicalEntityID:  "entity:sight:emeishan",
 		ObjectPageTemplate: "travel_photo",
 		Status:             "published",
 		SourceType:         "official_seed",
 		ClaimStatus:        "unclaimed",
-		CategoryTags:       []string{"景点", "西湖十景", "杭州"},
-		CoverURL:           "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
-		Address:            "浙江省杭州市西湖区断桥景区",
-		City:               "杭州",
-		Location:           &GeoPoint{Latitude: 30.2574, Longitude: 120.1487},
-		AverageRating:      &ratingA,
-		RatingCount:        214,
-		CreatedAt:          now.Add(-10 * 24 * time.Hour),
-		UpdatedAt:          now.Add(-2 * time.Hour),
-		PublishedAt:        &pubA,
-	})
-	add(&Homepage{
-		ID:                 "hp_quyuanfenghe",
-		Title:              "曲院风荷",
-		Subtitle:           "西湖赏荷与园林步道的经典片区",
-		HomepageType:       "sight",
-		CanonicalEntityID:  "entity:homepage:hp_quyuanfenghe",
-		ObjectPageTemplate: "travel_photo",
-		Status:             "published",
-		SourceType:         "official_seed",
-		ClaimStatus:        "unclaimed",
-		CategoryTags:       []string{"景点", "园林", "杭州"},
-		CoverURL:           "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
-		Address:            "浙江省杭州市西湖区曲院风荷",
-		City:               "杭州",
-		Location:           &GeoPoint{Latitude: 30.2545, Longitude: 120.1378},
-		AverageRating:      &ratingA,
-		RatingCount:        198,
-		CreatedAt:          now.Add(-10 * 24 * time.Hour),
-		UpdatedAt:          now.Add(-2 * time.Hour),
-		PublishedAt:        &pubA,
-	})
-	add(&Homepage{
-		ID:                 "hp_lingyin",
-		Title:              "灵隐寺",
-		Subtitle:           "飞来峰与千年古刹共同构成的杭州地标",
-		HomepageType:       "sight",
-		CanonicalEntityID:  "entity:homepage:hp_lingyin",
-		ObjectPageTemplate: "travel_photo",
-		Status:             "published",
-		SourceType:         "official_seed",
-		ClaimStatus:        "unclaimed",
-		CategoryTags:       []string{"景点", "寺院", "杭州"},
+		CategoryTags:       []string{"景点", "山地旅行", "乐山"},
 		CoverURL:           "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee",
-		Address:            "浙江省杭州市西湖区灵隐路法云弄1号",
-		City:               "杭州",
-		Location:           &GeoPoint{Latitude: 30.2429, Longitude: 120.1042},
+		Address:            "四川省乐山市峨眉山市黄湾镇",
+		City:               "乐山",
+		Location:           &GeoPoint{Latitude: 29.5593, Longitude: 103.3356},
 		AverageRating:      &ratingC,
 		RatingCount:        356,
 		CreatedAt:          now.Add(-12 * 24 * time.Hour),
@@ -931,20 +932,20 @@ func (s *HomepageService) seed() {
 		PublishedAt:        &pubC,
 	})
 	add(&Homepage{
-		ID:                 "hp_hefangjie",
-		Title:              "河坊街",
-		Subtitle:           "南宋御街延伸段与杭州老城步行街区",
+		ID:                 "homepage_sight_leshan_giant_buddha",
+		Title:              "乐山大佛",
+		Subtitle:           "岷江、青衣江、大渡河交汇处的石刻造像与城市地标",
 		HomepageType:       "sight",
-		CanonicalEntityID:  "entity:homepage:hp_hefangjie",
+		CanonicalEntityID:  "entity:sight:leshan_giant_buddha",
 		ObjectPageTemplate: "travel_photo",
 		Status:             "published",
 		SourceType:         "official_seed",
 		ClaimStatus:        "unclaimed",
-		CategoryTags:       []string{"老街", "夜游", "杭州"},
-		CoverURL:           "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
-		Address:            "浙江省杭州市上城区河坊街",
-		City:               "杭州",
-		Location:           &GeoPoint{Latitude: 30.2486, Longitude: 120.1709},
+		CategoryTags:       []string{"景点", "石刻", "乐山"},
+		CoverURL:           "https://images.unsplash.com/photo-1512453979798-5ea266f8880c",
+		Address:            "四川省乐山市市中区凌云路 2435 号",
+		City:               "乐山",
+		Location:           &GeoPoint{Latitude: 29.5447, Longitude: 103.7730},
 		AverageRating:      &ratingB,
 		RatingCount:        241,
 		CreatedAt:          now.Add(-9 * 24 * time.Hour),
@@ -964,6 +965,40 @@ func (s *HomepageService) seed() {
 		CategoryTags:       []string{"旅行摄影", "机位", "杭州"},
 		City:               "杭州",
 		RatingCount:        680,
+		CreatedAt:          now.Add(-8 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
+	add(&Homepage{
+		ID:                 "fixture_homepage_travel_photo_dali",
+		Title:              "大理旅行摄影路线",
+		Subtitle:           "旅行摄影主页模板样本",
+		HomepageType:       "travel_photo",
+		CanonicalEntityID:  "entity:travel_photo:dali",
+		ObjectPageTemplate: "travel_photo",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"旅行摄影", "机位", "大理"},
+		City:               "大理",
+		RatingCount:        352,
+		CreatedAt:          now.Add(-8 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
+	add(&Homepage{
+		ID:                 "fixture_homepage_travel_photo_tokyo",
+		Title:              "东京城市摄影路线",
+		Subtitle:           "旅行摄影主页模板样本",
+		HomepageType:       "travel_photo",
+		CanonicalEntityID:  "entity:travel_photo:tokyo",
+		ObjectPageTemplate: "travel_photo",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"旅行摄影", "机位", "东京"},
+		City:               "东京",
+		RatingCount:        318,
 		CreatedAt:          now.Add(-8 * 24 * time.Hour),
 		UpdatedAt:          now.Add(-2 * time.Hour),
 		PublishedAt:        &pubA,
@@ -1220,7 +1255,7 @@ func defaultIntersectionReasons(homepage *Homepage, edges []map[string]any) []ma
 			"relationKind":      "mutual",
 			"relationObjectId":  relObj,
 			"label":             "相关圈子",
-			"displayName":       "你认识的人在这",
+			"displayName":       "相关圈子里有你的连接",
 			"avatarUrl":         "",
 			"sharedCount":       len(edges),
 			"strength":          intersectionStrengthFromCount(len(edges), 4),
@@ -1320,12 +1355,16 @@ func defaultAssistantContext(
 			edgeIDs = append(edgeIDs, id)
 		}
 	}
+	entityRefs := []string{}
+	if canonical := strings.TrimSpace(homepage.CanonicalEntityID); canonical != "" {
+		entityRefs = []string{canonical}
+	}
 	return map[string]any{
 		"objectType":            "homepage",
 		"objectId":              homepage.ID,
 		"canonicalEntityId":     homepage.CanonicalEntityID,
 		"tagRefs":               cloneStrings(homepage.CategoryTags),
-		"entityRefs":            []string{homepage.CanonicalEntityID},
+		"entityRefs":            entityRefs,
 		"relationEdgeIds":       edgeIDs,
 		"referralSource":        referralSource,
 		"feedRequestId":         feedRequestID,
@@ -1342,13 +1381,6 @@ func relationObjectID(edges []map[string]any) string {
 		}
 	}
 	return ""
-}
-
-func canonicalEntityID(homepageID string, explicit string) string {
-	if trimmed := strings.TrimSpace(explicit); trimmed != "" {
-		return trimmed
-	}
-	return "entity:homepage:" + strings.TrimSpace(homepageID)
 }
 
 func objectPageTemplate(homepageType string, explicit string) string {

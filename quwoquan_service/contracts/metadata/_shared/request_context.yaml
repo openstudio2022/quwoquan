@@ -101,6 +101,7 @@ domain_operation_page_ids:
     CreateHomepageClaimRequest: entity.homepage.claim.create
     CreateHomepageStatusReport: entity.homepage.status_report.create
     GetHomepageDetail: entity.homepage.detail
+    GetHomepageIntroduction: entity.homepage.introduction
     GetHomepageRelatedGroups: entity.homepage.related_groups
     GetHomepageReviewSummary: entity.homepage.review_summary
     GetHomepageShell: entity.homepage.shell
@@ -178,6 +179,7 @@ standalone_page_ids:
   homepagePicker: entity.homepage.picker
   suggestHomepage: entity.homepage.suggest.page
   homepageDetail: entity.homepage.detail.page
+  homepageIntroduction: entity.homepage.introduction.page
   homepageClaim: entity.homepage.claim.page
   homepageMaintenance: entity.homepage.maintenance.page
   homepageStatusReport: entity.homepage.status_report.page

@@ -7,7 +7,7 @@ description: |
 
 scenarios:
   - name: chat_inbox_dto_parse
-    description: ChatInboxDto 解析（含 mention/unread、群头像主字段、头像拼图汇总与最近消息类型）
+    description: ChatInboxDto 解析（含 mention/unread、讨论头像主字段、头像拼图汇总与最近消息类型）
     assertions:
       - required_fields_non_empty
       - group_avatar_url_optional
@@ -32,7 +32,7 @@ scenarios:
       - app_does_not_parse_notification_from_title
 
   - name: commercial_contact_home_rows
-    description: 商用联系首页行解析，覆盖用户、圈子和群聊
+    description: 商用联系首页行解析，覆盖用户、圈子和讨论
     route: GET /v1/chat/contact-home
     variants: [all, mutual, circle, group]
     assertions:
@@ -42,7 +42,7 @@ scenarios:
       - app_does_not_build_source_summary
 
   - name: commercial_group_home
-    description: 群聊天页顶部与聊天信息页共享同一个 GroupHome DTO
+    description: 讨论页顶部与聊天信息页共享同一个 GroupHome DTO
     route: GET /v1/chat/groups/{conversationId}/home
     assertions:
       - title_member_count_sources_present

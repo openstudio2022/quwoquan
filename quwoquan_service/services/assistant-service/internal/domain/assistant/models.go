@@ -56,29 +56,29 @@ type Scorecard struct {
 }
 
 type AssistantLearningProfile struct {
-	UserID                 string             `bson:"userId" json:"userId"`
-	LastRunID              string             `bson:"lastRunId,omitempty" json:"lastRunId,omitempty"`
-	LastEventID            string             `bson:"lastEventId,omitempty" json:"lastEventId,omitempty"`
-	LastPageType           string             `bson:"lastPageType,omitempty" json:"lastPageType,omitempty"`
-	LastFeedbackType       string             `bson:"lastFeedbackType,omitempty" json:"lastFeedbackType,omitempty"`
-	LastFeedbackText       string             `bson:"lastFeedbackText,omitempty" json:"lastFeedbackText,omitempty"`
-	LastFeedbackScore      float64            `bson:"lastFeedbackScore,omitempty" json:"lastFeedbackScore,omitempty"`
-	LastFeedbackAt         time.Time          `bson:"lastFeedbackAt,omitempty" json:"lastFeedbackAt,omitempty"`
-	LastQueryTextDigest    string             `bson:"lastQueryTextDigest,omitempty" json:"lastQueryTextDigest,omitempty"`
-	LastAnswerTextDigest   string             `bson:"lastAnswerTextDigest,omitempty" json:"lastAnswerTextDigest,omitempty"`
-	LastMetricID           string             `bson:"lastMetricId,omitempty" json:"lastMetricId,omitempty"`
-	LastMetricScore        float64            `bson:"lastMetricScore,omitempty" json:"lastMetricScore,omitempty"`
-	TotalFeedbackCount     int64              `bson:"totalFeedbackCount,omitempty" json:"totalFeedbackCount,omitempty"`
-	PositiveFeedbackCount  int64              `bson:"positiveFeedbackCount,omitempty" json:"positiveFeedbackCount,omitempty"`
-	NegativeFeedbackCount  int64              `bson:"negativeFeedbackCount,omitempty" json:"negativeFeedbackCount,omitempty"`
-	TextFeedbackCount      int64              `bson:"textFeedbackCount,omitempty" json:"textFeedbackCount,omitempty"`
-	HighPriorityCount      int64              `bson:"highPriorityCount,omitempty" json:"highPriorityCount,omitempty"`
-	MediumPriorityCount    int64              `bson:"mediumPriorityCount,omitempty" json:"mediumPriorityCount,omitempty"`
-	MetricSampleCounts     map[string]int64   `bson:"metricSampleCounts,omitempty" json:"metricSampleCounts,omitempty"`
-	MetricScoreSums        map[string]float64 `bson:"metricScoreSums,omitempty" json:"metricScoreSums,omitempty"`
-	LatestMetricScores     map[string]float64 `bson:"latestMetricScores,omitempty" json:"latestMetricScores,omitempty"`
-	ReasonCodeCounts       map[string]int64   `bson:"reasonCodeCounts,omitempty" json:"reasonCodeCounts,omitempty"`
-	UpdatedAt              time.Time          `bson:"updatedAt,omitempty" json:"updatedAt,omitempty"`
+	UserID                string             `bson:"userId" json:"userId"`
+	LastRunID             string             `bson:"lastRunId,omitempty" json:"lastRunId,omitempty"`
+	LastEventID           string             `bson:"lastEventId,omitempty" json:"lastEventId,omitempty"`
+	LastPageType          string             `bson:"lastPageType,omitempty" json:"lastPageType,omitempty"`
+	LastFeedbackType      string             `bson:"lastFeedbackType,omitempty" json:"lastFeedbackType,omitempty"`
+	LastFeedbackText      string             `bson:"lastFeedbackText,omitempty" json:"lastFeedbackText,omitempty"`
+	LastFeedbackScore     float64            `bson:"lastFeedbackScore,omitempty" json:"lastFeedbackScore,omitempty"`
+	LastFeedbackAt        time.Time          `bson:"lastFeedbackAt,omitempty" json:"lastFeedbackAt,omitempty"`
+	LastQueryTextDigest   string             `bson:"lastQueryTextDigest,omitempty" json:"lastQueryTextDigest,omitempty"`
+	LastAnswerTextDigest  string             `bson:"lastAnswerTextDigest,omitempty" json:"lastAnswerTextDigest,omitempty"`
+	LastMetricID          string             `bson:"lastMetricId,omitempty" json:"lastMetricId,omitempty"`
+	LastMetricScore       float64            `bson:"lastMetricScore,omitempty" json:"lastMetricScore,omitempty"`
+	TotalFeedbackCount    int64              `bson:"totalFeedbackCount,omitempty" json:"totalFeedbackCount,omitempty"`
+	PositiveFeedbackCount int64              `bson:"positiveFeedbackCount,omitempty" json:"positiveFeedbackCount,omitempty"`
+	NegativeFeedbackCount int64              `bson:"negativeFeedbackCount,omitempty" json:"negativeFeedbackCount,omitempty"`
+	TextFeedbackCount     int64              `bson:"textFeedbackCount,omitempty" json:"textFeedbackCount,omitempty"`
+	HighPriorityCount     int64              `bson:"highPriorityCount,omitempty" json:"highPriorityCount,omitempty"`
+	MediumPriorityCount   int64              `bson:"mediumPriorityCount,omitempty" json:"mediumPriorityCount,omitempty"`
+	MetricSampleCounts    map[string]int64   `bson:"metricSampleCounts,omitempty" json:"metricSampleCounts,omitempty"`
+	MetricScoreSums       map[string]float64 `bson:"metricScoreSums,omitempty" json:"metricScoreSums,omitempty"`
+	LatestMetricScores    map[string]float64 `bson:"latestMetricScores,omitempty" json:"latestMetricScores,omitempty"`
+	ReasonCodeCounts      map[string]int64   `bson:"reasonCodeCounts,omitempty" json:"reasonCodeCounts,omitempty"`
+	UpdatedAt             time.Time          `bson:"updatedAt,omitempty" json:"updatedAt,omitempty"`
 }
 
 type SkillConsent struct {
@@ -104,13 +104,13 @@ type AssistantEntryPersonalizationChipView struct {
 }
 
 type AssistantEntryPersonalizationView struct {
-	WelcomeMessage     string                                 `json:"welcomeMessage"`
-	SuggestionLines    []string                               `json:"suggestionLines"`
-	Chips              []AssistantEntryPersonalizationChipView `json:"chips"`
-	Personalized       bool                                   `json:"personalized"`
-	MatchedInterestTags []string                              `json:"matchedInterestTags,omitempty"`
-	MatchedSegments    []string                               `json:"matchedSegments,omitempty"`
-	LifecycleStage     string                                 `json:"lifecycleStage,omitempty"`
+	WelcomeMessage      string                                  `json:"welcomeMessage"`
+	SuggestionLines     []string                                `json:"suggestionLines"`
+	Chips               []AssistantEntryPersonalizationChipView `json:"chips"`
+	Personalized        bool                                    `json:"personalized"`
+	MatchedInterestTags []string                                `json:"matchedInterestTags,omitempty"`
+	MatchedSegments     []string                                `json:"matchedSegments,omitempty"`
+	LifecycleStage      string                                  `json:"lifecycleStage,omitempty"`
 }
 
 type SuggestedAction struct {
@@ -191,21 +191,46 @@ type AssistantSkillCatalogListView struct {
 	Items []AssistantSkillCatalogItemView `json:"items"`
 }
 
+type AssistantSuggestedHomepageView struct {
+	ID                string `json:"id"`
+	Type              string `json:"type"`
+	CanonicalEntityID string `json:"canonicalEntityId,omitempty"`
+	DisplayName       string `json:"displayName"`
+	Reason            string `json:"reason,omitempty"`
+}
+
+type AssistantCreationSuggestRequest struct {
+	DraftTitle        string   `json:"draftTitle,omitempty"`
+	DraftSummary      string   `json:"draftSummary,omitempty"`
+	BodyDigest        string   `json:"bodyDigest,omitempty"`
+	BoundCircleIDs    []string `json:"boundCircleIds,omitempty"`
+	PrimaryHomepageID string   `json:"primaryHomepageId,omitempty"`
+}
+
+type AssistantCreationSuggestResponse struct {
+	SuggestedTagRefs   []string                         `json:"suggestedTagRefs"`
+	SuggestedHomepages []AssistantSuggestedHomepageView `json:"suggestedHomepages"`
+	SuggestedTitle     string                           `json:"suggestedTitle,omitempty"`
+	SuggestedSummary   string                           `json:"suggestedSummary,omitempty"`
+	Available          bool                             `json:"available"`
+	UnavailableReason  string                           `json:"unavailableReason,omitempty"`
+}
+
 type AssistantSearchCitationView struct {
-	CitationID   string `json:"citationId"`
-	ObjectType   string `json:"objectType"`
-	ObjectID     string `json:"objectId"`
-	Title        string `json:"title"`
-	ContentType  string `json:"contentType,omitempty"`
-	Snippet      string `json:"snippet,omitempty"`
-	CoverURL     string `json:"coverUrl,omitempty"`
-	BadgeLabel   string `json:"badgeLabel,omitempty"`
-	SourceDomain string `json:"sourceDomain,omitempty"`
-	URL          string  `json:"url,omitempty"`
-	DeepLink     string  `json:"deepLink,omitempty"`
-	Score        float64 `json:"score,omitempty"`
-	RecallSource string  `json:"recallSource,omitempty"`
-	ObjectTypeRef string `json:"objectTypeRef,omitempty"`
+	CitationID    string  `json:"citationId"`
+	ObjectType    string  `json:"objectType"`
+	ObjectID      string  `json:"objectId"`
+	Title         string  `json:"title"`
+	ContentType   string  `json:"contentType,omitempty"`
+	Snippet       string  `json:"snippet,omitempty"`
+	CoverURL      string  `json:"coverUrl,omitempty"`
+	BadgeLabel    string  `json:"badgeLabel,omitempty"`
+	SourceDomain  string  `json:"sourceDomain,omitempty"`
+	URL           string  `json:"url,omitempty"`
+	DeepLink      string  `json:"deepLink,omitempty"`
+	Score         float64 `json:"score,omitempty"`
+	RecallSource  string  `json:"recallSource,omitempty"`
+	ObjectTypeRef string  `json:"objectTypeRef,omitempty"`
 }
 
 type AssistantSearchResultView struct {
@@ -225,11 +250,11 @@ type PageContextInput struct {
 }
 
 type SearchRequest struct {
-	UserQuery             string `json:"userQuery"`
-	SearchIntensity       string `json:"searchIntensity,omitempty"`
-	SubAccountID          string `json:"subAccountId,omitempty"`
-	PersonaContextVersion string `json:"personaContextVersion,omitempty"`
-	SourceSurfaceID       string `json:"sourceSurfaceId,omitempty"`
-	FromGlobalSearch      bool   `json:"fromGlobalSearch,omitempty"`
+	UserQuery             string         `json:"userQuery"`
+	SearchIntensity       string         `json:"searchIntensity,omitempty"`
+	SubAccountID          string         `json:"subAccountId,omitempty"`
+	PersonaContextVersion string         `json:"personaContextVersion,omitempty"`
+	SourceSurfaceID       string         `json:"sourceSurfaceId,omitempty"`
+	FromGlobalSearch      bool           `json:"fromGlobalSearch,omitempty"`
 	ContextSnapshot       map[string]any `json:"contextSnapshot,omitempty"`
 }

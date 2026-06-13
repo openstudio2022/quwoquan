@@ -16895,14 +16895,14 @@
           "latestChangeReason": ""
         },
         {
-          "subjectId": "homepage_jiuzhaigou",
+          "subjectId": "homepage_sight_emeishan",
           "subjectType": "homepage",
-          "displayName": "九寨沟",
+          "displayName": "峨眉山",
           "avatarUrl": "",
           "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
           "subtitle": "地点动态有更新",
           "targetRouteId": "homepage_detail",
-          "targetObjectId": "homepage_jiuzhaigou",
+          "targetObjectId": "homepage_sight_emeishan",
           "followedAt": "2026-05-24T08:00:00Z",
           "lastVisitedAt": "2026-05-30T08:00:00Z",
           "latestChangedAt": "2026-06-01T12:20:00Z",

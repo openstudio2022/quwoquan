@@ -313,6 +313,22 @@ func compactStrings(items []string) []string {
 	return out
 }
 
+func compactStringMap(items map[string]string) map[string]string {
+	out := map[string]string{}
+	for key, value := range items {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" || value == "" {
+			continue
+		}
+		out[key] = value
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func isSupportedCron(raw string) bool {
 	parts := strings.Fields(raw)
 	if len(parts) != 5 {

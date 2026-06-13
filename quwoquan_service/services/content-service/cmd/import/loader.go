@@ -52,6 +52,7 @@ type PostDoc struct {
 	Angle                string                   `json:"angle" bson:"angle"`
 	Seq                  int                      `json:"seq" bson:"seq"`
 	EntityRefs           []string                 `json:"entityRefs" bson:"entityRefs"`
+	NormalizedEntityRefs []string                 `json:"normalizedEntityRefs" bson:"normalizedEntityRefs"`
 	TagRefs              []string                 `json:"tagRefs" bson:"tagRefs"`
 	Template             string                   `json:"template" bson:"template"`
 	GeneratorModel       string                   `json:"generatorModel" bson:"generatorModel"`
@@ -113,6 +114,7 @@ func toSet(items []string) map[string]bool {
 type postManifest struct {
 	ContentType          string                   `json:"contentType"`
 	EntityRefs           []string                 `json:"entityRefs"`
+	NormalizedEntityRefs []string                 `json:"normalizedEntityRefs"`
 	TagRefs              []string                 `json:"tagRefs"`
 	Template             string                   `json:"template"`
 	GeneratorModel       string                   `json:"generatorModel"`
@@ -254,6 +256,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			Angle:                angle,
 			Seq:                  m.PublishSeq,
 			EntityRefs:           m.EntityRefs,
+			NormalizedEntityRefs: m.NormalizedEntityRefs,
 			TagRefs:              m.TagRefs,
 			Template:             m.Template,
 			GeneratorModel:       m.GeneratorModel,

@@ -1006,7 +1006,20 @@
           "confidenceLabel": "",
           "modelReasonBucket": "",
           "freshAgoHours": 3,
-          "sourceRef": "sharedFollowees"
+          "sourceRef": "sharedFollowees",
+          "intersectionPoints": [
+            {
+              "pointId": "ix_rel_1_p0",
+              "pointClass": "fact",
+              "dimension": "relationship",
+              "label": "共同关注",
+              "displayText": "4位共同关注的人",
+              "sourceRef": "sharedFollowees",
+              "visibility": "public",
+              "count": 4,
+              "sampleText": "林清越"
+            }
+          ]
         },
         {
           "intersectionId": "ix_rel_2",
@@ -1029,7 +1042,20 @@
           "confidenceLabel": "",
           "modelReasonBucket": "",
           "freshAgoHours": 96,
-          "sourceRef": "sharedFollowees"
+          "sourceRef": "sharedFollowees",
+          "intersectionPoints": [
+            {
+              "pointId": "ix_rel_2_p0",
+              "pointClass": "fact",
+              "dimension": "relationship",
+              "label": "互相关注",
+              "displayText": "你们互相关注",
+              "sourceRef": "sharedFollowees",
+              "visibility": "public",
+              "count": 2,
+              "sampleText": "周屿"
+            }
+          ]
         },
         {
           "intersectionId": "ix_id_1",
@@ -1052,7 +1078,20 @@
           "confidenceLabel": "",
           "modelReasonBucket": "",
           "freshAgoHours": 10,
-          "sourceRef": "sameSchool"
+          "sourceRef": "sameSchool",
+          "intersectionPoints": [
+            {
+              "pointId": "ix_id_1_p0",
+              "pointClass": "fact",
+              "dimension": "identity",
+              "label": "同校",
+              "displayText": "同校校友",
+              "sourceRef": "sameSchool",
+              "visibility": "public",
+              "count": 3,
+              "sampleText": "新东方校友"
+            }
+          ]
         },
         {
           "intersectionId": "ix_ct_1",
@@ -1075,7 +1114,20 @@
           "confidenceLabel": "",
           "modelReasonBucket": "",
           "freshAgoHours": 30,
-          "sourceRef": "coCommented"
+          "sourceRef": "coCommented",
+          "intersectionPoints": [
+            {
+              "pointId": "ix_ct_1_p0",
+              "pointClass": "fact",
+              "dimension": "content",
+              "label": "共同讨论",
+              "displayText": "8人和你讨论过黄金内容",
+              "sourceRef": "coCommented",
+              "visibility": "public",
+              "count": 8,
+              "sampleText": "黄金投资圈"
+            }
+          ]
         },
         {
           "intersectionId": "ix_loc_1",
@@ -1098,7 +1150,20 @@
           "confidenceLabel": "",
           "modelReasonBucket": "",
           "freshAgoHours": 2,
-          "sourceRef": "coVisitedEntity"
+          "sourceRef": "coVisitedEntity",
+          "intersectionPoints": [
+            {
+              "pointId": "ix_loc_1_p0",
+              "pointClass": "fact",
+              "dimension": "location",
+              "label": "同游",
+              "displayText": "5人去过相同的地方",
+              "sourceRef": "coVisitedEntity",
+              "visibility": "public",
+              "count": 5,
+              "sampleText": "西湖"
+            }
+          ]
         },
         {
           "intersectionId": "ix_int_1",
@@ -1121,7 +1186,92 @@
           "confidenceLabel": "推荐",
           "modelReasonBucket": "friend_suggestion",
           "freshAgoHours": 20,
-          "sourceRef": ""
+          "sourceRef": "",
+          "intersectionPoints": [
+            {
+              "pointId": "ix_int_1_p0",
+              "pointClass": "recommended",
+              "dimension": "interest",
+              "label": "可能合得来",
+              "displayText": "可能合得来",
+              "sourceRef": "affinity",
+              "visibility": "public",
+              "count": 1,
+              "sampleText": "陆衡"
+            }
+          ]
+        },
+        {
+          "intersectionId": "ix_circle_1",
+          "dimension": "relationship",
+          "intersectionClass": "fact",
+          "label": "共同圈子",
+          "displayName": "城市漫游圈",
+          "displayText": "2个共同圈子",
+          "primaryText": "2个共同圈子",
+          "secondaryText": "你们都在城市漫游圈",
+          "weightTier": "light",
+          "objectKind": "circle",
+          "relationKind": "",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "sharedCount": 2,
+          "strength": 0.7,
+          "actionType": "view",
+          "actionTargetId": "fixture_circle_city",
+          "source": "relationship",
+          "confidenceLabel": "",
+          "modelReasonBucket": "",
+          "freshAgoHours": 6,
+          "sourceRef": "sharedCircle",
+          "intersectionPoints": [
+            {
+              "pointId": "ix_circle_1_p0",
+              "pointClass": "fact",
+              "dimension": "relationship",
+              "label": "共同圈子",
+              "displayText": "2个共同圈子",
+              "sourceRef": "sharedCircle",
+              "visibility": "public",
+              "count": 2,
+              "sampleText": "城市漫游圈"
+            }
+          ]
+        },
+        {
+          "intersectionId": "ix_tag_1",
+          "dimension": "interest",
+          "intersectionClass": "fact",
+          "label": "共同兴趣",
+          "displayName": "胶片摄影",
+          "displayText": "你们都关注胶片摄影",
+          "primaryText": "你们都关注胶片摄影",
+          "secondaryText": "",
+          "weightTier": "light",
+          "objectKind": "person",
+          "relationKind": "",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "sharedCount": 1,
+          "strength": 0.6,
+          "actionType": "view",
+          "actionTargetId": "fixture_user_lin",
+          "source": "interest",
+          "confidenceLabel": "",
+          "modelReasonBucket": "",
+          "freshAgoHours": 12,
+          "sourceRef": "sharedTagSample",
+          "intersectionPoints": [
+            {
+              "pointId": "ix_tag_1_p0",
+              "pointClass": "fact",
+              "dimension": "interest",
+              "label": "共同兴趣",
+              "displayText": "你们都关注胶片摄影",
+              "sourceRef": "sharedTagSample",
+              "visibility": "public",
+              "count": 1,
+              "sampleText": "胶片摄影"
+            }
+          ]
         }
       ],
       "channelReasons": {
@@ -1147,7 +1297,20 @@
             "confidenceLabel": "",
             "modelReasonBucket": "",
             "freshAgoHours": 3,
-            "sourceRef": "sharedFollowees"
+            "sourceRef": "sharedFollowees",
+            "intersectionPoints": [
+              {
+                "pointId": "ix_rel_1_p0",
+                "pointClass": "fact",
+                "dimension": "relationship",
+                "label": "共同关注",
+                "displayText": "4位共同关注的人",
+                "sourceRef": "sharedFollowees",
+                "visibility": "public",
+                "count": 4,
+                "sampleText": "林清越"
+              }
+            ]
           },
           {
             "intersectionId": "ix_id_1",
@@ -1170,7 +1333,20 @@
             "confidenceLabel": "",
             "modelReasonBucket": "",
             "freshAgoHours": 10,
-            "sourceRef": "sameSchool"
+            "sourceRef": "sameSchool",
+            "intersectionPoints": [
+              {
+                "pointId": "ix_id_1_p0",
+                "pointClass": "fact",
+                "dimension": "identity",
+                "label": "同校",
+                "displayText": "同校校友",
+                "sourceRef": "sameSchool",
+                "visibility": "public",
+                "count": 3,
+                "sampleText": "新东方校友"
+              }
+            ]
           },
           {
             "intersectionId": "ix_ct_1",
@@ -1193,7 +1369,20 @@
             "confidenceLabel": "",
             "modelReasonBucket": "",
             "freshAgoHours": 30,
-            "sourceRef": "coCommented"
+            "sourceRef": "coCommented",
+            "intersectionPoints": [
+              {
+                "pointId": "ix_ct_1_p0",
+                "pointClass": "fact",
+                "dimension": "content",
+                "label": "共同讨论",
+                "displayText": "8人和你讨论过黄金内容",
+                "sourceRef": "coCommented",
+                "visibility": "public",
+                "count": 8,
+                "sampleText": "黄金投资圈"
+              }
+            ]
           },
           {
             "intersectionId": "ix_int_1",
@@ -1216,7 +1405,20 @@
             "confidenceLabel": "推荐",
             "modelReasonBucket": "friend_suggestion",
             "freshAgoHours": 20,
-            "sourceRef": ""
+            "sourceRef": "",
+            "intersectionPoints": [
+              {
+                "pointId": "ix_int_1_p0",
+                "pointClass": "recommended",
+                "dimension": "interest",
+                "label": "可能合得来",
+                "displayText": "可能合得来",
+                "sourceRef": "affinity",
+                "visibility": "public",
+                "count": 1,
+                "sampleText": "陆衡"
+              }
+            ]
           }
         ],
         "campus": [
@@ -1241,7 +1443,20 @@
             "confidenceLabel": "",
             "modelReasonBucket": "",
             "freshAgoHours": 5,
-            "sourceRef": "sameMajor"
+            "sourceRef": "sameMajor",
+            "intersectionPoints": [
+              {
+                "pointId": "ix_campus_1_p0",
+                "pointClass": "fact",
+                "dimension": "identity",
+                "label": "同专业",
+                "displayText": "同专业同校",
+                "sourceRef": "sameMajor",
+                "visibility": "public",
+                "count": 6,
+                "sampleText": "苏黎"
+              }
+            ]
           },
           {
             "intersectionId": "ix_campus_2",
@@ -1264,7 +1479,20 @@
             "confidenceLabel": "推荐",
             "modelReasonBucket": "circle_discovery",
             "freshAgoHours": 40,
-            "sourceRef": ""
+            "sourceRef": "",
+            "intersectionPoints": [
+              {
+                "pointId": "ix_campus_2_p0",
+                "pointClass": "recommended",
+                "dimension": "interest",
+                "label": "同社团可能",
+                "displayText": "推荐加入社团",
+                "sourceRef": "affinity",
+                "visibility": "public",
+                "count": 1,
+                "sampleText": "吉他社"
+              }
+            ]
           }
         ],
         "travel": [
@@ -1284,12 +1512,25 @@
             "sharedCount": 3,
             "strength": 0.8,
             "actionType": "view",
-            "actionTargetId": "fixture_homepage_dali",
+            "actionTargetId": "fixture_homepage_travel_photo_dali",
             "source": "location",
             "confidenceLabel": "",
             "modelReasonBucket": "",
             "freshAgoHours": 8,
-            "sourceRef": "coVisitedEntity"
+            "sourceRef": "coVisitedEntity",
+            "intersectionPoints": [
+              {
+                "pointId": "ix_travel_1_p0",
+                "pointClass": "fact",
+                "dimension": "location",
+                "label": "同目的地",
+                "displayText": "3人去过相同目的地",
+                "sourceRef": "coVisitedEntity",
+                "visibility": "public",
+                "count": 3,
+                "sampleText": "大理"
+              }
+            ]
           },
           {
             "intersectionId": "ix_travel_2",
@@ -1312,7 +1553,20 @@
             "confidenceLabel": "推荐",
             "modelReasonBucket": "travel_affinity",
             "freshAgoHours": 50,
-            "sourceRef": ""
+            "sourceRef": "",
+            "intersectionPoints": [
+              {
+                "pointId": "ix_travel_2_p0",
+                "pointClass": "recommended",
+                "dimension": "interest",
+                "label": "兴趣相近",
+                "displayText": "可能喜欢相同路线",
+                "sourceRef": "affinity",
+                "visibility": "public",
+                "count": 1,
+                "sampleText": "程一苇"
+              }
+            ]
           }
         ]
       },
@@ -1384,6 +1638,41 @@
           ]
         }
       }
+    },
+    "footprint_core": {
+      "description": "我的足迹只读 seed：postRef 指向 content_discovery_core.posts（single-source，不复制第二套内容）；type/action 映射由云侧唯一定义，此处为云端响应镜像。",
+      "items": [
+        {
+          "postRef": "fixture_photo_001",
+          "action": "click",
+          "type": "viewed",
+          "occurredAgoHours": 2
+        },
+        {
+          "postRef": "fixture_article_001",
+          "action": "content_depth",
+          "type": "viewed",
+          "occurredAgoHours": 8
+        },
+        {
+          "postRef": "fixture_photo_001",
+          "action": "like",
+          "type": "liked",
+          "occurredAgoHours": 26
+        },
+        {
+          "postRef": "fixture_article_001",
+          "action": "comment",
+          "type": "commented",
+          "occurredAgoHours": 50
+        },
+        {
+          "postRef": "fixture_photo_001",
+          "action": "share",
+          "type": "shared",
+          "occurredAgoHours": 96
+        }
+      ]
     }
   },
   "scenarios": [

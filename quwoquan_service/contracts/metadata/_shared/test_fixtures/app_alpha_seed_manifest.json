@@ -31,7 +31,8 @@
         "comment_thread_v2_core",
         "search_core",
         "publish_core",
-        "intersection_core"
+        "intersection_core",
+        "footprint_core"
       ],
       "resetScope": "fixture_content_*",
       "targetStore": "alpha-local-mock+content-service:test_store",
@@ -121,7 +122,8 @@
       "targetStore": "alpha-local-mock+entity-service:test_store",
       "verifiedEndpoints": [
         "/v1/homepages/search",
-        "/v1/homepages/{homepageId}/object-page-bundle"
+        "/v1/homepages/{homepageId}/object-page-bundle",
+        "/v1/homepages/{homepageId}/introduction"
       ],
       "deliveryChannels": [
         "app-fixture-json",

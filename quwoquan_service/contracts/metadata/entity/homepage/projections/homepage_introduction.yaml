@@ -1,0 +1,81 @@
+version: 1
+read_model: HomepageIntroduction
+
+description: |
+  主页完整介绍页读模型。用户前台文案为「认识{对象名}」，禁止展示「实体介绍」等工程词。
+  内容来源为数据工程实体主页三件套或维护后台导入；sourceRefs 必须可追溯，端侧只读展示。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: HomepageIntroduction
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/homepage_introduction.g.dart
+  dart_imports:
+    - homepage_introduction_section.g.dart
+    - homepage_related_group_summary.g.dart
+  fields:
+    - name: homepageId
+      dart_type: String
+      nullable: false
+      source: homepageId
+      aliases: [homepageId, id, _id]
+      default: "''"
+
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName, title, name]
+      default: "''"
+
+    - name: homepageType
+      dart_type: String
+      nullable: false
+      source: homepageType
+      aliases: [homepageType, objectType]
+      default: "''"
+
+    - name: coverUrl
+      dart_type: String
+      nullable: true
+      source: coverUrl
+      aliases: [coverUrl]
+
+    - name: summary
+      dart_type: String
+      nullable: false
+      source: summary
+      aliases: [summary, subtitle]
+      default: "''"
+
+    - name: sections
+      dart_type: List<HomepageIntroductionSection>
+      nullable: false
+      source: sections
+      aliases: [sections]
+      list_element_dart_class: HomepageIntroductionSection
+
+    - name: relatedObjects
+      dart_type: List<HomepageRelatedGroupSummary>
+      nullable: false
+      source: relatedObjects
+      aliases: [relatedObjects, relatedGroups]
+      list_element_dart_class: HomepageRelatedGroupSummary
+
+    - name: sourceRefs
+      dart_type: List<String>
+      nullable: false
+      source: sourceRefs
+      aliases: [sourceRefs]
+
+    - name: updatedAt
+      dart_type: String
+      nullable: false
+      source: updatedAt
+      aliases: [updatedAt]
+      default: "''"

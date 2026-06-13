@@ -38,9 +38,11 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/assistant/memories", h.handleListMemories)
 	mux.HandleFunc("GET /v1/assistant/ops/learning-summary", h.handleGetLearningOpsSummary)
 	mux.HandleFunc("GET /v1/assistant/skills", h.handleListSkills)
+	mux.HandleFunc("POST /v1/assistant/skills/creation-suggest", h.handleSuggestCreationAssistance)
 	mux.HandleFunc("GET /v1/assistant/skill-subscriptions", h.handleListSkillSubscriptions)
 	mux.HandleFunc("POST /v1/assistant/skill-subscriptions", h.handleCreateSkillSubscription)
 	mux.HandleFunc("POST /v1/assistant/skill-subscriptions/cron/tick", h.handleTickSkillSubscriptionCron)
+	mux.HandleFunc("POST /v1/assistant/intersections/reminders/tick", h.handleTickIntersectionReminders)
 	mux.HandleFunc("GET /v1/assistant/skill-subscriptions/{subscriptionId}", h.handleGetSkillSubscription)
 	mux.HandleFunc("PATCH /v1/assistant/skill-subscriptions/{subscriptionId}/status", h.handleUpdateSkillSubscriptionStatus)
 	mux.HandleFunc("GET /v1/assistant/consents", h.handleListConsents)
@@ -193,6 +195,20 @@ func (h *Handler) handleListSkills(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, view)
 }
 
+func (h *Handler) handleSuggestCreationAssistance(w http.ResponseWriter, r *http.Request) {
+	var input assistant.AssistantCreationSuggestRequest
+	if err := readJSON(r, &input); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		return
+	}
+	view, err := h.service.SuggestCreationAssistance(r.Context(), resolveUserID(r), input)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
 func (h *Handler) handleListSkillSubscriptions(w http.ResponseWriter, r *http.Request) {
 	view, err := h.service.ListSkillSubscriptions(
 		r.Context(),
@@ -251,6 +267,23 @@ func (h *Handler) handleTickSkillSubscriptionCron(w http.ResponseWriter, r *http
 		return
 	}
 	result, err := h.service.TickSkillSubscriptionCron(r.Context(), input)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) handleTickIntersectionReminders(w http.ResponseWriter, r *http.Request) {
+	var input application.IntersectionReminderTickInput
+	if err := readJSON(r, &input); err != nil && err != io.EOF {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		return
+	}
+	if strings.TrimSpace(input.UserID) == "" {
+		input.UserID = resolveUserID(r)
+	}
+	result, err := h.service.TickIntersectionReminders(r.Context(), input)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return

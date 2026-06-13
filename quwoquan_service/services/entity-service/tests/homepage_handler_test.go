@@ -149,6 +149,130 @@ func TestHomepageTypeSupportsCampusAndTravelPhoto(t *testing.T) {
 	}
 }
 
+func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
+	server := httptest.NewServer(
+		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	)
+	defer server.Close()
+
+	const canonicalID = "entity:sight:homepage_sight_west_lake"
+
+	detail := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/v1/homepages/"+canonicalID,
+		nil,
+		http.StatusOK,
+	)
+	if got := stringField(t, detail, "_id"); got != "homepage_sight_west_lake" {
+		t.Fatalf("expected semantic canonical detail to resolve west lake, got %q", got)
+	}
+
+	introduction := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/v1/homepages/"+canonicalID+"/introduction",
+		nil,
+		http.StatusOK,
+	)
+	if got := stringField(t, introduction, "homepageId"); got != "homepage_sight_west_lake" {
+		t.Fatalf("expected semantic canonical introduction to resolve west lake, got %q", got)
+	}
+
+	bundle := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/v1/homepages/"+canonicalID+"/object-page-bundle",
+		nil,
+		http.StatusOK,
+	)
+	if got := stringField(t, bundle, "objectId"); got != "homepage_sight_west_lake" {
+		t.Fatalf("expected semantic canonical bundle to resolve west lake, got %q", got)
+	}
+	if got := stringField(t, bundle, "canonicalEntityId"); got != "entity:sight:west_lake" {
+		t.Fatalf("expected semantic canonical bundle id entity:sight:west_lake, got %q", got)
+	}
+}
+
+func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
+	server := httptest.NewServer(
+		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	)
+	defer server.Close()
+
+	introduction := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/v1/homepages/homepage_sight_west_lake/introduction",
+		nil,
+		http.StatusOK,
+	)
+	if got := stringField(t, introduction, "homepageId"); got != "homepage_sight_west_lake" {
+		t.Fatalf("expected west lake introduction, got %q", got)
+	}
+	if got := stringField(t, introduction, "displayName"); got != "西湖景区" {
+		t.Fatalf("expected displayName 西湖景区, got %q", got)
+	}
+	if got := stringField(t, introduction, "summary"); got == "" {
+		t.Fatalf("expected introduction summary")
+	}
+	if refs := sliceField(t, introduction, "sourceRefs"); len(refs) == 0 {
+		t.Fatalf("expected sourceRefs")
+	}
+	sections := sliceField(t, introduction, "sections")
+	if len(sections) < 4 {
+		t.Fatalf("expected structured sections, got %d", len(sections))
+	}
+	kinds := map[string]bool{}
+	totalBodyLen := 0
+	for _, raw := range sections {
+		section, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("expected section object, got %T", raw)
+		}
+		kind := stringField(t, section, "kind")
+		if !isAllowedIntroductionKind(kind) {
+			t.Fatalf("unexpected section kind %q", kind)
+		}
+		kinds[kind] = true
+		if body, ok := section["bodyMarkdown"].(string); ok {
+			totalBodyLen += len([]rune(body))
+		}
+	}
+	for _, kind := range []string{"overview", "keyFacts", "timeline", "history"} {
+		if !kinds[kind] {
+			t.Fatalf("expected section kind %s in %#v", kind, kinds)
+		}
+	}
+	if totalBodyLen < 800 {
+		t.Fatalf("expected 800+ rune introduction body, got %d", totalBodyLen)
+	}
+	related := sliceField(t, introduction, "relatedObjects")
+	if len(related) == 0 {
+		t.Fatalf("expected relatedObjects")
+	}
+}
+
+func TestHomepageIntroductionReturnsNotFoundForUnknownHomepage(t *testing.T) {
+	server := httptest.NewServer(
+		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/v1/homepages/missing-homepage/introduction")
+	if err != nil {
+		t.Fatalf("get introduction: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing homepage, got %d", resp.StatusCode)
+	}
+}
+
 func TestHomepageGovernanceLifecycle(t *testing.T) {
 	server := httptest.NewServer(
 		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
@@ -266,6 +390,15 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 	}
 	if _, ok := detail["offlineAt"].(string); !ok {
 		t.Fatalf("expected offlineAt timestamp in detail response")
+	}
+}
+
+func isAllowedIntroductionKind(kind string) bool {
+	switch kind {
+	case "overview", "keyFacts", "timeline", "history", "relatedPeople", "relatedObjects", "map", "gallery":
+		return true
+	default:
+		return false
 	}
 }
 

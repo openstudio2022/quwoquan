@@ -32,6 +32,8 @@ abstract class CircleReadRepository {
 
   Future<CircleStatsWireDto> getCircleStats(String circleId);
 
+  Future<CircleImpactSummary> getCircleImpact(String circleId);
+
   Future<List<CircleDto>> listUserCircles(
     String userId, {
     String? cursor,

@@ -156,6 +156,9 @@ func (s *AssistantService) normalizeAppMessageInput(input assistant.CreateAppMes
 		Target: assistant.AppMessageTarget{
 			TargetType: strings.TrimSpace(input.Target.TargetType),
 			TargetID:   strings.TrimSpace(input.Target.TargetID),
+			RouteID:    strings.TrimSpace(input.Target.RouteID),
+			RoutePath:  strings.TrimSpace(input.Target.RoutePath),
+			Query:      compactStringMap(input.Target.Query),
 		},
 		Personalized:    input.Personalized,
 		InterestTags:    compactStrings(input.InterestTags),
