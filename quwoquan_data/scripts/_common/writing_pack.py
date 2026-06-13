@@ -179,8 +179,9 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     base = pack.get("baseSourceRef")
     base_text = str(pack.get("baseDraftText") or "")
     source_use_mode = str(pack.get("sourceUseMode") or "factual_reference_only")
+    has_authorized_base = source_use_mode == "licensed_adaptation" or bool(base_text)
     if base:
-        if source_use_mode == "licensed_adaptation":
+        if has_authorized_base:
             lines.append(
                 f"- **授权底稿来源**：`{base}` 可在许可范围内改编；保留事实和必要结构，"
                 f"贴合度控制在 {_base_fidelity_range_label()}，同时保留署名与授权快照。"
@@ -214,7 +215,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         if nc.get("forbidStandaloneTips"):
             lines.append("- 注意事项**就地融入**叙述，禁止另起「实用信息/来源平台」清单块。")
         if base_text:
-            if source_use_mode == "licensed_adaptation":
+            if has_authorized_base:
                 lines.append("- 以下方授权底稿为基底，在许可范围内改编并用其它证据补全事实。")
             else:
                 lines.append("- 以下方事实参考材料核验信息，自行重组标题、章节和叙事顺序，禁止沿用原文结构。")
@@ -237,12 +238,12 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     if base_text:
         heading = (
             f"## 授权底稿（许可范围内改编；贴合度 {_base_fidelity_range_label()}）"
-            if source_use_mode == "licensed_adaptation"
+            if has_authorized_base
             else "## 事实参考材料（只取可核验事实，必须独立表达）"
         )
         lines.append(heading)
         lines.append("")
-        if source_use_mode == "licensed_adaptation":
+        if has_authorized_base:
             lines.append("> 在许可范围内加工，保留必要署名；禁止逐句搬运超出许可或掩盖来源。")
         else:
             lines.append("> 只抽取事实，独立拟定标题、结构和句子；不得模仿原作者叙事顺序或复现连续长句。")
