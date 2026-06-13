@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
+import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 
 class CircleContractSeedHelpers {
   const CircleContractSeedHelpers._();
@@ -155,6 +156,9 @@ class CircleContractSeedHelpers {
       byId[circle.id] = circle;
     }
 
+    for (final circle in CircleMockData.buildRepositorySeedCircleDtos()) {
+      put(circle);
+    }
     for (final circle in seedCircles() ?? const <CircleDto>[]) {
       put(circle);
     }

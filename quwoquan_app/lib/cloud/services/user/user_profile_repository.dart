@@ -451,7 +451,15 @@ class MockUserProfileRepository extends UserProfileRepository {
           )
           .toList(growable: false);
     }
-    return const <ProfileSocialRelationRowViewData>[];
+    return _mockFollowingWiresFor(userId)
+        .take(limit)
+        .map(
+          (m) =>
+              ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+                ProfileSocialRelationRowWireDto.fromMap(m),
+              ),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -472,7 +480,15 @@ class MockUserProfileRepository extends UserProfileRepository {
           )
           .toList(growable: false);
     }
-    return const <ProfileSocialRelationRowViewData>[];
+    return _mockFollowerWiresFor(userId)
+        .take(limit)
+        .map(
+          (m) =>
+              ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+                ProfileSocialRelationRowWireDto.fromMap(m),
+              ),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -531,7 +547,15 @@ class MockUserProfileRepository extends UserProfileRepository {
           )
           .toList(growable: false);
     }
-    return const <ProfileInteractionActivityViewData>[];
+    return _mockInteractionReceivedWiresFor(userId)
+        .take(limit)
+        .map(
+          (m) =>
+              ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+                ProfileInteractionActivityWireDto.fromMap(m),
+              ),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -552,7 +576,15 @@ class MockUserProfileRepository extends UserProfileRepository {
           )
           .toList(growable: false);
     }
-    return const <ProfileInteractionActivityViewData>[];
+    return _mockInteractionSentWiresFor(userId)
+        .take(limit)
+        .map(
+          (m) =>
+              ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+                ProfileInteractionActivityWireDto.fromMap(m),
+              ),
+        )
+        .toList(growable: false);
   }
 
   @override

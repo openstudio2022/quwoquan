@@ -1,7 +1,13 @@
 part of 'user_profile_repository.dart';
 
 Map<String, dynamic> _defaultProfile(String userId) {
-  final chatName = ChatMockData.nameFor(userId);
+  const profileNames = <String, String>{
+    'user_001': '趣我圈用户',
+    'nature_photographer': '自然摄影师',
+    'travel_photographer': '旅行摄影师',
+    'street_photo': '街头摄影',
+  };
+  final chatName = profileNames[userId] ?? ChatMockData.nameFor(userId);
   return <String, dynamic>{
     'subAccountId': userId,
     'ownerUserId': userId,
@@ -12,11 +18,85 @@ Map<String, dynamic> _defaultProfile(String userId) {
     'nickname': chatName.isEmpty ? userId : chatName,
     'avatarUrl': ChatMockData.avatarFor(userId) ?? '',
     'bio': '',
+    'followerCount': 1200,
+    'followingCount': 284,
+    'postCount': 4,
+    'circleCount': 3,
+    'likeCount': 1200,
     'isolationLevel': 'normal',
     'profileVisibility': 'public',
     'inheritsFromOwner': false,
     'overriddenFields': const <String>[],
   };
+}
+
+Map<String, dynamic> _mockSocialRelationWire({required bool isFollowing}) {
+  return <String, dynamic>{
+    'subAccountId': 'u1',
+    'userId': 'u1',
+    'displayName': '你的皮炎有点辣',
+    'nickname': '你的皮炎有点辣',
+    'avatarUrl':
+        'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
+    'isFollowing': isFollowing,
+  };
+}
+
+List<Map<String, dynamic>> _mockFollowingWiresFor(String userId) {
+  if (_isContractFixtureUser(userId)) {
+    return const <Map<String, dynamic>>[];
+  }
+  return <Map<String, dynamic>>[_mockSocialRelationWire(isFollowing: true)];
+}
+
+List<Map<String, dynamic>> _mockFollowerWiresFor(String userId) {
+  if (_isContractFixtureUser(userId)) {
+    return const <Map<String, dynamic>>[];
+  }
+  return <Map<String, dynamic>>[_mockSocialRelationWire(isFollowing: false)];
+}
+
+List<Map<String, dynamic>> _mockInteractionReceivedWiresFor(String userId) {
+  if (_isContractFixtureUser(userId)) {
+    return const <Map<String, dynamic>>[];
+  }
+  return <Map<String, dynamic>>[
+    <String, dynamic>{
+      'activityId': 'mock-like-u1-${userId}_p1',
+      'activityType': 'like',
+      'direction': 'received',
+      'actorSubAccountId': 'u1',
+      'actorDisplayName': '你的皮炎有点辣',
+      'actorAvatarUrl':
+          'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
+      'targetSubAccountId': userId,
+      'targetContentId': '${userId}_p1',
+      'targetContentType': 'photo',
+      'targetContentSummary': '光影的节奏',
+      'createdAt': '2025-12-21T09:30:00Z',
+    },
+  ];
+}
+
+List<Map<String, dynamic>> _mockInteractionSentWiresFor(String userId) {
+  if (_isContractFixtureUser(userId)) {
+    return const <Map<String, dynamic>>[];
+  }
+  return <Map<String, dynamic>>[
+    <String, dynamic>{
+      'activityId': 'mock-comment-$userId-u1',
+      'activityType': 'comment',
+      'direction': 'sent',
+      'actorSubAccountId': userId,
+      'actorDisplayName': _defaultProfile(userId)['displayName'],
+      'actorAvatarUrl': _defaultProfile(userId)['avatarUrl'],
+      'targetSubAccountId': 'u1',
+      'targetContentId': 'u1_p1',
+      'targetContentType': 'photo',
+      'targetContentSummary': '光影的节奏',
+      'createdAt': '2025-12-21T10:00:00Z',
+    },
+  ];
 }
 
 List<Map<String, dynamic>> _contractProfileRows() {

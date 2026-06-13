@@ -44,7 +44,8 @@ class EvidenceGroup {
   String get fallbackIconKind => fallbackIconKindFor(kind);
 
   /// 是否有可展示的有价值事实（必读要求 2 简洁：无价值不展示）。
-  bool get hasMeaning => label.trim().isNotEmpty || sampleText.trim().isNotEmpty;
+  bool get hasMeaning =>
+      label.trim().isNotEmpty || sampleText.trim().isNotEmpty;
 
   /// 从单个交集点投影为证据组。count 透传云侧值（0 表示无可量化条数，
   /// 展示侧 count>0 才显示数字，避免「0」空数字）；不在端侧编造计数。
@@ -69,7 +70,25 @@ class EvidenceGroup {
         .where((p) => p.visibility != 'hidden')
         .map(EvidenceGroup.fromPoint)
         .where((g) => g.hasMeaning)
-        .toList(growable: false);
+        .toList(growable: true);
+    if (resolved.isEmpty) {
+      final fallbackLabel = reason.displayText.trim().isNotEmpty
+          ? reason.displayText.trim()
+          : reason.label.trim();
+      if (fallbackLabel.isEmpty) {
+        return const <EvidenceGroup>[];
+      }
+      resolved.add(
+        EvidenceGroup._(
+          kind: reason.dimension.trim(),
+          label: fallbackLabel,
+          count: reason.sharedCount < 0 ? 0 : reason.sharedCount,
+          sampleText: reason.secondaryText.trim(),
+          sampleAvatarUrls: const <String>[],
+          isRecommended: reason.intersectionClass == 'recommended',
+        ),
+      );
+    }
     final indexed = resolved.asMap().entries.toList(growable: false)
       ..sort((a, b) {
         final byRank = a.value.rank.compareTo(b.value.rank);

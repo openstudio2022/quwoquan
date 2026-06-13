@@ -188,7 +188,9 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         .map(
           (entry) => <String, String>{
             'id': entry.key,
-            'label': entry.value.label.isNotEmpty ? entry.value.label : entry.key,
+            'label': entry.value.label.isNotEmpty
+                ? entry.value.label
+                : entry.key,
           },
         )
         .toList(growable: false);
@@ -253,7 +255,6 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       _activeSubCategoryIdsByCategory[categoryId] = subCategoryId;
     });
   }
-
 
   void _handleCategorySwipeDragEnd(DragEndDetails details) {
     final direction = TabSwipeSwitchRegion.directionFromDragEnd(details);
@@ -783,17 +784,21 @@ class _CirclesGlobalHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                UITextConstants.circlesRecommendedTitle,
-                style: TextStyle(
-                  fontSize: AppTypography.iosFootnote,
-                  fontWeight: AppTypography.medium,
-                  color: fgSecondary.withValues(alpha: 0.78),
-                  decoration: TextDecoration.none,
+              Expanded(
+                child: Text(
+                  UITextConstants.circlesRecommendedTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosFootnote,
+                    fontWeight: AppTypography.medium,
+                    color: fgSecondary.withValues(alpha: 0.78),
+                    decoration: TextDecoration.none,
+                  ),
                 ),
               ),
+              SizedBox(width: AppSpacing.intraGroupSm),
               CupertinoButton(
                 onPressed: onSeeMoreTap,
                 padding: EdgeInsets.zero,
@@ -1370,15 +1375,18 @@ class _CirclesEntityBridgeStrip extends StatelessWidget {
                   decoration: TextDecoration.none,
                 ),
               ),
-              const Spacer(),
-              Text(
-                UITextConstants.circlesEntitySectionHint,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.xs,
-                  color: fgSecondary.withValues(alpha: 0.7),
-                  decoration: TextDecoration.none,
+              SizedBox(width: AppSpacing.intraGroupSm),
+              Flexible(
+                child: Text(
+                  UITextConstants.circlesEntitySectionHint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontSize: AppTypography.xs,
+                    color: fgSecondary.withValues(alpha: 0.7),
+                    decoration: TextDecoration.none,
+                  ),
                 ),
               ),
             ],
@@ -1467,7 +1475,7 @@ class _CirclesEntityBridgeCard extends StatelessWidget {
                     color: AppColors.primaryColor,
                   ),
                 ),
-                const Spacer(),
+                const Expanded(child: SizedBox.shrink()),
                 Icon(
                   CupertinoIcons.chevron_forward,
                   size: AppSpacing.iconSmall,

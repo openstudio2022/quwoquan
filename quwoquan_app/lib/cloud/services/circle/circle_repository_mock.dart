@@ -940,7 +940,9 @@ class MockCircleRepository implements CircleRepository {
         contractRows.take(limit).map((e) => Map<String, dynamic>.from(e)),
       );
     }
-    return const <PostBaseDto>[];
+    return CircleMockData.catalogCircleFeedPostDtos
+        .take(limit)
+        .toList(growable: false);
   }
 
   @override

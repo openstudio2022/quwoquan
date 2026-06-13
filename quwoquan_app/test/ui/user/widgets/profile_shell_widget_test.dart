@@ -194,10 +194,10 @@ void main() {
       await _pumpFrames(tester);
       await revealProfilePrimaryTabs(tester);
       // 统计行也有「作品」标签，主 Tab 断言一律限定在 inline tabs 容器内。
-      expect(_inlinePrimaryTab('作品'), findsOneWidget);
+      expect(_inlinePrimaryTab('创作'), findsOneWidget);
       expect(_inlinePrimaryTab('圈子'), findsOneWidget);
       expect(_inlinePrimaryTab('互动'), findsOneWidget);
-      expect(_inlinePrimaryTab('看点'), findsOneWidget);
+      expect(_inlinePrimaryTab('生活'), findsOneWidget);
     });
 
     testWidgets('mine 模式四段式文案不串入 other 口径', (tester) async {
