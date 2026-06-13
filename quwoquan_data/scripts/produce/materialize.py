@@ -25,7 +25,8 @@ from _common.batch_asset_registry import allocate_post_asset_id, load_batch_asse
 from _common.batch_manifest import load_batch_manifest
 from _common.paths import DATA_ROOT, RUNTIME_ROOT, batch_root, relative_batch_ref
 from _common.io import write_json
-from _common.draft_io import read_draft_meta, read_writing_pack
+from _common.draft_io import is_placeholder, read_draft_article, read_draft_meta, read_writing_pack
+from _common.post_evidence_chain import build_finalization_report, build_source_refs_snapshot
 from _common.provenance import build_provenance
 from _common.intersection_signal import build_intersection_hints
 from _common.entity_annotation import annotate_inline, normalize_link_ref
@@ -39,10 +40,9 @@ def _resolve_entity_download_dir(
     from _common.source_unit import find_entity_object_dirs, iter_source_units
 
     for ref in entity_refs:
-        name = ref.strip("/").split("/")[-1]
-        if not name:
+        if not str(ref).strip():
             continue
-        for obj in find_entity_object_dirs(task_id, batch_id, name):
+        for obj in find_entity_object_dirs(task_id, batch_id, str(ref).strip()):
             for unit in iter_source_units(obj):
                 assets_dir = unit / "assets"
                 if assets_dir.is_dir():
@@ -122,6 +122,33 @@ def _annotate_manifest_entities(article_md: str, entity_refs: list[str]) -> str:
     return annotated_article
 
 
+def _canonical_entity_id_from_publish_ref(ref: str) -> str:
+    normalized = normalize_link_ref(str(ref))
+    parts = [part for part in normalized.strip("/").split("/") if part]
+    if parts and parts[0] == "entity":
+        parts = parts[1:]
+    if len(parts) < 3:
+        return ""
+    _, etype, name = parts[0], parts[1], "/".join(parts[2:])
+    etype_slug = etype.strip().replace(" ", "_")
+    name_slug = name.strip().replace(" ", "_")
+    if not etype_slug or not name_slug:
+        return ""
+    return f"entity:{etype_slug}:{name_slug}"
+
+
+def _normalized_runtime_entity_refs(entity_refs: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for ref in entity_refs:
+        canonical = _canonical_entity_id_from_publish_ref(ref)
+        if not canonical or canonical in seen:
+            continue
+        seen.add(canonical)
+        out.append(canonical)
+    return out
+
+
 def _publication_story_spine(compose_payload: dict) -> dict | list:
     """发布包只保留运行需要的叙事摘要，质量证据留在 provenance/review。"""
     raw = (
@@ -150,6 +177,30 @@ def _manifest_time_fact(payload: dict[str, Any], key: str) -> str | None:
     value = payload.get(key)
     text = str(value or "").strip()
     return text or None
+
+
+def _resolve_materialized_article(
+    task_id: str,
+    batch_id: str,
+    ref: str,
+    *,
+    compose_payload: dict[str, Any],
+    entity_refs: list[str],
+) -> tuple[str, list[str]]:
+    draft_article = read_draft_article(task_id, batch_id, ref)
+    if is_placeholder(draft_article):
+        raise RuntimeError(
+            f"{ref}: approved materialization requires a real 4.draft/draft.article.md; "
+            "compose snapshot fallback is blocked to avoid expanding multi-body drift"
+        )
+    article_md = str(draft_article or "")
+    actions: list[str] = []
+    if isinstance(entity_refs, list):
+        annotated = _annotate_manifest_entities(article_md, entity_refs)
+        if annotated != article_md:
+            actions.append("entity_annotations_injected")
+            article_md = annotated
+    return article_md, actions
 
 
 def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Path]:
@@ -187,7 +238,7 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
         if str(compose_payload.get("generator") or "") != "agent":
             continue
 
-        article_md = compose_payload.get("articleMarkdown", "")
+        writing_pack = read_writing_pack(task_id, batch_id, ref) or {}
         title = compose_payload.get("title") or ref
         template = compose_payload.get("template") or "journal"
         # 对象坐标（angle/title/seq）= 路由真相，与 promote/publish 发布面同名。
@@ -201,11 +252,21 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
         if assets_dir.exists():
             shutil.rmtree(assets_dir)
         entity_refs = compose_payload.get("entityRefs", [])
+        normalized_entity_refs = (
+            _normalized_runtime_entity_refs(entity_refs)
+            if isinstance(entity_refs, list)
+            else []
+        )
         tag_refs = compose_payload.get("tagRefs", [])
         source_urls = compose_payload.get("sourceUrls", [])
         source_paths = compose_payload.get("sourcePaths", [])
-        if isinstance(entity_refs, list):
-            article_md = _annotate_manifest_entities(article_md, entity_refs)
+        article_md, normalization_actions = _resolve_materialized_article(
+            task_id,
+            batch_id,
+            ref,
+            compose_payload=compose_payload,
+            entity_refs=entity_refs if isinstance(entity_refs, list) else [],
+        )
 
         raw_assets = compose_payload.get("assets") or []
         if not raw_assets and compose_payload.get("coverAssetRef"):
@@ -245,6 +306,7 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
         elif gallery_path.exists():
             gallery_path.unlink()
 
+        had_frontmatter = article_md.lstrip().startswith("---")
         if article_md and "articleMarkdownVersion" not in article_md[:200]:
             if not article_md.lstrip().startswith("---"):
                 front = (
@@ -257,6 +319,8 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
                     front += f"coverImage: asset://{assets[0]['assetId']}\n"
                 front += "---\n\n"
                 article_md = front + article_md
+        if not had_frontmatter and article_md.lstrip().startswith("---"):
+            normalization_actions.append("frontmatter_injected")
 
         (post_dir / "article.md").write_text(article_md, encoding="utf-8")
 
@@ -275,6 +339,7 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
             "topicId": ref,
             "contentType": content_type,
             "entityRefs": entity_refs,
+            "normalizedEntityRefs": normalized_entity_refs,
             "tagRefs": tag_refs,
             "conditionContext": _publication_condition_context(compose_payload.get("conditionContext")),
             "sourceUrls": source_urls,
@@ -348,15 +413,36 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
         }
         provenance = build_provenance(
             ref,
-            writing_pack=read_writing_pack(task_id, batch_id, ref),
+            writing_pack=writing_pack,
             draft_meta=draft_meta,
             review_payload=payload,
             compose_payload=provenance_compose,
             manifest=manifest,
         )
+        source_refs = build_source_refs_snapshot(
+            task_id,
+            batch_id,
+            base_source_ref=str(writing_pack.get("baseSourceRef") or ""),
+            cited_source_refs=manifest["citedSourceRefs"],
+            source_paths=provenance_compose["sourcePaths"],
+        )
         review_dir = post_dir / "5.review"
         review_dir.mkdir(parents=True, exist_ok=True)
+        download_dir = post_dir / "1.download"
+        download_dir.mkdir(parents=True, exist_ok=True)
+        write_json(download_dir / "source_refs.json", source_refs)
         write_json(review_dir / "provenance.json", provenance)
+        write_json(
+            review_dir / "finalization_report.json",
+            build_finalization_report(
+                ref,
+                draft_markdown=str(read_draft_article(task_id, batch_id, ref) or ""),
+                final_markdown=article_md,
+                normalization_actions=normalization_actions,
+                article_source="4.draft/draft.article.md",
+                compose_snapshot_markdown=compose_payload.get("articleMarkdown"),
+            ),
+        )
 
         # 对象索引：publish 目标相对路径 + 成品相对路径 + 各阶段状态（§14.3）。
         content_object.write_content_object_index(task_id, batch_id, ref)

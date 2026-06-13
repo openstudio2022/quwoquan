@@ -12,6 +12,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
+from _common.paths import DATA_ROOT
 from vertical.source_registry import resolve_travel_source_runtime
 
 # Wikimedia/多数公共源要求 User-Agent 含 contact，否则触发严格限流(429)。
@@ -435,10 +436,29 @@ def fetch_image_payload(url: str, *, min_bytes: int = 3000) -> dict | None:
     供来源单元写入器（write_source_unit）把图片直接落进来源 assets/，
     避免对象级散落 images/。非 200 / 过小 / 非图片 / 网络异常一律返回 None。
     """
-    try:
-        status, body, content_type = _http_get_bytes(url)
-    except Exception:
-        return None
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme == "file":
+        try:
+            path = Path(urllib.parse.unquote(parsed.path)).resolve()
+            data_root = DATA_ROOT.resolve()
+            if not path.is_relative_to(data_root) or not path.is_file():
+                return None
+            body = path.read_bytes()
+            status = 200
+            content_type = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".webp": "image/webp",
+            }.get(path.suffix.lower(), "")
+        except Exception:
+            return None
+    else:
+        try:
+            status, body, content_type = _http_get_bytes(url)
+        except Exception:
+            return None
     if status != 200 or len(body) < min_bytes:
         return None
     ext = sniff_image_ext(body, content_type)

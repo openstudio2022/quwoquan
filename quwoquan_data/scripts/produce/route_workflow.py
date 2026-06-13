@@ -132,7 +132,7 @@ def load_compose_brief(task_id: str, batch_id: str, ref: str) -> dict[str, Any]:
     brief = read_brief_object(task_id, batch_id, ref) or {}
     if not brief:
         return {}
-    return hydrate_entity_condition_context(brief)
+    return hydrate_entity_condition_context(brief, task_id=task_id, batch_id=batch_id)
 
 
 def iter_route_briefs(task_id: str, batch_id: str, refs: Sequence[str] | None = None) -> list[tuple[str, dict[str, Any]]]:
@@ -156,7 +156,7 @@ def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str,
     title = require_title_hint(brief, ref=ref)
     entity_refs = [str(item) for item in brief.get("entityRefs") or [] if item]
     entity_names = entity_names_from_refs(entity_refs)
-    source_records = load_source_records(task_id, batch_id, entity_names)
+    source_records = load_source_records(task_id, batch_id, entity_names, entity_refs=entity_refs)
     evidence_bundle = build_route_evidence_bundle(
         ref,
         brief,
@@ -382,11 +382,12 @@ def _compose_payload_from_pack(
 
 def _attach_base_draft_text(task_id: str, batch_id: str, pack: dict[str, Any]) -> None:
     """把底稿正文内联进 writing pack，供 prompt 渲染「在此基础上适度加工」。"""
-    from _common.base_draft import load_base_draft_text
+    from _common.base_draft import base_source_use_mode, load_base_draft_text
 
     base_ref = str(pack.get("baseSourceRef") or "")
     if not base_ref:
         return
+    pack["sourceUseMode"] = base_source_use_mode(task_id, batch_id, base_ref)
     text = load_base_draft_text(task_id, batch_id, base_ref).strip()
     if text:
         pack["baseDraftText"] = text[:4000]
@@ -451,13 +452,15 @@ def review_route_draft(
         "issues": traceability,
         "suggestions": ["补齐 mustIncludeFacts，并确保票价/海拔/时长等数字能在 source 证据中找到。"] if traceability else [],
     }
-    from _common.base_draft import base_draft_fidelity_issues, load_base_draft_text
+    from _common.base_draft import base_draft_fidelity_issues, base_source_use_mode, load_base_draft_text
 
     base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
+    source_use_mode = base_source_use_mode(task_id, batch_id, brief.get("baseSourceRef"))
     fidelity = base_draft_fidelity_issues(
         body,
         base_text,
         carrier=str(compose_payload.get("carrier") or brief.get("carrier") or "article"),
+        source_use_mode=source_use_mode,
     )
     route_checks["baseDraftFidelity"] = {
         "passed": not fidelity,
@@ -1103,7 +1106,7 @@ def _entity_image_candidates(
         cands = object_image_candidates(
             resolve_entity_object_dir(task_id, batch_id, entity_ref), task_id, batch_id
         )
-    if not cands:
+    if not cands and not entity_ref:
         for obj in find_entity_object_dirs(task_id, batch_id, name):
             cands.extend(object_image_candidates(obj, task_id, batch_id))
     if cands:

@@ -289,10 +289,59 @@ def complete_job(task_id: str, batch_id: str, job_id: str, lease: str) -> dict[s
     job = _load_owned(task_id, batch_id, job_id, lease)
     job["state"] = STATE_SUCCEEDED
     job["lease"] = None
+    job["leaseExpiresEpoch"] = 0
+    job["deadlineEpoch"] = 0
+    job["notBeforeEpoch"] = 0
+    job["sameRunRetryable"] = False
+    job["lastError"] = None
     job["timings"].append({"event": "succeeded", "at": store.now_iso()})
     job["updatedAt"] = store.now_iso()
     write_json(_job_path(task_id, batch_id, job_id), job)
     return job
+
+
+def reconcile_completed_refs(
+    task_id: str,
+    batch_id: str,
+    refs: Iterable[str],
+    stage: str,
+    *,
+    reason: str = "artifact_completed",
+) -> list[str]:
+    """把已在对象产物/工作流侧确认完成的 ref 对齐为 succeeded。
+
+    用于 fanout 历史残留清理：例如 author 曾 startup_failed/dead，但后续通过
+    finalize/manual rerun 已产出 approved 成品。此时 object_queue 不应继续把计划
+    聚合拖回 failed/dead。
+    """
+    touched: list[str] = []
+    wanted = {str(ref).strip() for ref in refs if str(ref).strip()}
+    if not wanted:
+        return touched
+    for ref in sorted(wanted):
+        job_id = stable_job_id(task_id, batch_id, ref, stage)
+        path = _job_path(task_id, batch_id, job_id)
+        if not path.is_file():
+            continue
+        job = read_json(path)
+        if str(job.get("stage") or "") != stage:
+            continue
+        if str(job.get("state") or "") == STATE_SUCCEEDED:
+            continue
+        job["state"] = STATE_SUCCEEDED
+        job["lease"] = None
+        job["leaseExpiresEpoch"] = 0
+        job["deadlineEpoch"] = 0
+        job["notBeforeEpoch"] = 0
+        job["sameRunRetryable"] = False
+        job["lastError"] = None
+        job.setdefault("timings", []).append(
+            {"event": "reconciled", "at": store.now_iso(), "reason": reason}
+        )
+        job["updatedAt"] = store.now_iso()
+        write_json(path, job)
+        touched.append(ref)
+    return touched
 
 
 def _is_stuck(job: dict[str, Any], fingerprint: str | None) -> bool:
@@ -398,11 +447,19 @@ def revive_dead_startup_jobs(
     refs: Iterable[str] | None = None,
     stage: str | None = None,
 ) -> dict[str, Any]:
-    """把仅因 startup failure 而 dead 的 job 恢复为 queued，继续同一批次主线。"""
+    """把仅因 startup failure 卡住的 job 恢复为 queued，继续同一批次主线。
+
+    兼容两种真实现场：
+    - 已耗尽 startup budget，落到 `dead`
+    - 非 retryable startup 失败，暂留在 `failed`
+
+    两者在“当前 draft 仍是占位稿、需要重新 author”这一语义上等价，都应允许
+    后续 `sync_content_author_jobs()` 把 job 拉回 `queued`。
+    """
     ref_filter = {str(ref) for ref in refs} if refs is not None else None
     revived: list[str] = []
     for job in _load_jobs(task_id, batch_id):
-        if job.get("state") != STATE_DEAD:
+        if job.get("state") not in (STATE_DEAD, STATE_FAILED):
             continue
         if stage and job.get("stage") != stage:
             continue

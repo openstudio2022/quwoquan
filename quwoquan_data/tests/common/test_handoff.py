@@ -96,6 +96,16 @@ def test_batch_reducer_flags_source_reuse():
     assert gate["intentDistribution"]["decision_experience"] == 1
 
 
+def test_batch_reducer_passes_for_distinct_refs():
+    payload = [
+        {"ref": "r1", "article": "先坐车到景区，再步行上山，最后回城。 asset://a1", "writingIntent": "planning_consultation", "baseSourceRef": "sources/a.md"},
+        {"ref": "r2", "article": "上午走老街，下午看博物馆，傍晚吃完再回酒店。 asset://a2", "writingIntent": "post_trip_journal", "baseSourceRef": "sources/b.md"},
+    ]
+    gate = handoff.build_batch_reducer_gate(payload)
+    assert gate["passed"] is True, gate["issues"]
+    assert gate["affectedRefs"] == []
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

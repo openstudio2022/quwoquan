@@ -33,6 +33,7 @@ import os
 import subprocess
 import sys
 
+from _common.io import read_json
 from task import lint as lint_mod
 from task import ops
 from task import queue
@@ -41,6 +42,7 @@ from task import store
 from task.decompose import register_decompose_parser
 from task.run import register_run_parser
 from verify.gate import gate_verify
+from verify.audit_summary import write_batch_audit_summary
 
 
 def _split(arg: str | None) -> list[str]:
@@ -277,13 +279,19 @@ def handle_cleanup_runtime(args: argparse.Namespace) -> None:
 
 def handle_rollup(args: argparse.Namespace) -> None:
     from task import fanout_rollup
+    from _common.paths import fanout_summary_path
 
     try:
         report = fanout_rollup.rollup(args.plan)
     except ValueError as exc:
         print(f"[task rollup] ERROR: {exc}", file=sys.stderr)
         raise SystemExit(2)
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    summary_path = fanout_summary_path(args.plan)
+    summary = read_json(summary_path) if summary_path.is_file() else None
+    if summary is None:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+    print(json.dumps({"rollup": report, "summary": summary}, ensure_ascii=False, indent=2))
 
 
 def handle_scaled_e2e(args: argparse.Namespace) -> None:
@@ -501,6 +509,7 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
         if getattr(args, "plan", None):
             from _common import fanout_plan as fp
             from _common import fanout_strategies as fs
+            from verify.handler import handle_sample_drift, handle_goldenset
 
             plan = fp.load_plan(args.plan)
             if plan is None:
@@ -509,9 +518,31 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
             roots: list[str] = []
             issues: list[str] = []
             for unit in fs.expand_units(plan):
-                unit_roots, unit_issues = gate_verify(task=str(unit["taskId"]), batch=str(unit["batchId"]), scope="current")
+                task_id = str(unit["taskId"])
+                batch_id = str(unit["batchId"])
+                unit_roots, unit_issues = gate_verify(task=task_id, batch=batch_id, scope="current")
                 roots.extend([str(r) for r in unit_roots])
                 issues.extend(unit_issues)
+                write_batch_audit_summary(task_id, batch_id, roots=unit_roots, issues=unit_issues)
+                try:
+                    handle_sample_drift(
+                        argparse.Namespace(
+                            task=task_id,
+                            batch=batch_id,
+                            fraction=1.0,
+                            samples_file=None,
+                            baseline=None,
+                            report_out=None,
+                        )
+                    )
+                except SystemExit as exc:
+                    if int(getattr(exc, "code", 1) or 0) != 0:
+                        issues.append(f"{task_id}/{batch_id}: sample-drift failed")
+            try:
+                handle_goldenset(argparse.Namespace(baseline=None, report_out=None))
+            except SystemExit as exc:
+                if int(getattr(exc, "code", 1) or 0) != 0:
+                    issues.append("goldenset regression gate failed")
         else:
             roots, issues = gate_verify(task=args.task, batch=args.batch, scope="current")
         if roots:

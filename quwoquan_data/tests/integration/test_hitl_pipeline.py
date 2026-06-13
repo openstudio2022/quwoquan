@@ -28,12 +28,12 @@ import cv2  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common.evidence_contract import post_manifest_contract_issues, quality_payload_contract_issues  # noqa: E402
+from _common.entity_object import find_entity_object_dir  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
     batch_inputs_dir,
     ensure_batch_layout,
     ensure_task_layout,
-    task_data,
 )
 from _common.batch_manifest import write_batch_manifest  # noqa: E402
 from _common.content_evidence import public_byline_label  # noqa: E402
@@ -191,9 +191,9 @@ def test_mined_entity_homepage_generated():
     assert MINED in names, "应挖掘出专有实体"
     ent = names[MINED]
     assert ent["hasHomepage"] is True
-    # 关联实体主页 page.md 真实生成在 task entities 下（无主页的抽取实体会被自动建主页）
-    page = task_data(TASK).entity_page(ent["domain"], ent["type"], MINED)
-    assert page.is_file(), "无主页的抽取实体应自动生成关联实体主页"
+    # 关联实体主页应优先生成在当前 batch 实体对象根；task/entities 仅为派生镜像。
+    obj = find_entity_object_dir(TASK, ent["domain"], ent["type"], MINED, batch_id=BATCH)
+    assert obj is not None and (obj / "page.md").is_file(), "无主页的抽取实体应自动生成关联实体主页对象"
 
 
 def _run_all() -> None:

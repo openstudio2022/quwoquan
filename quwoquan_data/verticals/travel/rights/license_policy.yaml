@@ -17,11 +17,22 @@ allowedLicenseKinds:
   - CC0
   - CC-BY
   - CC BY
+  - CC-BY 2.0
+  - CC BY 2.0
+  - CC-BY 3.0
+  - CC BY 3.0
+  - CC-BY 4.0
+  - CC BY 4.0
   - CC-BY-SA
   - CC BY-SA
+  - CC-BY-SA 2.0
+  - CC BY-SA 2.0
+  - CC-BY-SA 3.0
+  - CC BY-SA 3.0
   - CC-BY-SA 4.0
   - CC BY-SA 4.0
   - Public Domain
+  - AI Generated Original
   - government_open_data
   - scenic_official_authorized
   - photographer_authorized

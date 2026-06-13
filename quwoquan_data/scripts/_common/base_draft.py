@@ -100,6 +100,14 @@ def _unit_quality_score(unit_dir: Path) -> tuple[float, int]:
     """(质量分, source.md 去空白字符数)；质量分缺失回退 0，长度作次级排序键。"""
     score = 0.0
     quality = ""
+    meta_path = unit_dir / "meta.json"
+    if meta_path.is_file():
+        try:
+            meta = read_json(meta_path)
+        except (OSError, ValueError):
+            meta = {}
+        if str(meta.get("sourceUseMode") or "") == "blocked":
+            return -1.0, 0
     quality_path = unit_dir / "source.quality.json"
     if quality_path.is_file():
         try:
@@ -227,6 +235,23 @@ def load_base_draft_text(task_id: str, batch_id: str, base_source_ref: str | Non
     return ""
 
 
+def base_source_use_mode(task_id: str, batch_id: str, base_source_ref: str | None) -> str:
+    """读取来源单元权利模式；旧来源默认按事实参考处理，禁止误启用轻改门。"""
+    if not base_source_ref:
+        return "factual_reference_only"
+    candidate = batch_root(task_id, batch_id) / str(base_source_ref)
+    unit_dir = candidate if candidate.is_dir() else candidate.parent
+    meta_path = unit_dir / "meta.json"
+    if meta_path.is_file():
+        try:
+            mode = str(read_json(meta_path).get("sourceUseMode") or "").strip()
+        except (OSError, ValueError):
+            mode = ""
+        if mode:
+            return mode
+    return "factual_reference_only"
+
+
 def _looks_like_noise_line(line: str) -> bool:
     compact = re.sub(r"\s+", "", line)
     letters = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", compact)
@@ -281,8 +306,16 @@ _GALLERY_BASE_TARGET_CHARS = 1000
 _GALLERY_BASE_BODY_RATIO = 0.7
 
 
+def _normalize_embedded_newlines(text: str) -> str:
+    """兼容运行时/测试里以字面量 \\n 落盘或拼接的正文。"""
+    if "\\n" not in text:
+        return text
+    return text.replace("\\r\\n", "\n").replace("\\n", "\n")
+
+
 def _readable_body(article: str) -> str:
     """剥离 figure 块/asset 引用/标题井号后的可读正文（用于贴合度比较）。"""
+    article = _normalize_embedded_newlines(article)
     text = _FIGURE_RE.sub("", article)
     text = _ASSET_RE.sub("", text)
     text = re.sub(r"(?m)^#{1,6}\s*", "", text)
@@ -291,7 +324,13 @@ def _readable_body(article: str) -> str:
 
 def _base_excerpt_for_gallery(text: str, *, body_len: int) -> str:
     """画报正文较短，只要求贴住底稿前段主线，不强求覆盖整篇长底稿。"""
-    target_chars = max(_GALLERY_BASE_TARGET_CHARS, int(body_len * _GALLERY_BASE_BODY_RATIO))
+    text = _normalize_embedded_newlines(text)
+    source_chars = len(re.sub(r"\s+", "", text))
+    if _GALLERY_BASE_BODY_RATIO > 0:
+        target_chars = int(body_len / _GALLERY_BASE_BODY_RATIO)
+    else:
+        target_chars = int(body_len or 0)
+    target_chars = max(1, min(source_chars, target_chars))
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     if not paragraphs:
         return text[:target_chars]
@@ -301,6 +340,11 @@ def _base_excerpt_for_gallery(text: str, *, body_len: int) -> str:
         chars = len(re.sub(r"\s+", "", paragraph))
         if picked and total >= target_chars:
             break
+        if picked and total + chars > target_chars:
+            current_gap = abs(target_chars - total)
+            expanded_gap = abs(target_chars - (total + chars))
+            if current_gap <= expanded_gap:
+                break
         picked.append(paragraph)
         total += chars
     return "\n\n".join(picked)
@@ -308,6 +352,7 @@ def _base_excerpt_for_gallery(text: str, *, body_len: int) -> str:
 
 def _strip_source_meta(text: str, *, carrier: str = "article", body_len: int = 0) -> str:
     """去掉底稿里的 license/credit/url 等元信息行，并按载体裁切公平比较窗口。"""
+    text = _normalize_embedded_newlines(text)
     kept: list[str] = []
     for line in text.splitlines():
         low = line.strip().lower()
@@ -344,8 +389,11 @@ def base_draft_fidelity_issues(
     min_ratio: float = FIDELITY_MIN,
     max_ratio: float = FIDELITY_MAX,
     carrier: str = "article",
+    source_use_mode: str = "licensed_adaptation",
 ) -> list[str]:
-    """底稿贴合度区间门：仅当存在可读底稿时生效；底稿留存率落区间外报问题。"""
+    """底稿贴合度仅用于明确授权改编；普通网页只受反长句复现和事实回溯门约束。"""
+    if source_use_mode != "licensed_adaptation":
+        return []
     body = _readable_body(article)
     base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body))
     if not base or not body:
@@ -374,6 +422,7 @@ __all__ = [
     "base_draft_candidates",
     "assign_base_draft",
     "load_base_draft_text",
+    "base_source_use_mode",
     "base_draft_similarity",
     "base_draft_fidelity_issues",
 ]

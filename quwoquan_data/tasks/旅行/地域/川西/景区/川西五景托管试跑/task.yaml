@@ -1,0 +1,46 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/川西/景区/川西五景托管试跑
+title: 川西五景托管端到端试跑
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 川西
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 川西
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 四姑娘山
+  - entityType: 地点/景区
+    name: 毕棚沟
+  - entityType: 地点/景区
+    name: 稻城亚丁
+  - entityType: 地点/景区
+    name: 海螺沟
+  - entityType: 地点/景区
+    name: 墨石公园
+content:
+  angles:
+  - 攻略
+  - 体验
+  carriers:
+  - article
+  - gallery
+  quotas:
+    entityArticlesPerTarget: 2
+    galleryPostsPerTarget: 2
+    entityHomepagesPerTarget: 1
+    routeArticles: 0
+acceptance:
+  minEntities: 5
+  minPostsPerEntity: 4
+  requiredAngles:
+  - 攻略
+  - 体验
+provenance:
+  createdAt: '2026-06-13T00:00:00+08:00'
+  createdBy: codex-managed-pilot

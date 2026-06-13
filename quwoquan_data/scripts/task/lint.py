@@ -23,6 +23,7 @@ from task.store import (
     read_yaml,
     resolve_spec,
 )
+from _common.entity_extract import normalize_domain_etype_path
 
 # 历史已用但不在 sop/主页 的实体类型（海外/特殊），允许其作为 entityType
 OVERSEAS_SUPPLEMENT = {
@@ -100,6 +101,30 @@ def lint_spec(spec: dict[str, Any], spec_path: Path, valid_types: set[str]) -> l
         et = tgt.get("entityType")
         if et and et not in valid_types:
             errors.append(f"coverageTargets 未知 entityType '{et}'（实体 {tgt.get('name')}）")
+    scenic_targets: dict[str, set[str]] = {}
+    for tgt in scope.get("coverageTargets", []) or []:
+        name = str(tgt.get("name") or "").strip()
+        et = str(tgt.get("entityType") or "").strip()
+        if not name or not et:
+            continue
+        try:
+            normalized = normalize_domain_etype_path(
+                et,
+                context=f"coverageTargets[{name}]",
+                allow_default_on_missing=False,
+                allow_default_on_unknown=False,
+            )
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+        if normalized in {"地点/景区", "地点/打卡地"}:
+            scenic_targets.setdefault(name, set()).add(normalized)
+    for name, rows in sorted(scenic_targets.items()):
+        if len(rows) > 1:
+            errors.append(
+                f"coverageTargets 同名实体 '{name}' 同时声明为 {sorted(rows)}；"
+                "景区/打卡地 双树共存会导致目录与发布漂移，必须显式纠偏为唯一类型"
+            )
 
     errors.extend(_condition_axes_errors(spec, tid, vertical))
     return errors

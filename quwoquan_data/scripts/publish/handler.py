@@ -52,7 +52,7 @@ def handle_publish(args: argparse.Namespace) -> None:
     print(f"[publish] Task: {task_id} → Release: {release_id}")
     print(f"[publish] Steps: assemble → gate → package")
 
-    root = assemble_release(task_id, release_id)
+    root = assemble_release(task_id, release_id, batch_id=str(getattr(args, "batch", "") or ""))
     print(f"[publish] Assembled to: {root}")
 
     filter_issues = _apply_release_publish_filter(root)
@@ -83,6 +83,7 @@ def handle_publish(args: argparse.Namespace) -> None:
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("publish", help="Assemble release package")
     p.add_argument("--task", required=True, help="Task ID")
+    p.add_argument("--batch", default="", help="仅组装指定 batch（workflow 正式路径必填）")
     p.add_argument("--release-id", required=True, help="Release identifier")
     p.add_argument(
         "--push-to-service",

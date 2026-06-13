@@ -28,6 +28,14 @@ _GENERIC_RELEVANCE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^覆盖该?对象的基础事实"),
 )
 
+_INDIRECT_TARGET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?:距|距离).{0,18}(?:公里|千米)"),
+    re.compile(r"(?:互补|同日|组合).{0,12}(?:游线|环线|一日游)"),
+    re.compile(r"(?:邻近|周边).{0,12}(?:景点|景区|文化|游线)"),
+    re.compile(r"(?:所属县域|县城景观|藏居客厅|民居内景)"),
+    re.compile(r"支撑.{0,20}(?:环线|组合产品|组合一日游|区位段落|交通段落)"),
+)
+
 
 def is_generic_relevance(relevance: str, *, entity_id: str = "") -> bool:
     """判断相关性是否为空或通用模板串（去掉实体名后若只剩通用词，也算通用）。"""
@@ -47,12 +55,23 @@ def is_generic_relevance(relevance: str, *, entity_id: str = "") -> bool:
     return False
 
 
+def is_indirect_target_relevance(relevance: str) -> bool:
+    """识别明确把邻近景点、环线或县域素材当作目标实体配图的说明。"""
+    text = str(relevance or "").strip()
+    return any(pattern.search(text) for pattern in _INDIRECT_TARGET_PATTERNS)
+
+
 def relevance_issue(relevance: str, *, entity_id: str, asset_id: str) -> str | None:
     """单图相关性门：缺失/通用返回问题串，否则 None。"""
     if is_generic_relevance(relevance, entity_id=entity_id):
         return (
             f"imageRelevance: {asset_id} 缺少与『{entity_id}』的真实相关性说明"
             f"（当前: {relevance!r}，禁止通用模板串）"
+        )
+    if is_indirect_target_relevance(relevance):
+        return (
+            f"imageRelevance: {asset_id} 仅为『{entity_id}』邻近景点/环线/县域语境，"
+            f"不能冒充目标实体图片（当前: {relevance!r}）"
         )
     return None
 

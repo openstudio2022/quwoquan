@@ -16,6 +16,15 @@ from _common.io import read_json
 from _common.paths import STAGE_DOWNLOAD
 from _common.source_unit import resolve_entity_object_dir
 
+SOURCE_USE_LICENSED_ADAPTATION = "licensed_adaptation"
+SOURCE_USE_FACTUAL_REFERENCE = "factual_reference_only"
+SOURCE_USE_BLOCKED = "blocked"
+VALID_SOURCE_USE_MODES = {
+    SOURCE_USE_LICENSED_ADAPTATION,
+    SOURCE_USE_FACTUAL_REFERENCE,
+    SOURCE_USE_BLOCKED,
+}
+
 
 def _source_plan_file(task_id: str, batch_id: str, entity_id: str, entity_type: str = "") -> Path | None:
     """对象优先 source_plan 路径。"""
@@ -59,6 +68,13 @@ def curated_sources_for_entity(
                 "platform": src.get("platform") or "web",
                 "url": url,
                 "body": src.get("body", ""),
+                "title": src.get("title") or "",
+                "sourceUseMode": src.get("sourceUseMode") or "",
+                "license": src.get("license") or "",
+                "credit": src.get("credit") or "",
+                "termsUrl": src.get("termsUrl") or "",
+                "licenseSnapshot": src.get("licenseSnapshot") or "",
+                "authorizationProof": src.get("authorizationProof") or "",
             }
         )
     return out
@@ -86,6 +102,10 @@ def _normalize_image_specs(raw: Any) -> list[dict[str, Any]]:
                 "modelReleaseRequired": item.get("modelReleaseRequired", ""),
                 "modelReleaseStatus": item.get("modelReleaseStatus", ""),
                 "authorizationProof": item.get("authorizationProof", ""),
+                "generationModel": item.get("generationModel", ""),
+                "generationPromptHash": item.get("generationPromptHash", ""),
+                "generatedAt": item.get("generatedAt", ""),
+                "syntheticDisclosure": item.get("syntheticDisclosure", ""),
                 # 相关性/说明/类型/尺寸：供 relevance 门、caption 与像素门消费。
                 "caption": item.get("caption", ""),
                 "relevance": item.get("relevance") or item.get("caption") or "",
@@ -132,17 +152,55 @@ def curated_images_for_entity(
 
 def source_frontmatter(source: dict[str, Any], entity_id: str) -> str:
     """来源 frontmatter：只记录真实抓取元信息，source.md 正文不再允许 task body 冒充。"""
+    use_mode = str(source.get("sourceUseMode") or SOURCE_USE_FACTUAL_REFERENCE)
+    allowed_use = (
+        "licensed_adaptation"
+        if use_mode == SOURCE_USE_LICENSED_ADAPTATION
+        else "facts_only"
+    )
     return (
         f"---\n"
         f"url: {source.get('url', '')}\n"
         f"platform: {source.get('platform', 'web')}\n"
-        f"license: fetch-required\n"
-        f"allowedUse: internal_reference\n"
+        f"sourceUseMode: {use_mode}\n"
+        f"license: {source.get('license') or 'reference-only'}\n"
+        f"allowedUse: {allowed_use}\n"
+        f"credit: {source.get('credit', '')}\n"
+        f"termsUrl: {source.get('termsUrl', '')}\n"
+        f"licenseSnapshot: {source.get('licenseSnapshot', '')}\n"
+        f"authorizationProof: {source.get('authorizationProof', '')}\n"
         f"entity: {entity_id}\n"
         f"retained: false\n"
         f"taskProvidedBody: {'true' if str(source.get('body') or '').strip() else 'false'}\n"
         f"---\n\n"
     )
+
+
+def source_plan_rights_issues(
+    task_id: str,
+    batch_id: str,
+    entity_id: str,
+    entity_type: str = "",
+    require_explicit: bool = False,
+) -> list[str]:
+    """校验 source_plan 的文字来源权利分层，阻断缺模式和伪授权。"""
+    issues: list[str] = []
+    for source in curated_sources_for_entity(task_id, batch_id, entity_id, entity_type):
+        sid = str(source.get("source_id") or "?")
+        mode = str(source.get("sourceUseMode") or "").strip()
+        if not mode and not require_explicit:
+            mode = SOURCE_USE_FACTUAL_REFERENCE
+        if mode not in VALID_SOURCE_USE_MODES:
+            issues.append(f"{sid}: sourceUseMode must be one of {sorted(VALID_SOURCE_USE_MODES)}")
+            continue
+        if mode == SOURCE_USE_BLOCKED:
+            issues.append(f"{sid}: blocked source must not enter a consumable source plan")
+            continue
+        if mode == SOURCE_USE_LICENSED_ADAPTATION:
+            for field in ("license", "termsUrl", "licenseSnapshot"):
+                if not str(source.get(field) or "").strip():
+                    issues.append(f"{sid}: licensed_adaptation missing {field}")
+    return issues
 
 
 def manual_body_note(source: dict[str, Any], *, max_chars: int = 180) -> str:

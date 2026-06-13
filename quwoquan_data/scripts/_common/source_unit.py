@@ -27,10 +27,11 @@ from _common.image_variants import build_local_variants, image_dimensions
 from _common.paths import (
     STAGE_DOWNLOAD,
     batch_entity_object_dir,
+    batch_root,
     relative_batch_ref,
     source_unit_dir,
 )
-from _common.entity_extract import resolve_domain_etype
+from _common.entity_extract import require_domain_etype, resolve_domain_etype
 
 SOURCE_UNIT_MANIFEST = "meta.json"
 SOURCE_UNIT_ASSET_INDEX = "assets/index.json"
@@ -61,8 +62,37 @@ def resolve_entity_object_dir(
         domain, etype, name = parts[0], parts[1], parts[-1]
     else:
         name = parts[-1] if parts else raw
-        domain, etype = resolve_domain_etype(etype_hint)
-    return batch_entity_object_dir(task_id, batch_id, domain, etype, name)
+        if etype_hint:
+            domain, etype = require_domain_etype(etype_hint, context=f"entity object path for {name}")
+        else:
+            domain, etype = resolve_domain_etype(etype_hint)
+    obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
+    _raise_if_scenic_location_type_conflict(task_id, batch_id, domain, etype, name, current=obj)
+    return obj
+
+
+def _raise_if_scenic_location_type_conflict(
+    task_id: str,
+    batch_id: str,
+    domain: str,
+    etype: str,
+    name: str,
+    *,
+    current: Path,
+) -> None:
+    if domain != "地点" or etype not in {"景区", "打卡地"}:
+        return
+    sibling_type = "打卡地" if etype == "景区" else "景区"
+    sibling = batch_entity_object_dir(task_id, batch_id, domain, sibling_type, name)
+    if sibling == current or not sibling.exists():
+        return
+    if not any((sibling / marker).exists() for marker in ("_entity.json", "page.md", "1.download")):
+        return
+    raise ValueError(
+        "entity type drift detected: same batch contains both "
+        f"{domain}/{etype}/{name} and {domain}/{sibling_type}/{name}; "
+        "must fail or explicitly correct, silent coexistence is forbidden"
+    )
 
 
 # ─── 写：来源单元 ──────────────────────────────────────────────────
@@ -77,6 +107,8 @@ def write_source_unit(
     quality: Mapping[str, Any] | None = None,
     platform: str = "",
     source_category: str = "",
+    source_use_mode: str = "",
+    license_value: str = "",
     url: str = "",
     title: str = "",
     target_ref: str = "",
@@ -152,6 +184,10 @@ def write_source_unit(
             "termsUrl": str(img.get("termsUrl") or ""),
             "licenseSnapshot": str(img.get("licenseSnapshot") or ""),
             "usageScope": str(img.get("usageScope") or ""),
+            "generationModel": str(img.get("generationModel") or ""),
+            "generationPromptHash": str(img.get("generationPromptHash") or ""),
+            "generatedAt": str(img.get("generatedAt") or ""),
+            "syntheticDisclosure": str(img.get("syntheticDisclosure") or ""),
             "caption": str(img.get("caption") or ""),
             "relevance": str(img.get("relevance") or relevance or ""),
             "variants": variants_meta,
@@ -167,6 +203,8 @@ def write_source_unit(
         "ordinal": ordinal,
         "sourceKind": source_category or platform or "web",
         "platform": platform or "web",
+        "sourceUseMode": source_use_mode,
+        "license": license_value,
         "url": url,
         "title": title,
         "relevance": {
@@ -193,7 +231,13 @@ def iter_source_units(object_dir: Path) -> list[Path]:
     return sorted(units, key=lambda d: d.name)
 
 
-def find_entity_object_dirs(task_id: str, batch_id: str, name: str) -> list[Path]:
+def find_entity_object_dirs(
+    task_id: str,
+    batch_id: str,
+    name: str,
+    *,
+    etype_hint: str = "",
+) -> list[Path]:
     """按实体名在批次 entities/** 下定位对象目录（含 1.download 来源单元者）。
 
     新布局来源单元在对象目录下，produce/quality 读取时无需 domain/type，
@@ -204,12 +248,33 @@ def find_entity_object_dirs(task_id: str, batch_id: str, name: str) -> list[Path
     entities_root = batch_root(task_id, batch_id) / "entities"
     if not entities_root.is_dir():
         return []
+    raw = str(name or "").strip().strip("/")
+    parts = [p for p in raw.split("/") if p]
+    if parts and parts[0] == "entity":
+        parts = parts[1:]
+    if len(parts) >= 3:
+        return [resolve_entity_object_dir(task_id, batch_id, raw)]
+    if etype_hint:
+        return [resolve_entity_object_dir(task_id, batch_id, raw, etype_hint=etype_hint)]
     out: list[Path] = []
-    for src_dir in entities_root.rglob(f"{name}/{STAGE_DOWNLOAD}/sources"):
+    for src_dir in entities_root.rglob(f"{raw}/{STAGE_DOWNLOAD}/sources"):
         obj = src_dir.parent.parent
-        if obj.name == name:
+        if obj.name == raw:
             out.append(obj)
-    return sorted(set(out))
+    unique = sorted(set(out))
+    scenic_pairs = {
+        path.relative_to(entities_root).parts[1]
+        for path in unique
+        if len(path.relative_to(entities_root).parts) >= 3
+        and path.relative_to(entities_root).parts[0] == "地点"
+        and path.relative_to(entities_root).parts[1] in {"景区", "打卡地"}
+    }
+    if len(scenic_pairs) > 1:
+        rels = sorted(path.relative_to(batch_root(task_id, batch_id)).as_posix() for path in unique)
+        raise ValueError(
+            f"entity type drift detected for '{raw}': dual scenic-location trees coexist -> {rels}"
+        )
+    return unique
 
 
 def object_image_candidates(

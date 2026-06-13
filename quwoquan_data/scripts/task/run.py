@@ -29,12 +29,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
+from _common.entity_extract import require_domain_etype
 from _common.io import read_json, write_json
 from _common.paths import (
     batch_root,
@@ -75,6 +79,7 @@ FALLBACK_DAG_STAGE = {
     "download_plan": "download_plan",
 }
 MAX_REACT_REWINDS = 2  # 单 stage 自动回退次数上限，超出转人工，防无限自省
+MAX_MANAGED_INFRA_RETRIES = 3
 
 
 @dataclass
@@ -87,6 +92,12 @@ class PipelineContext:
     baseline_packet_path: Path | None = None
     until: str | None = None
     completed: list[str] = field(default_factory=list)
+    managed: bool = False
+    runtime: str = "local"
+    max_workers: int = 3
+    model: str = "composer-2.5"
+    release_only: bool = False
+    agent_runner: Callable[[str], dict[str, Any]] | None = None
 
 
 def _write_workflow_packet(
@@ -164,6 +175,13 @@ def load_workflow_state(task_id: str, batch_id: str) -> dict:
         "batchId": batch_id,
         "completed": [],
         "waitingCheckpoint": None,
+        "status": "queued",
+        "owner": None,
+        "heartbeatAt": None,
+        "retryCounts": {},
+        "infrastructureRetryCounts": {},
+        "failedObjects": [],
+        "nextAction": None,
         "updatedAt": store.now_iso(),
     }
 
@@ -207,27 +225,80 @@ def _coverage_entity_ids(spec: dict) -> list[str]:
 
 # ─── checkpoint 完成度探测（resume 判定 Agent 是否已物化产物）──────────
 def _coverage_entity_type(spec: dict) -> str:
-    """scope.entityTypes 首项（download/build 对象目录解析用）。"""
+    """coverageTargets/entityTypes 的唯一类型真相源；显式任务必须给出明确类型。"""
     scope = spec.get("scope") or {}
-    types = scope.get("entityTypes") or []
-    return str(types[0]) if types else ""
+    targets = scope.get("coverageTargets") or []
+    target_types = {
+        str(target.get("entityType") or "").strip()
+        for target in targets
+        if str(target.get("entityType") or "").strip()
+    }
+    if len(target_types) > 1:
+        raise ValueError(
+            "workflow currently requires a single entityType across coverageTargets; "
+            f"got {sorted(target_types)}"
+        )
+    if target_types:
+        only = next(iter(target_types))
+        require_domain_etype(only, context="scope.coverageTargets[].entityType")
+        return only
+    types = [str(item).strip() for item in (scope.get("entityTypes") or []) if str(item).strip()]
+    if not types:
+        return ""
+    require_domain_etype(types[0], context="scope.entityTypes[0]")
+    return types[0]
 
 
 def _source_plan_filled(ctx: PipelineContext) -> tuple[bool, list[str]]:
-    """download_plan checkpoint：每个 coverage 实体的 source_plan 是否有可消费 sources。"""
-    from download.source_inputs import curated_sources_for_entity
+    """download_plan checkpoint：来源数量、权利模式和图片计划均满足任务规模。"""
+    from download.gate import download_requirements
+    from download.source_inputs import (
+        curated_images_for_entity,
+        curated_sources_for_entity,
+        source_plan_rights_issues,
+    )
+    from _common.image_rules import relevance_issue
+    from vertical.license import validate_image_rights
+
     etype = _coverage_entity_type(ctx.spec)
+    requirements = download_requirements(ctx.task_id)
     missing: list[str] = []
     for eid in ctx.entity_ids:
-        if not curated_sources_for_entity(ctx.task_id, ctx.batch_id, eid, etype):
-            missing.append(eid)
+        sources = curated_sources_for_entity(ctx.task_id, ctx.batch_id, eid, etype)
+        images = curated_images_for_entity(ctx.task_id, ctx.batch_id, eid, etype)
+        issues = source_plan_rights_issues(
+            ctx.task_id,
+            ctx.batch_id,
+            eid,
+            etype,
+            require_explicit=requirements["minSources"] >= 4,
+        )
+        for index, image in enumerate(images, start=1):
+            issues.extend(
+                f"image[{index}]: {issue}"
+                for issue in validate_image_rights(image, vertical=str(ctx.spec.get("vertical") or "travel"))
+            )
+            relevance = str(image.get("relevance") or image.get("caption") or "")
+            rel_issue = relevance_issue(
+                relevance,
+                entity_id=eid,
+                asset_id=f"{eid}#{index}",
+            )
+            if rel_issue:
+                issues.append(f"image[{index}]: {rel_issue}")
+        if len(sources) < requirements["minSources"]:
+            issues.append(f"sources={len(sources)} need>={requirements['minSources']}")
+        if len(images) < requirements["minImages"]:
+            issues.append(f"imageUrls={len(images)} need>={requirements['minImages']}")
+        if issues:
+            missing.append(f"{eid}: " + "; ".join(issues[:8]))
     return (not missing), missing
 
 
 def _homepages_done(ctx: PipelineContext) -> tuple[bool, list[str]]:
     """build_homepage checkpoint：coverage 实体三件套是否物化（用 build validate 复核）。"""
     from build.homepage import validate_entity_pages
-    issues = validate_entity_pages(ctx.task_id, ctx.spec)
+    issues = validate_entity_pages(ctx.task_id, ctx.batch_id, ctx.spec)
     return (not issues), issues
 
 
@@ -483,7 +554,7 @@ def _run_build_prepare(ctx: PipelineContext) -> StageResult:
 
 def _run_build_validate(ctx: PipelineContext) -> StageResult:
     from build.homepage import validate_entity_pages
-    issues = validate_entity_pages(ctx.task_id, ctx.spec)
+    issues = validate_entity_pages(ctx.task_id, ctx.batch_id, ctx.spec)
     if issues:
         return StageResult("build_validate", AUTO, "failed",
                            "主页采纳门未过:\n  - " + "\n  - ".join(issues[:10]),
@@ -546,7 +617,8 @@ def _run_produce_plan(ctx: PipelineContext) -> StageResult:
         name = str(target.get("name") or "").strip()
         if not name:
             continue
-        etype = str(target.get("entityType") or "地点/景区")
+        etype = str(target.get("entityType") or "").strip()
+        require_domain_etype(etype, context=f"coverageTargets[{name}]")
         kind = _entity_type_kind(etype)
         subject_type = ENTITY_KIND_MAP.get(kind, etype)
         entity_ref = f"/entity/{etype}/{name}"
@@ -609,6 +681,9 @@ def _aggregate_review_fallback(ctx: PipelineContext) -> str | None:
 def _run_produce_review(ctx: PipelineContext) -> StageResult:
     from produce.handler import handle_produce
     from produce.gate import gate_produce
+    from _common import content_object
+    from _common.draft_io import read_draft_article, read_writing_pack
+    from _common.handoff import build_batch_reducer_gate, write_batch_reducer_gate
     ns = argparse.Namespace(
         task=ctx.task_id, batch=ctx.batch_id, type="article",
         stage="review", refs="", batch_size=1,
@@ -616,6 +691,32 @@ def _run_produce_review(ctx: PipelineContext) -> StageResult:
     )
     handle_produce(ns)
     issues = gate_produce(ctx.task_id, ctx.batch_id, "article")
+    refs_payload: list[dict[str, str]] = []
+    for ref in content_object.iter_content_refs(ctx.task_id, ctx.batch_id):
+        article = read_draft_article(ctx.task_id, ctx.batch_id, ref)
+        pack = read_writing_pack(ctx.task_id, ctx.batch_id, ref) or {}
+        if not article:
+            continue
+        refs_payload.append(
+            {
+                "ref": ref,
+                "article": article,
+                "writingIntent": str(pack.get("writingIntent") or ""),
+                "baseSourceRef": str(pack.get("baseSourceRef") or ""),
+            }
+        )
+    batch_gate = build_batch_reducer_gate(refs_payload) if refs_payload else {
+        "schemaVersion": "quwoquan_data.batch_reducer_gate/1",
+        "passed": False,
+        "issues": ["batchReducer: no draft payloads available after produce_review"],
+        "affectedRefs": [],
+        "sourceReuse": {},
+        "intentDistribution": {},
+        "imageCoverage": {},
+    }
+    write_batch_reducer_gate(ctx.task_id, ctx.batch_id, batch_gate)
+    if batch_gate.get("passed") is False:
+        issues.extend([str(issue) for issue in (batch_gate.get("issues") or [])])
     if issues:
         fb = _aggregate_review_fallback(ctx) or "produce_compose"
         return StageResult("produce_review", AUTO, "failed",
@@ -635,10 +736,11 @@ def _checkpoint_download_plan(ctx: PipelineContext) -> StageResult:
     entities = [{"entityId": e, "canonicalName": e, "entityType": etype} for e in ctx.entity_ids]
     prepare_source_plan(ctx.task_id, ctx.batch_id, entities)
     hint = (
-        f"[CHECKPOINT download_plan] Agent 检索真实素材，为以下实体各写 ≥2 个可消费 source 到 source_plan：\n"
+        f"[CHECKPOINT download_plan] Agent 检索真实素材，为以下实体写满足规模化门的 source_plan：\n"
         f"  待补实体: {missing}\n"
-        f"  写入: entities/<domain>/<type>/<entityId>/1.download/source_plan.json 的 payload.sources=[{{source_id,platform,url,body}}]\n"
-        f"  (web_search/浏览器检索，URL+正文 body；含图则填 imageUrls)\n"
+        f"  写入: entities/<domain>/<type>/<entityId>/1.download/source_plan.json\n"
+        f"  每实体至少 4 个真实可抓取来源、10 张不重复可发布图片；来源须写 sourceUseMode，"
+        f"图片须写 license/credit/sourceUrl/termsUrl/usageScope/relevance。\n"
         f"  完成后: qwq-data data workflow run --task {ctx.task_id} --batch {ctx.batch_id} --resume"
     )
     return StageResult("download_plan", CHECKPOINT, "waiting", "等待 Agent 写 source_plan", hint)
@@ -651,10 +753,22 @@ def _checkpoint_content_plan(ctx: PipelineContext) -> StageResult:
     from _common.content_plan import content_plan_quotas_required
 
     quotas = (ctx.spec.get("content") or {}).get("quotas") or {}
-    entity_q = int(quotas.get("entityArticles") or 0) if content_plan_quotas_required(ctx.spec) else 0
+    per_target_entity = int(quotas.get("entityArticlesPerTarget") or 0)
+    per_target_gallery = int(quotas.get("galleryPostsPerTarget") or 0)
+    entity_q = (
+        per_target_entity * len(ctx.entity_ids)
+        if per_target_entity
+        else int(quotas.get("entityArticles") or 0)
+    ) if content_plan_quotas_required(ctx.spec) else 0
     route_q = int(quotas.get("routeArticles") or 0) if content_plan_quotas_required(ctx.spec) else 0
+    gallery_q = (
+        per_target_gallery * len(ctx.entity_ids)
+        if per_target_gallery
+        else int(quotas.get("galleryPosts") or 0)
+    ) if content_plan_quotas_required(ctx.spec) else 0
     hint = (
-        f"[CHECKPOINT content_plan] Agent 通读已下载来源，证据驱动规划 {entity_q}+{route_q} 篇：\n"
+        f"[CHECKPOINT content_plan] Agent 通读已下载来源，证据驱动规划 "
+        f"{entity_q} 篇文章 + {gallery_q} 个画报 + {route_q} 篇线路：\n"
         f"  产出: batches/{ctx.batch_id}/_shared/content_plan_packet.json\n"
         f"  每条: ref, kind(entity|route), title, entityRefs, evidenceRefs(相对batch路径), rationale, mustIncludeFacts,\n"
         f"        writingIntent(planning_consultation|decision_experience|post_trip_journal 三选一，单篇唯一主线),\n"
@@ -701,8 +815,10 @@ def _workflow_release_id(task_id: str, batch_id: str) -> str:
 
 
 def _run_publish(ctx: PipelineContext) -> StageResult:
+    from _common import content_object
     from _common.publish_materialization import materialize_task_publish_inputs
     from publish.handler import handle_publish
+    from task import object_queue as oq
     summary = materialize_task_publish_inputs(ctx.task_id, ctx.batch_id)
     if summary["entityCount"] <= 0 or summary["postCount"] <= 0:
         return StageResult(
@@ -714,6 +830,7 @@ def _run_publish(ctx: PipelineContext) -> StageResult:
         )
     ns = argparse.Namespace(
         task=ctx.task_id,
+        batch=ctx.batch_id,
         release_id=_workflow_release_id(ctx.task_id, ctx.batch_id),
         push_to_service=None,
     )
@@ -728,13 +845,37 @@ def _run_publish(ctx: PipelineContext) -> StageResult:
             f"release package assemble/gate failed with exit code {code}",
             fallback_stage="produce_review",
         )
+    if ctx.managed or ctx.release_only:
+        from verify.gate import gate_verify
+
+        release_id = _workflow_release_id(ctx.task_id, ctx.batch_id)
+        _roots, verify_issues = gate_verify(release=release_id)
+        if verify_issues:
+            return StageResult(
+                "publish",
+                AUTO,
+                "failed",
+                "release verify failed:\n  - " + "\n  - ".join(verify_issues[:10]),
+                fallback_stage="produce_review",
+                issues=verify_issues,
+            )
+    authored_refs = content_object.iter_content_refs(ctx.task_id, ctx.batch_id)
+    reconciled = oq.reconcile_completed_refs(
+        ctx.task_id,
+        ctx.batch_id,
+        authored_refs,
+        "author",
+        reason="publish_succeeded",
+    )
+    _purge_author_queue_for_stale_workflow(ctx, reason="publish_succeeded")
     return StageResult(
         "publish",
         AUTO,
         "done",
         "release package assembled and gated "
         f"(entities={summary['entityCount']}, posts={summary['postCount']}, "
-        f"tags={summary['tagCount']}, relations={summary['relationCount']})",
+        f"tags={summary['tagCount']}, relations={summary['relationCount']}, "
+        f"authorQueueReconciled={len(reconciled)})",
     )
 
 
@@ -808,6 +949,10 @@ def run_pipeline(ctx: PipelineContext) -> int:
     if ctx.baseline_packet is None or ctx.baseline_packet_path is None:
         raise RuntimeError("workflow run requires baseline freeze packet")
     state = load_workflow_state(ctx.task_id, ctx.batch_id)
+    state["status"] = "running"
+    state["owner"] = "managed-local" if ctx.managed else "workflow-cli"
+    state["heartbeatAt"] = store.now_iso()
+    state["nextAction"] = None
     completed = set(state.get("completed") or [])
     ensure_batch_layout(ctx.task_id, ctx.batch_id, "workflow_run")
     state["baselinePacketPath"] = str(ctx.baseline_packet_path)
@@ -834,6 +979,9 @@ def run_pipeline(ctx: PipelineContext) -> int:
             if result.status == "waiting":
                 state["completed"] = sorted(completed)
                 state["waitingCheckpoint"] = stage_name
+                state["status"] = "waiting_agent"
+                state["heartbeatAt"] = store.now_iso()
+                state["nextAction"] = result.checkpoint_hint
                 save_workflow_state(state)
                 _write_workflow_packet(
                     ctx,
@@ -864,6 +1012,9 @@ def run_pipeline(ctx: PipelineContext) -> int:
                 state["completed"] = sorted(completed)
                 state["waitingCheckpoint"] = None
                 state["lastFailedStage"] = stage_name
+                state["status"] = "manual_required"
+                state["failedObjects"] = list(result.issues)
+                state["nextAction"] = result.message
                 save_workflow_state(state)
                 print(f"[task run] FAILED at '{stage_name}': {result.message}", file=sys.stderr)
                 return 1
@@ -872,6 +1023,16 @@ def run_pipeline(ctx: PipelineContext) -> int:
             progressed = True
             state["completed"] = sorted(completed)
             state["waitingCheckpoint"] = None
+            state["status"] = "running"
+            state["heartbeatAt"] = store.now_iso()
+            state["nextAction"] = next_stage
+            state["failedObjects"] = []
+            retry_counts = state.setdefault("retryCounts", {})
+            retry_counts.pop(stage_name, None)
+            state["retryCounts"] = retry_counts
+            infrastructure_retries = state.setdefault("infrastructureRetryCounts", {})
+            infrastructure_retries.pop(stage_name, None)
+            state["infrastructureRetryCounts"] = infrastructure_retries
             save_workflow_state(state)
             _write_workflow_packet(
                 ctx,
@@ -889,11 +1050,322 @@ def run_pipeline(ctx: PipelineContext) -> int:
         else:
             # DAG 全遍历无 break → 全部 stage 完成
             print(f"[task run] WORKFLOW COMPLETE — {ctx.task_id} / {ctx.batch_id}")
+            state["status"] = "succeeded"
+            state["heartbeatAt"] = store.now_iso()
+            state["nextAction"] = None
+            save_workflow_state(state)
             return 0
         if not progressed:
             break
     print(f"[task run] FAILED: ReAct 回退耗尽未收敛 — {ctx.task_id} / {ctx.batch_id}", file=sys.stderr)
     return 1
+
+
+def _managed_preflight(task_id: str, batch_id: str, spec: dict, args: argparse.Namespace) -> list[str]:
+    """托管任务启动前失败快返；不创建 batch/runtime。"""
+    issues: list[str] = []
+    if str(spec.get("status") or "") != "active":
+        issues.append(f"task status must be active for --managed, got {spec.get('status')!r}")
+    targets = (spec.get("scope") or {}).get("coverageTargets") or []
+    if not targets:
+        issues.append("scope.coverageTargets must not be empty")
+    quotas = ((spec.get("content") or {}).get("quotas") or {})
+    for field, expected_min in (
+        ("entityArticlesPerTarget", 1),
+        ("galleryPostsPerTarget", 1),
+        ("entityHomepagesPerTarget", 1),
+    ):
+        if int(quotas.get(field) or 0) < expected_min:
+            issues.append(f"content.quotas.{field} must be >= {expected_min}")
+    if str(getattr(args, "runtime", "local")) != "local":
+        issues.append("--managed production runs require --runtime local")
+    if not os.environ.get("CURSOR_API_KEY"):
+        issues.append("CURSOR_API_KEY missing")
+    try:
+        import cursor_sdk  # type: ignore  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        issues.append(f"cursor_sdk unavailable in current Python: {exc}")
+    for module in ("PIL", "cv2", "numpy"):
+        try:
+            __import__(module)
+        except Exception as exc:  # noqa: BLE001
+            issues.append(f"required test/runtime dependency {module} unavailable: {exc}")
+    if not task_baseline_freeze_packet_path(task_id).is_file() and not getattr(args, "baseline_packet", None):
+        issues.append("baseline freeze packet missing")
+    return issues
+
+
+def _default_managed_agent_runner(ctx: PipelineContext, prompt: str) -> dict[str, Any]:
+    """在当前 workspace 启动一个本地 Cursor Agent；只返回终态，推进由父进程校验。"""
+    try:
+        from cursor_sdk import Agent, AgentOptions, CursorAgentError, LocalAgentOptions  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        return {"started": False, "status": "error", "error": f"cursor_sdk unavailable: {exc}"}
+    key = os.environ.get("CURSOR_API_KEY")
+    if not key:
+        return {"started": False, "status": "error", "error": "CURSOR_API_KEY missing"}
+    try:
+        result = Agent.prompt(
+            prompt,
+            AgentOptions(
+                api_key=key,
+                model=ctx.model,
+                local=LocalAgentOptions(cwd=str(Path.cwd())),
+            ),
+        )
+    except CursorAgentError as exc:
+        return {
+            "started": False,
+            "status": "error",
+            "error": getattr(exc, "message", str(exc)),
+            "retryable": bool(getattr(exc, "is_retryable", False)),
+            "errorCode": getattr(exc, "code", None),
+            "requestId": getattr(exc, "request_id", None),
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "started": False,
+            "status": "error",
+            "error": f"{type(exc).__name__}: {exc}",
+            "retryable": False,
+        }
+    status = str(getattr(result, "status", "error"))
+    result_text = str(getattr(result, "result", "") or "").strip()
+    return {
+        "started": True,
+        "status": status,
+        "error": None if status == "finished" else (
+            f"agent status={status}: {result_text[:1600]}" if result_text else f"agent status={status}"
+        ),
+        "result": result_text[:4000],
+        "agentId": getattr(result, "agent_id", None),
+        "runId": getattr(result, "id", None),
+        "durationMs": int(getattr(result, "duration_ms", 0) or 0),
+    }
+
+
+def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
+    """把 checkpoint 拆为可并发且写集互斥的 Agent 任务。"""
+    base = (
+        "你是 quwoquan_data 托管工作流的执行 Agent。只完成本提示指定的 checkpoint，"
+        "不要递归运行整条 workflow，不要发布到 publish/，不要修改其它 task/batch。"
+        f"\n任务: {ctx.task_id}\n批次: {ctx.batch_id}\n"
+    )
+    if stage == "download_plan":
+        from _common.source_unit import resolve_entity_object_dir
+
+        etype = _coverage_entity_type(ctx.spec)
+        done, issues = _source_plan_filled(ctx)
+        if done:
+            return []
+        pending_entities = {
+            entity
+            for entity in ctx.entity_ids
+            if any(issue.startswith(f"{entity}:") for issue in issues)
+        }
+        prompts = []
+        for entity in ctx.entity_ids:
+            if entity not in pending_entities:
+                continue
+            path = resolve_entity_object_dir(
+                ctx.task_id, ctx.batch_id, entity, etype_hint=etype
+            ) / "1.download" / "source_plan.json"
+            prompts.append(
+                base
+                + f"\n对象: {entity}\n写入: {path}\n"
+                "真实联网检索并填写 source_plan。至少 4 个可抓取且类别多样的来源，每个来源必须含 "
+                "source_id/platform/url/sourceUseMode；普通官网、百科、攻略和游记用 "
+                "factual_reference_only。仅有明确 CC、公版或书面授权证据时用 licensed_adaptation，"
+                "并写 license/termsUrl/licenseSnapshot/credit。blocked 来源不得写入可消费列表。"
+                "\n至少 10 张互不重复的可发布图片，每张写 url/license/credit/sourceUrl/termsUrl/"
+                "usageScope/relevance，且画面必须直接呈现该景区自身或景区内部景点。禁止用邻近景点、"
+                "同日环线、所在县城、交通沿线或泛川西图片凑数；禁止发现页、缩略图、社媒水印图和"
+                "权利不明图片。若不足 10 张，明确保留不足状态，不得伪造达标。"
+                "\n完成后自行重新读取 JSON，确认 URL、权利字段和数量真实完整。"
+            )
+        return prompts
+    if stage == "build_homepage":
+        from _common.source_unit import resolve_entity_object_dir
+
+        etype = _coverage_entity_type(ctx.spec)
+        prompts = []
+        for entity in ctx.entity_ids:
+            obj = resolve_entity_object_dir(ctx.task_id, ctx.batch_id, entity, etype_hint=etype)
+            prompts.append(
+                base
+                + f"\n对象: {entity}\n对象目录: {obj}\n"
+                "读取 3.compose/entity_page_input.json、已下载 source.md/source.clean.md、SOP 和图片资产，"
+                "只为该实体完成 page.md、_entity.json、manifest.json 以及要求的 4.draft/5.review 证据。"
+                "主页必须多来源事实综合、独立表达，不得轻改百科原文；至少引用一张已过权利和安全门的真实图。"
+                "运行该实体适用的 build validate/review，修复到 validator 通过。"
+            )
+        return prompts
+    if stage == "content_plan":
+        quotas = ((ctx.spec.get("content") or {}).get("quotas") or {})
+        return [
+            base
+            + "\n为全部 coverageTargets 完成证据驱动 content_plan。"
+            f"\n配额: {json.dumps(quotas, ensure_ascii=False)}"
+            "\n每景区恰好 2 篇文章（planning_consultation 与 decision_experience 各一）和 2 个 gallery，"
+            "每个作品使用独立 baseSourceRef，gallery 标题/画面主题不同且图片集合不得相同。"
+            "写 _shared/content_plan_packet.json，注册 content_object，并写每项 3.compose/brief.json。"
+            "ref/title 必须由证据归纳；evidenceRefs 必须存在，blocked/reject 来源不可引用。"
+            "\n完成后运行 content_plan validator 并修复到无问题。"
+        ]
+    if stage == "produce_author":
+        from _common.draft_io import (
+            draft_article_path,
+            draft_meta_path,
+            prompt_path,
+            writing_pack_path,
+        )
+
+        _ok, pending = _drafts_authored(ctx)
+        return [
+            base
+            + f"\n内容 ref: {ref}\n读取: {prompt_path(ctx.task_id, ctx.batch_id, ref)}"
+            + f"\n读取: {writing_pack_path(ctx.task_id, ctx.batch_id, ref)}"
+            + f"\n写入: {draft_article_path(ctx.task_id, ctx.batch_id, ref)}"
+            + f"\n写入: {draft_meta_path(ctx.task_id, ctx.batch_id, ref)}"
+            + "\n严格依据证据独立创作；普通网页只取事实，不复现原句/原结构；授权来源按许可改编并保留归因。"
+            "只引用 writing_pack 中的 assetId 和 sourcePath。draft_meta 必须 generator=agent，记录 model、"
+            "citedSourcePaths、coveredFacts、styleFamily、openingStrategy。完成后做自检，但不要运行批次发布。"
+            for ref in pending
+        ]
+    return []
+
+
+def _checkpoint_is_done(ctx: PipelineContext, stage: str) -> tuple[bool, list[str]]:
+    checkers: dict[str, Callable[[PipelineContext], tuple[bool, list[str]]]] = {
+        "download_plan": _source_plan_filled,
+        "build_homepage": _homepages_done,
+        "content_plan": _content_plan_done,
+        "produce_author": _drafts_authored,
+    }
+    checker = checkers.get(stage)
+    return checker(ctx) if checker else (False, [f"unsupported managed checkpoint {stage}"])
+
+
+def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
+    prompts = _checkpoint_prompts(ctx, stage)
+    if not prompts:
+        return False
+    state = load_workflow_state(ctx.task_id, ctx.batch_id)
+    state["status"] = "waiting_agent"
+    state["owner"] = f"managed-local:{stage}"
+    state["heartbeatAt"] = store.now_iso()
+    state["nextAction"] = f"running {len(prompts)} agent job(s) for {stage}"
+    save_workflow_state(state)
+    runner = ctx.agent_runner or (lambda prompt: _default_managed_agent_runner(ctx, prompt))
+    with ThreadPoolExecutor(max_workers=max(1, min(ctx.max_workers, len(prompts)))) as pool:
+        futures = [pool.submit(runner, prompt) for prompt in prompts]
+        pending = set(futures)
+        outcomes: list[dict[str, Any]] = []
+        while pending:
+            done, pending = wait(pending, timeout=10)
+            for future in done:
+                try:
+                    outcome = future.result()
+                except Exception as exc:  # noqa: BLE001
+                    outcome = {
+                        "started": False,
+                        "status": "error",
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "retryable": False,
+                    }
+                outcomes.append(outcome)
+            state = load_workflow_state(ctx.task_id, ctx.batch_id)
+            state["heartbeatAt"] = store.now_iso()
+            state["nextAction"] = f"{stage}: {len(outcomes)}/{len(prompts)} agent job(s) finished"
+            save_workflow_state(state)
+    started_count = sum(bool(out.get("started")) for out in outcomes)
+    finished_count = sum(str(out.get("status")) == "finished" for out in outcomes)
+    infrastructure_failures = sum(not bool(out.get("started")) for out in outcomes)
+    state = load_workflow_state(ctx.task_id, ctx.batch_id)
+    state["lastAgentRun"] = {
+        "stage": stage,
+        "jobCount": len(outcomes),
+        "startedCount": started_count,
+        "finishedCount": finished_count,
+        "infrastructureFailures": infrastructure_failures,
+        "outcomes": outcomes,
+        "finishedAt": store.now_iso(),
+    }
+    save_workflow_state(state)
+    failures = [out for out in outcomes if str(out.get("status")) != "finished"]
+    if failures:
+        state = load_workflow_state(ctx.task_id, ctx.batch_id)
+        state["status"] = "repairing"
+        state["failedObjects"] = [str(out.get("error") or "agent failed") for out in failures]
+        save_workflow_state(state)
+        return False
+    ok, issues = _checkpoint_is_done(ctx, stage)
+    state = load_workflow_state(ctx.task_id, ctx.batch_id)
+    state["owner"] = "managed-local"
+    state["heartbeatAt"] = store.now_iso()
+    state["failedObjects"] = list(issues)
+    state["status"] = "running" if ok else "repairing"
+    state["nextAction"] = None if ok else f"repair {stage}: {issues[:5]}"
+    save_workflow_state(state)
+    return ok
+
+
+def run_managed_pipeline(ctx: PipelineContext) -> int:
+    """父进程消费全部 Agent checkpoint，直到 release verify 通过或转人工。"""
+    while True:
+        code = run_pipeline(ctx)
+        if code == 0:
+            return 0
+        if code != 10:
+            return code
+        state = load_workflow_state(ctx.task_id, ctx.batch_id)
+        stage = str(state.get("waitingCheckpoint") or "")
+        retries = state.setdefault("retryCounts", {})
+        used = int(retries.get(stage, 0))
+        if used >= MAX_REACT_REWINDS:
+            state["status"] = "manual_required"
+            state["nextAction"] = f"{stage} failed validation after {used} managed attempts"
+            save_workflow_state(state)
+            return 1
+        state["status"] = "repairing" if used else "waiting_agent"
+        save_workflow_state(state)
+        if _run_managed_checkpoint(ctx, stage):
+            state = load_workflow_state(ctx.task_id, ctx.batch_id)
+            infra = state.setdefault("infrastructureRetryCounts", {})
+            infra.pop(stage, None)
+            state["infrastructureRetryCounts"] = infra
+            save_workflow_state(state)
+            continue
+
+        state = load_workflow_state(ctx.task_id, ctx.batch_id)
+        last_run = state.get("lastAgentRun") or {}
+        infrastructure_failures = int(last_run.get("infrastructureFailures") or 0)
+        if infrastructure_failures:
+            infra = state.setdefault("infrastructureRetryCounts", {})
+            infra_used = int(infra.get(stage, 0)) + 1
+            infra[stage] = infra_used
+            state["infrastructureRetryCounts"] = infra
+            if infra_used >= MAX_MANAGED_INFRA_RETRIES:
+                state["status"] = "manual_required"
+                state["nextAction"] = (
+                    f"{stage} infrastructure failed after {infra_used} attempts; "
+                    f"{infrastructure_failures} agent job(s) did not start"
+                )
+                save_workflow_state(state)
+                return 1
+            state["nextAction"] = (
+                f"retry {stage} infrastructure: attempt "
+                f"{infra_used + 1}/{MAX_MANAGED_INFRA_RETRIES}"
+            )
+            save_workflow_state(state)
+            time.sleep(min(2 ** (infra_used - 1), 5))
+            continue
+
+        retries = state.setdefault("retryCounts", {})
+        retries[stage] = used + 1
+        state["retryCounts"] = retries
+        save_workflow_state(state)
+        time.sleep(min(2 ** used, 5))
 
 def _handle_run_fanout(args: argparse.Namespace) -> None:
     """--mode fanout：走冻结计划建 task/batch + enqueue 叶子 + 展开 assignment（幂等）。
@@ -965,7 +1437,17 @@ def handle_run(args: argparse.Namespace) -> None:
     spec = store.load_spec(task_id)
     entity_ids = _coverage_entity_ids(spec)
     if not entity_ids:
-        print(f"[task run] WARN: {task_id} 无 coverageTargets，无实体可编排", file=sys.stderr)
+        print(f"[task run] ERROR: {task_id} 无 coverageTargets，无实体可编排", file=sys.stderr)
+        raise SystemExit(2)
+
+    managed = bool(getattr(args, "managed", False))
+    if managed:
+        preflight_issues = _managed_preflight(task_id, batch_id, spec, args)
+        if preflight_issues:
+            print("[task run] managed preflight FAILED:", file=sys.stderr)
+            for issue in preflight_issues:
+                print(f"  - {issue}", file=sys.stderr)
+            raise SystemExit(2)
 
     if args.reset_state:
         p = _state_path(task_id, batch_id)
@@ -1000,8 +1482,14 @@ def handle_run(args: argparse.Namespace) -> None:
         task_id=task_id, batch_id=batch_id, entity_ids=entity_ids,
         spec=spec, baseline_packet=baseline_packet, baseline_packet_path=baseline_packet_path,
         until=until,
+        managed=managed,
+        runtime=str(getattr(args, "runtime", "local") or "local"),
+        max_workers=int(getattr(args, "max_workers", 3) or 3),
+        model=str(getattr(args, "model", "composer-2.5") or "composer-2.5"),
+        release_only=bool(getattr(args, "release_only", False)),
+        agent_runner=getattr(args, "agent_runner", None),
     )
-    code = run_pipeline(ctx)
+    code = run_managed_pipeline(ctx) if managed else run_pipeline(ctx)
     if code != 0:
         raise SystemExit(code)
 
@@ -1033,4 +1521,14 @@ def register_run_parser(sub: argparse._SubParsersAction) -> None:
         help="baseline freeze packet path（默认 task/_shared/baseline_freeze_packet.json）",
     )
     pr.add_argument("--until", help=f"跑到指定 stage 即停: {STAGE_NAMES}")
+    pr.add_argument("--managed", action="store_true", help="自动消费全部 Agent checkpoint 并续跑")
+    pr.add_argument("--runtime", choices=["local", "cloud"], default="local")
+    pr.add_argument("--max-workers", dest="max_workers", type=int, default=3)
+    pr.add_argument("--model", default="composer-2.5")
+    pr.add_argument(
+        "--release-only",
+        dest="release_only",
+        action="store_true",
+        help="仅组装隔离 release，不写 publish/ 或运行库（当前 managed 正式模式要求）",
+    )
     pr.set_defaults(handler=handle_run)

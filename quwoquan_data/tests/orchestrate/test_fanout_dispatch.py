@@ -175,6 +175,8 @@ def test_rollup_aggregates_partitions():
     from task import object_queue as _oq
     from _common import content_object
     from _common.draft_io import write_placeholder_draft, write_prompt, write_writing_pack
+    from _common.io import read_json
+    from _common.paths import fanout_summary_path
 
     plan = _frozen_plan("p_rollup")
     report0 = fd.dispatch(plan)
@@ -260,6 +262,134 @@ def test_rollup_aggregates_partitions():
     assert report["totals"]["succeeded"] == 1
     assert report["slo"]["partitionsTotal"] == 2
     assert 0.0 < report["slo"]["progress"] < 1.0
+    summary = read_json(fanout_summary_path("p_rollup"))
+    assert summary["counts"]["totalRefs"] == 2
+    assert summary["counts"]["succeeded"] == 1
+    assert summary["counts"]["queued"] == 1
+
+
+def test_rollup_prefers_published_ref_state_over_stale_queue():
+    from task import fanout_rollup
+    from task import object_queue as _oq
+    from _common import content_object
+    from _common.io import read_json, write_json
+    from _common.paths import fanout_summary_path
+
+    plan = _frozen_plan("p_rollup_published")
+    report0 = fd.dispatch(plan)
+    sc = report0["perPartition"][0]["taskId"]
+    batch = "fanout_p_rollup_published"
+
+    content_object.register_content_object(
+        sc,
+        batch,
+        "route_九寨沟",
+        content_type="article",
+        angle="攻略",
+        title="九寨沟·攻略",
+    )
+    post_dir = content_object.content_object_dir(sc, batch, "route_九寨沟")
+    post_dir.mkdir(parents=True, exist_ok=True)
+    (post_dir / "article.md").write_text("# 九寨沟·攻略\n\n正文。", encoding="utf-8")
+    write_json(post_dir / "manifest.json", {"reviewDecision": "approved", "entityRefs": ["/entity/地点/景区/九寨沟"], "tagRefs": ["四川省", "景区"], "storySpine": ["A"], "sourceUrls": ["https://example.invalid/jzg"]})
+    content_object.write_content_object_index(sc, batch, "route_九寨沟")
+
+    _oq.enqueue_ref_job(sc, batch, "route_九寨沟", "author", max_attempts=1)
+    job = _oq.acquire_lease(sc, batch, worker="w1", stage="author")
+    assert job is not None
+    _oq.fail_job(sc, batch, job["jobId"], job["lease"], error="dead now")
+
+    from task.run import save_workflow_state
+    save_workflow_state(
+        {
+            "schemaVersion": "quwoquan.task.workflow_state",
+            "taskId": sc,
+            "batchId": batch,
+            "completed": ["publish"],
+            "waitingCheckpoint": None,
+        }
+    )
+
+    report = fanout_rollup.rollup("p_rollup_published")
+    assert report["totals"]["leaves"] == 1
+    assert report["totals"]["succeeded"] == 1
+    assert report["totals"]["failed"] == 0
+    summary = read_json(fanout_summary_path("p_rollup_published"))
+    assert summary["counts"]["succeeded"] == 1
+    assert summary["counts"]["manualRequired"] == 0
+
+
+def test_rollup_backfills_run_matrix_success_summary():
+    from task import fanout_rollup
+    from _common import content_object
+    from _common.io import read_json, write_json
+    from _common.paths import fanout_run_matrix_path
+
+    plan = _frozen_plan("p_rollup_backfill_matrix")
+    report0 = fd.dispatch(plan)
+    sc = report0["perPartition"][0]["taskId"]
+    batch = "fanout_p_rollup_backfill_matrix"
+
+    content_object.register_content_object(
+        sc,
+        batch,
+        "route_九寨沟",
+        content_type="article",
+        angle="攻略",
+        title="九寨沟·攻略",
+    )
+    post_dir = content_object.content_object_dir(sc, batch, "route_九寨沟")
+    post_dir.mkdir(parents=True, exist_ok=True)
+    (post_dir / "article.md").write_text("# 九寨沟·攻略\n\n正文。", encoding="utf-8")
+    write_json(
+        post_dir / "manifest.json",
+        {
+            "reviewDecision": "approved",
+            "entityRefs": ["/entity/地点/景区/九寨沟"],
+            "tagRefs": ["四川省", "景区"],
+            "storySpine": ["A"],
+            "sourceUrls": ["https://example.invalid/jzg"],
+        },
+    )
+    content_object.write_content_object_index(sc, batch, "route_九寨沟")
+
+    write_json(
+        fanout_run_matrix_path("p_rollup_backfill_matrix"),
+        {
+            "schemaVersion": "quwoquan_data.fanout_run_matrix/1",
+            "planId": "p_rollup_backfill_matrix",
+            "refs": {
+                "route_九寨沟": {
+                    "ref": "route_九寨沟",
+                    "taskId": sc,
+                    "batchId": batch,
+                    "status": "startup_failed",
+                    "started": False,
+                    "error": "CURSOR_API_KEY missing",
+                }
+            },
+            "orchestrators": [],
+            "workers": [],
+        },
+    )
+
+    from task.run import save_workflow_state
+
+    save_workflow_state(
+        {
+            "schemaVersion": "quwoquan.task.workflow_state",
+            "taskId": sc,
+            "batchId": batch,
+            "completed": ["publish"],
+            "waitingCheckpoint": None,
+        }
+    )
+
+    fanout_rollup.rollup("p_rollup_backfill_matrix")
+    matrix = read_json(fanout_run_matrix_path("p_rollup_backfill_matrix"))
+    assert matrix["refs"]["route_九寨沟"]["status"] == "succeeded"
+    assert matrix["summary"]["completed"] == 1
+    assert matrix["summary"]["failed"] == 0
 
 
 def test_sync_content_author_jobs_revives_dead_startup_jobs():
@@ -327,6 +457,67 @@ def test_sync_content_author_jobs_revives_dead_startup_jobs():
     fd.sync_content_author_jobs(plan, {"taskId": sc, "batchId": batch}, partition_path=["四川省"])
     revived_payload = read_json(oq._job_path(sc, batch, job_id))
     assert revived_payload["state"] == oq.STATE_QUEUED
+    assert revived_payload["startupFailureCount"] == 0
+    assert revived_payload["lastError"] is None
+
+
+def test_sync_content_author_jobs_revives_failed_startup_jobs():
+    from _common import content_object
+    from _common.draft_io import write_placeholder_draft, write_prompt, write_writing_pack
+    from _common.io import read_json
+
+    plan = _frozen_plan("p_sync_revive_failed")
+    report = fd.dispatch(plan)
+    sc = report["perPartition"][0]["taskId"]
+    batch = "fanout_p_sync_revive_failed"
+    brief = {
+        "titleHint": "九寨沟·攻略",
+        "templateId": "travel.route.guide",
+        "writingIntent": "planning_consultation",
+        "mustIncludeFacts": ["九寨沟 事实"],
+        "baseSourceRef": "posts/article/攻略/九寨沟·攻略/1/1.download/sources/01.base/source.md",
+    }
+    content_object.write_brief_object(sc, batch, "route_九寨沟", brief, content_type="article")
+    write_writing_pack(
+        sc,
+        batch,
+        "route_九寨沟",
+        {
+            "ref": "route_九寨沟",
+            "title": "九寨沟·攻略",
+            "kind": "route",
+            "carrier": "article",
+            "writingIntent": "planning_consultation",
+            "styleFamily": "route-guide",
+            "mustIncludeFacts": ["九寨沟 事实"],
+            "baseSourceRef": brief["baseSourceRef"],
+            "sourcePaths": [brief["baseSourceRef"]],
+            "sourceUrls": ["https://example.invalid/jzg"],
+            "assets": [],
+        },
+    )
+    write_prompt(sc, batch, "route_九寨沟", "# 九寨沟\n\n写作提示。")
+    write_placeholder_draft(sc, batch, "route_九寨沟")
+    fd.sync_content_author_jobs(plan, {"taskId": sc, "batchId": batch}, partition_path=["四川省"])
+    job_id = oq.stable_job_id(sc, batch, "route_九寨沟", "author")
+    job = oq.acquire_lease(sc, batch, worker="w1", stage="author", ref="route_九寨沟")
+    assert job is not None
+    oq.fail_job(
+        sc,
+        batch,
+        job["jobId"],
+        job["lease"],
+        error="startup: CURSOR_API_KEY missing",
+        same_run_retryable=False,
+        startup_failure=True,
+    )
+    failed_payload = read_json(oq._job_path(sc, batch, job_id))
+    assert failed_payload["state"] == oq.STATE_FAILED
+    assert failed_payload["sameRunRetryable"] is False
+    fd.sync_content_author_jobs(plan, {"taskId": sc, "batchId": batch}, partition_path=["四川省"])
+    revived_payload = read_json(oq._job_path(sc, batch, job_id))
+    assert revived_payload["state"] == oq.STATE_QUEUED
+    assert revived_payload["sameRunRetryable"] is True
     assert revived_payload["startupFailureCount"] == 0
     assert revived_payload["lastError"] is None
 

@@ -26,9 +26,10 @@ import cv2  # noqa: E402
 from produce.route_workflow import _check_image_gate, _check_carrier_consistency, _review_fallback_stage  # noqa: E402
 
 FIXTURE_MEDIA = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[3]
     / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media"
 )
+FACE_FIXTURE = FIXTURE_MEDIA / "avatar/user/fixture_user_article/v1/avatar.png"
 _TMP = Path(tempfile.mkdtemp(prefix="review_img_"))
 
 
@@ -48,17 +49,7 @@ def _watermark(path: Path) -> Path:
 
 
 def _face_fixture() -> Path | None:
-    user_dir = FIXTURE_MEDIA / "background" / "user"
-    if not user_dir.is_dir():
-        return None
-    cas = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    for f in sorted(user_dir.rglob("*.jpg")):
-        img = cv2.imread(str(f))
-        if img is None:
-            continue
-        if len(cas.detectMultiScale(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 1.1, 6, minSize=(36, 36))) > 0:
-            return f
-    return None
+    return FACE_FIXTURE if FACE_FIXTURE.is_file() else None
 
 
 def test_clean_assets_pass():
@@ -91,7 +82,7 @@ def test_face_requires_human_review():
     """新 HITL 契约：含人脸图片不再硬阻断 review，而是标记 humanReview 并记入账本，
     由发布门 + annotate 在发布前裁决（存疑必须人确认）。"""
     face = _face_fixture()
-    assert face is not None, "未找到人脸 fixture"
+    assert face is not None, f"缺少仓库固定人脸 fixture: {FACE_FIXTURE}"
     gate = _check_image_gate({"assets": [{"assetId": "f", "sourcePath": str(face)}]})
     # 不因人脸阻断 review（无 unsafe/重复时 passed=True）
     assert gate["passed"] is True, gate["issues"]

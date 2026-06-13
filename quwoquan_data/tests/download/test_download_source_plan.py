@@ -37,6 +37,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 from _common.io import write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
     STAGE_DOWNLOAD,
+    batch_entity_object_dir,
     batch_inputs_dir,
     ensure_batch_layout,
 )
@@ -199,6 +200,22 @@ def test_handle_download_produces_source_unit_from_preset_plan():
     assert "开放时间" in clean_text and "门票" in clean_text and "返程排队" in clean_text
     # 不再产生对象级散落 images/
     assert not (obj / "images").exists()
+
+
+def test_curated_blocks_dual_scenic_location_tree_conflict():
+    conflict_batch = "dual_tree_download"
+    ensure_batch_layout(_TASK, conflict_batch, "download")
+    scenic = resolve_entity_object_dir(_TASK, conflict_batch, _EID, etype_hint="地点/景区")
+    write_json(scenic / STAGE_DOWNLOAD / "source_plan.json", _doc(top_level=True))
+    spot = batch_entity_object_dir(_TASK, conflict_batch, "地点", "打卡地", _EID)
+    (spot / STAGE_DOWNLOAD).mkdir(parents=True, exist_ok=True)
+    write_json(spot / STAGE_DOWNLOAD / "source_plan.json", _doc(top_level=True))
+    try:
+        curated_sources_for_entity(_TASK, conflict_batch, _EID, "景区")
+    except ValueError as exc:
+        assert "dual scenic-location trees coexist" in str(exc) or "entity type drift" in str(exc)
+    else:
+        raise AssertionError("expected dual-tree conflict")
 
 
 def _run_all() -> None:

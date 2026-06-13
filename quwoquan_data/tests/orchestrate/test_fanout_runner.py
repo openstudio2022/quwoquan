@@ -191,6 +191,9 @@ def test_non_retryable_startup_failure_does_not_wait_forever():
     assert report["startupFailures"] == 1
     assert snapshot["waitableLive"] == 0
     assert snapshot["byState"].get("failed") == 1
+    matrix = read_json(fanout_run_matrix_path("r_startup_no_wait"))
+    assert matrix["summary"]["startupFailures"] == 1
+    assert matrix["summary"]["startupFailureRate"] == 1.0
 
 
 def test_retryable_startup_failure_retried_within_same_run():
@@ -349,6 +352,9 @@ def test_by_partition_content_mode_syncs_content_refs_and_run_matrix():
     assert matrix["refs"]["route_九寨沟"]["agentRunId"] == "run-route_九寨沟"
     assert matrix["refs"]["route_稻城亚丁"]["agentId"] == "agent-route_稻城亚丁"
     assert matrix["orchestrators"][0]["preparedRefs"] == ["route_九寨沟", "route_稻城亚丁"]
+    assert matrix["summary"]["completed"] == 2
+    assert matrix["summary"]["retryConvergence"] == 1.0
+    assert matrix["workers"][0]["completed"] == 2
     meta = read_draft_meta(sc, batch, "route_九寨沟")
     assert meta is not None
     assert meta["agentRunId"] == "run-route_九寨沟"

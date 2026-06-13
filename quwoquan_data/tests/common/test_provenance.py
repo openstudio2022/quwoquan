@@ -34,6 +34,7 @@ from _common.draft_io import write_prompt, write_writing_pack  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
     batch_command_root,
+    batch_entity_object_dir,
     ensure_batch_layout,
     ensure_task_layout,
 )
@@ -42,6 +43,7 @@ from _common.provenance import (  # noqa: E402
     build_provenance,
     provenance_issues,
 )
+from _common.source_unit import write_source_unit  # noqa: E402
 from _common.stage_reports import write_stage_result  # noqa: E402
 from produce.materialize import materialize_posts  # noqa: E402
 
@@ -51,8 +53,39 @@ BATCH = "pilot"
 
 def _seed_post(produce_root: Path, ref: str, title: str) -> None:
     register_content_object(TASK, BATCH, ref, content_type="article", angle="攻略", title=title)
-    rel_a = "task_download/sources/a.md"
-    rel_b = "task_download/sources/b.md"
+    obj = batch_entity_object_dir(TASK, BATCH, "地点", "景区", "九寨沟")
+    write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="base",
+        source_md="# 九寨沟\n\nsource a",
+        clean_md="# 九寨沟\n\nsource a",
+        platform="curated",
+        source_category="overview_baike",
+        url="https://example.com/a",
+        title="source a",
+        target_ref="/entity/地点/景区/九寨沟",
+        relevance="九寨沟基础事实",
+        task_id=TASK,
+        batch_id=BATCH,
+    )
+    write_source_unit(
+        obj,
+        ordinal=2,
+        source_id="supplement",
+        source_md="# 九寨沟补充\n\nsource b",
+        clean_md="# 九寨沟补充\n\nsource b",
+        platform="curated",
+        source_category="travelogue",
+        url="https://example.com/b",
+        title="source b",
+        target_ref="/entity/地点/景区/九寨沟",
+        relevance="九寨沟补充事实",
+        task_id=TASK,
+        batch_id=BATCH,
+    )
+    rel_a = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
+    rel_b = "entities/地点/景区/九寨沟/1.download/sources/02.supplement/source.md"
     write_writing_pack(
         TASK,
         BATCH,
@@ -72,10 +105,6 @@ def _seed_post(produce_root: Path, ref: str, title: str) -> None:
         },
     )
     write_prompt(TASK, BATCH, ref, f"# {title}\n\n提示。")
-    download_root = batch_command_root(TASK, BATCH, "download") / "sources"
-    download_root.mkdir(parents=True, exist_ok=True)
-    (download_root / "a.md").write_text("# a\n\nsource a", encoding="utf-8")
-    (download_root / "b.md").write_text("# b\n\nsource b", encoding="utf-8")
     write_stage_result(
         TASK,
         BATCH,
@@ -125,8 +154,8 @@ def _seed_post(produce_root: Path, ref: str, title: str) -> None:
         f"# {title}\n\n正文：{ref} 的真实叙事展开，足够长以通过字数门校验。" * 12,
         model="cursor-agent",
         cited_source_paths=[
-            str((batch_command_root(TASK, BATCH, "download") / "sources" / "a.md")),
-            str((batch_command_root(TASK, BATCH, "download") / "sources" / "b.md")),
+            str(obj / "1.download" / "sources" / "01.base" / "source.md"),
+            str(obj / "1.download" / "sources" / "02.supplement" / "source.md"),
         ],
         covered_facts=[],
         session_trace="test-session",
@@ -175,11 +204,28 @@ def test_provenance_minimal_partitions_present():
     assert "routeCoverage" in data["gateResults"]["checks"]
 
 
+def test_materialize_writes_source_refs_snapshot_and_finalization_report():
+    post_dir = _materialize_one()
+    source_refs = read_json(post_dir / "1.download" / "source_refs.json")
+    assert source_refs["baseSourceRef"].endswith("01.base/source.md")
+    assert len(source_refs["sources"]) == 2
+    assert source_refs["sources"][0]["sourceUnitRef"].endswith("01.base")
+    assert source_refs["sources"][0]["sourceMarkdown"].startswith("# 九寨沟")
+    report = read_json(post_dir / "5.review" / "finalization_report.json")
+    assert report["articleSource"] == "4.draft/draft.article.md"
+    assert report["draftSha256"]
+    assert report["finalSha256"]
+    assert report["composeSnapshotMatchesDraft"] is True
+    assert report["frontmatterInjected"] is True
+    assert report["bodyChanged"] is False
+    assert report["frontmatterOnlyChange"] is True
+
+
 def test_materialize_relativizes_repo_runtime_cited_source_paths():
     post_dir = _materialize_one()
     manifest = read_json(post_dir / "manifest.json")
     provenance = read_json(post_dir / "5.review" / "provenance.json")
-    expected = "task_download/sources/a.md"
+    expected = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
     assert manifest["citedSourceRefs"][0] == expected
     assert provenance["citedSourcePaths"][0] == expected
 

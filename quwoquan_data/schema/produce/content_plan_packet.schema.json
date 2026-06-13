@@ -24,6 +24,11 @@
           "baseSourceRef": {
             "type": "string",
             "description": "主底稿来源 ref（相对内容对象 1.download/sources/）；作为风格与事实锚点，其它来源只能补事实"
+          },
+          "sourceUseMode": {
+            "type": "string",
+            "enum": ["licensed_adaptation", "factual_reference_only"],
+            "description": "主来源使用模式；blocked 来源不得进入 content_plan"
           }
         },
         "required": ["ref", "kind", "title", "entityRefs", "evidenceRefs", "rationale", "writingIntent"]

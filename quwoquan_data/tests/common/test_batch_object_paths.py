@@ -29,6 +29,8 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 os.environ.setdefault("QWQ_RUNTIME_ROOT", tempfile.mkdtemp())
 
+from _common.entity_object import collect_task_entity_objects, batch_entity_type_conflicts  # noqa: E402
+from _common.io import write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
     OBJECT_STAGES,
     STAGE_DOWNLOAD,
@@ -110,6 +112,48 @@ def test_relative_batch_ref_is_posix_relative_no_absolute():
     assert not ref.startswith("/"), ref
     assert "/Users/" not in ref, ref
     assert os.sep != "\\" or "\\" not in ref
+
+
+def test_collect_task_entity_objects_can_filter_approved_only():
+    approved = batch_entity_object_dir(TASK, "approved_batch", "地点", "景区", "都江堰")
+    approved.mkdir(parents=True, exist_ok=True)
+    (approved / "page.md").write_text("# 都江堰\n", encoding="utf-8")
+    write_json(approved / "_entity.json", {"label": "都江堰", "domain": "地点", "type": "景区"})
+    (approved / "5.review").mkdir(parents=True, exist_ok=True)
+    write_json(approved / "5.review" / "review.json", {"decision": "approved"})
+
+    rejected = batch_entity_object_dir(TASK, "rejected_batch", "地点", "景区", "青城山")
+    rejected.mkdir(parents=True, exist_ok=True)
+    (rejected / "page.md").write_text("# 青城山\n", encoding="utf-8")
+    write_json(rejected / "_entity.json", {"label": "青城山", "domain": "地点", "type": "景区"})
+    (rejected / "5.review").mkdir(parents=True, exist_ok=True)
+    write_json(rejected / "5.review" / "review.json", {"decision": "rejected"})
+
+    rows = collect_task_entity_objects(TASK, approved_only=True)
+    refs = {row["entityRel"] for row in rows}
+    assert "entities/地点/景区/都江堰" in refs
+    assert "entities/地点/景区/青城山" not in refs
+
+
+def test_collect_task_entity_objects_blocks_dual_scenic_location_trees():
+    scenic = batch_entity_object_dir(TASK, "dual_tree_batch", "地点", "景区", "都江堰")
+    scenic.mkdir(parents=True, exist_ok=True)
+    (scenic / "page.md").write_text("# 都江堰景区\n", encoding="utf-8")
+    write_json(scenic / "_entity.json", {"label": "都江堰", "domain": "地点", "type": "景区"})
+
+    spot = batch_entity_object_dir(TASK, "dual_tree_batch", "地点", "打卡地", "都江堰")
+    spot.mkdir(parents=True, exist_ok=True)
+    (spot / "page.md").write_text("# 都江堰打卡地\n", encoding="utf-8")
+    write_json(spot / "_entity.json", {"label": "都江堰", "domain": "地点", "type": "打卡地"})
+
+    conflicts = batch_entity_type_conflicts(TASK, "dual_tree_batch")
+    assert conflicts and conflicts[0]["name"] == "都江堰", conflicts
+    try:
+        collect_task_entity_objects(TASK, batch_id="dual_tree_batch", enforce_type_consistency=True)
+    except ValueError as exc:
+        assert "dual trees coexist" in str(exc)
+    else:
+        raise AssertionError("expected dual scenic-location tree conflict")
 
 
 def _run_all() -> None:

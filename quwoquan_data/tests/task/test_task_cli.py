@@ -93,6 +93,28 @@ def test_lint_detects_unknown_entity_type():
     assert any("飞碟基地" in e for e in results.get(spec["taskId"], [])), results
 
 
+def test_lint_blocks_dual_scenic_location_types_for_same_name():
+    spec = store.scaffold_spec(
+        vertical="travel",
+        organize_by="地域",
+        key="四川省",
+        name="类型漂移",
+        category="景区",
+        scope={
+            "region": "四川省",
+            "entityTypes": ["地点/景区"],
+            "coverageTargets": [
+                {"entityType": "地点/景区", "name": "都江堰"},
+                {"entityType": "地点/打卡地", "name": "都江堰"},
+            ],
+        },
+    )
+    store.save_spec(spec)
+    total, results, _ = lint_mod.lint_all(spec["taskId"])
+    assert total > 0
+    assert any("双树共存" in e or "同时声明为" in e for e in results.get(spec["taskId"], [])), results
+
+
 def test_resume_reports_gaps():
     spec = _mk(name="景区缺口")
     gaps = ops.compute_gaps(spec["taskId"])

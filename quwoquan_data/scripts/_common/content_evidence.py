@@ -337,22 +337,43 @@ def extract_source_evidence(text: str, *, entity_name: str | None = None) -> dic
     }
 
 
-def _source_dirs_for_entity(task_id: str, batch_id: str, entity_name: str) -> list[Path]:
-    """优先对象同构来源单元（entities/**/{name}/1.download/sources/*）。"""
+def _source_dirs_for_entity(
+    task_id: str,
+    batch_id: str,
+    entity_name: str,
+    *,
+    entity_ref: str = "",
+) -> list[Path]:
+    """优先对象同构来源单元；有显式 entityRef 时禁止回退到按名字跨类型模糊搜。"""
     from _common.source_unit import find_entity_object_dirs, iter_source_units
 
     dirs: list[Path] = []
-    for obj in find_entity_object_dirs(task_id, batch_id, entity_name):
-        dirs.extend(iter_source_units(obj))
+    if entity_ref:
+        for obj in find_entity_object_dirs(task_id, batch_id, entity_ref):
+            dirs.extend(iter_source_units(obj))
+    else:
+        for obj in find_entity_object_dirs(task_id, batch_id, entity_name):
+            dirs.extend(iter_source_units(obj))
     if dirs:
         return dirs
     return []
 
 
-def load_source_records(task_id: str, batch_id: str, entity_names: Sequence[str]) -> list[dict[str, Any]]:
+def load_source_records(task_id: str, batch_id: str, entity_names: Sequence[str], entity_refs: Sequence[str] | None = None) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
+    ref_by_name: dict[str, str] = {}
+    for raw_ref in entity_refs or []:
+        ref = str(raw_ref or "").strip()
+        if not ref:
+            continue
+        ref_by_name.setdefault(ref.split("/")[-1], ref)
     for entity_name in entity_names:
-        for source_dir in _source_dirs_for_entity(task_id, batch_id, entity_name):
+        for source_dir in _source_dirs_for_entity(
+            task_id,
+            batch_id,
+            entity_name,
+            entity_ref=ref_by_name.get(entity_name, ""),
+        ):
             if not source_dir.is_dir():
                 continue
             source_md = source_dir / "source.md"

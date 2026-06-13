@@ -37,6 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common.article_package import infer_format_angle  # noqa: E402
+from _common.entity_object import collect_task_entity_objects
 from _common.paths import (  # noqa: E402
     PUBLISH_ROOT,
     batch_root,
@@ -226,24 +227,30 @@ def promote_task_batch(task_id: str, batch_id: str, dry_run: bool) -> tuple[int,
 
 
 def promote_task_entities(task_id: str, dry_run: bool) -> int:
-    """Copy task entities tree into the publish mainline when present."""
-    src_entities = task_root(task_id) / "entities"
-    if not src_entities.is_dir():
-        return 0
+    """Copy batch entity objects into the publish mainline.
+
+    batch object 是主页真相源；task/entities 仅作兼容镜像，不得优先于 batch。
+    """
     dst = publish_data().entities_dir()
     count = 0
-    for entity_json in src_entities.rglob("_entity.json"):
-        rel = entity_json.relative_to(src_entities)
-        target = dst / rel.parent
+    for row in collect_task_entity_objects(
+        task_id,
+        include_task_mirror_fallback=True,
+        approved_only=True,
+        enforce_type_consistency=True,
+    ):
+        src_dir = Path(row["entityDir"])
+        rel = Path(str(row["entityRel"]))
+        target = dst / rel.relative_to("entities")
         if dry_run:
-            print(f"[promote] would copy entity {rel.parent}")
+            print(f"[promote] would copy entity {rel}")
         else:
             target.mkdir(parents=True, exist_ok=True)
             for fname in ("_entity.json", "page.md", "manifest.json"):
-                src_f = entity_json.parent / fname
+                src_f = src_dir / fname
                 if src_f.exists():
                     shutil.copy2(src_f, target / fname)
-            src_assets = entity_json.parent / "assets"
+            src_assets = src_dir / "assets"
             if src_assets.is_dir():
                 dst_assets = target / "assets"
                 if dst_assets.exists():

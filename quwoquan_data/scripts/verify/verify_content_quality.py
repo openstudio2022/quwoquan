@@ -23,6 +23,7 @@ from _common.article_package import sha256_file
 from _common.entity_annotation import annotation_publish_issues
 from _common.intersection_signal import intersection_hint_issues
 from _common.provenance import provenance_issues
+from produce.materialize import _normalized_runtime_entity_refs
 from template.condition import REGION_LOCKED_TERMS
 
 # asset:// 引用 token：允许中文实体名（assetId 可读化后含中文）。
@@ -30,6 +31,30 @@ _ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
 
 
 FORBIDDEN = ["冷启动", "批次", "角色：", "占位", "contract_fixture", "isSystemBuiltin", "routingReason"]
+
+
+def _normalized_entity_ref_issues(manifest_path: Path, manifest: dict) -> list[str]:
+    issues: list[str] = []
+    entity_refs = manifest.get("entityRefs", [])
+    normalized_refs = manifest.get("normalizedEntityRefs", [])
+    if not isinstance(entity_refs, list):
+        return issues
+    if normalized_refs is None:
+        normalized_refs = []
+    if not isinstance(normalized_refs, list):
+        issues.append(f"{manifest_path}: normalizedEntityRefs must be an array")
+        return issues
+    expected = _normalized_runtime_entity_refs([str(ref) for ref in entity_refs if str(ref).strip()])
+    actual = [str(ref).strip() for ref in normalized_refs if str(ref).strip()]
+    if expected != actual:
+        issues.append(
+            f"{manifest_path}: normalizedEntityRefs must equal canonicalized entityRefs "
+            f"(expected={expected}, actual={actual})"
+        )
+    for ref in actual:
+        if not ref.startswith("entity:") or "/" in ref:
+            issues.append(f"{manifest_path}: normalizedEntityRefs must use canonical entity:* format: {ref}")
+    return issues
 
 
 def _default_posts_root(task: str | None, batch: str | None) -> Path | None:
@@ -69,6 +94,7 @@ def verify_posts(posts_root: Path) -> list[str]:
             issues.append(f"{manifest_path}: tagRefs must contain at least 2 refs")
         if not isinstance(entity_refs, list):
             issues.append(f"{manifest_path}: entityRefs must be an array")
+        issues.extend(_normalized_entity_ref_issues(manifest_path, manifest))
         if not manifest.get("sourceTaskId"):
             issues.append(f"{manifest_path}: missing sourceTaskId provenance (task trace/hydrate 必需)")
 

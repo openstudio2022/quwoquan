@@ -149,7 +149,7 @@ def _stage_annotate_entities(task_id: str, batch_id: str, refs, *, allow_partial
             print(f"[produce] annotate-entities SKIP {ref}: draft 未由 agent 创作", file=sys.stderr)
             continue
         draft_meta = read_draft_meta(task_id, batch_id, ref) or {}
-        dictionary, required = build_entity_dictionary(task_id, brief, draft_meta)
+        dictionary, required = build_entity_dictionary(task_id, batch_id, brief, draft_meta)
         new_article, annotated = annotate_inline(article, dictionary)
         if new_article != article:
             draft_article_path(task_id, batch_id, ref).write_text(new_article, encoding="utf-8")
@@ -178,8 +178,8 @@ def _stage_review(task_id: str, batch_id: str, refs, *, materialize: bool, allow
     from media.handler import check_images
 
     check_refs = [ref for ref, _ in [*routes, *entities]]
-    media_statuses = check_images(task_id, batch_id, check_refs, allow_needs_review=False)
-    media_issues = gate_media_check(task_id, batch_id, allow_needs_review=False)
+    media_statuses = check_images(task_id, batch_id, check_refs, allow_needs_review=True)
+    media_issues = gate_media_check(task_id, batch_id, allow_needs_review=True)
     if media_statuses:
         passed = sum(1 for row in media_statuses if row["passed"])
         failed = len(media_statuses) - passed

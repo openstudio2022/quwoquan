@@ -118,6 +118,18 @@ def test_fetch_image_writes_and_rejects_non_image():
         fetch_mod._http_get_bytes = orig
 
 
+def test_fetch_image_payload_reads_only_data_root_file_urls():
+    local = fetch_mod.DATA_ROOT / "generated" / "asset.jpg"
+    local.parent.mkdir(parents=True, exist_ok=True)
+    local.write_bytes(_real_jpeg(23))
+    payload = fetch_mod.fetch_image_payload(local.resolve().as_uri())
+    assert payload is not None
+    assert payload["contentType"] == "image/jpeg"
+    outside = Path(tempfile.mkdtemp(prefix="outside_data_root_")) / "asset.jpg"
+    outside.write_bytes(_real_jpeg(24))
+    assert fetch_mod.fetch_image_payload(outside.resolve().as_uri()) is None
+
+
 def test_handle_download_fetches_images_into_source_unit():
     """新布局：图片落到首个来源单元 assets/，写 assets/index.json，无对象级散 images/。"""
     from _common.source_unit import iter_source_units, resolve_entity_object_dir

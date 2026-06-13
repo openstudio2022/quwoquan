@@ -288,13 +288,15 @@ def review_entity_draft(
         "issues": traceability,
         "suggestions": ["补齐 mustIncludeFacts，并确保门票/开放时间/海拔等数字能在 source 证据中找到。"] if traceability else [],
     }
-    from _common.base_draft import base_draft_fidelity_issues, load_base_draft_text
+    from _common.base_draft import base_draft_fidelity_issues, base_source_use_mode, load_base_draft_text
 
     base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
+    source_use_mode = base_source_use_mode(task_id, batch_id, brief.get("baseSourceRef"))
     fidelity = base_draft_fidelity_issues(
         body,
         base_text,
         carrier=str(compose_payload.get("carrier") or brief.get("carrier") or "article"),
+        source_use_mode=source_use_mode,
     )
     checks["baseDraftFidelity"] = {
         "passed": not fidelity,

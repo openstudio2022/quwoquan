@@ -19,19 +19,39 @@ import yaml
 
 from _common.io import read_json, write_assistant_task, write_json
 from _common.entity_page_quality import entity_page_quality_issues
+from _common.entity_object import sync_entity_object_to_task_mirror, write_entity_object_index
+from _common.post_evidence_chain import build_finalization_report
+from _common.provenance import build_provenance
 from _common.paths import (
+    STAGE_COMPOSE,
+    STAGE_DRAFT,
+    STAGE_QUALITY,
+    STAGE_REVIEW,
+    batch_entity_object_dir,
+    batch_entity_stage_dir,
     batch_assistant_task,
     batch_entity_page_input_path,
     batch_root,
+    relative_batch_ref,
     task_data,
 )
-from _common.entity_extract import entity_ref, resolve_domain_etype
+from _common.entity_extract import entity_ref, require_domain_etype
+from _common.source_unit import resolve_entity_object_dir
 
 MIN_PAGE_CHARS = 800
 _REQUIRED_ENTITY_FIELDS = ("label", "domain", "type", "sourceTaskId")
 _ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
+_HEADING_RE = re.compile(r"^(#{1,3})\s+(.+?)\s*$", re.MULTILINE)
 # catalog 是 committed 真相源，按脚本相对路径定位（与 QWQ_DATA_ROOT 覆盖无关）
 _CATALOG_DIR = Path(__file__).resolve().parents[2] / "templates" / "_registry" / "catalogs"
+_INTRODUCTION_KIND_BY_TITLE = (
+    ("timeline", ("时间线", "大事记", "节点")),
+    ("history", ("历史", "沿革", "背景")),
+    ("keyFacts", ("核心信息", "基础信息", "关键事实", "实用信息")),
+    ("relatedObjects", ("相关地点", "相关对象", "周边", "关联")),
+    ("gallery", ("图片", "图集", "相册")),
+    ("map", ("位置", "交通", "地图")),
+)
 
 
 def _safe_ref(domain: str, etype: str, name: str) -> str:
@@ -44,7 +64,10 @@ def _coverage_targets(spec: dict[str, Any]) -> list[dict[str, str]]:
         name = str(target.get("name") or "").strip()
         if not name:
             continue
-        domain, etype = resolve_domain_etype(target.get("entityType"))
+        domain, etype = require_domain_etype(
+            target.get("entityType"),
+            context=f"coverageTargets[{name}]",
+        )
         out.append({"name": name, "domain": domain, "etype": etype})
     return out
 
@@ -89,6 +112,7 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
     refs: list[str] = []
     for target in _coverage_targets(spec):
         domain, etype, name = target["domain"], target["etype"], target["name"]
+        resolve_entity_object_dir(task_id, batch_id, name, etype_hint=f"{domain}/{etype}")
         ref = _safe_ref(domain, etype, name)
         sop_dir = data.sop_dir(domain, etype)
         base_draft = _entity_base_draft(task_id, batch_id, domain, etype, name)
@@ -135,15 +159,64 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
                         "pathOrNote": "path 或 note 至少一个非空",
                     },
                 },
-                "outputDir": str(data.entity_dir(domain, etype, name)),
+                "outputDir": str(batch_entity_object_dir(task_id, batch_id, domain, etype, name)),
                 "sourceTaskId": task_id,
             },
         })
+        _write_entity_quality_stage(task_id, batch_id, domain, etype, name, base_draft=base_draft)
         refs.append(ref)
     manifest_path = batch_assistant_task(task_id, batch_id, "build", "entity_page")
-    results_dir = data.entities_dir()
+    results_dir = batch_root(task_id, batch_id) / "entities"
     write_assistant_task(manifest_path, step="entity_page", input_dir=inputs_root, result_dir=results_dir, refs=refs)
     return inputs_root, refs
+
+
+def _entity_source_paths(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> list[str]:
+    from _common.source_unit import iter_source_units
+
+    obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
+    refs: list[str] = []
+    for unit in iter_source_units(obj):
+        source_md = unit / "source.md"
+        if source_md.is_file():
+            refs.append(relative_batch_ref(source_md, task_id, batch_id))
+    return refs
+
+
+def _write_entity_quality_stage(
+    task_id: str,
+    batch_id: str,
+    domain: str,
+    etype: str,
+    name: str,
+    *,
+    base_draft: dict[str, Any],
+) -> None:
+    """实体对象 `2.quality/quality_analysis.json`：显式落底稿优先选择结果。"""
+    from _common.base_draft import base_draft_candidates
+
+    brief = {"entityRefs": [entity_ref(domain, etype, name)]}
+    candidates = base_draft_candidates(task_id, batch_id, brief)
+    payload = {
+        "entityRef": entity_ref(domain, etype, name),
+        "baseDraft": base_draft or None,
+        "candidateCount": len(candidates),
+        "candidates": [
+            {
+                "sourceRef": row["sourceRef"],
+                "score": row["score"],
+                "length": row["length"],
+            }
+            for row in candidates
+        ],
+        "recommendation": "proceed" if base_draft else "needs_source_repair",
+        "issues": [] if base_draft else ["no readable base draft source available for homepage"],
+        "sourcePaths": _entity_source_paths(task_id, batch_id, domain, etype, name),
+    }
+    write_json(
+        batch_entity_stage_dir(task_id, batch_id, domain, etype, name, STAGE_QUALITY) / "quality_analysis.json",
+        payload,
+    )
 
 
 def _page_char_count(page: Path) -> int:
@@ -158,6 +231,165 @@ def _page_asset_refs(page: Path) -> set[str]:
     for ref in _ASSET_REF_RE.findall(page.read_text(encoding="utf-8")):
         refs.add(ref.split("/")[-1])
     return refs
+
+
+def homepage_introduction_seed_from_triplet(entity_dir: Path) -> dict[str, Any]:
+    """将实体主页三件套映射为 entity-service introduction seed。
+
+    输入只读取 `page.md`、`_entity.json`、`manifest.json`。正文由 Agent 产出的
+    page.md 承担，脚本只做结构化映射；后续 importer 可直接消费该 seed。
+    """
+    page_path = entity_dir / "page.md"
+    entity_path = entity_dir / "_entity.json"
+    manifest_path = entity_dir / "manifest.json"
+    if not page_path.is_file() or not entity_path.is_file() or not manifest_path.is_file():
+        raise FileNotFoundError(f"missing homepage triplet under {entity_dir}")
+    page_text = page_path.read_text(encoding="utf-8")
+    entity_payload = read_json(entity_path)
+    manifest_payload = read_json(manifest_path)
+    label = str(entity_payload.get("label") or entity_payload.get("name") or entity_dir.name).strip()
+    domain = str(entity_payload.get("domain") or "").strip()
+    etype = str(entity_payload.get("type") or entity_payload.get("etype") or "").strip()
+    homepage_id = str(
+        entity_payload.get("homepageId")
+        or manifest_payload.get("homepageId")
+        or entity_payload.get("id")
+        or _safe_ref(domain or "entity", etype or "object", label or entity_dir.name),
+    ).strip()
+    sections = _introduction_sections_from_markdown(page_text, manifest_payload)
+    source_refs = _introduction_source_refs(entity_payload, manifest_payload, entity_dir)
+    return {
+        "homepageId": homepage_id,
+        "displayName": label,
+        "homepageType": etype,
+        "coverUrl": _manifest_cover_url(manifest_payload),
+        "summary": _introduction_summary(page_text, label),
+        "sections": sections,
+        "relatedObjects": _introduction_related_objects(entity_payload, manifest_payload),
+        "sourceRefs": source_refs,
+        "updatedAt": str(manifest_payload.get("updatedAt") or manifest_payload.get("generatedAt") or ""),
+        "seedSource": {
+            "pageMd": str(page_path),
+            "entityJson": str(entity_path),
+            "manifestJson": str(manifest_path),
+        },
+    }
+
+
+def _introduction_sections_from_markdown(page_text: str, manifest_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    chunks: list[tuple[str, str]] = []
+    matches = list(_HEADING_RE.finditer(page_text))
+    if not matches:
+        body = page_text.strip()
+        if body:
+            chunks.append(("概况", body))
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(page_text)
+        title = match.group(2).strip()
+        body = page_text[start:end].strip()
+        if title and body:
+            chunks.append((title, body))
+    if not chunks and page_text.strip():
+        chunks.append(("概况", page_text.strip()))
+    assets = _introduction_assets(manifest_payload)
+    out: list[dict[str, Any]] = []
+    for index, (title, body) in enumerate(chunks):
+        kind = _section_kind_for_title(title, index)
+        out.append(
+            {
+                "kind": kind,
+                "title": title,
+                "bodyMarkdown": body,
+                "assets": assets if index == 0 else [],
+                "timelineItems": _timeline_items_from_body(body) if kind == "timeline" else [],
+            }
+        )
+    return out
+
+
+def _section_kind_for_title(title: str, index: int) -> str:
+    if index == 0:
+        return "overview"
+    for kind, tokens in _INTRODUCTION_KIND_BY_TITLE:
+        if any(token in title for token in tokens):
+            return kind
+    return "overview"
+
+
+def _timeline_items_from_body(body: str) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for raw in body.splitlines():
+        line = raw.strip().lstrip("-*").strip()
+        if not line:
+            continue
+        if "：" in line:
+            date_label, text = line.split("：", 1)
+        elif ":" in line:
+            date_label, text = line.split(":", 1)
+        else:
+            continue
+        items.append({"dateLabel": date_label.strip(), "text": text.strip()})
+    return items
+
+
+def _introduction_assets(manifest_payload: dict[str, Any]) -> list[dict[str, str]]:
+    assets: list[dict[str, str]] = []
+    for raw in manifest_payload.get("assets") or []:
+        if not isinstance(raw, dict):
+            continue
+        asset_id = str(raw.get("assetId") or raw.get("id") or "").strip()
+        url = str(raw.get("url") or raw.get("imageUrl") or raw.get("sourceUrl") or "").strip()
+        file_name = str(raw.get("fileName") or "").strip()
+        if not url and file_name:
+            url = f"asset://{asset_id or file_name}"
+        if not asset_id or not url:
+            continue
+        assets.append(
+            {
+                "assetId": asset_id,
+                "url": url,
+                "caption": str(raw.get("caption") or raw.get("title") or "").strip(),
+                "sourceRef": str(raw.get("sourceRef") or raw.get("license") or "").strip(),
+            }
+        )
+    return assets
+
+
+def _manifest_cover_url(manifest_payload: dict[str, Any]) -> str:
+    cover = str(manifest_payload.get("coverUrl") or "").strip()
+    if cover:
+        return cover
+    assets = _introduction_assets(manifest_payload)
+    return assets[0]["url"] if assets else ""
+
+
+def _introduction_summary(page_text: str, fallback: str) -> str:
+    lines = [
+        line.strip()
+        for line in page_text.splitlines()
+        if line.strip() and not line.strip().startswith("#") and not line.strip().startswith("asset://")
+    ]
+    if not lines:
+        return f"{fallback} 的完整介绍正在整理中。"
+    summary = lines[0]
+    return summary[:180]
+
+
+def _introduction_related_objects(entity_payload: dict[str, Any], manifest_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_items = entity_payload.get("relatedObjects") or manifest_payload.get("relatedObjects") or []
+    return [item for item in raw_items if isinstance(item, dict)]
+
+
+def _introduction_source_refs(entity_payload: dict[str, Any], manifest_payload: dict[str, Any], entity_dir: Path) -> list[str]:
+    refs: list[str] = []
+    for raw in entity_payload.get("sourceRefs") or manifest_payload.get("sourceRefs") or []:
+        value = str(raw).strip()
+        if value:
+            refs.append(value)
+    for name in ("page.md", "_entity.json", "manifest.json"):
+        refs.append(str(entity_dir / name))
+    return sorted(set(refs))
 
 
 def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], label: str) -> list[str]:
@@ -195,8 +427,189 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
     return issues
 
 
+def _entity_draft_path(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> Path:
+    return batch_entity_stage_dir(task_id, batch_id, domain, etype, name, STAGE_DRAFT) / "page.md"
+
+
+def _write_entity_draft(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> Path:
+    obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
+    final_page = obj / "page.md"
+    draft_page = _entity_draft_path(task_id, batch_id, domain, etype, name)
+    if final_page.is_file():
+        draft_page.parent.mkdir(parents=True, exist_ok=True)
+        draft_page.write_text(final_page.read_text(encoding="utf-8"), encoding="utf-8")
+    return draft_page
+
+
+def _entity_review_paths(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> tuple[Path, Path, Path]:
+    review_dir = batch_entity_stage_dir(task_id, batch_id, domain, etype, name, STAGE_REVIEW)
+    return (
+        review_dir / "review.json",
+        review_dir / "provenance.json",
+        review_dir / "finalization_report.json",
+    )
+
+
+def _condition_profile_source_paths(cprofile: dict[str, Any], task_id: str, batch_id: str) -> list[str]:
+    refs: list[str] = []
+    for row in (cprofile.get("evidenceRefs") or []):
+        if not isinstance(row, dict):
+            continue
+        path = str(row.get("path") or "").strip()
+        if not path:
+            continue
+        if path == "page.md":
+            refs.append("page.md")
+        else:
+            refs.append(path)
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for ref in refs:
+        normalized = ref
+        if ref not in {"page.md", "source.md"} and not ref.startswith("entities/"):
+            candidate = batch_root(task_id, batch_id) / ref
+            if candidate.is_file():
+                normalized = relative_batch_ref(candidate, task_id, batch_id)
+        if normalized not in seen:
+            seen.add(normalized)
+            ordered.append(normalized)
+    return ordered
+
+
+def _build_entity_provenance(
+    *,
+    task_id: str,
+    batch_id: str,
+    domain: str,
+    etype: str,
+    name: str,
+    source_paths: list[str],
+    review_payload: dict[str, Any],
+    entity_payload: dict[str, Any],
+) -> dict[str, Any]:
+    rel_page = f"entities/{domain}/{etype}/{name}/page.md"
+    rel_input = f"entities/{domain}/{etype}/{name}/3.compose/entity_page_input.json"
+    cited_paths = _condition_profile_source_paths(entity_payload.get("conditionProfile") or {}, task_id, batch_id)
+    if "page.md" in cited_paths:
+        cited_paths = [rel_page if item == "page.md" else item for item in cited_paths]
+    compose_payload = {
+        "sourcePaths": source_paths,
+        "sourceUrls": [],
+        "citedSourceRefs": cited_paths or source_paths,
+        "generator": "agent",
+        "generatorModel": "homepage-agent",
+        "articleMarkdownDigest": None,
+        "entityRefs": [entity_ref(domain, etype, name)],
+    }
+    draft_meta = {
+        "generator": "agent",
+        "model": "homepage-agent",
+        "agentRunId": f"build-homepage:{task_id}:{batch_id}:{domain}/{etype}/{name}",
+        "agentId": "build.homepage",
+        "sessionTrace": "build_homepage",
+        "styleFamily": "entity-homepage",
+        "openingStrategy": "base_draft_light_edit",
+        "citedSourcePaths": cited_paths or source_paths,
+        "promptSha256": "sha256:entity-homepage-input",
+        "writingPackSha256": "sha256:entity-homepage-compose",
+        "sourceBundleSha256": "sha256:entity-homepage-sources",
+        "draftSha256": "sha256:entity-homepage-draft",
+    }
+    manifest = {
+        "publishTitle": name,
+        "publishSeq": 1,
+        "entityRefs": [entity_ref(domain, etype, name)],
+    }
+    provenance = build_provenance(
+        entity_ref(domain, etype, name),
+        writing_pack={"title": name, "styleFamily": "entity-homepage"},
+        draft_meta=draft_meta,
+        review_payload=review_payload,
+        compose_payload=compose_payload,
+        manifest=manifest,
+    )
+    provenance["agentInput"]["writingPack"] = rel_input
+    provenance["agentInput"]["prompt"] = "4.draft/page.md"
+    provenance["final"]["articleDigest"] = None
+    return provenance
+
+
+def _write_entity_review_sidecars(
+    task_id: str,
+    batch_id: str,
+    domain: str,
+    etype: str,
+    name: str,
+    *,
+    source_paths: list[str],
+    review_payload: dict[str, Any],
+    entity_payload: dict[str, Any],
+) -> None:
+    obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
+    final_page = obj / "page.md"
+    draft_page = _write_entity_draft(task_id, batch_id, domain, etype, name)
+    review_path, provenance_path, finalization_path = _entity_review_paths(task_id, batch_id, domain, etype, name)
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(review_path, review_payload)
+    write_json(
+        provenance_path,
+        _build_entity_provenance(
+            task_id=task_id,
+            batch_id=batch_id,
+            domain=domain,
+            etype=etype,
+            name=name,
+            source_paths=source_paths,
+            review_payload=review_payload,
+            entity_payload=entity_payload,
+        ),
+    )
+    write_json(
+        finalization_path,
+        build_finalization_report(
+            entity_ref(domain, etype, name),
+            draft_markdown=draft_page.read_text(encoding="utf-8") if draft_page.is_file() else "",
+            final_markdown=final_page.read_text(encoding="utf-8") if final_page.is_file() else "",
+            normalization_actions=["entity_homepage_draft_materialized"],
+            article_source="4.draft/page.md",
+            compose_snapshot_markdown=None,
+            draft_ref="4.draft/page.md",
+            final_ref="page.md",
+            compose_snapshot_ref=None,
+        ),
+    )
+    write_entity_object_index(task_id, batch_id, domain, etype, name)
+    sync_entity_object_to_task_mirror(task_id, batch_id, domain, etype, name)
+
+
+def _entity_review_payload(
+    *,
+    issues: list[str],
+    source_paths: list[str],
+    base_draft_exists: bool,
+) -> dict[str, Any]:
+    base_source_issue = (not source_paths) or (not base_draft_exists)
+    decision = "approved" if not issues else "revision_needed"
+    fallback = "build_homepage" if issues else None
+    if base_source_issue:
+        fallback = "needs_source_repair"
+    return {
+        "decision": decision,
+        "issues": issues,
+        "fallbackStage": fallback,
+        "checks": {
+            "entityPageQuality": {"passed": not issues, "issues": issues},
+            "sourceReadiness": {
+                "passed": not base_source_issue,
+                "issues": [] if not base_source_issue else ["no readable base draft source available for homepage"],
+            },
+        },
+    }
+
+
 def validate_entity_page(
     task_id: str,
+    batch_id: str,
     domain: str,
     etype: str,
     name: str,
@@ -205,10 +618,11 @@ def validate_entity_page(
     season_set: set[str],
 ) -> list[str]:
     """校验单个实体主页三件套/字数/字段/conditionProfile，返回阻断问题列表。"""
-    data = task_data(task_id)
-    page = data.entity_page(domain, etype, name)
-    ejson = data.entity_json(domain, etype, name)
-    manifest = data.entity_manifest(domain, etype, name)
+    resolve_entity_object_dir(task_id, batch_id, name, etype_hint=f"{domain}/{etype}")
+    obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
+    page = obj / "page.md"
+    ejson = obj / "_entity.json"
+    manifest = obj / "manifest.json"
     label = f"{domain}/{etype}/{name}"
     issues: list[str] = []
 
@@ -262,7 +676,24 @@ def validate_entity_page(
             if bad_seasons:
                 issues.append(f"{label}: conditionProfile.seasons 越界 {bad_seasons}（须 ∈ season_catalog）")
             issues.extend(_condition_profile_evidence_issues(cprofile, label))
-    issues.extend(_asset_closure_issues(data.entity_dir(domain, etype, name), manifest_payload, label))
+    issues.extend(_asset_closure_issues(obj, manifest_payload, label))
+    source_paths = _entity_source_paths(task_id, batch_id, domain, etype, name)
+    cprofile = payload.get("conditionProfile") if isinstance(payload, dict) else {}
+    review_payload = _entity_review_payload(
+        issues=issues,
+        source_paths=source_paths,
+        base_draft_exists=bool(source_paths),
+    )
+    _write_entity_review_sidecars(
+        task_id,
+        batch_id,
+        domain,
+        etype,
+        name,
+        source_paths=source_paths,
+        review_payload=review_payload,
+        entity_payload=payload,
+    )
     return issues
 
 
@@ -304,7 +735,7 @@ def _condition_profile_evidence_issues(cprofile: dict[str, Any], label: str) -> 
     return issues
 
 
-def validate_entity_pages(task_id: str, spec: dict[str, Any]) -> list[str]:
+def validate_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> list[str]:
     """校验全部 coverage 实体主页，返回阻断问题列表（空=采纳通过）。"""
     region_set = set(region_keys())
     season_set = set(season_keys())
@@ -316,6 +747,7 @@ def validate_entity_pages(task_id: str, spec: dict[str, Any]) -> list[str]:
         issues.extend(
             validate_entity_page(
                 task_id,
+                batch_id,
                 target["domain"],
                 target["etype"],
                 target["name"],

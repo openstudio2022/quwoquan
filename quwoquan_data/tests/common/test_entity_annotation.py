@@ -38,14 +38,16 @@ from _common.entity_annotation import (  # noqa: E402
     merge_entity_refs,
     parse_entity_links,
 )
-from _common.paths import ensure_task_layout, task_data  # noqa: E402
+from _common.entity_extract import homepage_exists  # noqa: E402
+from _common.paths import batch_entity_object_dir, ensure_task_layout  # noqa: E402
 
 TASK = "实体标注_gwt"
+BATCH = "b1"
 
 
 def _seed_homepage(name: str, domain: str = "地点", etype: str = "景区") -> None:
     ensure_task_layout(TASK)
-    page = task_data(TASK).entity_page(domain, etype, name)
+    page = batch_entity_object_dir(TASK, BATCH, domain, etype, name) / "page.md"
     page.parent.mkdir(parents=True, exist_ok=True)
     page.write_text(f"# {name}\n\n实体主页。", encoding="utf-8")
 
@@ -59,11 +61,12 @@ def test_build_dictionary_grounds_on_homepage():
             {"name": "无主页实体", "type": "景区"},
         ]
     }
-    dictionary, required = build_entity_dictionary(TASK, brief, draft_meta)
+    dictionary, required = build_entity_dictionary(TASK, BATCH, brief, draft_meta)
     assert dictionary["九寨沟"] == "/entity/地点/景区/九寨沟"
     assert dictionary["海螺沟"] == "/entity/地点/景区/海螺沟"
     assert "无主页实体" not in dictionary, "无主页实体不得进词典（grounding）"
     assert required == ["/entity/地点/景区/九寨沟"]
+    assert homepage_exists("地点", "景区", "海螺沟", TASK, BATCH) is True
 
 
 def test_annotate_inline_first_occurrence_and_frontmatter_safe():

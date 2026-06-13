@@ -1,0 +1,20 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/测试省/景区/景区全覆盖
+title: 测试省景区景区全覆盖
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 测试省
+entityCategory: 景区
+parentTaskId: null
+status: draft
+scope:
+  region: 测试省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 测试景区甲
+provenance:
+  createdAt: '2026-06-12T23:42:20.913529+00:00'
+  createdBy: test

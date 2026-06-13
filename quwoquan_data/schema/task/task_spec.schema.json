@@ -63,6 +63,17 @@
         "audiences": { "type": "array", "items": { "type": "string" }, "description": "受众人格 id（默认继承垂类）" },
         "carriers": { "type": "array", "items": { "type": "string" }, "description": "载体：article/gallery/review/video（默认继承全局 [article]）" },
         "emphasis": { "type": "array", "items": { "type": "string" }, "description": "可选 override：内容强调点/选题侧重（如 古镇=人文叙事/古建筑、博物馆=文物/科普）；与继承的 angles 正交，按实体类别声明" },
+        "quotas": {
+          "type": "object",
+          "properties": {
+            "entityArticles": { "type": "integer", "minimum": 0 },
+            "routeArticles": { "type": "integer", "minimum": 0 },
+            "galleryPosts": { "type": "integer", "minimum": 0 },
+            "entityArticlesPerTarget": { "type": "integer", "minimum": 0 },
+            "galleryPostsPerTarget": { "type": "integer", "minimum": 0 },
+            "entityHomepagesPerTarget": { "type": "integer", "minimum": 0 }
+          }
+        },
         "conditionAxes": {
           "type": "object",
           "description": "可选 override：地域/季节条件维。默认不写，继承地域/环线级 _defaults.yaml（该地域真实地形全谱 + 四季/旱雨季）；仅当确有地形/季节限制时 override，且必须是继承全谱子集（lint 校验）。每篇精确条件由实体 conditionProfile 在 plan/brief 注入",

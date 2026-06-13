@@ -18,10 +18,10 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
 _TMP = tempfile.mkdtemp(prefix="qwq_content_plan_test_")
 os.environ["QWQ_RUNTIME_ROOT"] = _TMP
 
-from _common import content_plan as cp  # noqa: E402
+from _common import content_object, content_plan as cp  # noqa: E402
 from _common.base_draft import assign_base_draft, base_draft_candidates, base_draft_fidelity_issues, load_base_draft_text  # noqa: E402
 from _common.io import write_json  # noqa: E402
-from _common.paths import batch_content_plan_packet_path, batch_results_dir  # noqa: E402
+from _common.paths import STAGE_COMPOSE, batch_content_plan_packet_path, batch_results_dir, batch_root  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 
 TASK = "旅行/地域/四川省/景区/景区精选"
@@ -65,6 +65,84 @@ def test_content_plan_blocks_rejected_source():
 def test_content_plan_quotas_required_includes_gallery_posts():
     spec = {"content": {"quotas": {"galleryPosts": 2}}}
     assert cp.content_plan_quotas_required(spec) is True
+
+
+def test_content_plan_enforces_per_target_2_plus_2_distribution():
+    batch = "per_target_quotas"
+    entity = "四姑娘山"
+    items = []
+    for index, (carrier, intent) in enumerate(
+        [
+            ("article", "planning_consultation"),
+            ("article", "decision_experience"),
+            ("gallery", "decision_experience"),
+            ("gallery", "decision_experience"),
+        ],
+        start=1,
+    ):
+        ref = f"siguniang_{index}"
+        title = f"四姑娘山作品{index}"
+        source_dir = (
+            batch_root(TASK, batch)
+            / "entities/地点/景区/四姑娘山/1.download/sources"
+            / f"{index:02d}.source_{index}"
+        )
+        source_dir.mkdir(parents=True, exist_ok=True)
+        source_path = source_dir / "source.md"
+        source_path.write_text(f"四姑娘山来源证据 {index}", encoding="utf-8")
+        write_json(
+            source_dir / "meta.json",
+            {"sourceUseMode": "factual_reference_only"},
+        )
+        content_object.register_content_object(
+            TASK,
+            batch,
+            ref,
+            content_type="image" if carrier == "gallery" else "article",
+            angle="画报" if carrier == "gallery" else "攻略",
+            title=title,
+        )
+        brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
+        write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": title})
+        rel = source_path.relative_to(batch_root(TASK, batch)).as_posix()
+        items.append(
+            {
+                "ref": ref,
+                "kind": "entity",
+                "carrier": carrier,
+                "title": title,
+                "entityRefs": [f"/entity/地点/景区/{entity}"],
+                "evidenceRefs": [rel],
+                "rationale": f"证据驱动主题 {index}",
+                "writingIntent": intent,
+                "baseSourceRef": rel,
+                "sourceUseMode": "factual_reference_only",
+            }
+        )
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items},
+    )
+    spec = {
+        "scope": {
+            "coverageTargets": [{"entityType": "地点/景区", "name": entity}],
+        },
+        "content": {
+            "quotas": {
+                "entityArticlesPerTarget": 2,
+                "galleryPostsPerTarget": 2,
+                "entityHomepagesPerTarget": 1,
+                "routeArticles": 0,
+            }
+        },
+    }
+    assert cp.validate_content_plan(TASK, batch, spec) == []
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items[:-1]},
+    )
+    issues = cp.validate_content_plan(TASK, batch, spec)
+    assert any("galleryPostsPerTarget quota 2" in issue for issue in issues), issues
 
 
 def test_base_draft_candidates_exclude_reject_sources():
@@ -254,8 +332,24 @@ def test_base_draft_fidelity_gallery_uses_leading_excerpt_window():
         "第二段继续写最核心的观看顺序与现场感。\\n\\n"
         "第三段补充一些延伸事实。\\n"
     )
-    assert base_draft_fidelity_issues(article, base)  # article 口径仍会被长尾底稿拉低
-    assert base_draft_fidelity_issues(article, base, carrier="gallery") == []
+    assert base_draft_fidelity_issues(
+        article, base, source_use_mode="licensed_adaptation"
+    )  # 授权改编的 article 口径仍会被长尾底稿拉低
+    assert base_draft_fidelity_issues(
+        article,
+        base,
+        carrier="gallery",
+        source_use_mode="licensed_adaptation",
+    ) == []
+
+
+def test_factual_reference_only_has_no_minimum_similarity_gate():
+    issues = base_draft_fidelity_issues(
+        "完全独立组织的正文，只复述可核验事实。",
+        "普通网页的原始叙述和作者表达。",
+        source_use_mode="factual_reference_only",
+    )
+    assert issues == []
 
 
 def _run_all() -> None:

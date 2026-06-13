@@ -68,6 +68,22 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
     want_entity = int(quotas.get("entityArticles") or 0)
     want_route = int(quotas.get("routeArticles") or 0)
     want_gallery = int(quotas.get("galleryPosts") or 0)
+    per_target_articles = int(quotas.get("entityArticlesPerTarget") or 0)
+    per_target_galleries = int(quotas.get("galleryPostsPerTarget") or 0)
+    strict_rights_mode = bool(
+        per_target_articles
+        or per_target_galleries
+        or int(quotas.get("entityHomepagesPerTarget") or 0)
+    )
+    targets = [
+        str(target.get("name") or "").strip()
+        for target in ((spec.get("scope") or {}).get("coverageTargets") or [])
+        if isinstance(target, Mapping) and str(target.get("name") or "").strip()
+    ]
+    if per_target_articles:
+        want_entity = per_target_articles * len(targets)
+    if per_target_galleries:
+        want_gallery = per_target_galleries * len(targets)
 
     def _item_carrier(item: Mapping[str, Any]) -> str:
         return str(item.get("carrier") or item.get("contentType") or "article")
@@ -90,6 +106,10 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
     index = load_index(task_id, batch_id)
     rejected_sources = reject_source_ids(task_id, batch_id)
     seen_refs: set[str] = set()
+    per_entity: dict[str, dict[str, list[Mapping[str, Any]]]] = {
+        target: {"article": [], "gallery": []} for target in targets
+    }
+    base_source_owners: dict[str, str] = {}
 
     for idx, item in enumerate(items, start=1):
         ref = str(item.get("ref") or "").strip()
@@ -110,6 +130,19 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             issues.append(f"item[{ref}]: entityRefs required")
         elif kind == "route" and len(entity_refs) < 3:
             issues.append(f"item[{ref}]: route needs entityRefs>=3")
+        if kind == "entity" and isinstance(entity_refs, list):
+            matched_targets = [
+                target
+                for target in targets
+                if any(str(entity_ref).rstrip("/").endswith("/" + target) for entity_ref in entity_refs)
+            ]
+            if len(matched_targets) != 1:
+                issues.append(
+                    f"item[{ref}]: entity item must map to exactly one coverage target, got {matched_targets}"
+                )
+            else:
+                bucket = "gallery" if _item_carrier(item) == "gallery" else "article"
+                per_entity[matched_targets[0]][bucket].append(item)
         evidence = item.get("evidenceRefs") or []
         if not isinstance(evidence, list) or not evidence:
             issues.append(f"item[{ref}]: evidenceRefs required")
@@ -132,6 +165,33 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                     break
         if not str(item.get("rationale") or "").strip():
             issues.append(f"item[{ref}]: missing rationale")
+        base_source_ref = str(item.get("baseSourceRef") or "").strip()
+        source_use_mode = str(item.get("sourceUseMode") or "").strip()
+        if strict_rights_mode and source_use_mode not in (
+            "licensed_adaptation",
+            "factual_reference_only",
+        ):
+            issues.append(f"item[{ref}]: sourceUseMode required for scaled task")
+        if base_source_ref:
+            meta_path = (root / base_source_ref).parent / "meta.json"
+            if meta_path.is_file():
+                try:
+                    actual_mode = str(read_json(meta_path).get("sourceUseMode") or "").strip()
+                except (OSError, ValueError):
+                    actual_mode = ""
+                if actual_mode == "blocked":
+                    issues.append(f"item[{ref}]: baseSourceRef points to blocked source")
+                if source_use_mode and actual_mode and source_use_mode != actual_mode:
+                    issues.append(
+                        f"item[{ref}]: sourceUseMode {source_use_mode!r} "
+                        f"does not match source meta {actual_mode!r}"
+                    )
+            previous = base_source_owners.get(base_source_ref)
+            if previous and previous != ref:
+                issues.append(
+                    f"item[{ref}]: baseSourceRef reused by {previous}; main evidence must be one-source-one-work"
+                )
+            base_source_owners[base_source_ref] = ref
         for msg in writing_intent_issues(item.get("writingIntent")):
             issues.append(f"item[{ref}]: {msg}")
         if ref not in index:
@@ -140,6 +200,30 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             brief_path = content_object_stage_dir(task_id, batch_id, ref, STAGE_COMPOSE) / BRIEF_FILE
             if not brief_path.is_file():
                 issues.append(f"item[{ref}]: missing 3.compose/brief.json")
+
+    for target, buckets in per_entity.items():
+        articles = buckets["article"]
+        galleries = buckets["gallery"]
+        if per_target_articles and len(articles) != per_target_articles:
+            issues.append(
+                f"{target}: entityArticlesPerTarget quota {per_target_articles} but packet has {len(articles)}"
+            )
+        if per_target_galleries and len(galleries) != per_target_galleries:
+            issues.append(
+                f"{target}: galleryPostsPerTarget quota {per_target_galleries} but packet has {len(galleries)}"
+            )
+        if per_target_articles == 2:
+            intents = sorted(str(item.get("writingIntent") or "") for item in articles)
+            expected = sorted(["planning_consultation", "decision_experience"])
+            if intents != expected:
+                issues.append(
+                    f"{target}: two entity articles must split planning_consultation and "
+                    f"decision_experience, got {intents}"
+                )
+        if len(galleries) > 1:
+            titles = {str(item.get("title") or "").strip() for item in galleries}
+            if len(titles) != len(galleries):
+                issues.append(f"{target}: gallery works must use distinct visual themes/titles")
 
     return issues
 
@@ -151,6 +235,9 @@ def content_plan_quotas_required(spec: Mapping[str, Any]) -> bool:
         int(quotas.get("entityArticles") or 0)
         or int(quotas.get("routeArticles") or 0)
         or int(quotas.get("galleryPosts") or 0)
+        or int(quotas.get("entityArticlesPerTarget") or 0)
+        or int(quotas.get("galleryPostsPerTarget") or 0)
+        or int(quotas.get("entityHomepagesPerTarget") or 0)
     )
 
 

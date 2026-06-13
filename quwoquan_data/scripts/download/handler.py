@@ -12,7 +12,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 from _common.paths import ensure_batch_layout, batch_root  # noqa: E402
 from _common.batch_manifest import write_batch_manifest, write_source_catalog  # noqa: E402
 from _common.content_evidence import anonymize_source_markdown, score_source_markdown  # noqa: E402
-from _common.entity_extract import entity_ref as build_entity_ref, resolve_domain_etype  # noqa: E402
+from _common.entity_extract import entity_ref as build_entity_ref, require_domain_etype  # noqa: E402
 from _common.source_catalog import (  # noqa: E402
     coverage_issues,
     source_category_coverage,
@@ -30,11 +30,12 @@ from _common.image_safety import assess_image  # noqa: E402
 from _common.image_variants import image_dimensions  # noqa: E402
 from _common.image_safety import dedupe_image_payloads  # noqa: E402
 from _common.stage_reports import write_gate_report, write_stage_result  # noqa: E402
-from download.gate import gate_download  # noqa: E402
+from download.gate import download_requirements, gate_download  # noqa: E402
 from download.source_inputs import (
     curated_sources_for_entity,
     curated_images_for_entity,
     manual_body_note,
+    source_plan_rights_issues,
     source_frontmatter,
 )  # noqa: E402
 from download.fetch import fetch_image_payload, fetch_source_payload  # noqa: E402
@@ -97,6 +98,15 @@ def handle_download(args: argparse.Namespace) -> None:
         plan_issues: list[str] = []
         if len(planned_sources) < 2:
             plan_issues.append("sourcePlan: fewer than 2 planned sources")
+        plan_issues.extend(
+            source_plan_rights_issues(
+                task_id,
+                batch_id,
+                entity["entityId"],
+                entity_type,
+                require_explicit=download_requirements(task_id)["minSources"] >= 4,
+            )
+        )
         plan_issues.extend(coverage_issues(planned_sources, vertical=vertical, entity_id=entity["entityId"]))
         write_gate_report(
             task_id=task_id,
@@ -118,7 +128,10 @@ def handle_download(args: argparse.Namespace) -> None:
             fallback_stage="source_plan" if plan_issues else None,
         )
 
-    domain, etype = resolve_domain_etype(entity_type)
+    domain, etype = require_domain_etype(
+        entity_type,
+        context=f"download entity_type for task={task_id} batch={batch_id}",
+    )
     fetched_sources: list[dict] = []
     quality_by_entity: dict[str, list[dict]] = defaultdict(list)
     failed_image_entities: list[str] = []
@@ -182,6 +195,10 @@ def handle_download(args: argparse.Namespace) -> None:
                     "termsUrl": rights.get("termsUrl") or spec.get("termsUrl") or "",
                     "licenseSnapshot": rights.get("licenseSnapshot") or spec.get("licenseSnapshot") or "",
                     "usageScope": rights.get("usageScope") or spec.get("usageScope") or "",
+                    "generationModel": rights.get("generationModel") or "",
+                    "generationPromptHash": rights.get("generationPromptHash") or "",
+                    "generatedAt": rights.get("generatedAt") or "",
+                    "syntheticDisclosure": rights.get("syntheticDisclosure") or "",
                     "caption": str(spec.get("caption") or relevance),
                     "relevance": relevance,
                     "slug": f"{entity_id}_{idx_img}",
@@ -240,6 +257,8 @@ def handle_download(args: argparse.Namespace) -> None:
                 quality=quality,
                 platform=source.get("platform") or "web",
                 source_category=source.get("platform") or "web",
+                source_use_mode=source.get("sourceUseMode") or "",
+                license_value=source.get("license") or "",
                 url=source["url"],
                 title=source.get("title") or source["source_id"],
                 target_ref=target_ref,
@@ -279,7 +298,17 @@ def handle_download(args: argparse.Namespace) -> None:
             fallback_stage="source_plan" if image_rights_issues else None,
         )
         kept_images = len(pending_images)
-        count_issue = min_count_issue(kept_images, entity_id=entity_id)
+        required_images = download_requirements(task_id)["minImages"]
+        count_issue = (
+            min_count_issue(kept_images, entity_id=entity_id)
+            if required_images <= MIN_ENTITY_IMAGES
+            else (
+                f"imageCount: {entity_id} 仅下到 {kept_images} 张合格去重图"
+                f"（规模化任务要求 ≥{required_images}）"
+                if kept_images < required_images
+                else None
+            )
+        )
         fetch_issues = list(image_rights_issues)
         if count_issue:
             fetch_issues.append(count_issue)
@@ -298,7 +327,7 @@ def handle_download(args: argparse.Namespace) -> None:
             evidence_summary={
                 "plannedImages": len(image_specs),
                 "downloadedImages": kept_images,
-                "minRequired": MIN_ENTITY_IMAGES,
+                "minRequired": required_images,
                 "rejectedForQuality": image_quality_issues,
             },
             next_step="quality_analysis",

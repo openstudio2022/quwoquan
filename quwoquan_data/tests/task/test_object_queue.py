@@ -158,6 +158,20 @@ def test_requeue_resets_startup_failure_count():
     assert payload["lastError"] is None
 
 
+def test_reconcile_completed_refs_marks_terminal_success():
+    batch = "test_batch_reconcile"
+    oq.enqueue_ref_job(TASK, batch, "rreconcile", "author", max_attempts=1)
+    job = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    oq.fail_job(TASK, batch, job["jobId"], job["lease"], error="dead now")
+    touched = oq.reconcile_completed_refs(TASK, batch, ["rreconcile"], "author", reason="publish_succeeded")
+    assert touched == ["rreconcile"]
+    payload = read_json(oq._job_path(TASK, batch, job["jobId"]))
+    assert payload["state"] == oq.STATE_SUCCEEDED
+    assert payload["lease"] is None
+    assert payload["lastError"] is None
+    assert payload["timings"][-1]["reason"] == "publish_succeeded"
+
+
 def test_purge_jobs_removes_matching_stage_entries():
     batch = "test_batch_purge"
     oq.enqueue_ref_job(TASK, batch, "keep_download", "download")

@@ -12,8 +12,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from _common.entity_object import find_entity_object_dir, sync_entity_object_to_task_mirror, write_entity_object_index
 from _common.io import read_json, write_json
-from _common.paths import PUBLISH_ROOT, task_data
+from _common.paths import PUBLISH_ROOT, batch_entity_object_dir, task_data
 from _common.review_ledger import entities_path
 
 # 抽取实体的中文类型 → (domain, etype)
@@ -35,15 +36,57 @@ TYPE_TO_DOMAIN_ETYPE: dict[str, tuple[str, str]] = {
 DEFAULT_DOMAIN_ETYPE = ("地点", "打卡地")
 
 
-def resolve_domain_etype(etype_hint: str | None) -> tuple[str, str]:
+def resolve_domain_etype(
+    etype_hint: str | None,
+    *,
+    allow_default_on_missing: bool = True,
+    allow_default_on_unknown: bool = True,
+) -> tuple[str, str]:
     if not etype_hint:
-        return DEFAULT_DOMAIN_ETYPE
+        if allow_default_on_missing:
+            return DEFAULT_DOMAIN_ETYPE
+        raise ValueError("entityType missing")
     hint = etype_hint.strip().strip("/")
+    if not hint:
+        if allow_default_on_missing:
+            return DEFAULT_DOMAIN_ETYPE
+        raise ValueError("entityType missing")
     if "/" in hint:
         parts = hint.split("/")
         if len(parts) >= 2:
             return parts[0], parts[1]
-    return TYPE_TO_DOMAIN_ETYPE.get(hint, DEFAULT_DOMAIN_ETYPE)
+    mapped = TYPE_TO_DOMAIN_ETYPE.get(hint)
+    if mapped is not None:
+        return mapped
+    if allow_default_on_unknown:
+        return DEFAULT_DOMAIN_ETYPE
+    raise ValueError(f"unknown entityType hint: {etype_hint!r}")
+
+
+def require_domain_etype(etype_hint: str | None, *, context: str = "entityType") -> tuple[str, str]:
+    try:
+        return resolve_domain_etype(
+            etype_hint,
+            allow_default_on_missing=False,
+            allow_default_on_unknown=False,
+        )
+    except ValueError as exc:
+        raise ValueError(f"{context}: {exc}") from exc
+
+
+def normalize_domain_etype_path(
+    etype_hint: str | None,
+    *,
+    context: str = "entityType",
+    allow_default_on_missing: bool = True,
+    allow_default_on_unknown: bool = True,
+) -> str:
+    domain, etype = resolve_domain_etype(
+        etype_hint,
+        allow_default_on_missing=allow_default_on_missing,
+        allow_default_on_unknown=allow_default_on_unknown,
+    )
+    return f"{domain}/{etype}"
 
 
 def entity_ref(domain: str, etype: str, name: str) -> str:
@@ -57,7 +100,10 @@ def normalize_entity_refs(raw_refs: Sequence[Any] | None, subject_type: str | No
     实体类型映射；已是全路径（含 domain/type）的引用原样规范化，短名引用按 subject 补全。
     publish_filter 据此精确定位 entities/{domain}/{type}/{name}/page.md，避免主实体被误过滤。
     """
-    domain, etype = resolve_domain_etype(subject_type)
+    if subject_type:
+        domain, etype = require_domain_etype(subject_type, context="brief.subject.type")
+    else:
+        domain, etype = DEFAULT_DOMAIN_ETYPE
     out: list[str] = []
     for item in raw_refs or []:
         s = str(item).strip().strip("/")
@@ -73,8 +119,11 @@ def normalize_entity_refs(raw_refs: Sequence[Any] | None, subject_type: str | No
     return out
 
 
-def homepage_exists(domain: str, etype: str, name: str, task_id: str) -> bool:
+def homepage_exists(domain: str, etype: str, name: str, task_id: str, batch_id: str = "") -> bool:
     if (PUBLISH_ROOT / "entities" / domain / etype / name / "page.md").is_file():
+        return True
+    obj = find_entity_object_dir(task_id, domain, etype, name, batch_id=batch_id)
+    if obj is not None and (obj / "page.md").is_file():
         return True
     return task_data(task_id).entity_page(domain, etype, name).is_file()
 
@@ -93,6 +142,7 @@ def _stub_entity_page(name: str, domain: str, etype: str, evidence: str) -> str:
 
 def generate_entity_homepage(
     task_id: str,
+    batch_id: str,
     name: str,
     domain: str,
     etype: str,
@@ -101,15 +151,21 @@ def generate_entity_homepage(
     source_ref: str = "",
     condition_profile: Mapping[str, Any] | None = None,
 ) -> Path:
-    """在 task entities 下生成最小实体主页 + _entity.json，使实体可关联查看。
+    """在 batch 实体对象下生成最小实体主页 + _entity.json，使实体可关联查看。
 
     condition_profile（L3 实体条件画像：真实地形 regions / 最佳季节 seasons / 海拔 altitudeMeters）
     仅在显式传入且非空时写入，plan/brief 据此精确注入 conditionContext；缺省时不写，回退地域全谱。
     """
-    data = task_data(task_id)
-    ent_dir = data.entity_dir(domain, etype, name)
+    from _common.source_unit import resolve_entity_object_dir
+
+    ent_dir = resolve_entity_object_dir(
+        task_id,
+        batch_id,
+        name,
+        etype_hint=f"{domain}/{etype}",
+    )
     ent_dir.mkdir(parents=True, exist_ok=True)
-    page = data.entity_page(domain, etype, name)
+    page = ent_dir / "page.md"
     page.write_text(_stub_entity_page(name, domain, etype, evidence), encoding="utf-8")
     payload: dict[str, Any] = {
         "label": name,
@@ -122,7 +178,9 @@ def generate_entity_homepage(
     }
     if condition_profile:
         payload["conditionProfile"] = dict(condition_profile)
-    write_json(data.entity_json(domain, etype, name), payload)
+    write_json(ent_dir / "_entity.json", payload)
+    write_entity_object_index(task_id, batch_id, domain, etype, name)
+    sync_entity_object_to_task_mirror(task_id, batch_id, domain, etype, name)
     return page
 
 
@@ -150,11 +208,12 @@ def build_entities_sidecar(
         if key in seen:
             continue
         seen.add(key)
-        has = homepage_exists(domain, etype, name, task_id)
+        has = homepage_exists(domain, etype, name, task_id, batch_id)
         generated = False
         if not has and auto_generate:
             generate_entity_homepage(
                 task_id,
+                batch_id,
                 name,
                 domain,
                 etype,

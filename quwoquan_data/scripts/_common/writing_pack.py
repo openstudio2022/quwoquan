@@ -142,6 +142,7 @@ def build_writing_pack(
         "sopExampleRef": brief.get("sopExampleRef"),
         "writingIntent": brief.get("writingIntent"),
         "baseSourceRef": brief.get("baseSourceRef"),
+        "sourceUseMode": brief.get("sourceUseMode"),
         "bannedRegisterTerms": [str(x) for x in (brief.get("bannedRegisterTerms") or []) if x],
     }
 
@@ -177,15 +178,18 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         )
     base = pack.get("baseSourceRef")
     base_text = str(pack.get("baseDraftText") or "")
+    source_use_mode = str(pack.get("sourceUseMode") or "factual_reference_only")
     if base:
-        lines.append(
-            f"- **主底稿来源**：以 `{base}`（见下方「## 底稿」）为基础做**适度加工（轻改）**——"
-            "保留其叙事顺序与结构，只做去语病/纠错别字/理顺语句/补证据/去版权与平台痕迹；"
-            f"**与底稿相似度维持 {_base_fidelity_range_label()}**："
-            f"不得逐句搬运（≥{int(FIDELITY_MAX * 100)}% 视为未去版权），"
-            f"也不得从零另写或换稿（≤{int(FIDELITY_MIN * 100)}% 视为脱离底稿）。"
-            "其它来源只能补充事实证据，不得再当底稿。排版可适度优化。"
-        )
+        if source_use_mode == "licensed_adaptation":
+            lines.append(
+                f"- **授权底稿来源**：`{base}` 可在许可范围内改编；保留事实和必要结构，"
+                f"贴合度控制在 {_base_fidelity_range_label()}，同时保留署名与授权快照。"
+            )
+        else:
+            lines.append(
+                f"- **事实参考来源**：`{base}` 仅用于提取可核验事实。必须独立组织结构和表达，"
+                "禁止复现连续长句、原文小标题和作者个人叙事。"
+            )
     banned = pack.get("bannedRegisterTerms") or []
     if banned:
         lines.append(f"- **禁用语域**：本主体禁止出现 {', '.join(banned)} 等错配语域词。")
@@ -210,9 +214,12 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         if nc.get("forbidStandaloneTips"):
             lines.append("- 注意事项**就地融入**叙述，禁止另起「实用信息/来源平台」清单块。")
         if base_text:
-            lines.append("- 以下方「## 底稿」为基底做**轻改**：遵从底稿的小标题与叙述顺序，再用证据点补全事实与细节；不要把多个来源平均拼接成模板化清单，也不要每篇都用相同章节套路。")
+            if source_use_mode == "licensed_adaptation":
+                lines.append("- 以下方授权底稿为基底，在许可范围内改编并用其它证据补全事实。")
+            else:
+                lines.append("- 以下方事实参考材料核验信息，自行重组标题、章节和叙事顺序，禁止沿用原文结构。")
         else:
-            lines.append("- 以证据点里**信息最完整、最有现场感**的那条原文叙事线为基底做**适度加工**：遵从其观察顺序与思路，再用其它来源补全事实与细节；不要把多个来源平均拼接成模板化清单，也不要每篇都用相同章节套路。")
+            lines.append("- 综合证据点独立组织内容，不要把多个来源机械拼成清单，也不要每篇都用相同章节套路。")
     lines.append("- 信息必须来自下方素材；**禁止编造**票价/时长/海拔/里程等数字（拿不准就写区间或定性，别杜撰精确值）。")
     lines.append("- 禁止出现平台名/作者名/水印/来源痕迹；禁止逐句搬运素材原文（改写为自己的表达）。")
     lines.append(
@@ -220,17 +227,25 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         "或 source 证据中核实的景区官方接待电话。"
     )
     lines.append(
-        "- **小标题跟随底稿、避免机械清单标题**：禁止 `## 节点顺序` `## 实用信息` `## 注意事项` `## 门票信息` 这类纯功能清单标题；"
-        "底稿已有的小标题尽量沿用，确需调整时改写得自然、有视角即可，**不要套用任何统一的「推荐标题」模板**。"
+        "- **小标题自然、避免机械清单标题**：禁止 `## 节点顺序` `## 实用信息` `## 注意事项` `## 门票信息` 这类纯功能清单标题；"
+        "**不要套用统一标题模板，也不要复制普通网页的原标题或小标题**。"
     )
     forb = pack.get("forbiddenPhrases") or []
     if forb:
         lines.append(f"- 禁用词: {', '.join(forb)}")
     lines.append("")
     if base_text:
-        lines.append(f"## 底稿（在此基础上适度加工 / 轻改；与其相似度维持 {_base_fidelity_range_label()}）")
+        heading = (
+            f"## 授权底稿（许可范围内改编；贴合度 {_base_fidelity_range_label()}）"
+            if source_use_mode == "licensed_adaptation"
+            else "## 事实参考材料（只取可核验事实，必须独立表达）"
+        )
+        lines.append(heading)
         lines.append("")
-        lines.append("> 保留底稿叙事顺序与结构，只做：去语病、纠错别字、理顺语句、补全可回溯证据、去版权与平台痕迹；排版可适度优化。禁止逐句搬运，也禁止从零另写。")
+        if source_use_mode == "licensed_adaptation":
+            lines.append("> 在许可范围内加工，保留必要署名；禁止逐句搬运超出许可或掩盖来源。")
+        else:
+            lines.append("> 只抽取事实，独立拟定标题、结构和句子；不得模仿原作者叙事顺序或复现连续长句。")
         lines.append("")
         lines.append(base_text)
         lines.append("")

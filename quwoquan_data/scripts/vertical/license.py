@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any, Mapping
 
 import yaml
@@ -52,8 +53,20 @@ def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str
         if not str(spec.get(field) or "").strip():
             issues.append(f"imageRights: missing required field {field}")
     license_value = str(spec.get("license") or "").strip()
-    if license_value and license_value not in set(policy.get("allowedLicenseKinds") or []):
+    normalized_allowed = {
+        re.sub(r"\s+", " ", str(item).strip()).casefold()
+        for item in (policy.get("allowedLicenseKinds") or [])
+    }
+    normalized_license = re.sub(r"\s+", " ", license_value).casefold()
+    if license_value and normalized_license not in normalized_allowed:
         issues.append(f"imageRights: unsupported license {license_value}")
+    if normalized_license == "ai generated original".casefold():
+        for field in ("generationModel", "generationPromptHash", "generatedAt"):
+            if not str(spec.get(field) or "").strip():
+                issues.append(f"imageRights: AI generated asset missing {field}")
+        disclosure = str(spec.get("syntheticDisclosure") or "").strip().casefold()
+        if disclosure not in {"true", "1", "yes"}:
+            issues.append("imageRights: AI generated asset requires syntheticDisclosure=true")
     usage_scope = str(spec.get("usageScope") or "").strip()
     if usage_scope and usage_scope not in set(policy.get("usageScopes") or []):
         issues.append(f"imageRights: unsupported usageScope {usage_scope}")
@@ -74,5 +87,9 @@ def normalize_rights_payload(spec: Mapping[str, Any]) -> dict[str, Any]:
         "modelReleaseRequired",
         "modelReleaseStatus",
         "authorizationProof",
+        "generationModel",
+        "generationPromptHash",
+        "generatedAt",
+        "syntheticDisclosure",
     ]
     return {key: spec.get(key, "") for key in keys if spec.get(key, "") != ""}

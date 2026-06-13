@@ -43,6 +43,7 @@ from _common.stage_reports import write_gate_report  # noqa: E402
 from _common import content_object  # noqa: E402
 from _common.paths import (  # noqa: E402
     batch_posts_root,
+    batch_root,
     committed_task_spec,
     STAGE_DOWNLOAD,
     batch_command_root,
@@ -517,6 +518,13 @@ def test_publish_stage_materializes_task_inputs_and_release():
     task_id = _make_task()
     batch_id = "publish1"
     _seed_publish_inputs(task_id, batch_id)
+    post_dir = batch_posts_root(task_id, batch_id) / "article" / "攻略" / _EID / "001"
+    (post_dir / "_author_run.py").write_text("raise RuntimeError('must not ship')\n", encoding="utf-8")
+    (post_dir / "_article_body.md").write_text("helper", encoding="utf-8")
+    oq.enqueue_ref_job(task_id, batch_id, f"{_EID} 攻略", "author", max_attempts=1)
+    job = oq.acquire_lease(task_id, batch_id, worker="w1", stage="author")
+    assert job is not None
+    oq.fail_job(task_id, batch_id, job["jobId"], job["lease"], error="dead now")
     ctx = _ctx(task_id, batch_id)
     result = run_mod._run_publish(ctx)
     assert result.status == "done", result.message
@@ -531,6 +539,66 @@ def test_publish_stage_materializes_task_inputs_and_release():
     assert not (release_root_dir / "graph").exists()
     assert not (release_root_dir / "tags").exists()
     assert (release_root_dir / "posts" / "article" / "攻略" / _EID / "001" / "5.review" / "review_ledger.json").exists()
+    assert not (release_root_dir / "posts" / "article" / "攻略" / _EID / "001" / "_author_run.py").exists()
+    assert not (release_root_dir / "posts" / "article" / "攻略" / _EID / "001" / "_article_body.md").exists()
+    queue = oq.queue_summary(task_id, batch_id)
+    assert queue["total"] == 0, queue
+
+
+def test_managed_loop_consumes_checkpoint_instead_of_returning_10():
+    task_id = _make_task()
+    ctx = _ctx(task_id, "managed1")
+    ctx.managed = True
+    calls = {"pipeline": 0, "checkpoint": 0}
+    original_pipeline = run_mod.run_pipeline
+    original_checkpoint = run_mod._run_managed_checkpoint
+    try:
+        def _fake_pipeline(_ctx):
+            calls["pipeline"] += 1
+            if calls["pipeline"] == 1:
+                state = run_mod.load_workflow_state(task_id, "managed1")
+                state["waitingCheckpoint"] = "download_plan"
+                run_mod.save_workflow_state(state)
+                return 10
+            return 0
+
+        def _fake_checkpoint(_ctx, stage):
+            calls["checkpoint"] += 1
+            assert stage == "download_plan"
+            return True
+
+        run_mod.run_pipeline = _fake_pipeline
+        run_mod._run_managed_checkpoint = _fake_checkpoint
+        assert run_mod.run_managed_pipeline(ctx) == 0
+    finally:
+        run_mod.run_pipeline = original_pipeline
+        run_mod._run_managed_checkpoint = original_checkpoint
+    assert calls == {"pipeline": 2, "checkpoint": 1}
+
+
+def test_managed_preflight_rejects_missing_key_without_creating_batch():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec["status"] = "active"
+    spec.setdefault("content", {})["quotas"] = {
+        "entityArticlesPerTarget": 2,
+        "galleryPostsPerTarget": 2,
+        "entityHomepagesPerTarget": 1,
+        "routeArticles": 0,
+    }
+    old_key = os.environ.pop("CURSOR_API_KEY", None)
+    try:
+        issues = run_mod._managed_preflight(
+            task_id,
+            "preflight_no_key",
+            spec,
+            argparse.Namespace(runtime="local", baseline_packet=None),
+        )
+    finally:
+        if old_key is not None:
+            os.environ["CURSOR_API_KEY"] = old_key
+    assert "CURSOR_API_KEY missing" in issues
+    assert not batch_root(task_id, "preflight_no_key").exists()
 
 
 def _run_all() -> None:

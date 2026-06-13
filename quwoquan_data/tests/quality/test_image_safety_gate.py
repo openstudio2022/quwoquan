@@ -26,9 +26,10 @@ import cv2  # noqa: E402
 from _common import image_safety as I  # noqa: E402
 
 FIXTURE_MEDIA = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[3]
     / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media"
 )
+FACE_FIXTURE = FIXTURE_MEDIA / "avatar/user/fixture_user_article/v1/avatar.png"
 
 
 _TMP_DIR = Path(tempfile.mkdtemp(prefix="img_safety_test_"))
@@ -63,18 +64,7 @@ def _text_heavy_image() -> Path:
 
 
 def _first_face_fixture() -> Path | None:
-    user_dir = FIXTURE_MEDIA / "background" / "s" / "archived-avatar" / "user"
-    if not user_dir.is_dir():
-        return None
-    cas = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    for f in sorted(user_dir.rglob("*.jpg")):
-        img = cv2.imread(str(f))
-        if img is None:
-            continue
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        if len(cas.detectMultiScale(gray, 1.1, 6, minSize=(36, 36))) > 0:
-            return f
-    return None
+    return FACE_FIXTURE if FACE_FIXTURE.is_file() else None
 
 
 def test_backends_present():
@@ -112,7 +102,7 @@ def test_text_heavy_routes_to_article():
 
 def test_face_image_needs_review():
     face = _first_face_fixture()
-    assert face is not None, "未找到可检出人脸的 fixture（应位于 media/background/s/archived-avatar/user/**）"
+    assert face is not None, f"缺少仓库固定人脸 fixture: {FACE_FIXTURE}"
     v = I.assess_image(face)
     assert v.faces > 0, v.to_dict()
     # 含人脸的图：水印命中则 unsafe，否则 needs_review；两者都不允许自动图文发布
