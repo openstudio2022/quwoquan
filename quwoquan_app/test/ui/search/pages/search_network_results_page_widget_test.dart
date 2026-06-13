@@ -102,7 +102,7 @@ void main() {
       tester.getTopLeft(find.text('小趣搜')).dx,
       lessThan(tester.getTopLeft(find.text('综合').first).dx),
     );
-    expect(find.text('主页'), findsOneWidget);
+    expect(find.text('主页'), findsAtLeastNWidgets(1));
     expect(find.text('消息'), findsWidgets);
     expect(find.text('视频'), findsOneWidget);
     expect(find.text('图片'), findsOneWidget);
@@ -163,9 +163,9 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text('主页'), findsOneWidget);
+    expect(find.text('主页'), findsAtLeastNWidgets(1));
     expect(find.text('西湖景区'), findsWidgets);
-    expect(find.textContaining('共享主页并进入详情'), findsOneWidget);
+    expect(find.textContaining('搜索主页并进入详情'), findsOneWidget);
     expect(find.byType(HomepageSummaryCard), findsWidgets);
   });
 

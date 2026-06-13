@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart'
     as runtime_error_display;
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -1184,7 +1185,31 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final targetId = span.targetId?.trim() ?? '';
     if (targetId.isEmpty) return;
     if (targetType != 'homepage' && targetType != 'entity') return;
-    context.push(AppRoutePaths.homepageDetail(id: targetId));
+    context.push(
+      AppRoutePaths.homepageDetail(id: _homepageIdForArticleEntity(targetId)),
+    );
+  }
+
+  String _homepageIdForArticleEntity(String targetId) {
+    final normalized = targetId.trim();
+    if (!normalized.startsWith('entity:')) {
+      return normalized;
+    }
+    final seed = ContractFixtureRuntimeLoader.entitySeedSet();
+    final homepages = seed?['homepages'];
+    if (homepages is List) {
+      for (final raw in homepages) {
+        if (raw is! Map) continue;
+        final item = raw.cast<String, dynamic>();
+        if (item['canonicalEntityId']?.toString() == normalized) {
+          final homepageId = item['homepageId']?.toString() ?? '';
+          if (homepageId.isNotEmpty) {
+            return homepageId;
+          }
+        }
+      }
+    }
+    return normalized;
   }
 
   bool _showsCaptionOverlay(PostBaseDto post) {
