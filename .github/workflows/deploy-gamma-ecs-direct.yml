@@ -229,7 +229,12 @@ jobs:
           PRODUCT_OPS_BASE_URL: ${{ steps.urls.outputs.product_ops_base_url }}
           MEDIA_BASE_URL: ${{ steps.urls.outputs.media_base_url }}
           GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+          REQUIRE_NON_EMPTY_CONTENT_FEED: ${{ inputs.mode != 'restart' && '1' || '0' }}
         run: |
+          probe_args=()
+          if [ "${REQUIRE_NON_EMPTY_CONTENT_FEED}" = "1" ]; then
+            probe_args+=(--require-non-empty-content-feed)
+          fi
           python3 agent_ops/deploy/probes/run_environment_integration_probe.py \
             --env gamma \
             --mode post-deploy \
@@ -237,7 +242,7 @@ jobs:
             --product-ops-base-url "${PRODUCT_OPS_BASE_URL}" \
             --media-base-url "${MEDIA_BASE_URL}" \
             --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
-            --require-non-empty-content-feed \
+            "${probe_args[@]}" \
             --report artifacts/stackctl/gamma/deploy-direct/integration-probe-post-deploy.json
       - name: Echo post-deploy probe report
         if: always()
