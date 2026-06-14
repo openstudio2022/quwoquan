@@ -147,6 +147,30 @@ jobs:
       PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
     steps:
       - uses: actions/checkout@v4
+      - name: Validate prod kubeconfig
+        run: |
+          if [ -z "${PROD_KUBECONFIG:-}" ]; then
+            echo "::error::需要配置 secrets.PROD_KUBECONFIG"
+            exit 2
+          fi
+          python3 - <<'PY'
+          import base64
+          import os
+          import sys
+
+          raw = os.environ.get("PROD_KUBECONFIG", "").strip()
+          try:
+              decoded = base64.b64decode(raw, validate=True).decode("utf-8")
+          except Exception as exc:  # noqa: BLE001
+              print(f"::error::secrets.PROD_KUBECONFIG 必须是 base64 kubeconfig 内容: {exc}")
+              raise SystemExit(2)
+          required = ("apiVersion:", "clusters:", "contexts:", "users:")
+          missing = [item for item in required if item not in decoded]
+          if missing:
+              print("::error::secrets.PROD_KUBECONFIG 解码后不像 kubeconfig，缺少: " + ", ".join(missing))
+              raise SystemExit(2)
+          print("prod kubeconfig secret looks valid")
+          PY
       - name: Regenerate release snapshot locally
         run: |
           rm -rf .mainline-release-artifact

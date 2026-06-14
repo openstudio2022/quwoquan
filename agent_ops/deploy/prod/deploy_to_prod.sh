@@ -47,6 +47,47 @@ if [[ ! -d "$KUSTOMIZATION" ]]; then
   exit 1
 fi
 
+prepare_prod_kubeconfig() {
+  if [[ -z "$PROD_KUBECONFIG" ]]; then
+    echo "::error::PROD_KUBECONFIG is required for real prod apply" >&2
+    exit 2
+  fi
+  mkdir -p ~/.kube
+  if ! PROD_KUBECONFIG="$PROD_KUBECONFIG" python3 - ~/.kube/config <<'PY'
+import base64
+import os
+import sys
+from pathlib import Path
+
+raw = os.environ.get("PROD_KUBECONFIG", "").strip()
+target = Path(sys.argv[1])
+try:
+    decoded = base64.b64decode(raw, validate=True).decode("utf-8")
+except Exception as exc:  # noqa: BLE001
+    print(f"::error::PROD_KUBECONFIG must be base64-encoded kubeconfig content: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+required = ("apiVersion:", "clusters:", "contexts:", "users:")
+missing = [item for item in required if item not in decoded]
+if missing:
+    print(
+        "::error::PROD_KUBECONFIG decoded payload does not look like kubeconfig; missing: "
+        + ", ".join(missing),
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+target.write_text(decoded, encoding="utf-8")
+PY
+  then
+    rm -f ~/.kube/config
+    exit 2
+  fi
+  chmod 600 ~/.kube/config
+  if ! kubectl cluster-info >/dev/null 2>&1; then
+    echo "::error::PROD_KUBECONFIG cannot reach the prod cluster" >&2
+    exit 2
+  fi
+}
+
 patch_overlay() {
   # $1: overlay kustomization 文件; $2: 该 overlay 对应镜像仓库
   python3 - "$1" "$CONFIG_VERSION" "$IMAGE_VERSION" "$REPLICAS" "$2" <<'PY'
@@ -87,6 +128,10 @@ fi
 
 echo "[deploy] prod (CLOUD_PROVIDER=$CLOUD_PROVIDER, DRY_RUN=$DRY_RUN, workloads=[$ROLLOUT_REFS])"
 
+if [[ "$DRY_RUN" != "true" ]]; then
+  prepare_prod_kubeconfig
+fi
+
 if command -v kustomize &>/dev/null; then
   MANIFEST="$(kustomize build "$KUSTOMIZATION")"
 elif command -v kubectl &>/dev/null; then
@@ -101,15 +146,6 @@ if [[ "$DRY_RUN" == "true" ]]; then
   echo "$MANIFEST" | head -30
   exit 0
 fi
-
-if [[ -z "$PROD_KUBECONFIG" ]]; then
-  echo "::warning::PROD_KUBECONFIG not set — skipping apply"
-  exit 0
-fi
-
-mkdir -p ~/.kube
-echo "$PROD_KUBECONFIG" | base64 -d > ~/.kube/config
-chmod 600 ~/.kube/config
 echo "$MANIFEST" | kubectl apply -f - --server-side
 for ref in $ROLLOUT_REFS; do
   kubectl rollout status "$ref" -n "$PROD_NAMESPACE" --timeout=5m

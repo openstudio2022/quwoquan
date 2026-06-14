@@ -156,7 +156,24 @@
 
 ---
 
-## 八、项目结构与路径
+## 八、Prod Hosted Deploy（deploy-prod-gray.yml / deploy-prod-auto.yml）
+
+### 必须配置
+
+| Secret | 用途 |
+|--------|------|
+| **PROD_KUBECONFIG** | **base64 编码后的生产集群 kubeconfig 全文**；`stackctl deploy prod-hosted` 会真实执行 `kubectl apply`、`kubectl rollout status` 与 post-deploy 健康检查，缺失或格式错误都会直接失败 |
+
+### 说明
+
+- `PROD_KUBECONFIG` 必须是 **base64 编码后的 kubeconfig 内容**，不是文件路径，也不是 context 名称。
+- `deploy-prod-gray.yml` 与 `deploy-prod-auto.yml` 现在都会先显式校验 `secrets.PROD_KUBECONFIG` 是否存在且能解码成 kubeconfig 结构。
+- `agent_ops/deploy/prod/deploy_to_prod.sh` 在 `DRY_RUN=false` 时会真实校验集群连通性；**不再允许** `PROD_KUBECONFIG` 缺失时以 warning 形式跳过 apply 并返回成功。
+- 如果需要真实 prod apply，但 workflow 日志出现 `PROD_KUBECONFIG not set` 或 `must be base64 kubeconfig content`，应先修复 Secret，再重跑 workflow；禁止把这类失败当成功放通。
+
+---
+
+## 九、项目结构与路径
 
 ```
 ├── quwoquan_service/     # Go monorepo + rec-model-service (Python)
@@ -174,7 +191,7 @@
 
 ---
 
-## 九、配置步骤
+## 十、配置步骤
 
 1. 进入仓库 **Settings → Secrets and variables → Actions**。
 2. 点击 **New repository secret**。
