@@ -2558,6 +2558,18 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
         args.target == "prod-hosted" and dry_run_requested
     )
     if run_post_deploy_checks:
+        def _deploy_health_args(target_name: str, scope_name: str, out_dir: Path) -> argparse.Namespace:
+            return argparse.Namespace(
+                command="health",
+                target=target_name,
+                scope=scope_name,
+                output_format="json",
+                report_dir=str(out_dir),
+                request_timeout_seconds=0,
+                retry_attempts=0,
+                retry_sleep_seconds=-1.0,
+            )
+
         for nested_command, nested_scope in (
             ("health", "full"),
             ("inspect", "all"),
@@ -2565,14 +2577,38 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
         ):
             nested_dir = report_dir / nested_command
             if nested_command == "health":
-                nested_args = argparse.Namespace(
-                    command="health",
-                    target=args.target,
-                    scope=nested_scope,
-                    output_format="json",
-                    report_dir=str(nested_dir),
-                )
-                post_deploy_checks.append(command_health(nested_args))
+                if args.target == "gamma-hosted":
+                    health_attempts: list[dict[str, Any]] = []
+                    final_health: dict[str, Any] | None = None
+                    for attempt in range(1, 4):
+                        attempt_dir = nested_dir / f"attempt-{attempt}"
+                        nested_args = _deploy_health_args(args.target, nested_scope, attempt_dir)
+                        health_result = command_health(nested_args)
+                        health_attempts.append(health_result)
+                        final_health = health_result
+                        if int(health_result.get("exitCode", 0) or 0) == 0:
+                            break
+                        if attempt < 3:
+                            time.sleep(10.0 * attempt)
+                    assert final_health is not None
+                    if len(health_attempts) > 1:
+                        final_health = {
+                            **final_health,
+                            "attempts": health_attempts,
+                            "summary": (
+                                f"{final_health['summary']} after {len(health_attempts)} attempts"
+                                if int(final_health.get("exitCode", 0) or 0) == 0
+                                else final_health["summary"]
+                            ),
+                            "details": (
+                                [f"stabilization attempts: {len(health_attempts)}"]
+                                + list(final_health.get("details", []))
+                            ),
+                        }
+                    post_deploy_checks.append(final_health)
+                else:
+                    nested_args = _deploy_health_args(args.target, nested_scope, nested_dir)
+                    post_deploy_checks.append(command_health(nested_args))
             elif nested_command == "inspect":
                 nested_args = argparse.Namespace(
                     command="inspect",
