@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import codecs
 import json
 import os
+import selectors
 import shlex
 import socket
 import ssl
@@ -122,6 +124,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["edge", "media", "service", "full"],
         default="full",
     )
+    health_parser.add_argument("--request-timeout-seconds", type=int, default=0)
+    health_parser.add_argument("--retry-attempts", type=int, default=0)
+    health_parser.add_argument("--retry-sleep-seconds", type=float, default=-1.0)
 
     inspect_parser = subparsers.add_parser("inspect")
     inspect_parser.add_argument("--target", choices=TARGETS, required=True)
@@ -248,24 +253,80 @@ def _run_with_live_output(
         argv,
         cwd=str(cwd or ROOT),
         env=merged_env,
-        text=True,
+        text=False,
+        bufsize=0,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
-    lines: list[str] = []
+    chunks: list[bytes] = []
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    pending = ""
+    interactive = _is_interactive_terminal()
     assert process.stdout is not None
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ)
+    exit_observed_at: float | None = None
+
+    def emit_available_text(text: str, *, flush_partial: bool = False) -> None:
+        nonlocal pending
+        pending += text
+        if not interactive:
+            if flush_partial:
+                pending = ""
+            return
+        while True:
+            newline_index = pending.find("\n")
+            if newline_index < 0:
+                break
+            line = pending[: newline_index + 1]
+            pending = pending[newline_index + 1 :]
+            if prefix:
+                print(f"{prefix}{line}", end="", flush=True)
+            else:
+                print(line, end="", flush=True)
+        if flush_partial and pending:
+            if prefix:
+                print(f"{prefix}{pending}", end="", flush=True)
+            else:
+                print(pending, end="", flush=True)
+            pending = ""
+
     try:
-        for line in process.stdout:
-            lines.append(line)
-            if _is_interactive_terminal():
-                if prefix:
-                    print(f"{prefix}{line}", end="", flush=True)
-                else:
-                    print(line, end="", flush=True)
-        process.wait()
+        while True:
+            events = selector.select(timeout=0.2)
+            saw_output = False
+            for _key, _mask in events:
+                try:
+                    data = os.read(process.stdout.fileno(), 4096)
+                except BlockingIOError:
+                    continue
+                if not data:
+                    exit_observed_at = 0.0
+                    continue
+                saw_output = True
+                chunks.append(data)
+                emit_available_text(decoder.decode(data))
+            if saw_output:
+                exit_observed_at = None
+                continue
+            if process.poll() is None:
+                continue
+            if exit_observed_at is None:
+                exit_observed_at = time.monotonic()
+                continue
+            if exit_observed_at == 0.0 or time.monotonic() - exit_observed_at >= 0.5:
+                break
     finally:
+        selector.close()
+        emit_available_text(decoder.decode(b"", final=True), flush_partial=True)
         process.stdout.close()
-    stdout = "".join(lines)
+        if process.poll() is None:
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=1)
+    stdout = b"".join(chunks).decode("utf-8", errors="replace")
     return subprocess.CompletedProcess(
         argv,
         process.returncode,
@@ -596,12 +657,23 @@ def _write_stdout_markdown(report_dir: Path, sections: list[tuple[str, str]]) ->
     write_markdown(report_dir / "stdout.md", "\n".join(lines))
 
 
-def _selected_verify_commands(kind: str) -> list[list[str]]:
+def _selected_verify_commands(kind: str, env_name: str = "") -> list[list[str]]:
+    packaging_commands = [
+        ["python3", "agent_ops/gate/verify_environment_packaging_contract.py"]
+        + (["--env", env_name] if env_name in ENVIRONMENTS else []),
+        ["python3", "agent_ops/gate/verify_env_artifact_isolation.py"],
+        ["python3", "quwoquan_app/scripts/env/verify_prod_package_purity.py"],
+    ]
     if kind == "all":
         commands: list[list[str]] = []
         for group_name in ("topology", "config", "packaging"):
+            if group_name == "packaging":
+                commands.extend(packaging_commands)
+                continue
             commands.extend(VERIFY_COMMAND_GROUPS[group_name])
         return commands
+    if kind == "packaging":
+        return packaging_commands
     return list(VERIFY_COMMAND_GROUPS[kind])
 
 
@@ -613,22 +685,22 @@ def _selected_tier_commands(env_name: str, target_name: str, tier: str) -> list[
                 {
                     "name": "content-media-url-tests",
                     "argv": [
-                        "flutter",
-                        "test",
+                        "python3",
+                        "quwoquan_app/scripts/env/run_flutter_test_guarded.py",
                         "test/core/media/content_media_url_test.dart",
                         "test/cloud/chat/chat_avatar_url_resolution_test.dart",
                     ],
-                    "cwd": ROOT / "quwoquan_app",
+                    "cwd": ROOT,
                 },
                 {
                     "name": "contract-seeded-mock-tests",
                     "argv": [
-                        "flutter",
-                        "test",
+                        "python3",
+                        "quwoquan_app/scripts/env/run_flutter_test_guarded.py",
                         "--dart-define=CONTRACT_FIXTURE_PROFILE=full",
                         "test/cloud/services/contract_seeded_mock_repository_test.dart",
                     ],
-                    "cwd": ROOT / "quwoquan_app",
+                    "cwd": ROOT,
                 },
             ]
         )
@@ -702,20 +774,38 @@ def _selected_tier_commands(env_name: str, target_name: str, tier: str) -> list[
     return commands
 
 
-def fetch_url(url: str, timeout: float = 6.0) -> tuple[bool, int | None, str]:
-    try:
-        with urllib.request.urlopen(
-            url,
-            timeout=timeout,
-            context=ssl._create_unverified_context(),
-        ) as response:
-            body = response.read().decode("utf-8", errors="replace")
-            return True, int(response.status), body[:500]
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-        return False, int(exc.code), body[:500]
-    except Exception as exc:
-        return False, None, str(exc)
+def fetch_url(
+    url: str,
+    timeout: float = 6.0,
+    *,
+    retry_attempts: int = 2,
+    retry_sleep_seconds: float = 2.0,
+) -> tuple[bool, int | None, str]:
+    retry_markers = (
+        "timed out",
+        "Remote end closed connection without response",
+        "Connection reset",
+        "Connection closed",
+    )
+    total_attempts = max(1, retry_attempts)
+    for attempt in range(1, total_attempts + 1):
+        try:
+            with urllib.request.urlopen(
+                url,
+                timeout=timeout,
+                context=ssl._create_unverified_context(),
+            ) as response:
+                body = response.read().decode("utf-8", errors="replace")
+                return True, int(response.status), body[:500]
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            return False, int(exc.code), body[:500]
+        except Exception as exc:
+            message = str(exc)
+            if attempt >= total_attempts or not any(marker in message for marker in retry_markers):
+                return False, None, message
+            time.sleep(max(0.0, retry_sleep_seconds) * attempt)
+    return False, None, "unknown fetch failure"
 
 
 def _read_json_payload(path: Path) -> Any | None:
@@ -806,14 +896,36 @@ def _run_environment_integration_probe(
         "--report",
         str(report_file),
     ]
+    if target_name == "prod-hosted":
+        argv.extend(
+            [
+                "--mode",
+                "post-deploy",
+                "--request-timeout-seconds",
+                "20",
+                "--retry-attempts",
+                "3",
+                "--retry-sleep-seconds",
+                "3",
+            ]
+        )
+    elif target_name == "gamma-hosted":
+        argv.extend(
+            [
+                "--request-timeout-seconds",
+                "20",
+                "--retry-attempts",
+                "4",
+                "--retry-sleep-seconds",
+                "2",
+            ]
+        )
     product_ops = str(public_bases.get("productOps") or "").strip()
     if product_ops:
         argv.extend(["--product-ops-base-url", product_ops])
     token = _resolve_test_auth_token(env_name)
     if token:
         argv.extend(["--test-auth-token", token])
-    if target_name == "prod-hosted":
-        argv.extend(["--mode", "post-deploy"])
     return _run_script_probe(
         name="integration-readonly",
         scope="full",
@@ -839,6 +951,20 @@ def _run_gamma_readiness_probe(
         str(public_bases["productOps"]),
         "--report",
         str(report_file),
+        "--wait-seconds",
+        "120",
+        "--request-timeout-seconds",
+        "10",
+        "--retry-attempts",
+        "3",
+        "--retry-sleep-seconds",
+        "2",
+        "--route-timeout-seconds",
+        "10",
+        "--route-retry-attempts",
+        "3",
+        "--route-retry-sleep-seconds",
+        "2",
     ]
     return _run_script_probe(
         name="gamma-readiness",
@@ -863,6 +989,14 @@ def _run_gamma_media_route_probe(
         str(public_bases["mediaImage"]),
         "--report",
         str(report_file),
+        "--request-timeout-seconds",
+        "10",
+        "--retry-attempts",
+        "3",
+        "--retry-sleep-seconds",
+        "2",
+        "--max-workers",
+        "4",
     ]
     return _run_script_probe(
         name="gamma-media-routes",
@@ -895,6 +1029,31 @@ def _script_probe_plan_for_target(
     if str(target.get("env")) == "gamma" and target_name == "gamma-local":
         return [{"name": "integration-readonly", "kind": "readonly-http"}]
     return []
+
+
+def _health_request_policy(target_name: str, scope: str) -> dict[str, float | int]:
+    policy: dict[str, float | int] = {
+        "timeoutSeconds": 6.0,
+        "retryAttempts": 2,
+        "retrySleepSeconds": 2.0,
+    }
+    if target_name == "gamma-hosted":
+        policy.update(
+            {
+                "timeoutSeconds": 15.0 if scope == "edge" else 20.0,
+                "retryAttempts": 4,
+                "retrySleepSeconds": 2.0,
+            }
+        )
+    elif target_name == "prod-hosted":
+        policy.update(
+            {
+                "timeoutSeconds": 15.0 if scope == "edge" else 20.0,
+                "retryAttempts": 3,
+                "retrySleepSeconds": 3.0,
+            }
+        )
+    return policy
 
 
 def _script_probes_for_target(
@@ -1144,7 +1303,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         if package_payload["exitCode"] != 0:
             issues.append(f"package failed for {package_env}: {'; '.join(package_payload.get('details', []))}")
     stdout_sections: list[tuple[str, str]] = []
-    commands = _selected_verify_commands(args.kind)
+    commands = _selected_verify_commands(args.kind, env_name if env_name in ENVIRONMENTS else "")
     for command in commands:
         result = run(command)
         command_key = " ".join(command)
@@ -1920,6 +2079,22 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
     report_dir = resolve_report_dir(args, env_name, args.target)
     started_monotonic, started_at = _start_timing()
     checks = _health_checks_for_target(topology, args.target, args.scope)
+    policy = _health_request_policy(args.target, args.scope)
+    timeout_seconds = (
+        max(1.0, float(args.request_timeout_seconds))
+        if getattr(args, "request_timeout_seconds", 0)
+        else float(policy["timeoutSeconds"])
+    )
+    retry_attempts = (
+        max(1, int(args.retry_attempts))
+        if getattr(args, "retry_attempts", 0)
+        else int(policy["retryAttempts"])
+    )
+    retry_sleep_seconds = (
+        max(0.0, float(args.retry_sleep_seconds))
+        if getattr(args, "retry_sleep_seconds", -1.0) >= 0
+        else float(policy["retrySleepSeconds"])
+    )
     statuses: list[dict[str, Any]] = []
     findings: list[str] = []
     stdout_sections: list[tuple[str, str]] = []
@@ -1937,7 +2112,12 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
             continue
-        ok, status_code, body = fetch_url(item["url"])
+        ok, status_code, body = fetch_url(
+            item["url"],
+            timeout=timeout_seconds,
+            retry_attempts=retry_attempts,
+            retry_sleep_seconds=retry_sleep_seconds,
+        )
         if not ok:
             findings.append(f"{item['scope']}/{item['name']} failed: {status_code or 'ERR'} {item['url']}")
         statuses.append(
@@ -1967,6 +2147,9 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         "command": "health",
         "target": args.target,
         "scope": args.scope,
+        "requestTimeoutSeconds": timeout_seconds,
+        "retryAttempts": retry_attempts,
+        "retrySleepSeconds": retry_sleep_seconds,
         "checks": statuses,
         "findings": findings,
         "timestamp": utc_now(),
@@ -2799,6 +2982,8 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
     env_cfg = topology["environments"][env_name]
     public_bases = target.get("publicBases") or {}
     origins = target.get("origins") or {}
+    service_policy = ((env_cfg.get("artifactPolicy") or {}).get("service") or {})
+    allow_fixture_refs = bool(service_policy.get("allowFixtureRefs"))
     checks: list[dict[str, Any]] = []
     if scope in {"edge", "full"}:
         checks.extend(
@@ -2813,22 +2998,23 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
             )
         )
     if scope in {"media", "full"} and "mediaImage" in public_bases:
-        checks.extend(
-            [
-                {
-                    "name": "media-edge-health",
-                    "scope": "media",
-                    "url": f"{str(public_bases['mediaImage']).rstrip('/')}/healthz",
-                },
+        checks.append(
+            {
+                "name": "media-edge-health",
+                "scope": "media",
+                "url": f"{str(public_bases['mediaImage']).rstrip('/')}/healthz",
+            }
+        )
+        if allow_fixture_refs:
+            checks.append(
                 {
                     "name": "media-public-sample",
                     "scope": "media",
                     "url": f"{str(public_bases['mediaImage']).rstrip('/')}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-                },
-            ]
-        )
+                }
+            )
         media_origin = str(origins.get("mediaOrigin") or "").rstrip("/")
-        if media_origin:
+        if media_origin and allow_fixture_refs:
             checks.append(
                 {
                     "name": "media-origin-sample",
@@ -2944,14 +3130,6 @@ def _full_scope_health_checks(
                     ),
                 },
             ]
-        )
-    elif target_name == "prod-hosted" and env_name == "prod":
-        checks.append(
-            {
-                "name": "prod-smoke",
-                "scope": "full",
-                "url": f"{str(public_bases['api']).rstrip('/')}/healthz",
-            }
         )
     return checks
 

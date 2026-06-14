@@ -19,6 +19,12 @@ from typing import Any, Dict, List, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROUTING_SCRIPT = REPO_ROOT / "quwoquan_service" / "scripts" / "gamma" / "verify_gamma_public_gateway_routing.py"
+RETRY_MARKERS = (
+    "timed out",
+    "Remote end closed connection without response",
+    "Connection reset",
+    "Connection closed",
+)
 
 
 def utc_now() -> str:
@@ -41,33 +47,77 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--wait-seconds", type=int, default=90)
     parser.add_argument("--poll-interval-seconds", type=float, default=5.0)
+    parser.add_argument("--request-timeout-seconds", type=float, default=8.0)
+    parser.add_argument("--retry-attempts", type=int, default=3)
+    parser.add_argument("--retry-sleep-seconds", type=float, default=2.0)
+    parser.add_argument("--route-timeout-seconds", type=float, default=8.0)
+    parser.add_argument("--route-retry-attempts", type=int, default=3)
+    parser.add_argument("--route-retry-sleep-seconds", type=float, default=2.0)
     return parser.parse_args()
 
 
-def request_ok(url: str, timeout: int = 8) -> Tuple[bool, str]:
-    ctx = ssl._create_unverified_context()
-    req = urllib.request.Request(url, method="GET")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            if 200 <= int(resp.status) < 300:
-                return True, body[:200]
-            return False, "http {0}: {1}".format(resp.status, body[:200])
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-        return False, "http {0}: {1}".format(exc.code, body[:200])
-    except Exception as exc:  # noqa: BLE001
-        return False, str(exc)
+def _is_retryable(message: str) -> bool:
+    lowered = message.lower()
+    return any(marker.lower() in lowered for marker in RETRY_MARKERS)
 
 
-def routing_ok(base_url: str) -> Tuple[bool, str]:
+def request_ok(
+    url: str,
+    *,
+    timeout: float,
+    retry_attempts: int,
+    retry_sleep_seconds: float,
+) -> Tuple[bool, str]:
+    total_attempts = max(1, retry_attempts)
+    last_error = "unknown"
+    for attempt in range(1, total_attempts + 1):
+        ctx = ssl._create_unverified_context()
+        req = urllib.request.Request(url, method="GET")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                if 200 <= int(resp.status) < 300:
+                    return True, body[:200]
+                return False, "http {0}: {1}".format(resp.status, body[:200])
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            return False, "http {0}: {1}".format(exc.code, body[:200])
+        except Exception as exc:  # noqa: BLE001
+            last_error = str(exc)
+            if attempt >= total_attempts or not _is_retryable(last_error):
+                return False, last_error
+            time.sleep(max(0.0, retry_sleep_seconds) * attempt)
+    return False, last_error
+
+
+def routing_ok(args: argparse.Namespace) -> Tuple[bool, str]:
+    base_url = args.base_url.rstrip("/")
+    argv = [
+        sys.executable,
+        str(ROUTING_SCRIPT),
+        "--base-url",
+        base_url,
+        "--request-timeout-seconds",
+        str(max(1.0, float(args.route_timeout_seconds))),
+        "--retry-attempts",
+        str(max(1, int(args.route_retry_attempts))),
+        "--retry-sleep-seconds",
+        str(max(0.0, float(args.route_retry_sleep_seconds))),
+    ]
+    route_timeout_budget = max(
+        30.0,
+        float(args.route_timeout_seconds)
+        * max(1, int(args.route_retry_attempts))
+        * 4.0,
+    )
     result = subprocess.run(
-        [sys.executable, str(ROUTING_SCRIPT), "--base-url", base_url],
+        argv,
         cwd=str(REPO_ROOT),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
+        timeout=route_timeout_budget,
     )
     output = (result.stdout or "").strip()
     if result.returncode == 0:
@@ -109,7 +159,12 @@ def main() -> int:
             "productOpsHealth": {"status": "skipped", "detail": ""},
             "routing": {"status": "running", "detail": ""},
         }
-        base_ok, base_detail = request_ok(args.base_url.rstrip("/") + "/healthz")
+        base_ok, base_detail = request_ok(
+            args.base_url.rstrip("/") + "/healthz",
+            timeout=max(1.0, float(args.request_timeout_seconds)),
+            retry_attempts=max(1, int(args.retry_attempts)),
+            retry_sleep_seconds=max(0.0, float(args.retry_sleep_seconds)),
+        )
         attempt["baseHealth"] = {
             "status": "passed" if base_ok else "failed",
             "detail": base_detail,
@@ -117,13 +172,20 @@ def main() -> int:
         product_ok = True
         if args.product_ops_base_url.strip():
             product_ok, product_detail = request_ok(
-                args.product_ops_base_url.rstrip("/") + "/healthz"
+                args.product_ops_base_url.rstrip("/") + "/healthz",
+                timeout=max(1.0, float(args.request_timeout_seconds)),
+                retry_attempts=max(1, int(args.retry_attempts)),
+                retry_sleep_seconds=max(0.0, float(args.retry_sleep_seconds)),
             )
             attempt["productOpsHealth"] = {
                 "status": "passed" if product_ok else "failed",
                 "detail": product_detail,
             }
-        routing_is_ok, routing_detail = routing_ok(args.base_url.rstrip("/"))
+        try:
+            routing_is_ok, routing_detail = routing_ok(args)
+        except subprocess.TimeoutExpired:
+            routing_is_ok = False
+            routing_detail = "routing probe timed out"
         attempt["routing"] = {
             "status": "passed" if routing_is_ok else "failed",
             "detail": routing_detail,
