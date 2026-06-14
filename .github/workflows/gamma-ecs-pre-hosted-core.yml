@@ -471,7 +471,6 @@ jobs:
           python3 agent_ops/assistant/run_assistant_runtime_smoke.py \
             --env cloud-gamma-pre \
             --base-url "${GAMMA_BASE_URL}" \
-            --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
             --scenario-id "${ASSISTANT_SCENARIO_ID}" \
             --report artifacts/assistant-runtime-smoke/cloud-gamma-pre/report.json \
             --timeout-seconds 75 \
@@ -555,7 +554,6 @@ jobs:
             --env cloud-gamma-pre \
             --base-url "${GAMMA_BASE_URL}" \
             --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
-            --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
             --report artifacts/avatar-e2e/cloud-gamma-pre/avatar_e2e_report.json
       - name: Upload chat avatar API probe report (pre)
         if: always()

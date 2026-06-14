@@ -224,7 +224,6 @@ jobs:
             --env cloud-gamma-prod-smoke \
             --base-url "${GAMMA_BASE_URL}" \
             --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
-            --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
             --report artifacts/avatar-e2e/cloud-gamma-prod-smoke/avatar_e2e_report.json
       - name: Upload chat avatar API probe report（prod）
         if: always()

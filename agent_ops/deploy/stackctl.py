@@ -924,13 +924,21 @@ def _run_environment_integration_probe(
     if product_ops:
         argv.extend(["--product-ops-base-url", product_ops])
     token = _resolve_test_auth_token(env_name)
+    probe_env: dict[str, str] | None = None
     if token:
-        argv.extend(["--test-auth-token", token])
+        probe_env = {"TEST_AUTH_TOKEN": token}
+        if env_name == "gamma":
+            probe_env["GAMMA_TEST_AUTH_TOKEN"] = token
+        elif env_name == "beta":
+            probe_env["BETA_TEST_AUTH_TOKEN"] = token
+        elif env_name == "prod":
+            probe_env["PROD_TEST_AUTH_TOKEN"] = token
     return _run_script_probe(
         name="integration-readonly",
         scope="full",
         argv=argv,
         report_file=report_file,
+        env=probe_env,
     )
 
 

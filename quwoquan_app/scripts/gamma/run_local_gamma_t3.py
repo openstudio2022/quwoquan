@@ -21,6 +21,15 @@ COMPOSE_FILE = ROOT / "quwoquan_service/docker-compose.gamma-local.yaml"
 CONTENT_SERVICE_YAML = METADATA_ROOT / "content/post/service.yaml"
 
 
+def default_test_auth_token() -> str:
+    return (
+        os.environ.get("LOCAL_GAMMA_TEST_AUTH_TOKEN")
+        or os.environ.get("GAMMA_TEST_AUTH_TOKEN")
+        or os.environ.get("TEST_AUTH_TOKEN")
+        or "local-gamma-token"
+    )
+
+
 def http_get(url: str, timeout: int = 5) -> Tuple[int, bytes]:
     ctx = ssl._create_unverified_context()
     req = urllib.request.Request(url, headers={"X-Test-Local-Gamma": "true"})
@@ -435,7 +444,7 @@ def main() -> int:
         help="Only run Mongo content seed (no health wait or flutter contracts).",
     )
     parser.add_argument("--skip-flutter-contracts", action="store_true")
-    parser.add_argument("--test-auth-token", default="local-gamma-token")
+    parser.add_argument("--test-auth-token", default=default_test_auth_token())
     parser.add_argument("--strict-all", action="store_true")
     parser.add_argument("--wait-seconds", type=int, default=45)
     args = parser.parse_args()

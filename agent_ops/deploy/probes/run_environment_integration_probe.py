@@ -4,7 +4,9 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import ssl
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -31,6 +33,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--media-base-url", default="")
     parser.add_argument("--test-auth-token", default="")
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
+    parser.add_argument("--request-timeout-seconds", type=int, default=12)
+    parser.add_argument("--retry-attempts", type=int, default=2)
+    parser.add_argument("--retry-sleep-seconds", type=float, default=2.0)
     parser.add_argument(
         "--require-non-empty-content-feed",
         action="store_true",
@@ -41,7 +46,26 @@ def parse_args() -> argparse.Namespace:
         choices=("readonly", "post-deploy"),
         default="readonly",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.test_auth_token = _resolve_test_auth_token(args.env, args.test_auth_token)
+    return args
+
+
+def _resolve_test_auth_token(env_name: str, explicit_token: str) -> str:
+    token = explicit_token.strip()
+    if token:
+        return token
+    token_envs = {
+        "alpha": ("ALPHA_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN", "GAMMA_TEST_AUTH_TOKEN"),
+        "beta": ("BETA_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN", "GAMMA_TEST_AUTH_TOKEN"),
+        "gamma": ("GAMMA_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN"),
+        "prod": ("PROD_TEST_AUTH_TOKEN", "TEST_AUTH_TOKEN"),
+    }
+    for env_var in token_envs.get(env_name, ("TEST_AUTH_TOKEN",)):
+        value = os.environ.get(env_var, "").strip()
+        if value:
+            return value
+    return ""
 
 
 def request(
@@ -51,18 +75,32 @@ def request(
     headers: dict[str, str] | None = None,
     body: bytes | None = None,
     timeout: int = 12,
+    retry_attempts: int = 2,
+    retry_sleep_seconds: float = 2.0,
 ) -> tuple[bool, int | None, str]:
-    req = urllib.request.Request(url, headers=headers or {}, data=body, method=method)
-    ctx = ssl._create_unverified_context()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as response:
-            payload = response.read().decode("utf-8", errors="replace")
-            return True, int(response.status), payload
-    except urllib.error.HTTPError as exc:
-        payload = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-        return False, int(exc.code), payload
-    except Exception as exc:  # noqa: BLE001
-        return False, None, str(exc)
+    retry_markers = (
+        "timed out",
+        "Remote end closed connection without response",
+        "Connection reset",
+        "Connection closed",
+    )
+    total_attempts = max(1, retry_attempts)
+    for attempt in range(1, total_attempts + 1):
+        req = urllib.request.Request(url, headers=headers or {}, data=body, method=method)
+        ctx = ssl._create_unverified_context()
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as response:
+                payload = response.read().decode("utf-8", errors="replace")
+                return True, int(response.status), payload
+        except urllib.error.HTTPError as exc:
+            payload = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            return False, int(exc.code), payload
+        except Exception as exc:  # noqa: BLE001
+            message = str(exc)
+            if attempt >= total_attempts or not any(marker in message for marker in retry_markers):
+                return False, None, message
+            time.sleep(max(0.0, retry_sleep_seconds) * attempt)
+    return False, None, "unknown request failure"
 
 
 def _common_headers(test_auth_token: str) -> dict[str, str]:
@@ -84,6 +122,10 @@ def _json_headers(test_auth_token: str) -> dict[str, str]:
     return headers
 
 
+def _public_headers() -> dict[str, str]:
+    return {"Accept": "application/json"}
+
+
 def _readonly_sync_headers() -> dict[str, str]:
     # user_sync readiness只验证 route/handler/data-plane 是否可读。
     # user-service 若收到当前 stage 无法本地验签的 Bearer token，会按安全逻辑清空
@@ -96,26 +138,27 @@ def _readonly_sync_headers() -> dict[str, str]:
 
 def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
     base = args.base_url.rstrip("/")
+    public_headers = _public_headers() if args.env == "prod" else _common_headers(args.test_auth_token)
     checks: list[dict[str, Any]] = [
         {
             "name": "gateway_healthz",
             "method": "GET",
             "url": f"{base}/healthz",
-            "headers": _common_headers(args.test_auth_token),
+            "headers": public_headers,
             "expected_statuses": [200],
         },
         {
             "name": "app_config",
             "method": "GET",
             "url": f"{base}/v1/config/app",
-            "headers": _common_headers(args.test_auth_token),
+            "headers": public_headers,
             "expected_statuses": [200],
         },
         {
             "name": "content_feed",
             "method": "GET",
             "url": f"{base}/v1/content/feed?limit=1",
-            "headers": _common_headers(args.test_auth_token),
+            "headers": public_headers,
             "expected_statuses": [200],
         },
         {
@@ -143,7 +186,7 @@ def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
                 "name": "product_ops_healthz",
                 "method": "GET",
                 "url": f"{product_ops}/healthz",
-                "headers": _common_headers(args.test_auth_token),
+                "headers": public_headers,
                 "expected_statuses": [200],
             }
         )
@@ -154,7 +197,7 @@ def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
                 "name": "media_sample",
                 "method": "GET",
                 "url": f"{media_base}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-                "headers": _common_headers(args.test_auth_token),
+                "headers": public_headers,
                 "expected_statuses": [200],
             }
         )
@@ -192,6 +235,9 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
             check["url"],
             headers=check.get("headers"),
             body=check.get("body"),
+            timeout=max(1, int(args.request_timeout_seconds)),
+            retry_attempts=max(1, int(args.retry_attempts)),
+            retry_sleep_seconds=max(0.0, float(args.retry_sleep_seconds)),
         )
         expected_statuses = list(check.get("expected_statuses") or [])
         matched = ok and status_code in expected_statuses
@@ -233,6 +279,9 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         "baseUrl": args.base_url.rstrip("/"),
         "productOpsBaseUrl": args.product_ops_base_url.rstrip("/"),
         "mediaBaseUrl": args.media_base_url.rstrip("/"),
+        "requestTimeoutSeconds": args.request_timeout_seconds,
+        "retryAttempts": args.retry_attempts,
+        "retrySleepSeconds": args.retry_sleep_seconds,
         "requireNonEmptyContentFeed": args.require_non_empty_content_feed,
         "checks": results,
         "findings": findings,

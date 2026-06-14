@@ -7,6 +7,8 @@ from pathlib import Path
 from unittest import mock
 
 from agent_ops.deploy import stackctl
+from agent_ops.deploy.probes import run_environment_integration_probe as integration_probe
+from quwoquan_app.scripts.gamma import run_local_gamma_t3 as local_gamma_t3
 
 
 class StackctlUpRuntimeTest(unittest.TestCase):
@@ -157,6 +159,57 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("hello", result.stdout)
         self.assertIn("world", result.stdout)
+
+    def test_integration_probe_resolves_test_auth_token_from_env(self) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {"GAMMA_TEST_AUTH_TOKEN": "-starts-with-dash", "TEST_AUTH_TOKEN": ""},
+            clear=False,
+        ):
+            self.assertEqual(
+                integration_probe._resolve_test_auth_token("gamma", ""),
+                "-starts-with-dash",
+            )
+
+    def test_run_environment_integration_probe_passes_token_via_env(self) -> None:
+        topology = {"targets": []}
+        target = {
+            "env": "gamma",
+            "publicBases": {
+                "api": "http://gamma.example",
+                "productOps": "http://ops.example",
+            },
+        }
+
+        with (
+            mock.patch("agent_ops.deploy.stackctl.get_target", return_value=target),
+            mock.patch(
+                "agent_ops.deploy.stackctl._resolve_test_auth_token",
+                return_value="-starts-with-dash",
+            ),
+            mock.patch(
+                "agent_ops.deploy.stackctl._run_script_probe",
+                return_value=({}, "", []),
+            ) as run_probe,
+        ):
+            stackctl._run_environment_integration_probe(topology, "gamma-hosted", Path("/tmp/report"))
+
+        kwargs = run_probe.call_args.kwargs
+        self.assertNotIn("--test-auth-token", kwargs["argv"])
+        self.assertEqual(kwargs["env"]["TEST_AUTH_TOKEN"], "-starts-with-dash")
+        self.assertEqual(kwargs["env"]["GAMMA_TEST_AUTH_TOKEN"], "-starts-with-dash")
+
+    def test_local_gamma_t3_resolves_test_auth_token_from_env(self) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "LOCAL_GAMMA_TEST_AUTH_TOKEN": "",
+                "GAMMA_TEST_AUTH_TOKEN": "",
+                "TEST_AUTH_TOKEN": "-starts-with-dash",
+            },
+            clear=False,
+        ):
+            self.assertEqual(local_gamma_t3.default_test_auth_token(), "-starts-with-dash")
 
     def test_tail_multiple_logs_for_startup_reads_existing_lines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -123,7 +123,6 @@ jobs:
           python3 agent_ops/assistant/run_assistant_runtime_smoke.py \
             --env gamma-pr \
             --base-url "${GAMMA_BASE_URL}" \
-            --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
             --scenario-id travel_journey_basic \
             --report artifacts/assistant-runtime-smoke/gamma-pr/report.json \
             --timeout-seconds 75 \
@@ -170,7 +169,6 @@ jobs:
             --env cloud-gamma-pr \
             --base-url "${GAMMA_BASE_URL}" \
             --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
-            --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
             --report artifacts/avatar-e2e/cloud-gamma-pr/avatar_e2e_report.json
         env:
           GAMMA_BASE_URL: ${{ needs.resolve_gamma_urls.outputs.base_url }}

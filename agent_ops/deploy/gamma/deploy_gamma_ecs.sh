@@ -950,7 +950,6 @@ then
   t3_args=(
     --base-url "http://127.0.0.1:${GW_LOCAL_PORT}"
     --product-ops-base-url "http://127.0.0.1:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
-    --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-${TEST_AUTH_TOKEN:-gamma-ecs-token}}"
     --skip-flutter-contracts
   )
   if [[ "${LOCAL_GAMMA_SKIP_FIXTURE_SEEDS:-0}" == "1" ]]; then
