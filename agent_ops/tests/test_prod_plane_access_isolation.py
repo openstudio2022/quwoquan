@@ -72,7 +72,7 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
                 "--stage",
                 "gray-initial",
             ],
-            PROD_KUBECONFIG="legacy",
+            PROD_KUBECONFIG="retired-kubeconfig",
             PROD_EDGE_SSH_KEY=key,
             PROD_MEDIA_SSH_KEY=key,
             PROD_SERVICE_SSH_KEY=key,

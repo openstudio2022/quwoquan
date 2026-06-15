@@ -231,6 +231,40 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             self.assertIn("[svc-a] a1", fake_stdout.getvalue())
             self.assertIn("[svc-b] b2", fake_stdout.getvalue())
 
+    def test_doctor_prod_hosted_missing_release_state_is_advisory(self) -> None:
+        topology = {
+            "targets": {
+                "prod-hosted": {
+                    "env": "prod",
+                    "backend": "ssh-hosted",
+                    "portProfile": None,
+                    "publicBases": {
+                        "api": "http://118.31.239.122:19000",
+                        "productOps": "http://118.31.239.122:19010",
+                    },
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            args = mock.Mock(target="prod-hosted", report_dir=tmp_dir)
+            health_payload = {
+                "exitCode": 0,
+                "summary": "stackctl health prod-hosted: 4/4 healthy",
+                "details": [],
+                "reportDir": "tmp",
+            }
+            with (
+                mock.patch("agent_ops.deploy.stackctl.load_environment_topology", return_value=topology),
+                mock.patch("agent_ops.deploy.stackctl.get_target", return_value=topology["targets"]["prod-hosted"]),
+                mock.patch("agent_ops.deploy.stackctl.command_health", return_value=health_payload),
+                mock.patch("agent_ops.deploy.stackctl._load_release_state", return_value={}),
+            ):
+                result = stackctl.command_doctor(args)
+            self.assertEqual(result["exitCode"], 0)
+            self.assertTrue(
+                any("prod rollout release-state is missing" in item for item in result["details"])
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

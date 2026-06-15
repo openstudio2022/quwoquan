@@ -59,6 +59,10 @@ final appDataSourceModeProvider =
       AppDataSourceModeNotifier.new,
     );
 
+bool isMockAppDataSource(WidgetRef ref) {
+  return ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock;
+}
+
 /// 应用级内容相关 mock / 过渡数据入口（含发现区 wire 切片）。
 ///
 /// **强类型发现列表**：遍历四类 mock 为 [PostBaseDto] 时使用

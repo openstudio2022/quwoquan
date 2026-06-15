@@ -1425,7 +1425,7 @@ class UITextConstants {
   static const String createActionWriteLong = '写长文';
   static const String createActionResumeDraft = '续草稿';
   static const String createActionAddContactShort = '加联系';
-  static const String createActionCreateGroupShort = '建群聊';
+  static const String createActionCreateGroupShort = '建讨论';
   static const String createActionCreateCircleShort = '建圈子';
   static const String createActionPublishGroupTitle = publishAction;
   static const String createActionSocialGroupTitle = profileTabInteraction;

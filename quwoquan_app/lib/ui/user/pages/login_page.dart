@@ -240,14 +240,17 @@ class LoginPhoneOtpState {
 
 bool shouldRevealOtpDebugCode({
   required String runtimeEnv,
-  required AppDataSourceMode dataSourceMode,
+  bool? isMockDataSource,
+  AppDataSourceMode? dataSourceMode,
   required OtpSendResultData result,
 }) {
+  final effectiveIsMockDataSource =
+      isMockDataSource ?? dataSourceMode?.name == 'mock';
   if (!result.isDebugCodeVisible) {
     return false;
   }
   if (runtimeEnv == 'alpha') {
-    return dataSourceMode == AppDataSourceMode.mock;
+    return effectiveIsMockDataSource;
   }
   if (runtimeEnv == 'beta') {
     return true;
@@ -883,7 +886,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost> {
           );
       final revealDebugCode = shouldRevealOtpDebugCode(
         runtimeEnv: CloudRuntimeConfig.appRuntimeEnv,
-        dataSourceMode: ref.read(appDataSourceModeProvider),
+        isMockDataSource: isMockAppDataSource(ref),
         result: result,
       );
       final seconds = result.retryAfterSeconds > 0

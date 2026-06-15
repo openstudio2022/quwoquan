@@ -8,7 +8,7 @@ class SearchResultTabIds {
   static const String video = 'video';
   static const String article = 'article';
 
-  static const Set<String> legacyResultTabIds = <String>{
+  static const Set<String> retiredResultTabIds = <String>{
     'humanity',
     'locations',
     'homepages',
@@ -68,7 +68,7 @@ class SearchResultTabSpec {
     if (normalized == null || normalized.isEmpty) {
       return null;
     }
-    if (SearchResultTabIds.legacyResultTabIds.contains(normalized)) {
+    if (SearchResultTabIds.retiredResultTabIds.contains(normalized)) {
       return SearchResultTabIds.all;
     }
     final known = fixedTabs.any((tab) => tab.id == normalized);

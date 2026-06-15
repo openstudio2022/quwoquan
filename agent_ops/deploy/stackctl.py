@@ -2135,6 +2135,7 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
     report_dir = resolve_report_dir(args, env_name, args.target)
     started_monotonic, started_at = _start_timing()
     findings: list[str] = []
+    advisories: list[str] = []
     health_args = argparse.Namespace(
         command="health",
         target=args.target,
@@ -2159,7 +2160,9 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         if args.target == "prod-hosted":
             state = _load_release_state("seed-box")
             if not state:
-                findings.append("prod rollout release-state is missing")
+                advisories.append(
+                    "prod rollout release-state is missing (local cache empty; hosted deploy workflow can resolve current state via service-plane SSH)"
+                )
             elif not state.get("to_image") or not state.get("to_config"):
                 findings.append("prod release-state missing image/config target")
     packages = [
@@ -2183,12 +2186,16 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
             "command": "doctor",
             "target": args.target,
             "findings": findings,
+            "advisories": advisories,
             "repairPlan": repair_plan,
             "timestamp": utc_now(),
             **timing,
         },
     )
-    write_json(report_dir / "findings.json", {"target": args.target, "issues": findings})
+    write_json(
+        report_dir / "findings.json",
+        {"target": args.target, "issues": findings, "advisories": advisories},
+    )
     write_json(report_dir / "repair_plan.json", {"target": args.target, "actions": repair_plan})
     _write_summary_bundle(
         report_dir,
@@ -2196,13 +2203,13 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         target=args.target,
         status="ok" if not findings else "failed",
         summary="stackctl doctor found no issues" if not findings else "stackctl doctor found issues",
-        details=findings or ["no issues found"],
+        details=findings + advisories or ["no issues found"],
         timing=timing,
     )
     return {
         "exitCode": 0 if not findings else 1,
         "summary": "stackctl doctor found no issues" if not findings else "stackctl doctor found issues",
-        "details": findings or ["no issues found"],
+        "details": findings + advisories or ["no issues found"],
         "reportDir": relpath(report_dir),
         **timing,
     }

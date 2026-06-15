@@ -725,21 +725,24 @@ class ImmersiveEngagementBar extends StatelessWidget {
         width: double.infinity,
         child: Align(
           alignment: alignment,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              icon,
-              SizedBox(height: AppSpacing.intraGroupXs / 2),
-              Text(
-                label,
-                style: TextStyle(
-                  color: AppColors.worksBodyText,
-                  fontSize: AppSpacing.immersiveEngagementActionLabelSize,
-                  fontWeight: AppTypography.medium,
-                  height: AppTypography.lineHeightTight,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                icon,
+                SizedBox(height: AppSpacing.intraGroupXs / 2),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: AppColors.worksBodyText,
+                    fontSize: AppSpacing.immersiveEngagementActionLabelSize,
+                    fontWeight: AppTypography.medium,
+                    height: AppTypography.lineHeightTight,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

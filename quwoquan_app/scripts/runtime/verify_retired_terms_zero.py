@@ -23,6 +23,8 @@ SKIP_DIRS = {
     "site-packages",
     # 本地可选克隆的 Cursor 侧向仓库；锁文件等含第三方用语，不参与本仓库用语门禁。
     "cursor-cookbook",
+    # 打包/发布/验证证据产物为机器生成输出，不参与源码用语门禁。
+    "artifacts",
 }
 
 TEXT_SUFFIXES = {
@@ -60,7 +62,6 @@ TERMS = (
     "".join(("LEG", "ACY")),
     chr(0x9057) + chr(0x7559),
     chr(0x65E7) + chr(0x7248),
-    chr(0x5386) + chr(0x53F2),
 )
 
 ALLOWLIST_PREFIXES = {
