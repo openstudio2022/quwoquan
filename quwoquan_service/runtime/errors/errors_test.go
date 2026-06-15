@@ -226,6 +226,12 @@ func TestHTTPStatusFromErrorSupportsMetadataUserSubKinds(t *testing.T) {
 		{name: "delete empty only", raw: "USER.SUB_ACCOUNT.delete_empty_only", want: http.StatusBadRequest},
 		{name: "sub account handle taken", raw: "USER.SUB_ACCOUNT.handle_taken", want: http.StatusConflict},
 		{name: "setting invalid", raw: "USER.SETTING.invalid_call_ringtone", want: http.StatusBadRequest},
+		{name: "rtc already in call", raw: "RTC.USER.already_in_call", want: http.StatusConflict},
+		{name: "rtc invalid action", raw: "RTC.USER.invalid_call_action", want: http.StatusConflict},
+		{name: "rtc blocked", raw: "RTC.USER.blocked", want: http.StatusForbidden},
+		{name: "rtc not mutual", raw: "RTC.USER.not_mutual", want: http.StatusForbidden},
+		{name: "rtc call ended", raw: "RTC.USER.call_ended", want: http.StatusGone},
+		{name: "rtc recording forbidden", raw: "RTC.USER.recording_not_allowed", want: http.StatusForbidden},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

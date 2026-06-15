@@ -560,7 +560,12 @@ func HTTPStatusFromError(err *AppError) int {
 			return http.StatusBadRequest
 		case "unauthorized", "token_expired":
 			return http.StatusUnauthorized
-		case "forbidden", "original_access_denied":
+		case "forbidden",
+			"original_access_denied",
+			"blocked",
+			"not_mutual",
+			"not_participant",
+			"recording_not_allowed":
 			return http.StatusForbidden
 		case "not_found", "route_not_found":
 			return http.StatusNotFound
@@ -570,13 +575,18 @@ func HTTPStatusFromError(err *AppError) int {
 			"already_contact",
 			"invalid_status_transition",
 			"conflict",
+			"already_in_call",
+			"call_full",
+			"cannot_answer",
+			"invalid_call_action",
+			"screen_share_conflict",
 			"nickname_taken",
 			"handle_taken",
 			"credential_conflict",
 			"already_accepted",
 			"retire_required":
 			return http.StatusConflict
-		case "expired":
+		case "expired", "call_ended":
 			return http.StatusGone
 		case "media_not_ready":
 			return http.StatusUnprocessableEntity
