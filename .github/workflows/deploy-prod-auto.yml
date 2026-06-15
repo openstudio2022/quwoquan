@@ -121,6 +121,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Download service pipeline timing summary
         if: ${{ steps.context.outputs.release_run_id != '' }}
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: service-pipeline-timing-summary
