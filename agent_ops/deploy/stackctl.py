@@ -82,15 +82,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output-format", choices=["text", "json"], default="text")
     parser.add_argument("--report-dir", default="")
+    report_dir_compat_parser = argparse.ArgumentParser(add_help=False)
+    report_dir_compat_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    package_parser = subparsers.add_parser("package")
+    package_parser = subparsers.add_parser("package", parents=[report_dir_compat_parser])
     package_parser.add_argument("--env", choices=ENVIRONMENTS, required=True)
     package_parser.add_argument("--service", default="")
     package_parser.add_argument("--include-services", action="store_true")
     package_parser.add_argument("--target", choices=TARGETS, default="")
 
-    verify_parser = subparsers.add_parser("verify")
+    verify_parser = subparsers.add_parser("verify", parents=[report_dir_compat_parser])
     verify_parser.add_argument("--env", choices=ENVIRONMENTS, default="")
     verify_parser.add_argument("--target", choices=TARGETS, default="")
     verify_parser.add_argument(
@@ -104,20 +106,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="t1",
     )
 
-    up_parser = subparsers.add_parser("up")
+    up_parser = subparsers.add_parser("up", parents=[report_dir_compat_parser])
     up_parser.add_argument("--target", choices=TARGETS, default="")
     up_parser.add_argument("--env", choices=DEV_UP_ENVS, default="")
     up_parser.add_argument("--device-id", default="")
     up_parser.add_argument("--skip-app", action="store_true")
     up_parser.add_argument("--rollout-mode", choices=["gray-initial", "carry-on", "full"], default="")
 
-    down_parser = subparsers.add_parser("down")
+    down_parser = subparsers.add_parser("down", parents=[report_dir_compat_parser])
     down_parser.add_argument("--target", choices=TARGETS, required=True)
 
-    status_parser = subparsers.add_parser("status")
+    status_parser = subparsers.add_parser("status", parents=[report_dir_compat_parser])
     status_parser.add_argument("--target", choices=TARGETS, required=True)
 
-    health_parser = subparsers.add_parser("health")
+    health_parser = subparsers.add_parser("health", parents=[report_dir_compat_parser])
     health_parser.add_argument("--target", choices=TARGETS, required=True)
     health_parser.add_argument(
         "--scope",
@@ -128,7 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
     health_parser.add_argument("--retry-attempts", type=int, default=0)
     health_parser.add_argument("--retry-sleep-seconds", type=float, default=-1.0)
 
-    inspect_parser = subparsers.add_parser("inspect")
+    inspect_parser = subparsers.add_parser("inspect", parents=[report_dir_compat_parser])
     inspect_parser.add_argument("--target", choices=TARGETS, required=True)
     inspect_parser.add_argument(
         "--scope",
@@ -141,10 +143,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["logs", "network", "data", "metrics", "config", "security", "all"],
     )
 
-    doctor_parser = subparsers.add_parser("doctor")
+    doctor_parser = subparsers.add_parser("doctor", parents=[report_dir_compat_parser])
     doctor_parser.add_argument("--target", choices=TARGETS, required=True)
 
-    repair_parser = subparsers.add_parser("repair")
+    repair_parser = subparsers.add_parser("repair", parents=[report_dir_compat_parser])
     repair_parser.add_argument("--target", choices=TARGETS, required=True)
     repair_parser.add_argument(
         "--fix",
@@ -152,7 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
-    roll_parser = subparsers.add_parser("roll")
+    roll_parser = subparsers.add_parser("roll", parents=[report_dir_compat_parser])
     roll_parser.add_argument(
         "--target",
         choices=("alpha-local", "beta-local", "gamma-local"),
@@ -171,7 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
     roll_parser.add_argument("--registry-username", default="")
     roll_parser.add_argument("--registry-password", default="")
 
-    deploy_parser = subparsers.add_parser("deploy")
+    deploy_parser = subparsers.add_parser("deploy", parents=[report_dir_compat_parser])
     deploy_parser.add_argument("--target", choices=("prod-hosted",), required=True)
     deploy_parser.add_argument("--mode", choices=("restart", "rollout", "cold-build"), default="")
     deploy_parser.add_argument("--stage", default="")

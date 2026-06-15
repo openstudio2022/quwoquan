@@ -91,6 +91,28 @@ def main() -> int:
         if not (report_dir / "summary.json").exists():
             issues.append("stackctl package must emit summary.json artifact")
 
+    package_result_post_subcommand = run(
+        [
+            "python3",
+            str(STACKCTL),
+            "--output-format",
+            "json",
+            "package",
+            "--env",
+            "alpha",
+            "--report-dir",
+            str(TMP / "package-alpha-post-subcommand"),
+        ]
+    )
+    if package_result_post_subcommand.returncode != 0:
+        issues.append("stackctl package must accept --report-dir after the subcommand")
+    else:
+        payload = json.loads(package_result_post_subcommand.stdout)
+        if payload.get("exitCode") != 0:
+            issues.append("stackctl package with post-subcommand --report-dir must exit 0")
+        if not payload.get("reportDir"):
+            issues.append("stackctl package with post-subcommand --report-dir missing reportDir")
+
     if issues:
         print("[verify_stackctl_args_contract] FAIL")
         for issue in issues:

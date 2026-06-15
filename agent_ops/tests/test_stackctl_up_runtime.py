@@ -12,6 +12,55 @@ from quwoquan_app.scripts.gamma import run_local_gamma_t3 as local_gamma_t3
 
 
 class StackctlUpRuntimeTest(unittest.TestCase):
+    def test_parser_accepts_report_dir_after_subcommand(self) -> None:
+        parser = stackctl.build_parser()
+        cases = [
+            ["package", "--env", "alpha", "--report-dir", "artifacts/stackctl/alpha/package"],
+            [
+                "verify",
+                "--env",
+                "alpha",
+                "--target",
+                "alpha-local",
+                "--kind",
+                "all",
+                "--tier",
+                "t1",
+                "--report-dir",
+                "artifacts/stackctl/alpha/verify",
+            ],
+            ["up", "--target", "alpha-local", "--report-dir", "artifacts/stackctl/alpha/up"],
+            [
+                "health",
+                "--target",
+                "alpha-local",
+                "--scope",
+                "full",
+                "--report-dir",
+                "artifacts/stackctl/alpha/health",
+            ],
+            [
+                "inspect",
+                "--target",
+                "alpha-local",
+                "--scope",
+                "all",
+                "--report-dir",
+                "artifacts/stackctl/alpha/inspect",
+            ],
+        ]
+        for argv in cases:
+            with self.subTest(argv=argv):
+                args = parser.parse_args(argv)
+                self.assertTrue(getattr(args, "report_dir", "").startswith("artifacts/stackctl/"))
+
+    def test_parser_keeps_global_report_dir_before_subcommand(self) -> None:
+        parser = stackctl.build_parser()
+        args = parser.parse_args(
+            ["--report-dir", "artifacts/stackctl/alpha/global", "package", "--env", "alpha"]
+        )
+        self.assertEqual(args.report_dir, "artifacts/stackctl/alpha/global")
+
     def test_format_stage_header(self) -> None:
         self.assertEqual(stackctl._format_stage_header(2, 3, "app-launch"), "[step 2/3] app-launch")
 
