@@ -20,6 +20,8 @@ class PostReadPresentation {
     required this.commentCount,
     required this.shareCount,
     required this.createdAt,
+    required this.updatedAt,
+    required this.publishedAt,
     required this.articleTemplate,
     required this.articleFontPreset,
   });
@@ -36,6 +38,8 @@ class PostReadPresentation {
   final int commentCount;
   final int shareCount;
   final DateTime createdAt;
+  final DateTime? updatedAt;
+  final DateTime? publishedAt;
   final String articleTemplate;
   final String articleFontPreset;
 
@@ -56,6 +60,8 @@ class PostReadPresentation {
       commentCount: post.commentCount,
       shareCount: post.shareCount,
       createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+      publishedAt: post.publishedAt,
       articleTemplate: (wire?[ArticleDetailWireKeys.articleTemplate] ?? '').toString(),
       articleFontPreset: (wire?[ArticleDetailWireKeys.articleFontPreset] ?? '').toString(),
     );

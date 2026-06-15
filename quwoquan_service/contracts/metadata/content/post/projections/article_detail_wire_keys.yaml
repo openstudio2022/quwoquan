@@ -4,8 +4,6 @@ version: 1
 dart_class: ArticleDetailWireKeys
 description: "文章详情顶层 wire Map 扩展键名 SSOT"
 keys:
-  - const_name: cards
-    json_key: cards
   - const_name: isOfficial
     json_key: isOfficial
   - const_name: badge
@@ -24,9 +22,5 @@ keys:
     json_key: articleAssetManifest
   - const_name: articleRenderProfile
     json_key: articleRenderProfile
-  - const_name: articleBlocks
-    json_key: articleBlocks
-  - const_name: articlePages
-    json_key: articlePages
   - const_name: coverUrl
     json_key: coverUrl

@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
@@ -72,9 +73,14 @@ Future<void> openHomeFeedPost(
   );
   primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
   final result = await context.push<Object?>(
-    post.isVideoLike
-        ? '/video-viewer/$initialIndex'
-        : '/media-viewer/photo/$initialIndex',
+    AppRoutePaths.workBrowser(
+      workId: post.id,
+      filter: post.isVideoLike
+          ? 'video'
+          : (post.isArticleLike ? 'article' : 'image'),
+      source: 'following',
+      index: '$initialIndex',
+    ),
     extra: MediaViewerExtra(
       posts: postViews,
       dtoPosts: viewerPosts,

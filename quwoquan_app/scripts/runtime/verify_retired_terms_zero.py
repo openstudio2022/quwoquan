@@ -16,6 +16,8 @@ SKIP_DIRS = {
     ".idea",
     ".vscode",
     ".venv",
+    # git worktree 检出目录：内容随各自分支治理，不属于主树扫描面。
+    ".worktrees",
     # 本地测试 Python 虚拟环境（PIL/pytest/numpy 等第三方包），非本仓库源码，不参与用语门禁。
     ".qwq_test_venv",
     "site-packages",
@@ -67,6 +69,7 @@ ALLOWLIST_PREFIXES = {
     "quwoquan_app/vendor/",
     "quwoquan_data/runtime/",
     "quwoquan_data/publish/",
+    "quwoquan_data/release/",
     "quwoquan_data/sop/",
     "quwoquan_data/docs/",
     "quwoquan_data/data/",
@@ -123,6 +126,13 @@ ALLOWLIST_PATHS = {
     "specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md",
     "specs/gates/v6_git_branch_cleanup_decisions.md",
     "specs/gates/v6_intersection_closure_acceptance_report.md",
+    "specs/00_PRODUCT_CONCEPT_SYSTEM.md",
+    "specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml",
+    "specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md",
+    "specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer--article-magazine-cover/acceptance.yaml",
+    "specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer--article-magazine-cover/spec.md",
+    "specs/product/2026H1-positioning-refactor/wp-04-entity-introduction-page.md",
+    "specs/product/2026H1-positioning-refactor/90-integration-acceptance.md",
 }
 
 

@@ -76,9 +76,9 @@ class AppLinkTemplates {
   }
 
 
-  static const String postRouteId = 'articleDetail';
+  static const String postRouteId = 'workBrowser';
   static const Map<String, String> postNavigationParamBindings = <String, String>{
-    'postId': 'id',
+    'postId': 'workId',
   };
 
   static String postWebPath(String postId) {

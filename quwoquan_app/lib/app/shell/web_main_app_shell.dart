@@ -19,6 +19,8 @@ import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 
+part 'web_main_app_shell_auth.dart';
+
 class WebMainAppShell extends ConsumerStatefulWidget {
   const WebMainAppShell({
     super.key,
@@ -162,6 +164,13 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
   }
 
   void _selectPrimary(MainTabDestination destination) {
+    if (!_selectWebShellPrimaryDestination(
+      context: context,
+      ref: ref,
+      destination: destination,
+    )) {
+      return;
+    }
     widget.onPrimarySelected(destination);
   }
 
@@ -856,7 +865,7 @@ class _WebFeaturedWorkspace extends StatelessWidget {
     final channelId = switch (filterId) {
       'image' => 'photo',
       'video' => 'video',
-      'note' => 'article',
+      'article' => 'article',
       _ => 'work',
     };
     return _WebDesktopFrame(child: _WebContentFeed(channelId: channelId));
@@ -1160,7 +1169,6 @@ class _CreateWorkspaceCard extends StatelessWidget {
 
 class _WebDesktopFrame extends StatelessWidget {
   const _WebDesktopFrame({required this.child});
-
   final Widget child;
 
   @override
@@ -1174,27 +1182,4 @@ class _WebDesktopFrame extends StatelessWidget {
       ),
     );
   }
-}
-
-class _WebContextTabSpec {
-  const _WebContextTabSpec({required this.id, required this.label});
-
-  final String id;
-  final String label;
-}
-
-class _CreateCardSpec {
-  const _CreateCardSpec({
-    required this.id,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.action,
-  });
-
-  final String id;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback action;
 }

@@ -138,6 +138,7 @@ class _UnifiedMediaViewerPageState
         rawPostsById: widget.extra.rawPostsById,
         defaultCircleId: widget.extra.circleId,
         initialInteractionSnapshot: widget.extra.interactionSnapshot,
+        initialCommentContext: widget.extra.commentContext,
         onPostIndexChanged: (newIndex) {
           _trackPostAtIndex(newIndex);
         },

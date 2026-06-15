@@ -52,6 +52,7 @@ def new_plan(
     *,
     partition_dimension: str = "",
     defaults: Mapping[str, Any] | None = None,
+    source_task_id: str = "",
 ) -> dict[str, Any]:
     merged = {**DEFAULT_DEFAULTS, **(dict(defaults) if defaults else {})}
     if defaults and isinstance(defaults.get("budget"), Mapping):
@@ -61,6 +62,7 @@ def new_plan(
         "planId": plan_id,
         "goal": goal,
         "vertical": vertical,
+        "sourceTaskId": source_task_id or "",
         "partitionDimension": partition_dimension,
         "status": "draft",
         "createdAt": store.now_iso(),

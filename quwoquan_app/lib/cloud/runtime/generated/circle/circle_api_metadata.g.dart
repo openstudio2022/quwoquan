@@ -25,6 +25,7 @@ class CircleApiMetadata {
     'GetCircleFeed': '/v1/circles/{circleId}/feed',
     'GetCircleFile': '/v1/circles/{circleId}/files/{fileId}',
     'GetCircleGroup': '/v1/circles/{circleId}/groups/{groupId}',
+    'GetCircleImpact': '/v1/circles/{circleId}/impact',
     'GetCircleStats': '/v1/circles/{circleId}/stats',
     'JoinCircle': '/v1/circles/{circleId}/join',
     'LeaveCircle': '/v1/circles/{circleId}/leave',
@@ -59,6 +60,7 @@ class CircleApiMetadata {
     'GetCircleFeed': 'GET',
     'GetCircleFile': 'GET',
     'GetCircleGroup': 'GET',
+    'GetCircleImpact': 'GET',
     'GetCircleStats': 'GET',
     'JoinCircle': 'POST',
     'LeaveCircle': 'POST',
@@ -94,6 +96,7 @@ class CircleApiMetadata {
     'GetCircleFeed': 'public',
     'GetCircleFile': 'public',
     'GetCircleGroup': 'public',
+    'GetCircleImpact': 'required',
     'GetCircleStats': 'public',
     'JoinCircle': 'required',
     'LeaveCircle': 'required',
@@ -127,6 +130,7 @@ class CircleApiMetadata {
   static const String getCircleFeedOperation = 'GetCircleFeed';
   static const String getCircleFileOperation = 'GetCircleFile';
   static const String getCircleGroupOperation = 'GetCircleGroup';
+  static const String getCircleImpactOperation = 'GetCircleImpact';
   static const String getCircleStatsOperation = 'GetCircleStats';
   static const String joinCircleOperation = 'JoinCircle';
   static const String leaveCircleOperation = 'LeaveCircle';
@@ -219,6 +223,12 @@ class CircleApiMetadata {
     return _fillPath(getCircleGroupPathTemplate, <String, String>{
       'circleId': circleId,
       'groupId': groupId,
+    });
+  }
+  static const String getCircleImpactPathTemplate = '/v1/circles/{circleId}/impact';
+  static String getCircleImpactPath({required String circleId}) {
+    return _fillPath(getCircleImpactPathTemplate, <String, String>{
+      'circleId': circleId,
     });
   }
   static const String getCircleStatsPathTemplate = '/v1/circles/{circleId}/stats';

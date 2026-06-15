@@ -15,6 +15,7 @@ from pathlib import Path
 SCRIPTS_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
+from _common.python_runtime import maybe_reexec_for_agent_command
 from _common.paths import RUNTIME_ROOT, RELEASE_ROOT
 
 
@@ -33,9 +34,12 @@ def handle_reset(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    maybe_reexec_for_agent_command(sys.argv)
+
     parser = argparse.ArgumentParser(prog="qwq-data", description="Data engineering pipeline CLI")
     subparsers = parser.add_subparsers(dest="command")
 
+    from env.handler import register_parser as reg_env
     from media.handler import register_parser as reg_media
     from template.handler import register_parser as reg_template
     from plan.handler import register_parser as reg_plan
@@ -47,8 +51,12 @@ def main() -> None:
     from vertical.handler import register_parser as reg_vertical
     from quality.handler import register_parser as reg_quality
     from data.handler import register_parser as reg_data
+    from governance.handler import register_parser as reg_governance
+    from audit.handler import register_parser as reg_audit
     from task.object_queue import register_object_queue_parser as reg_object_queue
 
+    reg_audit(subparsers)
+    reg_env(subparsers)
     reg_data(subparsers)
     reg_object_queue(subparsers)
     reg_media(subparsers)
@@ -61,6 +69,7 @@ def main() -> None:
     reg_homepage_assets(subparsers)
     reg_vertical(subparsers)
     reg_quality(subparsers)
+    reg_governance(subparsers)
 
     p_reset = subparsers.add_parser("reset", help="Clear runtime data")
     p_reset.add_argument("--include-release", action="store_true", help="Also clear release/")

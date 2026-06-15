@@ -66,6 +66,7 @@ services:
         aliases:
           - recommendation-service
           - rec-model-service
+    image: "${LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE:-localhost/quwoquan_service_rec-model-service:latest}"
     build:
       context: ..
       dockerfile: quwoquan_service/services/rec-model-service/Dockerfile
@@ -96,6 +97,7 @@ services:
       retries: 5
 
   content-service:
+    image: "${LOCAL_GAMMA_CONTENT_SERVICE_IMAGE:-localhost/quwoquan_service_content-service:latest}"
     build:
       context: .
       dockerfile: ../deploy/service/content-service/Dockerfile
@@ -135,6 +137,7 @@ services:
       retries: 10
 
   chat-service:
+    image: "${LOCAL_GAMMA_CHAT_SERVICE_IMAGE:-localhost/quwoquan_service_chat-service:latest}"
     build:
       context: .
       dockerfile: ../deploy/service/chat-service/Dockerfile
@@ -182,13 +185,15 @@ services:
       retries: 10
 
   user-service:
-    image: "${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-docker.io/library/golang:1.24-bookworm}"
-    working_dir: /workspace/services/user-service
-    command: ["sh", "-lc", "/usr/local/go/bin/go run ./cmd/api"]
+    image: "${LOCAL_GAMMA_USER_SERVICE_IMAGE:-localhost/quwoquan_service_user-service:latest}"
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
+        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
+        GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
     environment:
-      PATH: /go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      GOPROXY: "${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}"
-      GOSUMDB: "${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}"
       SERVICE_NAME: user-service
       APP_ENV: gamma
       CONFIG_ROOT: /etc/qwq-config
@@ -211,9 +216,7 @@ services:
     ports:
       - "${LOCAL_GAMMA_USER_PORT:-19210}:18082"
     volumes:
-      - .:/workspace
       - ../state/local/gamma/config-root:/etc/qwq-config:ro
-      - local-gamma-go-cache:/go
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -222,6 +225,7 @@ services:
       retries: 10
 
   assistant-service:
+    image: "${LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE:-localhost/quwoquan_service_assistant-service:latest}"
     build:
       context: .
       dockerfile: ../deploy/service/assistant-service/Dockerfile
@@ -262,13 +266,15 @@ services:
       retries: 10
 
   product-ops-service:
-    image: "${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-docker.io/library/golang:1.24-bookworm}"
-    working_dir: /workspace
-    command: ["sh", "-lc", "cd services/product-ops-service/cmd/api && /usr/local/go/bin/go run ."]
+    image: "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE:-localhost/quwoquan_service_product-ops-service:latest}"
+    build:
+      context: .
+      dockerfile: ../deploy/service/product-ops-service/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
+        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
+        GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
     environment:
-      PATH: /go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      GOPROXY: "${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}"
-      GOSUMDB: "${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}"
       SERVICE_NAME: product-ops-service
       APP_ENV: gamma
       CONFIG_ROOT: /etc/qwq-config
@@ -289,9 +295,7 @@ services:
       - "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:18086"
       - "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}:18086"
     volumes:
-      - .:/workspace
       - ../state/local/gamma/config-root:/etc/qwq-config:ro
-      - local-gamma-go-cache:/go
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -300,13 +304,15 @@ services:
       retries: 10
 
   tag-service:
-    image: "${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-docker.io/library/golang:1.24-bookworm}"
-    working_dir: /workspace
-    command: ["sh", "-lc", "cd services/tag-service/cmd/api && /usr/local/go/bin/go run ."]
+    image: "${LOCAL_GAMMA_TAG_SERVICE_IMAGE:-localhost/quwoquan_service_tag-service:latest}"
+    build:
+      context: .
+      dockerfile: ../deploy/service/tag-service/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
+        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
+        GO_BUILD_FLAGS: "${LOCAL_GAMMA_GO_BUILD_FLAGS:--p=1}"
     environment:
-      PATH: /go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      GOPROXY: "${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}"
-      GOSUMDB: "${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}"
       SERVICE_NAME: tag-service
       APP_ENV: gamma
       CONFIG_ROOT: /etc/qwq-config
@@ -321,9 +327,7 @@ services:
       mongo-init:
         condition: service_completed_successfully
     volumes:
-      - .:/workspace
       - ../state/local/gamma/config-root:/etc/qwq-config:ro
-      - local-gamma-go-cache:/go
     ports:
       - "${LOCAL_GAMMA_TAG_PORT:-19270}:18092"
     healthcheck:
@@ -385,6 +389,7 @@ services:
 
   rtc-service:
     profiles: ["edge-media"]
+    image: "${LOCAL_GAMMA_RTC_SERVICE_IMAGE:-localhost/quwoquan_service_rtc-service:latest}"
     build:
       context: .
       dockerfile: ../deploy/service/rtc-service/Dockerfile

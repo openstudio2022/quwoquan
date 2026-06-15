@@ -30,9 +30,10 @@ fields:
   - { name: height,         type: int,    description: "主图高度（px），上传时写入，用于布局计算宽高比" }
   - { name: likeCount,      type: int }
   - { name: commentCount,   type: int }
-  - { name: favoriteCount,  type: int }
   - { name: shareCount,     type: int }
   - { name: publishedAt,    type: timestamp }
+  - { name: createdAt,      type: timestamp, description: "内容首次进入系统时间（仅插入时写一次，永不变）" }
+  - { name: updatedAt,      type: timestamp, description: "内容最后实质变更时间（无实质变更不推进）" }
 
 # App 端契约（client_projection）
 # 由 codegen_app_metadata 读取，生成 PhotoPostDto（DO NOT EDIT 产物）
@@ -166,13 +167,6 @@ client_projection:
       aliases: [commentCount, commentsCount, comments, comment_count]
       default: "0"
 
-    - name: favoriteCount
-      dart_type: int
-      nullable: false
-      source: favoriteCount
-      aliases: [favoriteCount, savesCount, bookmarks, favorite_count]
-      default: "0"
-
     - name: shareCount
       dart_type: int
       nullable: false
@@ -183,6 +177,23 @@ client_projection:
     - name: createdAt
       dart_type: DateTime
       nullable: false
-      source: publishedAt
-      aliases: [publishedAt, createdAt, created_at]
+      source: createdAt
+      aliases: [createdAt, created_at]
       default: "DateTime(0)"
+      description: "创作时间（首次进入系统）。唯一源为 createdAt/created_at；不再以 publishedAt 借壳。"
+
+    - name: updatedAt
+      dart_type: DateTime
+      nullable: true
+      source: updatedAt
+      aliases: [updatedAt, updated_at]
+      default: "null"
+      description: "最后实质更新时间；与 createdAt 相等或更早时 UI 只显示创作时间，更晚时显示创作+更新。"
+
+    - name: publishedAt
+      dart_type: DateTime
+      nullable: true
+      source: publishedAt
+      aliases: [publishedAt, published_at]
+      default: "null"
+      description: "首次公开时间（仅首次发布置位）。"

@@ -63,6 +63,7 @@ type CreateConversationRequest struct {
 	Title            string
 	CircleId         string
 	CircleGroupId    string
+	EntityId         string
 	OriginType       string
 	BindingType      string
 	LifecyclePolicy  string
@@ -146,6 +147,7 @@ func (s *ConversationService) createDirectConversation(
 		CreatorId:       req.CreatorId,
 		CircleId:        req.CircleId,
 		CircleGroupId:   req.CircleGroupId,
+		EntityId:        req.EntityId,
 		OriginType:      originType,
 		BindingType:     bindingType,
 		LifecyclePolicy: lifecyclePolicy,
@@ -264,6 +266,7 @@ func (s *ConversationService) createDirectConversation(
 			"creatorId":       req.CreatorId,
 			"circleId":        conv.CircleId,
 			"circleGroupId":   conv.CircleGroupId,
+			"entityId":        conv.EntityId,
 			"originType":      conv.OriginType,
 			"bindingType":     conv.BindingType,
 			"lifecyclePolicy": conv.LifecyclePolicy,
@@ -401,6 +404,40 @@ func inferGroupConversationSemantics(
 
 func (s *ConversationService) GetConversation(ctx context.Context, conversationId string) (*model.Conversation, error) {
 	return s.repo.FindConversationByID(ctx, conversationId)
+}
+
+type UpdateConversationTitleRequest struct {
+	ConversationId string
+	OperatorId     string
+	Title          string
+}
+
+func (s *ConversationService) UpdateConversationTitle(ctx context.Context, req UpdateConversationTitleRequest) (*model.Conversation, error) {
+	conv, err := s.repo.FindConversationByID(ctx, req.ConversationId)
+	if err != nil {
+		return nil, err
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, rterr.NewInvalidArgument(rterr.ModuleChat, "群名称不能为空", "conversation title is empty")
+	}
+	conv.Title = title
+	conv.MembersRosterRevision++
+	conv.UpdatedAt = time.Now()
+	if err := s.repo.UpdateConversation(ctx, conv.ID, conv); err != nil {
+		return nil, err
+	}
+	_ = s.cache.InvalidateConversation(ctx, conv.ID)
+	go func() {
+		if err := s.publisher.PublishDomainEvent(context.Background(), event.ConversationRosterUpdated, conv.ID, req.OperatorId, map[string]any{
+			"membersRosterRevision": conv.MembersRosterRevision,
+			"updatedAt":             conv.UpdatedAt,
+			"aspects":               []string{"title"},
+		}); err != nil {
+			slog.Error("publish ConversationRosterUpdated after title update", "err", err, "conversationId", conv.ID)
+		}
+	}()
+	return conv, nil
 }
 
 func (s *ConversationService) CreateOrReuseDirect(ctx context.Context, creatorID, peerID string) (*model.Conversation, error) {

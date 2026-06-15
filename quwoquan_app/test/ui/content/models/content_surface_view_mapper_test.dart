@@ -21,7 +21,6 @@ void main() {
         'likeCount': 10,
         'commentCount': 2,
         'shareCount': 3,
-        'favoriteCount': 4,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
@@ -38,7 +37,6 @@ void main() {
       expect(view.stats.like, 10);
       expect(view.stats.comment, 2);
       expect(view.stats.share, 3);
-      expect(view.stats.favorite, 4);
     });
 
     test('video 帖 → kind.video，单视频 ref + 时长', () {
@@ -57,7 +55,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
@@ -87,7 +84,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
@@ -124,7 +120,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 
@@ -151,7 +146,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
         'intersectionReasons': <Map<String, dynamic>>[
           <String, dynamic>{
@@ -178,6 +172,88 @@ void main() {
           '你和 TA 都来自新东方校友圈');
     });
 
+    test('时间语义：createdAt 用真实创作时间，updatedAt/publishedAt 透传 (T1)', () {
+      final dto = ArticlePostDto.fromMap(<String, dynamic>{
+        '_id': 'time1',
+        'postId': 'time1',
+        'type': 'article',
+        'contentType': 'article',
+        'identity': 'work',
+        'authorId': 'a7',
+        'displayName': '作者庚',
+        'authorAvatarUrl': '',
+        'title': '时间语义文章',
+        'body': '正文',
+        'coverUrl': '',
+        'likeCount': 0,
+        'commentCount': 0,
+        'shareCount': 0,
+        'createdAt': '2026-01-01T00:00:00.000Z',
+        'updatedAt': '2026-02-01T00:00:00.000Z',
+        'publishedAt': '2026-01-03T00:00:00.000Z',
+      });
+
+      final view = ContentSurfaceViewMapper.fromDto(dto);
+
+      expect(view.createdAt, DateTime.utc(2026, 1, 1));
+      expect(view.updatedAt, DateTime.utc(2026, 2, 1));
+      expect(view.publishedAt, DateTime.utc(2026, 1, 3));
+      // updatedAt 明显晚于 createdAt → 视为实质更新。
+      expect(view.hasMeaningfulUpdate, isTrue);
+    });
+
+    test('时间语义：未更新内容只有 createdAt，hasMeaningfulUpdate=false (T1)', () {
+      final dto = ArticlePostDto.fromMap(<String, dynamic>{
+        '_id': 'time2',
+        'postId': 'time2',
+        'type': 'article',
+        'contentType': 'article',
+        'identity': 'work',
+        'authorId': 'a8',
+        'displayName': '作者辛',
+        'authorAvatarUrl': '',
+        'title': '未更新文章',
+        'body': '正文',
+        'coverUrl': '',
+        'likeCount': 0,
+        'commentCount': 0,
+        'shareCount': 0,
+        'createdAt': '2026-01-01T00:00:00.000Z',
+      });
+
+      final view = ContentSurfaceViewMapper.fromDto(dto);
+
+      expect(view.createdAt, DateTime.utc(2026, 1, 1));
+      expect(view.updatedAt, isNull);
+      expect(view.hasMeaningfulUpdate, isFalse);
+    });
+
+    test('时间语义：createdAt 缺失时不以 publishedAt 借壳（契约纯洁） (T1)', () {
+      final dto = ArticlePostDto.fromMap(<String, dynamic>{
+        '_id': 'time3',
+        'postId': 'time3',
+        'type': 'article',
+        'contentType': 'article',
+        'identity': 'work',
+        'authorId': 'a9',
+        'displayName': '作者壬',
+        'authorAvatarUrl': '',
+        'title': '仅有发布时间',
+        'body': '正文',
+        'coverUrl': '',
+        'likeCount': 0,
+        'commentCount': 0,
+        'shareCount': 0,
+        'publishedAt': '2026-01-05T00:00:00.000Z',
+      });
+
+      final view = ContentSurfaceViewMapper.fromDto(dto);
+
+      expect(view.createdAt, dto.createdAt);
+      expect(view.createdAt, isNot(equals(view.publishedAt)));
+      expect(view.publishedAt, DateTime.utc(2026, 1, 5));
+    });
+
     test('referral 上下文透传（不影响展示字段）', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
         '_id': 'micro3',
@@ -192,7 +268,6 @@ void main() {
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
-        'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
 

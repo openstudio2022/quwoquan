@@ -25,14 +25,19 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+import json
+import shutil
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp()
 
 from _common.content_object import register_content_object  # noqa: E402
+from _common.draft_io import write_agent_draft  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
+    PUBLISH_ROOT,
+    batch_entity_object_dir,
     batch_command_root,
     batch_root,
     ensure_batch_layout,
@@ -40,6 +45,7 @@ from _common.paths import (  # noqa: E402
 )
 from _common.stage_reports import write_stage_result  # noqa: E402
 from produce.materialize import materialize_posts  # noqa: E402
+from publish_ops.promote_to_publish import promote_task_batch, promote_task_entities  # noqa: E402
 
 TASK = "目录布局_gwt"
 BATCH = "pilot"
@@ -47,13 +53,14 @@ ANGLE = "攻略"
 
 
 def _seed_post(ref: str, publish_title: str) -> None:
+    article = f"# {publish_title}\n\n正文：{ref} 的真实内容展开。"
     register_content_object(TASK, BATCH, ref, content_type="article", angle=ANGLE, title=publish_title)
     write_stage_result(TASK, BATCH, "produce", "review", ref, {"decision": "approved"})
     write_stage_result(
         TASK, BATCH, "produce", "compose", ref,
         {
             "generator": "agent",
-            "articleMarkdown": f"# {publish_title}\n\n正文：{ref} 的真实内容展开。",
+            "articleMarkdown": article,
             "title": publish_title,
             "publishTitle": publish_title,
             "carrier": "article",
@@ -61,6 +68,17 @@ def _seed_post(ref: str, publish_title: str) -> None:
             "tagRefs": ["Topic/旅行", "Format/内容角度/攻略"],
             "assets": [],
         },
+    )
+    write_agent_draft(
+        TASK,
+        BATCH,
+        ref,
+        article,
+        model="test-agent/post-dir-layout",
+        cited_source_paths=[],
+        covered_facts=[],
+        agent_run_id=f"run-{ref}",
+        agent_id="agent-post-dir-layout",
     )
 
 
@@ -149,6 +167,55 @@ def test_promote_rglob_locates_object_layout():
         assert len(rel.parts) == 4, rel  # <type>/<angle>/<title>/<seq>
         assert rel.parts[1] == ANGLE, rel
         assert rel.parts[3].isdigit(), rel
+
+
+def test_promote_injects_and_preserves_published_at():
+    posts, _ = _materialize()
+    manifest_path = posts / "article" / ANGLE / "都江堰一日游怎么玩" / "1" / "manifest.json"
+    raw = read_json(manifest_path)
+    assert "publishedAt" not in raw
+
+    count, skipped = promote_task_batch(TASK, BATCH, dry_run=False)
+    assert count == 3
+    assert skipped == 0
+
+    publish_manifest = PUBLISH_ROOT / "posts" / "article" / ANGLE / "都江堰一日游怎么玩" / "1" / "manifest.json"
+    first = json.loads(publish_manifest.read_text(encoding="utf-8"))
+    assert first["publishedAt"]
+
+    count2, skipped2 = promote_task_batch(TASK, BATCH, dry_run=False)
+    assert count2 == 3
+    assert skipped2 == 0
+    second = json.loads(publish_manifest.read_text(encoding="utf-8"))
+    assert second["publishedAt"] == first["publishedAt"]
+
+
+def test_promote_task_entities_only_copies_approved_homepages():
+    approved_name = "都江堰_approved_only"
+    rejected_name = "青城山_rejected_only"
+    ensure_task_layout(TASK)
+    shutil.rmtree(PUBLISH_ROOT / "entities" / "地点" / "景区" / approved_name, ignore_errors=True)
+    shutil.rmtree(PUBLISH_ROOT / "entities" / "地点" / "景区" / rejected_name, ignore_errors=True)
+    approved = batch_entity_object_dir(TASK, BATCH, "地点", "景区", approved_name)
+    approved.mkdir(parents=True, exist_ok=True)
+    (approved / "page.md").write_text(f"# {approved_name}\n\n主页。", encoding="utf-8")
+    write_json(approved / "_entity.json", {"label": approved_name, "domain": "地点", "type": "景区"})
+    write_json(approved / "manifest.json", {"assets": []})
+    (approved / "5.review").mkdir(parents=True, exist_ok=True)
+    write_json(approved / "5.review" / "review.json", {"decision": "approved"})
+
+    rejected = batch_entity_object_dir(TASK, BATCH, "地点", "景区", rejected_name)
+    rejected.mkdir(parents=True, exist_ok=True)
+    (rejected / "page.md").write_text(f"# {rejected_name}\n\n主页。", encoding="utf-8")
+    write_json(rejected / "_entity.json", {"label": rejected_name, "domain": "地点", "type": "景区"})
+    write_json(rejected / "manifest.json", {"assets": []})
+    (rejected / "5.review").mkdir(parents=True, exist_ok=True)
+    write_json(rejected / "5.review" / "review.json", {"decision": "rejected"})
+
+    count = promote_task_entities(TASK, dry_run=False)
+    assert count >= 1
+    assert (PUBLISH_ROOT / "entities" / "地点" / "景区" / approved_name / "page.md").is_file()
+    assert not (PUBLISH_ROOT / "entities" / "地点" / "景区" / rejected_name / "page.md").exists()
 
 
 def _run_all() -> None:

@@ -192,7 +192,7 @@ def check_seed_train_loop(db, scenario: str) -> tuple[bool, str]:
     negative = total - positive
     sample = samples_coll.find_one({"scenario": scenario})
     labels = sample.get("labels", {}) if sample else {}
-    expected_keys = {"click", "dwell_s", "like", "favorite", "share", "comment", "follow", "dislike", "engaged"}
+    expected_keys = {"click", "dwell_s", "like", "share", "comment", "follow", "dislike", "engaged"}
     missing = expected_keys - set(labels.keys())
     if missing:
         return False, f"Training sample labels missing keys: {missing}"

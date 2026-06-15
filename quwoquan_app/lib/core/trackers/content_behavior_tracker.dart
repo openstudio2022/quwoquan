@@ -8,7 +8,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 ///
 /// 负责将散落的行为事件（impression/dwell/click/dislike/share 等）
 /// 按批次合并后统一上报给 BehaviorRepository。
-/// like/favorite/comment/report 使用专属路由，不经过此 Tracker。
+/// like/comment/report 使用专属路由，不经过此 Tracker。
 class ContentBehaviorTracker {
   factory ContentBehaviorTracker({
     required BehaviorRepository repository,

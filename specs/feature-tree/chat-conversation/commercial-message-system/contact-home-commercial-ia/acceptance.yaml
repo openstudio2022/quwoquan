@@ -1,0 +1,68 @@
+version: 2
+node:
+  id: contact-home-commercial-ia
+  level: L3_story
+  path: specs/feature-tree/chat-conversation/commercial-message-system/contact-home-commercial-ia
+  title: 商用联系首页 IA
+  parent_domain_service: chat-conversation
+  parent_business_capability: commercial-message-system
+scope:
+  summary: 建立商用消息体系中的联系首页一级信息架构，回答我和谁建立了连接。
+  journey_scenarios:
+    - commercial-message-system
+  out_of_scope:
+    - 联系首页聚合 read model 的数据细节
+gwt_acceptance:
+  GWT1:
+    title: 联系页作为独立一级状态成立
+    given:
+      - 用户已进入消息模块。
+    when:
+      - 用户切换到联系页状态。
+    then:
+      - 页面以联系一级状态回答连接关系，不回退传统通讯录主 IA。
+      - 顶部工具栏搜索按钮和小趣入口保持统一可用。
+    done_when:
+      - 联系首页 IA 可稳定进入并保持商用主线。
+    edge_cases:
+      - 联系为空时仍展示联系页主 IA。
+      - 互关人数不超过索引阈值时不出现额外 A-Z 入口。
+    platform_variants:
+      iOS: []
+      Android: []
+    contract_refs:
+      - specs/feature-tree/chat-conversation/commercial-message-system/spec.md
+      - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    performance_points: []
+    evidence:
+      primary:
+        - T2_module_interaction
+      supporting:
+        - T4_device_journey
+    tests:
+      planned:
+        - quwoquan_app/test/ui/chat/widgets/contact_home_widget_test.dart
+      recorded: []
+    status: pending
+contract_acceptance:
+  CONTRACT1:
+    title: 联系首页 IA 绑定联系 metadata 契约
+    metadata_refs:
+      - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    done_when:
+      - 页面入口和联系首页数据消费继续由消息域 metadata 真相源驱动。
+    evidence:
+      primary:
+        - T1_static_contract
+      supporting: []
+    tests:
+      planned:
+        - bash agent_ops/scaffold/verify_acceptance_standard.sh
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+    - make gate

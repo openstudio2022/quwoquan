@@ -40,10 +40,19 @@
 
 ### 1.2.1 篇目与 ref（证据后置，禁止搜索向预置）
 
-- **task.yaml 只冻结**：`coverageTargets`（实体）与 `content.quotas`（如 `entityArticles` / `routeArticles`），**禁止** `plannedRefs` 作为第二真相源。
+- **task.yaml 只冻结**：`coverageTargets`（实体）与 `content.quotas`。规模化任务使用
+  `entityArticlesPerTarget` / `galleryPostsPerTarget` / `entityHomepagesPerTarget`，
+  同时校验总量和逐实体分布；**禁止** `plannedRefs` 作为第二真相源。
 - **篇目真相源**：`batches/{batch}/_shared/content_plan_packet.json` + `content_object_index.json`。
 - **时机**：`content_plan` 在 `build_validate` 之后、`produce_compose` 之前；ref/title 由已下载 `evidenceRefs` 归纳，禁止 download 前预置 `XX攻略` / 营销线路名再凑来源。
 - **B 组线路**：仅当 ≥2 条独立来源出现联游/顺路叙述，或地理邻接且有共享交通/季节证据时立项；不足则 `repair` 回 `download_plan` 补检索，禁止模板大环线填空。
+
+### 来源权利模式
+
+- `licensed_adaptation`：自有、明确授权、CC 或公版；必须保存 license、terms、credit 与授权快照。
+- `factual_reference_only`：普通网页仅用于事实核验，成品必须独立表达。
+- `blocked`：权利不明、禁止商用、抓取失败或探针页，不得进入 content_plan。
+- `baseDraftFidelity` 只对 `licensed_adaptation` 生效；普通网页不设最低相似度，使用事实回溯、长句复现和跨稿重复门。
 - **可读性**：对齐主要来源体裁（加工而非重写腔调）；禁止百科罗列、机械收尾、独立「实用信息」清单块。
 - **发布 tagRefs**：`brief.json` / manifest 的 `tagRefs` 必须指向 `publish/v1/tags/**/_definition.json` 已存在路径；禁止扁平的省名/品类名（如 `<region>`/`<category>`）等未发布 tag（`ship` dangling_post_tag_ref）。
 - **线路 title**：`publishTitle` / frontmatter `title` 不得嵌入乱序实体名片段，否则 `verify_content_semantics` 的 routeCoverage progression 会在全文（含 frontmatter）判失败。

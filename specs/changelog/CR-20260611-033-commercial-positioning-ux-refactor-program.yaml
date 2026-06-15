@@ -1,0 +1,230 @@
+id: CR-20260611-033-commercial-positioning-ux-refactor-program
+title: 商用定位与 UX 重构需求包群基线（WP0–WP8）
+status: specified
+feature_path: object-homepage-network/intersection-unified-experience
+summary: |
+  基于「产品统一定位与 UX 重构规格」会话，冻结 2026H1 商用上线重构基线并拆解为可并行需求包群：
+  1) 概念基线增量：00_PRODUCT_CONCEPT_SYSTEM.md 新增 §20（产品核心闭环、实体先行、交集五维闭集 +
+     六个母表达词表、连接/影响/讨论用户语言、四段式主页结构、统一设计原则）；
+     00_GLOBAL_TERMINOLOGY.md 新增 §18（「讨论」统一群概念前台名、禁用词增量、迁移字典、术语门禁）。
+  2) 规格合理性修正冻结：交集六个母表达落证据组 kind + 云侧 primaryText 层（不动 5 维闭集、G2 不变）；
+     收藏体系全链路退场，内容主互动只保留赞 / 评 / 转；足迹为私有只读且不产生交集、影响数字或消息提醒；
+     共同校友首发降级「同校」事实；消息页保留「消息/联系」双 Tab、五分类落二级胶囊、小趣维持全局
+     顶栏入口；影响数字必须满足交集四条件（可证/可枚举/可解释/可行动），无归因即收起。
+  3) 需求包群落盘 specs/product/2026H1-positioning-refactor/：WP1 交集事实数据源与表达升级（云侧：
+     sharedFollowees 真实集合 / coCommented / coVisitedEntity / followeeVisited 新源 + spotlight 空窗治理）、
+     WP2 发现页交集呈现统一（卡结构契约固化 + weightTier 轻重分化）、WP3 三对象主页四段式统一与
+     影响模块扩展（circle_impact / 认识对象摘要卡 / Tab 标签 metadata 化）、WP4 实体完整介绍页、
+     WP5 「讨论」命名统一与消息页 IA + 术语门禁、WP6 长文编辑与发布增强（tagRefs/entityRefs/AI 摘要/
+     行内提及 + create_page 拆分）、WP7 精品页统一（Web 宽屏多列墙降级规格冻结 + 筛选 metadata 化 +
+     Work Browser V1 验收回填，专题卡位后置）、
+     WP8 小趣贯穿（创作辅助技能 / 新交集提醒 / 解释推荐扩展）。
+  4) 跨包并行机制：文件独占权矩阵、跨包契约（WP6↔WP8 创作辅助 API、WP1→WP3 evidence kind 映射
+     清单交接、WP3↔WP4 摘要卡/介绍页边界）、独立会话开场模板、集成验收清单（90-integration-acceptance.md，
+     含 gate 全量、统一性审计、T4 闭环旅程、CR 收口）。
+  各包完成后在本 CR dev_log 追加证据；全部合入并通过集成验收后推进 status: implemented。
+artifacts:
+  - specs/00_PRODUCT_CONCEPT_SYSTEM.md
+  - specs/00_GLOBAL_TERMINOLOGY.md
+  - specs/product/2026H1-positioning-refactor/00-overview.md
+  - specs/product/2026H1-positioning-refactor/wp-01-intersection-data-and-expression.md
+  - specs/product/2026H1-positioning-refactor/wp-02-discovery-intersection-presentation.md
+  - specs/product/2026H1-positioning-refactor/wp-03-object-homepage-unification.md
+  - specs/product/2026H1-positioning-refactor/wp-04-entity-introduction-page.md
+  - specs/product/2026H1-positioning-refactor/wp-05-discussion-naming-and-message-ia.md
+  - specs/product/2026H1-positioning-refactor/wp-06-article-editor-and-publish.md
+  - specs/product/2026H1-positioning-refactor/wp-07-featured-page-unification.md
+  - specs/product/2026H1-positioning-refactor/wp-08-assistant-throughline.md
+  - specs/product/2026H1-positioning-refactor/90-integration-acceptance.md
+related_cr:
+  - CR-20260602-029
+nodes_extended:
+  - object-homepage-network/intersection-unified-experience (六类交集母表达词表 + 影响数字四条件)
+  - discovery-content/dual-rail-discovery-redesign (卡结构契约固化 + weightTier 分化)
+  - user-identity-profile-relationship/profile-homepage-redesign (四段式统一 + Tab 措辞裁决)
+  - circle-community/circle-experience-redesign/circle-homepage-redesign (圈子影响模块)
+  - shared-homepage-network/homepage-review-and-content-journey (实体完整介绍页)
+  - chat-conversation/commercial-message-system (「讨论」命名 + 二级胶囊修订)
+  - discovery-content/publish-comment-reaction (发布增强 tagRefs/entityRefs/AI 摘要/行内提及)
+  - discovery-content/content-display-journey-consistency (精品页 Web 宽屏降级规格 + workBrowser 统一落点)
+  - assistant-run-learning (创作辅助技能 + 新交集提醒)
+convergence_items:
+  - item: 校友图谱（共同校友图谱级计算）
+    current: identity 维度「同校」entity tagRef 事实表达
+    target: 校友关系图谱数据源就绪后升级为可枚举校友集合
+  - item: 实体页影响卡（homepage_impact）
+    current: WP3 首发仅做「认识对象」摘要卡，影响卡视归因数据可用性
+    target: 归因数据可用后补 homepage_impact_summary 投影与卡片
+  - item: 消息页五个一级分类
+    current: 双 Tab + 五分类落二级胶囊（折中冻结）
+    target: 商用后若数据证明二级承载不足，另起 CR 评估一级分类重构
+  - item: 创作页协调层大文件治理
+    current: WP6 已抽离发布确认组件与行内对象提及 picker，但 create_page.dart 仍约 2646 行
+    target: 后续按 article-editor-refactor 继续拆出媒体处理、草稿调度、发布 orchestration 与编辑器 adapter，使协调层降至 <1000 行
+  - item: WP7 专题 / 圈子精选卡位
+    current: WP7 Core 冻结 Web 宽屏多列墙与 Work Browser V1 验收，尚未落地专题/精选卡位 metadata、UI 与测试
+    target: 启用 WP7 Plus 时，在 content/post/ui_config.yaml 增加卡位配置，Web/Mobile 消费并补配置开关与跳转测试
+  - item: Work Browser 输入边界纯化
+    current: viewer 仍保留 rawPostsById + PostBaseDto -> WorkBrowserItemDto 兼容路径
+    target: 后续收敛为 WorkBrowserItemDto 单一输入真相源，完成 works-immersive-viewer GWT6
+dev_log:
+  - date: "2026-06-11"
+    change: |
+      WP0 基线落盘：概念文档 §20 与术语表 §18 冻结；需求包群 WP1-WP8 简报、跨包独占权矩阵、
+      跨包契约、独立会话开场模板与集成验收清单落盘 specs/product/2026H1-positioning-refactor/。
+    verify:
+      - ls specs/product/2026H1-positioning-refactor/
+      - rg -n '## 20\.' specs/00_PRODUCT_CONCEPT_SYSTEM.md
+      - rg -n '## 18\.' specs/00_GLOBAL_TERMINOLOGY.md
+  - date: "2026-06-12"
+    change: |
+      WP3 三对象主页结构统一落地：吸收 WP1 standard kind rank/fallback icon，完成 object_page
+      交集卡排序与 CTA 常量化；新增 circle_impact_summary/item metadata 与 GetCircleImpact 契约、
+      App DTO/API metadata 生成、circle-service 最小读路径、端侧 CircleImpact Repository/Provider/UI
+      三态；实体页收口为「与你的连接」+「认识{对象名}」摘要卡；用户页 mine/other 影响文案反断言；
+      实体/圈子 Tab label 收敛到统一常量。
+    verify:
+      - make -C quwoquan_service verify-metadata
+      - make -C quwoquan_service codegen-app
+      - cd quwoquan_service && go test ./services/circle-service/internal/application -run 'TestGetCircleImpact' -count=1
+      - cd quwoquan_app && flutter test test/ui/user/author_impact_card_test.dart test/components/object_page/object_intersection_card_test.dart test/components/object_page/object_intersection_section_test.dart test/cloud/services/content/intersection_object_evidence_test.dart test/components/object_page/object_page_shell_test.dart test/ui/entity/pages/homepage_detail_page_widget_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/circle/widgets/circle_shell_widget_test.dart
+      - cd quwoquan_service && go test ./services/circle-service/... -run 'Test' -count=1
+    notes:
+      - go test 当前被既有 tests/testmain_test.go Redis Client 接口不匹配阻断；新增 cmd/api、adapters/http、application 包通过编译。
+  - date: "2026-06-12"
+    change: |
+      WP5 开发前口径刷新：CR 摘要从旧「七类交集 / coFavorited / coVisitedPlace」修正为最新
+      「六个母表达 / 收藏退场 / 足迹私有只读」口径；WP5 文档补充最新实现现状、消息能力词豁免、
+      App 用户文案门禁范围与 WP1 service/codegen/seed 残留风险边界。
+    verify:
+      - rg -n "六个母表达|收藏体系全链路退场|sharedFollowees" specs/changelog/CR-20260611-033-commercial-positioning-ux-refactor-program.yaml
+      - rg -n "交集口径以|通用消息能力词保留|门禁首发强拦截范围" specs/product/2026H1-positioning-refactor/wp-05-discussion-naming-and-message-ia.md
+  - date: "2026-06-12"
+    change: |
+      WP5 实现落地：移动端消息页二级胶囊、联系人二级胶囊、Web 壳、创作入口、搜索 metadata/codegen、
+      搜索模型与结果页均将 group 用户前台语境统一为「讨论」；保留 `group` wire filter 与 `GroupHome`
+      技术对象名。新增 `verify-app-concept-naming` 并接入 Makefile 与 app gate，首发强拦截 App 用户可见
+      文案和 search metadata 展示 label 中的旧 group 词、内容长期动作词和旧交集/favorite 代码模式。
+    verify:
+      - make -C quwoquan_service verify-metadata
+      - make verify-app-concept-naming
+      - cd quwoquan_app && python3 scripts/env/run_flutter_test_guarded.py test/ui/chat/widgets/chat_page_widget_test.dart test/ui/chat/providers/chat_contacts_rows_provider_test.dart test/ui/search/pages/global_search_page_widget_test.dart test/ui/search/pages/search_network_results_page_widget_test.dart test/ui/chat/journeys/chat_search_navigation_journey_test.dart test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart test/ui/content/entry/create_entry_information_architecture_widget_test.dart test/core/errors/ui_error_semantics_test.dart
+    notes:
+      - 早先记录的 app_router.dart ReferralSource.value 与 homepage_introduction_page.dart token 编译阻断已在 WP4 收尾修复；Web 文案本身已随 UITextConstants 更新。
+  - date: "2026-06-12"
+    change: |
+      WP4 实体完整介绍页落地：新增 HomepageIntroduction/Section/Asset/Timeline metadata projection、
+      GetHomepageIntroduction API、homepageIntroduction route/surface/request context 并完成 codegen；
+      entity-service 增加 /v1/homepages/{homepageId}/introduction 读路径与西湖 800+ 字结构化 seed；
+      qwq-data 增加三件套 page.md/_entity.json/manifest.json 到 introduction seed 的纯映射 helper 与 fixture 样本；
+      App 新增 HomepageIntroductionRepository 细接口、Provider、完整介绍页 UI、深链路由、曝光/停留/阅读深度/点击埋点；
+      已落地「认识{对象名}」摘要卡接入真实 introduction summary，点击使用 generated route 进入完整介绍页。
+    verify:
+      - make -C quwoquan_service verify-metadata
+      - make -C quwoquan_service codegen-app
+      - cd quwoquan_service/services/entity-service && go test ./...
+      - python3 -m py_compile quwoquan_data/scripts/build/homepage.py quwoquan_data/tests/produce/test_homepage_introduction_seed.py
+      - make verify-app-seed-manifest
+      - dart format quwoquan_app/lib/cloud/services/entity/entity_repository.dart quwoquan_app/lib/core/providers/app_providers.dart quwoquan_app/lib/ui/entity/pages/homepage_introduction_page.dart quwoquan_app/lib/ui/entity/pages/homepage_detail_page.dart quwoquan_app/lib/ui/entity/widgets/homepage_detail_shell.dart quwoquan_app/lib/ui/entity/widgets/homepage_detail_shell_builders.dart quwoquan_app/lib/app/navigation/app_router.dart
+      - cd quwoquan_app && flutter analyze lib/cloud/services/entity/entity_repository.dart lib/core/providers/app_providers.dart lib/ui/entity/pages/homepage_introduction_page.dart lib/ui/entity/pages/homepage_detail_page.dart lib/ui/entity/providers/homepage_introduction_provider.dart lib/ui/entity/widgets/homepage_detail_shell.dart lib/ui/entity/widgets/homepage_detail_shell_builders.dart lib/app/navigation/app_router.dart test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      - cd quwoquan_app && flutter test test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      - make verify-app-page-horizontal-quality
+    notes:
+      - 当前 shell Python 未安装 pytest，数据 helper 已通过 py_compile 与直接 smoke 调用；后续 CI 可跑 quwoquan_data/tests/produce/test_homepage_introduction_seed.py。
+  - date: "2026-06-12"
+    change: |
+      WP1 当前状态核验：content-service 已具备 sharedFollowees / coCommented / coVisitedEntity / followeeVisited
+      真实交集数据源与 evidence rank 映射，fixtures 已铺设标准 kind；/favorite 路由退场已有反向契约测试。
+      当前仍按 WP1 文档约束在集成验收中继续守护 spotlight 非空窗、足迹只读且不产出交集 reason。
+    verify:
+      - rg -n "sharedFollowees|coCommented|coVisitedEntity|followeeVisited" quwoquan_service/services/content-service/internal quwoquan_service/services/content-service/tests quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.lite.json
+      - rg -n "TestFavoriteRouteRetired|/favorite" quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
+  - date: "2026-06-12"
+    change: |
+      WP6 长文编辑与发布富语义闭环落地：修正 CreatePostRequestWire tagRefs/entityRefs 为 List 语义；
+      PublishSettings、Markdown front matter、payload builder 打通 summary/tagRefs/entityRefs/assistantUsePolicy；
+      发布确认组件新增摘要编辑、小趣摘要、标签与关联主页选择、assistant policy；编辑器工具栏新增「提及对象」
+      入口并复用 HomepagePicker 写入 ArticleInlineSpan entity mention；读侧 rich text 已支持 onEntityTap。
+      小趣推荐标签/对象仍等待 WP8 creation-suggest metadata，本包不硬编码 assistant API。
+    verify:
+      - cd quwoquan_app && flutter test test/ui/content/entry/article_editor_wysiwyg_widget_test.dart test/ui/content/entry/providers/create_editor_provider_test.dart test/ui/content/markdown/article_markdown_codec_test.dart test/ui/content/entry/publish_draft_projection_bridge_test.dart
+      - cd quwoquan_app && flutter analyze lib/ui/content/entry/services/article_entity_mention_picker.dart lib/ui/content/entry/pages/create_page.dart lib/ui/content/entry/widgets/article_editor.dart lib/ui/content/entry/widgets/article_editor_accessory_panels.dart test/ui/content/entry/article_editor_wysiwyg_widget_test.dart
+      - make verify-markdown-article-no-article-document
+      - make verify-article-contract-purity
+      - make verify-app-page-horizontal-quality
+      - make verify-app-mock-isolation
+      - make verify-app-ui-map-literal-budget
+      - make verify-app-cloud-tag-strict-typing
+      - dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
+    notes:
+      - 局部 analyze 已无诊断；article_editor_accessory_panels.dart 的既有 info 级参数顺序/下划线诊断已顺手收敛。
+      - create_page.dart 仍超过 1000 行，已登记 convergence item 继续拆分。
+  - date: "2026-06-12"
+    change: |
+      WP7 Core 口径刷新与验收回填：确认移动端 Work Browser V1 已由 works_immersive_viewer_widget_test
+      守护；Web 精品已冻结为「HomeMultiFormFeed 宽屏多列墙 + openHomeFeedPost -> workBrowser」
+      降级规格，不再视为无规格退化，也不恢复精品队列 hero/rail；work_format_filters 当前闭集
+      all/image/video/article 已完成 ui_config metadata -> ContentUIConfig codegen -> Web/Mobile 消费闭环。
+      同步刷新 wp-07、content-display-journey-consistency、works-immersive-viewer acceptance 与集成验收清单；
+      专题/圈子精选卡位与 WorkBrowserItemDto 单一输入纯化登记为 convergence item。
+    verify:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - cd quwoquan_app && flutter test test/app/shell/web_featured_no_queue_test.dart test/app/shell/main_app_shell_widget_test.dart
+      - cd quwoquan_app && flutter test test/ui/content/post/contract/post_ui_config_contract_test.dart
+      - rg -n "Web 精品定稿规格|宽屏发现内容墙|WP7 Core" specs/feature-tree/discovery-content/content-display-journey-consistency/spec.md specs/product/2026H1-positioning-refactor/wp-07-featured-page-unification.md
+  - date: "2026-06-12"
+    change: |
+      WP8 小趣贯穿强化落地：刷新 WP8 规格与集成验收清单，冻结「六类交集表达 / 无收藏 /
+      我的足迹不产交集 / AppMessage route-query 结构化跳转」口径；新增 assistant creation-suggest
+      metadata/API/skill manifest、assistant-service 创作辅助服务与 HTTP 路由、端侧 AssistantRepository
+      三层接线；AppMessage target 扩展 routeId/routePath/query 并新增端侧解析服务；assistant-service
+      新增交集收件箱增量提醒端口，fact reason 生成结构化新交集 AppMessage；对象页与作品交集详情
+      「问问小趣」均携带 AssistantOpenContext 打开私助。
+    verify:
+      - make -C quwoquan_service verify-metadata
+      - make -C quwoquan_service codegen-app
+      - cd quwoquan_service/services/assistant-service && go test ./internal/application ./internal/adapters/http
+      - cd quwoquan_app && flutter test test/cloud/services/assistant/assistant_creation_suggest_repository_test.dart test/cloud/services/notification/app_message_navigation_test.dart
+      - cd quwoquan_app && flutter analyze lib/cloud/services/assistant/assistant_repository.dart lib/cloud/services/notification/app_message_navigation.dart lib/cloud/services/notification/app_message_repository.dart lib/ui/entity/pages/homepage_detail_page.dart lib/ui/discovery/widgets/works_immersive_viewer.dart
+    notes:
+      - 本地 T1/T2 与 assistant-service HTTP 合约已验证；真实 gamma hosted 端云旅程仍需在环境具备 seed 与 gateway 后执行。
+  - date: "2026-06-12"
+    change: |
+      C0-C4 收口冲刺第一批实现：WP2 文档回填「chip 双口径同源 + 沉浸/详情 reasons 直出」边界与
+      weightTier 测试证据；WP6 发布确认页回接 WP8 creation-suggest，可一键采纳推荐 tagRefs/entityRefs
+      并在不可用/失败时降级提示；修正 "$title 讨论群"、圈子连接标题与用户可见 group/频道残留；
+      AuthorImpact/CircleImpact 行从假 chevron 改为可点开的来源说明；circle-service 测试 Redis client
+      适配 runtime redis.Client；assistant 新交集提醒 limit/maxLimit 策略化；entity introduction 删除
+      westLakeIntroduction Go 硬编码分支，统一从主页/fixture 数据生成；homepage introduction dispose
+      埋点不再卸载期读 ref。
+    verify:
+      - python3 quwoquan_app/scripts/runtime/verify_concept_naming.py
+      - cd quwoquan_app && flutter analyze lib/ui/content/entry/widgets/create_publish_confirm_sheet.dart lib/ui/user/widgets/author_impact_card.dart lib/ui/circle/widgets/circle_shell.dart lib/ui/circle/widgets/circle_shell_builders.dart lib/ui/entity/pages/homepage_introduction_page.dart lib/core/constants/ui_text_constants.dart lib/cloud/services/assistant/assistant_repository.dart
+      - cd quwoquan_app && flutter test test/ui/content/entry/create_publish_confirm_sheet_widget_test.dart test/ui/user/author_impact_card_test.dart test/ui/circle/widgets/circle_shell_widget_test.dart test/ui/entity/pages/homepage_introduction_page_widget_test.dart
+      - cd quwoquan_service/services/assistant-service && go test ./internal/application ./internal/adapters/http
+      - cd quwoquan_service/services/entity-service && go test ./internal/application
+      - cd quwoquan_service/services/circle-service && go test ./internal/infrastructure/cache ./internal/application
+    notes:
+      - `flutter analyze` 若把 `search_network_results_page.dart` 纳入同批，会暴露 5 个既有 unused private loader warning；本轮未扩大搜索页重构面，关键改动文件分析为 0 issue。
+      - C5 的 GHA/gamma 7/7 healthy、T3/T4 真实旅程、全量 gate --scope all 仍需在环境恢复后串行执行。
+  - date: "2026-06-12"
+    change: |
+      C5 环境证据推进：修复 local-gamma T3 runner 的内容评论 probe 漂移。runner 现在通过公开
+      CreateComment API 建立运行期父评论/回复，并按 content metadata method 优先 GET smoke、无 GET
+      时才发最小 POST body，避免把评论进程内状态误当 Mongo seed 或用 GET 误判写接口。复跑
+      stackctl gamma verify 全绿，集成清单追加本地 gamma 证据与 hosted/GHA 阻断项。
+    verify:
+      - python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --skip-flutter-contracts
+      - python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py
+      - python3 agent_ops/deploy/stackctl.py verify --env gamma --kind all --tier all
+      - python3 agent_ops/deploy/stackctl.py health --target gamma-hosted --scope full
+      - python3 agent_ops/deploy/stackctl.py inspect --target gamma-hosted --kind all
+      - python3 agent_ops/deploy/stackctl.py doctor --target gamma-hosted
+      - python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart --stage pre
+      - gh run list --limit 5 --json databaseId,name,status,conclusion,createdAt,headBranch,event
+    notes:
+      - 本地 gamma `stackctl verify` 通过，报告 `artifacts/stackctl/gamma/20260612T162426Z-verify-gamma-local`。
+      - hosted gamma 仍 BLOCK：`health --scope full` 为 1/7 healthy，gateway/product-ops/media/chat probes 失败，核心 healthz 显示 Mongo `ReplicaSetNoPrimary`；报告 `artifacts/stackctl/gamma/20260612T161458Z-health-gamma-hosted`。
+      - hosted doctor 仍 BLOCK：`health checks are failing`，报告 `artifacts/stackctl/gamma/20260612T162504Z-doctor-gamma-hosted`。
+      - hosted restart 仍 BLOCK：`roll --mode restart --stage pre` 缺少 `GAMMA_ECS_SSH_KEY` 或 `GAMMA_ECS_PASSWORD`；报告 `artifacts/stackctl/gamma/20260612T163152Z-roll-gamma-hosted`。
+      - 最近 5 个 GHA run 均 failure；真实 hosted T3/T4 与 CR status=implemented 需等待 hosted gamma 恢复后执行。

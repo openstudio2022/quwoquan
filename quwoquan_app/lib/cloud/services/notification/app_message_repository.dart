@@ -31,8 +31,11 @@ class MockAppMessageRepository implements AppMessageRepository {
       title: '小趣提醒',
       summary: '你关注的主题有新进展。',
       target: AppMessageTargetWire(
-        targetType: 'assistant_turn',
-        targetId: 'atn_mock_1',
+        targetType: 'route',
+        targetId: 'myIntersections',
+        routeId: 'myIntersections',
+        routePath: '/profile/intersections',
+        query: <String, dynamic>{'dimension': 'content'},
       ),
       read: false,
       createdAt: '2026-04-29T02:00:00Z',

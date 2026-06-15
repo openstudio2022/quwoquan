@@ -37,7 +37,7 @@ from pathlib import Path
 
 from _common.io import read_json, write_json
 from _common.media_asset_url import materialize_release_media
-from _common.paths import NOW_ISO, PUBLISH_ROOT, publish_meta_path
+from _common.paths import PUBLISH_ROOT, now_iso, publish_meta_path
 from ship.sampler import (
     build_sample_bundle,
     load_publish_records,
@@ -194,7 +194,7 @@ def handle_ship(args: argparse.Namespace) -> None:
         print(f"[ship] release contract {env}: {release_path}")
 
     meta = read_json(publish_meta_path()) if publish_meta_path().exists() else {"schemaVersion": "quwoquan.publish.meta"}
-    meta["lastShip"] = NOW_ISO
+    meta["lastShip"] = now_iso()
     meta["lastDataReleaseId"] = release_id
     meta["shipSummary"] = summary
     write_json(publish_meta_path(), meta)

@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/components/object_page/tag_intersection_mapper.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 
@@ -88,37 +87,18 @@ class ObjectIntersectionQuery {
       Object.hash(objectAId, objectAType, objectBId, objectBType, limit);
 }
 
-/// 对象页「你和这里 / 你们」的交集来源：
-/// - 关系类交集（共同关注/联系人来过/圈子加入等，§2 闭集）经 intersectionRepository；
-/// - 标签类交集经 tag-service shared-tags 直打。
-/// 二者在端合并为只读 [IntersectionReason] 列表供 ObjectIntersectionCard 消费，
-/// 关系类排在标签类之前（§9.8 挖掘强度：人物/事物 > 兴趣标签）。
-/// 通过 provider 透明 Mock/Remote 切换，无效查询返回空。
+/// 对象页「你和这里 / 你们」的交集唯一来源：后端 intersectionRepository。
+/// App 不再在 provider 层把 tag-service/shared-tags 合并成第二条 reason 主链。
 final objectSharedReasonsProvider = FutureProvider.family<
     List<IntersectionReason>,
     ObjectIntersectionQuery>((ref, q) async {
   if (!q.isResolvable) {
     return const <IntersectionReason>[];
   }
-  final tagRepo = ref.watch(tagRepositoryProvider);
   final intersectionRepo = ref.watch(intersectionRepositoryProvider);
-
-  final relationFuture = intersectionRepo.getObjectIntersections(
+  return intersectionRepo.getObjectIntersections(
     objectId: q.objectBId,
     objectType: q.objectBType,
     limit: q.limit,
   );
-  final sharedFuture = tagRepo.sharedTags(
-    objectAId: q.objectAId,
-    objectAType: q.objectAType,
-    objectBId: q.objectBId,
-    objectBType: q.objectBType,
-    limit: q.limit,
-  );
-
-  final relationReasons = await relationFuture;
-  final shared = await sharedFuture;
-  final tagReasons = sharedTagsToReasons(shared);
-
-  return <IntersectionReason>[...relationReasons, ...tagReasons];
 });

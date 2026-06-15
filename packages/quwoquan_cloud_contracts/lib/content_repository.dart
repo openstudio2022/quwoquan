@@ -114,15 +114,13 @@ abstract class ContentWriteRepository {
   });
 }
 
-/// 内容互动反应（点赞 / 收藏 / 分享 / 反应态 / 计数 / 行为上报）。
+/// 内容互动反应（点赞 / 分享 / 反应态 / 计数 / 行为上报）。
 ///
-/// 唯一的内容互动接口（已并入原 like/unlike/favorite/unfavorite 窄接口）。
+/// 唯一的内容互动接口（内容只有 赞/评/转 三动作）。
 /// R02：单接口 ≤10 方法。
 abstract class ContentReactionRepository {
   Future<void> likePost({required String postId});
   Future<void> unlikePost({required String postId});
-  Future<void> favoritePost({required String postId});
-  Future<void> unfavoritePost({required String postId});
   Future<bool> sharePost({required String postId});
   Future<bool> unsharePost({required String postId});
   Future<ContentReactionState> getReactionState({required String postId});

@@ -191,8 +191,8 @@ work_format_filters:
     content_type: video
     order: 2
 
-  - id: note
-    label_key: work_format_note
+  - id: article
+    label_key: work_format_article
     content_type: article
     order: 3
 
@@ -295,6 +295,48 @@ article_template_recommendations:
   - category_id: photography
     recommended_article_templates: [journal, ritual]
 
+article_dark_paper_themes:
+  default_theme: darkPaper
+  reading_setting_options:
+    - { id: system, label_key: article_paper_theme_system }
+    - { id: darkPaper, label_key: article_paper_theme_dark_paper }
+    - { id: coolGray, label_key: article_paper_theme_cool_gray }
+    - { id: warmBlack, label_key: article_paper_theme_warm_black }
+    - { id: inkGreen, label_key: article_paper_theme_ink_green }
+    - { id: deepBrown, label_key: article_paper_theme_deep_brown }
+  vertical_defaults:
+    photography: darkPaper
+    travel: warmBlack
+    history: deepBrown
+    tech: coolGray
+    nature: inkGreen
+  themes:
+    - id: darkPaper
+      stage: "#0F1115"
+      paper: "#161A20"
+      text: "#E6E8EB"
+      secondary_text: "#8B919C"
+    - id: coolGray
+      stage: "#101318"
+      paper: "#1A1F26"
+      text: "#E6E8EB"
+      secondary_text: "#8B919C"
+    - id: warmBlack
+      stage: "#13100D"
+      paper: "#1E1A16"
+      text: "#E8E6E3"
+      secondary_text: "#8D8680"
+    - id: inkGreen
+      stage: "#101511"
+      paper: "#161B18"
+      text: "#E6EAE6"
+      secondary_text: "#879086"
+    - id: deepBrown
+      stage: "#15110F"
+      paper: "#1F1A17"
+      text: "#E8E4DF"
+      secondary_text: "#8F8882"
+
 # ── 二、内容卡片展示配置 ────────────────────────────────────────────────
 card_config:
   image:
@@ -302,9 +344,8 @@ card_config:
     show_author_name: true
     show_like_count: true
     show_comment_count: false           # 列表态不展示评论数
-    show_favorite_count: false
     action_bar_position: overlay        # 覆盖在图片上
-    action_bar_items: [like, favorite, share]
+    action_bar_items: [like, share]
 
   video:
     show_author_avatar: true
@@ -313,7 +354,7 @@ card_config:
     show_like_count: true
     show_comment_count: false
     action_bar_position: right_side
-    action_bar_items: [like, comment, favorite, share]
+    action_bar_items: [like, comment, share]
     progress_bar: true
 
   micro:
@@ -333,7 +374,7 @@ card_config:
     show_comment_count: true
     show_cover: true
     action_bar_position: bottom
-    action_bar_items: [like, comment, favorite, share]
+    action_bar_items: [like, comment, share]
 
 # ── 三、互动操作 UI 配置 ─────────────────────────────────────────────────
 interaction_config:
@@ -344,14 +385,6 @@ interaction_config:
     inactive_icon: favorite_border
     error_rollback: true
     error_message_key: error_like_failed
-
-  favorite:
-    optimistic_update: true
-    animation: star_collect
-    active_icon: bookmark
-    inactive_icon: bookmark_border
-    error_rollback: true
-    error_message_key: error_favorite_failed
 
   share:
     optimistic_update: false            # 分享操作不做乐观更新

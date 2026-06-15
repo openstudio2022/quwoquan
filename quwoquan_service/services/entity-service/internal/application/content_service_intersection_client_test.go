@@ -18,11 +18,11 @@ func TestResolveObjectPageIntersectionsUsesContentService(t *testing.T) {
 		if got := r.Header.Get("X-Client-User-Id"); got != "viewer_1" {
 			t.Fatalf("viewer header=%q want viewer_1", got)
 		}
-		if got := r.URL.Query().Get("objectId"); got != "homepage_1" {
-			t.Fatalf("objectId=%q want homepage_1", got)
+		if got := r.URL.Query().Get("objectId"); got != "entity:university:pku" {
+			t.Fatalf("objectId=%q want entity:university:pku", got)
 		}
-		if got := r.URL.Query().Get("objectType"); got != "university" {
-			t.Fatalf("objectType=%q want university", got)
+		if got := r.URL.Query().Get("objectType"); got != "entity" {
+			t.Fatalf("objectType=%q want entity", got)
 		}
 		if got := r.URL.Query().Get("limit"); got != "8" {
 			t.Fatalf("limit=%q want 8", got)
@@ -42,8 +42,9 @@ func TestResolveObjectPageIntersectionsUsesContentService(t *testing.T) {
 	t.Setenv("CONTENT_SERVICE_BASE_URL", server.URL)
 
 	homepage := &Homepage{
-		ID:           "homepage_1",
-		HomepageType: "university",
+		ID:                "homepage_1",
+		HomepageType:      "university",
+		CanonicalEntityID: "entity:university:pku",
 	}
 
 	reasons, intersections := resolveObjectPageIntersections(context.Background(), "viewer_1", homepage, nil)

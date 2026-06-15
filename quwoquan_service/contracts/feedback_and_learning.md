@@ -233,7 +233,7 @@ SLA 建议策略：
 
 ### 7.1 必须覆盖的反馈类型
 
-- **显式反馈**：like/favorite/follow/comment/share/not_interested/report、对摘要/帮读的偏好等
+- **显式反馈**：like/follow/comment/share/not_interested/report、对摘要/帮读的偏好等
 - **隐式反馈**：曝光（impression）、点击（click）、停留（dwell）、滚动深度、跳出等
 - **助手反馈**：
   - interaction events（多轮对话、工具调用、用户纠错）

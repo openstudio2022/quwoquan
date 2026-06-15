@@ -37,7 +37,7 @@ entities:
         api_exposure: read
         ops_exposure: read
         recommend_feature: false
-        description: 首次创建来源：anonymous_device | phone | wechat | apple | passkey | migrated_seed
+        description: 首次创建来源：anonymous_device | phone | wechat | alipay | qq | apple | passkey | migrated_seed
 
       - name: logicalShard
         type: int
@@ -129,6 +129,17 @@ entities:
         recommend_feature: true
         search_field: true
         description: 个人签名
+
+      - name: identityTags
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        search_field: true
+        description: 主页单行身份标签（用户语言短词，如「AI产品 / 摄影 / 旅行 / 北京」），端侧以 · 分隔单行展示；与 bio 互补不重复
 
       - name: interestTags
         type: "[]string"
@@ -540,7 +551,7 @@ entities:
           strict: 完全不被外部发现，仅受邀可见
 
   CredentialBinding:
-    description: 第三方凭证绑定（phone/wechat/apple/passkey 并行，各最多 1 个绑定到同一 OwnerAccount）
+    description: 第三方凭证绑定（phone/wechat/alipay/qq/apple/passkey 并行，每种类型各最多 1 个绑定到同一 OwnerAccount；不同类型可同时绑定）
     cache_excluded: true
     fields:
       - name: id
@@ -568,7 +579,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: "凭证类型：phone / wechat / apple / passkey"
+        description: "凭证类型：phone / carrier_phone / wechat / alipay / qq / apple / passkey"
 
       - name: credentialKey
         type: string
@@ -620,8 +631,233 @@ entities:
 
     enums:
       CredentialType:
-        values: [phone, wechat, apple, passkey, anonymous_device]
+        values: [phone, carrier_phone, wechat, alipay, qq, apple, passkey, anonymous_device]
         description: 支持的第三方凭证类型
+
+  LoginAccountHint:
+    description: 登录页历史账号或运营商命中账号的脱敏摘要；只用于展示和二次登录，不是认证事实
+    cache_excluded: true
+    fields:
+      - name: displayName
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 登录页展示昵称；优先 ownerDisplayName，其次 nickname
+
+      - name: avatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: avatarAssetId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: maskedPhone
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+        description: 脱敏手机号，如 138****8888；端侧不得接触真实手机号
+
+      - name: identityOrigin
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: lastLoginAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  OneTapLoginHintResponse:
+    description: 运营商一键登录提示响应；不签发 token，只返回脱敏号码和账号摘要
+    cache_excluded: true
+    fields:
+      - name: state
+        type: enum
+        enum_ref: OneTapLoginHintState
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: maskedPhone
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+
+      - name: registered
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: accountHint
+        type: object
+        object_ref: LoginAccountHint
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+
+      - name: expiresInSeconds
+        type: int
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: providerRequestId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+    enums:
+      OneTapLoginHintState:
+        values: [registered, new_phone, unavailable]
+        description: 运营商号码是否命中已有账号
+
+  CarrierProviderAuditContext:
+    description: 运营商服务商审计上下文；禁止记录真实手机号和 carrier token
+    cache_excluded: true
+    fields:
+      - name: provider
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: providerRequestId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: latencyMs
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: resultCode
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: occurredAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+  ConsentRecord:
+    description: 登录前用户协议与隐私政策同意记录；用于登录、数据权利与法务审计
+    cache_excluded: true
+    fields:
+      - name: id
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: ownerId
+        type: string
+        constraints: [FK_user_profiles_CASCADE, NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: agreementVersion
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: privacyVersion
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: acceptedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: deviceId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: platform
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: sourceOperation
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
 
     business_rules:
       - id: last_credential_protection
@@ -1614,6 +1850,15 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: identityTags
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 主页单行身份标签（继承 owner 基线 identityTags，端侧以 · 分隔单行展示）
 
       - name: followerCount
         type: int

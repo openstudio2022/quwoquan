@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
@@ -18,7 +19,6 @@ import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// 圈子"创作"板块：SubTab 过滤 + 排序 + 二列网格。
 ///
@@ -48,11 +48,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   List<CircleHubFeedPostEntry> _feedEntries = const [];
   String? _circleCategoryId;
 
-  List<IdentityFilterConfig> get _identityFilters =>
-      ContentUIConfig.creationIdentityFilters;
-
-  List<WorkFormatFilterConfig> get _workFormatFilters =>
-      ContentUIConfig.workFormatFilters;
+  List<UserProfileSubTabConfig> get _creationFilters =>
+      UserProfileUIConfig.creationSubTabs;
 
   static const double _creationGridCoverAspectRatio = 0.92;
   static const ArticleDistributionProfileConfig
@@ -226,7 +223,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             ? (compactEmptyState ? AppSpacing.zero : AppSpacing.intraGroupXs)
             : AppSpacing.containerSm;
         final outerBottom = compactHeight
-            ? (compactEmptyState ? AppSpacing.intraGroupXs : AppSpacing.containerSm)
+            ? (compactEmptyState
+                  ? AppSpacing.intraGroupXs
+                  : AppSpacing.containerSm)
             : AppSpacing.containerLg;
         final sectionGap = compactHeight
             ? AppSpacing.intraGroupXs
@@ -239,25 +238,15 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildIdentityFilterRow(
-                circleState,
-                circleCtrl,
-                fg,
-                fgSecondary,
-              ),
-              if (_isWorkLikeSubTab(circleState.activeSubTab)) ...[
-                SizedBox(height: filterGap),
-                _buildWorkFormatFilterRow(
-                  circleState,
-                  circleCtrl,
-                  fg,
-                  fgSecondary,
-                ),
-              ],
+              _buildCreationFilterRow(circleState, circleCtrl, fg, fgSecondary),
               if (_isAdminOrOwner && !compactHeight) ...[
                 SizedBox(height: filterGap),
                 _buildSortControls(circleState, circleCtrl, fg, fgSecondary),
-                SizedBox(height: compactHeight ? AppSpacing.intraGroupXs : AppSpacing.xs),
+                SizedBox(
+                  height: compactHeight
+                      ? AppSpacing.intraGroupXs
+                      : AppSpacing.xs,
+                ),
                 _buildViewModeToggle(
                   circleState,
                   circleCtrl,
@@ -288,9 +277,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             if (!compactEmptyState && compactHeight)
               Flexible(
                 fit: FlexFit.loose,
-                child: SingleChildScrollView(
-                  child: filterSurface,
-                ),
+                child: SingleChildScrollView(child: filterSurface),
               )
             else if (!compactEmptyState)
               filterSurface,
@@ -298,10 +285,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             if (widget.inlineScroll)
               contentSurface
             else
-              Flexible(
-                fit: FlexFit.tight,
-                child: contentSurface,
-              ),
+              Flexible(fit: FlexFit.tight, child: contentSurface),
           ],
         );
 
@@ -321,31 +305,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   bool get _isAdminOrOwner =>
       widget.role == CircleRole.owner || widget.role == CircleRole.admin;
 
-  bool _isWorkLikeSubTab(CreationSubTab tab) {
-    switch (tab) {
-      case CreationSubTab.work:
-      case CreationSubTab.image:
-      case CreationSubTab.video:
-      case CreationSubTab.article:
-        return true;
-      case CreationSubTab.all:
-      case CreationSubTab.moment:
-      case CreationSubTab.micro:
-        return false;
-    }
-  }
-
   ({String? identity, String? type}) _feedQueryForState(CircleState state) {
     switch (state.activeSubTab) {
-      case CreationSubTab.moment:
-        return (identity: 'moment', type: null);
-      case CreationSubTab.micro:
-        return (identity: 'moment', type: 'micro');
-      case CreationSubTab.work:
-        return (
-          identity: 'work',
-          type: _contentTypeForWorkFormat(state.activeWorkFormat),
-        );
       case CreationSubTab.image:
         return (identity: 'work', type: 'image');
       case CreationSubTab.video:
@@ -357,7 +318,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
   }
 
-  Widget _buildIdentityFilterRow(
+  Widget _buildCreationFilterRow(
     CircleState circleState,
     CircleStateNotifier circleCtrl,
     Color fg,
@@ -368,7 +329,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       child: Row(
-        children: _identityFilters
+        children: _creationFilters
             .map((filter) {
               final tab = _creationSubTabForId(filter.id);
               final selected = circleState.activeSubTab == tab;
@@ -391,74 +352,16 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     );
   }
 
-  Widget _buildWorkFormatFilterRow(
-    CircleState circleState,
-    CircleStateNotifier circleCtrl,
-    Color fg,
-    Color fgSecondary,
-  ) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-      child: Row(
-        children: _workFormatFilters
-            .map((filter) {
-              final format = _creationWorkFormatForId(filter.id);
-              final selected = circleState.activeWorkFormat == format;
-              return Padding(
-                padding: EdgeInsets.only(right: AppSpacing.sm),
-                child: _CupertinoFilterChip(
-                  label: UITextConstants.contentLabelForKey(filter.labelKey),
-                  selected: selected,
-                  fg: fg,
-                  fgSecondary: fgSecondary,
-                  onPressed: () {
-                    circleCtrl.setWorkFormat(format);
-                    _loadFeed();
-                  },
-                ),
-              );
-            })
-            .toList(growable: false),
-      ),
-    );
-  }
-
   CreationSubTab _creationSubTabForId(String id) {
     switch (id) {
-      case 'moment':
-        return CreationSubTab.moment;
-      case 'work':
-        return CreationSubTab.work;
+      case 'image':
+        return CreationSubTab.image;
+      case 'video':
+        return CreationSubTab.video;
+      case 'article':
+        return CreationSubTab.article;
       default:
         return CreationSubTab.all;
-    }
-  }
-
-  CreationWorkFormat _creationWorkFormatForId(String id) {
-    switch (id) {
-      case 'image':
-        return CreationWorkFormat.image;
-      case 'video':
-        return CreationWorkFormat.video;
-      case 'note':
-        return CreationWorkFormat.note;
-      default:
-        return CreationWorkFormat.all;
-    }
-  }
-
-  String? _contentTypeForWorkFormat(CreationWorkFormat format) {
-    switch (format) {
-      case CreationWorkFormat.image:
-        return 'image';
-      case CreationWorkFormat.video:
-        return 'video';
-      case CreationWorkFormat.note:
-        return 'article';
-      case CreationWorkFormat.all:
-        return null;
     }
   }
 
@@ -467,43 +370,13 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     CreationSubTab tab,
   ) {
     switch (tab) {
-      case CreationSubTab.moment:
-        return _entryIdentity(entry) == 'moment';
-      case CreationSubTab.micro:
-        return _entryIdentity(entry) == 'moment' &&
-            _entryDisplayFormat(entry) == 'micro';
-      case CreationSubTab.work:
-        return _entryIdentity(entry) == 'work';
       case CreationSubTab.image:
-        return _entryIdentity(entry) == 'work' &&
-            _entryDisplayFormat(entry) == 'image';
-      case CreationSubTab.video:
-        return _entryIdentity(entry) == 'work' &&
-            _entryDisplayFormat(entry) == 'video';
-      case CreationSubTab.article:
-        return _entryIdentity(entry) == 'work' &&
-            _entryDisplayFormat(entry) == 'note';
-      case CreationSubTab.all:
-        return true;
-    }
-  }
-
-  bool _matchesWorkFormat(
-    CircleHubFeedPostEntry entry,
-    CreationSubTab activeSubTab,
-    CreationWorkFormat format,
-  ) {
-    if (!_isWorkLikeSubTab(activeSubTab) || format == CreationWorkFormat.all) {
-      return true;
-    }
-    switch (format) {
-      case CreationWorkFormat.image:
         return _entryDisplayFormat(entry) == 'image';
-      case CreationWorkFormat.video:
+      case CreationSubTab.video:
         return _entryDisplayFormat(entry) == 'video';
-      case CreationWorkFormat.note:
+      case CreationSubTab.article:
         return _entryDisplayFormat(entry) == 'note';
-      case CreationWorkFormat.all:
+      case CreationSubTab.all:
         return true;
     }
   }
@@ -624,9 +497,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       case 'video':
         return UITextConstants.workFormatFilterVideo;
       case 'note':
-        return UITextConstants.workFormatFilterNote;
+        return UITextConstants.creationSubText;
       default:
-        return UITextConstants.creationFilterWork;
+        return UITextConstants.homepageContentTypeDefault;
     }
   }
 
@@ -654,9 +527,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       case 'video':
         return UITextConstants.workFormatFilterVideo;
       case 'note':
-        return UITextConstants.workFormatFilterNote;
+        return UITextConstants.creationSubText;
       default:
-        return UITextConstants.creationFilterWork;
+        return UITextConstants.homepageContentTypeDefault;
     }
   }
 
@@ -761,16 +634,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
 
     final activeSubTab = circleState.activeSubTab;
-    final activeWorkFormat = circleState.activeWorkFormat;
     final filtered = _feedEntries
-        .where((entry) {
-          return _matchesIdentityFilter(entry, activeSubTab) &&
-              _matchesWorkFormat(entry, activeSubTab, activeWorkFormat);
-        })
+        .where((entry) => _matchesIdentityFilter(entry, activeSubTab))
         .toList(growable: true);
 
-    if (activeSubTab == CreationSubTab.article ||
-        activeWorkFormat == CreationWorkFormat.note) {
+    if (activeSubTab == CreationSubTab.article) {
       filtered.sort((left, right) {
         final leftHasTemplate = _entryArticleTemplate(left).trim().isNotEmpty;
         final rightHasTemplate = _entryArticleTemplate(right).trim().isNotEmpty;
@@ -887,9 +755,6 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         ),
     };
 
-    final route = _isVideoPost(tappedDto)
-        ? AppRoutePaths.videoViewer(index: '$initialIndex')
-        : AppRoutePaths.mediaViewer(category: 'circle', index: '$initialIndex');
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
       posts: viewerDtos,
       discoveryState: ref.read(discoveryStateProvider),
@@ -897,13 +762,23 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
-    final navFeedRequestId =
-        ref.read(feedSessionProvider.notifier).newFeedRequestId();
+    final navFeedRequestId = ref
+        .read(feedSessionProvider.notifier)
+        .newFeedRequestId();
     final result = await context.push<Object?>(
-      route,
+      AppRoutePaths.workBrowser(
+        workId: tappedDto.id,
+        filter: _isVideoPost(tappedDto)
+            ? 'video'
+            : (tappedDto.isArticleLike ? 'article' : 'image'),
+        source: 'circle',
+        index: '$initialIndex',
+      ),
       extra: MediaViewerExtra(
         posts: viewerDtos
-            .map((dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()))
+            .map(
+              (dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()),
+            )
             .toList(growable: false),
         dtoPosts: viewerDtos,
         initialIndex: initialIndex,
@@ -1243,7 +1118,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
     final templateId = (item['articleTemplate'] ?? '').toString().trim();
     if (templateId.isNotEmpty && recommended.contains(templateId)) {
-      return '频道推荐 · ${articleTemplatePresetFromString(templateId).label}';
+      return '讨论推荐 · ${articleTemplatePresetFromString(templateId).label}';
     }
     final labels = recommended
         .take(2)
@@ -1252,7 +1127,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     if (labels.isEmpty) {
       return '';
     }
-    return '频道推荐 · $labels';
+    return '讨论推荐 · $labels';
   }
 
   int _rawLikeCount(Map<String, dynamic> item) {
@@ -1269,8 +1144,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   Widget _buildEmpty(Color fgSecondary) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final ultraCompact =
-            constraints.maxHeight < AppSpacing.buttonHeight;
+        final ultraCompact = constraints.maxHeight < AppSpacing.buttonHeight;
         final compact = !ultraCompact && constraints.maxHeight < 220;
         final horizontalPadding = compact
             ? AppSpacing.containerSm

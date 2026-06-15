@@ -150,6 +150,33 @@ class SettingsSemanticConstants {
   static Color conversationSheetSelectionAccentColor(bool isDark) =>
       AppColors.primaryColor;
 
+  /// 创作入口动作主色：仅使用品牌蓝，避免发布面板形成多色噪音。
+  static Color createSheetActionIconColor(bool isDark) =>
+      AppColors.primaryColor;
+
+  /// 创作入口动作 halo：品牌蓝透明派生。
+  static Color createSheetActionHaloColor(bool isDark) =>
+      AppColors.primaryColor.withValues(alpha: isDark ? 0.22 : 0.10);
+
+  /// 创作入口草稿动作色：唯一辅助色，用于表达未完成/待续。
+  static Color createSheetDraftActionIconColor(bool isDark) =>
+      AppColors.warning;
+
+  /// 创作入口草稿 halo：由 warning 透明派生。
+  static Color createSheetDraftActionHaloColor(bool isDark) =>
+      AppColors.warning.withValues(alpha: isDark ? 0.24 : 0.16);
+
+  /// 创作入口拖拽手柄色，与 iOS secondary label 同源透明派生。
+  static Color createSheetDragHandleColor(bool isDark) =>
+      AppColorsFunctional.getColor(
+        isDark,
+        ColorType.foregroundSecondary,
+      ).withValues(alpha: isDark ? 0.34 : 0.28);
+
+  /// 创作入口分组标题强调条色。
+  static Color createSheetSectionAccentColor(bool isDark) =>
+      AppColors.primaryColor;
+
   /// 贴底对话态 sheet 内的轻量主操作按钮填充色（如「添加」）。
   static Color conversationSheetPrimaryActionBackgroundColor(bool isDark) =>
       AppColors.primaryColor;

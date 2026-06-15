@@ -1,0 +1,53 @@
+version: 1
+aggregate: Circle
+
+description: |
+  Circle 对象页端侧 UI 配置。
+  codegen 从本文件生成 Dart CircleUIConfig（DO NOT EDIT），
+  端侧圈子主页通过 CircleUIConfig 消费一级 Tab、板块映射与编辑页展示配置，
+  消除 CircleShell / CircleEditSettingsPage 内的 tab 与 sectionType 硬编码。
+
+circle_tabs:
+  - id: content
+    label_key: circle_tab_content
+    body_slot: creations
+    section_types: [works]
+    order: 0
+    default: true
+
+  - id: discussion
+    label_key: circle_tab_discussion
+    body_slot: discussion
+    section_types: [chat, storage]
+    order: 1
+
+  - id: members
+    label_key: circle_tab_members
+    body_slot: members
+    section_types: [interaction]
+    order: 2
+
+circle_sections:
+  - section_type: works
+    label_key: circle_section_works
+    icon: sparkles
+    tab_id: content
+    order: 0
+
+  - section_type: interaction
+    label_key: circle_section_interaction
+    icon: heart
+    tab_id: members
+    order: 1
+
+  - section_type: chat
+    label_key: circle_section_chat
+    icon: chat_bubble_2
+    tab_id: discussion
+    order: 2
+
+  - section_type: storage
+    label_key: circle_section_storage
+    icon: folder
+    tab_id: discussion
+    order: 3

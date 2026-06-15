@@ -88,6 +88,12 @@ client_projection:
       aliases: [bio]
       default: "''"
 
+    - name: identityTags
+      dart_type: List<String>
+      nullable: false
+      source: identityTags
+      aliases: [identityTags]
+
     - name: followerCount
       dart_type: int
       nullable: false

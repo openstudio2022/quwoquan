@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
@@ -63,8 +64,40 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 	if err := json.Unmarshal(reactionRec.Body.Bytes(), &reaction); err != nil {
 		t.Fatalf("decode reaction: %v", err)
 	}
-	if reaction["liked"] != true || reaction["favorited"] != true {
+	if reaction["liked"] != true {
 		t.Fatalf("expected seeded reaction state, got %+v", reaction)
+	}
+	if _, exists := reaction["favorited"]; exists {
+		t.Fatalf("favorited 字段已随收藏概念退场，不应再出现在 reaction state: %+v", reaction)
+	}
+}
+
+func TestContentFixturePostFromFixture_UsesExplicitUpdatedAndPublishedAt(t *testing.T) {
+	post := contentPostFromFixture(contentFixturePost{
+		PostID:      "fixture_time_semantics_001",
+		ContentType: "article",
+		Identity:    "work",
+		AuthorID:    "fixture_user_current",
+		DisplayName: "契约当前用户",
+		AvatarURL:   "media/avatar/example.png",
+		Title:       "时间语义",
+		Body:        "正文",
+		CreatedAt:   "2026-05-01T00:00:00Z",
+		UpdatedAt:   "2026-05-03T00:00:00Z",
+		PublishedAt: "2026-05-04T00:00:00Z",
+	})
+
+	if got, want := post.CreatedAt, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Fatalf("createdAt mismatch: got %s want %s", got, want)
+	}
+	if got, want := post.UpdatedAt, time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Fatalf("updatedAt mismatch: got %s want %s", got, want)
+	}
+	if got, want := post.PublishedAt, time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Fatalf("publishedAt mismatch: got %s want %s", got, want)
+	}
+	if !post.LastActiveAt.Equal(post.UpdatedAt) {
+		t.Fatalf("lastActiveAt should track updatedAt: got %s want %s", post.LastActiveAt, post.UpdatedAt)
 	}
 }
 

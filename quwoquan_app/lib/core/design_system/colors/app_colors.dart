@@ -159,6 +159,89 @@ class AppColors {
   static const Color webPcLoginSurfaceShadow = Color(0x26000000);
   static const Color webPcToolbarShadow = Color(0x14000000);
 
+  /// 第三方登录品牌色（与 simple_icons 官方品牌色一致，作为语义 token 复用）
+  static const Color loginMethodWechatBrand = Color(0xFF07C160);
+  static const Color loginMethodQqBrand = Color(0xFF1EBAFC);
+  static const Color loginMethodAlipayBrand = Color(0xFF1677FF);
+
+  /// 「其他手机号」登录方式实心圆底：与微信/QQ/支付宝同为实心彩色圆 + 白色图标，
+  /// 取应用品牌蓝，保证图一/图二底部入口视觉权重一致（不再是浅灰近背景的隐形圆）。
+  static const Color loginMethodPhoneCircle = brandBlue600;
+
+  /// 登录页高保背景与控件语义色。
+  static const Color loginPageBackgroundLight = Color(0xFFF7F7FB);
+  static const Color loginPageBackgroundDark = iosGroupedBackgroundDark;
+  static const Color loginInputSurfaceLight = Color(0xFFFFFFFF);
+  static const Color loginInputSurfaceDark = iosGroupedSurfaceDark;
+  static const Color loginInputBorderLight = Color(0xFFD7D7DE);
+  static const Color loginInputBorderDark = iosPopupHairlineSeparatorDark;
+  static const Color loginInputFocusedBorderLight = brandBlue600;
+  static const Color loginInputFocusedBorderDark = brandBlue500;
+  static const Color loginPrimaryDisabledLight = Color(0xFFA9D3FF);
+  static const Color loginPrimaryDisabledDark = Color(0xFF295F9B);
+  static const Color loginOtherDividerLight = Color(0xFFDADAE0);
+  static const Color loginOtherDividerDark = iosPopupHairlineSeparatorDark;
+
+  static Color loginPageBackground(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginPageBackgroundLight,
+        darkColor: loginPageBackgroundDark,
+      ),
+      context,
+    );
+  }
+
+  static Color loginInputSurface(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginInputSurfaceLight,
+        darkColor: loginInputSurfaceDark,
+      ),
+      context,
+    );
+  }
+
+  static Color loginInputBorder(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginInputBorderLight,
+        darkColor: loginInputBorderDark,
+      ),
+      context,
+    );
+  }
+
+  static Color loginInputFocusedBorder(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginInputFocusedBorderLight,
+        darkColor: loginInputFocusedBorderDark,
+      ),
+      context,
+    );
+  }
+
+  static Color loginPrimaryDisabled(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginPrimaryDisabledLight,
+        darkColor: loginPrimaryDisabledDark,
+      ),
+      context,
+    );
+  }
+
+  static Color loginOtherDivider(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginOtherDividerLight,
+        darkColor: loginOtherDividerDark,
+      ),
+      context,
+    );
+  }
+
   static Color webPcToolbarSurface(BuildContext context) =>
       iosGroupedSurface(context).withValues(alpha: 0.96);
 
@@ -193,9 +276,6 @@ class AppColors {
 
   /// 作品频道 — 点赞激活色（暗玫瑰，降低饱和度避免在深色背景过度刺眼）
   static const Color worksLike = Color(0xFFD94F6A);
-
-  /// 作品频道 — 收藏激活色（琥珀棕，业界通行星标色调）
-  static const Color worksSave = Color(0xFFE0A850);
 
   /// 创作页媒体错误占位渐变
   static const Color createMediaFallbackGradientTop = Color(0xFF343434);
@@ -440,136 +520,56 @@ class ArticleTemplateColors {
 class ArticlePaperPaletteColors {
   ArticlePaperPaletteColors._();
 
-  // white
-  static const Color whiteStageLight = Color(0xFFF5F5F5);
-  static const Color whiteStageDark = Color(0xFF1C1C1E);
-  static const Color whitePaperLight = Color(0xFFFFFFFF);
-  static const Color whitePaperDark = Color(0xFF1C1C1E);
-  static const Color whitePaperBorderLight = Color(0xFFE5E5EA);
-  static const Color whitePaperBorderDark = Color(0xFF38383A);
-  static const Color whiteTextLight = Color(0xFF1C1C1E);
-  static const Color whiteTextDark = Color(0xFFE5E5EA);
-  static const Color whiteSecondaryTextLight = Color(0xFF8E8E93);
-  static const Color whiteSecondaryTextDark = Color(0xFF98989D);
-  static const Color whiteAccentLight = AppColors.primaryColor;
-  static const Color whiteAccentDark = AppColors.iosAccentDark;
-  static const Color whiteBadgeBackgroundLight = Color(0xFFF2F2F7);
-  static const Color whiteBadgeBackgroundDark = Color(0xFF2C2C2E);
-  static const Color whiteBadgeTextLight = Color(0xFF3C3C43);
-  static const Color whiteBadgeTextDark = Color(0xFFEBEBF5);
-  static const Color whiteOverlayLight = Color(0x0A000000);
-  static const Color whiteOverlayDark = Color(0x0AFFFFFF);
+  // Work Browser Dark Paper V1.0
+  static const Color darkPaperStage = Color(0xFF0F1115);
+  static const Color darkPaperPaper = Color(0xFF161A20);
+  static const Color darkPaperBorder = Color(0xFF242A33);
+  static const Color darkPaperText = Color(0xFFE6E8EB);
+  static const Color darkPaperSecondaryText = Color(0xFF8B919C);
+  static const Color darkPaperAccent = AppColors.iosAccentDark;
+  static const Color darkPaperBadgeBackground = Color(0xFF242A33);
+  static const Color darkPaperBadgeText = Color(0xFFE6E8EB);
+  static const Color darkPaperOverlay = Color(0x0AFFFFFF);
 
-  // cream
-  static const Color creamStageLight = Color(0xFFF5F0E8);
-  static const Color creamStageDark = Color(0xFF1E1C18);
-  static const Color creamPaperLight = Color(0xFFFFF8F0);
-  static const Color creamPaperDark = Color(0xFF2C2520);
-  static const Color creamPaperBorderLight = Color(0xFFE8DDD0);
-  static const Color creamPaperBorderDark = Color(0xFF3A3228);
-  static const Color creamTextLight = Color(0xFF2C2418);
-  static const Color creamTextDark = Color(0xFFE8DDD0);
-  static const Color creamSecondaryTextLight = Color(0xFF8C7E6C);
-  static const Color creamSecondaryTextDark = Color(0xFF9C8E7C);
-  static const Color creamAccentLight = Color(0xFFA0845C);
-  static const Color creamAccentDark = Color(0xFFBFA07C);
-  static const Color creamBadgeBackgroundLight = Color(0xFFF0E8D8);
-  static const Color creamBadgeBackgroundDark = Color(0xFF3A3228);
-  static const Color creamBadgeTextLight = Color(0xFF4A3C28);
-  static const Color creamBadgeTextDark = Color(0xFFE8DDD0);
-  static const Color creamOverlayLight = Color(0x0A3C2810);
-  static const Color creamOverlayDark = Color(0x0AFFF8F0);
+  static const Color coolGrayStage = Color(0xFF101318);
+  static const Color coolGrayPaper = Color(0xFF1A1F26);
+  static const Color coolGrayBorder = Color(0xFF29313B);
+  static const Color coolGrayText = Color(0xFFE6E8EB);
+  static const Color coolGraySecondaryText = Color(0xFF8B919C);
+  static const Color coolGrayAccent = Color(0xFF7BA7FF);
+  static const Color coolGrayBadgeBackground = Color(0xFF29313B);
+  static const Color coolGrayBadgeText = Color(0xFFE6E8EB);
+  static const Color coolGrayOverlay = Color(0x0AFFFFFF);
 
-  // sepia
-  static const Color sepiaStageLight = Color(0xFFEDE4D0);
-  static const Color sepiaStageDark = Color(0xFF1E1A14);
-  static const Color sepiaPaperLight = Color(0xFFF4ECD8);
-  static const Color sepiaPaperDark = Color(0xFF3A3228);
-  static const Color sepiaPaperBorderLight = Color(0xFFD8CEB8);
-  static const Color sepiaPaperBorderDark = Color(0xFF4A4038);
-  static const Color sepiaTextLight = Color(0xFF3A3020);
-  static const Color sepiaTextDark = Color(0xFFD8CEB8);
-  static const Color sepiaSecondaryTextLight = Color(0xFF7A6E58);
-  static const Color sepiaSecondaryTextDark = Color(0xFF9A8E78);
-  static const Color sepiaAccentLight = Color(0xFF8C6E3C);
-  static const Color sepiaAccentDark = Color(0xFFB09060);
-  static const Color sepiaBadgeBackgroundLight = Color(0xFFE8DCC4);
-  static const Color sepiaBadgeBackgroundDark = Color(0xFF4A4038);
-  static const Color sepiaBadgeTextLight = Color(0xFF4A3C28);
-  static const Color sepiaBadgeTextDark = Color(0xFFD8CEB8);
-  static const Color sepiaOverlayLight = Color(0x0A3C2810);
-  static const Color sepiaOverlayDark = Color(0x0AF4ECD8);
+  static const Color warmBlackStage = Color(0xFF13100D);
+  static const Color warmBlackPaper = Color(0xFF1E1A16);
+  static const Color warmBlackBorder = Color(0xFF302820);
+  static const Color warmBlackText = Color(0xFFE8E6E3);
+  static const Color warmBlackSecondaryText = Color(0xFF8D8680);
+  static const Color warmBlackAccent = Color(0xFFD0A36C);
+  static const Color warmBlackBadgeBackground = Color(0xFF302820);
+  static const Color warmBlackBadgeText = Color(0xFFE8E6E3);
+  static const Color warmBlackOverlay = Color(0x0AFFF3E8);
 
-  // parchment
-  static const Color parchmentStageLight = Color(0xFFE8DCC4);
-  static const Color parchmentStageDark = Color(0xFF1C1810);
-  static const Color parchmentPaperLight = Color(0xFFF0E6D2);
-  static const Color parchmentPaperDark = Color(0xFF3E3428);
-  static const Color parchmentPaperBorderLight = Color(0xFFD0C4A8);
-  static const Color parchmentPaperBorderDark = Color(0xFF504430);
-  static const Color parchmentTextLight = Color(0xFF3C3020);
-  static const Color parchmentTextDark = Color(0xFFD0C4A8);
-  static const Color parchmentSecondaryTextLight = Color(0xFF786850);
-  static const Color parchmentSecondaryTextDark = Color(0xFF988870);
-  static const Color parchmentAccentLight = Color(0xFF7C6030);
-  static const Color parchmentAccentDark = Color(0xFFA88050);
-  static const Color parchmentBadgeBackgroundLight = Color(0xFFE0D4B8);
-  static const Color parchmentBadgeBackgroundDark = Color(0xFF504430);
-  static const Color parchmentBadgeTextLight = Color(0xFF4A3C28);
-  static const Color parchmentBadgeTextDark = Color(0xFFD0C4A8);
-  static const Color parchmentOverlayLight = Color(0x0A3C2810);
-  static const Color parchmentOverlayDark = Color(0x0AF0E6D2);
+  static const Color inkGreenStage = Color(0xFF101511);
+  static const Color inkGreenPaper = Color(0xFF161B18);
+  static const Color inkGreenBorder = Color(0xFF263129);
+  static const Color inkGreenText = Color(0xFFE6EAE6);
+  static const Color inkGreenSecondaryText = Color(0xFF879086);
+  static const Color inkGreenAccent = Color(0xFF8CBF9A);
+  static const Color inkGreenBadgeBackground = Color(0xFF263129);
+  static const Color inkGreenBadgeText = Color(0xFFE6EAE6);
+  static const Color inkGreenOverlay = Color(0x0AE6FAE6);
 
-  // eyeCare
-  static const Color eyeCareStageLight = Color(0xFFE0ECD8);
-  static const Color eyeCareStageDark = Color(0xFF141E14);
-  static const Color eyeCarePaperLight = Color(0xFFE8F0E0);
-  static const Color eyeCarePaperDark = Color(0xFF1E2A1E);
-  static const Color eyeCarePaperBorderLight = Color(0xFFC8D8C0);
-  static const Color eyeCarePaperBorderDark = Color(0xFF2E3E2E);
-  static const Color eyeCareTextLight = Color(0xFF1C2C1C);
-  static const Color eyeCareTextDark = Color(0xFFC8D8C0);
-  static const Color eyeCareSecondaryTextLight = Color(0xFF5C7C5C);
-  static const Color eyeCareSecondaryTextDark = Color(0xFF7C9C7C);
-  static const Color eyeCareAccentLight = Color(0xFF3C7C3C);
-  static const Color eyeCareAccentDark = Color(0xFF5CA05C);
-  static const Color eyeCareBadgeBackgroundLight = Color(0xFFD0E0C8);
-  static const Color eyeCareBadgeBackgroundDark = Color(0xFF2E3E2E);
-  static const Color eyeCareBadgeTextLight = Color(0xFF2C3C2C);
-  static const Color eyeCareBadgeTextDark = Color(0xFFC8D8C0);
-  static const Color eyeCareOverlayLight = Color(0x0A1C3C1C);
-  static const Color eyeCareOverlayDark = Color(0x0AE8F0E0);
-
-  // quiet
-  static const Color quietStageLight = Color(0xFFEAEAEF);
-  static const Color quietStageDark = Color(0xFF1C1C1E);
-  static const Color quietPaperLight = Color(0xFFF2F2F7);
-  static const Color quietPaperDark = Color(0xFF2C2C2E);
-  static const Color quietPaperBorderLight = Color(0xFFD1D1D6);
-  static const Color quietPaperBorderDark = Color(0xFF3A3A3C);
-  static const Color quietTextLight = Color(0xFF1C1C1E);
-  static const Color quietTextDark = Color(0xFFD1D1D6);
-  static const Color quietSecondaryTextLight = Color(0xFF8E8E93);
-  static const Color quietSecondaryTextDark = Color(0xFF98989D);
-  static const Color quietAccentLight = Color(0xFF5856D6);
-  static const Color quietAccentDark = Color(0xFF7D7AFF);
-  static const Color quietBadgeBackgroundLight = Color(0xFFE5E5EA);
-  static const Color quietBadgeBackgroundDark = Color(0xFF3A3A3C);
-  static const Color quietBadgeTextLight = Color(0xFF3C3C43);
-  static const Color quietBadgeTextDark = Color(0xFFD1D1D6);
-  static const Color quietOverlayLight = Color(0x0A000000);
-  static const Color quietOverlayDark = Color(0x0AFFFFFF);
-
-  // night (fixed palette)
-  static const Color nightStage = Color(0xFF000000);
-  static const Color nightPaper = Color(0xFF000000);
-  static const Color nightPaperBorder = Color(0xFF38383A);
-  static const Color nightText = Color(0xFFD1D1D6);
-  static const Color nightSecondaryText = Color(0xFF8E8E93);
-  static const Color nightAccent = Color(0xFF0A84FF);
-  static const Color nightBadgeBackground = Color(0xFF1C1C1E);
-  static const Color nightBadgeText = Color(0xFFD1D1D6);
-  static const Color nightOverlay = Color(0x0AFFFFFF);
+  static const Color deepBrownStage = Color(0xFF15110F);
+  static const Color deepBrownPaper = Color(0xFF1F1A17);
+  static const Color deepBrownBorder = Color(0xFF322922);
+  static const Color deepBrownText = Color(0xFFE8E4DF);
+  static const Color deepBrownSecondaryText = Color(0xFF8F8882);
+  static const Color deepBrownAccent = Color(0xFFC79A72);
+  static const Color deepBrownBadgeBackground = Color(0xFF322922);
+  static const Color deepBrownBadgeText = Color(0xFFE8E4DF);
+  static const Color deepBrownOverlay = Color(0x0AFFF0E6);
 }
 
 class AppColorsTheme {

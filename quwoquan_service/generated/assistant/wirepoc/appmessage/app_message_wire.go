@@ -2,6 +2,8 @@
 
 package appmessage
 
+import "encoding/json"
+
 type AppMessageDestinationWire struct {
 	Type string `json:"type"`
 	Id string `json:"id"`
@@ -10,6 +12,9 @@ type AppMessageDestinationWire struct {
 type AppMessageTargetWire struct {
 	TargetType string `json:"targetType"`
 	TargetId string `json:"targetId"`
+	RouteId string `json:"routeId"`
+	RoutePath string `json:"routePath"`
+	Query json.RawMessage `json:"query"`
 }
 
 type AppMessageWire struct {

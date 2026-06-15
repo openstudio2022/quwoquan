@@ -12,27 +12,39 @@ scope:
   out_of_scope: []
 gwt_acceptance:
   GWT1:
-    title: circle homepage redesign GWT
+    title: 圈子主页首屏统一结构
     given:
-    - 前置条件明确。
+    - 用户进入一个圈子主页。
     when:
-    - 用户或系统动作发生。
+    - 页面首屏完成渲染。
     then:
-    - 可观察结果符合预期。
+    - 用户 5 秒内能看懂这个圈子是什么、为什么推荐这个圈子、我为什么适合加入。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 首屏顺序为身份区、加入/私信、与你的交集、圈子影响力、内容/讨论/成员。
+    - 编辑圈子、管理中心、发布、分享、复制链接、举报进入更多菜单，不占首屏主 CTA。
+    - 与你的交集使用纵向列表，默认 3 条；圈子影响力展示连接价值，不展示统计面板。
+    - 圈子内容二级筛选沿主页统一口径，仅展示全部、图片、视频、文字。
+    edge_cases:
+    - 私密圈子游客访问时内容区显示门禁，不阻断首屏身份和 CTA。
+    - 圈子影响力为空或加载失败时模块收起，不影响交集与内容 tab。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/social/circle/ui_config.yaml
+    performance_points:
+    - Tab 切换 p95 < 200ms
     evidence:
       primary:
       - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T4_journey
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_app/test/ui/circle/widgets/circle_action_bar_widget_test.dart
+      - quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      - quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
+      - quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+    status: passing
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

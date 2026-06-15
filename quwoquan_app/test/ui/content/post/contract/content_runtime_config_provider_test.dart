@@ -24,6 +24,17 @@ ContentRuntimeConfigState _effectiveState(ProviderContainer container) {
       container.read(contentRuntimeConfigProvider);
 }
 
+/// 绕过 setMode 的环境守卫（alpha 强制 mock），用于验证 remote 配置拉取行为。
+class _SwitchableModeNotifier extends AppDataSourceModeNotifier {
+  @override
+  AppDataSourceMode build() => AppDataSourceMode.mock;
+
+  @override
+  void setMode(AppDataSourceMode mode) {
+    state = mode;
+  }
+}
+
 void main() {
   test('mock mode 会刷新出文章阅读相关 runtime flags', () async {
     final container = ProviderContainer();
@@ -46,6 +57,7 @@ void main() {
   test('remote app config 覆盖 feature flags 与 canary matrix', () async {
     final container = ProviderContainer(
       overrides: [
+        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
         contentRepositoryProvider.overrideWithValue(
           _RuntimeConfigRepository({
             'content': {
@@ -123,7 +135,10 @@ void main() {
       },
     });
     final container = ProviderContainer(
-      overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+      overrides: [
+        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
+        contentRepositoryProvider.overrideWithValue(repo),
+      ],
     );
     addTearDown(container.dispose);
 
@@ -169,6 +184,7 @@ void main() {
   test('remote app config 覆盖 client state sync 参数', () async {
     final container = ProviderContainer(
       overrides: [
+        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
         contentRepositoryProvider.overrideWithValue(
           _RuntimeConfigRepository({
             'content': {
@@ -219,6 +235,7 @@ void main() {
   test('remote app config 可关闭 persona management 与 sync flags', () async {
     final container = ProviderContainer(
       overrides: [
+        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
         contentRepositoryProvider.overrideWithValue(
           _RuntimeConfigRepository({
             'content': {

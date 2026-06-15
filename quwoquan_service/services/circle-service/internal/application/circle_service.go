@@ -627,6 +627,65 @@ func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (_ 
 	}, nil
 }
 
+func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (_ map[string]any, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.GetCircleImpact",
+		attribute.String("circle.id", circleID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	c, ok := s.circles.FindByID(ctx, circleID)
+	if !ok {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
+			"圈子不存在", "circle not found",
+		)
+	}
+	items := make([]map[string]any, 0, 3)
+	if c.MemberCount > 0 {
+		items = append(items, map[string]any{
+			"helpType":              "relationship",
+			"action":                "establish_connection",
+			"intersectionDimension": "relationship",
+			"tagRef":                "",
+			"source":                "circle_members",
+			"count":                 c.MemberCount,
+			"displayText":           fmt.Sprintf("%d人在这里建立了新连接", c.MemberCount),
+		})
+	}
+	if c.PostCount > 0 {
+		items = append(items, map[string]any{
+			"helpType":              "community",
+			"action":                "start_discussion",
+			"intersectionDimension": "content",
+			"tagRef":                "",
+			"source":                "circle_posts",
+			"count":                 c.PostCount,
+			"displayText":           fmt.Sprintf("%d个讨论正在这里发生", c.PostCount),
+		})
+	}
+	if c.WeeklyActiveCount > 0 {
+		items = append(items, map[string]any{
+			"helpType":              "spread",
+			"action":                "active_participation",
+			"intersectionDimension": "interest",
+			"tagRef":                "",
+			"source":                "circle_weekly_active",
+			"count":                 c.WeeklyActiveCount,
+			"displayText":           fmt.Sprintf("%d人最近参与了这里", c.WeeklyActiveCount),
+		})
+	}
+	total := 0
+	for _, item := range items {
+		if n, ok := item["count"].(int); ok {
+			total += n
+		}
+	}
+	return map[string]any{
+		"circleId": circleID,
+		"total":    total,
+		"items":    items,
+	}, nil
+}
+
 // --- Feed ---
 
 func (s *CircleService) GetCircleFeed(ctx context.Context, circleID string, limit int, cursor string, sort string) ([]map[string]any, string) {

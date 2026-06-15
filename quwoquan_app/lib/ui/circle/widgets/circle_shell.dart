@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_ui_config.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
@@ -20,13 +20,14 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
+import 'package:quwoquan_app/ui/circle/providers/circle_impact_provider.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_page_tab.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_header.dart';
-import 'package:quwoquan_app/ui/circle/widgets/circle_stats_row.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
-import 'package:quwoquan_app/ui/circle/widgets/section_interaction.dart';
+import 'package:quwoquan_app/ui/circle/widgets/section_members.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_entry_arguments.dart';
 
@@ -46,13 +47,7 @@ class CircleShell extends ConsumerStatefulWidget {
 }
 
 class _CircleShellState extends ConsumerState<CircleShell> {
-  static const List<String> _defaultSections = <String>[
-    'home',
-    'content',
-    'groups',
-    'members',
-  ];
-  static const double _cardRadius = AppSpacing.radiusTwenty;
+  static const double _cardRadius = AppSpacing.radiusTwentyFour;
   static const double _surfaceBridge = _cardRadius;
 
   late String _activeTabId;
@@ -74,31 +69,22 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           ..sort((a, b) => a.order.compareTo(b.order));
     final available = visible.isNotEmpty
         ? visible.map((section) => section.sectionType).toSet()
-        : <String>{'works', 'interaction', 'chat', 'storage'};
+        : CircleUIConfig.sections.map((section) => section.sectionType).toSet();
     final tabs = <_TabSpec>[];
-    tabs.add(const _TabSpec(type: 'home', label: '首页'));
-    if (available.contains('works')) {
-      tabs.add(const _TabSpec(type: 'content', label: '内容'));
-    }
-    if (available.contains('interaction')) {
-      tabs.add(const _TabSpec(type: 'members', label: '成员'));
-    }
-    if (available.contains('chat') || available.contains('storage')) {
-      tabs.add(const _TabSpec(type: 'groups', label: '群或组织'));
+    for (final tab in CircleUIConfig.tabs) {
+      final hasVisibleSection = tab.sectionTypes.any(available.contains);
+      if (!hasVisibleSection) {
+        continue;
+      }
+      tabs.add(
+        _TabSpec(type: tab.id, label: circleTabLabelForKey(tab.labelKey)),
+      );
     }
     if (tabs.isNotEmpty) return tabs;
-    return _defaultSections
+    return CircleUIConfig.tabs
         .map(
-          (type) => _TabSpec(
-            type: type,
-            label: switch (type) {
-              'home' => '首页',
-              'content' => '内容',
-              'groups' => '群或组织',
-              'members' => '成员',
-              _ => type,
-            },
-          ),
+          (tab) =>
+              _TabSpec(type: tab.id, label: circleTabLabelForKey(tab.labelKey)),
         )
         .toList(growable: false);
   }
@@ -178,52 +164,6 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     return _isMemberLike(state);
   }
 
-  List<_CircleMetaChipData> _metaChips(CircleState state) {
-    final circle = state.circleData;
-    final chips = <_CircleMetaChipData>[
-      _CircleMetaChipData(
-        label: circle?.visibility == 'private'
-            ? UITextConstants.visibilityMembers
-            : UITextConstants.visibilityPublic,
-        icon: circle?.visibility == 'private'
-            ? CupertinoIcons.lock_fill
-            : CupertinoIcons.globe,
-      ),
-      _CircleMetaChipData(
-        label: _joinPolicyLabel(circle?.joinPolicy),
-        icon: circle?.joinPolicy == 'approval'
-            ? CupertinoIcons.time_solid
-            : CupertinoIcons.person_add,
-      ),
-    ];
-    if (state.joinStatus == 'pending') {
-      chips.add(
-        const _CircleMetaChipData(
-          label: UITextConstants.joinPending,
-          icon: CupertinoIcons.time,
-          accent: true,
-        ),
-      );
-    } else if (_isMemberLike(state) && state.role == CircleRole.member) {
-      chips.add(
-        const _CircleMetaChipData(
-          label: UITextConstants.joinedCircle,
-          icon: CupertinoIcons.check_mark_circled,
-          accent: true,
-        ),
-      );
-    } else if (state.isFollowed) {
-      chips.add(
-        const _CircleMetaChipData(
-          label: UITextConstants.followedCircle,
-          icon: CupertinoIcons.check_mark,
-          accent: true,
-        ),
-      );
-    }
-    return chips;
-  }
-
   String? _badgeLabel(CircleState state) {
     final status = (state.circleData?.status ?? '').trim().toLowerCase();
     if (status == 'official' || status == 'verified') {
@@ -244,7 +184,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         semantic: UiErrorSemantic(
           category: UiErrorCategory.sectionLoad,
           scope: UiErrorScope.global,
-          title: '圈子信息暂不可用',
+          title: UITextConstants.circleInfoUnavailableTitle,
           message: UITextConstants.contentLoadSoftFailed,
         ),
       );
@@ -271,48 +211,83 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   Future<void> _showMoreOptions(
     BuildContext context, {
     required String circleName,
+    required CircleState state,
   }) async {
+    final isManager =
+        state.role == CircleRole.owner || state.role == CircleRole.admin;
+    final sections = <AppActionSheetSection<_CircleMoreAction>>[];
+    if (isManager) {
+      sections.add(
+        const AppActionSheetSection<_CircleMoreAction>(
+          items: <AppActionSheetItem<_CircleMoreAction>>[
+            AppActionSheetItem<_CircleMoreAction>(
+              value: _CircleMoreAction.edit,
+              label: UITextConstants.editCircle,
+              icon: CupertinoIcons.pencil,
+            ),
+            AppActionSheetItem<_CircleMoreAction>(
+              value: _CircleMoreAction.manage,
+              label: UITextConstants.manageCenter,
+              icon: CupertinoIcons.slider_horizontal_3,
+            ),
+          ],
+        ),
+      );
+    }
+    sections.addAll(const <AppActionSheetSection<_CircleMoreAction>>[
+      AppActionSheetSection<_CircleMoreAction>(
+        items: <AppActionSheetItem<_CircleMoreAction>>[
+          AppActionSheetItem<_CircleMoreAction>(
+            value: _CircleMoreAction.submitPost,
+            label: UITextConstants.circleSubmitPost,
+            icon: CupertinoIcons.add_circled,
+          ),
+        ],
+      ),
+      AppActionSheetSection<_CircleMoreAction>(
+        items: <AppActionSheetItem<_CircleMoreAction>>[
+          AppActionSheetItem<_CircleMoreAction>(
+            value: _CircleMoreAction.share,
+            label: UITextConstants.share,
+            icon: CupertinoIcons.share,
+          ),
+          AppActionSheetItem<_CircleMoreAction>(
+            value: _CircleMoreAction.copyLink,
+            label: UITextConstants.copyLink,
+            icon: CupertinoIcons.link,
+          ),
+        ],
+      ),
+      AppActionSheetSection<_CircleMoreAction>(
+        items: <AppActionSheetItem<_CircleMoreAction>>[
+          AppActionSheetItem<_CircleMoreAction>(
+            value: _CircleMoreAction.report,
+            label: UITextConstants.report,
+            icon: CupertinoIcons.flag,
+            isDestructive: true,
+          ),
+        ],
+      ),
+    ]);
     final action = await showAppActionSheet<_CircleMoreAction>(
       context,
       title: circleName.isEmpty ? AppConceptConstants.circles : circleName,
-      sections: [
-        const AppActionSheetSection<_CircleMoreAction>(
-          items: [
-            AppActionSheetItem<_CircleMoreAction>(
-              value: _CircleMoreAction.submitPost,
-              label: UITextConstants.circleSubmitPost,
-              icon: CupertinoIcons.add_circled,
-            ),
-          ],
-        ),
-        const AppActionSheetSection<_CircleMoreAction>(
-          items: [
-            AppActionSheetItem<_CircleMoreAction>(
-              value: _CircleMoreAction.share,
-              label: UITextConstants.share,
-              icon: CupertinoIcons.share,
-            ),
-            AppActionSheetItem<_CircleMoreAction>(
-              value: _CircleMoreAction.copyLink,
-              label: UITextConstants.copyLink,
-              icon: CupertinoIcons.link,
-            ),
-          ],
-        ),
-        const AppActionSheetSection<_CircleMoreAction>(
-          items: [
-            AppActionSheetItem<_CircleMoreAction>(
-              value: _CircleMoreAction.report,
-              label: UITextConstants.report,
-              icon: CupertinoIcons.flag,
-              isDestructive: true,
-            ),
-          ],
-        ),
-      ],
+      sections: sections,
     );
     if (!context.mounted || action == null) return;
     switch (action) {
+      case _CircleMoreAction.edit:
+        await _openEditor(
+          context,
+          state: state,
+          initialTab: CircleEditSettingsTab.info,
+        );
+      case _CircleMoreAction.manage:
+        await _openEditor(
+          context,
+          state: state,
+          initialTab: CircleEditSettingsTab.settings,
+        );
       case _CircleMoreAction.submitPost:
         // /create 路由门负责未登录拦截；圈子锚点经 extra 注入 PublishSettings.circleIds。
         context.push(
@@ -395,6 +370,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           fg: fg,
           border: border,
           circleName: circleName,
+          state: state,
           avatarUrl: coverUrl,
           identityOpacity: identity,
           backgroundOpacity: bgOpacity,

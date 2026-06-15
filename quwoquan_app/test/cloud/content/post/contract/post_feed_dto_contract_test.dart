@@ -30,7 +30,6 @@ void main() {
       expect(dto.imageUrls, isNotEmpty);
       expect(dto.likeCount, equals(1200));
       expect(dto.commentCount, equals(45));
-      expect(dto.favoriteCount, equals(230));
       expect(dto.shareCount, equals(18));
       expect(dto.createdAt, isA<DateTime>());
       expect(dto.createdAt.year, equals(2025));
@@ -138,6 +137,7 @@ void main() {
           'likesCount': 200,
           'commentsCount': 20,
           'savesCount': 5,
+          'createdAt': '2025-05-01T00:00:00Z',
           'publishedAt': '2025-06-01T00:00:00Z',
         };
         final dto = FeedItemDto.fromMap(serverRaw);
@@ -145,8 +145,9 @@ void main() {
         expect(dto.displayName, equals('Server Author'));
         expect(dto.likeCount, equals(200));
         expect(dto.commentCount, equals(20));
-        expect(dto.favoriteCount, equals(5));
         expect(dto.createdAt.year, equals(2025));
+        expect(dto.createdAt.month, equals(5));
+        expect(dto.publishedAt?.month, equals(6));
       },
     );
 
@@ -160,6 +161,24 @@ void main() {
       expect(map['displayName'], equals(dto.displayName));
       expect(map['likeCount'], equals(dto.likeCount));
       expect(map['imageUrls'], equals(dto.imageUrls));
+    });
+
+    test('toDiscoveryWireMap 不再用 createdAt 伪造 publishedAt', () {
+      const raw = <String, dynamic>{
+        'postId': 'wire_only_created',
+        'contentType': 'article',
+        'authorId': 'writer',
+        'authorNickname': 'Writer',
+        'authorAvatarUrl': 'https://example.com/avatar.jpg',
+        'title': '仅创作时间',
+        'body': '正文',
+        'coverUrl': 'https://example.com/cover.jpg',
+        'createdAt': '2026-01-01T08:00:00Z',
+      };
+      final dto = FeedItemDto.fromMap(raw);
+      final wire = dto.toDiscoveryWireMap();
+      expect(wire['createdAt'], equals('2026-01-01T08:00:00.000Z'));
+      expect(wire.containsKey('publishedAt'), isFalse);
     });
 
     test(
@@ -196,7 +215,6 @@ void main() {
       final dto = FeedItemDto.fromMap(minimalRaw);
       expect(dto.likeCount, equals(0));
       expect(dto.commentCount, equals(0));
-      expect(dto.favoriteCount, equals(0));
       expect(dto.shareCount, equals(0));
       expect(dto.imageUrls, isEmpty);
     });

@@ -26,13 +26,13 @@ enum AuthGateReason {
   greet,
   comment,
   like,
-  favorite,
   follow,
   followingFeed,
   shareRecord,
   personaManage,
   settingsAccount,
   mediaUpload,
+  deletePost,
   report,
   joinCircle,
   addContact,
@@ -49,14 +49,30 @@ class AuthGateEntry {
   const AuthGateEntry({
     required this.reason,
     required this.title,
+    required this.subtitle,
     required this.prompt,
     required this.requiredOperations,
   });
 
   final AuthGateReason reason;
   final String title;
+  final String subtitle;
   final String prompt;
   final List<String> requiredOperations;
+}
+
+enum LoginReasonCopySource { localApp, localSession, cloudHint }
+
+class LoginReasonCopy {
+  const LoginReasonCopy({
+    required this.title,
+    required this.subtitle,
+    required this.source,
+  });
+
+  final String title;
+  final String subtitle;
+  final LoginReasonCopySource source;
 }
 
 /// 受登录约束的 App 功能入口矩阵（覆盖主导航、内容互动、评论、创作、消息、
@@ -66,30 +82,35 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
       AuthGateReason.profileTab: AuthGateEntry(
         reason: AuthGateReason.profileTab,
         title: UITextConstants.authGateTitleProfile,
+        subtitle: UITextConstants.authGateSubtitleProfile,
         prompt: UITextConstants.authGatePromptProfile,
         requiredOperations: <String>['GetMeProfile'],
       ),
       AuthGateReason.createPost: AuthGateEntry(
         reason: AuthGateReason.createPost,
         title: UITextConstants.authGateTitleCreate,
+        subtitle: UITextConstants.authGateSubtitleCreate,
         prompt: UITextConstants.authGatePromptCreate,
         requiredOperations: <String>['CreatePost', 'UpdatePost'],
       ),
       AuthGateReason.openChat: AuthGateEntry(
         reason: AuthGateReason.openChat,
         title: UITextConstants.authGateTitleOpenChat,
+        subtitle: UITextConstants.authGateSubtitleOpenChat,
         prompt: UITextConstants.authGatePromptOpenChat,
         requiredOperations: <String>['ListConversations', 'GetConversation'],
       ),
       AuthGateReason.sendMessage: AuthGateEntry(
         reason: AuthGateReason.sendMessage,
         title: UITextConstants.authGateTitleSendMessage,
+        subtitle: UITextConstants.authGateSubtitleSendMessage,
         prompt: UITextConstants.authGatePromptSendMessage,
         requiredOperations: <String>['SendMessage'],
       ),
       AuthGateReason.comment: AuthGateEntry(
         reason: AuthGateReason.comment,
         title: UITextConstants.authGateTitleComment,
+        subtitle: UITextConstants.authGateSubtitleComment,
         prompt: UITextConstants.authGatePromptComment,
         requiredOperations: <String>['CreateComment'],
       ),
@@ -99,24 +120,21 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
       AuthGateReason.like: AuthGateEntry(
         reason: AuthGateReason.like,
         title: UITextConstants.authGateTitleLike,
+        subtitle: UITextConstants.authGateSubtitleLike,
         prompt: UITextConstants.authGatePromptLike,
         requiredOperations: <String>[],
-      ),
-      AuthGateReason.favorite: AuthGateEntry(
-        reason: AuthGateReason.favorite,
-        title: UITextConstants.authGateTitleFavorite,
-        prompt: UITextConstants.authGatePromptFavorite,
-        requiredOperations: <String>['FavoritePost'],
       ),
       AuthGateReason.follow: AuthGateEntry(
         reason: AuthGateReason.follow,
         title: UITextConstants.authGateTitleFollow,
+        subtitle: UITextConstants.authGateSubtitleFollow,
         prompt: UITextConstants.authGatePromptFollow,
         requiredOperations: <String>['FollowUser'],
       ),
       AuthGateReason.greet: AuthGateEntry(
         reason: AuthGateReason.greet,
         title: UITextConstants.authGateTitleGreet,
+        subtitle: UITextConstants.authGateSubtitleGreet,
         prompt: UITextConstants.authGatePromptGreet,
         requiredOperations: <String>[
           'SendGreetingRequest',
@@ -133,6 +151,7 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
       AuthGateReason.followingFeed: AuthGateEntry(
         reason: AuthGateReason.followingFeed,
         title: UITextConstants.authGateTitleFollowingFeed,
+        subtitle: UITextConstants.authGateSubtitleFollowingFeed,
         prompt: UITextConstants.authGatePromptFollowingFeed,
         requiredOperations: <String>[],
       ),
@@ -142,36 +161,49 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
       AuthGateReason.shareRecord: AuthGateEntry(
         reason: AuthGateReason.shareRecord,
         title: UITextConstants.authGateTitleShare,
+        subtitle: UITextConstants.authGateSubtitleShare,
         prompt: UITextConstants.authGatePromptShare,
         requiredOperations: <String>[],
       ),
       AuthGateReason.personaManage: AuthGateEntry(
         reason: AuthGateReason.personaManage,
         title: UITextConstants.authGateTitlePersona,
+        subtitle: UITextConstants.authGateSubtitlePersona,
         prompt: UITextConstants.authGatePromptPersona,
         requiredOperations: <String>['ListPersonas', 'CreatePersona'],
       ),
       AuthGateReason.settingsAccount: AuthGateEntry(
         reason: AuthGateReason.settingsAccount,
         title: UITextConstants.authGateTitleSettingsAccount,
+        subtitle: UITextConstants.authGateSubtitleSettingsAccount,
         prompt: UITextConstants.authGatePromptSettingsAccount,
         requiredOperations: <String>['ListCredentials'],
       ),
       AuthGateReason.mediaUpload: AuthGateEntry(
         reason: AuthGateReason.mediaUpload,
         title: UITextConstants.authGateTitleMediaUpload,
+        subtitle: UITextConstants.authGateSubtitleMediaUpload,
         prompt: UITextConstants.authGatePromptMediaUpload,
         requiredOperations: <String>['CreatePost'],
+      ),
+      AuthGateReason.deletePost: AuthGateEntry(
+        reason: AuthGateReason.deletePost,
+        title: UITextConstants.authGateTitleDeletePost,
+        subtitle: UITextConstants.authGateSubtitleDeletePost,
+        prompt: UITextConstants.authGatePromptDeletePost,
+        requiredOperations: <String>['DeletePost'],
       ),
       AuthGateReason.report: AuthGateEntry(
         reason: AuthGateReason.report,
         title: UITextConstants.authGateTitleReport,
+        subtitle: UITextConstants.authGateSubtitleReport,
         prompt: UITextConstants.authGatePromptReport,
         requiredOperations: <String>['CreateReport'],
       ),
       AuthGateReason.joinCircle: AuthGateEntry(
         reason: AuthGateReason.joinCircle,
         title: UITextConstants.authGateTitleJoinCircle,
+        subtitle: UITextConstants.authGateSubtitleJoinCircle,
         prompt: UITextConstants.authGatePromptJoinCircle,
         requiredOperations: <String>['JoinCircle'],
       ),
@@ -180,24 +212,28 @@ const Map<AuthGateReason, AuthGateEntry> authGateMatrix =
       AuthGateReason.addContact: AuthGateEntry(
         reason: AuthGateReason.addContact,
         title: UITextConstants.authGateTitleAddContact,
+        subtitle: UITextConstants.authGateSubtitleAddContact,
         prompt: UITextConstants.authGatePromptAddContact,
         requiredOperations: <String>[],
       ),
       AuthGateReason.startGroupChat: AuthGateEntry(
         reason: AuthGateReason.startGroupChat,
         title: UITextConstants.authGateTitleStartGroupChat,
+        subtitle: UITextConstants.authGateSubtitleStartGroupChat,
         prompt: UITextConstants.authGatePromptStartGroupChat,
         requiredOperations: <String>[],
       ),
       AuthGateReason.createCircle: AuthGateEntry(
         reason: AuthGateReason.createCircle,
         title: UITextConstants.authGateTitleCreateCircle,
+        subtitle: UITextConstants.authGateSubtitleCreateCircle,
         prompt: UITextConstants.authGatePromptCreateCircle,
         requiredOperations: <String>[],
       ),
       AuthGateReason.generic: AuthGateEntry(
         reason: AuthGateReason.generic,
         title: UITextConstants.authGateTitleGeneric,
+        subtitle: UITextConstants.authGateSubtitleGeneric,
         prompt: UITextConstants.authGatePromptGeneric,
         requiredOperations: <String>[],
       ),
@@ -207,6 +243,7 @@ extension AuthGateReasonX on AuthGateReason {
   AuthGateEntry get entry =>
       authGateMatrix[this] ?? authGateMatrix[AuthGateReason.generic]!;
   String get title => entry.title;
+  String get subtitle => entry.subtitle;
   String get prompt => entry.prompt;
   List<String> get requiredOperations => entry.requiredOperations;
 }
@@ -252,7 +289,8 @@ String buildLoginRouteLocation({
   final query = <String, String>{
     if (reason != null) 'reason': reason,
     if (redirectLocation != null) 'redirect': redirectLocation,
-    if (fallbackLocation != null) loginDismissFallbackQueryParam: fallbackLocation,
+    if (fallbackLocation != null)
+      loginDismissFallbackQueryParam: fallbackLocation,
     loginGuestDismissPopQueryParam: allowGuestDismissPop ? '1' : '0',
   };
   return Uri(
@@ -305,8 +343,60 @@ void openLoginPage(
 
 /// 解析登录页标题：优先用 AuthGateReason，其次回退到 [AuthPromptReason]。
 String? authGateTitleForReasonName(String? name) {
-  final reason = authGateReasonForName(name);
-  return reason?.title;
+  final gateReason = authGateReasonForName(name);
+  if (gateReason != null) {
+    return gateReason.title;
+  }
+  final promptReason = authPromptReasonForName(name);
+  if (promptReason != null) {
+    return loginReasonCopyForPromptReason(promptReason).title;
+  }
+  return null;
+}
+
+LoginReasonCopy loginReasonCopyForName(String? name) {
+  final gateReason = authGateReasonForName(name);
+  if (gateReason != null) {
+    return LoginReasonCopy(
+      title: gateReason.title,
+      subtitle: gateReason.subtitle,
+      source: LoginReasonCopySource.localApp,
+    );
+  }
+  final promptReason = authPromptReasonForName(name);
+  if (promptReason != null) {
+    return loginReasonCopyForPromptReason(promptReason);
+  }
+  return const LoginReasonCopy(
+    title: UITextConstants.loginDefaultTitle,
+    subtitle: UITextConstants.loginDefaultSubtitle,
+    source: LoginReasonCopySource.localApp,
+  );
+}
+
+LoginReasonCopy loginReasonCopyForPromptReason(AuthPromptReason reason) {
+  return switch (reason) {
+    AuthPromptReason.firstRun => const LoginReasonCopy(
+      title: UITextConstants.loginTitleFirstRun,
+      subtitle: UITextConstants.loginSubtitleFirstRun,
+      source: LoginReasonCopySource.localApp,
+    ),
+    AuthPromptReason.manualLoggedOut => const LoginReasonCopy(
+      title: UITextConstants.loginTitleManualLoggedOut,
+      subtitle: UITextConstants.loginSubtitleManualLoggedOut,
+      source: LoginReasonCopySource.localSession,
+    ),
+    AuthPromptReason.sessionExpired => const LoginReasonCopy(
+      title: UITextConstants.loginTitleReturn,
+      subtitle: UITextConstants.loginSubtitleSessionExpired,
+      source: LoginReasonCopySource.localSession,
+    ),
+    AuthPromptReason.actionRequired => const LoginReasonCopy(
+      title: UITextConstants.loginTitleActionRequired,
+      subtitle: UITextConstants.loginSubtitleActionRequired,
+      source: LoginReasonCopySource.localApp,
+    ),
+  };
 }
 
 AuthGateReason? authGateReasonForName(String? name) {
@@ -314,6 +404,18 @@ AuthGateReason? authGateReasonForName(String? name) {
     return null;
   }
   for (final reason in AuthGateReason.values) {
+    if (reason.name == name) {
+      return reason;
+    }
+  }
+  return null;
+}
+
+AuthPromptReason? authPromptReasonForName(String? name) {
+  if (name == null || name.isEmpty) {
+    return null;
+  }
+  for (final reason in AuthPromptReason.values) {
     if (reason.name == name) {
       return reason;
     }

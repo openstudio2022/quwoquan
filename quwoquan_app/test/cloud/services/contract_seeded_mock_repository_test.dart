@@ -22,6 +22,14 @@ void main() {
 
     expect(CloudRuntimeConfig.appRuntimeEnv, 'alpha');
     expect(container.read(appDataSourceModeProvider), AppDataSourceMode.mock);
+    container
+        .read(appDataSourceModeProvider.notifier)
+        .setMode(AppDataSourceMode.remote);
+    expect(container.read(appDataSourceModeProvider), AppDataSourceMode.mock);
+    expect(
+      container.read(homepageRepositoryProvider),
+      isA<MockHomepageRepository>(),
+    );
   });
 
   test('content mock repository 可由 contracts fixture 初始化', () async {
@@ -54,6 +62,32 @@ void main() {
       type: 'article',
     );
     expect(articles.map((item) => item.id), contains('fixture_article_001'));
+  });
+
+  test('content contract fixture 的核心文章保留显式创作/更新/发布时间', () async {
+    final pack = loadContentScenarioPack();
+    final seedSet =
+        pack.seedSets['content_discovery_core'] as Map<String, dynamic>;
+    final article = ((seedSet['posts'] as List?) ?? const <dynamic>[])
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .firstWhere((item) => item['postId'] == 'fixture_article_001');
+
+    expect(article['createdAt'], '2026-05-01T05:00:00Z');
+    expect(article['updatedAt'], '2026-05-03T05:00:00Z');
+    expect(article['publishedAt'], '2026-05-02T05:00:00Z');
+
+    final repo = buildContractSeededContentRepository(
+      seedRef: 'content_discovery_core',
+    );
+    final detail = await repo.getPost(postId: 'fixture_article_001');
+
+    expect(detail.post.createdAt, DateTime.utc(2026, 5, 1, 5));
+    expect(detail.post.updatedAt, DateTime.utc(2026, 5, 3, 5));
+    expect(detail.post.publishedAt, DateTime.utc(2026, 5, 2, 5));
+    expect(detail.post.hasMeaningfulUpdate, isTrue);
+    expect(detail.mergedArticleWireMap['updatedAt'], '2026-05-03T05:00:00Z');
+    expect(detail.mergedArticleWireMap['publishedAt'], '2026-05-02T05:00:00Z');
   });
 
   test('content mock repository 默认优先读取 contract fixture', () async {

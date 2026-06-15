@@ -34,11 +34,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('从相册选择'), findsOneWidget);
-    expect(find.text('写文字'), findsOneWidget);
-    expect(find.text('从草稿继续'), findsOneWidget);
-    expect(find.text('相机'), findsOneWidget);
+    expect(find.text('发图片'), findsOneWidget);
+    expect(find.text('写长文'), findsOneWidget);
+    expect(find.text('续草稿'), findsOneWidget);
+    expect(find.text('发视频'), findsOneWidget);
     expect(find.text('发点滴'), findsNothing);
-    expect(find.text('发图片'), findsNothing);
   });
 }

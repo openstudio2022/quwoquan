@@ -64,9 +64,11 @@ class UserApiMetadata {
     'ListUserWorks': '/v1/users/{userId}/works',
     'LoginAnonymous': '/v1/auth/login/anonymous',
     'LoginOneTap': '/v1/auth/login/one-tap',
+    'LoginWithAlipay': '/v1/auth/login/alipay',
     'LoginWithApple': '/v1/auth/login/apple',
     'LoginWithPasskey': '/v1/auth/login/passkey',
     'LoginWithPhone': '/v1/auth/login/phone',
+    'LoginWithQq': '/v1/auth/login/qq',
     'LoginWithWechat': '/v1/auth/login/wechat',
     'Logout': '/v1/auth/logout',
     'MarkFollowingSubjectVisited': '/v1/user/following-subjects/{subjectType}/{subjectId}:mark-visited',
@@ -75,6 +77,7 @@ class UserApiMetadata {
     'RegisterDevice': '/v1/user/devices/push-tokens',
     'RejectProposal': '/v1/user/profile/proposals/{id}/reject',
     'ReplyGreetingRequest': '/v1/user/greeting-request/{requestId}/reply',
+    'ResolveOneTapLoginHint': '/v1/auth/login/one-tap/hint',
     'RetirePersona': '/v1/user/personas/{subAccountId}/retire',
     'SearchSocialRelations': '/v1/user/search/social-relations',
     'SendGreetingRequest': '/v1/user/greeting-request',
@@ -139,9 +142,11 @@ class UserApiMetadata {
     'ListUserWorks': 'GET',
     'LoginAnonymous': 'POST',
     'LoginOneTap': 'POST',
+    'LoginWithAlipay': 'POST',
     'LoginWithApple': 'POST',
     'LoginWithPasskey': 'POST',
     'LoginWithPhone': 'POST',
+    'LoginWithQq': 'POST',
     'LoginWithWechat': 'POST',
     'Logout': 'POST',
     'MarkFollowingSubjectVisited': 'POST',
@@ -150,6 +155,7 @@ class UserApiMetadata {
     'RegisterDevice': 'POST',
     'RejectProposal': 'POST',
     'ReplyGreetingRequest': 'POST',
+    'ResolveOneTapLoginHint': 'POST',
     'RetirePersona': 'POST',
     'SearchSocialRelations': 'GET',
     'SendGreetingRequest': 'POST',
@@ -215,9 +221,11 @@ class UserApiMetadata {
     'ListUserWorks': 'public',
     'LoginAnonymous': 'public',
     'LoginOneTap': 'public',
+    'LoginWithAlipay': 'public',
     'LoginWithApple': 'public',
     'LoginWithPasskey': 'public',
     'LoginWithPhone': 'public',
+    'LoginWithQq': 'public',
     'LoginWithWechat': 'public',
     'Logout': 'required',
     'MarkFollowingSubjectVisited': 'required',
@@ -226,6 +234,7 @@ class UserApiMetadata {
     'RegisterDevice': 'public',
     'RejectProposal': 'public',
     'ReplyGreetingRequest': 'required',
+    'ResolveOneTapLoginHint': 'public',
     'RetirePersona': 'required',
     'SearchSocialRelations': 'required',
     'SendGreetingRequest': 'required',
@@ -289,9 +298,11 @@ class UserApiMetadata {
   static const String listUserWorksOperation = 'ListUserWorks';
   static const String loginAnonymousOperation = 'LoginAnonymous';
   static const String loginOneTapOperation = 'LoginOneTap';
+  static const String loginWithAlipayOperation = 'LoginWithAlipay';
   static const String loginWithAppleOperation = 'LoginWithApple';
   static const String loginWithPasskeyOperation = 'LoginWithPasskey';
   static const String loginWithPhoneOperation = 'LoginWithPhone';
+  static const String loginWithQqOperation = 'LoginWithQq';
   static const String loginWithWechatOperation = 'LoginWithWechat';
   static const String logoutOperation = 'Logout';
   static const String markFollowingSubjectVisitedOperation = 'MarkFollowingSubjectVisited';
@@ -300,6 +311,7 @@ class UserApiMetadata {
   static const String registerDeviceOperation = 'RegisterDevice';
   static const String rejectProposalOperation = 'RejectProposal';
   static const String replyGreetingRequestOperation = 'ReplyGreetingRequest';
+  static const String resolveOneTapLoginHintOperation = 'ResolveOneTapLoginHint';
   static const String retirePersonaOperation = 'RetirePersona';
   static const String searchSocialRelationsOperation = 'SearchSocialRelations';
   static const String sendGreetingRequestOperation = 'SendGreetingRequest';
@@ -482,9 +494,11 @@ class UserApiMetadata {
   }
   static const String loginAnonymousPath = '/v1/auth/login/anonymous';
   static const String loginOneTapPath = '/v1/auth/login/one-tap';
+  static const String loginWithAlipayPath = '/v1/auth/login/alipay';
   static const String loginWithApplePath = '/v1/auth/login/apple';
   static const String loginWithPasskeyPath = '/v1/auth/login/passkey';
   static const String loginWithPhonePath = '/v1/auth/login/phone';
+  static const String loginWithQqPath = '/v1/auth/login/qq';
   static const String loginWithWechatPath = '/v1/auth/login/wechat';
   static const String logoutPath = '/v1/auth/logout';
   static const String markFollowingSubjectVisitedPathTemplate = '/v1/user/following-subjects/{subjectType}/{subjectId}:mark-visited';
@@ -509,6 +523,7 @@ class UserApiMetadata {
       'requestId': requestId,
     });
   }
+  static const String resolveOneTapLoginHintPath = '/v1/auth/login/one-tap/hint';
   static const String retirePersonaPathTemplate = '/v1/user/personas/{subAccountId}/retire';
   static String retirePersonaPath({required String subAccountId}) {
     return _fillPath(retirePersonaPathTemplate, <String, String>{

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
@@ -11,6 +12,20 @@ import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/core/services/hive_runtime.dart';
 
 const String kAppExceptionQueueBoxName = 'app_exception_queue';
+
+class AppExceptionTelemetryFailureState {
+  const AppExceptionTelemetryFailureState({
+    required this.errorType,
+    required this.message,
+    required this.queueDepth,
+    required this.occurredAt,
+  });
+
+  final String errorType;
+  final String message;
+  final int queueDepth;
+  final DateTime occurredAt;
+}
 
 class AppExceptionTelemetryService {
   AppExceptionTelemetryService({
@@ -26,6 +41,10 @@ class AppExceptionTelemetryService {
   final String _queueBoxName;
 
   final Set<String> _recentFingerprints = <String>{};
+  AppExceptionTelemetryFailureState? _lastFlushFailure;
+
+  AppExceptionTelemetryFailureState? get lastFlushFailure =>
+      _lastFlushFailure;
 
   Future<void> recordGlobalException({
     required String source,
@@ -85,7 +104,15 @@ class AppExceptionTelemetryService {
       },
     );
     await _enqueue(event);
-    unawaited(flushPending().catchError((_) {}));
+    unawaited(
+      flushPending().catchError((Object error, StackTrace stackTrace) async {
+        await _recordFlushFailure(
+          error,
+          stackTrace,
+          phase: 'background_flush',
+        );
+      }),
+    );
   }
 
   Future<void> flushPending() async {
@@ -105,7 +132,11 @@ class AppExceptionTelemetryService {
       try {
         final decoded = (jsonDecode(raw) as Map).cast<String, Object?>();
         events.add(OpsEventRecordInput.fromJsonObject(decoded));
-      } catch (_) {
+      } catch (error) {
+        developer.log(
+          'app exception telemetry drops corrupt queue item: $error',
+          name: 'AppExceptionTelemetryService',
+        );
         await box.delete(key);
       }
     }
@@ -117,8 +148,8 @@ class AppExceptionTelemetryService {
       if (ack.acceptedCount + ack.duplicateCount >= events.length) {
         await box.clear();
       }
-    } catch (_) {
-      // Best effort: keep the local latest-100 queue for the next flush.
+    } catch (error, stackTrace) {
+      await _recordFlushFailure(error, stackTrace, phase: 'report_batch');
     }
   }
 
@@ -140,6 +171,43 @@ class AppExceptionTelemetryService {
         await box.delete(keys[i]);
       }
     }
+  }
+
+  Future<void> _recordFlushFailure(
+    Object error,
+    StackTrace stackTrace, {
+    required String phase,
+  }) async {
+    final queueDepth = await _queueDepth();
+    _lastFlushFailure = AppExceptionTelemetryFailureState(
+      errorType: error.runtimeType.toString(),
+      message: _truncate(error.toString(), 512),
+      queueDepth: queueDepth,
+      occurredAt: DateTime.now().toUtc(),
+    );
+    developer.log(
+      'app exception telemetry flush failed',
+      name: 'AppExceptionTelemetryService',
+      error: error,
+      stackTrace: stackTrace,
+      time: _lastFlushFailure?.occurredAt,
+      level: 900,
+      sequenceNumber: queueDepth,
+    );
+    developer.log(
+      jsonEncode(<String, dynamic>{
+        'phase': phase,
+        'errorType': _lastFlushFailure?.errorType,
+        'queueDepth': queueDepth,
+        'lastFailureAt': _lastFlushFailure?.occurredAt.toIso8601String(),
+      }),
+      name: 'AppExceptionTelemetryService.state',
+    );
+  }
+
+  Future<int> _queueDepth() async {
+    final box = await _ensureBox();
+    return box?.length ?? 0;
   }
 
   bool _rememberFingerprint(String fingerprint) {

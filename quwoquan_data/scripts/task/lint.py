@@ -23,6 +23,8 @@ from task.store import (
     read_yaml,
     resolve_spec,
 )
+from _common.entity_extract import normalize_domain_etype_path
+from _common.quality_gates import WRITING_INTENTS
 
 # 历史已用但不在 sop/主页 的实体类型（海外/特殊），允许其作为 entityType
 OVERSEAS_SUPPLEMENT = {
@@ -100,8 +102,33 @@ def lint_spec(spec: dict[str, Any], spec_path: Path, valid_types: set[str]) -> l
         et = tgt.get("entityType")
         if et and et not in valid_types:
             errors.append(f"coverageTargets 未知 entityType '{et}'（实体 {tgt.get('name')}）")
+    scenic_targets: dict[str, set[str]] = {}
+    for tgt in scope.get("coverageTargets", []) or []:
+        name = str(tgt.get("name") or "").strip()
+        et = str(tgt.get("entityType") or "").strip()
+        if not name or not et:
+            continue
+        try:
+            normalized = normalize_domain_etype_path(
+                et,
+                context=f"coverageTargets[{name}]",
+                allow_default_on_missing=False,
+                allow_default_on_unknown=False,
+            )
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+        if normalized in {"地点/景区", "地点/打卡地"}:
+            scenic_targets.setdefault(name, set()).add(normalized)
+    for name, rows in sorted(scenic_targets.items()):
+        if len(rows) > 1:
+            errors.append(
+                f"coverageTargets 同名实体 '{name}' 同时声明为 {sorted(rows)}；"
+                "景区/打卡地 双树共存会导致目录与发布漂移，必须显式纠偏为唯一类型"
+            )
 
     errors.extend(_condition_axes_errors(spec, tid, vertical))
+    errors.extend(_content_contract_errors(spec, tid))
     return errors
 
 
@@ -140,6 +167,43 @@ def _condition_axes_errors(spec: dict[str, Any], tid: str, vertical: Any) -> lis
             if menu_seasons and s not in menu_seasons:
                 errors.append(f"conditionAxes.seasons '{s}' 不在继承季节全谱 {sorted(menu_seasons)} 内")
 
+    return errors
+
+
+def _content_contract_errors(spec: dict[str, Any], tid: str) -> list[str]:
+    """生产内容契约：验收角度、配额与分离检索模式必须自洽。"""
+    errors: list[str] = []
+    try:
+        effective = resolve_spec(spec, tid)
+    except Exception as exc:  # noqa: BLE001
+        return [f"继承解析失败: {exc}"]
+    content = effective.get("content") or {}
+    if str(content.get("modalityContract") or "") != "separated_research":
+        return errors
+    quotas = content.get("quotas") or {}
+    per_target_articles = int(quotas.get("entityArticlesPerTarget") or 0)
+    per_target_images = int(quotas.get("imageWorksPerTarget") or 0)
+    if int(quotas.get("galleryPosts") or 0) or int(quotas.get("galleryPostsPerTarget") or 0):
+        errors.append("separated_research 已废弃 galleryPosts/galleryPostsPerTarget；使用 imageWorksPerTarget")
+    acceptance = effective.get("acceptance") or {}
+    required_angles = [str(angle).strip() for angle in (acceptance.get("requiredAngles") or []) if str(angle).strip()]
+    if required_angles:
+        article_intents = [angle for angle in required_angles if angle in WRITING_INTENTS]
+        image_angles = [angle for angle in required_angles if angle in {"image", "imagePost", "gallery"}]
+        unknown = [
+            angle
+            for angle in required_angles
+            if angle not in WRITING_INTENTS and angle not in {"image", "imagePost", "gallery"}
+        ]
+        if unknown:
+            errors.append(f"acceptance.requiredAngles 含非标准生产角度 {unknown}；separated_research 只能使用 writingIntent 或 image")
+        if article_intents and per_target_articles and len(article_intents) > per_target_articles:
+            errors.append(
+                "acceptance.requiredAngles 文章主线数量 "
+                f"{len(article_intents)} 超过 entityArticlesPerTarget={per_target_articles}"
+            )
+        if image_angles and per_target_images < 1:
+            errors.append("acceptance.requiredAngles 含 image，但 imageWorksPerTarget < 1")
     return errors
 
 

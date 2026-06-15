@@ -46,7 +46,7 @@ contract_test:
   mock_strategy:
     app_side:
       mock_target: user-service API (following subjects)
-      data_source: test_fixtures/scenarios/following_subject_scenarios.json
+      data_source: ../test_fixtures/scenarios/user_scenarios.json -> seedSets.following_subject_core
       scenarios:
         - name: list_three_subject_types
           route: GET /v1/user/following-subjects

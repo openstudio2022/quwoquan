@@ -49,7 +49,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
       final semantic = UiErrorSemantic(
         category: resolved.category,
         scope: resolved.scope,
-        title: '解散群聊未完成',
+        title: '解散讨论未完成',
         message: resolved.message,
         secondaryMessage: resolved.secondaryMessage,
         primaryAction: const UiErrorAction(

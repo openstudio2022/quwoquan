@@ -12,6 +12,7 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 
 Widget _scopedApp({
@@ -30,6 +31,7 @@ Widget _scopedApp({
       ),
     ],
     child: MaterialApp(
+      navigatorObservers: <NavigatorObserver>[chatRouteObserver],
       home: Scaffold(
         body: ChatDetailPage(
           conversationId: 'conv_001',
@@ -128,6 +130,7 @@ void main() {
             chatRepositoryProvider.overrideWithValue(MockChatRepository()),
           ],
           child: MaterialApp(
+            navigatorObservers: <NavigatorObserver>[chatRouteObserver],
             home: Scaffold(
               body: ChatDetailPage(
                 conversationId: 'conv_001',

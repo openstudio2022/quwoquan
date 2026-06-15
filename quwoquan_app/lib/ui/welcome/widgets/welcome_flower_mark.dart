@@ -154,25 +154,54 @@ class WelcomeFlowerMarkPainter extends CustomPainter {
 
     final baseColor = WelcomeAppearance.petalColors[index];
     final paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          _withMultipliedAlpha(
-            Color.lerp(
-                  baseColor,
-                  AppColors.white,
-                  appearance.isDarkTheme ? 0.07 : 0.09,
-                ) ??
-                baseColor,
-            opacity,
-          ),
-          _withMultipliedAlpha(baseColor.withValues(alpha: 0.78), opacity),
-          _withMultipliedAlpha(appearance.petalRootGlow, opacity),
-          _withMultipliedAlpha(appearance.petalRootTint, opacity),
-        ],
-        stops: const [0.0, 0.52, 0.78, 1.0],
-      ).createShader(petalRect);
+      ..shader =
+          (appearance.vivid
+                  ? LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        _withMultipliedAlpha(
+                          Color.lerp(baseColor, AppColors.white, 0.04) ??
+                              baseColor,
+                          opacity,
+                        ),
+                        _withMultipliedAlpha(baseColor, opacity),
+                        _withMultipliedAlpha(
+                          Color.lerp(baseColor, AppColors.white, 0.20) ??
+                              baseColor,
+                          opacity,
+                        ),
+                        _withMultipliedAlpha(
+                          Color.lerp(baseColor, AppColors.white, 0.55) ??
+                              baseColor,
+                          opacity,
+                        ),
+                      ],
+                      stops: const [0.0, 0.5, 0.82, 1.0],
+                    )
+                  : LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        _withMultipliedAlpha(
+                          Color.lerp(
+                                baseColor,
+                                AppColors.white,
+                                appearance.isDarkTheme ? 0.07 : 0.09,
+                              ) ??
+                              baseColor,
+                          opacity,
+                        ),
+                        _withMultipliedAlpha(
+                          baseColor.withValues(alpha: 0.78),
+                          opacity,
+                        ),
+                        _withMultipliedAlpha(appearance.petalRootGlow, opacity),
+                        _withMultipliedAlpha(appearance.petalRootTint, opacity),
+                      ],
+                      stops: const [0.0, 0.52, 0.78, 1.0],
+                    ))
+              .createShader(petalRect);
     canvas.drawPath(path, paint);
     canvas.restore();
   }

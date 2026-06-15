@@ -170,6 +170,7 @@ MainAppShell
 |---|---|---|---|---|
 | `photo_manager` | 已有 `vendor/.../ohos/` | 行为差异 | 能力位降级 | 中 |
 | `path_provider`/`shared_preferences`/`url_launcher`/`connectivity_plus`/`webview_flutter` | 社区 OH 版 | 多数 OK | Git 依赖替换 | 低 |
+| `simple_icons`/`cupertino_icons`/`fluentui_system_icons` | 纯 Dart 字体包（pure_dart=yes） | yes（字体随包内置） | 无需 replacement，图标随包打包，无运行时 fallback | 低 |
 | `sqflite` | 查社区版 | `ffi_web`/IndexedDB | 收口存储层 | 中 |
 | `flutter_secure_storage` | 待评估 | 受限 | `secureStorage` 能力位 | 中 |
 | `flutter_webrtc` | `fluttertpc_flutter_webrtc` | web 原生 | 能力位 + flag | 高 |

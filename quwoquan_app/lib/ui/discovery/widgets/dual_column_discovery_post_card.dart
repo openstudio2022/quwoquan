@@ -31,6 +31,15 @@ class DualColumnDiscoveryPostCard extends StatelessWidget {
   final VoidCallback onUserTap;
   final VoidCallback onLikeTap;
 
+  static const Key coverKey = ValueKey<String>('dual-discovery-card-cover');
+  static const Key reasonSlotKey = ValueKey<String>(
+    'dual-discovery-card-reason-slot',
+  );
+  static const Key titleKey = ValueKey<String>('dual-discovery-card-title');
+  static const Key authorRowKey = ValueKey<String>(
+    'dual-discovery-card-author-row',
+  );
+
   @override
   Widget build(BuildContext context) {
     final surface = AppColorsFunctional.getColor(
@@ -50,8 +59,9 @@ class DualColumnDiscoveryPostCard extends StatelessWidget {
       ColorType.foregroundSecondary,
     );
     final title = _headline;
-    final reasonText = IntersectionReasonChip.primaryText(
+    final reasonChip = IntersectionReasonChip.fromReasons(
       item.intersectionReasons,
+      isDark: isDark,
     );
 
     return GestureDetector(
@@ -73,24 +83,24 @@ class DualColumnDiscoveryPostCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _Cover(item: item, isDark: isDark),
+              _Cover(key: coverKey, item: item, isDark: isDark),
               Padding(
                 padding: EdgeInsets.all(AppSpacing.postPreviewCardPadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (reasonText != null) ...[
-                      IntersectionReasonChip(text: reasonText, isDark: isDark),
+                    if (reasonChip != null) ...[
+                      KeyedSubtree(key: reasonSlotKey, child: reasonChip),
                       SizedBox(height: AppSpacing.intraGroupXs),
                     ],
                     Text(
+                      key: titleKey,
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
                         color: fg,
                         height: AppSpacing.textLineHeightDense,
                         letterSpacing: -0.16,
@@ -98,6 +108,7 @@ class DualColumnDiscoveryPostCard extends StatelessWidget {
                     ),
                     SizedBox(height: AppSpacing.intraGroupSm),
                     Row(
+                      key: authorRowKey,
                       children: [
                         Expanded(
                           child: GestureDetector(
@@ -197,7 +208,7 @@ class _LikeCompactButton extends StatelessWidget {
 }
 
 class _Cover extends StatelessWidget {
-  const _Cover({required this.item, required this.isDark});
+  const _Cover({super.key, required this.item, required this.isDark});
 
   final PostBaseDto item;
   final bool isDark;

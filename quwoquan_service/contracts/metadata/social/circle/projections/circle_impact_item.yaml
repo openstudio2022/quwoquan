@@ -1,0 +1,58 @@
+version: 1
+read_model: CircleImpactItem
+description: |
+  圈子影响单条事实（「圈子影响」模块行真相源）。
+  云侧按真实下游动作聚合连接型结果，并产出 displayText 结论句
+  （如「328人在这里建立了新连接」「189人加入相关圈子」）。
+  端只读直出，禁止本地拼装文案；禁止下发收藏、关注内容、稍后看等内容长期动作。
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: CircleImpactItem
+  base_class: ""
+  output_path: cloud/runtime/generated/circle/circle_impact_item.g.dart
+  fields:
+    - name: helpType
+      dart_type: String
+      nullable: false
+      source: helpType
+      aliases: [helpType]
+      default: "''"
+    - name: action
+      dart_type: String
+      nullable: false
+      source: action
+      aliases: [action]
+      default: "''"
+    - name: intersectionDimension
+      dart_type: String
+      nullable: false
+      source: intersectionDimension
+      aliases: [intersectionDimension]
+      default: "''"
+    - name: tagRef
+      dart_type: String
+      nullable: false
+      source: tagRef
+      aliases: [tagRef]
+      default: "''"
+    - name: source
+      dart_type: String
+      nullable: false
+      source: source
+      aliases: [source]
+      default: "''"
+    - name: count
+      dart_type: int
+      nullable: false
+      source: count
+      aliases: [count]
+      default: "0"
+    - name: displayText
+      dart_type: String
+      nullable: false
+      source: displayText
+      aliases: [displayText]
+      default: "''"

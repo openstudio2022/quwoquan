@@ -37,30 +37,51 @@ AUTH_PUBLIC_OPERATIONS = {
     "LoginWithPhone",
     "LoginWithWechat",
     "LoginWithApple",
+    "LoginWithPasskey",
     "LoginOneTap",
+    "ResolveOneTapLoginHint",
     "LoginAnonymous",
     "RefreshToken",
+    "SendOtp",
 }
 
 # 明确需要账号身份的核心入口：必须 required，防止漏标回退为 public。
 # 注意：点赞/分享已按「游客设备态可写」策略下放到 MUST_BE_DEVICE_WRITABLE；
-# 收藏（Favorite）属个人资产，仍保持 required（与点赞/分享口径不同）。
+# 内容互动只有 赞/评/转；足迹（GetMyFootprint）属个人资产，必须登录。
 MUST_BE_REQUIRED = {
+    "ActivatePersona",
+    "ApplyPersonaProfileSync",
+    "BindCredential",
+    "ClearRecentSearches",
     "CreatePost",
     "UpdatePost",
     "DeletePost",
     "CreateComment",
-    "FavoritePost",
-    "UnfavoritePost",
+    "CreatePersona",
+    "GetMyFootprint",
     "SendMessage",
     "ListConversations",
     "GetConversation",
     "FollowUser",
     "CreateReport",
+    "GetActivePersonaContext",
+    "GetAppearanceSettings",
+    "GetCallSettings",
     "GetMeProfile",
+    "GetNotificationSettings",
+    "GetPersonaLifecycleGuard",
+    "GetPersonaManagementSummary",
+    "GetPrivacySettings",
     "ListPersonas",
-    "CreatePersona",
     "ListCredentials",
+    "Logout",
+    "RetirePersona",
+    "UnbindCredential",
+    "UpdateAppearanceSettings",
+    "UpdateCallSettings",
+    "UpdateNotificationSettings",
+    "UpdatePersona",
+    "UpdatePrivacySettings",
 }
 
 # 游客设备态可写入口（like/share）：必须是 optional（auth_mode=optional +

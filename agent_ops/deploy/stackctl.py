@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import codecs
 import json
 import os
+import selectors
 import shlex
 import socket
 import ssl
@@ -122,6 +124,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["edge", "media", "service", "full"],
         default="full",
     )
+    health_parser.add_argument("--request-timeout-seconds", type=int, default=0)
+    health_parser.add_argument("--retry-attempts", type=int, default=0)
+    health_parser.add_argument("--retry-sleep-seconds", type=float, default=-1.0)
 
     inspect_parser = subparsers.add_parser("inspect")
     inspect_parser.add_argument("--target", choices=TARGETS, required=True)
@@ -147,8 +152,28 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
+    roll_parser = subparsers.add_parser("roll")
+    roll_parser.add_argument(
+        "--target",
+        choices=("alpha-local", "beta-local", "gamma-local"),
+        required=True,
+    )
+    roll_parser.add_argument("--mode", choices=("restart", "rollout"), default="restart")
+    roll_parser.add_argument("--stage", default="")
+    roll_parser.add_argument("--image-version", default="")
+    roll_parser.add_argument("--previous-image-version", default="")
+    roll_parser.add_argument("--base-url", default="")
+    roll_parser.add_argument("--product-ops-base-url", default="")
+    roll_parser.add_argument("--media-base-url", default="")
+    roll_parser.add_argument("--media-origin-base-url", default="")
+    roll_parser.add_argument("--image-repository-root", default="")
+    roll_parser.add_argument("--image-registry", default="")
+    roll_parser.add_argument("--registry-username", default="")
+    roll_parser.add_argument("--registry-password", default="")
+
     deploy_parser = subparsers.add_parser("deploy")
-    deploy_parser.add_argument("--target", choices=("gamma-hosted", "prod-hosted"), required=True)
+    deploy_parser.add_argument("--target", choices=("prod-hosted",), required=True)
+    deploy_parser.add_argument("--mode", choices=("restart", "rollout", "cold-build"), default="")
     deploy_parser.add_argument("--stage", default="")
     deploy_parser.add_argument("--image-version", default="")
     deploy_parser.add_argument("--previous-image-version", default="")
@@ -156,6 +181,10 @@ def build_parser() -> argparse.ArgumentParser:
     deploy_parser.add_argument("--product-ops-base-url", default="")
     deploy_parser.add_argument("--media-base-url", default="")
     deploy_parser.add_argument("--media-origin-base-url", default="")
+    deploy_parser.add_argument("--image-repository-root", default="")
+    deploy_parser.add_argument("--image-registry", default="")
+    deploy_parser.add_argument("--registry-username", default="")
+    deploy_parser.add_argument("--registry-password", default="")
     deploy_parser.add_argument("--service", default="")
     deploy_parser.add_argument("--from-image", default="")
     deploy_parser.add_argument("--to-image", default="")
@@ -224,24 +253,80 @@ def _run_with_live_output(
         argv,
         cwd=str(cwd or ROOT),
         env=merged_env,
-        text=True,
+        text=False,
+        bufsize=0,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
-    lines: list[str] = []
+    chunks: list[bytes] = []
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    pending = ""
+    interactive = _is_interactive_terminal()
     assert process.stdout is not None
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ)
+    exit_observed_at: float | None = None
+
+    def emit_available_text(text: str, *, flush_partial: bool = False) -> None:
+        nonlocal pending
+        pending += text
+        if not interactive:
+            if flush_partial:
+                pending = ""
+            return
+        while True:
+            newline_index = pending.find("\n")
+            if newline_index < 0:
+                break
+            line = pending[: newline_index + 1]
+            pending = pending[newline_index + 1 :]
+            if prefix:
+                print(f"{prefix}{line}", end="", flush=True)
+            else:
+                print(line, end="", flush=True)
+        if flush_partial and pending:
+            if prefix:
+                print(f"{prefix}{pending}", end="", flush=True)
+            else:
+                print(pending, end="", flush=True)
+            pending = ""
+
     try:
-        for line in process.stdout:
-            lines.append(line)
-            if _is_interactive_terminal():
-                if prefix:
-                    print(f"{prefix}{line}", end="", flush=True)
-                else:
-                    print(line, end="", flush=True)
-        process.wait()
+        while True:
+            events = selector.select(timeout=0.2)
+            saw_output = False
+            for _key, _mask in events:
+                try:
+                    data = os.read(process.stdout.fileno(), 4096)
+                except BlockingIOError:
+                    continue
+                if not data:
+                    exit_observed_at = 0.0
+                    continue
+                saw_output = True
+                chunks.append(data)
+                emit_available_text(decoder.decode(data))
+            if saw_output:
+                exit_observed_at = None
+                continue
+            if process.poll() is None:
+                continue
+            if exit_observed_at is None:
+                exit_observed_at = time.monotonic()
+                continue
+            if exit_observed_at == 0.0 or time.monotonic() - exit_observed_at >= 0.5:
+                break
     finally:
+        selector.close()
+        emit_available_text(decoder.decode(b"", final=True), flush_partial=True)
         process.stdout.close()
-    stdout = "".join(lines)
+        if process.poll() is None:
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=1)
+    stdout = b"".join(chunks).decode("utf-8", errors="replace")
     return subprocess.CompletedProcess(
         argv,
         process.returncode,
@@ -572,12 +657,23 @@ def _write_stdout_markdown(report_dir: Path, sections: list[tuple[str, str]]) ->
     write_markdown(report_dir / "stdout.md", "\n".join(lines))
 
 
-def _selected_verify_commands(kind: str) -> list[list[str]]:
+def _selected_verify_commands(kind: str, env_name: str = "") -> list[list[str]]:
+    packaging_commands = [
+        ["python3", "agent_ops/gate/verify_environment_packaging_contract.py"]
+        + (["--env", env_name] if env_name in ENVIRONMENTS else []),
+        ["python3", "agent_ops/gate/verify_env_artifact_isolation.py"],
+        ["python3", "quwoquan_app/scripts/env/verify_prod_package_purity.py"],
+    ]
     if kind == "all":
         commands: list[list[str]] = []
         for group_name in ("topology", "config", "packaging"):
+            if group_name == "packaging":
+                commands.extend(packaging_commands)
+                continue
             commands.extend(VERIFY_COMMAND_GROUPS[group_name])
         return commands
+    if kind == "packaging":
+        return packaging_commands
     return list(VERIFY_COMMAND_GROUPS[kind])
 
 
@@ -589,22 +685,22 @@ def _selected_tier_commands(env_name: str, target_name: str, tier: str) -> list[
                 {
                     "name": "content-media-url-tests",
                     "argv": [
-                        "flutter",
-                        "test",
+                        "python3",
+                        "quwoquan_app/scripts/env/run_flutter_test_guarded.py",
                         "test/core/media/content_media_url_test.dart",
                         "test/cloud/chat/chat_avatar_url_resolution_test.dart",
                     ],
-                    "cwd": ROOT / "quwoquan_app",
+                    "cwd": ROOT,
                 },
                 {
                     "name": "contract-seeded-mock-tests",
                     "argv": [
-                        "flutter",
-                        "test",
+                        "python3",
+                        "quwoquan_app/scripts/env/run_flutter_test_guarded.py",
                         "--dart-define=CONTRACT_FIXTURE_PROFILE=full",
                         "test/cloud/services/contract_seeded_mock_repository_test.dart",
                     ],
-                    "cwd": ROOT / "quwoquan_app",
+                    "cwd": ROOT,
                 },
             ]
         )
@@ -621,22 +717,6 @@ def _selected_tier_commands(env_name: str, target_name: str, tier: str) -> list[
                 {
                     "name": "gamma-local-t3",
                     "argv": ["python3", "quwoquan_app/scripts/gamma/run_local_gamma_t3.py"],
-                }
-            )
-        if target_name == "gamma-hosted":
-            target = get_target(load_environment_topology(), target_name)
-            public_bases = target.get("publicBases") or {}
-            commands.append(
-                {
-                    "name": "gamma-hosted-readiness",
-                    "argv": [
-                        "python3",
-                        "quwoquan_service/scripts/gamma/verify_gamma_environment_ready.py",
-                        "--base-url",
-                        str(public_bases["api"]),
-                        "--product-ops-base-url",
-                        str(public_bases["productOps"]),
-                    ],
                 }
             )
         if target_name == "prod-hosted":
@@ -678,20 +758,38 @@ def _selected_tier_commands(env_name: str, target_name: str, tier: str) -> list[
     return commands
 
 
-def fetch_url(url: str, timeout: float = 6.0) -> tuple[bool, int | None, str]:
-    try:
-        with urllib.request.urlopen(
-            url,
-            timeout=timeout,
-            context=ssl._create_unverified_context(),
-        ) as response:
-            body = response.read().decode("utf-8", errors="replace")
-            return True, int(response.status), body[:500]
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-        return False, int(exc.code), body[:500]
-    except Exception as exc:
-        return False, None, str(exc)
+def fetch_url(
+    url: str,
+    timeout: float = 6.0,
+    *,
+    retry_attempts: int = 2,
+    retry_sleep_seconds: float = 2.0,
+) -> tuple[bool, int | None, str]:
+    retry_markers = (
+        "timed out",
+        "Remote end closed connection without response",
+        "Connection reset",
+        "Connection closed",
+    )
+    total_attempts = max(1, retry_attempts)
+    for attempt in range(1, total_attempts + 1):
+        try:
+            with urllib.request.urlopen(
+                url,
+                timeout=timeout,
+                context=ssl._create_unverified_context(),
+            ) as response:
+                body = response.read().decode("utf-8", errors="replace")
+                return True, int(response.status), body[:500]
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            return False, int(exc.code), body[:500]
+        except Exception as exc:
+            message = str(exc)
+            if attempt >= total_attempts or not any(marker in message for marker in retry_markers):
+                return False, None, message
+            time.sleep(max(0.0, retry_sleep_seconds) * attempt)
+    return False, None, "unknown fetch failure"
 
 
 def _read_json_payload(path: Path) -> Any | None:
@@ -782,69 +880,38 @@ def _run_environment_integration_probe(
         "--report",
         str(report_file),
     ]
+    if target_name == "prod-hosted":
+        argv.extend(
+            [
+                "--mode",
+                "post-deploy",
+                "--request-timeout-seconds",
+                "20",
+                "--retry-attempts",
+                "3",
+                "--retry-sleep-seconds",
+                "3",
+            ]
+        )
     product_ops = str(public_bases.get("productOps") or "").strip()
     if product_ops:
         argv.extend(["--product-ops-base-url", product_ops])
     token = _resolve_test_auth_token(env_name)
+    probe_env: dict[str, str] | None = None
     if token:
-        argv.extend(["--test-auth-token", token])
-    if target_name == "prod-hosted":
-        argv.extend(["--mode", "post-deploy"])
+        probe_env = {"TEST_AUTH_TOKEN": token}
+        if env_name == "gamma":
+            probe_env["GAMMA_TEST_AUTH_TOKEN"] = token
+        elif env_name == "beta":
+            probe_env["BETA_TEST_AUTH_TOKEN"] = token
+        elif env_name == "prod":
+            probe_env["PROD_TEST_AUTH_TOKEN"] = token
     return _run_script_probe(
         name="integration-readonly",
         scope="full",
         argv=argv,
         report_file=report_file,
-    )
-
-
-def _run_gamma_readiness_probe(
-    topology: dict[str, Any],
-    target_name: str,
-    report_dir: Path,
-) -> tuple[dict[str, Any], str, list[str]]:
-    target = get_target(topology, target_name)
-    public_bases = target.get("publicBases") or {}
-    report_file = report_dir / "gamma-readiness-report.json"
-    argv = [
-        "python3",
-        "quwoquan_service/scripts/gamma/verify_gamma_environment_ready.py",
-        "--base-url",
-        str(public_bases["api"]),
-        "--product-ops-base-url",
-        str(public_bases["productOps"]),
-        "--report",
-        str(report_file),
-    ]
-    return _run_script_probe(
-        name="gamma-readiness",
-        scope="full",
-        argv=argv,
-        report_file=report_file,
-    )
-
-
-def _run_gamma_media_route_probe(
-    topology: dict[str, Any],
-    target_name: str,
-    report_dir: Path,
-) -> tuple[dict[str, Any], str, list[str]]:
-    target = get_target(topology, target_name)
-    public_bases = target.get("publicBases") or {}
-    report_file = report_dir / "gamma-media-route-report.json"
-    argv = [
-        "python3",
-        "quwoquan_service/scripts/media/verify_gamma_curated_media_routes.py",
-        "--base-url",
-        str(public_bases["mediaImage"]),
-        "--report",
-        str(report_file),
-    ]
-    return _run_script_probe(
-        name="gamma-media-routes",
-        scope="media",
-        argv=argv,
-        report_file=report_file,
+        env=probe_env,
     )
 
 
@@ -853,14 +920,10 @@ def _script_probe_plan_for_target(
     target_name: str,
 ) -> list[dict[str, Any]]:
     target = get_target(topology, target_name)
+    if target_name == "alpha-local":
+        return [{"name": "integration-readonly", "kind": "readonly-http"}]
     if target_name == "beta-local":
         return [{"name": "integration-readonly", "kind": "readonly-http"}]
-    if target_name == "gamma-hosted":
-        return [
-            {"name": "gamma-readiness", "kind": "hosted-readiness"},
-            {"name": "gamma-media-routes", "kind": "curated-media"},
-            {"name": "integration-readonly", "kind": "readonly-http"},
-        ]
     if target_name == "prod-hosted":
         return [
             {"name": "integration-readonly", "kind": "readonly-http"},
@@ -869,6 +932,23 @@ def _script_probe_plan_for_target(
     if str(target.get("env")) == "gamma" and target_name == "gamma-local":
         return [{"name": "integration-readonly", "kind": "readonly-http"}]
     return []
+
+
+def _health_request_policy(target_name: str, scope: str) -> dict[str, float | int]:
+    policy: dict[str, float | int] = {
+        "timeoutSeconds": 6.0,
+        "retryAttempts": 2,
+        "retrySleepSeconds": 2.0,
+    }
+    if target_name == "prod-hosted":
+        policy.update(
+            {
+                "timeoutSeconds": 15.0 if scope == "edge" else 20.0,
+                "retryAttempts": 3,
+                "retrySleepSeconds": 3.0,
+            }
+        )
+    return policy
 
 
 def _script_probes_for_target(
@@ -883,19 +963,7 @@ def _script_probes_for_target(
     stdout_sections: list[tuple[str, str]] = []
     findings: list[str] = []
 
-    if target_name == "gamma-hosted":
-        for runner in (
-            _run_gamma_readiness_probe,
-            _run_gamma_media_route_probe,
-            _run_environment_integration_probe,
-        ):
-            status, output, probe_findings = runner(topology, target_name, report_dir)
-            statuses.append(status)
-            stdout_sections.append((status["name"], output))
-            findings.extend(probe_findings)
-        return statuses, stdout_sections, findings
-
-    if target_name in {"beta-local", "gamma-local", "prod-hosted"}:
+    if target_name in {"alpha-local", "beta-local", "gamma-local", "prod-hosted"}:
         status, output, probe_findings = _run_environment_integration_probe(
             topology,
             target_name,
@@ -1118,7 +1186,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         if package_payload["exitCode"] != 0:
             issues.append(f"package failed for {package_env}: {'; '.join(package_payload.get('details', []))}")
     stdout_sections: list[tuple[str, str]] = []
-    commands = _selected_verify_commands(args.kind)
+    commands = _selected_verify_commands(args.kind, env_name if env_name in ENVIRONMENTS else "")
     for command in commands:
         result = run(command)
         command_key = " ".join(command)
@@ -1342,6 +1410,54 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                 "tail": background_tail,
             }
         )
+        if result.returncode == 0:
+            beta_ready_tail = _tail_file_for_startup(
+                ROOT / "state" / "local" / "beta_stack" / "app-beta.log",
+                prefix="[beta app-beta] ",
+                idle_timeout_seconds=8.0,
+                max_follow_seconds=180.0,
+                ready_patterns=(
+                    "[app-beta-manual] beta environment is ready.",
+                    "[app-beta-manual] --skip-app set; beta cloud stack keeps running until Ctrl-C.",
+                ),
+                failure_patterns=(
+                    "GATE_BLOCK:",
+                    " unavailable:",
+                    "colima start failed",
+                    "docker daemon still unavailable",
+                    "docker daemon unavailable and colima is not installed",
+                    "assistant log:",
+                    "chat log:",
+                    "chat seed log:",
+                    "gateway log:",
+                    "media edge log:",
+                    "media origin log:",
+                ),
+                ready_idle_timeout_seconds=3.0,
+            )
+            steps.append(
+                {
+                    "kind": "beta-backend-ready-wait",
+                    "exitCode": 0,
+                    "stdout": "waited for beta backend ready sentinel",
+                    "stderr": "",
+                    "tail": beta_ready_tail,
+                }
+            )
+            beta_ready_failure = None
+            if bool(beta_ready_tail.get("failureSeen")):
+                beta_ready_failure = str(
+                    beta_ready_tail.get("failureLine") or "beta backend startup failed"
+                )
+            elif not bool(beta_ready_tail.get("readySeen")):
+                beta_ready_failure = "beta backend did not reach ready state before timeout"
+            if beta_ready_failure is not None:
+                result = subprocess.CompletedProcess(
+                    cmd,
+                    1,
+                    stdout="",
+                    stderr=beta_ready_failure,
+                )
         if result.returncode == 0 and not args.skip_app:
             try:
                 app_launch = start_app_process("beta", args.device_id)
@@ -1846,6 +1962,22 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
     report_dir = resolve_report_dir(args, env_name, args.target)
     started_monotonic, started_at = _start_timing()
     checks = _health_checks_for_target(topology, args.target, args.scope)
+    policy = _health_request_policy(args.target, args.scope)
+    timeout_seconds = (
+        max(1.0, float(args.request_timeout_seconds))
+        if getattr(args, "request_timeout_seconds", 0)
+        else float(policy["timeoutSeconds"])
+    )
+    retry_attempts = (
+        max(1, int(args.retry_attempts))
+        if getattr(args, "retry_attempts", 0)
+        else int(policy["retryAttempts"])
+    )
+    retry_sleep_seconds = (
+        max(0.0, float(args.retry_sleep_seconds))
+        if getattr(args, "retry_sleep_seconds", -1.0) >= 0
+        else float(policy["retrySleepSeconds"])
+    )
     statuses: list[dict[str, Any]] = []
     findings: list[str] = []
     stdout_sections: list[tuple[str, str]] = []
@@ -1863,7 +1995,12 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
             continue
-        ok, status_code, body = fetch_url(item["url"])
+        ok, status_code, body = fetch_url(
+            item["url"],
+            timeout=timeout_seconds,
+            retry_attempts=retry_attempts,
+            retry_sleep_seconds=retry_sleep_seconds,
+        )
         if not ok:
             findings.append(f"{item['scope']}/{item['name']} failed: {status_code or 'ERR'} {item['url']}")
         statuses.append(
@@ -1893,6 +2030,9 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         "command": "health",
         "target": args.target,
         "scope": args.scope,
+        "requestTimeoutSeconds": timeout_seconds,
+        "retryAttempts": retry_attempts,
+        "retrySleepSeconds": retry_sleep_seconds,
         "checks": statuses,
         "findings": findings,
         "timestamp": utc_now(),
@@ -1953,11 +2093,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             "releaseState": (
                 _load_release_state("seed-box")
                 if args.target == "prod-hosted"
-                else (
-                    _read_json_payload(ROOT / "artifacts" / "ecs-onebox" / "deploy-report.json")
-                    if args.target == "gamma-hosted"
-                    else {}
-                )
+                else {}
             ),
         }
     if "logs" in scopes:
@@ -2014,7 +2150,7 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         closed = [item["name"] for item in network["ports"] if not item["open"]]
         if closed:
             findings.append(f"ports not listening: {', '.join(closed)}")
-    elif args.target in {"gamma-hosted", "prod-hosted"}:
+    elif args.target == "prod-hosted":
         public_bases = target.get("publicBases") or {}
         if not public_bases.get("api"):
             findings.append("public api base url is missing")
@@ -2164,35 +2300,7 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
     rollback_state: dict[str, str] | None = None
     rollout_decision = "continue"
     dry_run_requested = str(getattr(args, "dry_run", "false")).strip().lower() == "true"
-    if args.target == "gamma-hosted":
-        if not args.stage or not args.image_version or not args.previous_image_version:
-            timing = _finish_timing(started_monotonic, started_at)
-            return {
-                "exitCode": 2,
-                "summary": "stackctl deploy gamma-hosted requires --stage --image-version --previous-image-version",
-                "details": [],
-                **timing,
-            }
-        cmd = [
-            "bash",
-            "agent_ops/deploy/gamma/deploy_gamma_ecs.sh",
-        ]
-        env = {}
-        for key, value in {
-            "GAMMA_ECS_STAGE": args.stage,
-            "GAMMA_DEPLOY_IMAGE_VERSION": args.image_version,
-            "GAMMA_PREVIOUS_IMAGE_VERSION": args.previous_image_version,
-            "GAMMA_BASE_URL": args.base_url,
-            "GAMMA_PRODUCT_OPS_BASE_URL": args.product_ops_base_url,
-        }.items():
-            if value:
-                env[key] = value
-        if args.media_base_url:
-            env["MEDIA_AVATAR_CDN_BASE_URL"] = args.media_base_url
-        if args.media_origin_base_url:
-            env["GAMMA_ECS_MEDIA_ORIGIN_BASE_URL"] = args.media_origin_base_url
-        result = run(cmd, env=env)
-    else:
+    if args.target == "prod-hosted":
         required = [
             args.service,
             args.from_image,
@@ -2235,12 +2343,15 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
             args.redis_error_rate,
         ]
         replicas = str(_replicas_for_step(args.step))
+        # 灰度 stage 映射：未到 100% 走 gray-initial 灰度实例（承接原远端 gamma 验证），100% 放量 full。
+        rollout_stage = "full" if str(args.step).strip() == "100" else "gray-initial"
         deploy_result = run(
             ["bash", "agent_ops/deploy/prod/deploy_to_prod.sh"],
             env={
                 "CLOUD_PROVIDER": args.cloud_provider,
                 "IMAGE_VERSION": args.to_image,
                 "CONFIG_VERSION": args.to_config,
+                "ROLLOUT_STAGE": rollout_stage,
                 "REPLICAS": replicas,
                 "DRY_RUN": args.dry_run,
                 "SEED_BOX_IMAGE_REPOSITORY": os.environ.get(
@@ -2301,6 +2412,18 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
         args.target == "prod-hosted" and dry_run_requested
     )
     if run_post_deploy_checks:
+        def _deploy_health_args(target_name: str, scope_name: str, out_dir: Path) -> argparse.Namespace:
+            return argparse.Namespace(
+                command="health",
+                target=target_name,
+                scope=scope_name,
+                output_format="json",
+                report_dir=str(out_dir),
+                request_timeout_seconds=0,
+                retry_attempts=0,
+                retry_sleep_seconds=-1.0,
+            )
+
         for nested_command, nested_scope in (
             ("health", "full"),
             ("inspect", "all"),
@@ -2308,13 +2431,7 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
         ):
             nested_dir = report_dir / nested_command
             if nested_command == "health":
-                nested_args = argparse.Namespace(
-                    command="health",
-                    target=args.target,
-                    scope=nested_scope,
-                    output_format="json",
-                    report_dir=str(nested_dir),
-                )
+                nested_args = _deploy_health_args(args.target, nested_scope, nested_dir)
                 post_deploy_checks.append(command_health(nested_args))
             elif nested_command == "inspect":
                 nested_args = argparse.Namespace(
@@ -2361,6 +2478,8 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
                 "CLOUD_PROVIDER": args.cloud_provider,
                 "IMAGE_VERSION": args.from_image,
                 "CONFIG_VERSION": args.from_config,
+                "PREVIOUS_IMAGE_VERSION": args.to_image,
+                "ROLLOUT_STAGE": "full",
                 "REPLICAS": str(_replicas_for_step("100")),
                 "DRY_RUN": "false",
                 "SEED_BOX_IMAGE_REPOSITORY": os.environ.get(
@@ -2486,6 +2605,36 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def command_roll(args: argparse.Namespace) -> dict[str, Any]:
+    started_monotonic, started_at = _start_timing()
+
+    if args.target in {"alpha-local", "beta-local", "gamma-local"}:
+        env_map = {
+            "alpha-local": "alpha",
+            "beta-local": "beta",
+            "gamma-local": "gamma",
+        }
+        nested_args = argparse.Namespace(
+            command="up",
+            env=env_map[args.target],
+            target=args.target,
+            device_id="",
+            output_format="json",
+            report_dir=getattr(args, "report_dir", ""),
+        )
+        payload = command_up(nested_args)
+        payload["summary"] = f"stackctl roll {args.mode} completed for {args.target}"
+        return payload
+
+    timing = _finish_timing(started_monotonic, started_at)
+    return {
+        "exitCode": 2,
+        "summary": f"stackctl roll does not support target {args.target}",
+        "details": [],
+        **timing,
+    }
+
+
 def _all_services() -> list[str]:
     services: list[str] = []
     for path in ROOT.glob("quwoquan_service/services/*/configs/default/config.yaml"):
@@ -2543,6 +2692,8 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
     env_cfg = topology["environments"][env_name]
     public_bases = target.get("publicBases") or {}
     origins = target.get("origins") or {}
+    service_policy = ((env_cfg.get("artifactPolicy") or {}).get("service") or {})
+    allow_fixture_refs = bool(service_policy.get("allowFixtureRefs"))
     checks: list[dict[str, Any]] = []
     if scope in {"edge", "full"}:
         checks.extend(
@@ -2557,22 +2708,23 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
             )
         )
     if scope in {"media", "full"} and "mediaImage" in public_bases:
-        checks.extend(
-            [
-                {
-                    "name": "media-edge-health",
-                    "scope": "media",
-                    "url": f"{str(public_bases['mediaImage']).rstrip('/')}/healthz",
-                },
+        checks.append(
+            {
+                "name": "media-edge-health",
+                "scope": "media",
+                "url": f"{str(public_bases['mediaImage']).rstrip('/')}/healthz",
+            }
+        )
+        if allow_fixture_refs:
+            checks.append(
                 {
                     "name": "media-public-sample",
                     "scope": "media",
                     "url": f"{str(public_bases['mediaImage']).rstrip('/')}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-                },
-            ]
-        )
+                }
+            )
         media_origin = str(origins.get("mediaOrigin") or "").rstrip("/")
-        if media_origin:
+        if media_origin and allow_fixture_refs:
             checks.append(
                 {
                     "name": "media-origin-sample",
@@ -2688,14 +2840,6 @@ def _full_scope_health_checks(
                     ),
                 },
             ]
-        )
-    elif target_name == "prod-hosted" and env_name == "prod":
-        checks.append(
-            {
-                "name": "prod-smoke",
-                "scope": "full",
-                "url": f"{str(public_bases['api']).rstrip('/')}/healthz",
-            }
         )
     return checks
 
@@ -2823,8 +2967,6 @@ def _local_log_report(target_name: str) -> dict[str, Any]:
         if path.exists():
             hits.append({"name": name, "path": relpath(path)})
     extra: dict[str, Any] = {}
-    if target_name == "gamma-hosted":
-        extra["gammaDeployState"] = _read_json_payload(ROOT / "artifacts" / "ecs-onebox" / "deploy-report.json") or {}
     if target_name == "prod-hosted":
         extra["prodReleaseState"] = _load_release_state("seed-box")
     return {"paths": hits, **extra}
@@ -2894,6 +3036,7 @@ def main() -> int:
         "inspect": command_inspect,
         "doctor": command_doctor,
         "repair": command_repair,
+        "roll": command_roll,
         "deploy": command_deploy,
     }
     payload = dispatch[args.command](args)

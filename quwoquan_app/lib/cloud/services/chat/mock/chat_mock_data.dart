@@ -332,7 +332,7 @@ class ChatMockData {
         'memberCount': n,
         'maxGroupSize': 1000,
         'receiptEnabled': false,
-        'lastMessagePreview': '$n人群聊测试',
+        'lastMessagePreview': '$n人讨论测试',
         'lastMessageTime': '2026-03-07T0${n < 10 ? n : 9}:00:00Z',
         'messageCount': n,
         'status': 'active',

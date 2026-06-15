@@ -509,24 +509,6 @@ void main() {
       expect(log.last.path, ContentApiMetadata.unlikePostPath(postId: 'p1'));
     });
 
-    test('favoritePost → POST /v1/content/posts/{postId}/favorite', () async {
-      await repo.favoritePost(postId: 'p1');
-      expect(log.last.method, 'POST');
-      expect(log.last.path, ContentApiMetadata.favoritePostPath(postId: 'p1'));
-    });
-
-    test(
-      'unfavoritePost → DELETE /v1/content/posts/{postId}/favorite',
-      () async {
-        await repo.unfavoritePost(postId: 'p1');
-        expect(log.last.method, 'DELETE');
-        expect(
-          log.last.path,
-          ContentApiMetadata.unfavoritePostPath(postId: 'p1'),
-        );
-      },
-    );
-
     test('sharePost → POST /v1/content/posts/{postId}/share', () async {
       await repo.sharePost(postId: 'p1');
       expect(log.last.method, 'POST');

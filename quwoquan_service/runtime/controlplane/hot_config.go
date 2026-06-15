@@ -65,6 +65,19 @@ func (s *HotConfigStore) GetFloat(key string, fallback float64) float64 {
 	}
 }
 
+// GetString 读取字符串型热配置值（如运营态错误提示语 override）。
+// HotConfigStore.Value 为 any，天然承载字符串；未命中或类型不符返回 fallback。
+func (s *HotConfigStore) GetString(key string, fallback string) string {
+	raw, ok := s.Get(key)
+	if !ok {
+		return fallback
+	}
+	if v, ok := raw.(string); ok {
+		return v
+	}
+	return fallback
+}
+
 func (s *HotConfigStore) GetBool(key string, fallback bool) bool {
 	raw, ok := s.Get(key)
 	if !ok {

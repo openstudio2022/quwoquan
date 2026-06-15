@@ -126,6 +126,8 @@ func TestMain(m *testing.M) {
 	}
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
 	userAuthStore := persistence.NewPgUserAuthStore(pgPool)
+	userDeviceStore := persistence.NewPgUserDeviceStore(pgPool)
+	consentRecordStore := persistence.NewPgConsentRecordStore(pgPool)
 	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
 	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
 	inviteStore := persistence.NewPgInviteStore(pgPool)
@@ -181,6 +183,8 @@ func TestMain(m *testing.M) {
 		profileCache,
 		shardDirectory,
 		application.WithUserAuthRepository(userAuthStore),
+		application.WithUserDeviceRepository(userDeviceStore),
+		application.WithConsentRepository(consentRecordStore),
 		application.WithOtpCodeStore(cache.NewOtpCodeCache(redisClient)),
 		application.WithOtpDebugReveal(true),
 		application.WithExternalInteractionClient(acceptedExternalClient{}),

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/publish_draft_projection_bridge.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 
@@ -80,6 +81,75 @@ void main() {
         expect(payload['articleAssetManifest'], isA<Map>());
         expect(payload['articleRenderProfile'], isA<Map>());
         expect(payload.containsKey('articleDocument'), isFalse);
+      },
+    );
+
+    test(
+      'buildCreatePostPayloadMap writes confirmed summary refs and assistant policy',
+      () {
+        final state = CreateEditorState.initial().copyWith(
+          title: 'T',
+          body: 'x' * 200,
+          settings: const PublishSettings(
+            summary: '用户确认摘要',
+            tagRefs: <String>['Topic/旅行/城市漫步'],
+            entityRefs: <String>['entity:sight:west_lake'],
+            assistantUsePolicy: 'allow_summary',
+          ),
+        );
+
+        final payload = buildCreatePostPayloadMap(state);
+
+        expect(payload['summary'], '用户确认摘要');
+        expect(payload['tagRefs'], <String>['Topic/旅行/城市漫步']);
+        expect(payload['entityRefs'], <String>[
+          'entity:sight:west_lake',
+        ]);
+        expect(payload['assistantUsePolicy'], 'allow_summary');
+        expect(payload['articleMarkdown'], contains('summary: "用户确认摘要"'));
+        expect(payload['articleMarkdown'], contains('tag_refs:'));
+        expect(payload['articleMarkdown'], contains('entity_refs:'));
+      },
+    );
+
+    test(
+      'buildCreatePostPayloadMap derives entityRefs from inline mentions',
+      () {
+        final document = ArticleDocumentData(
+          nodes: <ArticleDocumentNode>[
+            ArticleDocumentNode(
+              id: 'p1',
+              type: ArticleDocumentNodeType.paragraph,
+              text: '灵隐寺值得一去',
+              spans: <ArticleInlineSpan>[
+                ArticleInlineSpan(
+                  start: 0,
+                  end: 3,
+                  kind: 'entity',
+                  targetType: 'entity',
+                  targetId: 'entity:sight:lingyin',
+                  displayText: '灵隐寺',
+                ),
+              ],
+            ),
+          ],
+        );
+        final state = CreateEditorState.initial().copyWith(
+          title: 'T',
+          body: 'x' * 200,
+          articleDocument: document,
+        );
+
+        final payload = buildCreatePostPayloadMap(state);
+
+        expect(
+          payload['entityRefs'],
+          contains('entity:sight:lingyin'),
+        );
+        expect(
+          payload['articleMarkdown'],
+          contains('@[灵隐寺](entity:sight:lingyin)'),
+        );
       },
     );
 
@@ -191,6 +261,12 @@ void main() {
           title: '草稿标题',
           body: '草稿正文。',
           articleCoverImagePath: '/tmp/cover.jpg',
+          settings: const PublishSettings(
+            summary: '草稿摘要',
+            tagRefs: <String>['Topic/旅行/城市漫步'],
+            entityRefs: <String>['entity:sight:west_lake'],
+            assistantUsePolicy: 'allow_summary',
+          ),
         ),
       );
 
@@ -207,6 +283,12 @@ void main() {
       expect(restored.state.articleDocument.title, '草稿标题');
       expect(restored.state.articleDocument.body, contains('草稿正文'));
       expect(restored.state.articleCoverImagePath, '/tmp/cover.jpg');
+      expect(restored.state.settings.summary, '草稿摘要');
+      expect(restored.state.settings.tagRefs, <String>['Topic/旅行/城市漫步']);
+      expect(restored.state.settings.entityRefs, <String>[
+        'entity:sight:west_lake',
+      ]);
+      expect(restored.state.settings.assistantUsePolicy, 'allow_summary');
     });
   });
 }

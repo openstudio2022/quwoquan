@@ -385,7 +385,7 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final kind = UnifiedObjectKind.fromRelationKind(relationKind);
+    final kind = UnifiedObjectKind.resolve(relationKind: relationKind);
     final accent = AppColors.iosAccent(context);
     final radius = kind == UnifiedObjectKind.person
         ? BorderRadius.circular(size)
@@ -422,7 +422,9 @@ class _Avatar extends StatelessWidget {
         return CupertinoIcons.location_solid;
       case UnifiedObjectKind.circle:
         return CupertinoIcons.person_3_fill;
-      case UnifiedObjectKind.org:
+      case UnifiedObjectKind.school:
+        return CupertinoIcons.book_fill;
+      case UnifiedObjectKind.enterprise:
         return CupertinoIcons.building_2_fill;
     }
   }

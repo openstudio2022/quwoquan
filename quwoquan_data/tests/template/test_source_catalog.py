@@ -35,6 +35,7 @@ def test_platform_category_maps_vertical_sources():
     assert platform_category("维基百科") == "encyclopedia"
     assert platform_category("马蜂窝") == "travelogue"
     assert platform_category("携程攻略") == "travelogue"  # 包含匹配
+    assert platform_category("去哪儿攻略") == "travelogue"
     assert platform_category("两步路") == "outdoor_route"  # 路书/经纬度/地形
     assert platform_category("安营") == "camping"  # 床车营地
     assert platform_category("高德地图") == "map_geo"

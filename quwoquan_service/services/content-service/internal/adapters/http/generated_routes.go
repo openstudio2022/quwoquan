@@ -49,14 +49,12 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "DeletePost":
 		h.handleNotImplemented(w, r, operation)
-	case "FavoritePost":
-		h.handleNotImplemented(w, r, operation)
 	case "GenerateArticleSummary":
 		h.handleNotImplemented(w, r, operation)
 	case "GetAppConfig":
 		h.handleNotImplemented(w, r, operation)
 	case "GetAuthorImpact":
-		h.handleGetAuthorImpact(w, r)
+		h.handleNotImplemented(w, r, operation)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":
@@ -66,6 +64,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetHelperRead":
 		h.handleNotImplemented(w, r, operation)
 	case "GetMediaAsset":
+		h.handleNotImplemented(w, r, operation)
+	case "GetMyFootprint":
 		h.handleNotImplemented(w, r, operation)
 	case "GetMyIntersectionSummary":
 		h.handleGetMyIntersectionSummary(w, r)
@@ -123,8 +123,6 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "SharePost":
 		h.handleNotImplemented(w, r, operation)
-	case "UnfavoritePost":
-		h.handleNotImplemented(w, r, operation)
 	case "UnlikePost":
 		h.handleNotImplemented(w, r, operation)
 	case "UnsharePost":
@@ -148,6 +146,7 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/reaction", operation: "ReactToComment"},
 	{method: "GET", pathTemplate: "/v1/content/feed", operation: "GetFeed"},
 	{method: "GET", pathTemplate: "/v1/content/feed/intersections", operation: "GetFeedIntersections"},
+	{method: "GET", pathTemplate: "/v1/content/footprint", operation: "GetMyFootprint"},
 	{method: "GET", pathTemplate: "/v1/content/helper-read/{contentId}", operation: "GetHelperRead"},
 	{method: "GET", pathTemplate: "/v1/content/intersections", operation: "ListMyIntersections"},
 	{method: "POST", pathTemplate: "/v1/content/intersections/exposure", operation: "ReportIntersectionExposure"},
@@ -172,8 +171,6 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}", operation: "DeleteComment"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}/replies", operation: "ListCommentReplies"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/counters", operation: "GetCounters"},
-	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/favorite", operation: "UnfavoritePost"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/favorite", operation: "FavoritePost"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/like", operation: "UnlikePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/like", operation: "LikePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/media:bind", operation: "BindMediaAssetsToPost"},
@@ -300,8 +297,7 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"title":                     {},
 		"body":                      {},
 		"summary":                   {},
-		"tagRefs":                   {},
-		"entityRefs":                {},
+		"semanticMentions":          {},
 		"rating":                    {},
 		"reviewAspects":             {},
 		"mediaUrls":                 {},
@@ -334,8 +330,7 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"contentType":             {},
 		"title":                   {},
 		"summary":                 {},
-		"tagRefs":                 {},
-		"entityRefs":              {},
+		"semanticMentions":        {},
 		"rating":                  {},
 		"reviewAspects":           {},
 		"coverUrl":                {},
@@ -372,8 +367,7 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"title":                   {},
 		"body":                    {},
 		"summary":                 {},
-		"tagRefs":                 {},
-		"entityRefs":              {},
+		"semanticMentions":        {},
 		"rating":                  {},
 		"reviewAspects":           {},
 		"mediaUrls":               {},

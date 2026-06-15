@@ -49,10 +49,8 @@ class MediaViewerInteractionSnapshot {
     this.scopePostIds = const <String>{},
     this.scopeProfileIds = const <String>{},
     this.followingUsers = const <String>{},
-    this.savedPosts = const <String>{},
     this.likedPosts = const <String>{},
     this.postLikesCount = const <String, int>{},
-    this.postBookmarksCount = const <String, int>{},
     this.postSharesCount = const <String, int>{},
     this.postCommentCount = const <String, int>{},
   });
@@ -60,10 +58,8 @@ class MediaViewerInteractionSnapshot {
   final Set<String> scopePostIds;
   final Set<String> scopeProfileIds;
   final Set<String> followingUsers;
-  final Set<String> savedPosts;
   final Set<String> likedPosts;
   final Map<String, int> postLikesCount;
-  final Map<String, int> postBookmarksCount;
   final Map<String, int> postSharesCount;
   final Map<String, int> postCommentCount;
 
@@ -73,9 +69,7 @@ class MediaViewerInteractionSnapshot {
     }
     return <String>{
       ...likedPosts,
-      ...savedPosts,
       ...postLikesCount.keys,
-      ...postBookmarksCount.keys,
       ...postSharesCount.keys,
       ...postCommentCount.keys,
     };
@@ -92,10 +86,8 @@ class MediaViewerInteractionSnapshot {
     Set<String>? scopePostIds,
     Set<String>? scopeProfileIds,
     Set<String>? followingUsers,
-    Set<String>? savedPosts,
     Set<String>? likedPosts,
     Map<String, int>? postLikesCount,
-    Map<String, int>? postBookmarksCount,
     Map<String, int>? postSharesCount,
     Map<String, int>? postCommentCount,
   }) {
@@ -103,10 +95,8 @@ class MediaViewerInteractionSnapshot {
       scopePostIds: scopePostIds ?? this.scopePostIds,
       scopeProfileIds: scopeProfileIds ?? this.scopeProfileIds,
       followingUsers: followingUsers ?? this.followingUsers,
-      savedPosts: savedPosts ?? this.savedPosts,
       likedPosts: likedPosts ?? this.likedPosts,
       postLikesCount: postLikesCount ?? this.postLikesCount,
-      postBookmarksCount: postBookmarksCount ?? this.postBookmarksCount,
       postSharesCount: postSharesCount ?? this.postSharesCount,
       postCommentCount: postCommentCount ?? this.postCommentCount,
     );
@@ -118,10 +108,8 @@ class MediaViewerResult extends MediaViewerInteractionSnapshot {
     super.scopePostIds = const <String>{},
     super.scopeProfileIds = const <String>{},
     super.followingUsers = const <String>{},
-    super.savedPosts = const <String>{},
     super.likedPosts = const <String>{},
     super.postLikesCount = const <String, int>{},
-    super.postBookmarksCount = const <String, int>{},
     super.postSharesCount = const <String, int>{},
     super.postCommentCount = const <String, int>{},
   });
@@ -133,12 +121,54 @@ class MediaViewerResult extends MediaViewerInteractionSnapshot {
       scopePostIds: Set<String>.from(snapshot.effectiveScopePostIds),
       scopeProfileIds: Set<String>.from(snapshot.effectiveScopeProfileIds),
       followingUsers: Set<String>.from(snapshot.followingUsers),
-      savedPosts: Set<String>.from(snapshot.savedPosts),
       likedPosts: Set<String>.from(snapshot.likedPosts),
       postLikesCount: Map<String, int>.from(snapshot.postLikesCount),
-      postBookmarksCount: Map<String, int>.from(snapshot.postBookmarksCount),
       postSharesCount: Map<String, int>.from(snapshot.postSharesCount),
       postCommentCount: Map<String, int>.from(snapshot.postCommentCount),
+    );
+  }
+}
+
+/// work browser / 沉浸式评论直达上下文。
+///
+/// `openComments=true` 表示进入帖子后直接展开评论分屏；其余 id 用于恢复
+/// “查看原评论 / 在上下文中回复”的目标语义。
+class MediaViewerCommentContext {
+  const MediaViewerCommentContext({
+    this.openComments = false,
+    this.commentId,
+    this.parentCommentId,
+    this.replyToCommentId,
+  });
+
+  final bool openComments;
+  final String? commentId;
+  final String? parentCommentId;
+  final String? replyToCommentId;
+
+  bool get shouldOpen =>
+      openComments ||
+      (commentId?.trim().isNotEmpty ?? false) ||
+      (parentCommentId?.trim().isNotEmpty ?? false) ||
+      (replyToCommentId?.trim().isNotEmpty ?? false);
+
+  static MediaViewerCommentContext fromQueryParameters(
+    Map<String, String> query,
+  ) {
+    final openComments =
+        (query['openComments'] ?? '').trim().toLowerCase() == 'true';
+    final commentId = query['commentId']?.trim();
+    final parentCommentId = query['parentCommentId']?.trim();
+    final replyToCommentId = query['replyToCommentId']?.trim();
+    return MediaViewerCommentContext(
+      openComments: openComments,
+      commentId: commentId?.isEmpty == true ? null : commentId,
+      parentCommentId: parentCommentId?.isEmpty == true
+          ? null
+          : parentCommentId,
+      replyToCommentId: replyToCommentId?.isEmpty == true
+          ? null
+          : replyToCommentId,
     );
   }
 }
@@ -159,6 +189,7 @@ class MediaViewerExtra {
     this.referralSource = ReferralSource.organicFeed,
     this.feedRequestId,
     this.position,
+    this.commentContext = const MediaViewerCommentContext(),
   });
 
   final List<ContentSurfaceView> posts;
@@ -177,4 +208,25 @@ class MediaViewerExtra {
 
   /// 入口 post 在 feed 中的位置（推荐归因用；从 feed 列表序号透传）。
   final int? position;
+
+  final MediaViewerCommentContext commentContext;
+
+  MediaViewerExtra copyWith({MediaViewerCommentContext? commentContext}) {
+    return MediaViewerExtra(
+      posts: posts,
+      dtoPosts: dtoPosts,
+      initialIndex: initialIndex,
+      category: category,
+      initialImageIndex: initialImageIndex,
+      source: source,
+      circleId: circleId,
+      showWorksNavigation: showWorksNavigation,
+      rawPostsById: rawPostsById,
+      interactionSnapshot: interactionSnapshot,
+      referralSource: referralSource,
+      feedRequestId: feedRequestId,
+      position: position,
+      commentContext: commentContext ?? this.commentContext,
+    );
+  }
 }

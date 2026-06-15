@@ -212,26 +212,10 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     );
   }
 
-  CreationSubTab _creationSubTabForId(String id) {
-    switch (id) {
-      case 'image':
-        return CreationSubTab.image;
-      case 'video':
-        return CreationSubTab.video;
-      case 'article':
-        return CreationSubTab.article;
-      default:
-        return CreationSubTab.all;
-    }
-  }
+  CreationSubTab _creationSubTabForId(String id) => creationSubTabFromId(id);
 
   bool _matchesCreationFilter(PostBaseDto post, CreationSubTab tab) {
     switch (tab) {
-      case CreationSubTab.moment:
-      case CreationSubTab.micro:
-        return post.identity == 'moment';
-      case CreationSubTab.work:
-        return post.identity == 'work';
       case CreationSubTab.image:
         return post.displayFormat == 'image';
       case CreationSubTab.video:
@@ -246,28 +230,26 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
   String _emptyStateTitle(CreationSubTab filter) {
     final isMine = widget.mode == ProfileMode.mine;
     switch (filter) {
-      case CreationSubTab.moment:
-      case CreationSubTab.micro:
-        return isMine ? '还没有点滴' : 'Ta 还没有点滴';
-      case CreationSubTab.work:
-        return isMine ? '还没有作品' : 'Ta 还没有作品';
       case CreationSubTab.image:
-        return isMine ? '还没有图片内容' : 'Ta 还没有图片内容';
+        return isMine
+            ? UITextConstants.profileCreationEmptyImageMine
+            : UITextConstants.profileCreationEmptyImageOther;
       case CreationSubTab.video:
-        return isMine ? '还没有视频内容' : 'Ta 还没有视频内容';
+        return isMine
+            ? UITextConstants.profileCreationEmptyVideoMine
+            : UITextConstants.profileCreationEmptyVideoOther;
       case CreationSubTab.article:
-        return isMine ? '还没有文字内容' : 'Ta 还没有文字内容';
+        return isMine
+            ? UITextConstants.profileCreationEmptyTextMine
+            : UITextConstants.profileCreationEmptyTextOther;
       case CreationSubTab.all:
-        return isMine ? '还没有创作内容' : 'Ta 还没有创作内容';
+        return isMine
+            ? UITextConstants.profileCreationEmptyAllMine
+            : UITextConstants.profileCreationEmptyAllOther;
     }
   }
 
   Future<void> _onPostTap(BuildContext context, PostBaseDto post) async {
-    if (post.identity == 'work' && post.displayFormat == 'note') {
-      context.push(AppRoutePaths.articleDetail(id: post.id));
-      return;
-    }
-
     final state = ref.read(profileNotifierProvider(widget.userId));
     final filtered = state.creations
         .where((p) => _matchesCreationFilter(p, state.activeSubTab))
@@ -277,12 +259,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         .indexWhere((p) => p.id == post.id)
         .clamp(0, filtered.length - 1);
     final postViews = filtered
-        .map(
-          (dto) => ContentSurfaceViewMapper.fromDto(
-            dto,
-            wire: dto.toMap(),
-          ),
-        )
+        .map((dto) => ContentSurfaceViewMapper.fromDto(dto, wire: dto.toMap()))
         .toList();
     final isMoment = post.identity == 'moment';
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
@@ -292,31 +269,19 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
-    final navFeedRequestId =
-        ref.read(feedSessionProvider.notifier).newFeedRequestId();
-
-    if (post.displayFormat == 'video') {
-      final result = await context.push<Object?>(
-        '/video-viewer/$initialIndex',
-        extra: MediaViewerExtra(
-          posts: postViews,
-          dtoPosts: filtered,
-          initialIndex: initialIndex,
-          category: isMoment ? 'profile_moment' : 'profile',
-          source: isMoment ? 'profile_moment' : 'profile',
-          interactionSnapshot: interactionSnapshot,
-          referralSource: ReferralSource.authorProfile,
-          feedRequestId: navFeedRequestId,
-        ),
-      );
-      if (result is MediaViewerResult) {
-        applyMediaViewerResultToInteractionState(ref, result);
-      }
-      return;
-    }
+    final navFeedRequestId = ref
+        .read(feedSessionProvider.notifier)
+        .newFeedRequestId();
 
     final result = await context.push<Object?>(
-      '/media-viewer/photo/$initialIndex',
+      AppRoutePaths.workBrowser(
+        workId: post.id,
+        filter: post.isVideoLike
+            ? 'video'
+            : (post.isArticleLike ? 'article' : 'image'),
+        source: isMoment ? 'profile_moment' : 'profile',
+        index: '$initialIndex',
+      ),
       extra: MediaViewerExtra(
         posts: postViews,
         dtoPosts: filtered,
@@ -371,7 +336,7 @@ class _WorksPostCard extends ConsumerWidget {
     final body = post.normalizedBody;
     if (title.isNotEmpty) return title;
     if (body.isNotEmpty) return body;
-    return post.identity == 'moment' ? '点滴' : '作品';
+    return UITextConstants.profileTabCreations;
   }
 
   String get _supportingText {

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/governance/audit_event",
+  "title": "Candidate governance audit event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "auditId",
+    "candidateId",
+    "action",
+    "actor",
+    "occurredAt",
+    "status",
+    "version"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "quwoquan_data.governance_audit/1"
+    },
+    "auditId": {
+      "type": "string",
+      "pattern": "^audit_[0-9a-f]{24}$"
+    },
+    "candidateId": {
+      "type": "string",
+      "pattern": "^candidate_[0-9a-f]{24}$"
+    },
+    "action": {
+      "type": "string",
+      "enum": ["candidate.intake", "candidate.intake_updated", "candidate.reviewed"]
+    },
+    "actor": {
+      "type": "string",
+      "minLength": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["published", "pending_review", "rejected", "offline"]
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "details": {
+      "type": "object"
+    }
+  }
+}

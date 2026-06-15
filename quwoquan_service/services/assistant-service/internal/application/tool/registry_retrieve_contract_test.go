@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestRetrieveToolsDoNotRequireLegacyQuery(t *testing.T) {
+func TestRetrieveToolsDoNotRequireCompatQuery(t *testing.T) {
 	registry := DefaultRegistry()
 	for _, name := range []string{"search", "app_search"} {
 		meta, ok := registry.Metadata(name)
@@ -15,7 +15,7 @@ func TestRetrieveToolsDoNotRequireLegacyQuery(t *testing.T) {
 		}
 		for _, key := range meta.RequiredInputKeys {
 			if key == "query" || key == "mode" || key == "strategy" || key == "type" || key == "relation" {
-				t.Fatalf("tool %q must not require legacy key %q", name, key)
+				t.Fatalf("tool %q must not require compat key %q", name, key)
 			}
 		}
 		for _, forbidden := range []string{"mode", "type", "relation"} {
@@ -55,7 +55,7 @@ func TestAppSearchExecutesViaRetrieveTargets(t *testing.T) {
 	}
 }
 
-func TestSearchToolLegacyQueryStillParsed(t *testing.T) {
+func TestSearchToolCompatQueryStillParsed(t *testing.T) {
 	registry := DefaultRegistry()
 	result, err := registry.Execute(context.Background(), Request{
 		ToolName: "search",

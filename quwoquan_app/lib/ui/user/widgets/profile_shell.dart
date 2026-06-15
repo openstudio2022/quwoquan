@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,18 +18,17 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
-import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
+import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
+import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_header.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_lifestyle_tab.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_stats_row.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
 
 part 'profile_shell_builders.dart';
@@ -62,7 +60,7 @@ class ProfileShell extends ConsumerStatefulWidget {
 }
 
 class _ProfileShellState extends ConsumerState<ProfileShell> {
-  static const double _profileCardRadius = AppSpacing.radiusTwenty;
+  static const double _profileCardRadius = AppSpacing.radiusTwentyFour;
   static const double _profileSurfaceBridge = _profileCardRadius;
   final GlobalKey _worksSecondaryTabKey = GlobalKey();
   final GlobalKey _interactionSecondaryTabKey = GlobalKey();
@@ -73,75 +71,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   void initState() {
     super.initState();
     _activeTabId = UserProfileUIConfig.defaultTabId;
-  }
-
-  void _showGreetDialog(BuildContext context) {
-    AppToast.show(context, '打招呼功能即将上线');
-  }
-
-  Future<void> _startCall(BuildContext context, String callType) async {
-    final profileNotifier = ref.read(profileNotifierProvider(widget.userId).notifier);
-    final currentState = ref.read(profileNotifierProvider(widget.userId));
-    final capability = currentState.displayCapability;
-    if (capability != null &&
-        (!capability.canOpenConversation ||
-            (!capability.canStartVoiceCall && !capability.canStartVideoCall))) {
-      if (!mounted) {
-        return;
-      }
-      final resolved = runtimeErrorSemantic(
-        context,
-        error: StateError('relationship gate denied call'),
-        category: UiErrorCategory.submit,
-        scope: UiErrorScope.global,
-      );
-      await AppActionErrorFeedback.show(context, semantic: resolved);
-      return;
-    }
-    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
-      ref.read(authContinuationProvider.notifier).set(
-            StartDirectCallContinuation(
-              targetUserId: widget.userId,
-              callType: callType,
-            ),
-          );
-      await requireLogin(
-        ref,
-        context,
-        AuthGateReason.sendMessage,
-        dismissFallback: AppRoutePaths.home,
-      );
-      return;
-    }
-
-    try {
-      final created = await profileNotifier.openOrCreateDirectConversation();
-      if (!mounted || created.conversationId.isEmpty) {
-        return;
-      }
-      final router = GoRouter.of(context);
-      final notifier = ref.read(callSessionProvider.notifier);
-      final callId = await notifier.initiateCall(
-        callTypeStr: callType,
-        targetUserIds: [widget.userId],
-        conversationId: created.conversationId,
-      );
-      if (!mounted) return;
-      if (callId != null) {
-        router.push(AppRoutePaths.rtcOutgoing(callId: callId));
-      }
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      final resolved = runtimeErrorSemantic(
-        context,
-        error: error,
-        category: UiErrorCategory.submit,
-        scope: UiErrorScope.global,
-      );
-      await AppActionErrorFeedback.show(context, semantic: resolved);
-    }
   }
 
   void _onPrimaryTabChange(String tabId) {
@@ -236,30 +165,10 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     return bottom > viewportTop + 1 && top < viewportBottom - 1;
   }
 
-  CreationSubTab _creationSubTabForId(String id) {
-    switch (id) {
-      case 'image':
-        return CreationSubTab.image;
-      case 'video':
-        return CreationSubTab.video;
-      case 'article':
-        return CreationSubTab.article;
-      default:
-        return CreationSubTab.all;
-    }
-  }
+  CreationSubTab _creationSubTabForId(String id) => creationSubTabFromId(id);
 
-  InteractionSubTab _interactionSubTabForId(String id) {
-    switch (id) {
-      case 'comments':
-        return InteractionSubTab.comments;
-      case 'shares':
-        return InteractionSubTab.shares;
-      case 'likes':
-      default:
-        return InteractionSubTab.likes;
-    }
-  }
+  InteractionSubTab _interactionSubTabForId(String id) =>
+      interactionSubTabFromId(id);
 
   double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
     final painter = TextPainter(
@@ -340,9 +249,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
-    final personaManagementEnabled = ref.watch(
-      personaManagementFeatureFlagProvider,
-    );
     final state = ref.watch(profileNotifierProvider(widget.userId));
     final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
     ref.listen<AuthSessionState>(authSessionControllerProvider, (
@@ -354,17 +260,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           (previous == null || !previous.isAuthenticated);
       if (justLoggedIn) {
         maybeResumeFollowContinuation(notifier);
-        maybeResumeRelationshipContinuations(context, notifier);
-        final pendingCall = ref
-            .read(authContinuationProvider.notifier)
-            .take<StartDirectCallContinuation>();
-        if (pendingCall != null) {
-          if (pendingCall.targetUserId != widget.userId) {
-            ref.read(authContinuationProvider.notifier).set(pendingCall);
-          } else {
-            unawaited(_startCall(context, pendingCall.callType));
-          }
-        }
+        maybeResumeDirectMessageContinuation(context, notifier);
       }
     });
     final userData = ref.watch(userDataProvider);
@@ -425,7 +321,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         summaryBuilder: (c) => _buildSummarySection(
           c,
           isDark: isDark,
-          personaManagementEnabled: personaManagementEnabled,
           avatarUrl: avatarUrl,
           displayName: displayName,
           bio: bio,
@@ -462,7 +357,10 @@ enum _ProfileMoreAction { share, block, report }
 /// 用户举报原因（与 content/report 后端 reason code 对齐）。
 enum _ProfileReportReason {
   spam('spam', UITextConstants.profileReportReasonSpam),
-  misinformation('misinformation', UITextConstants.profileReportReasonMisinformation),
+  misinformation(
+    'misinformation',
+    UITextConstants.profileReportReasonMisinformation,
+  ),
   harassment('harassment', UITextConstants.profileReportReasonHarassment),
   pornography('pornography', UITextConstants.profileReportReasonPornography),
   other('other', UITextConstants.profileReportReasonOther);

@@ -161,6 +161,11 @@ func TestHandleAppMessageLifecycle(t *testing.T) {
 		"target": map[string]any{
 			"targetType": "assistant_turn",
 			"targetId":   "atn_http_1",
+			"routeId":    "myIntersections",
+			"routePath":  "/profile/intersections",
+			"query": map[string]string{
+				"dimension": "content",
+			},
 		},
 	})
 	createReq := httptest.NewRequest(http.MethodPost, "/v1/app-messages", bytes.NewReader(payload))
@@ -178,6 +183,11 @@ func TestHandleAppMessageLifecycle(t *testing.T) {
 	messageID, _ := created["messageId"].(string)
 	if messageID == "" {
 		t.Fatal("messageId should be returned")
+	}
+	target, _ := created["target"].(map[string]any)
+	query, _ := target["query"].(map[string]any)
+	if target["routeId"] != "myIntersections" || query["dimension"] != "content" {
+		t.Fatalf("structured target not preserved: %#v", target)
 	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/app-messages", nil)
@@ -225,6 +235,89 @@ func TestHandleAppMessageLifecycle(t *testing.T) {
 	if count["unreadCount"] != 0 {
 		t.Fatalf("unreadCount=%v, want 0", count["unreadCount"])
 	}
+}
+
+func TestHandleSuggestCreationAssistance(t *testing.T) {
+	service := application.NewAssistantService(
+		persistence.NewMemoryEventStore(),
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+		application.WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
+	)
+	if _, err := service.CreateSkillSubscription(context.Background(), "user_creation", assistant.CreateSkillSubscriptionInput{
+		SkillID:  "creation_assistant",
+		DomainID: "content_creation",
+		Trigger:  assistant.SkillSubscriptionTrigger{Type: "cron", Cron: "0 8 * * *"},
+	}); err != nil {
+		t.Fatalf("CreateSkillSubscription error: %v", err)
+	}
+	handler := NewHandler(service).Routes()
+	payload, _ := json.Marshal(map[string]any{
+		"bodyDigest":        "峨眉山旅行路线和摄影点整理",
+		"primaryHomepageId": "homepage_sight_emeishan",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/v1/assistant/skills/creation-suggest", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", "user_creation")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["available"] != true {
+		t.Fatalf("available=%v body=%s", resp["available"], w.Body.String())
+	}
+	tags, _ := resp["suggestedTagRefs"].([]any)
+	if len(tags) == 0 {
+		t.Fatalf("missing tag suggestions: %s", w.Body.String())
+	}
+}
+
+func TestHandleTickIntersectionReminders(t *testing.T) {
+	service := application.NewAssistantService(
+		persistence.NewMemoryEventStore(),
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+		application.WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		application.WithIntersectionInboxReader(httpFakeIntersectionInboxReader{reasons: []application.IntersectionReminderReason{{
+			ReasonID:    "reason_http_1",
+			TargetID:    "user_2",
+			TargetName:  "阿青",
+			Dimension:   "content",
+			PrimaryText: "共同讨论",
+			IsFact:      true,
+		}}}),
+	)
+	handler := NewHandler(service).Routes()
+	payload, _ := json.Marshal(map[string]any{"userId": "user_http_intersection"})
+	req := httptest.NewRequest(http.MethodPost, "/v1/assistant/intersections/reminders/tick", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["processedCount"] != float64(1) {
+		t.Fatalf("response=%s", w.Body.String())
+	}
+}
+
+type httpFakeIntersectionInboxReader struct {
+	reasons []application.IntersectionReminderReason
+}
+
+func (r httpFakeIntersectionInboxReader) ListNewIntersectionReasons(context.Context, string, time.Time, int) ([]application.IntersectionReminderReason, error) {
+	return r.reasons, nil
 }
 
 func TestHandleAppMessageStream(t *testing.T) {

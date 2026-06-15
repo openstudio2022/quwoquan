@@ -330,32 +330,29 @@ jobs:
       validation_profile: mainline_auto_prod
     secrets: inherit
 
-  gamma_hosted:
-    name: Gamma hosted stage
-    needs: [prepare, beta_device_matrix]
-    uses: ./.github/workflows/gamma-ecs-pre-hosted-core.yml
-    with:
-      checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
-      image_version: ${{ needs.prepare.outputs.to_image }}
-      config_version: ${{ needs.prepare.outputs.to_config }}
-      release_artifact_name: ${{ needs.prepare.outputs.has_release_artifact == 'true' && 'resolved-mainline-release-artifact' || '' }}
-      assistant_smoke_profile: protocol
-    secrets: inherit
-
   prod_initial:
     name: Prod initial rollout
-    needs: [prepare, gamma_hosted]
+    needs: [prepare, beta_device_matrix]
     runs-on: ubuntu-latest
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    # 去 root · 按平面 SSH 凭据（退役单一全权 PROD_KUBECONFIG）。
     env:
-      PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
+      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+      PROD_EDGE_SSH_KEY: ${{ secrets.PROD_EDGE_SSH_KEY }}
+      PROD_MEDIA_SSH_KEY: ${{ secrets.PROD_MEDIA_SSH_KEY }}
+      PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
+      PROD_DATA_SSH_KEY: ${{ secrets.PROD_DATA_SSH_KEY }}
       SEED_BOX_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/seed-box
       RECOMMENDATION_SERVICE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/recommendation-service
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Validate prod plane SSH credentials
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        run: |
+          python3 agent_ops/deploy/prod/validate_prod_plane_credentials.py --stage gray-initial
       - name: Download resolved release artifact
         if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
         continue-on-error: true
@@ -394,12 +391,6 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: 安装 kustomize
-        run: bash agent_ops/deploy/shared/install_kustomize.sh
-      - name: Install kubectl
-        run: |
-          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
       - name: Deploy prod initial via stackctl
         run: |
           python3 agent_ops/deploy/stackctl.py deploy \
@@ -436,14 +427,23 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    # 去 root · 按平面 SSH 凭据（退役单一全权 PROD_KUBECONFIG）。
     env:
-      PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
+      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+      PROD_EDGE_SSH_KEY: ${{ secrets.PROD_EDGE_SSH_KEY }}
+      PROD_MEDIA_SSH_KEY: ${{ secrets.PROD_MEDIA_SSH_KEY }}
+      PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
+      PROD_DATA_SSH_KEY: ${{ secrets.PROD_DATA_SSH_KEY }}
       SEED_BOX_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/seed-box
       RECOMMENDATION_SERVICE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/recommendation-service
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Validate prod plane SSH credentials
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        run: |
+          python3 agent_ops/deploy/prod/validate_prod_plane_credentials.py --stage gray-initial
       - name: Download resolved release artifact
         if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
         continue-on-error: true
@@ -482,12 +482,6 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: 安装 kustomize
-        run: bash agent_ops/deploy/shared/install_kustomize.sh
-      - name: Install kubectl
-        run: |
-          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
       - name: Deploy prod full via stackctl
         run: |
           python3 agent_ops/deploy/stackctl.py deploy \
@@ -525,7 +519,6 @@ jobs:
       - delivery_gate
       - alpha_local
       - beta_device_matrix
-      - gamma_hosted
       - prod_initial
       - prod_full
     if: always()
@@ -558,13 +551,6 @@ jobs:
         with:
           name: app-env-device-matrix-timing-summary
           path: .beta-device-timing
-      - name: Download gamma timing summary
-        if: ${{ always() }}
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: gamma-hosted-timing-summary
-          path: .gamma-hosted-timing
       - name: Download alpha stackctl artifacts
         if: ${{ always() }}
         continue-on-error: true
@@ -599,7 +585,6 @@ jobs:
           DELIVERY_SECONDS: ${{ needs.delivery_gate.outputs.critical_path_seconds }}
           ALPHA_SECONDS: ${{ needs.alpha_local.outputs.duration_seconds }}
           BETA_SECONDS: ${{ needs.beta_device_matrix.outputs.critical_path_seconds }}
-          GAMMA_SECONDS: ${{ needs.gamma_hosted.outputs.critical_path_seconds }}
           PROD_INITIAL_SECONDS: ${{ needs.prod_initial.outputs.duration_seconds }}
           PROD_FULL_SECONDS: ${{ needs.prod_full.outputs.duration_seconds }}
         run: |
@@ -616,10 +601,9 @@ jobs:
           DELIVERY="${DELIVERY_SECONDS:-0}"
           ALPHA="${ALPHA_SECONDS:-0}"
           BETA="${BETA_SECONDS:-0}"
-          GAMMA="${GAMMA_SECONDS:-0}"
           PROD_INITIAL="${PROD_INITIAL_SECONDS:-0}"
           PROD_FULL="${PROD_FULL_SECONDS:-0}"
-          CRITICAL_PATH_SECONDS=$(( DELIVERY + ALPHA + BETA + GAMMA + PROD_INITIAL + PROD_FULL ))
+          CRITICAL_PATH_SECONDS=$(( DELIVERY + ALPHA + BETA + PROD_INITIAL + PROD_FULL ))
           COMMIT_TO_PROD_SECONDS=$(( SERVICE_PIPELINE + CRITICAL_PATH_SECONDS ))
           python3 agent_ops/ci/render_ci_timing_summary.py \
             --gate-key 07.mainline_auto_prod \
@@ -628,7 +612,6 @@ jobs:
             --phase "delivery_gate=${DELIVERY}" \
             --phase "alpha_stage=${ALPHA}" \
             --phase "beta_device_matrix=${BETA}" \
-            --phase "gamma_hosted=${GAMMA}" \
             --phase "prod_initial_checks=${PROD_INITIAL}" \
             --phase "prod_full=${PROD_FULL}" \
             --note "目标版本来源：${{ needs.prepare.outputs.artifact_note }}；主链 checkout 已锁定到触发 02 的 main commit。" \
@@ -658,7 +641,6 @@ jobs:
             --service-pipeline-root ".service-pipeline-timing" \
             --delivery-gate-root ".delivery-gate-timing" \
             --beta-summary-root ".beta-device-timing" \
-            --gamma-summary-root ".gamma-hosted-timing" \
             --mainline-summary "artifacts/ci-timing/mainline-auto-prod-summary.json" \
             --commit-summary "artifacts/ci-timing/main-commit-to-prod-summary.json" \
             --alpha-stackctl-root ".mainline-alpha" \
@@ -685,7 +667,6 @@ jobs:
           DELIVERY_RESULT: ${{ needs.delivery_gate.outputs.summary_result }}
           ALPHA_RESULT: ${{ needs.alpha_local.result }}
           BETA_RESULT: ${{ needs.beta_device_matrix.outputs.summary_result }}
-          GAMMA_RESULT: ${{ needs.gamma_hosted.result }}
           PROD_INITIAL_RESULT: ${{ needs.prod_initial.result }}
           PROD_FULL_RESULT: ${{ needs.prod_full.result }}
         run: |
@@ -701,7 +682,6 @@ jobs:
           expect_success "delivery_gate" "${DELIVERY_RESULT}" "检查 03 Delivery Gate"
           expect_success "alpha_local" "${ALPHA_RESULT}" "检查 alpha-local package/up/health artifacts"
           expect_success "beta_device_matrix" "${BETA_RESULT}" "检查 beta-local self-hosted matrix gate"
-          expect_success "gamma_hosted" "${GAMMA_RESULT}" "检查 gamma hosted deploy/readiness/T3/protocol smoke"
           expect_success "prod_initial" "${PROD_INITIAL_RESULT}" "检查 prod initial deploy 与 post-deploy probes"
           expect_success "prod_full" "${PROD_FULL_RESULT}" "检查 prod full deploy 与 rollback 闭环"
           if [ "${fail}" -ne 0 ]; then

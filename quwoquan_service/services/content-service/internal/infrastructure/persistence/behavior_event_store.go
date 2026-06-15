@@ -18,6 +18,10 @@ const (
 // BehaviorEventStore persists raw user behavior events for offline analytics.
 type BehaviorEventStore interface {
 	InsertBatch(ctx context.Context, events []RawBehaviorEvent) error
+	// ListUserFootprint 按用户读取最近行为边（我的足迹只读契约的数据源；
+	// 无新写路径，复用既有行为事件）。actions 为空表示全部消费型行为；
+	// before 非零时只取更早的事件（cursor 分页）。
+	ListUserFootprint(ctx context.Context, userID string, actions []string, before time.Time, limit int) ([]RawBehaviorEvent, error)
 }
 
 // RawBehaviorEvent is the persistent form of a user behavior event.
@@ -105,9 +109,39 @@ func (s *MongoBehaviorEventStore) InsertBatch(ctx context.Context, events []RawB
 	return err
 }
 
+// ListUserFootprint 读取用户最近行为事件（createdAt 倒序），复用
+// userId+action+createdAt 复合索引；不投影聚合，去重与展示语义由应用层决定。
+func (s *MongoBehaviorEventStore) ListUserFootprint(ctx context.Context, userID string, actions []string, before time.Time, limit int) ([]RawBehaviorEvent, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	filter := bson.M{"userId": userID}
+	if len(actions) > 0 {
+		filter["action"] = bson.M{"$in": actions}
+	}
+	if !before.IsZero() {
+		filter["createdAt"] = bson.M{"$lt": before}
+	}
+	cursor, err := s.coll.Find(ctx, filter,
+		options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var out []RawBehaviorEvent
+	if err := cursor.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NoopBehaviorEventStore discards events (used when MongoDB is not available).
 type NoopBehaviorEventStore struct{}
 
 func (NoopBehaviorEventStore) InsertBatch(_ context.Context, _ []RawBehaviorEvent) error {
 	return nil
+}
+
+func (NoopBehaviorEventStore) ListUserFootprint(_ context.Context, _ string, _ []string, _ time.Time, _ int) ([]RawBehaviorEvent, error) {
+	return nil, nil
 }

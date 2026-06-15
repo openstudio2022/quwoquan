@@ -1,13 +1,13 @@
 part of 'homepage_detail_shell.dart';
 
 extension _HomepageBuilders on _HomepageDetailShellState {
-  /// 交集卡「你和这里的交集」：tag-service shared-tags 对象对直打（当前用户 × 实体主页）。
-  /// bundle 直出优先；否则经统一 section（loading 骨架 / 空收起，G2 不造假）。
+  /// 交集卡「与你的连接」：对象对直打（当前用户 × 主页对象）。
+  /// 只读 bundle 直出；bundle 为空时直接收起，不再客户端补第二条交集链。
   Widget _buildIntersectionCard(bool isDark) {
     final bundleReasons = widget.objectPageBundle?.intersectionReasons;
     if (bundleReasons != null && bundleReasons.isNotEmpty) {
       final card = ObjectIntersectionCard.fromReasons(
-        title: UITextConstants.homepageIntersectionTitle,
+        title: UITextConstants.objectConnectionWithYou,
         reasons: bundleReasons,
         isDark: isDark,
         onReasonTap: widget.onIntersectionReasonTap,
@@ -19,41 +19,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         );
       }
     }
-    final viewerId = widget.viewerOwnerUserId ?? '';
-    final entityId =
-        widget.objectPageBundle?.canonicalEntityId ??
-        widget.detail?.id ??
-        widget.initialSummary?.id ??
-        '';
-    if (viewerId.isEmpty || entityId.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    // 无 bundle 直出数据时：经统一 section（loading 骨架 / data 卡 / error 收起 + 旅程高亮）。
-    return Padding(
-      padding: EdgeInsets.only(top: AppSpacing.containerSm),
-      child: ObjectIntersectionSection(
-        query: ObjectIntersectionQuery(
-          objectAId: viewerId,
-          objectAType: 'user',
-          objectBId: entityId,
-          objectBType: 'entity',
-        ),
-        title: UITextConstants.homepageIntersectionTitle,
-        isDark: isDark,
-        onReasonTap: widget.onIntersectionReasonTap,
-      ),
-    );
-  }
-
-  Widget _buildRelationRibbon(bool isDark) {
-    final edges = widget.objectPageBundle?.relationEdges;
-    if (edges == null || edges.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: EdgeInsets.only(top: AppSpacing.containerSm),
-      child: ObjectRelationRibbon(edges: edges, isDark: isDark),
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildIdentityMedia(BuildContext context, String? coverUrl) {
@@ -231,19 +197,12 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           .isNotEmpty)
         (detail?.address ?? widget.initialSummary?.address ?? '').trim(),
     ].join(' · ');
-    final stats = _HomepageSummaryStats(
-      averageRating:
-          _reviewSummary?.averageRating ??
-          detail?.averageRating ??
-          widget.initialSummary?.averageRating,
-      ratingCount:
-          _reviewSummary?.ratingCount ??
-          detail?.ratingCount ??
-          widget.initialSummary?.ratingCount ??
-          0,
-      contentCount: _contentPreview.length + _questionPreview.length,
-      relatedCount: _relatedGroups.length,
-    );
+    final typeLabel = _typeLabel(reference?.homepageType ?? '');
+    final identitySubtitle = <String>[
+      if (typeLabel.trim().isNotEmpty) typeLabel.trim(),
+      if (locationLine.trim().isNotEmpty) locationLine.trim(),
+    ].join(' · ');
+    final identityMetaLine = (reference?.subtitle ?? '').trim();
 
     return Container(
       decoration: BoxDecoration(
@@ -272,9 +231,11 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           children: <Widget>[
             ObjectIdentityHeader(
               kind: ObjectIdentityKind.entity,
-              title: reference?.title ?? '主页',
-              subtitle: (reference?.subtitle ?? '').trim(),
-              metaLine: locationLine,
+              title:
+                  reference?.title ??
+                  UITextConstants.objectHomepageDefaultTitle,
+              subtitle: identitySubtitle,
+              metaLine: identityMetaLine,
               media: _buildIdentityMedia(context, reference?.coverUrl),
               trailing: _hasMoreActions
                   ? ProfileIosIconButton(
@@ -288,35 +249,93 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                   : null,
             ),
             SizedBox(height: AppSpacing.containerSm),
-            Wrap(
-              spacing: AppSpacing.intraGroupXs,
-              runSpacing: AppSpacing.intraGroupXs,
-              children: _summaryChips()
-                  .map(
-                    (chip) => _HomepageSummaryChipWidget(
-                      label: chip.label,
-                      accent: chip.accent,
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-            SizedBox(height: AppSpacing.containerSm),
-            _HomepageStatsRow(stats: stats),
-            _buildIntersectionCard(isDark),
-            _buildRelationRibbon(isDark),
             if (!widget.selectionMode) ...<Widget>[
               SizedBox(height: AppSpacing.containerSm),
               _HomepageActionBar(
-                canCreate: _canCreateFromHomepage,
-                canClaim: _canClaim,
-                isClaimPending: _isClaimPending,
-                isOwnerLike: _isOwnerLike,
-                onClaim: widget.onClaim,
-                onMaintain: widget.onMaintain,
-                onCreateContent: _handlePrimaryAction,
+                isFollowing: widget.detail?.viewerFollowsHomepage ?? false,
+                onToggleFollow: widget.onToggleFollow,
+                onMessageOwner: widget.onMessageOwner,
               ),
             ],
+            SizedBox(height: AppSpacing.containerSm),
+            _buildIntersectionCard(isDark),
+            _buildEntityIntroCard(context),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEntityIntroCard(BuildContext context) {
+    final objectName = (_reference?.title ?? '').trim();
+    final introductionSummary = (widget.introductionSummary ?? '').trim();
+    final fallbackIntro = <String>[
+      if ((_reference?.subtitle ?? '').trim().isNotEmpty)
+        _reference!.subtitle!.trim(),
+      if ((widget.detail?.categoryTags ?? const <String>[]).isNotEmpty)
+        widget.detail!.categoryTags.take(3).join(' · '),
+      if ((widget.detail?.city ?? '').trim().isNotEmpty)
+        widget.detail!.city!.trim(),
+    ].join(' · ');
+    final intro = introductionSummary.isNotEmpty
+        ? introductionSummary
+        : fallbackIntro;
+    final canOpenIntroduction = introductionSummary.isNotEmpty;
+    if (objectName.isEmpty || intro.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: EdgeInsets.only(top: AppSpacing.containerSm),
+      child: CupertinoButton(
+        key: const ValueKey<String>('homepage-introduction-entry-button'),
+        padding: EdgeInsets.zero,
+        onPressed: canOpenIntroduction ? widget.onOpenIntroduction : null,
+        child: ProfileIosSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      UITextConstants.objectIntroTitle(objectName),
+                      style: TextStyle(
+                        fontSize: AppTypography.iosSubheadline,
+                        fontWeight: AppTypography.semiBold,
+                        color: AppColors.iosLabel(context),
+                      ),
+                    ),
+                  ),
+                  if (canOpenIntroduction) ...<Widget>[
+                    Text(
+                      UITextConstants.objectIntroMoreLabel,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosFootnote,
+                        color: AppColors.iosAccent(context),
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.two),
+                    Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: AppSpacing.iconXSmall,
+                      color: AppColors.iosTertiaryLabel(context),
+                    ),
+                  ],
+                ],
+              ),
+              SizedBox(height: AppSpacing.intraGroupXs),
+              Text(
+                intro,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.iosFootnote,
+                  color: AppColors.iosSecondaryLabel(context),
+                  height: AppSpacing.textLineHeightDense,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -504,7 +523,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           title: '记录状态',
           child: ProfileIosSectionCard(
             child: Text(
-              '该主页已下线，记录口碑、关联内容与群组摘要会继续保留，方便用户回看与迁移判断。',
+              '该主页已下线，记录口碑、关联内容与讨论摘要会继续保留，方便用户回看与迁移判断。',
               style: TextStyle(
                 fontSize: AppTypography.iosBody,
                 color: AppColors.iosSecondaryLabel(context),

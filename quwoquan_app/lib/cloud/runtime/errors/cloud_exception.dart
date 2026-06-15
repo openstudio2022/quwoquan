@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/domain_error_code.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 enum CloudErrorType {
@@ -18,7 +19,7 @@ class CloudException implements Exception {
     required this.message,
     this.statusCode,
     this.code,
-    this.errorCode,
+    this.domainErrorCode,
     this.runtimeFailure,
     this.userMessage,
     this.cause,
@@ -31,8 +32,14 @@ class CloudException implements Exception {
   /// Raw error code string from the server response (e.g. "CONTENT.USER.post_not_found").
   final String? code;
 
-  /// Typed [ContentErrorCode] parsed from [code]. Null when not a content-domain error.
-  final ContentErrorCode? errorCode;
+  /// 全域 typed error code，来自生成的 *ErrorCode enum registry。
+  final DomainErrorCode? domainErrorCode;
+
+  /// 兼容存量 content 调用点；新代码使用 [domainErrorCode]。
+  ContentErrorCode? get errorCode {
+    final value = domainErrorCode?.value;
+    return value is ContentErrorCode ? value : null;
+  }
 
   final RuntimeFailureBase? runtimeFailure;
 

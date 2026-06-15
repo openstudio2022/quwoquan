@@ -28,6 +28,7 @@ class PlatformCapabilities {
     required this.appleNativeLogin,
     required this.systemCredentialLogin,
     required this.passkeyLogin,
+    required this.quickLoginPersistence,
   });
 
   /// Local random-access file system (`dart:io File/Directory`). False on web.
@@ -88,6 +89,13 @@ class PlatformCapabilities {
   /// WebAuthn / passkey entry available for this platform.
   final bool passkeyLogin;
 
+  /// 是否可在本机安全存储中长期持有"快速登录凭证"（软退出后有效期内免验证码登录）。
+  ///
+  /// 个人设备（手机/iPad/桌面）为 true：refresh 凭证存安全存储，退出后有效期内可一键恢复。
+  /// Web 为 false：凭证生命周期由浏览器 cookies/会话控制，端侧不长期持有，
+  /// 业务层据此决定 returning 主按钮是否提供一键登录（只看会话是否仍在）。
+  final bool quickLoginPersistence;
+
   PlatformCapabilities copyWith({
     bool? hasLocalFileSystem,
     bool? mediaLibrary,
@@ -105,6 +113,7 @@ class PlatformCapabilities {
     bool? appleNativeLogin,
     bool? systemCredentialLogin,
     bool? passkeyLogin,
+    bool? quickLoginPersistence,
   }) {
     return PlatformCapabilities(
       hasLocalFileSystem: hasLocalFileSystem ?? this.hasLocalFileSystem,
@@ -125,6 +134,8 @@ class PlatformCapabilities {
       systemCredentialLogin:
           systemCredentialLogin ?? this.systemCredentialLogin,
       passkeyLogin: passkeyLogin ?? this.passkeyLogin,
+      quickLoginPersistence:
+          quickLoginPersistence ?? this.quickLoginPersistence,
     );
   }
 }
@@ -156,6 +167,7 @@ class CapabilityProfile {
     appleNativeLogin: true,
     systemCredentialLogin: true,
     passkeyLogin: true,
+    quickLoginPersistence: true,
   );
 
   static const PlatformCapabilities web = PlatformCapabilities(
@@ -175,6 +187,7 @@ class CapabilityProfile {
     appleNativeLogin: false,
     systemCredentialLogin: false,
     passkeyLogin: false,
+    quickLoginPersistence: false,
   );
 
   // HarmonyOS / OpenHarmony initial baseline. RTC / incoming-call / native
@@ -196,6 +209,7 @@ class CapabilityProfile {
     appleNativeLogin: false,
     systemCredentialLogin: false,
     passkeyLogin: false,
+    quickLoginPersistence: true,
   );
 
   static const PlatformCapabilities desktop = PlatformCapabilities(
@@ -215,6 +229,7 @@ class CapabilityProfile {
     appleNativeLogin: false,
     systemCredentialLogin: false,
     passkeyLogin: false,
+    quickLoginPersistence: true,
   );
 }
 
@@ -224,7 +239,8 @@ PlatformCapabilities platformCapabilitiesFor(AppPlatform platform) {
     case AppPlatform.android:
       return CapabilityProfile.mobile.copyWith(appleNativeLogin: false);
     case AppPlatform.ios:
-      return CapabilityProfile.mobile;
+      // 微信原生登录仅 Android 开启；iOS 走 Apple 登录（与来电能力位基线测试契约一致）。
+      return CapabilityProfile.mobile.copyWith(wechatNativeLogin: false);
     case AppPlatform.web:
       return CapabilityProfile.web;
     case AppPlatform.ohos:

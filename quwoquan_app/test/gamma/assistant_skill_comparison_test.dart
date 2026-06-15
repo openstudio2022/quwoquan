@@ -15,138 +15,144 @@ import '../common/assistant/assistant_eval_scenario_fixtures.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
+const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
+  'ASSISTANT_SCENARIO_FIXTURE_JSON_B64',
+);
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('21 skill alpha/beta comparison evidence collector', (
-    tester,
-  ) async {
-    _installPathProviderMock();
-    final scenarioPack = loadAssistantEvalScenarioPack();
-    final runtimeEnv = CloudRuntimeConfig.appRuntimeEnv;
-    final scenarios = scenarioPack.assistantTurnScenariosFor(runtimeEnv);
-    expect(scenarios, hasLength(21));
-    expect(scenarioPack.qualityStandards, hasLength(21));
+  testWidgets(
+    '21 skill alpha/beta comparison evidence collector',
+    (tester) async {
+      _installPathProviderMock();
+      final scenarioPack = loadAssistantEvalScenarioPack();
+      final runtimeEnv = CloudRuntimeConfig.appRuntimeEnv;
+      final scenarios = scenarioPack.assistantTurnScenariosFor(runtimeEnv);
+      expect(scenarios, hasLength(21));
+      expect(scenarioPack.qualityStandards, hasLength(21));
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          if (runtimeEnv == 'alpha')
-            assistantRepositoryProvider.overrideWithValue(
-              ScenarioEvalMockAssistantRepository(pack: scenarioPack),
-            ),
-        ],
-        child: const MaterialApp(home: PersonalAssistantConversationPage()),
-      ),
-    );
-    await _pumpFrames(tester);
-    _expectScreenClass(tester);
-
-    expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(PersonalAssistantConversationPage)),
-    );
-    final mode = container.read(appDataSourceModeProvider);
-
-    for (final scenario in scenarios) {
-      final started = DateTime.now();
-      await container
-          .read(personalAssistantStreamControllerProvider.notifier)
-          .send(scenario.question);
-      await _pumpUntilStreamSettled(tester);
-
-      final context = tester.element(
-        find.byType(PersonalAssistantConversationPage),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            if (runtimeEnv == 'alpha')
+              assistantRepositoryProvider.overrideWithValue(
+                ScenarioEvalMockAssistantRepository(pack: scenarioPack),
+              ),
+          ],
+          child: const MaterialApp(home: PersonalAssistantConversationPage()),
+        ),
       );
-      final state = ProviderScope.containerOf(
-        context,
-      ).read(personalAssistantStreamControllerProvider);
-      final durationMs = DateTime.now().difference(started).inMilliseconds;
-      final eventTypes = state.events
-          .map((event) => event.eventType)
-          .toList(growable: false);
-      final selectedSkillIds = <String>{
-        for (final event in state.events)
-          if (_looksLikeSkillSelection(event.payload))
-            (event.payload['skillId'] ?? '').toString(),
-      }..remove('');
-      final toolNames = <String>{
-        for (final event in state.events) _toolNameForEvent(event.payload),
-      }..remove('');
-      final transcript = state.transcript
-          .map(PersistedTimelineTurnCodec.encode)
-          .toList(growable: false);
-      final expectedAnswerFragments = runtimeEnv == 'alpha'
-          ? scenario.expectedAnswerFragments
-          : (scenario.remoteExpectations.answerFragments.isNotEmpty
-                ? scenario.remoteExpectations.answerFragments
-                : scenario.expectedAnswerFragments);
-      final expectedEventTypes = runtimeEnv == 'alpha'
-          ? scenario.expectedEvents
-          : (scenario.remoteExpectations.eventTypes.isNotEmpty
-                ? scenario.remoteExpectations.eventTypes
-                : scenario.expectedEvents);
-      final qualityStandard =
-          scenarioPack.qualityStandards[scenario.qualityStandardRef];
-      expect(qualityStandard, isNotNull, reason: scenario.id);
-      final minimumQualityScore = qualityStandard?.minimumTotalScore ?? 0;
-      _expectRunMeetsScenarioContract(
-        scenario: scenario,
-        answer: state.answer,
-        errorMessage: state.errorMessage,
-        running: state.running,
-        eventTypes: eventTypes,
-        toolNames: toolNames,
-        expectedAnswerFragments: expectedAnswerFragments,
-        expectedEventTypes: expectedEventTypes,
-      );
-      final totalScore = _scoreVerticalQaRun(
-        answer: state.answer,
-        processSummary: state.processSummary,
-        eventTypes: eventTypes,
-        toolNames: toolNames,
-        expectedAnswerFragments: expectedAnswerFragments,
-        expectedToolNames: scenario.expectedToolNames,
-      );
-      expect(
-        totalScore,
-        greaterThanOrEqualTo(minimumQualityScore),
-        reason:
-            '${scenario.id} score=$totalScore standard=$minimumQualityScore',
-      );
+      await _pumpFrames(tester);
+      _expectScreenClass(tester);
 
-      _printEvalResult(<String, dynamic>{
-        'env': runtimeEnv,
-        'repositoryMode': mode.name,
-        'scenarioId': scenario.id,
-        'skillId': scenario.skillId,
-        'domainId': scenario.domainId,
-        'question': scenario.question,
-        'answer': state.answer,
-        'answerLength': state.answer.length,
-        'errorMessage': state.errorMessage,
-        'running': state.running,
-        'durationMs': durationMs,
-        'eventTypes': eventTypes,
-        'eventCount': state.events.length,
-        'selectedSkillIds': selectedSkillIds.toList(growable: false),
-        'toolNames': toolNames.toList(growable: false),
-        'qualityStandardRef': scenario.qualityStandardRef,
-        'qualityScore': totalScore,
-        'minimumQualityScore': minimumQualityScore,
-        'processSummary': <String, dynamic>{
-          'searchCount': state.processSummary.searchCount,
-          'processedCount': state.processSummary.processedCount,
-          'acceptedCount': state.processSummary.acceptedCount,
-          'finalAnswerReady': state.processSummary.finalAnswerReady,
-        },
-        'transcript': transcript,
-        'turnId': state.turnId,
-        'conversationId': state.conversationId,
-      });
-    }
-  });
+      expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PersonalAssistantConversationPage)),
+      );
+      final mode = container.read(appDataSourceModeProvider);
+
+      for (final scenario in scenarios) {
+        final started = DateTime.now();
+        await container
+            .read(personalAssistantStreamControllerProvider.notifier)
+            .send(scenario.question);
+        await _pumpUntilStreamSettled(tester);
+
+        final context = tester.element(
+          find.byType(PersonalAssistantConversationPage),
+        );
+        final state = ProviderScope.containerOf(
+          context,
+        ).read(personalAssistantStreamControllerProvider);
+        final durationMs = DateTime.now().difference(started).inMilliseconds;
+        final eventTypes = state.events
+            .map((event) => event.eventType)
+            .toList(growable: false);
+        final selectedSkillIds = <String>{
+          for (final event in state.events)
+            if (_looksLikeSkillSelection(event.payload))
+              (event.payload['skillId'] ?? '').toString(),
+        }..remove('');
+        final toolNames = <String>{
+          for (final event in state.events) _toolNameForEvent(event.payload),
+        }..remove('');
+        final transcript = state.transcript
+            .map(PersistedTimelineTurnCodec.encode)
+            .toList(growable: false);
+        final expectedAnswerFragments = runtimeEnv == 'alpha'
+            ? scenario.expectedAnswerFragments
+            : (scenario.remoteExpectations.answerFragments.isNotEmpty
+                  ? scenario.remoteExpectations.answerFragments
+                  : scenario.expectedAnswerFragments);
+        final expectedEventTypes = runtimeEnv == 'alpha'
+            ? scenario.expectedEvents
+            : (scenario.remoteExpectations.eventTypes.isNotEmpty
+                  ? scenario.remoteExpectations.eventTypes
+                  : scenario.expectedEvents);
+        final qualityStandard =
+            scenarioPack.qualityStandards[scenario.qualityStandardRef];
+        expect(qualityStandard, isNotNull, reason: scenario.id);
+        final minimumQualityScore = qualityStandard?.minimumTotalScore ?? 0;
+        _expectRunMeetsScenarioContract(
+          scenario: scenario,
+          answer: state.answer,
+          errorMessage: state.errorMessage,
+          running: state.running,
+          eventTypes: eventTypes,
+          toolNames: toolNames,
+          expectedAnswerFragments: expectedAnswerFragments,
+          expectedEventTypes: expectedEventTypes,
+        );
+        final totalScore = _scoreVerticalQaRun(
+          answer: state.answer,
+          processSummary: state.processSummary,
+          eventTypes: eventTypes,
+          toolNames: toolNames,
+          expectedAnswerFragments: expectedAnswerFragments,
+          expectedToolNames: scenario.expectedToolNames,
+        );
+        expect(
+          totalScore,
+          greaterThanOrEqualTo(minimumQualityScore),
+          reason:
+              '${scenario.id} score=$totalScore standard=$minimumQualityScore',
+        );
+
+        _printEvalResult(<String, dynamic>{
+          'env': runtimeEnv,
+          'repositoryMode': mode.name,
+          'scenarioId': scenario.id,
+          'skillId': scenario.skillId,
+          'domainId': scenario.domainId,
+          'question': scenario.question,
+          'answer': state.answer,
+          'answerLength': state.answer.length,
+          'errorMessage': state.errorMessage,
+          'running': state.running,
+          'durationMs': durationMs,
+          'eventTypes': eventTypes,
+          'eventCount': state.events.length,
+          'selectedSkillIds': selectedSkillIds.toList(growable: false),
+          'toolNames': toolNames.toList(growable: false),
+          'qualityStandardRef': scenario.qualityStandardRef,
+          'qualityScore': totalScore,
+          'minimumQualityScore': minimumQualityScore,
+          'processSummary': <String, dynamic>{
+            'searchCount': state.processSummary.searchCount,
+            'processedCount': state.processSummary.processedCount,
+            'acceptedCount': state.processSummary.acceptedCount,
+            'finalAnswerReady': state.processSummary.finalAnswerReady,
+          },
+          'transcript': transcript,
+          'turnId': state.turnId,
+          'conversationId': state.conversationId,
+        });
+      }
+    },
+    skip: _assistantScenarioFixtureJsonBase64.trim().isEmpty,
+  );
 }
 
 void _installPathProviderMock() {

@@ -423,6 +423,119 @@ class AssistantConversationGroundingView {
       };
 }
 
+class AssistantCreationSuggestRequest {
+  const AssistantCreationSuggestRequest({
+    this.draftTitle,
+    this.draftSummary,
+    this.bodyDigest,
+    this.boundCircleIds = const [],
+    this.primaryHomepageId,
+  });
+
+  final String? draftTitle;
+  final String? draftSummary;
+  final String? bodyDigest;
+  final List<String>? boundCircleIds;
+  final String? primaryHomepageId;
+
+  factory AssistantCreationSuggestRequest.fromJson(Map<String, dynamic> json) {
+    return AssistantCreationSuggestRequest(
+      draftTitle: json['draftTitle']?.toString(),
+      draftSummary: json['draftSummary']?.toString(),
+      bodyDigest: json['bodyDigest']?.toString(),
+      boundCircleIds: ((json['boundCircleIds'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(growable: false),
+      primaryHomepageId: json['primaryHomepageId']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'draftTitle': draftTitle,
+        'draftSummary': draftSummary,
+        'bodyDigest': bodyDigest,
+        'boundCircleIds': boundCircleIds,
+        'primaryHomepageId': primaryHomepageId,
+      };
+}
+
+class AssistantSuggestedHomepageView {
+  const AssistantSuggestedHomepageView({
+    required this.id,
+    required this.type,
+    this.canonicalEntityId,
+    required this.displayName,
+    this.reason,
+  });
+
+  final String id;
+  final String type;
+  final String? canonicalEntityId;
+  final String displayName;
+  final String? reason;
+
+  factory AssistantSuggestedHomepageView.fromJson(Map<String, dynamic> json) {
+    return AssistantSuggestedHomepageView(
+      id: (json['id'] ?? '').toString(),
+      type: (json['type'] ?? '').toString(),
+      canonicalEntityId: json['canonicalEntityId']?.toString(),
+      displayName: (json['displayName'] ?? json['display_name'] ?? json['name'] ?? '').toString(),
+      reason: json['reason']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'type': type,
+        'canonicalEntityId': canonicalEntityId,
+        'displayName': displayName,
+        'reason': reason,
+      };
+}
+
+class AssistantCreationSuggestResponse {
+  const AssistantCreationSuggestResponse({
+    required this.suggestedTagRefs,
+    required this.suggestedHomepages,
+    this.suggestedTitle,
+    this.suggestedSummary,
+    required this.available,
+    this.unavailableReason,
+  });
+
+  final List<String> suggestedTagRefs;
+  final List<AssistantSuggestedHomepageView> suggestedHomepages;
+  final String? suggestedTitle;
+  final String? suggestedSummary;
+  final bool available;
+  final String? unavailableReason;
+
+  factory AssistantCreationSuggestResponse.fromJson(Map<String, dynamic> json) {
+    return AssistantCreationSuggestResponse(
+      suggestedTagRefs: ((json['suggestedTagRefs'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(growable: false),
+      suggestedHomepages: ((json['suggestedHomepages'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => AssistantSuggestedHomepageView.fromJson(item.cast<String, dynamic>()))
+            .toList(growable: false),
+      suggestedTitle: json['suggestedTitle']?.toString(),
+      suggestedSummary: json['suggestedSummary']?.toString(),
+      available: json['available'] == true,
+      unavailableReason: json['unavailableReason']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'suggestedTagRefs': suggestedTagRefs,
+        'suggestedHomepages': suggestedHomepages,
+        'suggestedTitle': suggestedTitle,
+        'suggestedSummary': suggestedSummary,
+        'available': available,
+        'unavailableReason': unavailableReason,
+      };
+}
+
 class AssistantEntryPersonalizationChipView {
   const AssistantEntryPersonalizationChipView({
     required this.chipId,
@@ -1146,7 +1259,6 @@ class InteractionEvent {
     this.explicitReasonCodes = const [],
     required this.copiedAnswer,
     required this.sharedAnswer,
-    required this.favoritedAnswer,
     required this.regeneratedAnswer,
     required this.styleAdjusted,
     required this.modelSwitched,
@@ -1176,7 +1288,6 @@ class InteractionEvent {
   final List<String>? explicitReasonCodes;
   final bool copiedAnswer;
   final bool sharedAnswer;
-  final bool favoritedAnswer;
   final bool regeneratedAnswer;
   final bool styleAdjusted;
   final bool modelSwitched;
@@ -1211,7 +1322,6 @@ class InteractionEvent {
             .toList(growable: false),
       copiedAnswer: json['copiedAnswer'] == true,
       sharedAnswer: json['sharedAnswer'] == true,
-      favoritedAnswer: json['favoritedAnswer'] == true,
       regeneratedAnswer: json['regeneratedAnswer'] == true,
       styleAdjusted: json['styleAdjusted'] == true,
       modelSwitched: json['modelSwitched'] == true,
@@ -1243,7 +1353,6 @@ class InteractionEvent {
         'explicitReasonCodes': explicitReasonCodes,
         'copiedAnswer': copiedAnswer,
         'sharedAnswer': sharedAnswer,
-        'favoritedAnswer': favoritedAnswer,
         'regeneratedAnswer': regeneratedAnswer,
         'styleAdjusted': styleAdjusted,
         'modelSwitched': modelSwitched,

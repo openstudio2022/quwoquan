@@ -78,13 +78,39 @@ type config struct {
 	Integration struct {
 		ExternalInteractionBaseURL string `yaml:"external_interaction_base_url"`
 		SmsOTP                     struct {
-			PassThroughEnabled   bool   `yaml:"pass_through_enabled"`
-			PassThroughDebtID    string `yaml:"pass_through_debt_id"`
-			PassThroughOwner     string `yaml:"pass_through_owner"`
-			PassThroughExpiresAt string `yaml:"pass_through_expires_at"`
-			DebugRevealEnabled   bool   `yaml:"debug_reveal_enabled"`
+			PassThroughEnabled   bool                 `yaml:"pass_through_enabled"`
+			PassThroughDebtID    string               `yaml:"pass_through_debt_id"`
+			PassThroughOwner     string               `yaml:"pass_through_owner"`
+			PassThroughExpiresAt string               `yaml:"pass_through_expires_at"`
+			DebugRevealEnabled   bool                 `yaml:"debug_reveal_enabled"`
+			SandboxAllowlist     sandboxAllowlistCfg  `yaml:"sandbox_allowlist"`
 		} `yaml:"sms_otp"`
+		Social struct {
+			SandboxAllowlist sandboxAllowlistCfg            `yaml:"sandbox_allowlist"`
+			Providers        map[string]providerOAuthCfg    `yaml:"providers"`
+		} `yaml:"social"`
+		OneTap struct {
+			Resolver         string             `yaml:"resolver"`
+			SandboxAllowlist sandboxAllowlistCfg `yaml:"sandbox_allowlist"`
+			SandboxPhones    map[string]string  `yaml:"sandbox_phones"`
+		} `yaml:"one_tap"`
 	} `yaml:"integration"`
+}
+
+type sandboxAllowlistCfg struct {
+	Enabled   bool     `yaml:"enabled"`
+	Phones    []string `yaml:"phones"`
+	Tokens    []string `yaml:"tokens"`
+	DebtID    string   `yaml:"debt_id"`
+	Owner     string   `yaml:"owner"`
+	ExpiresAt string   `yaml:"expires_at"`
+}
+
+type providerOAuthCfg struct {
+	AppID       string `yaml:"app_id"`
+	AppSecret   string `yaml:"app_secret"`
+	TokenURL    string `yaml:"token_url"`
+	UserInfoURL string `yaml:"user_info_url"`
 }
 
 func main() {
@@ -134,8 +160,9 @@ func main() {
 		log.Fatalf("postgres ping: %v", err)
 	}
 
-	// 2. Run migrations
-	if err := persistence.RunMigrations(ctx, pgPool); err != nil {
+	// 2. Run startup migrations with a persisted ledger so restart/rollout can
+	// safely keep the existing Postgres volume.
+	if err := persistence.RunManagedMigrations(ctx, pgPool); err != nil {
 		log.Fatalf("migration: %v", err)
 	}
 
@@ -179,6 +206,8 @@ func main() {
 	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
 	userAuthStore := persistence.NewPgUserAuthStore(pgPool)
+	userDeviceStore := persistence.NewPgUserDeviceStore(pgPool)
+	consentRecordStore := persistence.NewPgConsentRecordStore(pgPool)
 	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
 	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
 	inviteStore := persistence.NewPgInviteStore(pgPool)
@@ -245,6 +274,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("sms otp pass-through config invalid: %v", err)
 	}
+	otpSandboxAllowlist, err := smsOtpSandboxAllowlist(cfg, isProdRuntimeEnv())
+	if err != nil {
+		log.Fatalf("sms otp sandbox allowlist invalid: %v", err)
+	}
+	socialProviderClient, err := socialAuthProviderClient(cfg, appEnv, isProdRuntimeEnv())
+	if err != nil {
+		log.Fatalf("social auth provider client init failed: %v", err)
+	}
+	oneTapResolverImpl, err := oneTapResolver(cfg, appEnv)
+	if err != nil {
+		log.Fatalf("one tap resolver init failed: %v", err)
+	}
 	accessTokenSecret := []byte(getenvOrDefault("AUTH_JWT_SECRET", "dev-user-service-access-secret"))
 	accessSigner := rtauth.NewHS256Signer(accessTokenSecret, 30*time.Minute)
 	accessVerifier := rtauth.NewHS256Verifier(accessTokenSecret)
@@ -256,11 +297,16 @@ func main() {
 		profileCache,
 		shardDirectory,
 		application.WithUserAuthRepository(userAuthStore),
+		application.WithUserDeviceRepository(userDeviceStore),
+		application.WithConsentRepository(consentRecordStore),
 		application.WithOtpCodeStore(otpCodeCache),
 		application.WithOtpChallengeStore(otpChallengeStore),
 		application.WithExternalInteractionClient(externalInteractionClient),
 		application.WithSmsOtpPassThroughConfig(passThroughConfig),
+		application.WithSmsOtpSandboxAllowlist(otpSandboxAllowlist),
 		application.WithOtpDebugReveal(smsOtpDebugRevealEnabled(cfg, isProdRuntimeEnv())),
+		application.WithExternalAuthProviderClient(socialProviderClient),
+		application.WithOneTapPhoneResolver(oneTapResolverImpl),
 		application.WithAccessTokenSigner(accessSigner),
 	)
 	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
@@ -403,6 +449,90 @@ func smsOtpPassThroughConfig(cfg config, isProduction bool) (application.SmsOtpP
 		ExpiresAt: expiresAt,
 	}
 	return config, config.Validate(isProduction)
+}
+
+// buildSandboxAllowlist 从配置构造受控放通白名单（gamma 用）；生产强制为空（由 Validate 拦截）。
+func buildSandboxAllowlist(raw sandboxAllowlistCfg) (application.SandboxAllowlist, error) {
+	list := application.SandboxAllowlist{
+		Enabled: raw.Enabled,
+		Phones:  raw.Phones,
+		Tokens:  raw.Tokens,
+		DebtID:  strings.TrimSpace(raw.DebtID),
+		Owner:   strings.TrimSpace(raw.Owner),
+	}
+	if expires := strings.TrimSpace(raw.ExpiresAt); expires != "" {
+		parsed, err := time.Parse("2006-01-02", expires)
+		if err != nil {
+			return application.SandboxAllowlist{}, err
+		}
+		list.ExpiresAt = parsed.UTC()
+	}
+	return list, nil
+}
+
+func smsOtpSandboxAllowlist(cfg config, isProduction bool) (application.SandboxAllowlist, error) {
+	list, err := buildSandboxAllowlist(cfg.Integration.SmsOTP.SandboxAllowlist)
+	if err != nil {
+		return application.SandboxAllowlist{}, err
+	}
+	return list, list.Validate(isProduction)
+}
+
+func socialSandboxAllowlist(cfg config, isProduction bool) (application.SandboxAllowlist, error) {
+	list, err := buildSandboxAllowlist(cfg.Integration.Social.SandboxAllowlist)
+	if err != nil {
+		return application.SandboxAllowlist{}, err
+	}
+	return list, list.Validate(isProduction)
+}
+
+// socialAuthProviderClient 按环境选择社交票据置换实现：
+//   - alpha/beta：mock（离线确定性身份，发布安全）；
+//   - gamma：sandbox 包装（命中 allowlist 返回沙箱身份，其余委托真实 HTTP）；
+//   - prod：真实 HTTP（微信标准流程；支付宝/QQ 待配置 app 凭证）。
+func socialAuthProviderClient(cfg config, appEnv string, isProduction bool) (application.ExternalAuthProviderClient, error) {
+	providerConfigs := make(map[string]userintegration.ProviderOAuthConfig, len(cfg.Integration.Social.Providers))
+	for name, p := range cfg.Integration.Social.Providers {
+		providerConfigs[name] = userintegration.ProviderOAuthConfig{
+			AppID:       strings.TrimSpace(p.AppID),
+			AppSecret:   strings.TrimSpace(p.AppSecret),
+			TokenURL:    strings.TrimSpace(p.TokenURL),
+			UserInfoURL: strings.TrimSpace(p.UserInfoURL),
+		}
+	}
+	httpClient := userintegration.NewHTTPExternalAuthProviderClient(providerConfigs, nil)
+	switch appEnv {
+	case "alpha", "beta":
+		return userintegration.NewMockExternalAuthProviderClient(), nil
+	case "gamma":
+		allow, err := socialSandboxAllowlist(cfg, isProduction)
+		if err != nil {
+			return nil, err
+		}
+		return userintegration.NewSandboxExternalAuthProviderClient(allow, httpClient), nil
+	default:
+		return httpClient, nil
+	}
+}
+
+// oneTapResolver 按环境注入一键置换：alpha/beta 用 dev 解码；gamma 用沙箱静态号段；prod 待真实运营商接入前返回不可用。
+func oneTapResolver(cfg config, appEnv string) (application.OneTapPhoneResolver, error) {
+	switch appEnv {
+	case "alpha", "beta":
+		return application.TokenEncodedOneTapPhoneResolver{}, nil
+	case "gamma":
+		phones := map[string]string{}
+		for token, phone := range cfg.Integration.OneTap.SandboxPhones {
+			phones[strings.TrimSpace(token)] = strings.TrimSpace(phone)
+		}
+		if len(phones) == 0 {
+			return application.UnavailableOneTapPhoneResolver{}, nil
+		}
+		return application.StaticOneTapPhoneResolver(phones), nil
+	default:
+		// prod：真实运营商 resolver 待接入；在此之前不暴露 dev 解码后门。
+		return application.UnavailableOneTapPhoneResolver{}, nil
+	}
 }
 
 func smsOtpDebugRevealEnabled(cfg config, isProduction bool) bool {

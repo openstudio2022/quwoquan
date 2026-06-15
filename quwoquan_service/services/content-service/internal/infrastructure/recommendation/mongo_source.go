@@ -82,7 +82,6 @@ type discoveryFeedDoc struct {
 	LikeCount     int64     `bson:"likeCount"`
 	CommentCount  int64     `bson:"commentCount"`
 	ShareCount    int64     `bson:"shareCount"`
-	FavoriteCount int64     `bson:"favoriteCount"`
 	ViewCount     int64     `bson:"viewCount"`
 	PublishedAt   time.Time `bson:"publishedAt"`
 	RecScore      float64   `bson:"recScore"`

@@ -86,6 +86,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Regenerate release snapshot locally
+        run: |
+          rm -rf .mainline-release-artifact
+          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
+            --output-dir .mainline-release-artifact \
+            --git-sha "${GITHUB_SHA}" \
+            --run-number "${{ github.run_number }}" \
+            --repository "${{ github.repository }}" \
+            --registry "${{ env.REGISTRY || 'ghcr.io' }}" \
+            --image-version "${{ github.event.inputs.to_image }}" \
+            --config-version "${{ github.event.inputs.to_config }}"
+      - name: Unpack generated release snapshots
+        run: |
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path(".mainline-release-artifact")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          for rel_path in manifest.get("releaseFiles", {}).values():
+              src = root / rel_path
+              dst = Path(rel_path)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+          PY
       - name: Check config file exists
         run: |
           cfg="releases/config/seed-box/${{ github.event.inputs.to_config }}.yaml"
@@ -97,10 +123,17 @@ jobs:
         run: |
           state="state/release/seed-box.state"
           prev=0
+          prev_target_image=""
+          prev_target_config=""
           if [[ -f "$state" ]]; then
             prev=$(awk -F= '/^step=/{print $2}' "$state" || echo 0)
+            prev_target_image=$(awk -F= '/^to_image=/{print $2; exit}' "$state" || true)
+            prev_target_config=$(awk -F= '/^to_config=/{print $2; exit}' "$state" || true)
           fi
           step=${{ github.event.inputs.step }}
+          if [[ "$prev_target_image" != "${{ github.event.inputs.to_image }}" || "$prev_target_config" != "${{ github.event.inputs.to_config }}" ]]; then
+            prev=0
+          fi
           if [[ "$prev" -gt "$step" ]]; then
             echo "FAIL: step cannot go backwards (prev=$prev, next=$step)"
             exit 1
@@ -110,16 +143,47 @@ jobs:
     name: Stackctl deploy prod gray
     needs: [validate, resolve-versions]
     runs-on: ubuntu-latest
+    # 去 root · 按平面 SSH 凭据（退役单一全权 PROD_KUBECONFIG）。
     env:
-      PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
+      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+      PROD_EDGE_SSH_KEY: ${{ secrets.PROD_EDGE_SSH_KEY }}
+      PROD_MEDIA_SSH_KEY: ${{ secrets.PROD_MEDIA_SSH_KEY }}
+      PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
+      PROD_DATA_SSH_KEY: ${{ secrets.PROD_DATA_SSH_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - name: 安装 kustomize
-        run: bash agent_ops/deploy/shared/install_kustomize.sh
-      - name: Install kubectl
+      - name: Validate prod plane SSH credentials
+        if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
-          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+          STAGE=gray-initial
+          [ "${{ github.event.inputs.step }}" = "100" ] && STAGE=full
+          python3 agent_ops/deploy/prod/validate_prod_plane_credentials.py --stage "$STAGE"
+      - name: Regenerate release snapshot locally
+        run: |
+          rm -rf .mainline-release-artifact
+          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
+            --output-dir .mainline-release-artifact \
+            --git-sha "${GITHUB_SHA}" \
+            --run-number "${{ github.run_number }}" \
+            --repository "${{ github.repository }}" \
+            --registry "ghcr.io" \
+            --image-version "${{ github.event.inputs.to_image }}" \
+            --config-version "${{ github.event.inputs.to_config }}"
+      - name: Unpack generated release snapshots
+        run: |
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path(".mainline-release-artifact")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          for rel_path in manifest.get("releaseFiles", {}).values():
+              src = root / rel_path
+              dst = Path(rel_path)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+          PY
       - name: Deploy via stackctl
         run: |
           python3 agent_ops/deploy/stackctl.py deploy \

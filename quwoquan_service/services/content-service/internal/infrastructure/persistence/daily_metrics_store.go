@@ -49,7 +49,6 @@ type DailyMetric struct {
 	Shares                int64     `bson:"shares"`
 	Comments              int64     `bson:"comments"`
 	Dislikes              int64     `bson:"dislikes"`
-	Favorites             int64     `bson:"favorites"`
 	Reports               int64     `bson:"reports"`
 	FollowConversions     int64     `bson:"followConversions"`
 	JoinCircleConversions int64     `bson:"joinCircleConversions"`
@@ -105,7 +104,7 @@ func (s *DailyMetricsStore) ensureIndexes() {
 
 // IncrementMetric atomically increments a daily metric using upsert. The action
 // -> counter mapping is aligned with the analytics-metric-dictionary behavior
-// domain (impression/click/dwell/like/share/comment/dislike/favorite/report)
+// domain (impression/click/dwell/like/share/comment/dislike/report)
 // plus the intersection conversion actions (follow/join_circle/add_contact);
 // dimension must be one of DailyMetricDimensions. Actions outside the counted
 // set still upsert the dimension row (createdAt) but increment nothing, avoiding
@@ -136,8 +135,6 @@ func (s *DailyMetricsStore) IncrementMetric(ctx context.Context, date, dimension
 		incFields["comments"] = int64(1)
 	case "dislike":
 		incFields["dislikes"] = int64(1)
-	case "favorite":
-		incFields["favorites"] = int64(1)
 	case "report":
 		incFields["reports"] = int64(1)
 	case "follow":

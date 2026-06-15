@@ -122,9 +122,11 @@ void main() {
 
     expect(store.savedRefreshAccessToken, 'fresh-access');
     expect(store.savedRefreshToken, 'fresh-refresh');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
   });
 
-  testWidgets('静默 refresh 判定为 token 失效时，欢迎页展示回访式快捷登录提示', (tester) async {
+  testWidgets('静默 refresh 判定为 token 失效时，清理会话进入重登态', (tester) async {
     final store = _ImmediateAuthSessionStore(
       stored: const StoredAuthSession(
         accessToken: 'stale-access',
@@ -159,10 +161,13 @@ void main() {
     );
 
     await tester.pump();
-    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 4));
 
-    expect(find.text(UITextConstants.loginTitleReturn), findsOneWidget);
-    expect(find.text(UITextConstants.authSessionExpired), findsOneWidget);
+    expect(store.stored.accessToken, isEmpty);
+    expect(store.stored.refreshToken, isEmpty);
+    expect(store.stored.manualLoggedOut, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
   });
 }
 
@@ -192,6 +197,7 @@ final class _BlockingAuthSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
 
   @override
@@ -205,6 +211,9 @@ final class _BlockingAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> softLogout() async {}
 
   @override
   Future<void> markLaunchPromptDismissed() async {}
@@ -229,6 +238,7 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
 
   @override
@@ -283,6 +293,23 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
       lastRefreshAtEpochMs: 0,
       lastForegroundAuthCheckAtEpochMs: 0,
       manualLoggedOut: manualLogout,
+      launchPromptDismissed: false,
+    );
+  }
+
+  @override
+  Future<void> softLogout() async {
+    stored = StoredAuthSession(
+      accessToken: '',
+      refreshToken: stored.refreshToken,
+      ownerId: stored.ownerId,
+      activeSubAccountId: stored.activeSubAccountId,
+      accountState: stored.accountState,
+      identityOrigin: stored.identityOrigin,
+      installId: stored.installId,
+      lastRefreshAtEpochMs: stored.lastRefreshAtEpochMs,
+      lastForegroundAuthCheckAtEpochMs: stored.lastForegroundAuthCheckAtEpochMs,
+      manualLoggedOut: true,
       launchPromptDismissed: false,
     );
   }

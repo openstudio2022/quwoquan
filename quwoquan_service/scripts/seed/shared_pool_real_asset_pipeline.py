@@ -504,6 +504,30 @@ def iso_at(offset_hours: int) -> str:
     return (base + timedelta(hours=offset_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def build_time_fields(
+    *,
+    created_offset_hours: int,
+    published_offset_hours: int | None = None,
+    updated_offset_hours: int | None = None,
+) -> dict[str, str]:
+    created_at = iso_at(created_offset_hours)
+    published_at = iso_at(
+        created_offset_hours + 24
+        if published_offset_hours is None
+        else published_offset_hours
+    )
+    updated_at = iso_at(
+        created_offset_hours
+        if updated_offset_hours is None
+        else updated_offset_hours
+    )
+    return {
+        "createdAt": created_at,
+        "updatedAt": updated_at,
+        "publishedAt": published_at,
+    }
+
+
 def media_spec(post_id: str, variant: str, source_id: str, width: int, height: int, format_ext: str) -> dict[str, Any]:
     return {
         "sourceId": source_id,
@@ -825,7 +849,7 @@ def build_posts(users: list[dict[str, Any]], circles: list[dict[str, Any]], sour
                     "body": f"共享池真实图片样本，主题={theme['displayName']}，作者={author['displayName']}，圈子={circle['displayName']}。",
                     "coverAsset": cover,
                     "supportingAssets": supporting_assets[1:],
-                    "publishedAt": iso_at(320 + len(posts)),
+                    **build_time_fields(created_offset_hours=320 + len(posts)),
                     "stats": {"likeCount": 48 + index * 3, "commentCount": 4 + index % 6, "shareCount": 2 + index % 4},
                     "isCoreFixture": index < 3,
                     "videoObjectKey": BETA_VIDEO_OBJECT_KEY if post_type == "videoCoverPost" else None,
@@ -867,7 +891,9 @@ def build_posts(users: list[dict[str, Any]], circles: list[dict[str, Any]], sour
                     "body": "跨主题联动样本，用于验证相邻主题在 feed 与聊天分享中的视觉差异。",
                     "coverAsset": cover,
                     "supportingAssets": [],
-                    "publishedAt": iso_at(600 + pair_index * 10 + index),
+                    **build_time_fields(
+                        created_offset_hours=600 + pair_index * 10 + index
+                    ),
                     "stats": {"likeCount": 120 + index * 2, "commentCount": 8 + index % 5, "shareCount": 6 + index % 3},
                     "isCoreFixture": False,
                     "videoObjectKey": None,
@@ -1058,8 +1084,8 @@ def ensure_core_posts(posts: list[dict[str, Any]], post_assets: dict[str, list[d
         {"postId": "fixture_photo_003", "themeId": "travel", "authorUserId": "fixture_user_travel", "circleId": "fixture_circle_travel", "postType": "heroPost", "headline": "山路湖面与露营灯", "summary": "山路、湖面与露营灯。", "body": "山路、湖面与露营灯。", "sourceIndex": 0, "extraCount": 0, "locationName": "千岛湖"},
         {"postId": "fixture_video_001", "themeId": "travel", "authorUserId": "fixture_user_travel", "circleId": "fixture_circle_travel", "postType": "videoCoverPost", "headline": "杭州一日游契约视频", "summary": "杭州一日游契约视频。", "body": "杭州一日游契约视频。", "sourceIndex": 1, "extraCount": 1, "locationName": "杭州"},
         {"postId": "fixture_video_002", "themeId": "cityWalk", "authorUserId": "fixture_user_video", "circleId": "fixture_circle_city", "postType": "videoCoverPost", "headline": "城市街头慢镜头", "summary": "城市街头慢镜头。", "body": "城市街头慢镜头。", "sourceIndex": 0, "extraCount": 1, "locationName": "上海"},
-        {"postId": "fixture_article_001", "themeId": "designWriting", "authorUserId": "fixture_user_article", "circleId": "fixture_circle_tech", "postType": "articlePost", "headline": "契约驱动的发现页文章", "summary": "契约驱动的发现页文章。", "body": "文章、攻略与长图文作者。", "sourceIndex": 0, "extraCount": 1, "locationName": "线上专栏"},
-        {"postId": "fixture_article_002", "themeId": "designWriting", "authorUserId": "fixture_user_article", "circleId": "fixture_circle_tech", "postType": "articlePost", "headline": "从图片共享池到页面观感验证", "summary": "从图片共享池到页面观感验证。", "body": "用于验证文章封面、作者头像和详情配图。", "sourceIndex": 1, "extraCount": 1, "locationName": "线上专栏"},
+        {"postId": "fixture_article_001", "themeId": "designWriting", "authorUserId": "fixture_user_article", "circleId": "fixture_circle_tech", "postType": "articlePost", "headline": "契约驱动的发现页文章", "summary": "契约驱动的发现页文章。", "body": "文章、攻略与长图文作者。", "sourceIndex": 0, "extraCount": 1, "locationName": "线上专栏", "publishedOffsetHours": 69, "updatedOffsetHours": 93},
+        {"postId": "fixture_article_002", "themeId": "designWriting", "authorUserId": "fixture_user_article", "circleId": "fixture_circle_tech", "postType": "articlePost", "headline": "从图片共享池到页面观感验证", "summary": "从图片共享池到页面观感验证。", "body": "用于验证文章封面、作者头像和详情配图。", "sourceIndex": 1, "extraCount": 1, "locationName": "线上专栏", "publishedOffsetHours": 70, "updatedOffsetHours": 46},
         {"postId": "fixture_moment_001", "themeId": "lifestyle", "authorUserId": "fixture_user_current", "circleId": "fixture_circle_life", "postType": "momentPost", "headline": "契约周末早餐", "summary": "契约周末早餐。", "body": "咖啡、手账与周末早餐。", "sourceIndex": 0, "extraCount": 0, "locationName": "家附近"},
         {"postId": "fixture_moment_002", "themeId": "food", "authorUserId": "fixture_user_friend", "circleId": "fixture_circle_food", "postType": "momentPost", "headline": "午后咖啡和小店", "summary": "午后咖啡和小店。", "body": "记录城市里的咖啡馆和小店。", "sourceIndex": 0, "extraCount": 0, "locationName": "杭州上城"},
         {"postId": "fixture_moment_003", "themeId": "cityWalk", "authorUserId": "fixture_user_weekend_1", "circleId": "fixture_circle_city", "postType": "momentPost", "headline": "看展后的晚风", "summary": "看展后的晚风。", "body": "城市影像、扫街和周末看展。", "sourceIndex": 1, "extraCount": 0, "locationName": "上海西岸"},
@@ -1103,7 +1129,11 @@ def ensure_core_posts(posts: list[dict[str, Any]], post_assets: dict[str, list[d
             "body": spec["body"],
             "coverAsset": cover,
             "supportingAssets": assets[1:],
-            "publishedAt": iso_at(40 + idx),
+            **build_time_fields(
+                created_offset_hours=40 + idx,
+                published_offset_hours=spec.get("publishedOffsetHours"),
+                updated_offset_hours=spec.get("updatedOffsetHours"),
+            ),
             "stats": {"likeCount": 80 + idx * 17, "commentCount": 6 + idx, "shareCount": 3 + idx % 4},
             "isCoreFixture": True,
             "videoObjectKey": BETA_VIDEO_OBJECT_KEY if spec["postType"] == "videoCoverPost" else None,
@@ -1346,7 +1376,9 @@ def content_row(post: dict[str, Any], circles_by_id: dict[str, dict[str, Any]]) 
         "commentCount": post["stats"]["commentCount"],
         "favoriteCount": max(0, post["stats"]["likeCount"] // 3),
         "shareCount": post["stats"]["shareCount"],
-        "createdAt": post["publishedAt"],
+        "createdAt": post["createdAt"],
+        "updatedAt": post["updatedAt"],
+        "publishedAt": post["publishedAt"],
         "authorDisplayNameSnapshot": post["authorProfile"]["displayName"],
         "authorAvatarObjectKey": post["authorProfile"]["avatar"]["objectKey"],
         "avatarObjectKey": post["authorProfile"]["avatar"]["objectKey"],
@@ -1448,7 +1480,7 @@ def build_user_doc(users: list[dict[str, Any]], posts: list[dict[str, Any]]) -> 
             "persona_core": {"description": "当前 sub-account、候选 sub-account 与 active context。", "activeSubAccountId": "fixture_persona_daily", "personas": [{"subAccountId": "fixture_persona_daily", "name": "日常我", "description": "默认日常 sub-account"}, {"subAccountId": "fixture_persona_work", "name": "工作我", "description": "工作场景 sub-account"}]},
             "profile_feed_core": {"description": "我的作品、作者作品、生活记录与评论。", "myPostIds": my_posts or ["fixture_moment_001", "fixture_photo_001"], "authorPostIds": author_posts or ["fixture_photo_001", "fixture_photo_002"], "commentIds": ["fixture_comment_photo_001"]},
             "relationship_core": {"description": "关注、互关、拉黑、可聊天、可通话能力矩阵。", "relationships": [{"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_photo", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}, {"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_friend", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}, {"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_weekend_1", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}]},
-            "following_subject_core": {"description": "关注对象动态 strip 种子。", "items": [{"subjectId": "user_travel_photographer", "subjectType": "user", "displayName": "旅行摄影师", "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png", "coverUrl": "", "subtitle": "刚更新了川西路线", "targetRouteId": "user_profile", "targetObjectId": "user_travel_photographer", "followedAt": "2026-05-20T08:00:00Z", "lastVisitedAt": "2026-06-01T08:00:00Z", "latestChangedAt": "2026-06-02T00:30:00Z", "unreadChangeCount": 2, "hasUnreadChanges": True, "latestChangeReason": "发布了新内容"}, {"subjectId": "circle_sichuan_travel", "subjectType": "circle", "displayName": "四川旅行圈", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_003/v1/cover.png", "subtitle": "圈内有新攻略", "targetRouteId": "circle_detail", "targetObjectId": "circle_sichuan_travel", "followedAt": "2026-05-22T08:00:00Z", "lastVisitedAt": "2026-06-02T01:00:00Z", "latestChangedAt": "2026-06-02T01:00:00Z", "unreadChangeCount": 0, "hasUnreadChanges": False, "latestChangeReason": ""}, {"subjectId": "homepage_jiuzhaigou", "subjectType": "homepage", "displayName": "九寨沟", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png", "subtitle": "地点动态有更新", "targetRouteId": "homepage_detail", "targetObjectId": "homepage_jiuzhaigou", "followedAt": "2026-05-24T08:00:00Z", "lastVisitedAt": "2026-05-30T08:00:00Z", "latestChangedAt": "2026-06-01T12:20:00Z", "unreadChangeCount": 1, "hasUnreadChanges": True, "latestChangeReason": "新增问答和口碑"}]},
+            "following_subject_core": {"description": "关注对象动态 strip 种子。", "items": [{"subjectId": "user_travel_photographer", "subjectType": "user", "displayName": "旅行摄影师", "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png", "coverUrl": "", "subtitle": "刚更新了川西路线", "targetRouteId": "user_profile", "targetObjectId": "user_travel_photographer", "followedAt": "2026-05-20T08:00:00Z", "lastVisitedAt": "2026-06-01T08:00:00Z", "latestChangedAt": "2026-06-02T00:30:00Z", "unreadChangeCount": 2, "hasUnreadChanges": True, "latestChangeReason": "发布了新内容"}, {"subjectId": "circle_sichuan_travel", "subjectType": "circle", "displayName": "四川旅行圈", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_003/v1/cover.png", "subtitle": "圈内有新攻略", "targetRouteId": "circle_detail", "targetObjectId": "circle_sichuan_travel", "followedAt": "2026-05-22T08:00:00Z", "lastVisitedAt": "2026-06-02T01:00:00Z", "latestChangedAt": "2026-06-02T01:00:00Z", "unreadChangeCount": 0, "hasUnreadChanges": False, "latestChangeReason": ""}, {"subjectId": "homepage_sight_emeishan", "subjectType": "homepage", "displayName": "峨眉山", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png", "subtitle": "地点动态有更新", "targetRouteId": "homepage_detail", "targetObjectId": "homepage_sight_emeishan", "followedAt": "2026-05-24T08:00:00Z", "lastVisitedAt": "2026-05-30T08:00:00Z", "latestChangedAt": "2026-06-01T12:20:00Z", "unreadChangeCount": 1, "hasUnreadChanges": True, "latestChangeReason": "新增问答和口碑"}]},
             "settings_core": {"description": "外观、通话设置与开发者诊断最小数据。", "appearance": {"themeMode": "system", "fontScale": 1.0}, "callSettings": {"allowVoiceCall": True, "allowVideoCall": True}, "diagnostics": [{"id": "fixture_ops_event_settings", "message": "契约设置诊断事件"}]},
         },
         "scenarios": [{"id": "user_profile_basic", "title": "用户主页与关系能力契约种子", "type": "user_profile", "domainId": "user", "seedRefs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "settings_core"], "uiExpectations": {"userIds": ["fixture_user_current", "fixture_user_photo"], "textFragments": ["契约当前用户", "契约摄影师", "日常我"]}, "remoteExpectations": {"profileUserIds": ["fixture_user_current", "fixture_user_photo"], "subAccountIds": ["fixture_persona_daily", "fixture_persona_work"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],

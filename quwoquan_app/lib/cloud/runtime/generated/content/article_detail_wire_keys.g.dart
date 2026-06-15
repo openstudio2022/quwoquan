@@ -6,8 +6,6 @@
 abstract final class ArticleDetailWireKeys {
   const ArticleDetailWireKeys._();
 
-  static const String cards = 'cards';
-
   static const String isOfficial = 'isOfficial';
 
   static const String badge = 'badge';
@@ -25,10 +23,6 @@ abstract final class ArticleDetailWireKeys {
   static const String articleAssetManifest = 'articleAssetManifest';
 
   static const String articleRenderProfile = 'articleRenderProfile';
-
-  static const String articleBlocks = 'articleBlocks';
-
-  static const String articlePages = 'articlePages';
 
   static const String coverUrl = 'coverUrl';
 }

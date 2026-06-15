@@ -3,26 +3,255 @@ node:
   id: works-immersive-viewer
   level: L3_story
   path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer
-  title: works immersive viewer
+  title: works immersive viewer (Work Browser V1.0)
   parent_domain_service: discovery-content
   parent_business_capability: dual-rail-discovery-redesign
 scope:
-  summary: works immersive viewer 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: Work Browser V1.0 统一沉浸式作品浏览器验收范围。
+  in_scope:
+    - workBrowser 统一深链入口
+    - 顶部系统层只保留返回/更多
+    - 更多菜单媒体筛选（全部作品/图片/视频/文章）
+    - 图片点状指示器、视频集胶囊、文章页尾页码
+    - 底部工具栏作者/关注/赞转评 + 交集摘要行
+    - 交集详情 sheet（点击后出现）
+    - WorkBrowserItemDto 强类型契约数据流
+    - 文章深色纸张主题系统、阅读设置与实体标签跳转
+  out_of_scope:
+    - 保留旧深链兼容重定向
+    - 评论 Drawer 改版
+    - 收藏入口（V1.0 明确禁止）
 gwt_acceptance:
   GWT1:
-    title: works immersive viewer GWT
+    title: 统一作品导航与顶部系统层
     given:
-    - 前置条件明确。
+    - 用户从任一入口进入 Work Browser，队列中含图片、视频、文章三类作品。
     when:
-    - 用户或系统动作发生。
+    - 用户垂直滑动切换作品，并在三类媒体之间穿越。
     then:
-    - 可观察结果符合预期。
+    - 每次垂直滑动精确切换一个完整作品；滑到底触发加载下一页。
+    - 顶部始终只有返回与更多；不出现媒体类型标识、页码、常驻筛选 Tab。
+    - 三类媒体的顶部系统层与底部工具栏结构、位置一致，无「换浏览器」感。
     done_when:
-    - 最小价值点闭环。
+    - widget 测试断言顶部无 works-format-tab-strip、无 works-top-progress-label。
+    edge_cases:
+    - 边缘 15px 不响应水平拖拽。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/app_routes.yaml#workBrowser
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_contract
+    tests:
+      planned:
+      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: completed
+  GWT2:
+    title: 旧内容深链入口收敛到 workBrowser
+    given:
+    - "metadata 中 `workBrowser` 是内容消费唯一深链路由。"
+    - "post link template 的 navigation route_id 指向 `workBrowser`，参数绑定为 `postId -> workId`。"
+    when:
+    - 执行 app metadata codegen 并扫描 App 路由、UI 调用点与测试桩。
+    then:
+    - "`AppRoutePaths` 仅生成 `workBrowser`，不再生成 `articleDetail`、`mediaViewer`、`videoViewer`。"
+    - "`app_router.dart` 只注册 `/works/browser/{workId}` 内容消费入口；无 extra 时按 workId 拉取作品定位队列，有 extra 时复用同一 Work Browser 壳。"
+    - "发现、搜索、圈子、个人主页、评论回原帖入口均调用 `AppRoutePaths.workBrowser(...)`。"
+    done_when:
+    - metadata/codegen/router/UI/test 中无旧三入口残留。
+    edge_cases:
+    - "单帖搜索结果可通过 `workId` 定位作品。"
+    - "圈子与个人主页传入的队列上下文仍保持互动状态回写。"
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/app_routes.yaml#workBrowser
+    - quwoquan_service/contracts/metadata/_shared/link_templates.yaml#entities.post.navigation
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting:
+      - T1_contract
+    tests:
+      planned:
+      - make codegen-app
+      - make -C quwoquan_service verify-metadata
+      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded:
+      - go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service --rtc-service-dir ./services/rtc-service --chat-service-dir ./services/chat-service --user-service-dir ./services/user-service
+      - make -C quwoquan_service verify-metadata
+      - python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py
+      - flutter analyze --no-fatal-warnings --no-fatal-infos <modified workBrowser route files>
+      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - flutter test test/ui/circle/pages/home_circles_hub_page_test.dart test/ui/circle/widgets/section_widgets_test.dart test/ui/circle/circle_content_identity_widget_test.dart
+      - flutter test test/app/navigation/native_back_navigation_policy_test.dart
+      - bash agent_ops/scaffold/verify_acceptance_standard.sh
+      - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    status: completed
+  GWT3:
+    title: 三类媒体内部导航状态信息
+    given:
+    - 队列中存在 8 图作品、4 集视频作品、6 页文章作品。
+    when:
+    - 用户在各作品内部水平滑动。
+    then:
+    - 图片作品在内容下方、标题上方显示点状指示器，最多 6 点且明确当前位置；单图无指示器。
+    - 视频作品显示自绘极简控制行（播放态/当前时间/进度/总时长）与 `视频集 · n/m ↔` 胶囊（时间轴下、标题上）；无点状指示器；单视频无胶囊；无平台默认控制层。
+    - 文章作品使用深色纸张阅读，页码 `n / m` 位于正文后、作者栏前，chevron 可切页；顶部无页码。
+    - 文章默认不使用白纸，翻页正面、背面、底页共用同一纸张 palette。
+    done_when:
+    - widget 测试覆盖三类媒体导航状态信息位置与上限断言。
+    - pageflip 测试覆盖文章深色纸张正反面材质同源。
+    edge_cases:
+    - 8 图作品只渲染 6 点，以首尾淡化表达更多。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_contract
+    tests:
+      planned:
+      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: completed
+  GWT4:
+    title: 媒体筛选进入更多菜单
+    given:
+    - 用户在 Work Browser 中打开右上更多菜单。
+    when:
+    - 用户选择 `图片` 筛选项。
+    then:
+    - 菜单出现 `全部作品/图片/视频/文章` 四个筛选项；筛选后队列只含图片作品。
+    - 顶部不出现常驻媒体筛选；菜单内无收藏入口。
+    done_when:
+    - widget 测试断言筛选项与筛选行为，且 onSave 入口不存在。
+    edge_cases:
+    - 当前作品在新筛选下不存在时定位到队首。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/ui_config.yaml#work_format_filters
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_contract
+    tests:
+      planned:
+      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - cd quwoquan_app && flutter test test/ui/content/post/contract/post_ui_config_contract_test.dart
+    status: completed
+  GWT5:
+    title: 交集作为推荐解释层
+    given:
+    - 当前作品契约下发交集摘要与详情列表。
+    when:
+    - 用户查看默认态并点击 `N 个交集 >`。
+    then:
+    - 默认态只在作者区域显示 `N 个交集 >` 摘要；内容层无交集 chip/卡片/浮层。
+    - 点击后弹出「为什么推荐给你」详情 sheet，详情项文案来自云侧投影。
+    done_when:
+    - widget 测试断言默认态摘要、点击后详情、内容层无交集元素。
+    edge_cases:
+    - 无交集数据时摘要行隐藏。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_contract
+    tests:
+      planned:
+      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: completed
+  GWT6:
+    title: WorkBrowserItem 端云契约一致
+    given:
+    - "metadata 投影 `work_browser_item` 定义 workId/workType/标题/配文/作者快照/互动计数/mediaItems/交集摘要。"
+    when:
+    - 执行 metadata verify 与 codegen-app。
+    then:
+    - 生成的 `WorkBrowserItemDto` 字段与投影一致；fixtures 覆盖 8 图、4 集视频、6 页文章与交集场景。
+    - 浏览器不再从 raw Map 拼标题、视频集、交集。
+    done_when:
+    - verify-metadata 与 codegen hash 校验通过。
     edge_cases: []
-    contract_refs: []
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
+    - quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      supporting:
+      - T2_module_interaction
+    tests:
+      planned:
+      - make -C quwoquan_service verify-metadata
+      - make codegen-app
+      recorded: []
+    status: pending
+  GWT7:
+    title: 文章深色纸张主题与阅读设置
+    given:
+    - 队列中存在摄影、旅行、历史、科技、自然垂类文章作品。
+    when:
+    - 用户进入文章作品，并在更多菜单打开阅读设置切换纸张。
+    then:
+    - 默认按垂类映射到深色纸、暖黑纸、深棕纸、冷灰纸、墨绿纸；无垂类时回退深色纸。
+    - 阅读设置包含 `系统适配/深色纸/冷灰纸/暖黑纸/墨绿纸/深棕纸`，切换后当前文章实时生效。
+    - 图片、视频、文章之间垂直切换无白底闪烁。
+    done_when:
+    - widget 测试断言默认主题映射、阅读设置选项、实时切换和白纸不作为默认。
+    edge_cases:
+    - 用户选择系统适配后恢复垂类默认。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
+    - quwoquan_service/contracts/metadata/content/post/ui_config.yaml#article_dark_paper_themes
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_contract
+    tests:
+      planned:
+      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: completed
+  GWT8:
+    title: 文章实体标签跳转实体主页
+    given:
+    - 文章 Markdown 中包含结构化实体标签，契约下发 entityRefs/entityMentions。
+    when:
+    - 用户点击正文中的实体标签。
+    then:
+    - 标签以行内高亮呈现，不覆盖正文、不作为浮层。
+    - 点击后通过 metadata 路由进入 `AppRoutePaths.homepageDetail(id: ...)`。
+    done_when:
+    - codec 测试覆盖实体标签解析为 span。
+    - widget/navigation 测试覆盖点击标签进入 `/homepages/{id}`。
+    edge_cases:
+    - 未知实体类型不渲染为可点击标签。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/fields.yaml#entityRefs
+    - quwoquan_service/contracts/metadata/content/post/projections/content_post_detail_wire.yaml
+    - quwoquan_service/contracts/metadata/_shared/app_routes.yaml#homepageDetail
     performance_points: []
     evidence:
       primary:
@@ -30,9 +259,12 @@ gwt_acceptance:
       - T2_module_interaction
       supporting: []
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - flutter test test/ui/content/markdown/article_markdown_codec_test.dart
+      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded:
+      - cd quwoquan_app && flutter test test/ui/content/markdown/article_markdown_codec_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: completed
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

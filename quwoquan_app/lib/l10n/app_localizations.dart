@@ -608,12 +608,6 @@ abstract class AppLocalizations {
   /// **'设置'**
   String get settings;
 
-  /// No description provided for @bookmarks.
-  ///
-  /// In zh, this message translates to:
-  /// **'收藏'**
-  String get bookmarks;
-
   /// No description provided for @createCircle.
   ///
   /// In zh, this message translates to:
@@ -671,7 +665,7 @@ abstract class AppLocalizations {
   /// No description provided for @circleGroups.
   ///
   /// In zh, this message translates to:
-  /// **'群聊'**
+  /// **'讨论'**
   String get circleGroups;
 
   /// No description provided for @circleFans.
@@ -695,7 +689,7 @@ abstract class AppLocalizations {
   /// No description provided for @searchGroupsHint.
   ///
   /// In zh, this message translates to:
-  /// **'搜索群聊...'**
+  /// **'搜索讨论...'**
   String get searchGroupsHint;
 
   /// No description provided for @searchFansHint.
@@ -977,7 +971,7 @@ abstract class AppLocalizations {
   /// No description provided for @groupChat.
   ///
   /// In zh, this message translates to:
-  /// **'群聊'**
+  /// **'讨论'**
   String get groupChat;
 
   /// No description provided for @secretLockedTitle.
@@ -1049,7 +1043,7 @@ abstract class AppLocalizations {
   /// No description provided for @contactsTabFunGroup.
   ///
   /// In zh, this message translates to:
-  /// **'趣群'**
+  /// **'讨论'**
   String get contactsTabFunGroup;
 
   /// No description provided for @contactsTabFriends.
@@ -1061,7 +1055,7 @@ abstract class AppLocalizations {
   /// No description provided for @contactsTabGroups.
   ///
   /// In zh, this message translates to:
-  /// **'群聊'**
+  /// **'讨论'**
   String get contactsTabGroups;
 
   /// No description provided for @starredFriends.
@@ -1193,7 +1187,7 @@ abstract class AppLocalizations {
   /// No description provided for @groupName.
   ///
   /// In zh, this message translates to:
-  /// **'群聊名称'**
+  /// **'讨论名称'**
   String get groupName;
 
   /// No description provided for @qrCode.
@@ -1241,7 +1235,7 @@ abstract class AppLocalizations {
   /// No description provided for @exitGroupChat.
   ///
   /// In zh, this message translates to:
-  /// **'退出群聊'**
+  /// **'退出讨论'**
   String get exitGroupChat;
 
   /// No description provided for @addMember.
@@ -1253,19 +1247,19 @@ abstract class AppLocalizations {
   /// No description provided for @startGroupChat.
   ///
   /// In zh, this message translates to:
-  /// **'发起群聊'**
+  /// **'发起讨论'**
   String get startGroupChat;
 
   /// No description provided for @createNewGroupChat.
   ///
   /// In zh, this message translates to:
-  /// **'创建新群聊'**
+  /// **'创建新讨论'**
   String get createNewGroupChat;
 
   /// No description provided for @selectFriendsFromGroupChat.
   ///
   /// In zh, this message translates to:
-  /// **'选择群聊成员'**
+  /// **'选择讨论成员'**
   String get selectFriendsFromGroupChat;
 
   /// No description provided for @selectFriendsFromCircle.
@@ -1283,13 +1277,13 @@ abstract class AppLocalizations {
   /// No description provided for @selectGroupChat.
   ///
   /// In zh, this message translates to:
-  /// **'选择群聊'**
+  /// **'选择讨论'**
   String get selectGroupChat;
 
   /// No description provided for @searchGroupChatHint.
   ///
   /// In zh, this message translates to:
-  /// **'搜索群聊'**
+  /// **'搜索讨论'**
   String get searchGroupChatHint;
 
   /// No description provided for @selectCircle.
@@ -1561,12 +1555,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'该链接域名未通过安全白名单，已复制到剪贴板'**
   String get assistantReferenceHostBlocked;
-
-  /// No description provided for @assistantBookmarked.
-  ///
-  /// In zh, this message translates to:
-  /// **'已收藏'**
-  String get assistantBookmarked;
 
   /// No description provided for @assistantDevReplayTitle.
   ///

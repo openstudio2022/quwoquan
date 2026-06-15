@@ -2,6 +2,7 @@ import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/one_tap_login_hint_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/owner_credential_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
@@ -14,6 +15,7 @@ class OtpSendResultData {
     required this.maskedPhone,
     required this.expiresInSeconds,
     required this.deliveryStatus,
+    this.retryAfterSeconds = 0,
     this.requestId,
     this.challengeId,
     this.debugCode,
@@ -24,6 +26,7 @@ class OtpSendResultData {
       maskedPhone: (map['maskedPhone'] as String?) ?? '',
       expiresInSeconds: (map['expiresInSeconds'] as num?)?.toInt() ?? 0,
       deliveryStatus: (map['deliveryStatus'] as String?) ?? 'queued',
+      retryAfterSeconds: (map['retryAfterSeconds'] as num?)?.toInt() ?? 0,
       requestId: map['requestId'] as String?,
       challengeId: map['challengeId'] as String?,
       debugCode: map['debugCode'] as String?,
@@ -33,6 +36,7 @@ class OtpSendResultData {
   final String maskedPhone;
   final int expiresInSeconds;
   final String deliveryStatus;
+  final int retryAfterSeconds;
   final String? requestId;
   final String? challengeId;
   final String? debugCode;
@@ -40,13 +44,21 @@ class OtpSendResultData {
   bool get isDebugCodeVisible =>
       debugCode != null &&
       debugCode!.isNotEmpty &&
-      (deliveryStatus == 'debug' || deliveryStatus == 'pass_through');
+      (deliveryStatus == 'debug' ||
+          deliveryStatus == 'pass_through' ||
+          deliveryStatus == 'sandbox');
 }
 
 /// AuthRepository: 登录、凭证管理、分身管理。
 abstract class AuthRepository {
   /// 下发手机号验证码（发码冷却 + 每小时配额）。
-  Future<OtpSendResultData> sendOtp({required String phone});
+  Future<OtpSendResultData> sendOtp({
+    required String phone,
+    String? deviceId,
+    String? platform,
+    String? appVersion,
+    String? sourceOperation,
+  });
 
   /// 手机号/微信/Apple 登录，首次自动创建用户与默认分身。
   /// 手机号登录需附带 [otpCode]。
@@ -57,6 +69,9 @@ abstract class AuthRepository {
     String? displayLabel,
     String? deviceId,
     String? platform,
+    String? appVersion,
+    String? agreementVersion,
+    String? privacyVersion,
   });
 
   /// 运营商一键登录。App 只上传授权 token，真实手机号由服务端置换。
@@ -65,13 +80,37 @@ abstract class AuthRepository {
     required String carrierToken,
     required String deviceId,
     required String platform,
+    String? appVersion,
     required String agreementVersion,
     required String privacyVersion,
   });
 
-  /// 微信授权码登录。App 只上传短期授权码，服务端负责换取长期会话。
+  /// 运营商一键登录提示。只返回脱敏号码和账号摘要，不签发 token。
+  Future<OneTapLoginHintDto> resolveOneTapLoginHint({
+    required String vendor,
+    required String carrierToken,
+    required String deviceId,
+    required String platform,
+    String? appVersion,
+  });
+
+  /// 微信授权码登录。App 只上传短期授权码，服务端置换 openid/unionid 并首次同步资料。
   Future<AuthLoginResultDto> loginWechat({
     required String wechatCode,
+    required String deviceId,
+    required String platform,
+  });
+
+  /// 支付宝授权码登录。App 只上传短期 authCode，服务端置换稳定身份并首次同步资料。
+  Future<AuthLoginResultDto> loginAlipay({
+    required String alipayAuthCode,
+    required String deviceId,
+    required String platform,
+  });
+
+  /// QQ 授权码登录。App 只上传短期授权码/accessToken，服务端置换 openid/unionid 并首次同步资料。
+  Future<AuthLoginResultDto> loginQq({
+    required String qqAuthCode,
     required String deviceId,
     required String platform,
   });
@@ -134,12 +173,19 @@ abstract class AuthRepository {
 
 class MockAuthRepository implements AuthRepository {
   @override
-  Future<OtpSendResultData> sendOtp({required String phone}) async {
+  Future<OtpSendResultData> sendOtp({
+    required String phone,
+    String? deviceId,
+    String? platform,
+    String? appVersion,
+    String? sourceOperation,
+  }) async {
     await Future.delayed(const Duration(milliseconds: 200));
     return OtpSendResultData(
       maskedPhone: _maskPhone(phone),
       expiresInSeconds: 300,
       deliveryStatus: 'debug',
+      retryAfterSeconds: 0,
       requestId: 'mock_otp_request',
       challengeId: 'mock_otp_challenge',
       debugCode: '000000',
@@ -162,6 +208,9 @@ class MockAuthRepository implements AuthRepository {
     String? displayLabel,
     String? deviceId,
     String? platform,
+    String? appVersion,
+    String? agreementVersion,
+    String? privacyVersion,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
     return AuthLoginResultDto.fromMap(<String, dynamic>{
@@ -179,6 +228,7 @@ class MockAuthRepository implements AuthRepository {
     required String carrierToken,
     required String deviceId,
     required String platform,
+    String? appVersion,
     required String agreementVersion,
     required String privacyVersion,
   }) async {
@@ -191,6 +241,39 @@ class MockAuthRepository implements AuthRepository {
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'phone',
+      'accountHint': <String, dynamic>{
+        'displayName': '趣友3909',
+        'avatarUrl': '',
+        'maskedPhone': '138****3909',
+        'identityOrigin': 'phone',
+      },
+    });
+  }
+
+  @override
+  Future<OneTapLoginHintDto> resolveOneTapLoginHint({
+    required String vendor,
+    required String carrierToken,
+    required String deviceId,
+    required String platform,
+    String? appVersion,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 120));
+    final registered = carrierToken.contains('registered');
+    return OneTapLoginHintDto.fromMap(<String, dynamic>{
+      'state': registered ? 'registered' : 'new_phone',
+      'maskedPhone': '138****3909',
+      'registered': registered,
+      'accountHint': registered
+          ? <String, dynamic>{
+              'displayName': '趣友3909',
+              'avatarUrl': '',
+              'maskedPhone': '138****3909',
+              'identityOrigin': 'phone',
+            }
+          : null,
+      'expiresInSeconds': 60,
+      'providerRequestId': 'mock_one_tap_hint',
     });
   }
 
@@ -209,6 +292,42 @@ class MockAuthRepository implements AuthRepository {
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'wechat',
+    });
+  }
+
+  @override
+  Future<AuthLoginResultDto> loginAlipay({
+    required String alipayAuthCode,
+    required String deviceId,
+    required String platform,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return AuthLoginResultDto.fromMap(<String, dynamic>{
+      'accessToken': 'mock_alipay_token_${alipayAuthCode.hashCode}',
+      'refreshToken': 'mock_alipay_refresh',
+      'ownerId': 'mock_owner_id',
+      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'subAccountCount': 1,
+      'accountState': 'active',
+      'identityOrigin': 'alipay',
+    });
+  }
+
+  @override
+  Future<AuthLoginResultDto> loginQq({
+    required String qqAuthCode,
+    required String deviceId,
+    required String platform,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return AuthLoginResultDto.fromMap(<String, dynamic>{
+      'accessToken': 'mock_qq_token_${qqAuthCode.hashCode}',
+      'refreshToken': 'mock_qq_refresh',
+      'ownerId': 'mock_owner_id',
+      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'subAccountCount': 1,
+      'accountState': 'active',
+      'identityOrigin': 'qq',
     });
   }
 
@@ -359,6 +478,10 @@ class RemoteAuthRepository implements AuthRepository {
         return UserApiMetadata.loginWithPhonePath;
       case 'wechat':
         return UserApiMetadata.loginWithWechatPath;
+      case 'alipay':
+        return UserApiMetadata.loginWithAlipayPath;
+      case 'qq':
+        return UserApiMetadata.loginWithQqPath;
       case 'apple':
         return UserApiMetadata.loginWithApplePath;
       default:
@@ -376,6 +499,10 @@ class RemoteAuthRepository implements AuthRepository {
         return UserRequestPageIds.loginWithPhone;
       case 'wechat':
         return UserRequestPageIds.loginWithWechat;
+      case 'alipay':
+        return UserRequestPageIds.loginWithAlipay;
+      case 'qq':
+        return UserRequestPageIds.loginWithQq;
       case 'apple':
         return UserRequestPageIds.loginWithApple;
       default:
@@ -394,12 +521,26 @@ class RemoteAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<OtpSendResultData> sendOtp({required String phone}) async {
+  Future<OtpSendResultData> sendOtp({
+    required String phone,
+    String? deviceId,
+    String? platform,
+    String? appVersion,
+    String? sourceOperation,
+  }) async {
     final context = UserRequestPageIds.sendOtp;
     final resp = await _client.postJson(
       _uri(UserApiMetadata.sendOtpPath),
       headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{'phone': phone},
+      body: <String, dynamic>{
+        'phone': phone,
+        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
+        if (platform != null && platform.isNotEmpty) 'platform': platform,
+        if (appVersion != null && appVersion.isNotEmpty)
+          'appVersion': appVersion,
+        if (sourceOperation != null && sourceOperation.isNotEmpty)
+          'sourceOperation': sourceOperation,
+      },
     );
     return OtpSendResultData.fromMap(
       CloudResponseDecoder.asObject(resp, context: context),
@@ -414,15 +555,49 @@ class RemoteAuthRepository implements AuthRepository {
     String? displayLabel,
     String? deviceId,
     String? platform,
+    String? appVersion,
+    String? agreementVersion,
+    String? privacyVersion,
   }) async {
-    final isPhone = credentialType.trim().toLowerCase() == 'phone';
-    final body = <String, dynamic>{
-      'credentialType': credentialType,
-      'credentialKey': credentialKey,
-      if (isPhone) 'phone': credentialKey,
-      if (otpCode != null && otpCode.isNotEmpty) 'otpCode': otpCode,
-      if (isPhone && deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
-      if (isPhone && platform != null && platform.isNotEmpty) 'platform': platform,
+    final normalizedType = credentialType.trim().toLowerCase();
+    final body = switch (normalizedType) {
+      'phone' => <String, dynamic>{
+        'phone': credentialKey,
+        if (otpCode != null && otpCode.isNotEmpty) 'otpCode': otpCode,
+        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
+        if (platform != null && platform.isNotEmpty) 'platform': platform,
+        if (appVersion != null && appVersion.isNotEmpty)
+          'appVersion': appVersion,
+        if (agreementVersion != null && agreementVersion.isNotEmpty)
+          'agreementVersion': agreementVersion,
+        if (privacyVersion != null && privacyVersion.isNotEmpty)
+          'privacyVersion': privacyVersion,
+      },
+      'wechat' => <String, dynamic>{
+        'wechatCode': credentialKey,
+        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
+        if (platform != null && platform.isNotEmpty) 'platform': platform,
+      },
+      'alipay' => <String, dynamic>{
+        'alipayAuthCode': credentialKey,
+        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
+        if (platform != null && platform.isNotEmpty) 'platform': platform,
+      },
+      'qq' => <String, dynamic>{
+        'qqAuthCode': credentialKey,
+        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
+        if (platform != null && platform.isNotEmpty) 'platform': platform,
+      },
+      'apple' => <String, dynamic>{
+        'appleIdToken': credentialKey,
+        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
+        if (platform != null && platform.isNotEmpty) 'platform': platform,
+      },
+      _ => throw ArgumentError.value(
+        credentialType,
+        'credentialType',
+        'Unsupported credential type',
+      ),
     };
     if (displayLabel != null) {
       body['displayLabel'] = displayLabel;
@@ -446,6 +621,7 @@ class RemoteAuthRepository implements AuthRepository {
     required String carrierToken,
     required String deviceId,
     required String platform,
+    String? appVersion,
     required String agreementVersion,
     required String privacyVersion,
   }) async {
@@ -458,11 +634,39 @@ class RemoteAuthRepository implements AuthRepository {
         'carrierToken': carrierToken,
         'deviceId': deviceId,
         'platform': platform,
+        if (appVersion != null && appVersion.isNotEmpty)
+          'appVersion': appVersion,
         'agreementVersion': agreementVersion,
         'privacyVersion': privacyVersion,
       },
     );
     return _authResultFromResponse(resp, context);
+  }
+
+  @override
+  Future<OneTapLoginHintDto> resolveOneTapLoginHint({
+    required String vendor,
+    required String carrierToken,
+    required String deviceId,
+    required String platform,
+    String? appVersion,
+  }) async {
+    final context = UserRequestPageIds.resolveOneTapLoginHint;
+    final resp = await _client.postJson(
+      _uri(UserApiMetadata.resolveOneTapLoginHintPath),
+      headers: CloudRequestHeaders.forPage(context),
+      body: <String, dynamic>{
+        'vendor': vendor,
+        'carrierToken': carrierToken,
+        'deviceId': deviceId,
+        'platform': platform,
+        if (appVersion != null && appVersion.isNotEmpty)
+          'appVersion': appVersion,
+      },
+    );
+    return OneTapLoginHintDto.fromMap(
+      CloudResponseDecoder.asObject(resp, context: context),
+    );
   }
 
   @override
@@ -477,6 +681,44 @@ class RemoteAuthRepository implements AuthRepository {
       headers: CloudRequestHeaders.forPage(context),
       body: <String, dynamic>{
         'wechatCode': wechatCode,
+        'deviceId': deviceId,
+        'platform': platform,
+      },
+    );
+    return _authResultFromResponse(resp, context);
+  }
+
+  @override
+  Future<AuthLoginResultDto> loginAlipay({
+    required String alipayAuthCode,
+    required String deviceId,
+    required String platform,
+  }) async {
+    final context = UserRequestPageIds.loginWithAlipay;
+    final resp = await _client.postJson(
+      _uri(UserApiMetadata.loginWithAlipayPath),
+      headers: CloudRequestHeaders.forPage(context),
+      body: <String, dynamic>{
+        'alipayAuthCode': alipayAuthCode,
+        'deviceId': deviceId,
+        'platform': platform,
+      },
+    );
+    return _authResultFromResponse(resp, context);
+  }
+
+  @override
+  Future<AuthLoginResultDto> loginQq({
+    required String qqAuthCode,
+    required String deviceId,
+    required String platform,
+  }) async {
+    final context = UserRequestPageIds.loginWithQq;
+    final resp = await _client.postJson(
+      _uri(UserApiMetadata.loginWithQqPath),
+      headers: CloudRequestHeaders.forPage(context),
+      body: <String, dynamic>{
+        'qqAuthCode': qqAuthCode,
         'deviceId': deviceId,
         'platform': platform,
       },

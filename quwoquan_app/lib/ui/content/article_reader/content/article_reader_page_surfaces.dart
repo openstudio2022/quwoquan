@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter, lerpDouble;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
@@ -305,6 +306,7 @@ class ArticlePageReadOnlyView extends StatelessWidget {
     required this.fontPreset,
     this.metrics,
     this.paperTexture,
+    this.onEntityTap,
   });
 
   final ArticlePageData page;
@@ -312,6 +314,7 @@ class ArticlePageReadOnlyView extends StatelessWidget {
   final ArticleFontPreset fontPreset;
   final ArticleCanvasMetrics? metrics;
   final ArticlePaperTexture? paperTexture;
+  final ValueChanged<ArticleInlineSpan>? onEntityTap;
 
   @override
   Widget build(BuildContext context) {
@@ -332,6 +335,7 @@ class ArticlePageReadOnlyView extends StatelessWidget {
               typography,
               template,
               metrics ?? ArticleCanvasMetrics.snapshot(),
+              onEntityTap,
             ),
           ),
         ),
@@ -442,6 +446,7 @@ List<Widget> _buildReadOnlyPageFragments(
   ArticleTypographySpec typography,
   ArticleTemplatePreset template,
   ArticleCanvasMetrics metrics,
+  ValueChanged<ArticleInlineSpan>? onEntityTap,
 ) {
   final fragments = _resolveReadOnlyFragments(page);
   final widgets = <Widget>[];
@@ -462,7 +467,11 @@ List<Widget> _buildReadOnlyPageFragments(
           break;
         }
         widgets.add(
-          _ArticleSemanticBlock(block: fragment.block!, typography: typography),
+          _ArticleSemanticBlock(
+            block: fragment.block!,
+            typography: typography,
+            onEntityTap: onEntityTap,
+          ),
         );
         appended = true;
         break;
@@ -519,7 +528,14 @@ List<Widget> _buildReadOnlyPageFragments(
         break;
       case ArticleLayoutFragmentKind.body:
         if (fragment.text.trim().isNotEmpty) {
-          widgets.add(Text(fragment.text.trim(), style: typography.bodyStyle));
+          widgets.add(
+            _ArticleInlineText(
+              text: fragment.text.trim(),
+              spans: const <ArticleInlineSpan>[],
+              style: typography.bodyStyle,
+              onEntityTap: onEntityTap,
+            ),
+          );
           appended = true;
         }
         break;
@@ -968,10 +984,15 @@ class _ArticleBookChromePainter extends CustomPainter {
 }
 
 class _ArticleSemanticBlock extends StatelessWidget {
-  const _ArticleSemanticBlock({required this.block, required this.typography});
+  const _ArticleSemanticBlock({
+    required this.block,
+    required this.typography,
+    this.onEntityTap,
+  });
 
   final ArticleDocumentBlock block;
   final ArticleTypographySpec typography;
+  final ValueChanged<ArticleInlineSpan>? onEntityTap;
 
   @override
   Widget build(BuildContext context) {
@@ -993,7 +1014,67 @@ class _ArticleSemanticBlock extends StatelessWidget {
       ),
       _ => typography.bodyStyle,
     };
-    return Text(block.text.trim(), style: style);
+    return _ArticleInlineText(
+      text: block.text.trim(),
+      spans: block.spans,
+      style: style,
+      onEntityTap: onEntityTap,
+    );
+  }
+}
+
+class _ArticleInlineText extends StatelessWidget {
+  const _ArticleInlineText({
+    required this.text,
+    required this.spans,
+    required this.style,
+    this.onEntityTap,
+  });
+
+  final String text;
+  final List<ArticleInlineSpan> spans;
+  final TextStyle style;
+  final ValueChanged<ArticleInlineSpan>? onEntityTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final entitySpans = spans.where((span) => span.isEntity).toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+    if (entitySpans.isEmpty) {
+      return Text(text, style: style);
+    }
+    final children = <InlineSpan>[];
+    var cursor = 0;
+    for (final span in entitySpans) {
+      final start = span.start.clamp(0, text.length);
+      final end = span.end.clamp(start, text.length);
+      if (start < cursor) continue;
+      if (start > cursor) {
+        children.add(TextSpan(text: text.substring(cursor, start)));
+      }
+      final label = text.substring(start, end);
+      children.add(
+        TextSpan(
+          text: label,
+          style: style.copyWith(
+            color: AppColors.worksAccent,
+            fontWeight: AppTypography.semiBold,
+            decoration: TextDecoration.underline,
+            decorationColor: AppColors.worksAccent.withValues(alpha: 0.64),
+          ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () => onEntityTap?.call(span),
+        ),
+      );
+      cursor = end;
+    }
+    if (cursor < text.length) {
+      children.add(TextSpan(text: text.substring(cursor)));
+    }
+    return RichText(
+      key: const ValueKey<String>('article-entity-rich-text'),
+      text: TextSpan(style: style, children: children),
+    );
   }
 }
 

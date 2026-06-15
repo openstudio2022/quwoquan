@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/四川省/景区/三景点真实实跑",
+  "updatedAt": "2026-06-11T14:05:46.581432+00:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/都江堰",
+        "地点/景区/乐山大佛",
+        "地点/景区/峨眉山"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

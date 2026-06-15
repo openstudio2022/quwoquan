@@ -9,15 +9,13 @@ type UserFeatureVector struct {
 	TagAffinities    map[string]float64 `json:"tagAffinities,omitempty"`
 	AuthorAffinities map[string]float64 `json:"authorAffinities,omitempty"`
 	TotalLikes       int                `json:"totalLikes"`
-	TotalFavorites   int                `json:"totalFavorites"`
 	TotalShares      int                `json:"totalShares"`
 	TotalEvents      int                `json:"totalEvents"`
 	EngagementRate   float64            `json:"engagementRate"`
 
 	// Level-mapped features (0-5 scale, derived from raw counts)
-	LikeLevel     int `json:"likeLevel"`
-	FavoriteLevel int `json:"favoriteLevel"`
-	ShareLevel    int `json:"shareLevel"`
+	LikeLevel  int `json:"likeLevel"`
+	ShareLevel int `json:"shareLevel"`
 	EventLevel    int `json:"eventLevel"`
 
 	// Four-dimension tag affinities (Phase 2.1)

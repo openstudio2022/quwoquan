@@ -17,7 +17,7 @@ description: 归一化工作流 · 单来源全链路追查
 ## 真实实现
 
 ```bash
-python3 quwoquan_data/tools/cli.py data trace-source \
+python3 quwoquan_data/scripts/cli.py data trace-source \
   --batch-label "<batch>" \
   --source-md "<source.md>"
 ```
@@ -34,8 +34,12 @@ python3 quwoquan_data/tools/cli.py data trace-source \
 
 - 若找不到来源：先检查 `/data-source-fetch` 是否成功落盘
 
+自然语言等价触发：用户说“追查来源”“这条 source 从哪来”“source 证据链断了”时，也按本命令语义执行。
+
 ## Trace Keys
 
 - `sourceUrl`
 - `pageTitle`
 - `sourceMarkdownPath`
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

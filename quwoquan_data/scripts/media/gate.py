@@ -1,7 +1,7 @@
 """Exit gate for media check-images command。
 
-unsafe（水印/平台文字/版权）即阻断；needs_review（人脸/后端缺失）记为待人工复核，
-默认也阻断图文自动发布（strict）。
+unsafe（水印/平台文字/版权）即阻断；needs_review（人脸/后端缺失）记为待人工复核。
+produce review 阶段可选择放行为账本待人工项，真正发布前仍由 publish_filter / ship 准入裁决。
 """
 from __future__ import annotations
 

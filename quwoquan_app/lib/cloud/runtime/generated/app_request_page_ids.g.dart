@@ -12,6 +12,7 @@ class AppRequestPageIds {
     'globalSearchSuggestions': 'global.search.suggestions',
     'homepageClaim': 'entity.homepage.claim.page',
     'homepageDetail': 'entity.homepage.detail.page',
+    'homepageIntroduction': 'entity.homepage.introduction.page',
     'homepageMaintenance': 'entity.homepage.maintenance.page',
     'homepagePicker': 'entity.homepage.picker',
     'homepageStatusReport': 'entity.homepage.status_report.page',
@@ -28,6 +29,7 @@ class AppRequestPageIds {
   static const String globalSearchSuggestions = 'global.search.suggestions';
   static const String homepageClaim = 'entity.homepage.claim.page';
   static const String homepageDetail = 'entity.homepage.detail.page';
+  static const String homepageIntroduction = 'entity.homepage.introduction.page';
   static const String homepageMaintenance = 'entity.homepage.maintenance.page';
   static const String homepagePicker = 'entity.homepage.picker';
   static const String homepageStatusReport = 'entity.homepage.status_report.page';

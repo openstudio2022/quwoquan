@@ -14,24 +14,14 @@ import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart'
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
-import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page_visit_recorder.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 
 final chatGreetingInboxProvider = FutureProvider.autoDispose
     .family<List<GreetingRequestDto>, int>((ref, limit) async {
@@ -58,26 +48,30 @@ class _ChatPageState extends ConsumerState<ChatPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => mounted ? recordChatPageVisit(ref, _mainTabIndex, _subTabIndex) : null,
+      (_) => mounted
+          ? recordChatPageVisit(ref, _mainTabIndex, _subTabIndex)
+          : null,
     );
   }
+
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
   }
+
   static const List<String> _messageSubTabs = [
     UITextConstants.contactsTabAll,
-    UITextConstants.atMe,
-    UITextConstants.atXiaoqu,
     UITextConstants.unread,
-    UITextConstants.reminders,
+    UITextConstants.groupChat,
+    UITextConstants.chatPrivateMessages,
+    UITextConstants.chatNotifications,
   ];
   static const List<String> _contactsSubTabs = [
     UITextConstants.contactsTabAll,
-    UITextConstants.contactsTabCircles,
     UITextConstants.contactsTabMutualFollow,
-    UITextConstants.contactsTabFunGroup,
+    UITextConstants.contactsTabCircles,
+    UITextConstants.contactsTabGroups,
   ];
   void _onScroll() {
     final y = _scrollController.hasClients ? _scrollController.offset : 0.0;
@@ -241,7 +235,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
   ) {
     final tabs = <TabItem>[
       TabItem(id: 'messages', label: AppConceptConstants.messages),
-      TabItem(id: 'contacts', label: AppConceptConstants.contacts),
+      TabItem(id: 'contacts', label: UITextConstants.chatPrimaryContacts),
     ];
     final activeTabId = _mainTabIndex == 0 ? 'messages' : 'contacts';
 
@@ -293,7 +287,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Map<int, bool>? dotBadges;
 
     if (_mainTabIndex == 0) {
-      int atMeCount = 0;
       int unreadCount = 0;
 
       final inboxItems = ref.watch(chatInboxListProvider).items;
@@ -302,23 +295,16 @@ class _ChatPageState extends ConsumerState<ChatPage>
         if (isSecret) {
           continue;
         }
-        atMeCount += item.mentionUnreadCount;
         unreadCount += item.unreadCount;
       }
 
       numberBadges = {};
       dotBadges = {};
 
-      final atMeIndex = _messageSubTabs.indexOf(UITextConstants.atMe);
-      if (atMeIndex != -1 && atMeCount > 0) {
-        numberBadges[atMeIndex] = atMeCount;
-      }
-
       final unreadIndex = _messageSubTabs.indexOf(UITextConstants.unread);
       if (unreadIndex != -1 && unreadCount > 0) {
         numberBadges[unreadIndex] = unreadCount;
       }
-
     }
 
     return SecondaryCapsuleTabBar(
@@ -344,29 +330,55 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color listItemBackground,
     Color listDividerColor,
   ) {
-    final inboxState = ref.watch(chatInboxListProvider);
+    final messageFilter = _messageHomeFilterForSubTab(
+      _messageSubTabs[_subTabIndex],
+    );
+    final messageRows = ref.watch(messageHomeRowsProvider(messageFilter));
     final greetingInbox = ref.watch(chatGreetingInboxProvider(20));
     final pendingGreetings = greetingInbox.maybeWhen(
-      data: (items) => items
-          .where((greeting) => greeting.isPending)
-          .toList(growable: false),
+      data: (items) =>
+          items.where((greeting) => greeting.isPending).toList(growable: false),
       orElse: () => const <GreetingRequestDto>[],
     );
-    final shouldShowGreetingInbox = _subTabIndex == 0 && pendingGreetings.isNotEmpty;
-    final items = _filterInboxListForSubTab(
-      inboxState.items
-          .map(ChatListItemViewModel.fromDto)
-          .toList(growable: false),
+    final shouldShowGreetingInbox =
+        _subTabIndex == 0 && pendingGreetings.isNotEmpty;
+    final items = messageRows.maybeWhen(
+      data: (rows) => rows,
+      orElse: () => const <ChatListItemViewModel>[],
     );
 
-    if (inboxState.isLoading &&
-        inboxState.items.isEmpty &&
-        greetingInbox.isLoading) {
+    final isLoading = messageRows.maybeWhen(
+      loading: () => true,
+      orElse: () => false,
+    );
+    final rowError = messageRows.maybeWhen(
+      error: (error, _) => error,
+      orElse: () => null,
+    );
+
+    if (isLoading && items.isEmpty && greetingInbox.isLoading) {
       return Center(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.lg),
           child: CupertinoActivityIndicator(),
         ),
+      );
+    }
+
+    if (rowError != null && items.isEmpty) {
+      return AppPageErrorState(
+        semantic: runtimeErrorSemantic(
+          context,
+          error: rowError,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            ref.invalidate(messageHomeRowsProvider(messageFilter));
+          }
+        },
       );
     }
 
@@ -405,7 +417,12 @@ class _ChatPageState extends ConsumerState<ChatPage>
           fgSecondary: fgSecondary,
           backgroundColor: listItemBackground,
           dividerColor: listDividerColor,
-          onTap: () => context.push(AppRoutePaths.chatDetail(id: item.id)),
+          onTap: () {
+            if (item.isNotification) {
+              return;
+            }
+            context.push(AppRoutePaths.chatDetail(id: item.id));
+          },
         );
       },
     );
@@ -451,16 +468,16 @@ class _ChatPageState extends ConsumerState<ChatPage>
     var title = UITextConstants.noConversations;
     var subtitle = UITextConstants.startChatHint;
 
-    if (subTab == UITextConstants.atMe) {
-      title = UITextConstants.noMentionsMessages;
-      subtitle = UITextConstants.noMentionsHint;
-    } else if (subTab == UITextConstants.atXiaoqu) {
-      title = UITextConstants.noXiaoquMessages;
-      subtitle = UITextConstants.noXiaoquHint;
-    } else if (subTab == UITextConstants.unread) {
+    if (subTab == UITextConstants.unread) {
       title = UITextConstants.noUnreadMessages;
       subtitle = UITextConstants.noUnreadHint;
-    } else if (subTab == UITextConstants.reminders) {
+    } else if (subTab == UITextConstants.groupChat) {
+      title = '暂无讨论消息';
+      subtitle = '加入讨论后的最近动态会出现在这里';
+    } else if (subTab == UITextConstants.chatPrivateMessages) {
+      title = '暂无私聊消息';
+      subtitle = '与互关用户或已建立连接的人交流后会出现在这里';
+    } else if (subTab == UITextConstants.chatNotifications) {
       title = UITextConstants.noReminderMessages;
       subtitle = UITextConstants.noReminderHint;
     }
@@ -502,39 +519,14 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 
-  List<ChatListItemViewModel> _filterInboxListForSubTab(
-    List<ChatListItemViewModel> list,
-  ) {
-    final sub = _messageSubTabs[_subTabIndex];
-    if (sub == UITextConstants.atMe) {
-      return list.where((item) => item.hasMention).toList(growable: false);
-    }
-    if (sub == UITextConstants.atXiaoqu) {
-      return list
-          .where(
-            (item) =>
-                item.id == AppConceptConstants.assistantConversationId ||
-                item.title.contains(UITextConstants.assistantEntryXiaoqu) ||
-                item.subtitle.contains(UITextConstants.assistantEntryXiaoqu) ||
-                item.subtitle.contains(UITextConstants.atXiaoqu),
-          )
-          .toList(growable: false);
-    }
-    if (sub == UITextConstants.unread) {
-      return list.where((item) => item.hasUnread).toList(growable: false);
-    }
-    if (sub == UITextConstants.reminders) {
-      return list
-          .where(
-            (item) =>
-                item.title.contains(UITextConstants.reminders) ||
-                item.subtitle.contains('提醒') ||
-                item.subtitle.contains('更新') ||
-                item.subtitle.contains('摘要'),
-          )
-          .toList(growable: false);
-    }
-    return list;
+  String _messageHomeFilterForSubTab(String subTab) {
+    return switch (subTab) {
+      UITextConstants.unread => 'unread',
+      UITextConstants.groupChat => 'group',
+      UITextConstants.chatPrivateMessages => 'direct',
+      UITextConstants.chatNotifications => 'notification',
+      _ => 'all',
+    };
   }
 
   Widget _buildContactsContent(
@@ -706,6 +698,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 }
+
 class _ContactsListWithIndex extends StatefulWidget {
   const _ContactsListWithIndex({
     required this.items,
@@ -1121,226 +1114,6 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ConversationTile extends StatelessWidget {
-  final ChatInboxDto conversation;
-  final bool isSpecial;
-  final VoidCallback onTap;
-  final Color fgPrimary;
-  final Color fgSecondary;
-  final Color backgroundColor;
-  final Color dividerColor;
-  final bool showEncryptedBadge;
-
-  const _ConversationTile({
-    required this.conversation,
-    required this.onTap,
-    required this.fgPrimary,
-    required this.fgSecondary,
-    required this.backgroundColor,
-    required this.dividerColor,
-    this.isSpecial = false,
-    this.showEncryptedBadge = false,
-  });
-
-  static const double _avatarSize = ChatConversationAvatarTokens.listSize;
-
-  String _formatConversationTime(ChatInboxDto conv) {
-    final t = conv.lastMessageTime;
-    if (t == null) return '';
-    return ChatTimeFormatter.formatForConversationList(t);
-  }
-
-  Widget _buildConversationAvatar(BuildContext context) {
-    return ConversationAvatar(
-      conversationId: conversation.id,
-      conversationType: conversation.type,
-      title: conversation.title,
-      avatarUrl: conversation.avatarUrl,
-      groupAvatarVersion: conversation.groupAvatarVersion,
-      size: _avatarSize,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tileIsDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final onAccentFg = AppColorsFunctional.getColor(
-      tileIsDark,
-      ColorType.badgeForeground,
-    );
-    final unread = conversation.unreadCount;
-    final isEncrypted = showEncryptedBadge;
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onTap,
-      child: Container(
-        key: ValueKey<String>('chat-conversation-row-${conversation.id}'),
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm + AppSpacing.two,
-        ),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          border: Border(
-            bottom: BorderSide(color: dividerColor, width: AppSpacing.hairline),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                _buildConversationAvatar(context),
-                if (isEncrypted)
-                  Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: Container(
-                      padding: EdgeInsets.all(AppSpacing.two),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryColor,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: backgroundColor,
-                          width: AppSpacing.oneHalf,
-                        ),
-                      ),
-                      child: Icon(
-                        CupertinoIcons.lock_fill,
-                        size: AppTypography.xs,
-                        color: onAccentFg,
-                      ),
-                    ),
-                  ),
-                if (unread > 0)
-                  Positioned(
-                    right: -6,
-                    top: -6,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: unread > 9 ? 5 : 4,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.radiusTen,
-                        ),
-                        border: Border.all(
-                          color: backgroundColor,
-                          width: AppSpacing.oneHalf,
-                        ),
-                      ),
-                      child: Text(
-                        unread > 99 ? '99+' : '$unread',
-                        style: TextStyle(
-                          fontSize: AppTypography.xs,
-                          color: onAccentFg,
-                          fontWeight: FontWeight.w600,
-                          height: AppTypography.lineHeightTight,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            SizedBox(width: ChatConversationAvatarTokens.leadingGap),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                conversation.title,
-                                style: TextStyle(
-                                  fontSize: AppTypography.iosBody,
-                                  fontWeight: AppTypography.semiBold,
-                                  color: fgPrimary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (isSpecial) ...[
-                              SizedBox(width: AppSpacing.xs),
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.xs,
-                                  vertical: AppSpacing.two,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.warning.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                  borderRadius: BorderRadius.circular(
-                                    AppSpacing.xs,
-                                  ),
-                                ),
-                                child: Text(
-                                  'AI',
-                                  style: TextStyle(
-                                    fontSize: AppTypography.xs,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.warning,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: AppSpacing.sm),
-                      Text(
-                        _formatConversationTime(conversation),
-                        style: TextStyle(
-                          fontSize: AppTypography.iosFootnote,
-                          color: fgSecondary.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: AppSpacing.xs),
-                  Row(
-                    children: [
-                      if (isEncrypted) ...[
-                        Icon(
-                          CupertinoIcons.lock_fill,
-                          size: AppSpacing.fourteen,
-                          color: fgSecondary.withValues(alpha: 0.8),
-                        ),
-                        SizedBox(width: AppSpacing.xs),
-                      ],
-                      Expanded(
-                        child: Text(
-                          conversation.lastMessagePreview,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosFootnote,
-                            color: fgSecondary.withValues(alpha: 0.8),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

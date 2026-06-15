@@ -260,6 +260,31 @@ class DiscoveryFeedMapNotifier
       };
     }
   }
+
+  void removePostLocally(String postId) {
+    final normalized = postId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    final next = <String, AsyncValue<DiscoveryFeedState>>{};
+    for (final entry in state.entries) {
+      final value = entry.value.value;
+      if (value == null) {
+        next[entry.key] = entry.value;
+        continue;
+      }
+      final filteredItems = value.items
+          .where((item) => item.id != normalized)
+          .toList(growable: false);
+      final filteredSeen = value.seenItemIds
+          .where((id) => id != normalized)
+          .toList(growable: false);
+      next[entry.key] = AsyncData(
+        value.copyWith(items: filteredItems, seenItemIds: filteredSeen),
+      );
+    }
+    state = next;
+  }
 }
 
 /// 全量 feed 状态 Map 的 Provider

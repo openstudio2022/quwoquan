@@ -29,6 +29,8 @@ AppRoot -> L1_domain_service -> L2_business_capability -> L3_story
 
 缺任一关键项：`GATE_BLOCK`，先补规格、验收、设计或测试方案。
 
+入口检查与自然语言路由的完整契约见 `docs/agent_context_contract.md`。用户直接输入“帮我修”“实现一下”“检查一下”时，不得跳过阶段识别、正向规格理解和执行前反思。
+
 ## 军规
 
 - `spec-first`、`acceptance-first`、`test-first`。
@@ -38,6 +40,7 @@ AppRoot -> L1_domain_service -> L2_business_capability -> L3_story
 - `single-source`：不得维护第二套树、路由、错误码、surface、operation、mock 数据。
 - 用户可见且可发布能力必须先冻结 SLO/KPI、权限、生命周期、灰度、回滚和观测。
 - `/dev` 不得停在部分端、部分测试或无证据状态。
+- 跨 App / Service / Data / Ops / Portal 的任务必须证明端到端链路闭环，不能只完成局部文件改动。
 
 ## 测试映射
 
@@ -45,3 +48,7 @@ AppRoot -> L1_domain_service -> L2_business_capability -> L3_story
 - 领域服务：主证据 `T1/T3`，必要时 `T4`。
 - 业务能力 SIT：主证据 `T2/T3`。
 - Story GWT/contract：主证据 `T1/T2`，涉及远端补 `T3`。
+
+## 完成后复盘
+
+每次完成非纯查询任务，最终说明或验收文档必须覆盖适用项：规格达成、测试证据、E2E 验证、产品/UX、运营观测、自动化/门禁、剩余风险。不适用项需说明原因。

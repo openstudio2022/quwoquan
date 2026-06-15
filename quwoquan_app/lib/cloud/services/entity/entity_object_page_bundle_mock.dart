@@ -266,7 +266,28 @@ List<ObjectIntersection> _mockObjectIntersections(
 }
 
 String _canonicalEntityId(HomepageDetail homepage) {
-  return 'entity:homepage:${homepage.id}';
+  final explicit = homepage.canonicalEntityId?.trim() ?? '';
+  if (explicit.isNotEmpty) {
+    return explicit;
+  }
+  final type = homepage.homepageType.trim();
+  final slug = _canonicalSlug(homepage.title);
+  if (type.isEmpty || slug.isEmpty) {
+    return '';
+  }
+  return 'entity:$type:$slug';
+}
+
+String _canonicalSlug(String value) {
+  final trimmed = value.trim().toLowerCase();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  final normalized = trimmed.replaceAll(RegExp(r'[\s/-]+'), '_');
+  return normalized.replaceAll(RegExp(r'_+'), '_').replaceAll(
+    RegExp(r'^_|_$'),
+    '',
+  );
 }
 
 String _objectPageTemplate(HomepageDetail homepage) {

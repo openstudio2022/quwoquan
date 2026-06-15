@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -40,6 +41,8 @@ from _common.paths import (  # noqa: E402
     ensure_task_layout,
 )
 from _common.content_evidence import public_byline_label  # noqa: E402
+from _common.content_object import read_brief_object, write_brief_object  # noqa: E402
+from _common.base_draft import save_base_draft_ledger  # noqa: E402
 from _common.draft_io import read_writing_pack, write_agent_draft  # noqa: E402
 from _common.post_verify import verify_scope  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
@@ -49,7 +52,9 @@ from produce.entity_workflow import (  # noqa: E402
     is_entity_brief,
     review_entity_draft,
 )
+from produce.route_workflow import load_compose_brief  # noqa: E402
 from produce.materialize import materialize_posts  # noqa: E402
+from produce.handler import handle_produce  # noqa: E402
 from helpers.agent_draft_kit import entity_article  # noqa: E402
 
 
@@ -67,6 +72,8 @@ def _compose_entity_agent_draft(task: str, batch: str, ref: str, brief: dict):
         model="test-agent/contract",
         cited_source_paths=quality.get("sourcePaths") or [],
         covered_facts=pack.get("mustIncludeFacts") or [],
+        agent_run_id=f"run-{ref}",
+        agent_id=f"agent-{ref}",
     )
     return quality, pack
 
@@ -206,6 +213,32 @@ def test_normalize_entity_refs_full_path():
     assert (domain, etype, name) == ("地点", "景区", "稻城亚丁")
 
 
+def test_load_compose_brief_hydrates_entity_condition_context_from_profile():
+    _seed_sources()
+    task_root = Path(os.environ["QWQ_RUNTIME_ROOT"]) / "tasks" / TASK / "entities" / "地点" / "博物馆" / ENTITY
+    task_root.mkdir(parents=True, exist_ok=True)
+    write_json(
+        task_root / "_entity.json",
+        {
+            "label": ENTITY,
+            "conditionProfile": {
+                "regions": ["平原都市"],
+                "seasons": ["秋"],
+                "altitudeMeters": 500,
+                "notes": "城市平原展馆，无高反风险",
+            },
+        },
+    )
+    brief = _entity_brief()
+    brief.pop("conditionContext", None)
+    write_brief_object(TASK, BATCH, REF, brief, content_type="article")
+    hydrated = load_compose_brief(TASK, BATCH, REF)
+    context = hydrated.get("conditionContext") or {}
+    assert context["region"]["name"] == "平原都市"
+    assert context["season"]["name"] == "秋"
+    assert context["entityProfile"]["altitudeMeters"] == 500
+
+
 def test_entity_placeholder_blocks_then_agent_draft_green():
     _seed_sources()
     brief = _entity_brief()
@@ -247,6 +280,62 @@ def test_entity_e2e_materialize_verify_green():
     roots, issues = verify_scope(task=TASK, batch=BATCH, scope="current")
     assert roots, "verify found no posts root"
     assert not issues, "entity pilot verify must be green:\n" + "\n".join(issues[:40])
+
+
+def test_compose_brief_persists_reassigned_base_source_ref():
+    _seed_sources()
+    brief = _entity_brief()
+    write_brief_object(TASK, BATCH, REF, brief, content_type="article")
+    initial_ref = "entities/地点/博物馆/三星堆博物馆/1.download/sources/01.curated_story/source.md"
+    save_base_draft_ledger(
+        TASK,
+        BATCH,
+        {
+            "schemaVersion": "quwoquan_data.base_draft_ledger",
+            "assignments": {initial_ref: "三星堆博物馆_图集"},
+        },
+    )
+
+    obj = resolve_entity_object_dir(TASK, BATCH, ENTITY, etype_hint="博物馆")
+    image_root = Path(tempfile.mkdtemp(prefix="entity_composer_reassign_sources_"))
+    image_path = image_root / f"{ENTITY}_reassigned.jpg"
+    _clean_image(image_path, seed=8)
+    write_source_unit(
+        obj,
+        ordinal=2,
+        source_id="museum_story",
+        source_md="# 三星堆博物馆\n\n这是一条可写底稿，保留现场叙事。",
+        clean_md="# 三星堆博物馆\n\n这是一条可写底稿，保留现场叙事。",
+        quality={"sourceId": "museum_story", "quality": "A-story", "score": 8},
+        platform="curated",
+        source_category="travelogue",
+        url="https://example.com/story",
+        title="museum story",
+        target_ref=f"/entity/地点/博物馆/{ENTITY}",
+        images=[
+            {
+                "sourcePath": str(image_path),
+                "caption": f"{ENTITY} 展厅图",
+                "relevance": f"{ENTITY} 展厅图来自重分配底稿来源",
+            }
+        ],
+    )
+
+    handle_produce(
+        argparse.Namespace(
+            task=TASK,
+            batch=BATCH,
+            type="article",
+            stage="compose-brief",
+            refs=REF,
+            batch_size=1,
+            materialize=False,
+            allow_partial=False,
+        )
+    )
+    persisted = read_brief_object(TASK, BATCH, REF)
+    assert persisted is not None
+    assert persisted["baseSourceRef"].endswith("02.museum_story/source.md"), persisted["baseSourceRef"]
 
 
 def _run_all() -> None:

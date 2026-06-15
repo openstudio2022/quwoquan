@@ -23,7 +23,7 @@ from task.queue import enqueue, list_jobs, run_workers  # noqa: E402
 from vertical.benchmark import evaluate_benchmark  # noqa: E402
 from vertical.coverage import evaluate_registry, list_verticals  # noqa: E402
 from vertical.governance import verify_vertical_script_governance  # noqa: E402
-from vertical.license import validate_image_rights  # noqa: E402
+from vertical.license import load_travel_license_policy, validate_image_rights  # noqa: E402
 from vertical.quality import verify_vertical_quality  # noqa: E402
 
 
@@ -62,8 +62,90 @@ def test_photography_image_rights_accepts_authorized_payload():
     assert issues == []
 
 
+def test_travel_image_rights_blocks_discovery_platform_and_accepts_authorized_payload():
+    policy = load_travel_license_policy()
+    assert policy["vertical"] == "travel"
+    issues = validate_image_rights(
+        {
+            "url": "https://example.com/t.jpg",
+            "platform": "小红书",
+        },
+        vertical="travel",
+    )
+    assert any("灵感或参考" in issue for issue in issues), issues
+    allowed = validate_image_rights(
+        {
+            "url": "https://example.com/t2.jpg",
+            "platform": "景区官网",
+            "license": "scenic_official_authorized",
+            "credit": "九寨沟景区",
+            "sourceUrl": "https://official.example/image",
+            "termsUrl": "https://official.example/terms",
+            "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
+        },
+        vertical="travel",
+    )
+    assert allowed == [], allowed
+
+
+def test_travel_image_rights_accepts_versioned_commons_cc_licenses():
+    base = {
+        "url": "https://upload.wikimedia.org/example.jpg",
+        "platform": "Wikimedia Commons",
+        "credit": "Example photographer",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+        "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "usageScope": "app_publish",
+        "modelReleaseStatus": "not_required",
+    }
+    for license_value in (
+        "CC BY 2.0",
+        "CC BY-SA 2.0",
+        "CC BY-SA 3.0",
+        "CC BY 4.0",
+        "Public domain",
+    ):
+        issues = validate_image_rights(
+            {**base, "license": license_value},
+            vertical="travel",
+        )
+        assert issues == [], (license_value, issues)
+
+
+def test_travel_image_rights_requires_generated_asset_provenance():
+    base = {
+        "url": "file:///workspace/generated.png",
+        "platform": "OpenAI image generation",
+        "license": "AI Generated Original",
+        "credit": "Quwoquan synthetic media pipeline",
+        "sourceUrl": "file:///workspace/generated.png",
+        "termsUrl": "file:///workspace/provenance.json",
+        "usageScope": "app_publish",
+        "modelReleaseStatus": "not_required",
+    }
+    missing = validate_image_rights(base, vertical="travel")
+    assert any("generationModel" in issue for issue in missing), missing
+    allowed = validate_image_rights(
+        {
+            **base,
+            "generationModel": "gpt-image",
+            "generationPromptHash": "sha256:abc",
+            "generatedAt": "2026-06-13T00:00:00Z",
+            "syntheticDisclosure": True,
+        },
+        vertical="travel",
+    )
+    assert allowed == [], allowed
+
+
 def test_vertical_quality_gate_has_golden_samples():
     assert verify_vertical_quality() == []
+
+
+def test_travel_source_registry_is_part_of_vertical_quality():
+    issues = verify_vertical_quality()
+    assert not any("source registry" in issue for issue in issues), issues
 
 
 def test_post_activation_requires_smoke_report_and_active_release_match():

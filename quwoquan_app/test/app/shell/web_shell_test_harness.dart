@@ -6,10 +6,13 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/auth/one_tap_login_channel.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 
 /// Web 宽屏壳测试通用脚手架：固定宽屏视口 + Web 能力 + 可控登录态，
 /// 复用同一 [MainAppShell] 入口，避免每个用例各自拼装第二套壳。
@@ -28,6 +31,9 @@ class WebShellTestHarness {
     return ProviderScope(
       overrides: [
         platformCapabilitiesProvider.overrideWithValue(CapabilityProfile.web),
+        oneTapLoginClientProvider.overrideWithValue(
+          const _UnavailableOneTapLoginClient(),
+        ),
         authSessionStoreProvider.overrideWithValue(
           _TestAuthSessionStore(authenticated: authenticated),
         ),
@@ -45,6 +51,18 @@ class WebShellTestHarness {
           builder: (context, state) => MainAppShell(
             currentLocation: state.uri.path,
             child: const SizedBox.shrink(),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutePaths.loginPathTemplate,
+          builder: (context, state) => LoginPage(
+            reason: state.uri.queryParameters['reason'],
+            redirect: state.uri.queryParameters['redirect'],
+            dismissFallback:
+                state.uri.queryParameters[loginDismissFallbackQueryParam],
+            allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+              state.uri.queryParameters[loginGuestDismissPopQueryParam],
+            ),
           ),
         ),
       ],
@@ -100,6 +118,22 @@ class MaterialAppRouterHost extends StatelessWidget {
   }
 }
 
+class _UnavailableOneTapLoginClient implements OneTapLoginClient {
+  const _UnavailableOneTapLoginClient();
+
+  @override
+  Future<bool> isAvailable() async => false;
+
+  @override
+  Future<OneTapLoginProbe> probe() async =>
+      const OneTapLoginProbe(isAvailable: false);
+
+  @override
+  Future<OneTapLoginResult> requestLoginToken() {
+    throw UnimplementedError('one tap login is unavailable in web shell tests');
+  }
+}
+
 class _TestAuthSessionStore implements AuthSessionStore {
   const _TestAuthSessionStore({required this.authenticated});
 
@@ -128,6 +162,7 @@ class _TestAuthSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
 
   @override
@@ -141,6 +176,9 @@ class _TestAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> softLogout() async {}
 
   @override
   Future<void> markLaunchPromptDismissed() async {}

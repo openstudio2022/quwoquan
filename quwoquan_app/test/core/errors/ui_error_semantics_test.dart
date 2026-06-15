@@ -69,7 +69,7 @@ void main() {
 
     expect(semantic.category, UiErrorCategory.authRequired);
     expect(semantic.primaryAction?.type, UiErrorActionType.login);
-    expect(semantic.secondaryMessage, '登录后将继续打开发起群聊流程');
+    expect(semantic.secondaryMessage, '登录后将继续打开发起讨论流程');
   });
 
   testWidgets('列表追加失败映射为 footer 而不是区块卡片', (tester) async {

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/峨眉山系/景区/四川三景点真实并发实跑",
+  "updatedAt": "2026-06-11T14:05:47.241492+00:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/峨眉山"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

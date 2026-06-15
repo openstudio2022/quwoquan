@@ -22,24 +22,117 @@ from pathlib import Path
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 TESTS_ROOT = DATA_ROOT / "tests"
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
-for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+REPO_ROOT = DATA_ROOT.parent
+for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT, REPO_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 
+from _common.io import read_json
 from task import lint as lint_mod
 from task import ops
 from task import queue
+from task import run as run_mod
 from task import store
+from task.cleanup_generated import build_cleanup_manifest, execute_cleanup, write_manifest
 from task.decompose import register_decompose_parser
+from task.content_supply import register_content_supply_parsers
 from task.run import register_run_parser
+from verify.gate import gate_verify
+from verify.audit_summary import write_batch_audit_summary
 
 
 def _split(arg: str | None) -> list[str]:
     return [x.strip() for x in (arg or "").split(",") if x.strip()]
+
+
+def _fanout_runner_python() -> str | None:
+    module = sys.modules.get("agent_ops.runners.fanout_runner")
+    if module is not None and not getattr(module, "__file__", None):
+        return None
+    from _common.python_runtime import resolve_data_agent_python
+
+    runner_python = resolve_data_agent_python(include_current=True)
+    if runner_python is None:
+        return None
+    if Path(runner_python) == Path(sys.executable):
+        return None
+    return str(runner_python)
+
+
+def _scaled_e2e_plan_runtime_issues(plan: dict, roots_by_unit: dict[tuple[str, str], list[str]]) -> list[str]:
+    """Plan-level hard gates for scaled E2E verification.
+
+    `gate_verify` only checks existing artifacts. The scaled E2E gate must also
+    prove the fanout controller actually ran and every partition batch reached
+    a terminal workflow state with at least one auditable output root.
+    """
+    from _common import fanout_strategies as fs
+    from _common.paths import batch_workflow_state_path, fanout_run_matrix_path
+    from task.run import load_workflow_state
+
+    issues: list[str] = []
+    plan_id = str(plan.get("planId") or "")
+    matrix_path = fanout_run_matrix_path(plan_id)
+    if not matrix_path.is_file():
+        issues.append(f"{plan_id}: missing run_matrix.json")
+    else:
+        matrix = read_json(matrix_path)
+        summary = matrix.get("summary") or {}
+        for key in ("failed", "attemptFailures", "startupFailures", "orchestrationFailed"):
+            count = int(summary.get(key) or 0)
+            if count:
+                issues.append(f"{plan_id}: run_matrix summary {key}={count}")
+        if int(summary.get("orchestrated") or 0) == 0 and int(summary.get("completed") or 0) == 0:
+            issues.append(f"{plan_id}: run_matrix has no completed or orchestrated work")
+        for idx, item in enumerate(matrix.get("orchestrators") or []):
+            if not item.get("reached"):
+                worker = str(item.get("worker") or item.get("partition") or f"orchestrator[{idx}]")
+                missing = ",".join(str(x) for x in (item.get("missing") or []))
+                error = str(item.get("error") or "")
+                detail = f" missing={missing}" if missing else ""
+                if error:
+                    detail += f" error={error}"
+                issues.append(f"{plan_id}: {worker} did not reach required checkpoints{detail}")
+
+    for unit in fs.expand_units(plan):
+        task_id = str(unit["taskId"])
+        batch_id = str(unit["batchId"])
+        key = (task_id, batch_id)
+        state_path = batch_workflow_state_path(task_id, batch_id)
+        if not state_path.is_file():
+            issues.append(f"{task_id}/{batch_id}: missing task_workflow_state.json")
+        else:
+            state = load_workflow_state(task_id, batch_id)
+            status = str(state.get("status") or "")
+            waiting = str(state.get("waitingCheckpoint") or "")
+            if waiting:
+                issues.append(f"{task_id}/{batch_id}: stuck at checkpoint {waiting}")
+            if status not in {"succeeded", "completed", "done"}:
+                issues.append(f"{task_id}/{batch_id}: workflow status is {status or 'unknown'}")
+            failed_objects = state.get("failedObjects") or []
+            if failed_objects:
+                issues.append(f"{task_id}/{batch_id}: failedObjects={len(failed_objects)}")
+        if not roots_by_unit.get(key):
+            issues.append(f"{task_id}/{batch_id}: no current artifacts found for verification")
+    return issues
+
+
+def _prepare_author_jobs_for_paused_targets(plan: dict, paused_targets: list[tuple[str, str]]) -> None:
+    from _common import fanout_strategies as fs
+    from task import fanout_dispatch as fd
+
+    paused_keys = {(task_id, batch_id) for task_id, batch_id in paused_targets}
+    for unit in fs.expand_units(plan):
+        key = (str(unit["taskId"]), str(unit["batchId"]))
+        if key not in paused_keys:
+            continue
+        fd.sync_content_author_jobs(plan, unit, partition_path=list(unit.get("partitionPath") or []))
 
 
 def handle_new(args: argparse.Namespace) -> None:
@@ -81,6 +174,20 @@ def handle_new(args: argparse.Namespace) -> None:
         content["carriers"] = _split(args.carriers)
     if _split(args.emphasis):
         content["emphasis"] = _split(args.emphasis)
+    quotas: dict[str, int] = {}
+    for key, value in (
+        ("entityArticles", getattr(args, "entity_articles", None)),
+        ("routeArticles", getattr(args, "route_articles", None)),
+        ("galleryPosts", getattr(args, "gallery_posts", None)),
+    ):
+        if value is None:
+            continue
+        if value < 0:
+            print(f"[task new] 配额不能为负数: {key}={value}", file=sys.stderr)
+            raise SystemExit(2)
+        quotas[key] = int(value)
+    if quotas:
+        content["quotas"] = quotas
     cond: dict = {}
     if _split(args.cond_regions):
         cond["regions"] = _split(args.cond_regions)
@@ -232,15 +339,371 @@ def handle_cleanup_runtime(args: argparse.Namespace) -> None:
     ops.cleanup_runtime(args.task_id)
 
 
+def handle_cleanup_generated(args: argparse.Namespace) -> None:
+    manifest = build_cleanup_manifest(
+        task_id=getattr(args, "task", None),
+        batch_id=getattr(args, "batch", None),
+        release_id=getattr(args, "release", None),
+        all_runtime=bool(getattr(args, "all_runtime", False)),
+        all_releases=bool(getattr(args, "all_releases", False)),
+    )
+    if getattr(args, "manifest_out", None):
+        write_manifest(Path(args.manifest_out), manifest)
+        print(f"[task cleanup-generated] wrote manifest: {args.manifest_out}")
+    print(json.dumps(manifest, ensure_ascii=False, indent=2))
+    if manifest.get("issues"):
+        raise SystemExit(1)
+    if not getattr(args, "confirm", False):
+        print("[task cleanup-generated] dry-run only; pass --confirm to delete")
+        return
+    result = execute_cleanup(manifest)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if getattr(args, "prepare_task", None):
+        _prepare_generated_run_inputs(
+            str(args.prepare_task),
+            regions=getattr(args, "prepare_regions", None),
+            entity_types=getattr(args, "prepare_entity_types", None),
+        )
+
+
+def _prepare_generated_run_inputs(
+    task_id: str,
+    *,
+    regions: str | None = None,
+    entity_types: str | None = None,
+) -> None:
+    """Rebuild task catalog and baseline after a generated-runtime cleanup."""
+    from data.baseline import handle_baseline
+    from explore.handler import handle_explore
+
+    spec = store.load_spec(task_id)
+    scope = spec.get("scope") or {}
+    region_value = str(regions or scope.get("region") or "").strip()
+    entity_type_value = str(
+        entity_types
+        or ",".join(str(item) for item in (scope.get("entityTypes") or []) if str(item))
+    ).strip()
+    print(f"[task cleanup-generated] prepare task inputs: {task_id}")
+    handle_explore(
+        argparse.Namespace(
+            task=task_id,
+            regions=region_value,
+            entity_types=entity_type_value,
+        )
+    )
+    handle_baseline(
+        argparse.Namespace(
+            task=task_id,
+            catalog=None,
+            spec_doc=None,
+            design_doc=None,
+            acceptance_doc=None,
+            workflow_doc=None,
+            command_matrix_doc=None,
+            catalog_config=None,
+            naming_rules=None,
+            geo_band_rules=None,
+            schema_files=[],
+            config_files=[],
+            output=None,
+        )
+    )
+
+
 def handle_rollup(args: argparse.Namespace) -> None:
     from task import fanout_rollup
+    from _common.paths import fanout_summary_path
 
     try:
         report = fanout_rollup.rollup(args.plan)
     except ValueError as exc:
         print(f"[task rollup] ERROR: {exc}", file=sys.stderr)
         raise SystemExit(2)
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    summary_path = fanout_summary_path(args.plan)
+    summary = read_json(summary_path) if summary_path.is_file() else None
+    if summary is None:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+    print(json.dumps({"rollup": report, "summary": summary}, ensure_ascii=False, indent=2))
+
+
+def handle_select_targets(args: argparse.Namespace) -> None:
+    from task.target_selection import handle_select_targets as _handle
+
+    _handle(args)
+
+
+def handle_audit_batch(args: argparse.Namespace) -> None:
+    from task.target_selection import handle_audit_batch as _handle
+
+    _handle(args)
+
+
+def handle_scaled_e2e(args: argparse.Namespace) -> None:
+    command = getattr(args, "scaled_e2e_command", "")
+    if command == "prepare":
+        from explore.handler import handle_explore
+        from data.baseline import handle_baseline
+
+        spec = store.load_spec(args.task)
+        scope = spec.get("scope") or {}
+        regions = [str(x) for x in (scope.get("regions") or []) if str(x)]
+        task_region = str(scope.get("region") or "").strip()
+        if not regions and task_region:
+            regions = [task_region]
+        entity_types = [str(x) for x in (scope.get("entityTypes") or []) if str(x)]
+        handle_explore(
+            argparse.Namespace(
+                task=args.task,
+                regions=",".join(regions),
+                entity_types=",".join(entity_types),
+            )
+        )
+        handle_baseline(
+            argparse.Namespace(
+                task=args.task,
+                catalog=getattr(args, "catalog", None),
+                spec_doc=None,
+                design_doc=None,
+                acceptance_doc=None,
+                workflow_doc=None,
+                command_matrix_doc=None,
+                catalog_config=None,
+                naming_rules=None,
+                geo_band_rules=None,
+                schema_files=[],
+                config_files=[],
+                output=None,
+            )
+        )
+        run_mod.handle_run(
+            argparse.Namespace(
+                mode="single",
+                task=args.task,
+                batch=args.batch,
+                plan=None,
+                strategy=None,
+                concurrency=None,
+                batch_size=None,
+                resume=False,
+                reset_state=bool(getattr(args, "reset_state", False)),
+                baseline_packet=None,
+                until="produce_compose",
+            )
+        )
+        print(
+            f"[task scaled-e2e prepare] 已到 produce_compose。"
+            f"\n下一步：qwq-data task scaled-e2e fanout-author --plan {args.plan}"
+        )
+        return
+    if command == "fanout-author":
+        run_mod.handle_run(
+            argparse.Namespace(
+                mode="fanout",
+                task=None,
+                batch=args.batch,
+                plan=args.plan,
+                strategy=getattr(args, "strategy", None),
+                concurrency=getattr(args, "concurrency", None),
+                batch_size=getattr(args, "batch_size", None),
+                resume=False,
+                reset_state=False,
+                baseline_packet=None,
+                until=None,
+            )
+        )
+        return
+    if command == "author-runner":
+        fr = sys.modules.get("agent_ops.runners.fanout_runner")
+        if fr is None:
+            from agent_ops.runners import fanout_runner as fr
+        argv = ["--plan", args.plan]
+        if getattr(args, "strategy", None):
+            argv += ["--strategy", args.strategy]
+        if getattr(args, "concurrency", None) is not None:
+            argv += ["--concurrency", str(args.concurrency)]
+        if getattr(args, "max_workers", None) is not None:
+            argv += ["--max-workers", str(args.max_workers)]
+        if getattr(args, "runtime", None):
+            argv += ["--runtime", args.runtime]
+        if getattr(args, "model", None):
+            argv += ["--model", args.model]
+        if getattr(args, "cwd", None):
+            argv += ["--cwd", args.cwd]
+        if getattr(args, "spend_limit", None) is not None:
+            argv += ["--spend-limit-usd", str(args.spend_limit)]
+        if getattr(args, "refs", None):
+            argv += ["--refs", args.refs]
+        if getattr(args, "force_refs", None):
+            argv += ["--force-refs", args.force_refs]
+        if getattr(args, "orchestrate", False):
+            argv += ["--orchestrate"]
+        if getattr(args, "no_orchestrate", False):
+            argv += ["--no-orchestrate"]
+        runner_python = _fanout_runner_python()
+        if runner_python:
+            result = subprocess.run(
+                [runner_python, str(REPO_ROOT / "agent_ops" / "runners" / "fanout_runner.py"), *argv],
+                check=False,
+            )
+            if result.returncode != 0:
+                raise SystemExit(result.returncode)
+            return
+        code = fr.main(argv)
+        if code != 0:
+            raise SystemExit(code)
+        return
+    if command == "rollup":
+        handle_rollup(argparse.Namespace(plan=args.plan))
+        return
+    if command == "finalize":
+        from _common import fanout_plan as fp
+        from _common import fanout_strategies as fs
+        from task.run import load_workflow_state
+
+        plan = fp.load_plan(args.plan)
+        if plan is None:
+            print(f"[task scaled-e2e finalize] plan not found: {args.plan}", file=sys.stderr)
+            raise SystemExit(2)
+        units = fs.expand_units(plan)
+        failures: list[str] = []
+        paused_for_author: list[tuple[str, str]] = []
+        for unit in units:
+            task_id = str(unit["taskId"])
+            batch_id = str(unit["batchId"])
+            try:
+                run_mod.handle_run(
+                    argparse.Namespace(
+                        mode="single",
+                        task=task_id,
+                        batch=batch_id,
+                        plan=None,
+                        strategy=None,
+                        concurrency=None,
+                        batch_size=None,
+                        resume=True,
+                        reset_state=bool(getattr(args, "reset_state", False)),
+                        baseline_packet=None,
+                        until=None,
+                    )
+                )
+            except SystemExit as exc:
+                code = int(getattr(exc, "code", 1) or 0)
+                if code == 10:
+                    state = load_workflow_state(task_id, batch_id)
+                    waiting = str(state.get("waitingCheckpoint") or "")
+                    if waiting == "produce_author":
+                        paused_for_author.append((task_id, batch_id))
+                    else:
+                        failures.append(f"{task_id}/{batch_id}: paused_at={waiting or 'unknown'}")
+                    continue
+                if code not in (0,):
+                    failures.append(f"{task_id}/{batch_id}: exit={code}")
+        if paused_for_author:
+            _prepare_author_jobs_for_paused_targets(plan, paused_for_author)
+            handle_scaled_e2e(
+                argparse.Namespace(
+                    scaled_e2e_command="author-runner",
+                    plan=args.plan,
+                    strategy=getattr(args, "strategy", None),
+                    concurrency=getattr(args, "concurrency", None),
+                    max_workers=getattr(args, "max_workers", None),
+                    runtime=getattr(args, "runtime", None),
+                    model=getattr(args, "model", None),
+                    cwd=getattr(args, "cwd", None),
+                    spend_limit=getattr(args, "spend_limit", None),
+                    orchestrate=False,
+                    no_orchestrate=True,
+                )
+            )
+            for task_id, batch_id in paused_for_author:
+                try:
+                    run_mod.handle_run(
+                        argparse.Namespace(
+                            mode="single",
+                            task=task_id,
+                            batch=batch_id,
+                            plan=None,
+                            strategy=None,
+                            concurrency=None,
+                            batch_size=None,
+                            resume=True,
+                            reset_state=bool(getattr(args, "reset_state", False)),
+                            baseline_packet=None,
+                            until=None,
+                        )
+                    )
+                except SystemExit as exc:
+                    code = int(getattr(exc, "code", 1) or 0)
+                    if code == 10:
+                        state = load_workflow_state(task_id, batch_id)
+                        waiting = str(state.get("waitingCheckpoint") or "")
+                        failures.append(f"{task_id}/{batch_id}: paused_at={waiting or 'unknown'}")
+                        continue
+                    if code not in (0,):
+                        failures.append(f"{task_id}/{batch_id}: exit={code}")
+                        continue
+        if failures:
+            print(f"[task scaled-e2e finalize] FAILED ({len(failures)} partition(s))", file=sys.stderr)
+            for item in failures[:100]:
+                print(f"  - {item}", file=sys.stderr)
+            raise SystemExit(1)
+        print(f"[task scaled-e2e finalize] finalized {len(units)} partition batch(es)")
+        return
+    if command == "verify":
+        if getattr(args, "plan", None):
+            from _common import fanout_plan as fp
+            from _common import fanout_strategies as fs
+            from verify.handler import handle_sample_drift, handle_goldenset
+
+            plan = fp.load_plan(args.plan)
+            if plan is None:
+                print(f"[task scaled-e2e verify] plan not found: {args.plan}", file=sys.stderr)
+                raise SystemExit(2)
+            roots: list[str] = []
+            roots_by_unit: dict[tuple[str, str], list[str]] = {}
+            issues: list[str] = []
+            for unit in fs.expand_units(plan):
+                task_id = str(unit["taskId"])
+                batch_id = str(unit["batchId"])
+                unit_roots, unit_issues = gate_verify(task=task_id, batch=batch_id, scope="current")
+                roots_by_unit[(task_id, batch_id)] = [str(r) for r in unit_roots]
+                roots.extend([str(r) for r in unit_roots])
+                issues.extend(unit_issues)
+                write_batch_audit_summary(task_id, batch_id, roots=unit_roots, issues=unit_issues)
+                try:
+                    handle_sample_drift(
+                        argparse.Namespace(
+                            task=task_id,
+                            batch=batch_id,
+                            fraction=1.0,
+                            samples_file=None,
+                            baseline=None,
+                            report_out=None,
+                        )
+                    )
+                except SystemExit as exc:
+                    if int(getattr(exc, "code", 1) or 0) != 0:
+                        issues.append(f"{task_id}/{batch_id}: sample-drift failed")
+            try:
+                handle_goldenset(argparse.Namespace(baseline=None, report_out=None))
+            except SystemExit as exc:
+                if int(getattr(exc, "code", 1) or 0) != 0:
+                    issues.append("goldenset regression gate failed")
+            issues.extend(_scaled_e2e_plan_runtime_issues(plan, roots_by_unit))
+        else:
+            roots, issues = gate_verify(task=args.task, batch=args.batch, scope="current")
+        if roots:
+            print(f"[task scaled-e2e verify] roots={len(roots)}")
+        if issues:
+            print(f"[task scaled-e2e verify] FAILED ({len(issues)} issue(s))", file=sys.stderr)
+            for issue in issues[:200]:
+                print(f"  - {issue}", file=sys.stderr)
+            raise SystemExit(1)
+        print("[task scaled-e2e verify] PASSED")
+        return
+    print("[task scaled-e2e] 需要子命令：prepare | fanout-author | rollup | verify", file=sys.stderr)
+    raise SystemExit(2)
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -266,6 +729,12 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pn.add_argument("--angles", help="content.angles 逗号分隔（仅与垂类默认不同时写，否则继承）")
     pn.add_argument("--audiences", help="content.audiences 逗号分隔（默认继承垂类）")
     pn.add_argument("--carriers", help="content.carriers 逗号分隔（默认继承全局 [article]）")
+    pn.add_argument("--entity-articles", dest="entity_articles", type=int,
+                    help="content.quotas.entityArticles（显式写入 task.yaml，允许 0）")
+    pn.add_argument("--route-articles", dest="route_articles", type=int,
+                    help="content.quotas.routeArticles（显式写入 task.yaml，允许 0）")
+    pn.add_argument("--gallery-posts", dest="gallery_posts", type=int,
+                    help="content.quotas.galleryPosts（显式写入 task.yaml，允许 0）")
     pn.add_argument("--emphasis", help="content.emphasis 逗号分隔：实体类别选题侧重，如 人文叙事,古建筑")
     pn.add_argument("--cond-regions", dest="cond_regions", help="conditionAxes.regions（默认不写，继承地域全谱）")
     pn.add_argument("--cond-seasons", dest="cond_seasons", help="conditionAxes.seasons（默认不写，继承四季/旱雨季）")
@@ -350,12 +819,124 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pcr.add_argument("task_id")
     pcr.set_defaults(handler=handle_cleanup_runtime)
 
+    pcg = sub.add_parser(
+        "cleanup-generated",
+        help="清理生成型 runtime/release 产物；默认 dry-run，保留 committed task、publish、tag/entity 真源",
+    )
+    pcg.add_argument("--task", help="runtime taskId")
+    pcg.add_argument("--batch", help="runtime batchId；与 --task 搭配只清指定 batch")
+    pcg.add_argument("--release", help="releaseId；只清指定 isolated release")
+    pcg.add_argument("--all-runtime", action="store_true", help="清空 runtime/ 下全部生成产物")
+    pcg.add_argument("--all-releases", action="store_true", help="清空 release/ 下全部 isolated release")
+    pcg.add_argument("--manifest-out", help="写出清理清单 JSON")
+    pcg.add_argument("--confirm", action="store_true", help="确认执行删除；缺省只 dry-run")
+    pcg.add_argument(
+        "--prepare-task",
+        help="删除确认后重建该 task 的 catalog.ndjson 与 baseline_freeze_packet.json",
+    )
+    pcg.add_argument("--prepare-regions", help="prepare-task 的 explore regions；默认取 task scope.region")
+    pcg.add_argument(
+        "--prepare-entity-types",
+        help="prepare-task 的 explore entity types；默认取 task scope.entityTypes",
+    )
+    pcg.set_defaults(handler=handle_cleanup_generated)
+
     prl = sub.add_parser("rollup", help="fanout 归并治理：分区 reducer + 全局进度/SLO + dead/spillover 巡检")
     prl.add_argument("--plan", required=True, help="冻结计划 planId")
     prl.set_defaults(handler=handle_rollup)
 
+    pstg = sub.add_parser(
+        "select-targets",
+        help="从 discovery 分区确定性选择多模态 coverageTargets，支持按历史不可行对象排除",
+    )
+    pstg.add_argument("--source-task", dest="source_task", default="旅行/地域/四川省/景区/景区精选")
+    pstg.add_argument("--discovery", help="discovery JSON 路径；默认取 source task 的 discovery_sichuan_100e.json")
+    pstg.add_argument("--limit", type=int, default=50)
+    pstg.add_argument("--mandatory", help="必须保留实体，逗号分隔；默认川西五景")
+    pstg.add_argument("--exclude", help="显式排除实体，逗号分隔")
+    pstg.add_argument("--exclude-from-task", dest="exclude_from_task", help="从历史 managed batch failedObjects 读取不可行实体")
+    pstg.add_argument("--exclude-from-batch", dest="exclude_from_batch", help="与 --exclude-from-task 配套的 batchId")
+    pstg.add_argument(
+        "--exclude-from-run",
+        dest="exclude_from_run",
+        action="append",
+        help="追加排除历史批次不可行实体，格式 TASK_ID::BATCH_ID；可重复",
+    )
+    pstg.add_argument("--region", default="四川省")
+    pstg.add_argument("--category", default="景区")
+    pstg.add_argument("--name", required=True, help="新任务名")
+    pstg.add_argument("--title", help="新任务标题；默认同 name")
+    pstg.add_argument("--owner", help="createdBy")
+    pstg.add_argument("--write", action="store_true", help="写入 committed task；默认只打印 selection report")
+    pstg.add_argument("--force", action="store_true", help="覆盖同名任务")
+    pstg.set_defaults(handler=handle_select_targets)
+
+    pab = sub.add_parser("audit-batch", help="审计 managed separated_research 批次 lane 通过率和图片容量")
+    pab.add_argument("--task", required=True)
+    pab.add_argument("--batch", required=True)
+    pab.add_argument("--json", action="store_true")
+    pab.add_argument("--write", action="store_true", help="写入 batch/_shared/managed_batch_audit.json")
+    pab.set_defaults(handler=handle_audit_batch)
+
+    pse = sub.add_parser("scaled-e2e", help="放大规模 E2E 薄壳：只编排现有 CLI/fanout 主线，不产正文")
+    sesub = pse.add_subparsers(dest="scaled_e2e_command")
+
+    psep = sesub.add_parser("prepare", help="baseline + single workflow 到 produce_compose（不写正文）")
+    psep.add_argument("--task", required=True)
+    psep.add_argument("--batch", required=True)
+    psep.add_argument("--plan", required=True, help="后续 fanout 使用的冻结计划 planId")
+    psep.add_argument("--catalog", help="可选 baseline catalog path")
+    psep.add_argument("--reset-state", dest="reset_state", action="store_true")
+    psep.set_defaults(handler=handle_scaled_e2e)
+
+    psef = sesub.add_parser("fanout-author", help="复用 task run --mode fanout 调度 author 子任务")
+    psef.add_argument("--plan", required=True)
+    psef.add_argument("--batch", default="run_1")
+    psef.add_argument("--strategy", choices=["by-partition", "flat-pool", "by-leaf", "by-batch"])
+    psef.add_argument("--concurrency", type=int)
+    psef.add_argument("--batch-size", dest="batch_size", type=int)
+    psef.set_defaults(handler=handle_scaled_e2e)
+
+    pserun = sesub.add_parser("author-runner", help="复用 fanout_runner 真正并行拉起 author subagent")
+    pserun.add_argument("--plan", required=True)
+    pserun.add_argument("--strategy", choices=["by-partition", "flat-pool", "by-leaf", "by-batch"])
+    pserun.add_argument("--concurrency", type=int)
+    pserun.add_argument("--max-workers", dest="max_workers", type=int)
+    pserun.add_argument("--runtime", choices=["local", "cloud"], default="cloud")
+    pserun.add_argument("--model", default="composer-2.5")
+    pserun.add_argument("--cwd", default=os.getcwd())
+    pserun.add_argument("--spend-limit-usd", dest="spend_limit", type=float)
+    pserun.add_argument("--refs", help="仅运行逗号分隔的 ref 列表（content-mode 为内容对象 ref）")
+    pserun.add_argument("--force-refs", dest="force_refs", help="强制重跑逗号分隔的已成稿 ref")
+    pserun.add_argument("--orchestrate", action="store_true")
+    pserun.add_argument("--no-orchestrate", dest="no_orchestrate", action="store_true")
+    pserun.set_defaults(handler=handle_scaled_e2e)
+
+    pser = sesub.add_parser("rollup", help="复用 task rollup 汇总 fanout 执行状态")
+    pser.add_argument("--plan", required=True)
+    pser.set_defaults(handler=handle_scaled_e2e)
+
+    psef2 = sesub.add_parser("finalize", help="在 fanout author 后恢复各分区 workflow，跑 review/materialize/publish")
+    psef2.add_argument("--plan", required=True)
+    psef2.add_argument("--strategy", choices=["by-partition", "flat-pool", "by-leaf", "by-batch"])
+    psef2.add_argument("--concurrency", type=int)
+    psef2.add_argument("--max-workers", dest="max_workers", type=int)
+    psef2.add_argument("--runtime", choices=["local", "cloud"], default="cloud")
+    psef2.add_argument("--model", default="composer-2.5")
+    psef2.add_argument("--cwd", default=os.getcwd())
+    psef2.add_argument("--spend-limit-usd", dest="spend_limit", type=float)
+    psef2.add_argument("--reset-state", dest="reset_state", action="store_true")
+    psef2.set_defaults(handler=handle_scaled_e2e)
+
+    psev = sesub.add_parser("verify", help="显式校验某 runtime task/batch")
+    psev.add_argument("--task")
+    psev.add_argument("--batch")
+    psev.add_argument("--plan", help="若提供，则聚合校验 plan 下全部分区 task/batch")
+    psev.set_defaults(handler=handle_scaled_e2e)
+
     register_run_parser(sub)
     register_decompose_parser(sub)
+    register_content_supply_parsers(sub)
     queue.register_queue_parser(sub)
 
     def _dispatch(args: argparse.Namespace) -> None:

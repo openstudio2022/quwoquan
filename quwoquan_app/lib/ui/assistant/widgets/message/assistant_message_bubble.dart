@@ -101,7 +101,6 @@ class AssistantMessageBubble extends StatelessWidget {
     this.onFeedbackCorrect,
     this.onCopyAnswer,
     this.onShareAnswer,
-    this.onFavoriteAnswer,
     this.onRegenerateAnswer,
     this.onBriefAnswer,
     this.onDetailedAnswer,
@@ -145,7 +144,6 @@ class AssistantMessageBubble extends StatelessWidget {
   final VoidCallback? onFeedbackCorrect;
   final VoidCallback? onCopyAnswer;
   final VoidCallback? onShareAnswer;
-  final VoidCallback? onFavoriteAnswer;
   final VoidCallback? onRegenerateAnswer;
   final VoidCallback? onBriefAnswer;
   final VoidCallback? onDetailedAnswer;

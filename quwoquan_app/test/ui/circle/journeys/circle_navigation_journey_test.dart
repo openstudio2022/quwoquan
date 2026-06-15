@@ -32,15 +32,18 @@ Widget _scopedApp({CircleRepository? mock}) {
           ),
           GoRoute(
             path: '/circle/:id/stats',
-            builder: (_, _) => const Scaffold(body: Center(child: Text('Stats'))),
+            builder: (_, _) =>
+                const Scaffold(body: Center(child: Text('Stats'))),
           ),
           GoRoute(
-            path: '/article/:id',
-            builder: (_, _) => const Scaffold(body: Center(child: Text('Article'))),
+            path: '/works/browser/:workId',
+            builder: (_, _) =>
+                const Scaffold(body: Center(child: Text('Work Browser'))),
           ),
           GoRoute(
             path: '/chat/:id',
-            builder: (_, _) => const Scaffold(body: Center(child: Text('Chat'))),
+            builder: (_, _) =>
+                const Scaffold(body: Center(child: Text('Chat'))),
           ),
         ],
       ),
@@ -63,7 +66,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -99,7 +102,7 @@ void main() {
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
 
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await tester.pump(const Duration(milliseconds: 200));
       router.go('/circles');
       await tester.pump(const Duration(milliseconds: 200));

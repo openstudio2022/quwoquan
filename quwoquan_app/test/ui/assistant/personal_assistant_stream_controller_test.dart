@@ -4,6 +4,7 @@ import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
 import 'package:quwoquan_app/assistant/session/session_transcript_service.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
+import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/notification/app_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
@@ -267,14 +268,14 @@ void main() {
 
       final state = container.read(personalAssistantStreamControllerProvider);
       expect(state.answer, isEmpty);
-      expect(state.errorMessage, contains('找私助执行遇到问题'));
+      expect(state.errorMessage, AssistantErrorCode.unknown.defaultMessage);
       expect(
         state.events.single.runtimeFailure?.code,
         contains('ASSISTANT.MIDDLEWARE.tool_failed'),
       );
       expect(
         (state.transcript.last as AssistantAnswerTranscriptRow).content,
-        contains('找私助执行遇到问题'),
+        AssistantErrorCode.unknown.defaultMessage,
       );
     });
 
@@ -863,9 +864,7 @@ class _FakeAssistantHistoryLoader implements AssistantHistoryLoader {
   int loadCount = 0;
 
   @override
-  Future<AssistantHistorySnapshot?> load({
-    required String subAccountId,
-  }) async {
+  Future<AssistantHistorySnapshot?> load({required String subAccountId}) async {
     loadCount += 1;
     return snapshot;
   }

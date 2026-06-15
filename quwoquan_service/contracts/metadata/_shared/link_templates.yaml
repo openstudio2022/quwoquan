@@ -33,9 +33,9 @@ entities:
     web:
       path_template: post/{postId}
     navigation:
-      route_id: articleDetail
+      route_id: workBrowser
       param_bindings:
-        postId: id
+        postId: workId
 
   circle:
     description: 圈子主页

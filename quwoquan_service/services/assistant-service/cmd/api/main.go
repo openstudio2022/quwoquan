@@ -642,7 +642,12 @@ func allowDeterministicProvider(appEnv string) bool {
 	if strings.TrimSpace(os.Getenv("ALLOW_DETERMINISTIC_BETA")) != "1" {
 		return false
 	}
-	return appEnv == "beta" || appEnv == "gamma"
+	switch appEnv {
+	case "beta", "gamma", "prod":
+		return true
+	default:
+		return false
+	}
 }
 
 func realSearchHandler(cfg providerCfg) tool.Handler {

@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from _common.evidence_contract import quality_payload_contract_issues
 from _common.post_verify import verify_scope
+from _common.release_integrity import release_integrity_issues
 from _common.stage_reports import iter_stage_envelopes
+from verify.audit_summary import write_batch_audit_summary
 
 
 def gate_verify(*, task: str | None = None, batch: str | None = None, release: str | None = None, scope: str = "current"):
@@ -11,6 +13,19 @@ def gate_verify(*, task: str | None = None, batch: str | None = None, release: s
     roots, issues = verify_scope(task=task, batch=batch, release=release, scope=scope)
     if task and batch:
         issues.extend(_verify_runtime_stage_payloads(task, batch))
+        write_batch_audit_summary(task, batch, roots=roots, issues=issues)
+    if release:
+        issues.extend(release_integrity_issues(release))
+    elif not task and not batch:
+        seen_releases: set[str] = set()
+        for root in roots:
+            if root.name != "posts":
+                continue
+            release_id = root.parent.name
+            if release_id in seen_releases:
+                continue
+            seen_releases.add(release_id)
+            issues.extend(release_integrity_issues(release_id))
     return roots, issues
 
 

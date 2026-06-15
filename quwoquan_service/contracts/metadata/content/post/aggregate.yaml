@@ -35,7 +35,7 @@ members:
   - entity: ContentReaction
     relation: 1:N
     cascade_delete: true
-    description: 用户互动状态（点赞/收藏/转发/举报）
+    description: 用户互动状态（点赞/转发/举报）
 
   - entity: PostCircleDistribution
     relation: 1:N
@@ -64,6 +64,6 @@ counter_strategy:
     热点 Post 计数使用 Redis 原子递增 + 异步批量回写 MongoDB。
     避免热点文档高频更新导致 MongoDB 写锁竞争。
   redis_key: "counter:{postId}:{type}"
-  types: [like, comment, favorite, share, view]
+  types: [like, comment, share, view]
   flush_interval_seconds: 10
   flush_batch_size: 100

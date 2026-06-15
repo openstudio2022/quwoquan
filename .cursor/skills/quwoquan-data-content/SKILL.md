@@ -24,6 +24,9 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 | `annotate` | Human-in-loop 标注：发布前对账本图片/事实/文章下人判定、打分、置发布态、记再加工 |
 | `ship` | 一键发布：promote→重建索引→按环境确定性采样写 sample bundle→(可选)调用服务侧 importer 灌库 |
 | `verify` | 收紧范围校验 post package（schema + 语义 + 图片 + 三道门） |
+| `verify scale-readiness` | 商用放量证据门：来源充分率、workflow 状态、队列后端、TokenLedger、release/import、吞吐和首轮通过率 |
+| `env ready` | 一键准备 data venv，并检查 `cursor_sdk`、CV/OCR 依赖、`CURSOR_API_KEY` 和网络可达性 |
+| `env preflight` | 只做运行前环境验收，不安装依赖 |
 | `template lint` | 模板蓝图门禁（含 route 叙事契约 / gallery imagePolicy） |
 
 ## 正文创作只能由会话模型完成（禁止脚本拼正文）
@@ -49,21 +52,20 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 - CLI 负责 IO/拉取/落盘/打分/校验/落写作契约；语义创作只在会话模型内完成；
 - 每个 stage 必落 stage result + gate report，失败写 repair report 并按 `fallbackStage` 回退重跑直至全绿（provenance/traceability/叙事问题回退到 `agent_compose` 重新创作）。
 
-## 底稿轻改范式（核心：以真实底稿为基础适度加工，不从零总结、不套模板）
+## 来源权利分层
 
-- **每篇/每个主页只认领一篇底稿**（某来源单元 `source.md`），由 compose 阶段自动分配（`baseSourceRef` 永远非空）；
-  批次级账本 `batches/<batch>/_shared/base_draft_ledger.json` 记录 `sourceRef -> postRef` 一对一，**一源仅一稿**；
-  已被占用的源在其它篇目只能进 `evidenceRefs` 作补充材料，不得再当底稿。
-- **加工方式 = 轻改**：保留底稿叙事顺序与结构，只做去语病/纠错别字/理顺语句/补可回溯证据/去版权与平台痕迹；排版可适度优化。
-- **与底稿相似度维持 70%~90%**（HARD 门 `baseDraftFidelity`）：`<70%` 视为脱离底稿/从零另写，`>90%` 视为逐句搬运/未去版权。
-- **结构跟随底稿**：`prompt.md` 内联底稿正文（## 底稿），few-shot 仅供参考口吻与颗粒度；章节意图仅参考，不强套固定骨架。
+- `licensed_adaptation`：仅限自有、明确授权、CC 或公版材料；保存许可、署名、条款和授权快照，可在许可范围内改编。
+- `factual_reference_only`：普通官网、百科、攻略和游记；只抽取可核验事实，标题、结构和句子必须独立表达。
+- `blocked`：权利不明、禁止商用、抓取失败、探针页或平台发现页；不得进入 content_plan。
+- `baseDraftFidelity` 只适用于 `licensed_adaptation`。普通网页不设最低相似度，统一受事实回溯、连续长句复现和跨稿重复门约束。
+- 主证据仍执行一源一稿；同一来源可作为其它作品的补充事实证据，但不得重复充当 `baseSourceRef`。
 
 ## 三道真实性门（review + verify 交付面强制）
 
 1. **generator 出处门**：`draft_meta`/manifest 必须 `generator=agent` 且带 `model` 与 `citedSourceRefs`；非 agent 直接 `revision_needed`，`materialize` 拒绝落地。
 2. **模板指纹门**：扫描旧脚本模板的强/弱指纹短语（`_common/template_fingerprints.py`），命中即判为机械拼接并阻断。
 3. **事实可回溯门**：`mustIncludeFacts` 必须在正文出现；正文中带单位的关键数值（票价/海拔/时长等）必须能在 source 证据中回溯。
-4. **底稿贴合度门 `baseDraftFidelity`**：成品与底稿相似度须落 70%~90%；与 `_long_phrase_hits`（禁 ≥28 字逐句搬运）共同构成上限约束。
+4. **授权改编贴合度门 `baseDraftFidelity`**：仅对 `licensed_adaptation` 生效；普通网页必须独立表达，并由 `_long_phrase_hits`（禁 ≥28 字逐句搬运）阻断抄袭。
 
 ## Human-in-loop 标注 + 发布门（账本驱动）
 
@@ -120,6 +122,9 @@ bash quwoquan_service/scripts/content/run_content_import_mongo_test.sh
 ## 关键命令示例
 
 ```bash
+# 托管/真实 Agent 工作流启动前必须先过环境门；其它助手也统一使用这条入口
+python3 quwoquan_data/scripts/cli.py env ready
+
 # 1) 准备写作契约（不产出正文）
 python3 quwoquan_data/scripts/cli.py produce --task <task> --batch <batch> --content-type article --stage compose-brief
 
@@ -138,6 +143,7 @@ python3 quwoquan_data/scripts/cli.py verify --scope current   # 门禁默认：�
 python3 quwoquan_data/scripts/cli.py verify --scope all       # 全部 release（含旧 schema）
 python3 quwoquan_data/scripts/cli.py verify --task <task> --batch <batch>  # 显式校验某中间批次（仍严格）
 python3 quwoquan_data/scripts/cli.py verify --release <release_id>
+python3 quwoquan_data/scripts/cli.py verify scale-readiness --task <task> --batch <batch> --daily-target 10000
 ```
 
 ## 硬约束（违反即门禁拦截）
@@ -147,13 +153,13 @@ python3 quwoquan_data/scripts/cli.py verify --release <release_id>
 3. **真相源**：路径/错误码/字段/叙事契约/imagePolicy 先改 metadata/blueprint/schema，再 `template lint` / 业务逻辑；codegen 与 schema 不手绕。
 4. **三道真实性门**：generator 出处门 + 模板指纹门 + 事实可回溯门，review 与 verify 交付面强制；非 agent / 命中指纹 / 数值不可回溯一律阻断。
 5. **图片治理**：发布图必须过 `media check-images`；unsafe→改稿，needs_review(人脸/后端缺失)→人工复核，近重复→去重。
-6. **载体路由**：图多文少→gallery（配小字、禁大空白）；图带交叠文字→article（避免大空白）。
+6. **载体路由按底稿形态判定**：图片集合为主、只有标题或少量配文的底稿 → `image` 图片作品；图文混合编排且源图随正文共同构成底稿 → `article`；Wiki/百科/官方/政府/文旅等介绍实体本身的底稿 → entity homepage。不能只按目标内容类型混用来源；文章源图也是底稿的一部分，必须和 `baseSourceRef` 同源且一稿一用。
 7. **修辞/结构骨架=软门（仅建议+降分，不阻断）**：开篇钩子、显式喜欢/不喜欢、取舍判断、口语化标题、章节镜像、分节形态等不再硬阻断忠实轻改稿；硬门保留真实性/反抄袭/反雷同/数值可回溯/图片/联系方式/语域/载体/路线覆盖/底稿贴合度。
 8. **Mock/来源隔离**：不泄露平台名/作者名/用户名/水印；来源痕迹必须改写。
 9. **证据后置篇目（content_plan）**：只冻结实体与 `content.quotas`；ref/title 在 download+build 后由 `content_plan_packet` 定义，禁止 download 前预置营销 ref。B 组线路须有来源联游互证。
 10. **Ralph 准出**：每阶段必须 hook-check gate；FAIL 写 repair 并 re-inject，禁止无 gate 证据 `--resume`。
-11. **人读与语气**：以底稿为锚做适度加工（轻改）而非从零重写；遵从底稿结构与口吻，禁止百科罗列、机械收尾、独立「实用信息」清单、统一模板小标题。
-14. **实体主页 = 百科底稿轻改 + 必图 + 章节语义**：以最完整的百科 `source.md` 为底稿；**结构尊重原文**——SOP `template.md` 的章节只是「规范化参考」（命名/归类对齐），**非强制逐节填满**，可按底稿增减/合并；`概况`必备、其余章节有真实内容才写、无内容直接省略、禁止硬凑；`历史沿革`必须是真实历史（年份/朝代/建置沿革），否则省略，禁把地质成因/评级塞入；每个实体主页须配 ≥1 张真实 CC 图（`source_plan` 每实体提供结构化 `imageUrls`：license+credit+relevance）。
+11. **人读与语气**：普通网页只取事实并独立成文；授权材料才可按许可改编。禁止百科罗列、机械收尾、独立「实用信息」清单、统一模板小标题。
+14. **实体主页 = 多来源事实综合 + 必图 + 章节语义**：主页必须综合多个来源独立表达；SOP `template.md` 的章节只是规范化参考，可按事实增减/合并；`概况`必备、其余章节有真实内容才写、无内容省略；`历史沿革`必须是真实历史。每个实体主页须配 ≥1 张权利和安全门均通过的真实图。
 12. **tagRefs 对齐 publish**：`brief.json` / manifest 的 `tagRefs` 必须指向 `publish/v1/tags/**` 已发布路径（地理/玩法/内容角度等），禁止扁平省名/品类名；ship 前自检 `intersectionHints` 含 content+interest。
 13. **写作主线 + 公共/SOP/任务分工**：每篇 `writingIntent` 单一（攻略=planning_consultation｜体验=decision_experience｜游记=post_trip_journal），结构须与之匹配；垂类写法（题材矩阵、版面、语域禁忌）见垂类 SOP（`quwoquan_data/sop/**`），本批特例只写任务 `notes.md`，公共层不写具体 region/实体/batch。
 

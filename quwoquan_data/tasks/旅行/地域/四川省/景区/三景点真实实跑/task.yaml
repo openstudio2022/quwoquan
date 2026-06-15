@@ -1,0 +1,34 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/景区/三景点真实实跑
+title: 四川三景点真实并发实跑
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 景区
+parentTaskId: null
+status: draft
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 都江堰
+  - entityType: 地点/景区
+    name: 乐山大佛
+  - entityType: 地点/景区
+    name: 峨眉山
+provenance:
+  createdAt: '2026-06-11T14:05:46.580474+00:00'
+  createdBy: cursor-agent
+content:
+  angles:
+  - 攻略
+  carriers:
+  - article
+  - gallery
+  quotas:
+    entityArticles: 3
+    routeArticles: 0
+    galleryPosts: 3

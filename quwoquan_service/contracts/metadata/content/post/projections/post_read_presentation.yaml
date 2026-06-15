@@ -39,6 +39,12 @@ fields:
   - name: createdAt
     dart_type: DateTime
     post_base: createdAt
+  - name: updatedAt
+    dart_type: DateTime?
+    post_base: updatedAt
+  - name: publishedAt
+    dart_type: DateTime?
+    post_base: publishedAt
   - name: articleTemplate
     dart_type: String
     wire_key: articleTemplate

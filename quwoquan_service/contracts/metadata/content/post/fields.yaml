@@ -23,6 +23,63 @@ entities:
         recommend_feature: true
         description: 作者稳定公开主体 ID（subAccountId）
 
+      - name: creatorProfileId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: 平台创作者画像 ID；系统作者内容必须存在，不写入标签或实体主树
+
+      - name: creatorArchetype
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: 作者类型，如 travel_blogger / landscape_photographer / campus_blogger
+
+      - name: creatorProfileVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 写入内容时绑定的作者画像版本
+
+      - name: creatorDisclosure
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 用户可见的虚拟创作者披露信息
+
+      - name: experienceClaimMode
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 经验声明模式，默认 editorial_synthesis，禁止伪真实亲历
+
+      - name: authorQualitySignals
+        type: object
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+        recommend_feature: true
+        description: 作者质量、疲劳度、风险等级等推荐与调度信号
+
       - name: authorDisplayNameSnapshot
         type: string
         constraints: [NULLABLE]
@@ -95,21 +152,33 @@ entities:
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read_write
+        api_exposure: read
         ops_exposure: read
         recommend_feature: true
         tag_ref: true
-        description: 路径制 tagRef 列表；唯一真相源为数据工程 publish/v1/tags（四分组路径 id）
+        description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 tag mention 派生。旧数据无 semanticMentions 时兼容既有值
 
       - name: entityRefs
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read_write
+        api_exposure: read
         ops_exposure: read
         recommend_feature: true
-        description: 实体引用列表（POI/主页/景区等 entity 实例引用）；与 tagRefs 正交，承载交集实体维度归因与推荐实体亲和
+        description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 entity mention 派生。旧数据无 semanticMentions 时兼容既有值
+
+      - name: semanticMentions
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: |
+          标题/正文/文章中的语义标注事实：
+          [{mentionId,kind,surface,location,rangeStart,rangeEnd,status,candidateId,targetRef}]。
+          status 支持 published/pending_review/rejected/offline；只有 published 且 targetRef 合法的项进入活动 entityRefs/tagRefs。
 
       - name: rating
         type: int
@@ -138,6 +207,18 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: mediaItems
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: |
+          统一媒体序列（Work Browser 真相源）：[{kind:image|video, url, coverUrl?, durationMs?, width?, height?, title?}]。
+          视频集（一个作品多段视频）唯一契约表达；禁止端侧按同作者从队列临时拼集合。
+          为空时端按 mediaUrls/videoUrl 派生单一序列。
+
       - name: coverUrl
         type: string
         constraints: [NULLABLE]
@@ -146,17 +227,6 @@ entities:
         api_exposure: read_write
         ops_exposure: read
         description: 作者显式设置的文章封面；分发卡与阅读器扉页共享同一真相源
-
-      - name: articleDocument
-        type: object
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: internal
-        ops_exposure: internal
-        description: |
-          已废弃的旧文章显示快照。当前应用尚未正式上线，不提供兼容读取、
-          兼容转换、双写或回滚语义；新长文唯一持久化真相源是 articleMarkdown。
 
       - name: articleMarkdown
         type: string
@@ -202,7 +272,31 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: 模板、字体、版心能力与 wrap/gallery 小屏降级策略
+        description: |
+          文章渲染画像。Work Browser V1.0 消费字段：
+          template/fontPreset、paperThemeMode(system|manual)、paperTexture
+          (darkPaper|coolGray|warmBlack|inkGreen|deepBrown)、contentVertical
+          (photography|travel|history|tech|nature)。
+          旧模板只保留为版心/排版气质输入，不再决定浏览器默认纸张亮度。
+
+      - name: contentVertical
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        recommend_feature: true
+        description: "内容垂类：photography/travel/history/tech/nature 等；Work Browser 文章纸张系统适配的唯一垂类输入。"
+
+      - name: entityMentions
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: "文章行内实体标签列表 [{subjectType,subjectId,displayName,rangeStart,rangeEnd}]，由 QWQ Rich Markdown 派生。"
 
       - name: articleTemplate
         type: enum
@@ -420,15 +514,6 @@ entities:
         recommend_feature: true
 
       - name: commentCount
-        type: int
-        constraints: [NOT_NULL, DEFAULT_0]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        recommend_feature: true
-
-      - name: favoriteCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
         classification: PUBLIC
@@ -1137,14 +1222,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: favorited
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
       - name: shared
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
@@ -1162,14 +1239,6 @@ entities:
         ops_exposure: read
 
       - name: likedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: favoritedAt
         type: timestamp
         constraints: [NULLABLE]
         classification: PUBLIC

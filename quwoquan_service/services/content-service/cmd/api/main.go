@@ -417,7 +417,11 @@ func main() {
 	recOpts = append(recOpts, rtrec.WithPolicyStore(policyStore))
 
 	engine := rtrec.NewEngine(sessionCache, candidateSources, recOpts...)
-	feedService := application.NewFeedService(engine, source)
+	feedServiceOpts := []application.FeedServiceOption{}
+	if intersectionService != nil {
+		feedServiceOpts = append(feedServiceOpts, application.WithFeedIntersectionProvider(intersectionService))
+	}
+	feedService := application.NewFeedService(engine, source, feedServiceOpts...)
 	postService := application.NewPostService(store, postServiceOpts...)
 	reportService := application.NewReportService(reportStore, eventPub)
 	behaviorService := application.NewBehaviorService(

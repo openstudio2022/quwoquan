@@ -7,7 +7,7 @@
 从特性到入库（L1/L2 自测通过），再到集成验证（L3/L4），再到生产端到端打通，含灰度/滚动发布。
 
 ```
-特性 → dev 完成本地 T1/T2/T3/T4 左移验证并自动归档 → commit 入库 → PR required checks（03/04/05）→ ECS gamma 验证 → 灰度到 prod
+特性 → dev 完成本地 T1/T2/T3/T4 左移验证并自动归档 → commit 入库 → PR required checks（03/04/05）→ 灰度到 prod（`gray-initial` 承接真实远端集成验证）
 ```
 
 ---
@@ -17,9 +17,9 @@
 | 阶段 | 命令/动作 | 门禁 | 输出 |
 |------|-----------|------|------|
 | 1. 开发+入库 | `/dev` → `/commit`（或 `/deliver`） | G2 → G3 → G4 | `/dev` 完成四层自验证、gray-release ready 与自动归档；`/commit` 前本地 `gate-local-gamma` 通过并完成入库 |
-| 2. PR 主门禁 | `03` / `04`（pr_light）/ `05`（pr_light） | G5a | gamma readiness 通过 + alpha/beta 设备矩阵通过 |
-| 3. 集成验证收口 | `09`（nightly_full）或 `08`（manual_full） | G5b | 完整 ECS deploy + full semantic smoke + Patrol UI + 全设备矩阵通过 |
-| 4. 灰度到 prod | `config-gray-rollout` | G5c | prod 灰度完成，SLO 通过 |
+| 2. PR 主门禁 | `03` / `04`（pr_light）/ `05`（pr_light） | G5a | local-gamma readiness 通过 + alpha/beta 设备矩阵通过 |
+| 3. 集成验证收口 | `09`（nightly_full） | G5b | local-gamma full semantic smoke + Patrol UI + 全设备矩阵通过 |
+| 4. 灰度到 prod | `config-gray-rollout` | G5c | prod 灰度完成（`gray-initial` 承接真实远端集成与 curated 媒体路由复验），SLO 通过 |
 
 ---
 
@@ -40,7 +40,7 @@
 ```bash
 make gate-local-gamma
 # 或统一入口
-python3 agent_ops/deploy/stackctl.py up --target gamma-local
+python3 agent_ops/deploy/stackctl.py up --env gamma
 ```
 
 通过判据：
@@ -58,13 +58,13 @@ python3 agent_ops/deploy/stackctl.py up --target gamma-local
 - 端侧 `alpha` / `beta` / `gamma` 可在**不同模拟器**并行运行多个实例。
 - 每次启动必须显式绑定唯一 `device-id`，避免交互式 `flutter run` 争用全局 Flutter startup lock。
 - `beta` 服务端只允许一套本地集成栈；重新启动 beta 前必须停止旧实例并回收固定端口。
-- `gamma` 服务端只允许一套 ECS gamma 或一套 local-gamma mirror；部署 / mirror 切换必须先清理旧实例再重启。
+- `gamma` 服务端只允许一套 local-gamma mirror（无远端 gamma）；mirror 切换必须先清理旧实例再重启。
 - 本手册中的“多实例”仅指端侧 App 进程，不代表服务端允许多套 beta/gamma 并行。
 
 ### 3.2 部署环境
 
-- **gamma**：gamma API 可访问，`GAMMA_BASE_URL`、`GAMMA_PRODUCT_OPS_BASE_URL`、`GAMMA_TEST_AUTH_TOKEN` 已配置
-- **prod**：K8s 集群就绪（阿里云 ACK / 火山引擎 VKE / 华为云 CCE），`CONFIG_VERSION`、`IMAGE_VERSION` 已确定
+- **gamma（仅本地）**：local-gamma mirror 可访问，`GAMMA_BASE_URL`、`GAMMA_PRODUCT_OPS_BASE_URL`、`GAMMA_TEST_AUTH_TOKEN` 指向本地 mirror endpoint（无远端 gamma）
+- **prod（唯一远端目标）**：K8s 集群就绪（阿里云 ACK / 火山引擎 VKE / 华为云 CCE），`CONFIG_VERSION`、`IMAGE_VERSION` 已确定；backend SSH 托管，gray 与 full 共享同一集群
 - **多云切换**：通过 `CLOUD_PROVIDER=aliyun|volcengine|huaweicloud` 选择 overlay，见 `deploy/cloud-providers/`
 
 ### 3.2.1 Package Purity / Host Allowlist
@@ -91,37 +91,38 @@ python3 agent_ops/deploy/stackctl.py up --target gamma-local
 
 | 字段 | 含义 | 获取方式 |
 |------|------|----------|
-| **Current prod image version** | 当前生产正在使用的镜像版本 | 从 **`state/release/seed-box.state`** 的 **`to_image`** 读取（上次灰度完成后写入）；若无则从集群查：`kubectl get deployment seed-box -n seed-box-prod -o jsonpath='{.spec.template.spec.containers[0].image}'` 取 tag |
-| **Target image version (match pre-release)** | 本次要上的镜像版本，须与预发布一致 | 来自 **main PR required checks 中 `04. Pre-Release Gate` 的 ECS gamma pre** 部署版本：tag 触发用该 tag 或解析值；必要时参考 ECS deploy report / workflow artifact |
+| **Current prod image version** | 当前生产正在使用的镜像版本 | 从 **`state/release/seed-box.state`** 的 **`to_image`** 读取（上次灰度完成后写入）；若无则 SSH 到 prod ECS（`prod-service-svc`）查：`podman inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' quwoquan-service-prod_seed-box_1`（远端为 ssh-hosted + rootless podman compose，已退役 kubectl/`PROD_KUBECONFIG`） |
+| **Target image version (match pre-release)** | 本次要上的镜像版本，须与预发布一致 | 来自 **main PR required checks（`04. Pre-Release Gate`）通过的构建版本**：tag 触发用该 tag 或解析值；必要时参考 service pipeline build report / workflow artifact |
 | **Current prod config version** | 当前生产正在使用的配置版本 | 从 **`state/release/seed-box.state`** 的 **`to_config`** 读取；若无则从 deployment 环境变量 `CONFIG_VERSION` 读取 |
 | **Target config version** | 本次要上的配置版本 | 与 target image 对应，来自 pre-release 的 `CONFIG_VERSION`（同上） |
 
-**约定**：Target 必须与 `04. Pre-Release Gate` 在 ECS gamma pre 验证通过的版本一致。Workflow 支持**留空 Current prod 两栏**时自动从 `state/release/seed-box.state` 读取（见下文）。
+**约定**：Target 必须与 `04. Pre-Release Gate` 通过的构建版本一致。Workflow 支持**留空 Current prod 两栏**时自动从 `state/release/seed-box.state` 读取（见下文）。
 
 ---
 
-## 4. G5a：部署到 ECS gamma pre
+## 4. G5a：本地 left-shift 验证（远端 gamma pre 已退役）
 
-1) PR required checks 或手动 `08` 会先进入 ECS gamma hosted pre core：
+旧的「部署到 ECS gamma pre」阶段已随远端 gamma 退役而移除。提交前的端云预验证统一在本地 local-gamma mirror 完成（见 3.1.1），真实远端发布与集成复验下沉到 prod `gray-initial`（见 §6）。
+
+1) 提交前左移在本机运行 local-gamma mirror：
 
 ```bash
-gh workflow run "08. Deploy Gamma ECS"
+make gate-local-gamma
 # 或统一入口
-python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --stage pre --image-version <new> --previous-image-version <old>
+python3 agent_ops/deploy/stackctl.py up --env gamma
 ```
 
-2) hosted pre core 执行：
+2) local-gamma mirror 执行：
 
-- 打包 gamma ECS bundle
-- `agent_ops/deploy/gamma/deploy_gamma_ecs.sh` 部署 ECS pre
+- 启动与 prod 同构的本地工作负载图谱
 - assistant gamma smoke
 - gamma API contract
 - chat-avatar API probe
 
-3) 验证 ECS gamma 可达：
+3) 真实远端可达性在 prod `gray-initial` rollout stage 校验（统一入口 `stackctl deploy --target prod-hosted ...`）：
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}" $GAMMA_BASE_URL/healthz
+python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service seed-box --from-image <old> --to-image <new> --from-config <old> --to-config <new> --step 50 --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>
 ```
 
 ---
@@ -168,7 +169,7 @@ scripts/start_app_instance.sh --env gamma --device-id <gamma-device>
 - 三个实例位于不同模拟器；
 - beta/gamma 未派生第二套服务端栈；
 - beta 重新启动时会先 stop 旧栈；
-- gamma 仅附着到同一套 ECS gamma 或同一套 local-gamma mirror。
+- gamma 仅附着到同一套 local-gamma mirror（无远端 gamma）。
 
 ---
 
@@ -176,7 +177,9 @@ scripts/start_app_instance.sh --env gamma --device-id <gamma-device>
 
 ### 6.0 灰度对象：整颗 seed-box（不按服务区分）
 
-在 **integration / prod** 只有一个 K8s Deployment：**seed-box**，内有两个容器（Go seed-box + Python recommendation-service），**一起发布、同一镜像/配置版本**。灰度就是整颗 seed-box 一起滚，不按“服务”拆开。配置与状态统一用 seed-box：`releases/config/seed-box/`、`state/release/seed-box.state`。见 `deploy/shared/process_domain_mapping.yaml` 与 `deploy/service/seed-box/kustomize/base/deployment.yaml`。
+在 **integration / prod** 只有一个发布单元：**seed-box**，内有两个容器（Go seed-box + Python recommendation-service），**一起发布、同一镜像/配置版本**。灰度就是整颗 seed-box 一起滚，不按“服务”拆开。配置与状态统一用 seed-box：`releases/config/seed-box/`、`state/release/seed-box.state`。
+
+> **远端底座（prod-hosted）现状**：成本约束下 prod 与原 gamma 同台 ECS，远端发布为 **ssh-hosted + rootless podman compose**（非独立 ACK 集群），按 `edge/media/service/data` 四平面去 root 隔离（账号 `prod-<plane>-svc`，见 `deploy/shared/prod_plane_access_isolation.yaml`），seed-box 归属 `service` 平面、由 `prod-service-svc` 发布。`deploy/service/seed-box/kustomize/**` 与 `deploy/kustomization/<cloud>-prod` 保留为面向未来 ACK 的脚手架（仅静态门禁校验），当前不参与远端 apply。
 
 ### 6.1 灰度步进
 
@@ -195,7 +198,10 @@ python3 agent_ops/deploy/stackctl.py deploy \
   --service seed-box \
   --from-image <old> --to-image <new> \
   --from-config <old> --to-config <new> \
-  --step 50
+  --step 50 \
+  --error-rate <rate> \
+  --p95-ms <ms> \
+  --redis-error-rate <rate>
 ```
 
 ### 6.2 SLO 卡点（每步后）
@@ -214,6 +220,33 @@ python3 agent_ops/deploy/stackctl.py doctor --target prod-hosted
 ```
 
 阈值见 `deploy/service/config-release/slo_thresholds.yaml`。
+
+### 6.2.1 登录与账号商用卡点
+
+触及登录、会话、账号安全、隐私权利、Web 登录入口时，进入 G5c 前必须额外归档：
+
+- `make verify-app-auth-policy`
+- `make verify-app-login-entry-loop-contract`
+- `flutter test test/cloud/runtime/cloud_http_client_refresh_test.dart test/core/auth/auth_session_controller_test.dart test/app/app_startup_welcome_test.dart`
+- `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/app/shell/web_auth_entry_contract_test.dart`
+- user-service `auth_contract_test.go`、`credential_contract_test.go`、`persona_contract_test.go` 的 gamma 证据
+
+认证账号链路 SLO：
+
+- 欢迎页到首页 P95 <= 2s
+- OTP 发码 P95 <= 1.5s
+- 登录成功到目标页 P95 <= 2s
+- token refresh + retry P95 <= 800ms
+- 设置账号安全首屏 P95 <= 1.5s
+- 凭证绑定/解绑、注销/恢复、拉黑/举报等危险动作 P95 <= 2s
+
+No-Go 条件：
+
+- 账号注销、数据导出、撤回同意、恢复申诉仍只有“待接入”入口或无后端闭环。
+- 法律文本 URL / 版本 / consent record 不可审计。
+- `Logout` / `BindCredential` / `UnbindCredential` / 设置类 owner API 在 metadata 或生成鉴权快照中不是 `required`。
+- 会话过期后无法 refresh once + retry，或 refresh 401 后不能清 session 并进入安全重登。
+- Web 宽屏消息/我的入口与移动端强入口登录契约不一致。
 
 ### 6.3 异常回滚
 
@@ -246,9 +279,9 @@ python3 agent_ops/deploy/stackctl.py repair --target prod-hosted --fix rebuild-p
 ☐ environment_topology / local_env_port manifest 校验通过
 ☐ stackctl package / verify 报告已归档
 ☐ `03` / `04` / `05` required checks 已全部通过
-☐ ECS gamma pre 已部署目标版本
+☐ local-gamma left-shift 已验证目标版本（远端 gamma pre 已退役，远端验证在 prod gray-initial）
 ☐ T3 test-api-contract 通过
-☐ gamma assistant/avatar Android+iOS 旅程通过并带证据产物
+☐ local-gamma assistant/avatar Android+iOS 旅程通过并带证据产物
 ☐ prod package purity / artifact isolation / public-vs-upstream URL 契约通过
 ☐ 灰度：初始灰度（1 pod，全自动）→ Carry-on 100%（审批后执行）
 ☐ 每步 SLO 卡点通过

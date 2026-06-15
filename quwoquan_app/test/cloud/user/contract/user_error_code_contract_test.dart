@@ -24,10 +24,20 @@ void main() {
     });
 
     test('user/**/errors.yaml 聚合错误码均已覆盖', () {
-      expect(UserErrorCode.values.length, 41);
+      expect(UserErrorCode.values.length, 55);
       expect(
         UserErrorCode.contactDiscoveryRateLimited.code,
         'USER.CONTACT.rate_limited',
+      );
+      expect(UserErrorCode.alipayAuthFailed.code, 'USER.AUTH.alipay_auth_failed');
+      expect(UserErrorCode.qqAuthFailed.code, 'USER.AUTH.qq_auth_failed');
+      expect(
+        UserErrorCode.socialProviderCancelled.code,
+        'USER.AUTH.social_provider_cancelled',
+      );
+      expect(
+        UserErrorCode.socialProviderUnavailable.code,
+        'USER.AUTH.social_provider_unavailable',
       );
       expect(UserErrorCode.tooManyContacts.code, 'USER.CONTACT.too_many_contacts');
       expect(UserErrorCode.greetingAlreadyContact.code, 'USER.GREETING.already_contact');

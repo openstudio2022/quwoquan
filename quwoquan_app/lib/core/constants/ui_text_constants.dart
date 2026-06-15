@@ -1,5 +1,6 @@
+part 'ui_text_constants_content_labels.dart';
+
 class UITextConstants {
-  // ==================== 导航 ====================
   static const String home = '首页';
   static const String discovery = '发现';
   static const String homeTabFollowing = '关注';
@@ -10,9 +11,7 @@ class UITextConstants {
   static const String homeTabPhotography = '摄影';
   static const String homeTabTech = '科技';
   static const String homeTabCarFriends = '车之家';
-  // 首页交集顶部流标题
   static const String homeTodayIntersection = '发现交集';
-  // 频道气质文案（下拉加载留白露出；moodCopyKey 来自 ContentUIConfig.homeChannels）
   static const String homeMoodFollowing = '关注对象的新动态';
   static const String homeMoodRecommend = '为你挑选新的交集';
   static const String homeMoodCampus = '看看同校与校园动态';
@@ -67,9 +66,6 @@ class UITextConstants {
     }
   }
 
-  // ==================== 统一对象推荐卡（发现交集对象） ====================
-  // 对象行动按钮动词（actionType 真相源来自 IntersectionReason.actionType，
-  // 此处仅做动词映射，不拼装交集文案——交集句以 displayText 为准）。
   static const String homeObjectActionFollow = '关注';
   static const String homeObjectActionJoin = '加入';
   static const String homeObjectActionAddContact = '添加联系人';
@@ -81,8 +77,6 @@ class UITextConstants {
   static const String followingSubjectEmptySubtitle =
       '去推荐、校园、旅行里关注感兴趣的对象，回来这里查看它们的新动态。';
 
-  /// 对象行动按钮文案解析：actionType（IntersectionReason 真相源）→ 动词。
-  /// 无匹配回退「查看」。
   static String homeObjectActionLabel(String actionType) {
     switch (actionType) {
       case 'follow':
@@ -104,7 +98,7 @@ class UITextConstants {
     return '$count$homeObjectSharedCountSuffix';
   }
 
-  static const String globalXiaoquSearchHint = '搜内容、圈子、聊天';
+  static const String globalXiaoquSearchHint = '搜内容、圈子、讨论';
   static const String globalXiaoquSearchAsk = '找小趣';
 
   // ==================== PC Web 宽屏壳 ====================
@@ -120,13 +114,13 @@ class UITextConstants {
   static const String webPcCreateTabDrafts = '草稿';
   static const String webPcMessagesTabMessages = '消息';
   static const String webPcMessagesTabContacts = '联系人';
-  static const String webPcMessagesTabGroups = '群聊';
+  static const String webPcMessagesTabGroups = '讨论';
   static const String webPcProfileContextTitle = '我的主页';
   static const String webPcSearchHintHome = '搜索兴趣、圈子、作品、用户';
   static const String webPcSearchHintFeatured = '搜索精品作品、视频、图文';
   static const String webPcSearchHintCreate = '搜索素材、草稿、发布模板';
-  static const String webPcSearchHintMessages = '搜索联系人、群聊、消息';
-  static const String webPcSearchHintProfile = '搜索我的内容、收藏、互动';
+  static const String webPcSearchHintMessages = '搜索联系人、讨论、消息';
+  static const String webPcSearchHintProfile = '搜索我的内容、足迹、互动';
   static const String webPcWelcomeLogin = '登录';
   static const String webPcWelcomePublish = '发布作品';
   static const String webPcWelcomeHeadline = '以兴趣为半径，画出我们的交集。';
@@ -139,12 +133,12 @@ class UITextConstants {
   static const String webPcWelcomeDownloadPanelBody =
       'iOS、Android 与鸿蒙入口都在安装页中。';
   static const String webPcMessagesRailTitle = '消息中心';
-  static const String webPcMessagesRailBody = '在这里查看会话、联系人与群聊，点击任意会话进入对话详情。';
+  static const String webPcMessagesRailBody = '在这里查看会话、联系人与讨论，点击任意会话进入对话详情。';
   static const String webPcProfileRailTitle = '我的主页';
   static const String webPcProfileRailBody =
       '在 Web 端浏览个人主页、作品与互动数据，保持与移动端一致的展示。';
   static const String webPcHomeRailTitle = homeTodayIntersection;
-  static const String webPcHomeRailBody = '关注同校、旅行、摄影与科技等兴趣频道，新的交集会在这里持续浮现。';
+  static const String webPcHomeRailBody = '关注同校、旅行、摄影与科技等兴趣讨论，新的交集会在这里持续浮现。';
   static const String webPcHomeFeedTitle = '首页推荐';
   static const String webPcFeaturedRailTitle = '精选发现';
   static const String webPcFeaturedRailBody =
@@ -152,7 +146,7 @@ class UITextConstants {
   static const String webPcFeaturedFeedTitle = '精品内容';
   static const String webPcCreateRailTitle = '创作与社交';
   static const String webPcCreateRailBody =
-      '左侧可发布内容，也可以发起群聊、添加联系人或创建圈子，全部复用移动端能力。';
+      '左侧可发布内容，也可以发起讨论、添加联系人或创建圈子，全部复用移动端能力。';
   static const String webPcCreateWorkspaceTitle = '添加';
   static const String webPcCreateWorkspaceSubtitle =
       '选择一种方式开始：发布内容，或建立社交关系，Web 端复用现有发布与社交链路。';
@@ -166,8 +160,8 @@ class UITextConstants {
   static const String webPcCreateTextSubtitle = '快速记录想法，也可以继续打磨成长文。';
   static const String webPcCreateDraftsTitle = '继续草稿';
   static const String webPcCreateDraftsSubtitle = '打开移动端同源草稿入口，继续未完成内容。';
-  static const String webPcCreateGroupChatTitle = '发起群聊';
-  static const String webPcCreateGroupChatSubtitle = '拉联系人进群，开始多人会话。';
+  static const String webPcCreateGroupChatTitle = '发起讨论';
+  static const String webPcCreateGroupChatSubtitle = '邀请联系人加入讨论，开始多人会话。';
   static const String webPcCreateAddContactTitle = '添加联系人';
   static const String webPcCreateAddContactSubtitle = '通过账号或二维码添加联系人。';
   static const String webPcCreateCircleTitle = '创建圈子';
@@ -233,10 +227,16 @@ class UITextConstants {
   static const String creationFilterAll = '全部';
   static const String creationFilterMoment = '点滴';
   static const String creationFilterWork = '作品';
-  static const String workFormatFilterAll = '全部';
+  static const String workFormatFilterAll = '全部作品';
   static const String workFormatFilterImage = '图片';
   static const String workFormatFilterVideo = '视频';
-  static const String workFormatFilterNote = '文章';
+  static const String workFormatFilterArticle = '文章';
+  static const String articlePaperThemeSystem = '系统适配';
+  static const String articlePaperThemeDarkPaper = '深色纸';
+  static const String articlePaperThemeCoolGray = '冷灰纸';
+  static const String articlePaperThemeWarmBlack = '暖黑纸';
+  static const String articlePaperThemeInkGreen = '墨绿纸';
+  static const String articlePaperThemeDeepBrown = '深棕纸';
 
   /// 发现页 V1：帮读/美图/视频
   static const String discoveryTabHelperRead = '帮读';
@@ -304,19 +304,75 @@ class UITextConstants {
   static const String bottomNavGuestProfile = '未登录';
   static const String loginOneTap = '一键登录';
   static const String loginOneTapPrimary = '本机号码一键登录';
+  static const String loginSubmitting = '正在登录...';
+  static const String loginOtherMethodFallback = '稍后接入其他方式';
+  static const String loginCarrierUnsupported = '当前环境暂不支持本机号码一键登录';
+  static const String loginCarrierUnavailable = '本机号码一键登录暂不可用';
+  static const String loginMethodComingSoonToast = '该登录方式即将开放';
+  static const String loginHelpComingSoon = '登录帮助即将开放';
+  static const String loginPhoneOtpComingSoon = '手机号验证码登录将在下一版高保接入';
+  static const String loginWechatComingSoon = '微信登录将在单独高保后接入';
+  static const String loginQqComingSoon = 'QQ 登录将在单独高保后接入';
+  static const String loginAlipayComingSoon = '支付宝登录将在单独高保后接入';
+  static const String loginDefaultTitle = '登录后继续同步你的兴趣与交集';
+  static const String loginDefaultSubtitle = '随时查看互动、消息和个性化推荐';
+  static const String loginReturningHeroTitle = '登录后继续同步你的兴趣与交集';
+  static const String loginReturningHeroSubtitle = '随时查看互动、消息和个性化推荐';
+  static const String loginCarrierHeroTitle = '登录后继续同步你的兴趣与交集';
+  static const String loginCarrierHeroSubtitle = '随时查看互动、消息和个性化推荐';
+  static const String loginDismissSemanticLabel = '关闭登录页';
+  static const String loginHelpSemanticLabel = '帮助';
+  static const String loginBrandName = '趣我圈';
+  static const String loginBrandIconSemanticLabel = '趣我圈应用图标';
+  static const String loginMethodPhoneSemanticLabel = '手机号登录';
+  static const String loginMethodWechatSemanticLabel = '微信登录，即将开放';
+  static const String loginMethodQqSemanticLabel = 'QQ 登录，即将开放';
+  static const String loginMethodAlipaySemanticLabel = '支付宝登录，即将开放';
+  static const String loginReturningDefaultName = '欢迎回来';
+  static const String loginReturningDefaultAccount = '上次使用的账号';
+
+  /// 快速登录凭证过期/不可用时，returning 态主按钮与引导文案（中性，不报错）。
+  static const String loginReturningSmsPrimary = '用短信验证码登录';
+  static const String loginSessionExpiredHint = '登录信息已过期，请用验证码重新登录';
+  static const String loginReturningSmsSubtitle = '为安全起见，请用短信验证码登录';
+  static const String loginQuickLoginUnavailableHint = '为安全起见，请用短信验证码登录';
+  static const String loginCarrierDefaultPhone = '本机号码';
+  static const String loginCarrierCreateHint = '将创建趣我圈账号，登录后可完善头像和昵称';
+  static const String loginResolvingHint = '正在确认可用登录方式';
+  static const String loginDefaultAvatarGlyph = '趣';
+  static const String loginMethodPhone = '其他手机号';
   static const String loginPhoneNumberPlaceholder = '请输入手机号';
   static const String loginOtpPlaceholder = '请输入验证码';
   static const String loginSendOtp = '获取验证码';
+  static const String loginSendOtpSubmitting = '发送中...';
   static const String loginPhoneSubmit = '手机号登录';
+  static const String loginPhoneChange = '修改手机号';
+  static const String loginPhoneInvalid = '请输入正确的手机号';
+  static const String loginOtpSentTo = '验证码已发送至 %s';
+  static const String loginOtpResend = '重新获取';
+  static const String loginOtpResendCountdown = '重新获取(%ds)';
+  static const String loginOtpMismatch = '验证码错误，请重新输入';
+  static const String loginOtpExpired = '验证码已过期，请重新获取';
+  static const String loginOtpRateLimited = '发送过于频繁，请 %d 秒后再试';
+  static const String loginOtpSendFailed = '验证码发送失败，请重试或换其它方式';
+  static const String loginPhoneLoginLocked = '多次失败已锁定，请稍后再试或更换其它方式登录';
+  static const String loginAccountSuspended = '账号已被限制登录，请按页面提示处理或更换其它方式登录';
+  static const String loginAccountDeleted = '账号已注销或进入删除流程，无法直接登录，可更换手机号';
+  static const String loginSwitchPhone = '换个手机号登录';
+  static const String loginSuccess = '登录成功';
+  static const String loginRedirecting = '正在为你跳转...';
   static const String loginLater = '稍后登录';
-  static const String loginLaterHint = '稍后也可以在「我的」页面登录，同步作品、收藏和消息。';
+  static const String loginLaterHint = '稍后也可以在「我的」页面登录，同步作品、足迹和消息。';
   static const String loginContinueAsGuest = loginLater;
   static const String loginTitleFirstRun = '登录后，趣我圈更懂你的热爱';
   static const String loginTitleReturn = '欢迎回来，登录后继续同步';
   static const String loginTitleActionRequired = '登录后继续使用';
-  static const String loginSubtitleFirstRun = '作品、收藏、赞过、消息与分身资料会跟随账号保存。';
-  static const String loginSubtitleReturn = '你可以直接浏览，登录后继续同步点赞、收藏、关注和创作记录。';
+  static const String loginTitleManualLoggedOut = '重新登录趣我圈';
+  static const String loginSubtitleFirstRun = '作品、足迹、赞过、消息与分身资料会跟随账号保存。';
+  static const String loginSubtitleReturn = '你可以直接浏览，登录后继续同步点赞、关注和创作记录。';
   static const String loginSubtitleActionRequired = '该操作需要账号身份，用于保存你的记录和权限。';
+  static const String loginSubtitleManualLoggedOut = '你已退出当前账号，可重新登录或稍后继续浏览。';
+  static const String loginSubtitleSessionExpired = '为了保护账号安全，请重新登录后继续刚才的操作。';
   static const String loginRememberedMethodTitle = '继续上次登录方式';
   static const String loginRememberedMethodPhoneOtp = '上次使用手机号验证码登录';
   static const String loginRememberedMethodOneTap = '上次使用本机号码一键登录';
@@ -331,12 +387,15 @@ class UITextConstants {
   static const String loginAgreementRequired = '请先阅读并同意用户协议和隐私政策';
   static const String loginOtherMethods = '其他登录方式';
   static const String loginMethodWechat = '微信';
+  static const String loginMethodWechatFull = '微信登录';
   static const String loginMethodApple = 'Apple';
   static const String loginMethodPasskey = 'Passkey';
   static const String loginMethodCredentialManager = '系统凭据';
   static const String loginMethodWeibo = '微博';
   static const String loginMethodQq = 'QQ';
+  static const String loginMethodQqFull = 'QQ登录';
   static const String loginMethodAlipay = '支付宝';
+  static const String loginMethodPhoneFull = '其他手机号登录';
   static const String loginMethodComingSoon = '即将支持';
   static const String loginMethodUnavailable = '当前设备暂不可用，请改用手机号登录';
   static const String loginPhoneRequired = '请输入手机号';
@@ -356,7 +415,6 @@ class UITextConstants {
   static const String authGateTitleSendMessage = '登录后发送消息';
   static const String authGateTitleComment = '登录后继续评论';
   static const String authGateTitleLike = '登录后继续点赞';
-  static const String authGateTitleFavorite = '登录后同步收藏';
   static const String authGateTitleFollow = '登录后继续关注';
   static const String authGateTitleGreet = '登录后发送打招呼';
   static const String authGateTitleFollowingFeed = '登录后查看关注';
@@ -364,12 +422,35 @@ class UITextConstants {
   static const String authGateTitlePersona = '登录后管理分身';
   static const String authGateTitleSettingsAccount = '登录后管理账号';
   static const String authGateTitleMediaUpload = '登录后上传素材';
+  static const String authGateTitleDeletePost = '登录后删除内容';
   static const String authGateTitleReport = '登录后提交举报';
   static const String authGateTitleJoinCircle = '登录后加入圈子';
   static const String authGateTitleAddContact = '登录后添加联系人';
-  static const String authGateTitleStartGroupChat = '登录后发起群聊';
+  static const String authGateTitleStartGroupChat = '登录后发起讨论';
   static const String authGateTitleCreateCircle = '登录后创建圈子';
   static const String authGateTitleGeneric = '登录后继续使用';
+
+  // 登录页副标题：表达「登录后获得什么 / 如何继续」，不得与主标题重复。
+  static const String authGateSubtitleProfile = '同步你的作品、足迹、互动和分身资料。';
+  static const String authGateSubtitleCreate = '保存草稿、发布记录和后续互动通知。';
+  static const String authGateSubtitleOpenChat = '读取你的会话列表，并接收新的私信提醒。';
+  static const String authGateSubtitleSendMessage = '消息将以你的账号身份发送，对方才能识别你。';
+  static const String authGateSubtitleComment = '评论会沉淀到内容页，并跟随账号同步。';
+  static const String authGateSubtitleLike = '登录后可跨设备同步点赞记录。';
+  static const String authGateSubtitleFollow = '关注关系会写入账号，后续可在关注流查看。';
+  static const String authGateSubtitleGreet = '用账号身份发起打招呼，对方回复后进入私信。';
+  static const String authGateSubtitleFollowingFeed = '汇总你关注的人、圈子和地点的最新动态。';
+  static const String authGateSubtitleShare = '同步分享记录，方便后续回看和归因。';
+  static const String authGateSubtitlePersona = '管理分身资料，并保持内容身份一致。';
+  static const String authGateSubtitleSettingsAccount = '查看登录方式、协议状态和账号安全设置。';
+  static const String authGateSubtitleMediaUpload = '上传素材会绑定账号，便于继续编辑和发布。';
+  static const String authGateSubtitleDeletePost = '确认账号身份后，才能删除自己的内容。';
+  static const String authGateSubtitleReport = '举报将以账号身份提交，便于平台反馈处理进展。';
+  static const String authGateSubtitleJoinCircle = '加入后圈子动态和成员关系会同步到账号。';
+  static const String authGateSubtitleAddContact = '添加后可在联系人和私信中继续沟通。';
+  static const String authGateSubtitleStartGroupChat = '创建讨论会同步成员关系和后续消息。';
+  static const String authGateSubtitleCreateCircle = '圈子资料、成员管理和后续运营会绑定账号。';
+  static const String authGateSubtitleGeneric = '登录后保存记录，并继续刚才的操作。';
 
   // 轻提示：触发受限动作时在原页面给出的短提示（先提示，再进入登录页）。
   static const String authGatePromptProfile = '登录后查看我的主页';
@@ -378,7 +459,6 @@ class UITextConstants {
   static const String authGatePromptSendMessage = '登录后即可发送消息';
   static const String authGatePromptComment = '登录后即可评论，评论会按账号发布并沉淀到对象页';
   static const String authGatePromptLike = '登录后即可点赞';
-  static const String authGatePromptFavorite = '登录后即可收藏';
   static const String authGatePromptFollow = '登录后即可关注';
   static const String authGatePromptGreet = '登录后即可发起打招呼';
   static const String authGatePromptFollowingFeed = '登录后查看你关注的人、圈子和地点动态';
@@ -386,10 +466,11 @@ class UITextConstants {
   static const String authGatePromptPersona = '登录后即可管理分身';
   static const String authGatePromptSettingsAccount = '登录后即可管理账号';
   static const String authGatePromptMediaUpload = '登录后即可上传素材';
+  static const String authGatePromptDeletePost = '登录后即可删除自己的内容';
   static const String authGatePromptReport = '登录后即可提交举报';
   static const String authGatePromptJoinCircle = '登录后即可加入圈子';
   static const String authGatePromptAddContact = '登录后即可添加联系人';
-  static const String authGatePromptStartGroupChat = '登录后即可发起群聊';
+  static const String authGatePromptStartGroupChat = '登录后即可发起讨论';
   static const String authGatePromptCreateCircle = '登录后即可创建圈子';
   static const String authGatePromptGeneric = '登录后即可继续';
 
@@ -401,18 +482,36 @@ class UITextConstants {
   static const String authPermissionDenied = '当前账号暂无权限';
   static const String legalLoadFailed = '页面加载失败，请重试';
   static const String profileLoginCardTitle = '登录后，可同步使用记录';
-  static const String profileLoginCardSubtitle = '作品、收藏、赞过、消息与分身资料会跟随账号保存。';
+  static const String profileLoginCardSubtitle = '作品、足迹、赞过、消息与分身资料会跟随账号保存。';
   static const String profileLoginNow = '立即登录';
   static const String profileLoggedOutDisplayName = '未登录用户';
-  static const String profileLoggedOutTimelineHint = '登录后，这里会展示你的作品、收藏与互动记录。';
-  static const String favorite = '收藏';
+  static const String profileLoggedOutTimelineHint = '登录后，这里会展示你的作品、足迹与互动记录。';
+  static const String myFootprint = '足迹', myFootprintTitle = '我的足迹';
+  static const String myFootprintEmpty = '还没有足迹，去看看推荐内容吧';
+  static const String myFootprintPrivacyHint = '足迹仅自己可见，自动记录你看过、赞过、评论过、转发过的内容';
+  static const String myFootprintLoadMore = '加载更多';
+  static String footprintTypeLabel(String type) => _footprintTypeLabel(type);
+
   static const String profileLikedTab = '赞过';
   static const String logout = '退出登录';
   static const String logoutConfirmTitle = '确定退出登录吗';
   static const String logoutConfirmMessage =
-      '退出登录后，将不能发布内容和评论，无法同步点赞、关注、收藏记录等。你可以选择切换其他账号使用。';
+      '退出登录后，将不能发布内容和评论，无法同步点赞、关注、足迹记录等。你可以选择切换其他账号使用。';
   static const String logoutThinkAgain = '我再想想';
   static const String logoutConfirm = '确定退出';
+
+  /// 退出登录二级选择：默认软退出（保留快速登录），可选彻底清除。
+  static const String logoutSheetTitle = '退出登录';
+  static const String logoutSheetMessage = '退出后本机会保留登录信息，有效期内可免验证码快速登录。';
+  static const String logoutSoftAction = '退出登录';
+  static const String logoutHardAction = '退出并清除本机登录信息';
+  static const String logoutCancel = '取消';
+
+  /// 软退出后提示：有效期内可免验证码快速登录。{days} 为有效期天数。
+  static const String loginSoftLogoutToast = '已退出登录，{days} 天内可免验证码快速登录';
+
+  /// 彻底退出后提示：已清除本机登录信息。
+  static const String loginHardLogoutToast = '已清除本机登录信息，下次登录需重新验证';
   static const String switchAccount = '切换账号';
   static const String like = '点赞';
   static const String share = '分享';
@@ -423,8 +522,6 @@ class UITextConstants {
   // ==================== 欢迎页 ====================
   static const String welcomeTitle = '趣我圈';
 
-  /// 欢迎页主 slogan：品牌视角（第三人称），与全局基线 slogan 一致。
-  /// 「绽放热爱」承接花瓣视觉，强化轻快、明亮的品牌记忆。
   static const String welcomeMainSlogan = '遇见同趣，绽放热爱';
   static const String welcomeButtonLabel = '开启发现之旅';
   static const String welcomeLoginPromptTitle = '登录后，趣我圈更懂你的热爱';
@@ -432,12 +529,8 @@ class UITextConstants {
   static String welcomeLoginSkipWithCountdown(int seconds) =>
       '先不登录 · $seconds秒后进入';
 
-  /// 欢迎页底部「小趣寄语」署名 chip 中的发言人名（与 `✨` 一起出现）。
-  /// 与中央 slogan 形成「品牌口吻 → 小趣口吻」的双层结构。
   static const String assistantWhisperSignature = '小趣';
 
-  /// 欢迎页底部「小趣寄语」第一人称承诺一句话。
-  /// 由小趣以「我」直接对用户说话，呈现 AI Native 的主动感。
   static const String assistantWhisperLine = '专注你的热爱，剩下的交给我';
 
   // ==================== 通用 ====================
@@ -503,37 +596,14 @@ class UITextConstants {
   static const String profileReportReasonHarassment = '骚扰辱骂';
   static const String profileReportReasonPornography = '色情低俗';
   static const String profileReportReasonOther = '其他';
-  // Creator Impact（双向可解释性·生产端 v0：仅用真实聚合总数，无估算）
-  static const String creatorImpactTitle = '你的影响力';
-  static const String creatorImpactSubtitle = '你的内容真实促成的连接';
-  static const String creatorImpactEmpty = '发布内容后，这里会显示你帮到了谁';
-  static const String creatorImpactRelationshipLabel = '关注你的人';
-  static const String creatorImpactAppreciationLabel = '收获的赞同';
-  static const String creatorImpactContributionLabel = '贡献的内容';
-  static const String creatorImpactCommunityLabel = '参与的圈子';
-  static const String creatorImpactCommunityHelpLabel = '促成进圈';
-  static const String creatorImpactDecisionLabel = '帮助决策';
-  static const String creatorImpactKnowledgeLabel = '知识帮助';
-  static const String creatorImpactSpreadLabel = '传播回流';
-  static const String creatorImpactAudienceLabel = '触达同好';
-  static String creatorImpactRelationshipNarrative(int count) =>
-      '$count 人因为你的内容关注了你';
-  static String creatorImpactAppreciationNarrative(int count) =>
-      '你的内容累计获得 $count 次赞同';
-  static String creatorImpactContributionNarrative(int count) =>
-      '你已贡献 $count 篇内容';
-  static String creatorImpactCommunityNarrative(int count) => '你活跃在 $count 个圈子';
-  static String creatorImpactCommunityHelpNarrative(int count) =>
-      '你的内容促成 $count 次进圈或圈内互动';
-  static String creatorImpactDecisionNarrative(int count) =>
-      '你的内容帮助 $count 次查看、收藏或深度消费';
-  static String creatorImpactKnowledgeNarrative(int count) =>
-      '你的内容被用于 $count 次知识回应';
-  static String creatorImpactSpreadNarrative(int count) =>
-      '你的内容带来 $count 次分享或回流';
-  static String creatorImpactAudienceNarrative(int count) =>
-      '你的内容触达 $count 次同维度兴趣人群';
-  static const String shareComingSoon = '分享功能即将上线';
+  // 影响力摘要模块（他人 / 我的双视角）
+  static const String profileImpactTitleMine = '我的影响力';
+  static const String profileImpactTitleOther = 'TA的影响力';
+  static const String profileImpactSubtitleMine = '我的内容真实帮到了谁';
+  static const String profileImpactSubtitleOther = 'TA的内容真实帮到了谁';
+  static const String profileImpactEmptyMine = '发布内容后，这里会显示我帮到了谁';
+  static const String profileShareHomepage = '分享主页';
+  static const String shareComingSoon = '主页分享暂不可用';
   static const String notInterested = '不感兴趣';
   static const String shareTo = '分享到';
   static const String shareActionSavePoster = '保存海报';
@@ -553,8 +623,6 @@ class UITextConstants {
   static String shareSeedMomentTitle(String displayName) => '$displayName 的点滴';
   static const String savePhoto = '保存图片';
   static const String saveVideo = '保存视频';
-  static const String savePost = '收藏';
-  static const String savedLabel = '已收藏';
   static const String unknown = '未知';
   static const String commentSent = '评论已发送';
   static const String replySent = '回复已发送';
@@ -588,19 +656,77 @@ class UITextConstants {
   /// 评论平铺区：回复某人占位。
   static const String commentReplyToTemplate = '回复 %s';
 
-  // 对象页统一交集卡标题（你和对象的交集，由各壳按对象类型传入）
   static const String profileMutualIntersectionTitle = '你们的交集';
-  static const String homepageIntersectionTitle = '你和这里的交集';
-  static const String circleIntersectionTitle = '你认识的人在这';
+  static const String homepageIntersectionTitle = objectConnectionWithYou;
+  static const String circleIntersectionTitle = objectConnectionWithYou;
   static const String intersectionMoreLabel = '全部交集';
-  // 我的主页「我的交集」聚合入口
-  static const String myIntersectionsTitle = '我的交集';
-  static const String myIntersectionsSubtitle = '谁和你产生了新的交集';
+  // Work Browser 作者区交集入口与详情解释层（V1.0：N 个交集 › → 弹出推荐解释）
+  static String intersectionEntrySummary(int count) => '$count 个交集';
+  static const String intersectionDetailTitle = '为什么推荐给你';
+  // Work Browser 视频集进度（时间轴下方、标题上方）
+  static String videoSeriesProgress(int current, int total) =>
+      '视频集 · $current/$total';
+  // Work Browser 文章页码（正文下方、作者工具栏上方）
+  static String workArticlePageProgress(int current, int total) =>
+      '$current / $total';
+  static const String myIntersectionsTitle = '我的新交集';
+  static const String myIntersectionsSubtitle = '最近谁和你有了新的共同点';
   static const String intersectionExpandMore = '展开更多';
   static const String intersectionCollapse = '收起';
-  static const String myIntersectionsEmpty = '还没有新的交集，去发现更多有交集的人和圈子';
+  static const String objectIntersectionCtaFollowAuthor = '关注作者';
+  static const String objectIntersectionCtaJoinCircle = '加入圈子';
+  static const String objectIntersectionCtaAddContact = '加为联系人';
+  static const String objectIntersectionCtaAskAssistant = '问问小趣';
+  static const String objectIntersectionCtaView = '查看这个交集';
+  static const String circleImpactTitle = '圈子影响力';
+  static const String objectConnectionWithYou = '与你的交集';
+  static const String impactEnumerableHintMine = '可查看与你内容相关的连接来源';
+  static const String impactEnumerableHintOther = '可查看与TA内容相关的连接来源';
+  static const String impactEnumerableHintCircle = '可查看这个影响的连接来源';
+  static const String objectIntersectionsTitle = '全部交集';
+  static const String objectIntersectionsEmpty = '暂时还没有可展示的交集';
+  static const String objectIntersectionsUnavailableTitle = '交集暂不可用';
+  static const String objectHomepageDefaultTitle = '这个主页';
+  static const String homepageMaintainAction = '维护主页';
+  static const String homepageClaimAction = '认领主页';
+  static const String homepageClaimPendingAction = '认领审核中';
+  static const String homepageStatusReportAction = '状态上报';
+  static const String homepageAttachPublishEnabled = '关联到本次发布';
+  static const String homepageAttachPublishDisabled = '这个主页待审核，暂不可操作';
+  static const String homepageContentSectionTitle = '相关内容';
+  static const String homepageDiscussionSectionTitle = '大家在聊';
+  static String homepageDiscussionSectionTitleFor(String objectName) =>
+      '大家在聊$objectName';
+  static const String homepageInterestCircleSectionTitle = '兴趣圈';
+  static const String homepageContentEmptyTitle = '还没有相关内容';
+  static const String homepageContentEmptyDescription = '后续围绕这个主页发布的内容会展示在这里。';
+  static const String homepageDiscussionEmptyTitle = '还没有讨论';
+  static const String homepageDiscussionEmptyDescription = '大家围绕这个主页的讨论会展示在这里。';
+  static const String homepageInterestCircleEmptyTitle = '还没有兴趣圈';
+  static const String homepageInterestCircleEmptyDescription =
+      '围绕这个主页形成的圈子会展示在这里。';
+  static const String homepageRelatedGroupSubtitle = '位成员也在这里';
+  static const String homepageContentTypeArticle = '文章';
+  static const String homepageContentTypeVideo = '视频';
+  static const String homepageContentTypeImage = '图片';
+  static const String homepageContentTypeDefault = '内容';
+  static const String homepageTypeDefault = '地点和事物';
+  static const String circleInfoUnavailableTitle = '圈子信息暂不可用';
+  static const String publishAssistantSuggestTitle = '小趣推荐';
+  static const String publishAssistantSuggestAction = '推荐标签和关联主页';
+  static const String publishAssistantSuggestSubtitle =
+      '基于草稿内容推荐标签、关联主页和摘要，结果可继续调整';
+  static const String publishAssistantSuggestUnavailable = '创作助手暂未启用';
+  static const String publishAssistantSuggestNoResult = '暂时没有新的推荐';
+  static const String publishAssistantSuggestFailed = '小趣推荐失败，请稍后再试';
+  static const String objectTabContent = '内容';
+  static const String objectTabDiscussion = '讨论';
+  static const String objectTabInterestCircles = '兴趣圈';
+  static const String objectTabMembers = '成员';
+  static const String objectIntroMoreLabel = '查看更多';
+  static String objectIntroTitle(String objectName) => '认识$objectName';
+  static const String myIntersectionsEmpty = '还没有新的交集，去发现更多同频的人和圈子';
   static const String intersectionNewBadgeSuffix = '条新增';
-  // 推荐（概率）交集标签：不伪装事实
   static const String intersectionAffinityLabel = '推荐';
   // 交集维度短标签（端展示用，真相源仍为服务端 dimension 枚举）
   static const Map<String, String> intersectionDimensionShortLabels =
@@ -626,6 +752,19 @@ class UITextConstants {
 
   /// 首页/频道交集推荐「换一批」入口（候选窗内轮转，强调保鲜）。
   static const String intersectionShuffle = '换一批';
+
+  /// 交集对象类型统一品牌蓝角标文字（闭集 person|circle|school|place|enterprise）。
+  static const Map<String, String> intersectionObjectKindBadgeLabels =
+      <String, String>{
+        'person': '人',
+        'circle': '圈',
+        'school': '校',
+        'place': '地',
+        'enterprise': '企',
+      };
+
+  static String intersectionObjectKindBadgeLabel(String objectKindName) =>
+      intersectionObjectKindBadgeLabels[objectKindName] ?? '';
   static const String intersectionRecommendSpotlightTitle = '与你有关的新对象';
   static const String intersectionCampusSpotlightTitle = '校园里与你有关的人和圈子';
   static const String intersectionTravelSpotlightTitle = '和你有相同足迹的人与地点';
@@ -633,7 +772,6 @@ class UITextConstants {
   // ==================== 我的主页 ====================
   static const String editProfile = '编辑资料';
   static const String settings = '设置';
-  static const String bookmarks = '收藏';
 
   // ==================== 圈子 ====================
   static const String createCircle = '创建圈子';
@@ -647,7 +785,7 @@ class UITextConstants {
   static const String joinedCircle = '已加入圈子';
   static const String joinPending = '加入审批中';
   static const String circleMembers = '成员';
-  static const String circleGroups = '群聊';
+  static const String circleGroups = '讨论';
   static const String circleFans = '粉丝';
   static const String circleLikes = '获赞';
   static const String circlePosts = '创作';
@@ -659,7 +797,7 @@ class UITextConstants {
 
   /// 成员列表本地过滤无结果。
   static const String noMatchingMembers = '暂无匹配成员';
-  static const String searchGroupsHint = '搜索群聊...';
+  static const String searchGroupsHint = '搜索讨论...';
   static const String searchFansHint = '搜索粉丝...';
   static const String searchLikesHint = '搜索获赞记录...';
   static const String noData = '暂无数据';
@@ -679,22 +817,22 @@ class UITextConstants {
   static const String circleSortHot = '最热';
   static const String circleSortFeatured = '精选';
   static const String circleNoCreations = '暂无创作内容';
-  static const String circleNoChatEnabled = '群聊尚未开启';
+  static const String circleNoChatEnabled = '讨论尚未开启';
   static const String circleUploadFile = '上传文件';
   static const String circleComments = '评论';
   static const String circleOfficialBadge = '官方认证 | 优质社区';
   static const String circlesRecommendedTitle = '推荐圈子';
   static const String circlesDirectoryTitle = '圈子广场';
-  static const String circlesSearchHint = '搜索圈子、实体与内容';
-  static const String circlesEntitySectionTitle = '实体主页';
-  static const String circlesEntitySectionHint = '补实体主页，圈子和内容会自动聚合';
+  static const String circlesSearchHint = '搜索圈子、对象和内容';
+  static const String circlesEntitySectionTitle = '地点和事物';
+  static const String circlesEntitySectionHint = '从景点到车型，看看大家在聊什么';
   static const String circlesFollowingEmpty = '关注暂无内容';
   static const String discoveryEndHint = '已经到底啦';
-  static const String circleManageChannels = '频道管理';
-  static const String circleMyChannels = '我的频道';
-  static const String circleAllChannels = '全部频道';
+  static const String circleManageChannels = '讨论管理';
+  static const String circleMyChannels = '我的讨论';
+  static const String circleAllChannels = '全部讨论';
   static const String circleDragToSort = '拖动排序';
-  static const String circleTapToAdd = '点击添加频道';
+  static const String circleTapToAdd = '点击添加讨论';
   static const String circleInfoSectionTitle = '基本信息';
   static const String circlePermissionSectionTitle = '访问与加入';
   static const String circleSurfaceSectionTitle = '展示与协作';
@@ -765,7 +903,9 @@ class UITextConstants {
   static const String reminders = '提醒';
   static const String secretMessage = '密信';
   static const String friends = '联系人';
-  static const String groupChat = '群聊';
+  static const String groupChat = '讨论';
+  static const String chatPrivateMessages = '私聊';
+  static const String chatNotifications = '通知';
   static const String secretLockedTitle = '密信已锁定';
   static const String secretUnlockButton = '解锁密信';
   static const String secretPasswordHint = '请输入密信密码';
@@ -786,7 +926,7 @@ class UITextConstants {
   static const String commentXiaoquBadge = '小趣回复';
   static const String commentXiaoquSource = '基于当前内容与评论上下文生成，可继续追问或纠错';
   static const String noReminderMessages = '暂无提醒';
-  static const String noReminderHint = '实体更新、圈子摘要和主动提醒会在这里汇总';
+  static const String noReminderHint = '主页动态、圈子摘要和主动提醒会在这里汇总';
   static const String untitledConversation = '未命名对话';
   static const String chatPreviewImage = '[图片]';
   static const String chatPreviewVideo = '[视频]';
@@ -796,15 +936,16 @@ class UITextConstants {
   static const String chatPreviewCard = '[卡片]';
   static const String chatPreviewRecalled = '[消息已撤回]';
   static const String contactsTabAll = '全部';
+  static const String chatPrimaryContacts = '联系';
   static const String contactsTabCircles = '圈子';
 
   /// 联系人一级 Tab 下的二级：互相关注
   static const String contactsTabMutualFollow = '互相关注';
 
-  /// 联系人一级 Tab 下的二级：趣群（原群聊）
-  static const String contactsTabFunGroup = '趣群';
+  /// 联系人一级 Tab 下的二级：讨论（wire filter 仍为 group）
+  static const String contactsTabFunGroup = '讨论';
   static const String contactsTabFriends = '联系人';
-  static const String contactsTabGroups = '群聊';
+  static const String contactsTabGroups = '讨论';
   static const String starredFriends = '星标朋友';
   static const String encryptedMessagePreview = '[加密消息] 查看需要验证身份';
   static const String copiedToClipboard = '已复制';
@@ -868,7 +1009,7 @@ class UITextConstants {
   static const String callConnectFailed = '连接通话失败，请重试';
   static const String callAnswerFailed = '接听失败，请重试';
   static const String callSwitchInviteSourceFailed = '切换邀请来源失败';
-  static const String callSwitchGroupMembersFailed = '切换群聊成员失败';
+  static const String callSwitchGroupMembersFailed = '切换讨论成员失败';
   static const String callTrustUnknownBadge = '可能不认识';
   static const String callOngoing = '通话中';
   static const String callBarTapToReturn = '点击返回';
@@ -914,29 +1055,36 @@ class UITextConstants {
   // 聊天设置页（1:1 图二）
   static const String chatInfoTitle = '聊天信息';
   static const String viewAllMembers = '查看全部成员';
-  static const String groupName = '群聊名称';
+  static const String groupName = '讨论名称';
   static const String qrCode = '二维码';
   static const String groupAnnouncement = '群公告';
+  static const String groupAnnouncementEmpty = '未设置';
+  static const String groupSourcePrefix = '来自：';
+  static const String groupMemberCountSuffix = '成员';
+  static const String groupCapabilityAlbum = '相册';
+  static const String groupCapabilityFile = '文件';
+  static const String groupCapabilityActivity = '活动';
+  static const String groupCapabilityMembers = '成员';
   static const String muteNotifications = '消息免打扰';
   static const String pinChat = '置顶聊天';
   static const String privacyShield = '隐私屏障(禁截屏、禁转发)';
   static const String setChatBackground = '设置当前聊天背景';
   static const String clearChatHistory = '清空聊天记录';
   static const String circleSubmitPost = '向圈子投稿';
-  static const String exitGroupChat = '退出群聊';
-  static const String exitGroupChatConfirmMessage = '退出后将不再接收该群聊消息，确定退出吗？';
-  static const String exitGroupChatSuccess = '已退出群聊';
-  static const String dissolveGroupChat = '解散该群聊';
+  static const String exitGroupChat = '退出讨论';
+  static const String exitGroupChatConfirmMessage = '退出后将不再接收该讨论消息，确定退出吗？';
+  static const String exitGroupChatSuccess = '已退出讨论';
+  static const String dissolveGroupChat = '解散该讨论';
   static const String dissolveGroupChatConfirmMessage =
-      '解散后所有成员将被移出群聊，此操作不可撤销。';
-  static const String groupChatDissolvedToast = '群聊已解散';
-  static const String dissolveGroupChatFailedToast = '解散群聊失败，请稍后重试';
+      '解散后所有成员将被移出讨论，此操作不可撤销。';
+  static const String groupChatDissolvedToast = '讨论已解散';
+  static const String dissolveGroupChatFailedToast = '解散讨论失败，请稍后重试';
   static const String addMember = '添加成员';
   static const String groupManagement = '群管理';
-  static const String groupNameAdminOnly = '群组已设定为只有群主或管理员才能修改群名';
+  static const String groupNameAdminOnly = '讨论已设定为只有群主或管理员才能修改名称';
   static const String qrCodeJoin = '二维码进群';
   static const String joinRequiresApproval = '进群需要群主/群管理员确认';
-  static const String nameEditableByAdminOnly = '仅群主/群管理员可修改群聊名称';
+  static const String nameEditableByAdminOnly = '仅群主/群管理员可修改讨论名称';
   static const String transferOwnership = '群主管理权转让';
   static const String groupAdmins = '群管理员';
   static const String selectNewOwner = '选择新群主';
@@ -944,17 +1092,17 @@ class UITextConstants {
   static const String transferOwnershipConfirmPrefix = '确定选择 ';
   static const String transferOwnershipConfirmSuffix = ' 为新群主，你将自动放弃群主身份。';
   static const String maxAdminsReached = '最多选择 3 位管理员';
-  static const String editGroupName = '修改群聊名称';
-  static const String groupNameHint = '请输入群聊名称';
-  static const String groupNameUpdated = '群聊名称已更新';
-  static const String groupAdminDescription = '管理员可协助群主管理群聊，拥有发布群公告、移除群成员等能力。';
-  static const String groupAdminOnlyOwner = '只有群主具备设置管理员、解散群聊的能力。';
+  static const String editGroupName = '修改讨论名称';
+  static const String groupNameHint = '请输入讨论名称';
+  static const String groupNameUpdated = '讨论名称已更新';
+  static const String groupAdminDescription = '管理员可协助群主管理讨论，拥有发布公告、移除成员等能力。';
+  static const String groupAdminOnlyOwner = '只有群主具备设置管理员、解散讨论的能力。';
   static const String groupAdminMaxCount = '最多可设置3个管理员。';
   static const String admin = '管理员';
   static const String owner = '群主';
 
-  /// 发起群聊页（图一）
-  static const String startGroupChat = '发起群聊';
+  /// 发起讨论页（wire filter/type 仍为 group）
+  static const String startGroupChat = '发起讨论';
   static const String addContact = '添加';
   static const String chatMutualFollowRtcHint = '互相关注后可发起语音和视频通话';
   static const String chatBlockedConversationHint = '当前会话已被关系门禁限制，暂时无法继续发送消息';
@@ -972,14 +1120,14 @@ class UITextConstants {
   static const String globalSearchTitle = '搜索';
   static const String createActionCamera = '从摄像';
   static const String createActionTextShort = '写点字';
-  static const String createActionGroupChatHint = '拉人进群，立即开聊';
+  static const String createActionGroupChatHint = '邀请联系人加入讨论';
   static const String createActionContactHint = '找到新联系，发起对话';
-  static const String createNewGroupChat = '创建新群聊';
-  static const String selectFriendsFromGroupChat = '选择群聊成员';
+  static const String createNewGroupChat = '创建新讨论';
+  static const String selectFriendsFromGroupChat = '选择讨论成员';
   static const String selectFriendsFromCircle = '选择圈子成员';
   static const String relatedMutualFollow = '互相关注';
-  static const String selectGroupChat = '选择群聊';
-  static const String searchGroupChatHint = '搜索群聊';
+  static const String selectGroupChat = '选择讨论';
+  static const String searchGroupChatHint = '搜索讨论';
   static const String selectCircle = '选择圈子';
   static const String searchCircleHint = '搜索圈子';
   static const String selectAll = '全选';
@@ -987,7 +1135,7 @@ class UITextConstants {
   static const String friendsCount = '个朋友';
 
   /// 聊天信息页：超过首屏成员时展开入口
-  static const String moreMembers = '更多群成员';
+  static const String moreMembers = '更多成员';
 
   /// 聊天信息页：收起成员列表
   static const String collapseMembers = '收起来';
@@ -1125,7 +1273,6 @@ class UITextConstants {
       '我在切换更合适的处理路径，优先保证结论稳定。';
   static const String assistantProcessRecoveryReassurance =
       '中途有一部分信息需要重试，我已自动恢复并继续收敛。';
-  static const String assistantBookmarked = '已收藏';
   static const String assistantDevReplayTitle = '助理开发态回放';
   static const String assistantDevReplayOpen = '回放';
   static const String assistantDevReplayRun = '运行记录';
@@ -1184,11 +1331,17 @@ class UITextConstants {
   static const String personaDeleteBlocked = '当前分身暂不可删除';
   static const String personaRetireBlocked = '当前分身暂不可退役';
 
+  /// 内容时间展示（创作时间 / 更新时间）。
+  /// 规则：更新时间不晚于创作时间（或相等）只显示创作时间；更晚才显示更新时间。
+  static const String contentCreatedAtPrefix = '创作于';
+  static const String contentUpdatedAtPrefix = '更新于';
+  static const String contentEditedSuffix = '已编辑';
+
   /// 我的主页统计与子页（关注数用 follow，此处为统计栏标题）
-  static const String profileEditLabel = '资料编辑';
+  static const String profileEditLabel = '编辑资料';
   static const String profilePersonasLabel = '分身管理';
-  static const String profileDirectMessage = '消息';
-  static const String profileTabCreations = '创作';
+  static const String profileDirectMessage = '私信';
+  static const String profileTabCreations = '作品';
   static const String profileTabCircles = '圈子';
   static const String profileTabInteraction = '互动';
   static const String profileTabLifestyle = '生活';
@@ -1202,6 +1355,14 @@ class UITextConstants {
   static const String creationSubVideo = '视频';
   static const String creationSubArticle = '文章';
   static const String creationSubText = '文字';
+  static const String profileCreationEmptyAllMine = '还没有作品内容';
+  static const String profileCreationEmptyAllOther = 'TA还没有作品内容';
+  static const String profileCreationEmptyImageMine = '还没有图片内容';
+  static const String profileCreationEmptyImageOther = 'TA还没有图片内容';
+  static const String profileCreationEmptyVideoMine = '还没有视频内容';
+  static const String profileCreationEmptyVideoOther = 'TA还没有视频内容';
+  static const String profileCreationEmptyTextMine = '还没有文字内容';
+  static const String profileCreationEmptyTextOther = 'TA还没有文字内容';
   static const String interactionSubLikes = '赞';
   static const String interactionSubComments = '评论';
   static const String interactionSubShares = '转发';
@@ -1210,6 +1371,7 @@ class UITextConstants {
   static const String profileSubAccountDeleteTitle = '删除子账号';
   static const String profileSubAccountDeleteConfirmTemplate =
       '确定要删除「%s」吗？此操作不可撤销。';
+  static const String contentDeleteSuccess = '内容已删除';
   static const String profileSubAccountCreateTitle = '创建子账号';
   static const String profileSubAccountNamePlaceholder = '账号名称（如：职业号、匿名号）';
   static const String profileSubAccountOpen = '公开';
@@ -1258,6 +1420,15 @@ class UITextConstants {
   static const String postArticle = '写笔记';
   static const String publish = '发表';
   static const String publishAction = '发布';
+  static const String createActionPostPhotoShort = postPhoto;
+  static const String createActionPostVideoShort = postVideo;
+  static const String createActionWriteLong = '写长文';
+  static const String createActionResumeDraft = '续草稿';
+  static const String createActionAddContactShort = '加联系';
+  static const String createActionCreateGroupShort = '建群聊';
+  static const String createActionCreateCircleShort = '建圈子';
+  static const String createActionPublishGroupTitle = publishAction;
+  static const String createActionSocialGroupTitle = profileTabInteraction;
   static const String createPageTitle = '创作';
 
   /// 沉浸文章顶栏分段：纵向长文编辑态
@@ -1286,7 +1457,7 @@ class UITextConstants {
   static const String attachHomepageSearchHint = '搜索景点、酒店、餐厅、车型';
   static const String attachHomepageSuggest = '找不到？添加一个主页';
   static const String attachHomepageEmpty = '没有找到匹配主页，试试添加一个新主页';
-  static const String attachHomepageUnavailable = '共享主页暂时不可用，请稍后重试';
+  static const String attachHomepageUnavailable = '主页暂时不可用，请稍后重试';
   static const String addHomepageTitle = '添加主页';
   static const String addHomepageIntroTitle = '添加一个缺失主页';
   static const String addHomepageIntroSubtitle =
@@ -1620,80 +1791,8 @@ class UITextConstants {
   static const String shareTemplateMomentTitle = '分享点滴';
   static const String shareTemplateMomentSubtitle = '保留当时的语境与氛围';
   static const String shareTemplateWorkTitle = '分享作品';
-  static const String shareTemplateWorkSubtitle = '突出标题、摘要与收藏价值';
+  static const String shareTemplateWorkSubtitle = '突出标题、摘要与长期参考价值';
 
-  static String contentLabelForKey(String labelKey) {
-    switch (labelKey) {
-      case 'discovery_rail_moment':
-        return discoveryRailMoment;
-      case 'discovery_rail_work':
-        return discoveryRailWorks;
-      case 'creation_filter_all':
-        return creationFilterAll;
-      case 'creation_filter_moment':
-        return creationFilterMoment;
-      case 'creation_filter_work':
-        return creationFilterWork;
-      case 'profile_tab_creations':
-        return profileTabCreations;
-      case 'profile_tab_circles':
-        return profileTabCircles;
-      case 'profile_tab_interaction':
-        return profileTabInteraction;
-      case 'profile_tab_lifestyle':
-        return profileTabLifestyle;
-      case 'lifestyle_sub_footprint':
-        return lifestyleSubFootprint;
-      case 'lifestyle_sub_soul':
-        return lifestyleSubSoul;
-      case 'lifestyle_sub_taste':
-        return lifestyleSubTaste;
-      case 'lifestyle_sub_private':
-        return lifestyleSubPrivate;
-      case 'creation_sub_all':
-        return creationSubAll;
-      case 'creation_sub_micro':
-        return creationSubMicro;
-      case 'creation_sub_image':
-        return creationSubImage;
-      case 'creation_sub_video':
-        return creationSubVideo;
-      case 'creation_sub_article':
-        return creationSubArticle;
-      case 'creation_sub_text':
-        return creationSubText;
-      case 'interaction_sub_likes':
-        return interactionSubLikes;
-      case 'interaction_sub_comments':
-        return interactionSubComments;
-      case 'interaction_sub_shares':
-        return interactionSubShares;
-      case 'work_format_all':
-        return workFormatFilterAll;
-      case 'work_format_image':
-        return workFormatFilterImage;
-      case 'work_format_video':
-        return workFormatFilterVideo;
-      case 'work_format_note':
-        return workFormatFilterNote;
-      case 'share_template_moment_title':
-        return shareTemplateMomentTitle;
-      case 'share_template_moment_subtitle':
-        return shareTemplateMomentSubtitle;
-      case 'share_template_work_title':
-        return shareTemplateWorkTitle;
-      case 'share_template_work_subtitle':
-        return shareTemplateWorkSubtitle;
-      case 'tab_photo':
-        return discoveryTabPhoto;
-      case 'tab_video':
-        return discoveryTabVideo;
-      case 'tab_moment':
-        return discoveryTabMoment;
-      case 'tab_article':
-        return discoveryTabArticle;
-      default:
-        return labelKey;
-    }
-  }
+  static String contentLabelForKey(String labelKey) =>
+      _contentLabelForKey(labelKey);
 }

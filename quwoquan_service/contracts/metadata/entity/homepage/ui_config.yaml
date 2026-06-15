@@ -1,0 +1,24 @@
+version: 1
+aggregate: Homepage
+
+description: |
+  Homepage 对象页端侧 UI 配置。
+  codegen 从本文件生成 Dart HomepageUIConfig（DO NOT EDIT），
+  端侧实体主页通过 HomepageUIConfig 消费一级 Tab 配置，消除页面内硬编码。
+
+homepage_tabs:
+  - id: content
+    label_key: homepage_tab_content
+    body_slot: content
+    order: 0
+    default: true
+
+  - id: discussion
+    label_key: homepage_tab_discussion
+    body_slot: discussion
+    order: 1
+
+  - id: interest_circles
+    label_key: homepage_tab_interest_circles
+    body_slot: interest_circles
+    order: 2

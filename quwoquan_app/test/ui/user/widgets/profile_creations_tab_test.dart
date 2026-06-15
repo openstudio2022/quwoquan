@@ -11,6 +11,8 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
+import '../../../support/harness/profile_shell_scroll_utils.dart';
+
 /// 创作 Tab（V5）：二级子页恰为 全部/图片/视频/文字，全链路无「微趣/moment」概念。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
 
@@ -74,6 +76,7 @@ void main() {
 
     await tester.pumpWidget(_scopedApp());
     await _pumpFrames(tester);
+    await revealProfilePrimaryTabs(tester);
 
     final subTabs = find.byKey(
       const ValueKey<String>('profile-works-secondary-tabs'),

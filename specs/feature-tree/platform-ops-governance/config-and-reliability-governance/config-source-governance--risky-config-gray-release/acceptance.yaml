@@ -15,14 +15,18 @@ gwt_acceptance:
     title: config source governance  risky config gray release GWT
     given:
     - 前置条件明确。
+    - APP_ENV 与 CONFIG_VERSION 已进入风险配置灰度发布的判定输入。
     when:
     - 用户或系统动作发生。
     then:
     - 可观察结果符合预期。
     done_when:
     - 最小价值点闭环。
+    - APP_ENV 与 CONFIG_VERSION 能支撑灰度范围、回滚点和发布证据追踪。
     edge_cases: []
-    contract_refs: []
+    contract_refs:
+    - APP_ENV
+    - CONFIG_VERSION
     performance_points: []
     evidence:
       primary:

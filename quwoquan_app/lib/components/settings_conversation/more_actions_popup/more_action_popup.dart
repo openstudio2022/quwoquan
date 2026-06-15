@@ -21,7 +21,7 @@ class MoreActionPopup extends StatelessWidget {
     bool isScrollControlled = true,
   }) async {
     if (config is MediaPostMoreActionConfig) {
-      await showCupertinoModalPopup(
+      await showCupertinoModalPopup<dynamic>(
         context: context,
         barrierColor: AppColors.transparent,
         builder: (context) => _MediaPostMoreActionSheet(
@@ -60,6 +60,7 @@ class _BottomAction {
   final String label;
   final String? description;
   final VoidCallback? onTap;
+  final bool isDestructive;
 
   const _BottomAction({
     required this.id,
@@ -67,6 +68,7 @@ class _BottomAction {
     required this.label,
     this.description,
     this.onTap,
+    this.isDestructive = false,
   });
 }
 
@@ -75,10 +77,7 @@ class _MediaPostMoreActionSheet extends ConsumerStatefulWidget {
   final MediaPostMoreActionConfig config;
   final double? panelMaxWidth;
 
-  const _MediaPostMoreActionSheet({
-    required this.config,
-    this.panelMaxWidth,
-  });
+  const _MediaPostMoreActionSheet({required this.config, this.panelMaxWidth});
 
   @override
   ConsumerState<_MediaPostMoreActionSheet> createState() =>
@@ -87,6 +86,26 @@ class _MediaPostMoreActionSheet extends ConsumerStatefulWidget {
 
 class _MediaPostMoreActionSheetState
     extends ConsumerState<_MediaPostMoreActionSheet> {
+  static const String _contentFilterActionId = 'contentFilter';
+  static const String _readingSettingsActionId = 'readingSettings';
+  bool _showContentFilterPanel = false;
+  bool _showReadingSettingsPanel = false;
+  late Set<String> _selectedFilterIds;
+  late String _selectedReadingOptionId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFilterIds = widget.config.selectedFilterIds.isEmpty
+        ? <String>{'all'}
+        : widget.config.selectedFilterIds.toSet();
+    _selectedReadingOptionId =
+        widget.config.selectedReadingOptionId ??
+        (widget.config.readingOptions.isEmpty
+            ? 'system'
+            : widget.config.readingOptions.first.id);
+  }
+
   List<_ScrollAction> _buildScrollActions(bool isDark) {
     final actions = <_ScrollAction>[
       _ScrollAction(
@@ -94,12 +113,6 @@ class _MediaPostMoreActionSheetState
         icon: CupertinoIcons.gift,
         label: AppStrings.reward,
         onTap: widget.config.onReward,
-      ),
-      _ScrollAction(
-        id: 'save',
-        icon: CupertinoIcons.arrow_down_to_line,
-        label: AppStrings.save,
-        onTap: widget.config.onSave,
       ),
       _ScrollAction(
         id: 'message',
@@ -158,7 +171,27 @@ class _MediaPostMoreActionSheetState
   }
 
   List<_BottomAction> _buildBottomActions() {
-    return [
+    final actions = <_BottomAction>[
+      if (widget.config.filterOptions.isNotEmpty)
+        _BottomAction(
+          id: _contentFilterActionId,
+          icon: CupertinoIcons.line_horizontal_3_decrease,
+          label: '内容过滤',
+          description: _contentFilterSummaryFor(
+            options: widget.config.filterOptions,
+            selectedIds: _selectedFilterIds,
+          ),
+        ),
+      if (widget.config.readingOptions.isNotEmpty)
+        _BottomAction(
+          id: _readingSettingsActionId,
+          icon: CupertinoIcons.book,
+          label: '阅读设置',
+          description: _readingSettingSummaryFor(
+            options: widget.config.readingOptions,
+            selectedId: _selectedReadingOptionId,
+          ),
+        ),
       _BottomAction(
         id: 'notInterested',
         icon: CupertinoIcons.eye_slash,
@@ -188,14 +221,88 @@ class _MediaPostMoreActionSheetState
         onTap: widget.config.onReport,
       ),
     ];
+    if (widget.config.showDeleteAction && widget.config.onDelete != null) {
+      actions.add(
+        _BottomAction(
+          id: 'delete',
+          icon: CupertinoIcons.delete,
+          label: UITextConstants.messageActionDelete,
+          onTap: widget.config.onDelete,
+          isDestructive: true,
+        ),
+      );
+    }
+    return actions;
+  }
+
+  static String _readingSettingSummaryFor({
+    required List<MoreActionReadingOption> options,
+    required String selectedId,
+  }) {
+    for (final option in options) {
+      if (option.id == selectedId) return option.label;
+    }
+    return options.isEmpty ? '' : options.first.label;
+  }
+
+  static String _contentFilterSummaryFor({
+    required List<MoreActionFilterOption> options,
+    required Set<String> selectedIds,
+  }) {
+    if (options.isEmpty || selectedIds.isEmpty) {
+      return '全部作品';
+    }
+    final selected = options
+        .where((option) => selectedIds.contains(option.id))
+        .toList(growable: false);
+    if (selected.isEmpty ||
+        selected.any((option) => option.id == 'all') ||
+        selected.length == options.length - 1) {
+      return '全部作品';
+    }
+    return selected.map((option) => option.label).join(' / ');
+  }
+
+  void _toggleFilterOption(String id) {
+    setState(() {
+      if (id == 'all') {
+        _selectedFilterIds = <String>{'all'};
+        return;
+      }
+      _selectedFilterIds.remove('all');
+      if (_selectedFilterIds.contains(id)) {
+        _selectedFilterIds.remove(id);
+      } else {
+        _selectedFilterIds.add(id);
+      }
+      if (_selectedFilterIds.isEmpty) {
+        _selectedFilterIds = <String>{'all'};
+      }
+      final nonAllIds = widget.config.filterOptions
+          .where((option) => option.id != 'all')
+          .map((option) => option.id)
+          .toSet();
+      if (_selectedFilterIds.containsAll(nonAllIds)) {
+        _selectedFilterIds = <String>{'all'};
+      }
+    });
+  }
+
+  void _commitFilterSelection() {
+    widget.config.onFilterSelectionChanged?.call(_selectedFilterIds);
+    setState(() => _showContentFilterPanel = false);
+  }
+
+  void _commitReadingOption(String id) {
+    setState(() => _selectedReadingOptionId = id);
+    widget.config.onReadingOptionChanged?.call(id);
+    Navigator.pop(context);
   }
 
   VoidCallback? _fallbackScrollAction(String actionId) {
     switch (actionId) {
       case 'reward':
         return () => _showToast(AppStrings.rewardFeatureDeveloping);
-      case 'save':
-        return () => _showToast(AppStrings.saveFeatureDeveloping);
       case 'message':
         return () => _showToast(AppStrings.messageFeatureDeveloping);
       case 'viewOriginal':
@@ -231,85 +338,141 @@ class _MediaPostMoreActionSheetState
   }
 
   void _handleBottomActionTap(_BottomAction action) {
+    if (action.id == _contentFilterActionId) {
+      setState(() {
+        _showContentFilterPanel = true;
+        _showReadingSettingsPanel = false;
+      });
+      return;
+    }
+    if (action.id == _readingSettingsActionId) {
+      setState(() {
+        _showReadingSettingsPanel = true;
+        _showContentFilterPanel = false;
+      });
+      return;
+    }
     Navigator.pop(context);
     action.onTap?.call();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = ref.watch(isDarkProvider);
-    final scrollActions = _buildScrollActions(isDark);
+    final resolvedIsDark = widget.config.forceDarkAppearance
+        ? true
+        : ref.watch(isDarkProvider);
+    final scrollActions = _buildScrollActions(resolvedIsDark);
     final bottomActions = _buildBottomActions();
     final panelBackground =
-        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
+        SettingsSemanticConstants.conversationSheetPanelBackground(
+          resolvedIsDark,
+        );
     final iconSurface = AppColorsFunctional.getColor(
-      isDark,
+      resolvedIsDark,
       ColorType.surfaceMuted,
     );
     final iconBorder = AppColorsFunctional.getColor(
-      isDark,
+      resolvedIsDark,
       ColorType.separatorSubtle,
-    ).withValues(alpha: isDark ? 0.72 : 0.9);
+    ).withValues(alpha: resolvedIsDark ? 0.72 : 0.9);
     final primaryText = AppColorsFunctional.getColor(
-      isDark,
+      resolvedIsDark,
       ColorType.foregroundPrimary,
     );
     final secondaryText = AppColorsFunctional.getColor(
-      isDark,
+      resolvedIsDark,
       ColorType.foregroundSecondary,
     );
 
-    return AppBottomModalSurface(
-      onDismiss: () => Navigator.pop(context),
-      backgroundColor: panelBackground,
-      panelKey: TestKeys.modalBottomSheetPanel,
-      panelMaxWidth: widget.panelMaxWidth,
-      contentPadding: EdgeInsets.fromLTRB(
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-        0,
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-      ),
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ConversationSheetHeader(
-              isDark: isDark,
-              title: AppStrings.moreActionsTitle,
-            ),
-            if (scrollActions.isNotEmpty) ...[
-              _MoreActionQuickSection(
-                isDark: isDark,
-                actions: scrollActions,
-                iconSurface: iconSurface,
-                iconBorder: iconBorder,
-                primaryText: primaryText,
-                secondaryText: secondaryText,
-                onTap: _handleScrollActionTap,
+    return CupertinoTheme(
+      data: CupertinoTheme.of(context).copyWith(brightness: Brightness.dark),
+      child: AppBottomModalSurface(
+        onDismiss: () => Navigator.pop(context),
+        backgroundColor: panelBackground,
+        panelKey: TestKeys.modalBottomSheetPanel,
+        panelMaxWidth: widget.panelMaxWidth,
+        contentPadding: EdgeInsets.fromLTRB(
+          SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+          0,
+          SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+          SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        ),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConversationSheetHeader(
+                isDark: resolvedIsDark,
+                title: AppStrings.moreActionsTitle,
               ),
-              SizedBox(
-                height: SettingsSemanticConstants.conversationSheetSectionGap,
+              if (_showContentFilterPanel) ...[
+                _InlineContentFilterSection(
+                  options: widget.config.filterOptions,
+                  selectedIds: _selectedFilterIds,
+                  onToggle: _toggleFilterOption,
+                  onBack: () => setState(() => _showContentFilterPanel = false),
+                  onDone: _commitFilterSelection,
+                ),
+                SizedBox(
+                  height: SettingsSemanticConstants.conversationSheetSectionGap,
+                ),
+              ] else if (_showReadingSettingsPanel) ...[
+                _InlineReadingSettingsSection(
+                  options: widget.config.readingOptions,
+                  selectedId: _selectedReadingOptionId,
+                  onSelect: _commitReadingOption,
+                ),
+                SizedBox(
+                  height: SettingsSemanticConstants.conversationSheetSectionGap,
+                ),
+              ] else ...[
+                if (scrollActions.isNotEmpty) ...[
+                  _MoreActionQuickSection(
+                    isDark: resolvedIsDark,
+                    actions: scrollActions,
+                    iconSurface: iconSurface,
+                    iconBorder: iconBorder,
+                    primaryText: primaryText,
+                    secondaryText: secondaryText,
+                    onTap: _handleScrollActionTap,
+                  ),
+                  SizedBox(
+                    height:
+                        SettingsSemanticConstants.conversationSheetSectionGap,
+                  ),
+                ],
+                if (bottomActions.isNotEmpty) ...[
+                  _MoreActionListSection(
+                    isDark: resolvedIsDark,
+                    actions: bottomActions,
+                    onTap: _handleBottomActionTap,
+                  ),
+                  SizedBox(
+                    height:
+                        SettingsSemanticConstants.conversationSheetSectionGap,
+                  ),
+                ],
+              ],
+              ConversationSheetCancelBar(
+                isDark: resolvedIsDark,
+                label: (_showContentFilterPanel || _showReadingSettingsPanel)
+                    ? '返回'
+                    : UITextConstants.cancel,
+                onTap: () {
+                  if (_showContentFilterPanel || _showReadingSettingsPanel) {
+                    setState(() {
+                      _showContentFilterPanel = false;
+                      _showReadingSettingsPanel = false;
+                    });
+                    return;
+                  }
+                  Navigator.pop(context);
+                },
               ),
             ],
-            if (bottomActions.isNotEmpty) ...[
-              _MoreActionListSection(
-                isDark: isDark,
-                actions: bottomActions,
-                onTap: _handleBottomActionTap,
-              ),
-              SizedBox(
-                height: SettingsSemanticConstants.conversationSheetSectionGap,
-              ),
-            ],
-            ConversationSheetCancelBar(
-              isDark: isDark,
-              label: UITextConstants.cancel,
-              onTap: () => Navigator.pop(context),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -421,6 +584,135 @@ class _QuickActionIcon extends StatelessWidget {
   }
 }
 
+class _InlineContentFilterSection extends StatelessWidget {
+  const _InlineContentFilterSection({
+    required this.options,
+    required this.selectedIds,
+    required this.onToggle,
+    required this.onBack,
+    required this.onDone,
+  });
+
+  final List<MoreActionFilterOption> options;
+  final Set<String> selectedIds;
+  final ValueChanged<String> onToggle;
+  final VoidCallback onBack;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    const isDark = true;
+    return Column(
+      key: const ValueKey<String>('more-action-content-filter-panel'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const ConversationSheetHeader(isDark: isDark, title: '内容过滤'),
+        ConversationSheetListCard(
+          isDark: isDark,
+          child: Column(
+            children: options.asMap().entries.map((entry) {
+              final index = entry.key;
+              final option = entry.value;
+              final selected = option.id == 'all'
+                  ? selectedIds.isEmpty || selectedIds.contains('all')
+                  : selectedIds.contains(option.id);
+              return Column(
+                children: [
+                  ConversationSheetSingleSelectRow(
+                    key: ValueKey<String>(
+                      'more-action-content-filter-${option.id}',
+                    ),
+                    isDark: isDark,
+                    label: option.label,
+                    icon: option.id == 'all'
+                        ? CupertinoIcons.line_horizontal_3_decrease
+                        : null,
+                    isSelected: selected,
+                    onTap: () => onToggle(option.id),
+                  ),
+                  if (index < options.length - 1)
+                    ConversationSheetDivider(
+                      isDark: isDark,
+                      dividerLeftInset:
+                          ConversationSheetSingleSelectRow.dividerInsetForIcon(
+                            option.id == 'all',
+                          ),
+                    ),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+        SizedBox(height: SettingsSemanticConstants.conversationSheetSectionGap),
+        ConversationSheetCancelBar(isDark: isDark, label: '完成', onTap: onDone),
+      ],
+    );
+  }
+}
+
+class _InlineReadingSettingsSection extends StatelessWidget {
+  const _InlineReadingSettingsSection({
+    required this.options,
+    required this.selectedId,
+    required this.onSelect,
+  });
+
+  final List<MoreActionReadingOption> options;
+  final String selectedId;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    const isDark = true;
+    return Column(
+      key: const ValueKey<String>('more-action-reading-settings-panel'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const ConversationSheetHeader(isDark: isDark, title: '阅读设置'),
+        ConversationSheetListCard(
+          isDark: isDark,
+          child: Column(
+            children: options
+                .asMap()
+                .entries
+                .map((entry) {
+                  final index = entry.key;
+                  final option = entry.value;
+                  return Column(
+                    children: [
+                      ConversationSheetSingleSelectRow(
+                        key: ValueKey<String>(
+                          'more-action-reading-theme-${option.id}',
+                        ),
+                        isDark: isDark,
+                        label: option.label,
+                        icon: option.id == 'system'
+                            ? CupertinoIcons.sparkles
+                            : null,
+                        isSelected: selectedId == option.id,
+                        onTap: () => onSelect(option.id),
+                      ),
+                      if (index < options.length - 1)
+                        ConversationSheetDivider(
+                          isDark: isDark,
+                          dividerLeftInset:
+                              ConversationSheetSingleSelectRow.dividerInsetForIcon(
+                                option.id == 'system',
+                              ),
+                        ),
+                    ],
+                  );
+                })
+                .toList(growable: false),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MoreActionListSection extends StatelessWidget {
   const _MoreActionListSection({
     required this.isDark,
@@ -447,6 +739,7 @@ class _MoreActionListSection extends StatelessWidget {
                 icon: action.icon,
                 label: action.label,
                 description: action.description,
+                isDestructive: action.isDestructive,
                 onTap: () => onTap(action),
               ),
               if (index < actions.length - 1)

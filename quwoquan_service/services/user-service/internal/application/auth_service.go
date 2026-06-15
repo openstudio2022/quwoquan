@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"strings"
 	"time"
@@ -27,7 +28,10 @@ import (
 
 const (
 	credentialPhone           = "phone"
+	credentialCarrierPhone    = "carrier_phone"
 	credentialWechat          = "wechat"
+	credentialAlipay          = "alipay"
+	credentialQq              = "qq"
 	credentialApple           = "apple"
 	credentialAnonymousDevice = "anonymous_device"
 
@@ -45,6 +49,8 @@ type AuthService struct {
 	personas         userrepo.PersonaRepository
 	credentials      userrepo.CredentialRepository
 	userAuth         userrepo.UserAuthRepository
+	userDevices      userrepo.UserDeviceRepository
+	consents         userrepo.ConsentRepository
 	anonymousDevices userrepo.AnonymousDeviceBindingRepository
 	pcache           *cache.ProfileCache
 	shardDirectory   *ShardDirectory
@@ -54,6 +60,8 @@ type AuthService struct {
 	externalClient   ExternalInteractionClient
 	otpDebugReveal   bool
 	otpPassThrough   SmsOtpPassThroughConfig
+	otpSandbox       SandboxAllowlist
+	socialProviders  ExternalAuthProviderClient
 	accessSigner     *rtauth.Signer
 }
 
@@ -106,6 +114,18 @@ func WithUserAuthRepository(repo userrepo.UserAuthRepository) AuthServiceOption 
 	}
 }
 
+func WithUserDeviceRepository(repo userrepo.UserDeviceRepository) AuthServiceOption {
+	return func(s *AuthService) {
+		s.userDevices = repo
+	}
+}
+
+func WithConsentRepository(repo userrepo.ConsentRepository) AuthServiceOption {
+	return func(s *AuthService) {
+		s.consents = repo
+	}
+}
+
 func WithOneTapPhoneResolver(resolver OneTapPhoneResolver) AuthServiceOption {
 	return func(s *AuthService) {
 		if resolver != nil {
@@ -152,6 +172,24 @@ func WithSmsOtpPassThroughConfig(config SmsOtpPassThroughConfig) AuthServiceOpti
 	}
 }
 
+// WithSmsOtpSandboxAllowlist 注入 gamma 受控放通白名单：仅命中号码跳过真实下发并回填验证码，
+// 真实用户仍走严格校验。生产必须为空（由 SandboxAllowlist.Validate 在装配期强制）。
+func WithSmsOtpSandboxAllowlist(list SandboxAllowlist) AuthServiceOption {
+	return func(s *AuthService) {
+		s.otpSandbox = list
+	}
+}
+
+// WithExternalAuthProviderClient 注入社交登录（微信/支付宝/QQ）票据置换实现。
+// 按环境分别注入 mock（alpha/beta）、sandbox 包装（gamma）、真实 HTTP（prod）。
+func WithExternalAuthProviderClient(client ExternalAuthProviderClient) AuthServiceOption {
+	return func(s *AuthService) {
+		if client != nil {
+			s.socialProviders = client
+		}
+	}
+}
+
 // WithAccessTokenSigner 注入 access token 签发器；注入后 accessToken 为短期 JWT，
 // 可被各服务/网关本地验签。未注入时回退到不透明随机串（过渡期回退）。
 func WithAccessTokenSigner(signer *rtauth.Signer) AuthServiceOption {
@@ -171,6 +209,16 @@ type LoginResult struct {
 	IdentityOrigin           string         `json:"identityOrigin"`
 	LogicalShard             int            `json:"logicalShard"`
 	AnonymousRetentionPolicy string         `json:"anonymousRetentionPolicy"`
+	AccountHint              map[string]any `json:"accountHint,omitempty"`
+}
+
+type OneTapLoginHint struct {
+	State             string         `json:"state"`
+	MaskedPhone       string         `json:"maskedPhone"`
+	Registered        bool           `json:"registered"`
+	AccountHint       map[string]any `json:"accountHint,omitempty"`
+	ExpiresInSeconds  int            `json:"expiresInSeconds"`
+	ProviderRequestID string         `json:"providerRequestId,omitempty"`
 }
 
 // LoginWithCredential authenticates via the given credential type and key.
@@ -201,6 +249,186 @@ func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey
 	}
 
 	return s.issueLoginResult(ctx, ownerID, credType, credKey)
+}
+
+// LoginWithSocialProvider 用社交提供方（微信/支付宝/QQ）的短期授权码登录。
+// App 只上传 authCode，服务端置换稳定身份并在首次登录时同步昵称/头像。
+func (s *AuthService) LoginWithSocialProvider(
+	ctx context.Context,
+	provider, authCode, deviceID, platform, appVersion string,
+) (_ *LoginResult, err error) {
+	provider, supported := NormalizeSocialProvider(provider)
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.LoginWithSocialProvider",
+		attribute.String("social.provider", provider))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	if !supported {
+		return nil, generated.AppErrorFromInvalidArgument("unsupported social provider")
+	}
+	if s.socialProviders == nil || !s.socialProviders.Supports(provider) {
+		return nil, generated.AppErrorFromSocialProviderUnavailable(fmt.Sprintf("%s provider client unavailable", provider))
+	}
+	authCode = strings.TrimSpace(authCode)
+	if authCode == "" {
+		return nil, generated.AppErrorFromInvalidArgument("authCode is required")
+	}
+
+	identity, err := s.socialProviders.Exchange(ctx, provider, authCode, platform, appVersion)
+	if err != nil {
+		return nil, mapSocialProviderError(provider, err)
+	}
+	if !identity.hasIdentity() {
+		return nil, providerAuthFailedError(provider, "provider returned empty identity")
+	}
+	identity.Provider = provider
+	credKey := identity.StableKey()
+
+	existing, err := s.credentials.FindByTypeAndKey(ctx, provider, credKey)
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("social credential lookup: %v", err))
+	}
+	var ownerID string
+	if existing != nil {
+		ownerID = existing.OwnerID
+		_ = s.credentials.UpdateLastUsed(ctx, existing.ID)
+	} else {
+		ownerID, err = s.createSocialOwnerAccount(ctx, provider, credKey, identity)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := s.persistLoginDevice(ctx, ownerID, deviceID, platform, appVersion); err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist social login device: %v", err))
+	}
+	return s.issueLoginResult(ctx, ownerID, provider, credKey)
+}
+
+// createSocialOwnerAccount 创建社交首登账号，并以厂商资料初始化昵称/头像。
+func (s *AuthService) createSocialOwnerAccount(ctx context.Context, provider, credKey string, identity ExternalIdentity) (string, error) {
+	displayLabel := sanitizeProviderDisplayName(identity.DisplayName)
+	ownerID, err := s.createOwnerAccount(ctx, provider, credKey, displayLabel)
+	if err != nil {
+		return "", err
+	}
+	// 资料首次同步：失败不阻断登录（结构化告警 + 默认资料兜底）。
+	if syncErr := s.syncProviderProfileOnFirstLogin(ctx, ownerID, identity); syncErr != nil {
+		slog.WarnContext(ctx, "social provider profile first-sync failed",
+			"social.provider", provider,
+			"owner.id", ownerID,
+			"error", syncErr.Error())
+	}
+	return ownerID, nil
+}
+
+// syncProviderProfileOnFirstLogin 用厂商公开资料初始化 owner 与主分身的昵称/头像。
+// 注意：头像目前直接引用厂商 URL；转存自有 CDN 留待 media 资产管线（avatarAssetId）后续接入。
+func (s *AuthService) syncProviderProfileOnFirstLogin(ctx context.Context, ownerID string, identity ExternalIdentity) error {
+	profile, err := s.profiles.FindByID(ctx, ownerID)
+	if err != nil || profile == nil {
+		return err
+	}
+	updated := false
+	if displayName := sanitizeProviderDisplayName(identity.DisplayName); displayName != "" {
+		profile.OwnerDisplayName = displayName
+		if nick := s.resolveAvailableNickname(ctx, displayName, ownerID); nick != "" {
+			profile.Nickname = nick
+		}
+		updated = true
+	}
+	if avatar := strings.TrimSpace(identity.AvatarURL); avatar != "" {
+		profile.AvatarURL = avatar
+		updated = true
+	}
+	if updated {
+		if err := s.profiles.Update(ctx, profile); err != nil {
+			return err
+		}
+	}
+	activeSub, err := s.personas.FindActiveByUserID(ctx, ownerID)
+	if err != nil || activeSub == nil {
+		return err
+	}
+	personaUpdated := false
+	if name := strings.TrimSpace(profile.Nickname); name != "" && activeSub.DisplayName != name {
+		activeSub.DisplayName = name
+		personaUpdated = true
+	}
+	if avatar := strings.TrimSpace(profile.AvatarURL); avatar != "" && activeSub.AvatarURL != avatar {
+		activeSub.AvatarURL = avatar
+		personaUpdated = true
+	}
+	if personaUpdated {
+		normalizePersonaPersistence(activeSub)
+		return s.personas.Update(ctx, activeSub)
+	}
+	return nil
+}
+
+// resolveAvailableNickname 优先使用厂商昵称；若已被占用则追加 owner 熵尾后缀生成可用昵称。
+func (s *AuthService) resolveAvailableNickname(ctx context.Context, desired, ownerID string) string {
+	desired = sanitizeProviderDisplayName(desired)
+	if desired == "" {
+		return ""
+	}
+	existing, err := s.profiles.FindByNickname(ctx, desired)
+	if err != nil {
+		return ""
+	}
+	if existing == nil || strings.TrimSpace(existing.UserID) == ownerID {
+		return desired
+	}
+	suffix := strings.TrimSpace(ownerID)
+	if len(suffix) > 4 {
+		suffix = suffix[len(suffix)-4:]
+	}
+	candidate := desired + "_" + suffix
+	other, err := s.profiles.FindByNickname(ctx, candidate)
+	if err != nil {
+		return ""
+	}
+	if other == nil || strings.TrimSpace(other.UserID) == ownerID {
+		return candidate
+	}
+	return ""
+}
+
+func sanitizeProviderDisplayName(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return ""
+	}
+	if len([]rune(trimmed)) > 32 {
+		trimmed = string([]rune(trimmed)[:32])
+	}
+	return trimmed
+}
+
+func providerAuthFailedError(provider, message string) error {
+	switch provider {
+	case SocialProviderWechat:
+		return generated.AppErrorFromWechatAuthFailed(message)
+	case SocialProviderAlipay:
+		return generated.AppErrorFromAlipayAuthFailed(message)
+	case SocialProviderQq:
+		return generated.AppErrorFromQqAuthFailed(message)
+	default:
+		return generated.AppErrorFromSocialProviderUnavailable(message)
+	}
+}
+
+func mapSocialProviderError(provider string, err error) error {
+	if err == nil {
+		return nil
+	}
+	text := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(text, "cancel"):
+		return generated.AppErrorFromSocialProviderCancelled(err.Error())
+	case strings.Contains(text, "unavailable"), strings.Contains(text, "timeout"):
+		return generated.AppErrorFromSocialProviderUnavailable(err.Error())
+	default:
+		return providerAuthFailedError(provider, err.Error())
+	}
 }
 
 func (s *AuthService) issueLoginResult(
@@ -263,6 +491,7 @@ func (s *AuthService) issueLoginResult(
 		IdentityOrigin:           defaultString(profileField(profile, func(p *model.UserProfile) string { return p.IdentityOrigin }), identityOriginValue(credType)),
 		LogicalShard:             profileIntField(profile, func(p *model.UserProfile) int { return p.LogicalShard }),
 		AnonymousRetentionPolicy: defaultString(profileField(profile, func(p *model.UserProfile) string { return p.AnonymousRetentionPolicy }), anonymousRetentionPolicyForCredentialType(credType)),
+		AccountHint:              buildLoginAccountHint(profile, ""),
 	}, nil
 }
 
@@ -336,6 +565,7 @@ func (s *AuthService) LoginWithOneTap(
 	carrierToken string,
 	deviceID string,
 	platform string,
+	appVersion string,
 	agreementVersion string,
 	privacyVersion string,
 ) (_ *LoginResult, err error) {
@@ -359,7 +589,80 @@ func (s *AuthService) LoginWithOneTap(
 	if strings.TrimSpace(displayLabel) == "" {
 		displayLabel = maskPhoneForDisplay(phone)
 	}
-	return s.LoginWithCredential(ctx, credentialPhone, phone, displayLabel)
+	if strings.TrimSpace(agreementVersion) == "" || strings.TrimSpace(privacyVersion) == "" {
+		return nil, generated.AppErrorFromConsentRequired("agreementVersion and privacyVersion required")
+	}
+	result, err := s.LoginWithCredential(ctx, credentialCarrierPhone, phone, displayLabel)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistLoginDevice(ctx, result.OwnerID, deviceID, platform, appVersion); err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist login device: %v", err))
+	}
+	if err := s.persistConsentRecord(ctx, result.OwnerID, agreementVersion, privacyVersion, deviceID, platform, "LoginOneTap"); err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist consent record: %v", err))
+	}
+	return result, nil
+}
+
+func (s *AuthService) ResolveOneTapLoginHint(
+	ctx context.Context,
+	vendor string,
+	carrierToken string,
+	deviceID string,
+	platform string,
+	appVersion string,
+) (_ *OneTapLoginHint, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.ResolveOneTapLoginHint",
+		attribute.String("one_tap.vendor", strings.TrimSpace(vendor)),
+		attribute.String("platform", strings.TrimSpace(platform)))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	resolver := s.oneTapResolver
+	if resolver == nil {
+		return nil, generated.AppErrorFromCarrierUnavailable("one tap resolver unavailable")
+	}
+	phone, displayLabel, err := resolver.ResolvePhone(ctx, vendor, carrierToken)
+	if err != nil {
+		return nil, mapCarrierResolverError(err)
+	}
+	phone = normalizePhoneCredentialKey(phone)
+	if phone == "" {
+		return nil, generated.AppErrorFromCarrierTokenInvalid("one tap phone is empty")
+	}
+	if strings.TrimSpace(displayLabel) == "" {
+		displayLabel = maskPhoneForDisplay(phone)
+	}
+	hint := &OneTapLoginHint{
+		State:            "new_phone",
+		MaskedPhone:      displayLabel,
+		Registered:       false,
+		ExpiresInSeconds: 60,
+	}
+	existing, err := s.credentials.FindByTypeAndKey(ctx, credentialCarrierPhone, phone)
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("one tap credential lookup: %v", err))
+	}
+	if existing == nil {
+		existing, err = s.credentials.FindByTypeAndKey(ctx, credentialPhone, phone)
+		if err != nil {
+			return nil, generated.AppErrorFromInternalError(fmt.Sprintf("phone credential lookup: %v", err))
+		}
+	}
+	if existing == nil {
+		return hint, nil
+	}
+	profile, err := s.profiles.FindByID(ctx, existing.OwnerID)
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("load one tap account hint: %v", err))
+	}
+	if err := ensureProfileCanLogin(profile); err != nil {
+		return nil, err
+	}
+	hint.State = "registered"
+	hint.Registered = true
+	hint.AccountHint = buildLoginAccountHint(profile, displayLabel)
+	return hint, nil
 }
 
 func (s *AuthService) LoginAnonymously(
@@ -524,16 +827,17 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 	profile := &model.UserProfile{
 		UserID:                   ownerID,
 		Phone:                    "",
-		Nickname:                 defaultNickname(ownerID),
+		Nickname:                 defaultNicknameForCredential(ownerID, credType, credKey),
 		Status:                   "active",
 		AccountState:             accountStateForCredentialType(credType),
 		IdentityOrigin:           identityOriginValue(credType),
 		LogicalShard:             identity.LogicalShard,
 		AnonymousRetentionPolicy: anonymousRetentionPolicyForCredentialType(credType),
+		IdentityTags:             "{}",
 		ProfileVersion:           1,
 		SubAccountCount:          1,
 	}
-	if credType == credentialPhone {
+	if credType == credentialPhone || credType == credentialCarrierPhone {
 		profile.Phone = credKey
 	}
 
@@ -592,6 +896,96 @@ func buildActiveSubEnvelope(activeSub *model.Persona) map[string]any {
 	}
 }
 
+func buildLoginAccountHint(profile *model.UserProfile, fallbackMaskedPhone string) map[string]any {
+	if profile == nil {
+		return nil
+	}
+	displayName := strings.TrimSpace(profile.OwnerDisplayName)
+	if displayName == "" {
+		displayName = strings.TrimSpace(profile.Nickname)
+	}
+	maskedPhone := strings.TrimSpace(fallbackMaskedPhone)
+	if maskedPhone == "" {
+		maskedPhone = maskPhoneForDisplay(profile.Phone)
+	}
+	return map[string]any{
+		"displayName":    displayName,
+		"avatarUrl":      strings.TrimSpace(profile.AvatarURL),
+		"avatarAssetId":  strings.TrimSpace(profile.AvatarAssetID),
+		"maskedPhone":    maskedPhone,
+		"identityOrigin": strings.TrimSpace(profile.IdentityOrigin),
+	}
+}
+
+func ensureProfileCanLogin(profile *model.UserProfile) error {
+	if profile == nil {
+		return generated.AppErrorFromUserNotFound("account not found")
+	}
+	switch strings.TrimSpace(profile.AccountState) {
+	case "suspended":
+		return generated.AppErrorFromAccountSuspended("account suspended")
+	case "deleted":
+		return generated.AppErrorFromAccountDeleted("account deleted")
+	default:
+		return nil
+	}
+}
+
+func (s *AuthService) persistLoginDevice(ctx context.Context, ownerID, deviceID, platform, appVersion string) error {
+	if s.userDevices == nil {
+		return nil
+	}
+	deviceID = strings.TrimSpace(deviceID)
+	if strings.TrimSpace(ownerID) == "" || deviceID == "" {
+		return nil
+	}
+	return s.userDevices.UpsertLoginDevice(ctx, &model.UserDevice{
+		UserID:       strings.TrimSpace(ownerID),
+		DeviceID:     deviceID,
+		Platform:     strings.TrimSpace(platform),
+		AppVersion:   strings.TrimSpace(appVersion),
+		LastActiveAt: time.Now().UTC(),
+	})
+}
+
+func (s *AuthService) persistConsentRecord(ctx context.Context, ownerID, agreementVersion, privacyVersion, deviceID, platform, sourceOperation string) error {
+	if s.consents == nil {
+		return nil
+	}
+	if strings.TrimSpace(agreementVersion) == "" || strings.TrimSpace(privacyVersion) == "" {
+		return generated.AppErrorFromConsentRequired("agreementVersion and privacyVersion required")
+	}
+	return s.consents.Create(ctx, &userrepo.ConsentRecord{
+		OwnerID:          strings.TrimSpace(ownerID),
+		AgreementVersion: strings.TrimSpace(agreementVersion),
+		PrivacyVersion:   strings.TrimSpace(privacyVersion),
+		AcceptedAt:       time.Now().UTC(),
+		DeviceID:         strings.TrimSpace(deviceID),
+		Platform:         strings.TrimSpace(platform),
+		SourceOperation:  strings.TrimSpace(sourceOperation),
+	})
+}
+
+func mapCarrierResolverError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return generated.AppErrorFromCarrierProviderTimeout(err.Error())
+	}
+	text := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(text, "timeout"):
+		return generated.AppErrorFromCarrierProviderTimeout(err.Error())
+	case strings.Contains(text, "unavailable"):
+		return generated.AppErrorFromCarrierUnavailable(err.Error())
+	case strings.Contains(text, "invalid"), strings.Contains(text, "not recognized"):
+		return generated.AppErrorFromCarrierTokenInvalid(err.Error())
+	default:
+		return generated.AppErrorFromCarrierUnavailable(err.Error())
+	}
+}
+
 func generateCredentialBindingID() string {
 	id, err := generateIdentityEntropyBody()
 	if err != nil {
@@ -607,6 +1001,16 @@ func defaultNickname(ownerID string) string {
 	}
 	trimmed = strings.ReplaceAll(trimmed, "_", "")
 	return "user_" + strings.ToLower(trimmed)
+}
+
+func defaultNicknameForCredential(ownerID, credType, credKey string) string {
+	if credType == credentialPhone || credType == credentialCarrierPhone {
+		phone := normalizePhoneCredentialKey(credKey)
+		if len(phone) >= 4 {
+			return "趣友" + phone[len(phone)-4:]
+		}
+	}
+	return defaultNickname(ownerID)
 }
 
 func extractOwnerRootPrefix(ownerID string) string {
@@ -659,6 +1063,14 @@ func (TokenEncodedOneTapPhoneResolver) ResolvePhone(_ context.Context, _ string,
 	return "", "", generated.AppErrorFromInternalError("one tap resolver requires carrier server exchange")
 }
 
+// UnavailableOneTapPhoneResolver 在尚未接入真实运营商置换的环境（如 prod 过渡期、gamma 无沙箱号段）
+// 统一返回结构化不可用，杜绝 dev 解码后门进入生产。
+type UnavailableOneTapPhoneResolver struct{}
+
+func (UnavailableOneTapPhoneResolver) ResolvePhone(_ context.Context, _ string, _ string) (string, string, error) {
+	return "", "", generated.AppErrorFromCarrierUnavailable("one tap carrier resolver not provisioned")
+}
+
 type StaticOneTapPhoneResolver map[string]string
 
 func (r StaticOneTapPhoneResolver) ResolvePhone(_ context.Context, _ string, carrierToken string) (string, string, error) {
@@ -692,17 +1104,20 @@ func (s *AuthService) issueAccessToken(ownerID string, activeSub *model.Persona)
 
 // OtpSendResult 描述一次发码结果；DebugCode 仅在非生产开启 reveal 时填充。
 type OtpSendResult struct {
-	MaskedPhone      string `json:"maskedPhone"`
-	ExpiresInSeconds int    `json:"expiresInSeconds"`
-	RequestID        string `json:"requestId,omitempty"`
-	ChallengeID      string `json:"challengeId,omitempty"`
-	DeliveryStatus   string `json:"deliveryStatus"`
-	DebugCode        string `json:"debugCode,omitempty"`
+	MaskedPhone       string `json:"maskedPhone"`
+	ExpiresInSeconds  int    `json:"expiresInSeconds"`
+	RequestID         string `json:"requestId,omitempty"`
+	ChallengeID       string `json:"challengeId,omitempty"`
+	DeliveryStatus    string `json:"deliveryStatus"`
+	RetryAfterSeconds int    `json:"retryAfterSeconds,omitempty"`
+	DebugCode         string `json:"debugCode,omitempty"`
 }
 
 // SendOtp 校验号码、限频后创建 OTP challenge，并通过 integration-service 提交短信发送。
-func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResult, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "user.SendOtp")
+func (s *AuthService) SendOtp(ctx context.Context, phone, deviceID, platform, appVersion, sourceOperation string) (_ *OtpSendResult, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.SendOtp",
+		attribute.String("platform", strings.TrimSpace(platform)),
+		attribute.String("source.operation", strings.TrimSpace(sourceOperation)))
 	defer func() { rtobs.EndSpan(span, err) }()
 
 	normalized := normalizePhoneCredentialKey(phone)
@@ -720,8 +1135,8 @@ func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResu
 		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp allow-send: %v", err))
 	}
 	if !allowed {
-		return nil, generated.AppErrorFromRateLimited(
-			fmt.Sprintf("otp send throttled, retry after %ds", retryAfter))
+		return nil, generated.AppErrorFromOtpRateLimited("otp send throttled").
+			WithRecovery("retry", retryAfter)
 	}
 	code, err := generateOtpCode()
 	if err != nil {
@@ -757,8 +1172,16 @@ func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResu
 		ChallengeID:      challenge.ChallengeID,
 		DeliveryStatus:   "queued",
 	}
-	passThroughAllowed := s.otpPassThrough.Allows(time.Now().UTC())
-	if s.externalClient != nil {
+	now := time.Now().UTC()
+	passThroughAllowed := s.otpPassThrough.Allows(now)
+	// 受控放通：gamma 对接真实上游，但命中白名单的测试号跳过真实下发，回填真实验证码（仍可被严格校验）。
+	sandboxAllowed := s.otpSandbox.AllowsPhone(normalized, now)
+	switch {
+	case sandboxAllowed:
+		span.SetAttributes(attribute.Bool("otp.sandbox_pass_through", true))
+		result.DeliveryStatus = "sandbox"
+		_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
+	case s.externalClient != nil:
 		if _, err := s.externalClient.SubmitSMSOTP(ctx, SMSOTPDispatchRequest{
 			RequestID:      challenge.RequestID,
 			ChallengeID:    challenge.ChallengeID,
@@ -771,7 +1194,7 @@ func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResu
 		}); err != nil {
 			if !passThroughAllowed {
 				_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, err.Error())
-				return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp integration submit: %v", err))
+				return nil, generated.AppErrorFromOtpProviderFailed(fmt.Sprintf("otp integration submit: %v", err))
 			}
 			result.DeliveryStatus = "pass_through"
 			_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
@@ -779,14 +1202,15 @@ func (s *AuthService) SendOtp(ctx context.Context, phone string) (_ *OtpSendResu
 			_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
 			result.DeliveryStatus = "queued"
 		}
-	} else if passThroughAllowed {
+	case passThroughAllowed:
 		result.DeliveryStatus = "pass_through"
 		_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
-	} else {
+	default:
 		_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, "external interaction client unavailable")
-		return nil, generated.AppErrorFromInternalError("otp external interaction client unavailable")
+		return nil, generated.AppErrorFromOtpProviderFailed("otp external interaction client unavailable")
 	}
-	if passThroughAllowed || s.otpDebugReveal {
+	// 放通(alpha/beta) 与全局 debug reveal 回填明文；受控放通(gamma) 只对白名单回填。
+	if passThroughAllowed || sandboxAllowed || s.otpDebugReveal {
 		result.DebugCode = code
 	}
 	return result, nil
@@ -817,28 +1241,54 @@ func (s *AuthService) verifyOtp(ctx context.Context, phone, code string) error {
 		return generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge read: %v", err))
 	}
 	if challenge == nil {
-		return generated.AppErrorFromInvalidArgument("otp expired")
+		return generated.AppErrorFromOtpExpired("otp expired")
 	}
 	if challenge.Status != OtpChallengeStatusActive {
-		return generated.AppErrorFromInvalidArgument("otp not ready")
+		return generated.AppErrorFromOtpExpired("otp not ready")
 	}
 	if challenge.CodeHash != hashOTPCode(challenge.ChallengeID, phone, code) {
-		return generated.AppErrorFromInvalidArgument("otp mismatch")
+		return generated.AppErrorFromOtpMismatch("otp mismatch")
 	}
 	_ = s.otpChallenges.ConsumeChallenge(ctx, challenge.ChallengeID, now)
 	return nil
 }
 
-// LoginWithPhone 先校验验证码，再走统一的凭证登录链路。
-func (s *AuthService) LoginWithPhone(ctx context.Context, phone, otpCode, displayLabel string) (*LoginResult, error) {
+// LoginWithPhone 先校验验证码，再走统一的凭证登录链路，并落设备与 consent 留痕。
+func (s *AuthService) LoginWithPhone(
+	ctx context.Context,
+	phone string,
+	otpCode string,
+	displayLabel string,
+	deviceID string,
+	platform string,
+	appVersion string,
+	agreementVersion string,
+	privacyVersion string,
+) (*LoginResult, error) {
 	normalized := normalizePhoneCredentialKey(phone)
 	if len(normalized) < 5 {
 		return nil, generated.AppErrorFromInvalidArgument("phone required")
 	}
+	if strings.TrimSpace(agreementVersion) == "" || strings.TrimSpace(privacyVersion) == "" {
+		return nil, generated.AppErrorFromConsentRequired("agreementVersion and privacyVersion required")
+	}
 	if err := s.verifyOtp(ctx, normalized, otpCode); err != nil {
 		return nil, err
 	}
-	return s.LoginWithCredential(ctx, credentialPhone, normalized, displayLabel)
+	if strings.TrimSpace(displayLabel) == "" {
+		displayLabel = maskPhoneForDisplay(normalized)
+	}
+	result, err := s.LoginWithCredential(ctx, credentialPhone, normalized, displayLabel)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.persistLoginDevice(ctx, result.OwnerID, deviceID, platform, appVersion); err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist login device: %v", err))
+	}
+	if err := s.persistConsentRecord(ctx, result.OwnerID, agreementVersion, privacyVersion, deviceID, platform, "LoginWithPhone"); err != nil {
+		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist consent record: %v", err))
+	}
+	return result, nil
 }
 
 func (s *AuthService) HandleOtpDeliveryCallback(ctx context.Context, requestID string, status string, normalizedError string) error {
@@ -1417,6 +1867,7 @@ func buildSubAccountProfileView(owner *model.UserProfile, persona *model.Persona
 		"avatarUrl":         avatarURL,
 		"backgroundUrl":     "",
 		"bio":               owner.Bio,
+		"identityTags":      parsePgTextArray(owner.IdentityTags),
 		"followerCount":     owner.FollowerCount,
 		"followingCount":    owner.FollowingCount,
 		"postCount":         owner.PostCount,
@@ -1600,6 +2051,25 @@ func removeProfileFields(existing, toRemove []string) []string {
 		result = append(result, field)
 	}
 	return normalizeProfileFields(result)
+}
+
+// parsePgTextArray 解析 Postgres TEXT[] 扫描出的 "{a,b}" 字面量为字符串切片（不做字段白名单归一）。
+func parsePgTextArray(raw string) []string {
+	text := strings.TrimSpace(raw)
+	text = strings.TrimPrefix(text, "{")
+	text = strings.TrimSuffix(text, "}")
+	if text == "" {
+		return []string{}
+	}
+	parts := strings.Split(text, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.Trim(strings.TrimSpace(part), `"`)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
 }
 
 func parseProfileFieldList(raw string) []string {
@@ -1865,6 +2335,9 @@ func normalizePhoneCredentialKey(phone string) string {
 
 func maskPhoneForDisplay(phone string) string {
 	normalized := normalizePhoneCredentialKey(phone)
+	if strings.HasPrefix(normalized, "+86") && len(normalized) == 14 {
+		normalized = normalized[3:]
+	}
 	if len(normalized) <= 7 {
 		return normalized
 	}

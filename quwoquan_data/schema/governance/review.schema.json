@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/governance/review",
+  "title": "Human candidate review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "decisionId",
+    "candidateId",
+    "decision",
+    "reviewer",
+    "actorType",
+    "reason",
+    "fromStatus",
+    "toStatus",
+    "reviewedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "quwoquan_data.governance_review/1"
+    },
+    "decisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidateId": {
+      "type": "string",
+      "pattern": "^candidate_[0-9a-f]{24}$"
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["approve", "reject", "offline", "reopen"]
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "actorType": {
+      "const": "human"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "fromStatus": {
+      "type": "string",
+      "enum": ["published", "pending_review", "rejected", "offline"]
+    },
+    "toStatus": {
+      "type": "string",
+      "enum": ["published", "pending_review", "rejected", "offline"]
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

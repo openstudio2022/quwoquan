@@ -5,10 +5,57 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/conversation_avatar.dart';
+import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/cloud/runtime/models/recent_search_read_presentation.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/ui/search/models/search_result_tab_spec.dart';
 import 'package:quwoquan_app/ui/search/providers/search_coordinator.dart';
+
+/// 搜索域统一语义 token。
+///
+/// 字体四级：
+/// - L1 区块标题 [sectionTitleSize] + [sectionTitleWeight] + foregroundPrimary
+/// - L2 正文/列表主文本 [bodySize] + [bodyWeight] + foregroundPrimary
+/// - L3 卡片标题 [cardTitleSize] + [bodyWeight] + foregroundPrimary
+/// - L4 辅助说明 [captionSize] + [bodyWeight] + foregroundSecondary
+///
+/// 低频工具栏：[toolbarSize] + [toolbarWeight] + foregroundTertiary，
+/// 删除态操作 [toolbarSize] + [toolbarActionWeight] + foregroundSecondary。
+///
+/// 颜色三级：主文本 foregroundPrimary / 辅助 foregroundSecondary /
+/// 低频工具栏与占位 foregroundTertiary；仅提交与可点链接使用 primaryColor。
+class _SearchTokens {
+  _SearchTokens._();
+
+  // ===== 字体层级 =====
+  static const double sectionTitleSize = AppTypography.iosBody; // L1 17
+  static const FontWeight sectionTitleWeight = AppTypography.semiBold;
+  static const double bodySize = AppTypography.iosCallout; // L2 16
+  static const double cardTitleSize = AppTypography.iosFootnote; // L3 13
+  static const double captionSize = AppTypography.iosCaption1; // L4 12
+  static const double toolbarSize = AppTypography.iosSubheadline; // 工具栏 15
+  static const FontWeight bodyWeight = AppTypography.regular;
+  static const FontWeight toolbarWeight = AppTypography.regular;
+  static const FontWeight toolbarActionWeight = AppTypography.medium;
+
+  // ===== 间距层级 =====
+  static const double tabToContentGap = AppSpacing.interGroupSm;
+  static const double headerContentGap = AppSpacing.intraGroupSm;
+  static const double sectionGap = AppSpacing.interGroupLg;
+  static const double historyColumnGap = AppSpacing.interGroupMd;
+  static const double historyRowGap = AppSpacing.intraGroupLg;
+  static const double inspirationGridGap = AppSpacing.intraGroupSm;
+
+  /// 搜索页正文左右边距：窄屏 containerMd，宽屏 containerLg。
+  static double contentHorizontal(BuildContext context) =>
+      AppSpacing.responsiveValue(
+        context,
+        compact: AppSpacing.containerMd,
+        regular: AppSpacing.containerMd,
+        expanded: AppSpacing.containerLg,
+      );
+}
 
 class GlobalSearchPage extends ConsumerStatefulWidget {
   const GlobalSearchPage({super.key, required this.launchContext});
@@ -20,8 +67,6 @@ class GlobalSearchPage extends ConsumerStatefulWidget {
 }
 
 class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
-  static const int _collapsedHistoryCount = 6;
-
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
 
@@ -66,14 +111,6 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final fgTertiary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundTertiary,
-    );
-    final mutedSurface = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.surfaceMuted,
-    );
     _syncControllerText(state.query);
 
     return AppFullscreenModalSurface(
@@ -87,21 +124,16 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
           Expanded(
             child: Padding(
               padding: EdgeInsets.fromLTRB(
-                AppSpacing.containerMd,
+                _SearchTokens.contentHorizontal(context),
                 AppSpacing.containerSm,
-                AppSpacing.containerMd,
+                _SearchTokens.contentHorizontal(context),
                 AppSpacing.containerLg,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildSearchObjectSelector(
-                    state: state,
-                    isDark: isDark,
-                    fgSecondary: fgSecondary,
-                    mutedSurface: mutedSurface,
-                  ),
-                  SizedBox(height: AppSpacing.containerSm),
+                  _buildFixedTabBar(state: state, isDark: isDark),
+                  SizedBox(height: _SearchTokens.tabToContentGap),
                   Expanded(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 180),
@@ -110,17 +142,13 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
                           key: const ValueKey<String>('search_history_browse'),
                           state: state,
                           fgSecondary: fgSecondary,
-                          fgTertiary: fgTertiary,
                           isDark: isDark,
-                          manageMode: false,
                         ),
                         SearchViewMode.historyManage => _buildHistoryView(
                           key: const ValueKey<String>('search_history_manage'),
                           state: state,
                           fgSecondary: fgSecondary,
-                          fgTertiary: fgTertiary,
                           isDark: isDark,
-                          manageMode: true,
                         ),
                         SearchViewMode.liveSuggestions => _buildSuggestionView(
                           key: const ValueKey<String>(
@@ -161,7 +189,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
           height: AppSpacing.appChromeTopBarHeight(context),
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.feedContentHorizontal(context),
+              horizontal: _SearchTokens.contentHorizontal(context),
             ),
             child: _buildSearchBar(state, isDark, fgSecondary),
           ),
@@ -266,189 +294,26 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     );
   }
 
-  Widget _buildSearchObjectSelector({
+  Widget _buildFixedTabBar({
     required SearchSessionState state,
     required bool isDark,
-    required Color fgSecondary,
-    required Color mutedSurface,
   }) {
-    final selection = state.selection.normalized();
-    final selectionBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.selectionBackground,
+    final tabs = SearchResultTabSpec.fixedTabs;
+    final activeIndex = tabs.indexWhere(
+      (tab) => tab.id == SearchResultTabIds.all,
     );
-    final selectionForeground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.selectionForeground,
-    );
-    final selectionBorder = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.selectionBorder,
-    );
-    final fgTertiary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundTertiary,
-    );
-
-    return Column(
-      key: TestKeys.globalSearchObjectSelector,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CupertinoButton(
-          key: TestKeys.searchContentSelectorButton,
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
-          minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
-          onPressed: _openContentTypeSelector,
-          child: Row(
-            children: [
-              Text(
-                '搜索指定内容',
-                style: TextStyle(
-                  fontSize: AppTypography.iosSubheadline,
-                  fontWeight: AppTypography.medium,
-                  color: fgSecondary,
-                ),
-              ),
-              SizedBox(width: AppSpacing.intraGroupXs),
-              Icon(
-                CupertinoIcons.chevron_forward,
-                size: AppSpacing.iconSmall,
-                color: fgTertiary,
-              ),
-              const Spacer(),
-              Flexible(
-                child: Text(
-                  _buildContentSelectionSummary(selection),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    fontWeight: AppTypography.medium,
-                    color: selection.isAllContent
-                        ? fgSecondary
-                        : AppColors.primaryColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(height: AppSpacing.intraGroupXs),
-        SingleChildScrollView(
-          key: TestKeys.globalSearchScopeRail,
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _InlineSelectionChip(
-                chipKey: TestKeys.searchScopeAllChip,
-                label: '全部',
-                isSelected: selection.activeObjectTarget == null,
-                backgroundColor: mutedSurface,
-                textColor: fgSecondary,
-                selectedBackgroundColor: selectionBackground,
-                selectedTextColor: selectionForeground,
-                selectedBorderColor: selectionBorder,
-                onTap: () => _selectObjectTarget(null),
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-              _InlineSelectionChip(
-                chipKey: TestKeys.searchScopeContactsChip,
-                label: SearchObjectTarget.contacts.label,
-                isSelected:
-                    selection.activeObjectTarget == SearchObjectTarget.contacts,
-                backgroundColor: mutedSurface,
-                textColor: fgSecondary,
-                selectedBackgroundColor: selectionBackground,
-                selectedTextColor: selectionForeground,
-                selectedBorderColor: selectionBorder,
-                onTap: () => _selectObjectTarget(SearchObjectTarget.contacts),
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-              _InlineSelectionChip(
-                chipKey: TestKeys.searchScopeDirectChatChip,
-                label: SearchObjectTarget.directChats.label,
-                isSelected:
-                    selection.activeObjectTarget ==
-                    SearchObjectTarget.directChats,
-                backgroundColor: mutedSurface,
-                textColor: fgSecondary,
-                selectedBackgroundColor: selectionBackground,
-                selectedTextColor: selectionForeground,
-                selectedBorderColor: selectionBorder,
-                onTap: () =>
-                    _selectObjectTarget(SearchObjectTarget.directChats),
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-              _InlineSelectionChip(
-                chipKey: TestKeys.searchScopeGroupChatChip,
-                label: SearchObjectTarget.groupChats.label,
-                isSelected:
-                    selection.activeObjectTarget ==
-                    SearchObjectTarget.groupChats,
-                backgroundColor: mutedSurface,
-                textColor: fgSecondary,
-                selectedBackgroundColor: selectionBackground,
-                selectedTextColor: selectionForeground,
-                selectedBorderColor: selectionBorder,
-                onTap: () => _selectObjectTarget(SearchObjectTarget.groupChats),
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-              _InlineSelectionChip(
-                chipKey: TestKeys.searchScopeCirclesChip,
-                label: SearchObjectTarget.circles.label,
-                isSelected:
-                    selection.activeObjectTarget == SearchObjectTarget.circles,
-                backgroundColor: mutedSurface,
-                textColor: fgSecondary,
-                selectedBackgroundColor: selectionBackground,
-                selectedTextColor: selectionForeground,
-                selectedBorderColor: selectionBorder,
-                onTap: () => _selectObjectTarget(SearchObjectTarget.circles),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _buildContentSelectionSummary(SearchObjectSelection selection) {
-    if (selection.isAllContent) {
-      return '全部内容';
-    }
-    final labels = SearchContentTypeFilter.values
-        .where(selection.isContentTypeEnabled)
-        .map((item) => item.label)
-        .toList(growable: false);
-    if (labels.length <= 2) {
-      return labels.join(' · ');
-    }
-    return '${labels[0]} · ${labels[1]} +${labels.length - 2}';
-  }
-
-  Future<void> _openContentTypeSelector() async {
-    final nextSelection = await showCupertinoModalPopup<SearchObjectSelection>(
-      context: context,
-      barrierColor: AppColors.black.withValues(alpha: 0),
-      builder: (_) => _SearchContentTypeSheet(
-        initialSelection: _searchSession.selection.normalized(),
-      ),
-    );
-    if (nextSelection != null) {
-      _coordinator.updateSelection(nextSelection);
-    }
-  }
-
-  void _selectObjectTarget(SearchObjectTarget? target) {
-    final current = _searchSession.selection.normalized();
-    _coordinator.updateSelection(
-      SearchObjectSelection(
-        targets: target == null
-            ? const <SearchObjectTarget>{}
-            : <SearchObjectTarget>{target},
-        contentTypes: current.contentTypes,
-      ),
+    return SecondaryCapsuleTabBar(
+      isDark: isDark,
+      tabs: tabs.map((tab) => tab.label).toList(growable: false),
+      activeIndex: activeIndex < 0 ? 0 : activeIndex,
+      onTap: (index) {
+        final query = state.query.trim();
+        if (query.isEmpty) {
+          _focusNode.requestFocus();
+          return;
+        }
+        _openNetworkResults(query, initialTabId: tabs[index].id);
+      },
     );
   }
 
@@ -460,29 +325,19 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     required Key key,
     required SearchSessionState state,
     required Color fgSecondary,
-    required Color fgTertiary,
     required bool isDark,
-    required bool manageMode,
   }) {
     if (state.isHydratingHistory && state.recentSearches.isEmpty) {
       return const Center(child: CupertinoActivityIndicator());
     }
-    if (state.recentSearches.isEmpty) {
-      return SizedBox(key: key);
-    }
 
-    final visibleEntries = manageMode || state.isHistoryExpanded
+    final historyColumns = _historyGridColumns(context);
+    final collapsedHistoryCount = historyColumns * 5;
+    final visibleEntries = state.isHistoryExpanded || state.isManagingHistory
         ? state.recentSearches
         : state.recentSearches
-              .take(_collapsedHistoryCount)
+              .take(collapsedHistoryCount)
               .toList(growable: false);
-    final separatorColor = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.separatorSubtle,
-    );
-    final showExpand =
-        !manageMode && state.recentSearches.length > _collapsedHistoryCount;
-
     return ListView(
       key: key,
       padding: EdgeInsets.only(
@@ -490,106 +345,61 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         bottom: AppSpacing.containerMd,
       ),
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              '最近在搜',
-              style: TextStyle(
-                fontSize: AppTypography.iosBody,
-                fontWeight: AppTypography.medium,
-                color: fgTertiary,
-              ),
-            ),
-            const Spacer(),
-            if (showExpand)
-              CupertinoButton(
-                key: TestKeys.searchHistoryExpandButton,
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                onPressed: _coordinator.toggleHistoryExpanded,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      state.isHistoryExpanded ? '收起' : '展开',
-                      style: TextStyle(
-                        fontSize: AppTypography.iosBody,
-                        color: fgSecondary,
-                      ),
-                    ),
-                    SizedBox(width: AppSpacing.intraGroupXs / 2),
-                    Icon(
-                      state.isHistoryExpanded
-                          ? CupertinoIcons.chevron_up
-                          : CupertinoIcons.chevron_down,
-                      color: fgTertiary,
-                      size: AppSpacing.iconSmall,
-                    ),
-                  ],
-                ),
-              ),
-            if (showExpand) ...[
-              SizedBox(width: AppSpacing.containerSm),
-              _HeaderActionDivider(color: separatorColor),
-            ],
-            if (!manageMode) ...[
-              SizedBox(width: AppSpacing.containerSm),
-              CupertinoButton(
-                key: TestKeys.searchHistoryManageButton,
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                onPressed: _coordinator.startManagingHistory,
-                child: Icon(
-                  CupertinoIcons.delete,
-                  color: fgTertiary,
-                  size: AppSpacing.iconMedium,
-                ),
-              ),
-            ] else ...[
-              CupertinoButton(
-                key: TestKeys.searchHistoryClearButton,
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                onPressed: () => unawaited(_confirmClearHistory()),
-                child: Text(
-                  '清空',
-                  style: TextStyle(
-                    fontSize: AppTypography.iosBody,
-                    color: fgSecondary,
-                  ),
-                ),
-              ),
-              SizedBox(width: AppSpacing.containerSm),
-              _HeaderActionDivider(color: separatorColor),
-              SizedBox(width: AppSpacing.containerSm),
-              _ManageDoneButton(onTap: _coordinator.finishManagingHistory),
-            ],
-          ],
+        if (state.recentSearches.isNotEmpty)
+          _buildRecentSearchSection(
+            entries: visibleEntries,
+            columns: historyColumns,
+            expanded: state.isHistoryExpanded,
+            managing: state.isManagingHistory,
+            isDark: isDark,
+          ),
+        if (state.recentSearches.isNotEmpty)
+          SizedBox(height: _SearchTokens.sectionGap),
+        ..._buildDefaultInspirationSections(state: state, isDark: isDark),
+      ],
+    );
+  }
+
+  Widget _buildRecentSearchSection({
+    required List<RecentSearchEntryView> entries,
+    required int columns,
+    required bool expanded,
+    required bool managing,
+    required bool isDark,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SearchHistoryToolbar(
+          expanded: expanded,
+          managing: managing,
+          onToggleExpanded: _coordinator.toggleHistoryExpanded,
+          onStartManaging: _coordinator.startManagingHistory,
+          onClearAll: () => unawaited(_confirmClearHistory()),
+          onDone: _coordinator.finishManagingHistory,
         ),
-        SizedBox(height: AppSpacing.containerMd),
+        SizedBox(height: _SearchTokens.headerContentGap),
         GridView.builder(
           shrinkWrap: true,
+          padding: EdgeInsets.zero,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: visibleEntries.length,
+          itemCount: entries.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisExtent: manageMode
-                ? AppSpacing.buttonHeightMd + AppSpacing.containerSm
-                : AppSpacing.buttonHeightMd,
-            crossAxisSpacing: AppSpacing.intraGroupSm,
-            mainAxisSpacing: AppSpacing.intraGroupSm,
+            crossAxisCount: columns,
+            mainAxisExtent: AppSpacing.buttonHeightMd,
+            crossAxisSpacing: _SearchTokens.historyColumnGap,
+            mainAxisSpacing: _SearchTokens.historyRowGap,
           ),
           itemBuilder: (context, index) {
-            final entry = visibleEntries[index];
-            return _HistoryChip(
+            final entry = entries[index];
+            return _SearchHistoryGridItem(
               entry: entry,
-              manageMode: manageMode,
               isDark: isDark,
-              onTap: manageMode
+              managing: managing,
+              onTap: managing
                   ? null
                   : () => unawaited(_coordinator.useRecentSearch(entry)),
-              onRemove: manageMode
+              onRemove: managing
                   ? () => unawaited(
                       _coordinator.removeRecentSearch(entry.entryId),
                     )
@@ -599,6 +409,70 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         ),
       ],
     );
+  }
+
+  int _historyGridColumns(BuildContext context) {
+    return AppSpacing.responsiveValue(
+      context,
+      compact: 2,
+      regular: 2,
+      expanded: 3,
+    ).round();
+  }
+
+  List<Widget> _buildDefaultInspirationSections({
+    required SearchSessionState state,
+    required bool isDark,
+  }) {
+    final inspiration = state.inspiration;
+    if (inspiration.isLoading && inspiration.isEmpty) {
+      return const <Widget>[Center(child: CupertinoActivityIndicator())];
+    }
+    return <Widget>[
+      if (inspiration.todayIntersections.isNotEmpty)
+        _TodayIntersectionSection(
+          items: inspiration.todayIntersections,
+          isDark: isDark,
+          onTap: (item) => _openNetworkResults(
+            item.query ?? item.title,
+            initialTabId: 'all',
+          ),
+        ),
+      if (inspiration.todayIntersections.isNotEmpty)
+        SizedBox(height: _SearchTokens.sectionGap),
+      if (inspiration.hotCircles.isNotEmpty)
+        _InspirationCardGridSection(
+          title: '热门圈子',
+          items: inspiration.hotCircles,
+          isDark: isDark,
+          fallbackIcon: CupertinoIcons.person_3_fill,
+          onTap: (item) => _openNetworkResults(
+            item.query ?? item.title,
+            initialTabId: 'all',
+          ),
+        ),
+      if (inspiration.hotCircles.isNotEmpty)
+        SizedBox(height: _SearchTokens.sectionGap),
+      if (inspiration.hotLocations.isNotEmpty)
+        _InspirationCardGridSection(
+          title: '热门地点',
+          items: inspiration.hotLocations,
+          isDark: isDark,
+          fallbackIcon: CupertinoIcons.location_solid,
+          onTap: (item) => _openNetworkResults(
+            item.query ?? item.title,
+            initialTabId: 'all',
+          ),
+        ),
+      if (inspiration.hotLocations.isNotEmpty)
+        SizedBox(height: _SearchTokens.sectionGap),
+      if (inspiration.people.isNotEmpty)
+        _InspirationPeopleSection(
+          people: inspiration.people,
+          isDark: isDark,
+          onTap: (person) => _openUserProfile(person.id),
+        ),
+    ];
   }
 
   Widget _buildSuggestionView({
@@ -628,11 +502,9 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     }
     return ListView.builder(
       key: key,
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
-        AppSpacing.containerMd,
-        AppSpacing.containerMd,
-        AppSpacing.containerMd,
+      padding: EdgeInsets.only(
+        top: AppSpacing.containerXs,
+        bottom: AppSpacing.containerMd,
       ),
       itemCount: state.suggestionSections.length,
       itemBuilder: (context, index) {
@@ -641,7 +513,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
           padding: EdgeInsets.only(
             bottom: index == state.suggestionSections.length - 1
                 ? 0
-                : AppSpacing.containerLg,
+                : _SearchTokens.sectionGap,
           ),
           child: _buildSuggestionSection(
             section: section,
@@ -665,66 +537,200 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          section.title,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            fontWeight: AppTypography.semiBold,
-            color: fgPrimary,
-          ),
-        ),
-        SizedBox(height: AppSpacing.intraGroupSm),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColorsFunctional.getColor(
-              isDark,
-              ColorType.backgroundPrimary,
+        _SearchSectionHeader(title: section.title),
+        SizedBox(height: _SearchTokens.headerContentGap),
+        switch (section.kind) {
+          SearchSuggestionSectionKind.contacts ||
+          SearchSuggestionSectionKind.followedPeople =>
+            _buildAvatarSuggestionGrid(
+              section: section,
+              query: query,
+              isDark: isDark,
             ),
-            borderRadius: BorderRadius.circular(
-              AppSpacing.contentPreviewCornerRadius,
-            ),
-            border: Border.all(
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.separatorSubtle,
-              ),
-            ),
+          SearchSuggestionSectionKind.circles ||
+          SearchSuggestionSectionKind.locations => _buildObjectSuggestionGrid(
+            section: section,
+            query: query,
+            isDark: isDark,
           ),
-          child: Column(
-            children: [
-              for (var i = 0; i < section.visibleItems.length; i++) ...[
-                _buildSuggestionItem(
-                  item: section.visibleItems[i],
-                  query: query,
-                  isDark: isDark,
-                  fgPrimary: fgPrimary,
-                  fgSecondary: fgSecondary,
-                ),
-                if (i != section.visibleItems.length - 1 ||
-                    section.showsMoreEntry)
-                  _DividerLine(isDark: isDark),
-              ],
-              if (section.showsMoreEntry)
-                _MoreActionRow(
-                  label: section.moreLabel ?? '查看更多',
-                  onTap: () {
-                    switch (section.kind) {
-                      case SearchSuggestionSectionKind.contacts:
-                        _coordinator.expandContacts();
-                      case SearchSuggestionSectionKind.chatRecords:
-                        _coordinator.expandChatRecords();
-                      case SearchSuggestionSectionKind.mostUsed:
-                      case SearchSuggestionSectionKind.circles:
-                      case SearchSuggestionSectionKind.network:
-                        return;
-                    }
-                  },
-                ),
-            ],
+          SearchSuggestionSectionKind.network => _buildNetworkSuggestionTags(
+            section: section,
+            query: query,
+            isDark: isDark,
           ),
-        ),
+          SearchSuggestionSectionKind.chatRecords => _buildSuggestionListCard(
+            section: section,
+            query: query,
+            isDark: isDark,
+            fgPrimary: fgPrimary,
+            fgSecondary: fgSecondary,
+          ),
+        },
       ],
     );
+  }
+
+  Widget _buildSuggestionListCard({
+    required SearchSuggestionSection section,
+    required String query,
+    required bool isDark,
+    required Color fgPrimary,
+    required Color fgSecondary,
+  }) {
+    return _SuggestionSurface(
+      isDark: isDark,
+      child: Column(
+        children: [
+          for (var i = 0; i < section.visibleItems.length; i++) ...[
+            _buildSuggestionItem(
+              item: section.visibleItems[i],
+              query: query,
+              isDark: isDark,
+              fgPrimary: fgPrimary,
+              fgSecondary: fgSecondary,
+            ),
+            if (i != section.visibleItems.length - 1 || section.showsMoreEntry)
+              _DividerLine(isDark: isDark),
+          ],
+          if (section.showsMoreEntry)
+            _MoreActionRow(
+              label: section.moreLabel ?? '查看更多',
+              onTap: () {
+                switch (section.kind) {
+                  case SearchSuggestionSectionKind.contacts:
+                    _coordinator.expandContacts();
+                  case SearchSuggestionSectionKind.chatRecords:
+                    _coordinator.expandChatRecords();
+                  case SearchSuggestionSectionKind.circles:
+                  case SearchSuggestionSectionKind.locations:
+                  case SearchSuggestionSectionKind.followedPeople:
+                  case SearchSuggestionSectionKind.network:
+                    return;
+                }
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatarSuggestionGrid({
+    required SearchSuggestionSection section,
+    required String query,
+    required bool isDark,
+  }) {
+    return _SuggestionSurface(
+      isDark: isDark,
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        child: GridView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: section.visibleItems.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4,
+            crossAxisSpacing: _SearchTokens.inspirationGridGap,
+            mainAxisSpacing: _SearchTokens.inspirationGridGap,
+            childAspectRatio: 0.64,
+          ),
+          itemBuilder: (context, index) {
+            final entry = section.visibleItems[index];
+            return _AvatarSuggestionCard(
+              entry: entry,
+              query: query,
+              isDark: isDark,
+              onTap: () => _handleGridSuggestionTap(entry),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildObjectSuggestionGrid({
+    required SearchSuggestionSection section,
+    required String query,
+    required bool isDark,
+  }) {
+    return _SuggestionSurface(
+      isDark: isDark,
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        child: GridView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: section.visibleItems.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: _SearchTokens.inspirationGridGap,
+            mainAxisSpacing: _SearchTokens.inspirationGridGap,
+            childAspectRatio: 0.78,
+          ),
+          itemBuilder: (context, index) {
+            final entry = section.visibleItems[index];
+            return _ObjectSuggestionCard(
+              entry: entry,
+              query: query,
+              isDark: isDark,
+              onTap: () => _handleGridSuggestionTap(entry),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNetworkSuggestionTags({
+    required SearchSuggestionSection section,
+    required String query,
+    required bool isDark,
+  }) {
+    return _SuggestionSurface(
+      isDark: isDark,
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        child: Wrap(
+          spacing: AppSpacing.intraGroupSm,
+          runSpacing: AppSpacing.intraGroupSm,
+          children: [
+            for (final entry in section.visibleItems)
+              _NetworkSuggestionPill(
+                entry: entry,
+                isDark: isDark,
+                onTap: () => _handleGridSuggestionTap(entry),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _handleGridSuggestionTap(SearchSuggestionEntry entry) {
+    switch (entry.kind) {
+      case SearchSuggestionEntryKind.contact:
+        final contact = entry.cast<ContactSearchSuggestion>();
+        _openConversation(contact.conversationId);
+      case SearchSuggestionEntryKind.chatRecord:
+        final record = entry.cast<ChatRecordSearchSuggestion>();
+        _openConversation(
+          record.conversationId,
+          messageAnchorId: record.messageAnchorId,
+        );
+      case SearchSuggestionEntryKind.circle:
+        final circle = entry.cast<CircleSearchItemView>();
+        _openCircle(circle.circleId);
+      case SearchSuggestionEntryKind.location:
+        final location = entry.cast<LocationPoiDto>();
+        _openNetworkResults(location.name, initialTabId: 'all');
+      case SearchSuggestionEntryKind.followedPerson:
+        final person = entry.cast<SocialRelationSearchItemView>();
+        _openUserProfile(person.subAccountId);
+      case SearchSuggestionEntryKind.network:
+        final network = entry.cast<NetworkSearchSuggestion>();
+        _openNetworkResults(network.query, initialTabId: network.initialTabId);
+    }
   }
 
   Widget _buildSuggestionItem({
@@ -735,63 +741,6 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     required Color fgSecondary,
   }) {
     switch (item.kind) {
-      case SearchSuggestionEntryKind.mostUsed:
-        final mostUsed = item.cast<MostUsedSearchItem>();
-        return _BasicSuggestionTile(
-          leading:
-              mostUsed.targetKind == MostUsedTargetKind.chatRecord &&
-                  mostUsed.conversationId?.trim().isNotEmpty == true
-              ? ConversationAvatar(
-                  conversationId: mostUsed.conversationId!.trim(),
-                  conversationType: mostUsed.conversationType ?? 'group',
-                  title: mostUsed.title,
-                  avatarUrl: mostUsed.avatarUrl ?? '',
-                  size: AppSpacing.avatarUserMd,
-                  borderRadius: AppSpacing.avatarUserMd / 2,
-                  groupFallbackIcon: CupertinoIcons.person_2_fill,
-                  directFallbackIcon: CupertinoIcons.chat_bubble_2_fill,
-                )
-              : _buildConversationLeading(
-                  avatarUrl: mostUsed.avatarUrl,
-                  isDark: isDark,
-                  fallbackIcon: switch (mostUsed.targetKind) {
-                    MostUsedTargetKind.contact => CupertinoIcons.person_fill,
-                    MostUsedTargetKind.chatRecord =>
-                      CupertinoIcons.chat_bubble_2_fill,
-                    MostUsedTargetKind.circle => CupertinoIcons.person_3_fill,
-                  },
-                ),
-          title: _highlightedText(
-            mostUsed.title,
-            query,
-            TextStyle(
-              fontSize: AppTypography.iosBody,
-              fontWeight: AppTypography.medium,
-              color: fgPrimary,
-            ),
-          ),
-          subtitle: _highlightedText(
-            mostUsed.subtitle,
-            query,
-            TextStyle(fontSize: AppTypography.iosFootnote, color: fgSecondary),
-            maxLines: 2,
-          ),
-          trailing: Text(
-            switch (mostUsed.targetKind) {
-              MostUsedTargetKind.contact => '联系人',
-              MostUsedTargetKind.chatRecord =>
-                mostUsed.conversationType?.trim().toLowerCase() == 'group'
-                    ? '群聊'
-                    : '单聊',
-              MostUsedTargetKind.circle => '圈子',
-            },
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: fgSecondary,
-            ),
-          ),
-          onTap: () => _openMostUsedItem(mostUsed),
-        );
       case SearchSuggestionEntryKind.contact:
         final contact = item.cast<ContactSearchSuggestion>();
         return _BasicSuggestionTile(
@@ -804,8 +753,8 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
             contact.displayName,
             query,
             TextStyle(
-              fontSize: AppTypography.iosBody,
-              fontWeight: AppTypography.medium,
+              fontSize: _SearchTokens.bodySize,
+              fontWeight: _SearchTokens.bodyWeight,
               color: fgPrimary,
             ),
           ),
@@ -841,8 +790,8 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
             circle.name,
             query,
             TextStyle(
-              fontSize: AppTypography.iosBody,
-              fontWeight: AppTypography.medium,
+              fontSize: _SearchTokens.bodySize,
+              fontWeight: _SearchTokens.bodyWeight,
               color: fgPrimary,
             ),
           ),
@@ -861,6 +810,66 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
           ),
           onTap: () => _openCircle(circle.circleId),
         );
+      case SearchSuggestionEntryKind.location:
+        final location = item.cast<LocationPoiDto>();
+        return _BasicSuggestionTile(
+          leading: _buildConversationLeading(
+            avatarUrl: null,
+            isDark: isDark,
+            fallbackIcon: CupertinoIcons.location_solid,
+          ),
+          title: _highlightedText(
+            location.name,
+            query,
+            TextStyle(
+              fontSize: _SearchTokens.bodySize,
+              fontWeight: _SearchTokens.bodyWeight,
+              color: fgPrimary,
+            ),
+          ),
+          subtitle: Text(
+            (location.address ?? '').trim().isNotEmpty
+                ? location.address!.trim()
+                : '已关注地点',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.iosFootnote,
+              color: fgSecondary,
+            ),
+          ),
+          onTap: () => _openNetworkResults(location.name, initialTabId: 'all'),
+        );
+      case SearchSuggestionEntryKind.followedPerson:
+        final person = item.cast<SocialRelationSearchItemView>();
+        return _BasicSuggestionTile(
+          leading: _buildConversationLeading(
+            avatarUrl: person.avatarUrl,
+            isDark: isDark,
+            fallbackIcon: CupertinoIcons.person_crop_circle_fill,
+          ),
+          title: _highlightedText(
+            person.displayName,
+            query,
+            TextStyle(
+              fontSize: _SearchTokens.bodySize,
+              fontWeight: _SearchTokens.bodyWeight,
+              color: fgPrimary,
+            ),
+          ),
+          subtitle: Text(
+            person.headline?.trim().isNotEmpty == true
+                ? person.headline!.trim()
+                : '已关注 · 共同兴趣相关',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.iosFootnote,
+              color: fgSecondary,
+            ),
+          ),
+          onTap: () => _openUserProfile(person.subAccountId),
+        );
       case SearchSuggestionEntryKind.network:
         final network = item.cast<NetworkSearchSuggestion>();
         return _BasicSuggestionTile(
@@ -873,8 +882,8 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
             network.displayTitle,
             query,
             TextStyle(
-              fontSize: AppTypography.iosBody,
-              fontWeight: AppTypography.medium,
+              fontSize: _SearchTokens.bodySize,
+              fontWeight: _SearchTokens.bodyWeight,
               color: fgPrimary,
             ),
           ),
@@ -898,25 +907,6 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     }
   }
 
-  void _openMostUsedItem(MostUsedSearchItem item) {
-    switch (item.targetKind) {
-      case MostUsedTargetKind.contact:
-      case MostUsedTargetKind.chatRecord:
-        if (item.conversationId == null) {
-          return;
-        }
-        _openConversation(
-          item.conversationId!,
-          messageAnchorId: item.messageAnchorId,
-        );
-      case MostUsedTargetKind.circle:
-        if (item.circleId == null) {
-          return;
-        }
-        _openCircle(item.circleId!);
-    }
-  }
-
   void _openConversation(String conversationId, {String? messageAnchorId}) {
     unawaited(_coordinator.rememberCurrentQuery());
     context.push(
@@ -933,6 +923,15 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   void _openCircle(String circleId) {
     unawaited(_coordinator.rememberCurrentQuery());
     context.push(AppRoutePaths.circleDetail(id: circleId));
+  }
+
+  void _openUserProfile(String userId) {
+    final normalized = userId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    unawaited(_coordinator.rememberCurrentQuery());
+    context.push(AppRoutePaths.userProfile(username: normalized));
   }
 
   void _openNetworkResults(String query, {String? initialTabId}) {
@@ -982,10 +981,10 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(
-          title: const Text('清空最近搜索'),
+          title: const Text('清空搜索历史'),
           content: const Padding(
             padding: EdgeInsets.only(top: AppSpacing.containerXs),
-            child: Text('将移除全部最近搜索记录，且无法恢复。'),
+            child: Text('将移除全部搜索历史记录，且无法恢复。'),
           ),
           actions: [
             CupertinoDialogAction(
@@ -1025,179 +1024,31 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   }
 }
 
-class _HeaderActionDivider extends StatelessWidget {
-  const _HeaderActionDivider({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: AppSpacing.one,
-      height: AppSpacing.buttonHeightMd - AppSpacing.intraGroupXs,
-      child: DecoratedBox(decoration: BoxDecoration(color: color)),
-    );
-  }
-}
-
-class _ManageDoneButton extends StatelessWidget {
-  const _ManageDoneButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      key: TestKeys.searchHistoryDoneButton,
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onTap,
-      child: Text(
-        '完成',
-        style: TextStyle(
-          fontSize: AppTypography.iosBody,
-          fontWeight: AppTypography.medium,
-          color: AppColors.primaryColor,
-        ),
-      ),
-    );
-  }
-}
-
-class _InlineSelectionChip extends StatelessWidget {
-  const _InlineSelectionChip({
-    required this.chipKey,
-    required this.label,
-    required this.isSelected,
-    required this.backgroundColor,
-    required this.textColor,
-    required this.selectedBackgroundColor,
-    required this.selectedTextColor,
-    required this.selectedBorderColor,
-    required this.onTap,
+class _SearchHistoryToolbar extends StatelessWidget {
+  const _SearchHistoryToolbar({
+    required this.expanded,
+    required this.managing,
+    required this.onToggleExpanded,
+    required this.onStartManaging,
+    required this.onClearAll,
+    required this.onDone,
   });
 
-  final Key chipKey;
-  final String label;
-  final bool isSelected;
-  final Color backgroundColor;
-  final Color textColor;
-  final Color selectedBackgroundColor;
-  final Color selectedTextColor;
-  final Color selectedBorderColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      key: chipKey,
-      padding: EdgeInsets.zero,
-      minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
-      onPressed: onTap,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: isSelected ? selectedBackgroundColor : backgroundColor,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-          border: Border.all(
-            color: isSelected
-                ? selectedBorderColor
-                : AppColors.black.withValues(alpha: 0),
-            width: AppSpacing.hairline,
-          ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.containerSm,
-            vertical: AppSpacing.intraGroupXs,
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: AppTypography.sm,
-              fontWeight: AppTypography.medium,
-              color: isSelected ? selectedTextColor : textColor,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchContentTypeSheet extends StatefulWidget {
-  const _SearchContentTypeSheet({required this.initialSelection});
-
-  final SearchObjectSelection initialSelection;
-
-  @override
-  State<_SearchContentTypeSheet> createState() =>
-      _SearchContentTypeSheetState();
-}
-
-class _SearchContentTypeSheetState extends State<_SearchContentTypeSheet> {
-  late Set<SearchContentTypeFilter> _enabledTypes;
-
-  @override
-  void initState() {
-    super.initState();
-    _enabledTypes = widget.initialSelection.enabledContentTypes.toSet();
-  }
-
-  void _toggleType(SearchContentTypeFilter type, bool enabled) {
-    setState(() {
-      if (enabled) {
-        _enabledTypes.add(type);
-      } else {
-        _enabledTypes.remove(type);
-      }
-    });
-  }
-
-  void _reset() {
-    setState(() {
-      _enabledTypes = SearchContentTypeFilter.values.toSet();
-    });
-  }
-
-  void _complete() {
-    final normalizedTypes =
-        _enabledTypes.isEmpty ||
-            _enabledTypes.length == SearchContentTypeFilter.values.length
-        ? const <SearchContentTypeFilter>{}
-        : _enabledTypes;
-    Navigator.of(context).pop(
-      SearchObjectSelection(
-        targets: widget.initialSelection.normalizedTargets,
-        contentTypes: normalizedTypes,
-      ),
-    );
-  }
-
-  Key _toggleKeyForType(SearchContentTypeFilter type) {
-    switch (type) {
-      case SearchContentTypeFilter.article:
-        return TestKeys.searchContentArticleToggle;
-      case SearchContentTypeFilter.image:
-        return TestKeys.searchContentImageToggle;
-      case SearchContentTypeFilter.video:
-        return TestKeys.searchContentVideoToggle;
-      case SearchContentTypeFilter.micro:
-        return TestKeys.searchContentMicroToggle;
-    }
-  }
+  final bool expanded;
+  final bool managing;
+  final VoidCallback onToggleExpanded;
+  final VoidCallback onStartManaging;
+  final VoidCallback onClearAll;
+  final VoidCallback onDone;
 
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final pageBackground = AppColorsFunctional.getColor(
+    final fgTertiary = AppColorsFunctional.getColor(
       isDark,
-      ColorType.pageBackground,
+      ColorType.foregroundTertiary,
     );
-    final primaryText = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final secondaryText = AppColorsFunctional.getColor(
+    final fgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,
     );
@@ -1205,187 +1056,232 @@ class _SearchContentTypeSheetState extends State<_SearchContentTypeSheet> {
       isDark,
       ColorType.separatorSubtle,
     );
-    final cardBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.surfaceElevated,
-    );
-
-    return AppBottomModalSurface(
-      panelKey: TestKeys.searchContentSheet,
-      onDismiss: () => Navigator.of(context).pop(),
-      backgroundColor: pageBackground,
-      contentPadding: EdgeInsets.fromLTRB(
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-        0,
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '搜索指定内容',
-                  style: TextStyle(
-                    fontSize: AppTypography.iosTitle3,
-                    fontWeight: AppTypography.semiBold,
-                    color: primaryText,
-                  ),
-                ),
-              ),
-              CupertinoButton(
-                key: TestKeys.searchContentSheetResetButton,
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                onPressed: _reset,
-                child: Text(
-                  '恢复默认',
-                  style: TextStyle(
-                    fontSize: AppTypography.iosBody,
-                    color: secondaryText,
-                  ),
-                ),
-              ),
-              SizedBox(width: AppSpacing.containerSm),
-              CupertinoButton(
-                key: TestKeys.searchContentSheetDoneButton,
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                onPressed: _complete,
-                child: Text(
-                  '完成',
-                  style: TextStyle(
-                    fontSize: AppTypography.iosBody,
-                    fontWeight: AppTypography.medium,
-                    color: AppColors.primaryColor,
-                  ),
-                ),
-              ),
-            ],
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            '搜索历史',
+            style: TextStyle(
+              fontSize: _SearchTokens.toolbarSize,
+              fontWeight: _SearchTokens.toolbarWeight,
+              color: fgTertiary,
+            ),
           ),
-          SizedBox(height: AppSpacing.containerMd),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: cardBackground,
-              borderRadius: BorderRadius.circular(
-                AppSpacing.contentPreviewCornerRadius,
+        ),
+        if (managing) ...[
+          CupertinoButton(
+            key: TestKeys.searchHistoryClearButton,
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: onClearAll,
+            child: Text(
+              '全部删除',
+              style: TextStyle(
+                fontSize: _SearchTokens.toolbarSize,
+                fontWeight: _SearchTokens.toolbarActionWeight,
+                color: fgSecondary,
               ),
             ),
-            child: Column(
+          ),
+          SizedBox(width: AppSpacing.interGroupMd),
+          CupertinoButton(
+            key: TestKeys.searchHistoryDoneButton,
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: onDone,
+            child: Text(
+              '完成',
+              style: TextStyle(
+                fontSize: _SearchTokens.toolbarSize,
+                fontWeight: _SearchTokens.toolbarActionWeight,
+                color: fgSecondary,
+              ),
+            ),
+          ),
+        ] else ...[
+          CupertinoButton(
+            key: TestKeys.searchHistoryExpandButton,
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: onToggleExpanded,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                for (
-                  var index = 0;
-                  index < SearchContentTypeFilter.values.length;
-                  index++
-                ) ...[
-                  _ContentToggleRow(
-                    label: SearchContentTypeFilter.values[index].label,
-                    value: _enabledTypes.contains(
-                      SearchContentTypeFilter.values[index],
-                    ),
-                    toggleKey: _toggleKeyForType(
-                      SearchContentTypeFilter.values[index],
-                    ),
-                    onChanged: (value) => _toggleType(
-                      SearchContentTypeFilter.values[index],
-                      value,
-                    ),
+                Text(
+                  expanded ? '收起' : '展开',
+                  style: TextStyle(
+                    fontSize: _SearchTokens.toolbarSize,
+                    fontWeight: _SearchTokens.toolbarWeight,
+                    color: fgTertiary,
                   ),
-                  if (index != SearchContentTypeFilter.values.length - 1)
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.containerSm,
-                      ),
-                      child: SizedBox(
-                        height: AppSpacing.one,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(color: divider),
-                        ),
-                      ),
-                    ),
-                ],
+                ),
+                SizedBox(width: AppSpacing.intraGroupXs),
+                Icon(
+                  expanded
+                      ? CupertinoIcons.chevron_up
+                      : CupertinoIcons.chevron_down,
+                  size: AppSpacing.iconSmall,
+                  color: fgTertiary,
+                ),
               ],
             ),
           ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.interGroupSm),
+            child: SizedBox(
+              width: AppSpacing.hairline,
+              height: AppSpacing.iconMedium,
+              child: DecoratedBox(decoration: BoxDecoration(color: divider)),
+            ),
+          ),
+          CupertinoButton(
+            key: TestKeys.searchHistoryManageButton,
+            padding: EdgeInsets.zero,
+            minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+            onPressed: onStartManaging,
+            child: Icon(
+              CupertinoIcons.delete,
+              size: AppSpacing.iconMedium,
+              color: fgTertiary,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SearchHistoryGridItem extends StatelessWidget {
+  const _SearchHistoryGridItem({
+    required this.entry,
+    required this.isDark,
+    required this.managing,
+    required this.onTap,
+    required this.onRemove,
+  });
+
+  final RecentSearchEntryView entry;
+  final bool isDark;
+  final bool managing;
+  final VoidCallback? onTap;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final pres = RecentSearchReadPresentation.fromEntry(entry);
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgTertiary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundTertiary,
+    );
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: managing ? () {} : onTap,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              pres.displayQuery,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: _SearchTokens.bodySize,
+                fontWeight: _SearchTokens.bodyWeight,
+                color: fgPrimary,
+                height: AppTypography.lineHeightTight,
+              ),
+            ),
+          ),
+          if (managing && onRemove != null) ...[
+            SizedBox(width: AppSpacing.intraGroupSm),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onRemove,
+              child: SizedBox.square(
+                dimension: AppSpacing.iconButtonMinSizeSm,
+                child: Center(
+                  child: Icon(
+                    CupertinoIcons.xmark,
+                    size: AppSpacing.iconSmall,
+                    color: fgTertiary,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _ContentToggleRow extends StatelessWidget {
-  const _ContentToggleRow({
-    required this.label,
-    required this.value,
-    required this.toggleKey,
-    required this.onChanged,
+class _SearchSectionHeader extends StatelessWidget {
+  const _SearchSectionHeader({
+    required this.title,
+    this.actionLabel,
+    this.onAction,
   });
 
-  final String label;
-  final bool value;
-  final Key toggleKey;
-  final ValueChanged<bool> onChanged;
+  final String title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final primaryText = AppColorsFunctional.getColor(
+    final fgPrimary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
     );
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
-      onPressed: () => onChanged(!value),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.containerSm,
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: _SearchTokens.sectionTitleSize,
+              fontWeight: _SearchTokens.sectionTitleWeight,
+              color: fgPrimary,
+            ),
+          ),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: AppTypography.iosBody,
-                  color: primaryText,
-                ),
+        if (actionLabel != null && onAction != null)
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: onAction,
+            child: Text(
+              actionLabel!,
+              style: TextStyle(
+                fontSize: _SearchTokens.toolbarSize,
+                fontWeight: _SearchTokens.toolbarWeight,
+                color: fgSecondary,
               ),
             ),
-            IgnorePointer(
-              ignoring: true,
-              child: CupertinoSwitch(
-                key: toggleKey,
-                value: value,
-                onChanged: (_) {},
-                activeTrackColor: AppColors.primaryColor,
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+      ],
     );
   }
 }
 
-class _HistoryChip extends StatelessWidget {
-  const _HistoryChip({
+class _RecentSearchPill extends StatelessWidget {
+  const _RecentSearchPill({
     required this.entry,
-    required this.manageMode,
     required this.isDark,
-    this.onTap,
-    this.onRemove,
+    required this.onTap,
   });
 
   final RecentSearchEntryView entry;
-  final bool manageMode;
   final bool isDark;
-  final VoidCallback? onTap;
-  final VoidCallback? onRemove;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1394,64 +1290,738 @@ class _HistoryChip extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final fgTertiary = AppColorsFunctional.getColor(
+    final surface = AppColorsFunctional.getColor(
       isDark,
-      ColorType.foregroundTertiary,
+      ColorType.surfaceMuted,
     );
-    final background = manageMode
-        ? AppColorsFunctional.getColor(isDark, ColorType.surfaceMuted)
-        : AppColors.black.withValues(alpha: 0);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-      ),
-      child: CupertinoButton(
-        padding: EdgeInsets.symmetric(
-          horizontal: manageMode ? AppSpacing.containerSm : 0,
-          vertical: AppSpacing.intraGroupSm,
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
+      onPressed: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
         ),
-        minimumSize: Size.zero,
-        onPressed: onTap,
-        child: Row(
-          children: [
-            Icon(
-              CupertinoIcons.clock,
-              size: AppSpacing.iconSmall,
-              color: fgTertiary,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupXs,
+          ),
+          child: Text(
+            pres.displayQuery,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: _SearchTokens.cardTitleSize,
+              fontWeight: _SearchTokens.bodyWeight,
+              color: fgSecondary,
             ),
-            SizedBox(width: AppSpacing.intraGroupXs),
-            Expanded(
-              child: Text(
-                pres.displayQuery,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TodayIntersectionSection extends StatelessWidget {
+  const _TodayIntersectionSection({
+    required this.items,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final List<SearchInspirationChipView> items;
+  final bool isDark;
+  final ValueChanged<SearchInspirationChipView> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SearchSectionHeader(title: '今日交集'),
+        SizedBox(height: _SearchTokens.headerContentGap),
+        GridView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4,
+            crossAxisSpacing: _SearchTokens.inspirationGridGap,
+            mainAxisSpacing: _SearchTokens.inspirationGridGap,
+            childAspectRatio: 0.9,
+          ),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _InspirationTextCard(
+              title: item.title,
+              subtitle: item.subtitle,
+              isDark: isDark,
+              onTap: () => onTap(item),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _InspirationCardGridSection extends StatelessWidget {
+  const _InspirationCardGridSection({
+    required this.title,
+    required this.items,
+    required this.isDark,
+    required this.fallbackIcon,
+    required this.onTap,
+  });
+
+  final String title;
+  final List<SearchInspirationCardView> items;
+  final bool isDark;
+  final IconData fallbackIcon;
+  final ValueChanged<SearchInspirationCardView> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SearchSectionHeader(title: title),
+        SizedBox(height: _SearchTokens.headerContentGap),
+        GridView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: _SearchTokens.inspirationGridGap,
+            mainAxisSpacing: _SearchTokens.inspirationGridGap,
+            childAspectRatio: 0.82,
+          ),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _InspirationGridCard(
+              item: item,
+              isDark: isDark,
+              fallbackIcon: fallbackIcon,
+              onTap: () => onTap(item),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _InspirationTextCard extends StatelessWidget {
+  const _InspirationTextCard({
+    required this.title,
+    required this.subtitle,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final surface = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    );
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
+      onPressed: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(
+            AppSpacing.contentPreviewCornerRadius,
+          ),
+          border: Border.all(color: border),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.containerSm),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: _SearchTokens.cardTitleSize,
+                  fontWeight: _SearchTokens.bodyWeight,
+                  color: fgPrimary,
+                ),
+              ),
+              SizedBox(height: AppSpacing.intraGroupXs),
+              Text(
+                subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: AppTypography.iosBody,
+                  fontSize: _SearchTokens.captionSize,
+                  fontWeight: _SearchTokens.bodyWeight,
                   color: fgSecondary,
                 ),
               ),
-            ),
-            if (manageMode && onRemove != null) ...[
-              SizedBox(width: AppSpacing.intraGroupXs),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onRemove,
-                child: SizedBox.square(
-                  dimension: AppSpacing.buttonHeightMd,
-                  child: Center(
-                    child: Icon(
-                      CupertinoIcons.xmark,
-                      size: AppSpacing.iconSmall,
-                      color: fgTertiary,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InspirationGridCard extends StatelessWidget {
+  const _InspirationGridCard({
+    required this.item,
+    required this.isDark,
+    required this.fallbackIcon,
+    required this.onTap,
+  });
+
+  final SearchInspirationCardView item;
+  final bool isDark;
+  final IconData fallbackIcon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final surface = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final imageUrl = (item.coverUrl ?? '').trim();
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
+      onPressed: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(
+            AppSpacing.contentPreviewCornerRadius,
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.intraGroupXs),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.smallBorderRadius,
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.backgroundSecondary,
+                      ),
                     ),
+                    child: imageUrl.isEmpty
+                        ? Icon(
+                            fallbackIcon,
+                            size: AppSpacing.iconMedium,
+                            color: fgSecondary,
+                          )
+                        : Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                fallbackIcon,
+                                size: AppSpacing.iconMedium,
+                                color: fgSecondary,
+                              );
+                            },
+                          ),
                   ),
                 ),
               ),
+              SizedBox(height: AppSpacing.intraGroupXs),
+              Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: _SearchTokens.cardTitleSize,
+                  fontWeight: _SearchTokens.bodyWeight,
+                  color: fgPrimary,
+                ),
+              ),
+              SizedBox(height: AppSpacing.intraGroupXs / 2),
+              Text(
+                item.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.iosCaption1,
+                  color: fgSecondary,
+                ),
+              ),
             ],
-          ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _InspirationPeopleSection extends StatelessWidget {
+  const _InspirationPeopleSection({
+    required this.people,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final List<SearchInspirationPersonView> people;
+  final bool isDark;
+  final ValueChanged<SearchInspirationPersonView> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SearchSectionHeader(title: '同趣的人'),
+        SizedBox(height: _SearchTokens.headerContentGap),
+        GridView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: people.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4,
+            crossAxisSpacing: _SearchTokens.inspirationGridGap,
+            mainAxisSpacing: _SearchTokens.inspirationGridGap,
+            childAspectRatio: 0.62,
+          ),
+          itemBuilder: (context, index) {
+            final person = people[index];
+            return _InspirationPersonCard(
+              person: person,
+              isDark: isDark,
+              onTap: () => onTap(person),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _InspirationPersonCard extends StatelessWidget {
+  const _InspirationPersonCard({
+    required this.person,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final SearchInspirationPersonView person;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
+      onPressed: onTap,
+      child: Column(
+        children: [
+          _buildConversationLeading(
+            avatarUrl: person.avatarUrl,
+            isDark: isDark,
+            fallbackIcon: CupertinoIcons.person_crop_circle_fill,
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          Text(
+            person.displayName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: _SearchTokens.cardTitleSize,
+              fontWeight: _SearchTokens.bodyWeight,
+              color: fgPrimary,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs / 2),
+          Text(
+            person.headline,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs / 2),
+          Text(
+            person.reason,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SuggestionSurface extends StatelessWidget {
+  const _SuggestionSurface({required this.isDark, required this.child});
+
+  final bool isDark;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundPrimary,
+        ),
+        borderRadius: BorderRadius.circular(
+          AppSpacing.contentPreviewCornerRadius,
+        ),
+        border: Border.all(
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.separatorSubtle,
+          ),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _AvatarSuggestionCard extends StatelessWidget {
+  const _AvatarSuggestionCard({
+    required this.entry,
+    required this.query,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final SearchSuggestionEntry entry;
+  final String query;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final data = switch (entry.kind) {
+      SearchSuggestionEntryKind.contact => _AvatarSuggestionData.fromContact(
+        entry.cast<ContactSearchSuggestion>(),
+      ),
+      SearchSuggestionEntryKind.followedPerson =>
+        _AvatarSuggestionData.fromPerson(
+          entry.cast<SocialRelationSearchItemView>(),
+        ),
+      _ => const _AvatarSuggestionData(
+        title: '',
+        subtitle: '',
+        reason: '',
+        avatarUrl: null,
+      ),
+    };
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
+      onPressed: onTap,
+      child: Column(
+        children: [
+          _buildConversationLeading(
+            avatarUrl: data.avatarUrl,
+            isDark: isDark,
+            fallbackIcon: CupertinoIcons.person_crop_circle_fill,
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          _highlightedText(
+            data.title,
+            query,
+            TextStyle(
+              fontSize: _SearchTokens.cardTitleSize,
+              fontWeight: _SearchTokens.bodyWeight,
+              color: fgPrimary,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs / 2),
+          Text(
+            data.subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+          if (data.reason.trim().isNotEmpty) ...[
+            SizedBox(height: AppSpacing.intraGroupXs / 2),
+            Text(
+              data.reason,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.iosCaption1,
+                color: fgSecondary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ObjectSuggestionCard extends StatelessWidget {
+  const _ObjectSuggestionCard({
+    required this.entry,
+    required this.query,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final SearchSuggestionEntry entry;
+  final String query;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final data = switch (entry.kind) {
+      SearchSuggestionEntryKind.circle => _ObjectSuggestionData.fromCircle(
+        entry.cast<CircleSearchItemView>(),
+      ),
+      SearchSuggestionEntryKind.location => _ObjectSuggestionData.fromLocation(
+        entry.cast<LocationPoiDto>(),
+      ),
+      _ => const _ObjectSuggestionData(
+        title: '',
+        subtitle: '',
+        coverUrl: null,
+        fallbackIcon: CupertinoIcons.search,
+      ),
+    };
+    final coverUrl = (data.coverUrl ?? '').trim();
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
+      onPressed: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.backgroundSecondary,
+                  ),
+                ),
+                child: coverUrl.isEmpty
+                    ? Icon(
+                        data.fallbackIcon,
+                        size: AppSpacing.iconMedium,
+                        color: fgSecondary,
+                      )
+                    : Image.network(
+                        coverUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            data.fallbackIcon,
+                            size: AppSpacing.iconMedium,
+                            color: fgSecondary,
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          _highlightedText(
+            data.title,
+            query,
+            TextStyle(
+              fontSize: _SearchTokens.cardTitleSize,
+              fontWeight: _SearchTokens.bodyWeight,
+              color: fgPrimary,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs / 2),
+          Text(
+            data.subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NetworkSuggestionPill extends StatelessWidget {
+  const _NetworkSuggestionPill({
+    required this.entry,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final SearchSuggestionEntry entry;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final network = entry.cast<NetworkSearchSuggestion>();
+    return _RecentSearchPill(
+      entry: RecentSearchEntryView(
+        entryId: '${network.query}_${network.initialTabId ?? ''}',
+        query: network.displayTitle,
+        scope: SearchScope.all,
+        facet: null,
+        updatedAt: DateTime.now(),
+      ),
+      isDark: isDark,
+      onTap: onTap,
+    );
+  }
+}
+
+class _AvatarSuggestionData {
+  const _AvatarSuggestionData({
+    required this.title,
+    required this.subtitle,
+    required this.reason,
+    required this.avatarUrl,
+  });
+
+  final String title;
+  final String subtitle;
+  final String reason;
+  final String? avatarUrl;
+
+  factory _AvatarSuggestionData.fromContact(ContactSearchSuggestion item) {
+    return _AvatarSuggestionData(
+      title: item.displayName,
+      subtitle: item.subtitle ?? '共同圈子 2 个',
+      reason: '',
+      avatarUrl: item.avatarUrl,
+    );
+  }
+
+  factory _AvatarSuggestionData.fromPerson(SocialRelationSearchItemView item) {
+    return _AvatarSuggestionData(
+      title: item.displayName,
+      subtitle: item.relationshipCapability.canUnfollow ? '已关注' : '同趣的人',
+      reason: '共同兴趣 3 个',
+      avatarUrl: item.avatarUrl,
+    );
+  }
+}
+
+class _ObjectSuggestionData {
+  const _ObjectSuggestionData({
+    required this.title,
+    required this.subtitle,
+    required this.coverUrl,
+    required this.fallbackIcon,
+  });
+
+  final String title;
+  final String subtitle;
+  final String? coverUrl;
+  final IconData fallbackIcon;
+
+  factory _ObjectSuggestionData.fromCircle(CircleSearchItemView item) {
+    return _ObjectSuggestionData(
+      title: item.name,
+      subtitle: '已加入',
+      coverUrl: item.coverUrl,
+      fallbackIcon: CupertinoIcons.person_3_fill,
+    );
+  }
+
+  factory _ObjectSuggestionData.fromLocation(LocationPoiDto item) {
+    return _ObjectSuggestionData(
+      title: item.name,
+      subtitle: '已关注',
+      coverUrl: null,
+      fallbackIcon: CupertinoIcons.location_solid,
     );
   }
 }
@@ -1557,8 +2127,8 @@ class _ChatRecordTile extends StatelessWidget {
                         suggestion.conversationTitle,
                         query,
                         TextStyle(
-                          fontSize: AppTypography.iosBody,
-                          fontWeight: AppTypography.medium,
+                          fontSize: _SearchTokens.bodySize,
+                          fontWeight: _SearchTokens.bodyWeight,
                           color: fgPrimary,
                         ),
                       ),

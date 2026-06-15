@@ -166,27 +166,6 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> favoritePost({required String postId}) async {
-    final uri = _uri(ContentApiMetadata.favoritePostPath(postId: postId));
-    await _httpClient.postJson(
-      uri,
-      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.favoritePost),
-      body: {},
-    );
-  }
-
-  @override
-  Future<void> unfavoritePost({required String postId}) async {
-    final uri = _uri(ContentApiMetadata.unfavoritePostPath(postId: postId));
-    await _httpClient.deleteJson(
-      uri,
-      headers: CloudRequestHeaders.forPage(
-        ContentRequestPageIds.unfavoritePost,
-      ),
-    );
-  }
-
-  @override
   Future<bool> sharePost({required String postId}) async {
     final uri = _uri(ContentApiMetadata.sharePostPath(postId: postId));
     final decoded = await _httpClient.postJson(

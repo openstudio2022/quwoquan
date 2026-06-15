@@ -141,6 +141,8 @@ def test_pilot_e2e_verify_green():
         model="test-agent/contract",
         cited_source_paths=quality.get("sourcePaths") or [],
         covered_facts=pack.get("mustIncludeFacts") or [],
+        agent_run_id="run-verify-pilot",
+        agent_id="agent-verify-pilot",
     )
     review = review_route_draft(TASK, BATCH, REF, brief, quality)
     assert review["decision"] == "approved", review["issues"]

@@ -1,6 +1,5 @@
-# 04 PR 轻量 gamma preflight：探针已运行的共享 gamma（不部署）。
-# readiness 阻断；assistant/chat-avatar smoke 仅记录漂移告警、不阻断 PR。
-# Full gamma 验证改走 08（手动 ECS）/ 09（nightly full）。
+# 04 PR 轻量门禁占位：hosted gamma 预检已退役，远端验证统一收敛到 07 prod gray-initial。
+# 仅保留 profile 解析与门禁汇总，便于后续按需扩展非 gamma 的 PR 预检。
 # 触发：pull_request(main) + workflow_dispatch
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
 name: 04. Pre-Release Gate
@@ -44,87 +43,33 @@ jobs:
             echo "use_ecs_deploy=false" >> "$GITHUB_OUTPUT"
           fi
 
-  gamma_pr_light:
-    name: Gamma PR light preflight
-    needs: [resolve_profile]
-    if: ${{ needs.resolve_profile.outputs.use_ecs_deploy == 'false' }}
-    uses: ./.github/workflows/gamma-pr-hosted-core.yml
-    secrets: inherit
-
-  gamma_full_deploy:
-    name: Gamma ECS full deploy (explicit)
-    needs: [resolve_profile]
-    if: ${{ needs.resolve_profile.outputs.use_ecs_deploy == 'true' }}
-    uses: ./.github/workflows/gamma-ecs-pre-hosted-core.yml
-    secrets: inherit
-
   release-evidence-summary:
     name: 04. Pre-Release Gate
     needs:
       - resolve_profile
-      - gamma_pr_light
-      - gamma_full_deploy
     if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 输出 PR hosted 耗时摘要
+      - name: 输出 04 PR gate 摘要
         env:
           PROFILE: ${{ needs.resolve_profile.outputs.profile }}
-          USE_ECS: ${{ needs.resolve_profile.outputs.use_ecs_deploy }}
-          LIGHT_READY_SECONDS: ${{ needs.gamma_pr_light.outputs.readiness_duration_seconds }}
-          LIGHT_ASSISTANT_SECONDS: ${{ needs.gamma_pr_light.outputs.assistant_protocol_smoke_duration_seconds }}
-          LIGHT_CHAT_SECONDS: ${{ needs.gamma_pr_light.outputs.chat_avatar_probe_duration_seconds }}
-          LIGHT_CRITICAL_SECONDS: ${{ needs.gamma_pr_light.outputs.critical_path_seconds }}
-          FULL_PACKAGE_SECONDS: ${{ needs.gamma_full_deploy.outputs.package_duration_seconds }}
-          FULL_DEPLOY_SECONDS: ${{ needs.gamma_full_deploy.outputs.deploy_duration_seconds }}
-          FULL_READY_SECONDS: ${{ needs.gamma_full_deploy.outputs.readiness_duration_seconds }}
-          FULL_API_SECONDS: ${{ needs.gamma_full_deploy.outputs.api_contract_duration_seconds }}
-          FULL_ASSISTANT_SECONDS: ${{ needs.gamma_full_deploy.outputs.assistant_smoke_duration_seconds }}
-          FULL_CHAT_SECONDS: ${{ needs.gamma_full_deploy.outputs.chat_avatar_probe_duration_seconds }}
-          FULL_CRITICAL_SECONDS: ${{ needs.gamma_full_deploy.outputs.critical_path_seconds }}
         run: |
-          if [ "${USE_ECS}" = "true" ]; then
-            python3 agent_ops/ci/render_ci_timing_summary.py \
-              --gate-key 04.pre_release_gate_full \
-              --title "04. Pre-Release Gate (manual_full)" \
-              --critical-path-seconds "${FULL_CRITICAL_SECONDS:-0}" \
-              --phase gamma_package_bundle="${FULL_PACKAGE_SECONDS:-0}" \
-              --phase gamma_deploy_ecs_pre="${FULL_DEPLOY_SECONDS:-0}" \
-              --phase gamma_environment_ready="${FULL_READY_SECONDS:-0}" \
-              --phase gamma_api_contract="${FULL_API_SECONDS:-0}" \
-              --phase assistant_runtime_smoke="${FULL_ASSISTANT_SECONDS:-0}" \
-              --phase chat_avatar_api_probe="${FULL_CHAT_SECONDS:-0}" \
-              --note "04 显式 manual_full profile：完整 ECS 部署 + 全链路验证。" \
-              --write-step-summary
-          else
-            python3 agent_ops/ci/render_ci_timing_summary.py \
-              --gate-key 04.pre_release_gate_pr \
-              --title "04. Pre-Release Gate (pr_light)" \
-              --critical-path-seconds "${LIGHT_CRITICAL_SECONDS:-0}" \
-              --phase gamma_environment_ready="${LIGHT_READY_SECONDS:-0}" \
-              --phase assistant_protocol_smoke="${LIGHT_ASSISTANT_SECONDS:-0}" \
-              --phase chat_avatar_api_probe="${LIGHT_CHAT_SECONDS:-0}" \
-              --note "04 PR 轻量 preflight：探针共享 gamma readiness（阻断）+ assistant/chat-avatar smoke（漂移告警，不阻断）。Full 验证走 08/09。" \
-              --write-step-summary
-          fi
+          python3 agent_ops/ci/render_ci_timing_summary.py \
+            --gate-key 04.pre_release_gate_pr \
+            --title "04. Pre-Release Gate (pr_light)" \
+            --critical-path-seconds 0 \
+            --phase profile_resolved=0 \
+            --note "hosted gamma 预检已退役；远端验证统一收敛到 07 prod gray-initial。04 仅保留 profile 解析与门禁占位。" \
+            --write-step-summary
       - name: 汇总并阻断失败项
         env:
           PROFILE: ${{ needs.resolve_profile.outputs.profile }}
-          USE_ECS: ${{ needs.resolve_profile.outputs.use_ecs_deploy }}
-          LIGHT_RESULT: ${{ needs.gamma_pr_light.result }}
-          FULL_RESULT: ${{ needs.gamma_full_deploy.result }}
+          RESOLVE_RESULT: ${{ needs.resolve_profile.result }}
         run: |
           set -euo pipefail
-          if [ "${USE_ECS}" = "true" ]; then
-            if [ "${FULL_RESULT}" != "success" ]; then
-              echo "::error::gamma-ecs-full-deploy expected success, got ${FULL_RESULT}. 检查 ECS 部署、readiness、API contract、assistant smoke、chat avatar probe"
-              exit 1
-            fi
-          else
-            if [ "${LIGHT_RESULT}" != "success" ]; then
-              echo "::error::gamma-pr-light-preflight expected success, got ${LIGHT_RESULT}. 检查共享 gamma readiness（healthz + product-ops + 公网路由）。assistant/chat-avatar smoke 漂移不阻断 04，权威验证在 08/09。"
-              exit 1
-            fi
+          if [ "${RESOLVE_RESULT}" != "success" ]; then
+            echo "::error::resolve_profile expected success, got ${RESOLVE_RESULT}."
+            exit 1
           fi
           echo "::notice::04. Pre-Release Gate passed with profile=${PROFILE}"

@@ -4,6 +4,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from _common import quality_gates as qg
+
 
 # 真实历史标记：年份/朝代/世纪/建置沿革动词等（用于「历史沿革」章节语义校验）。
 _HISTORY_MARKERS = (
@@ -43,6 +45,7 @@ def entity_page_quality_issues(page_path: Path, *, label: str = "") -> list[str]
             issues.append(f"{prefix}entity homepage contains engineering/template phrase: {phrase}")
     if "## 为什么值得关注" in text and "属于「" in text and "实体" in text:
         issues.append(f"{prefix}entity homepage looks like generated system explainer, not reader-facing copy")
+    issues.extend(f"{prefix}{issue}" for issue in qg.intra_doc_repetition_issues(text))
     issues.extend(_history_section_issues(text, prefix))
     return issues
 

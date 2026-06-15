@@ -30,3 +30,6 @@ subcontracts:
     fields:
       - { name: targetType, type: string, default: assistant_turn }
       - { name: targetId, type: string, default: '' }
+      - { name: routeId, type: string, default: '' }
+      - { name: routePath, type: string, default: '' }
+      - { name: query, type: object, default: {} }

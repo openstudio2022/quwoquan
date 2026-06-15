@@ -13,17 +13,17 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from _common.io import write_json
-from _common.paths import NOW_ISO, PUBLISH_ROOT
+from _common.paths import PUBLISH_ROOT, now_iso
 
 DEFAULT_SOURCE_OWNER = "qwq_data"
-DEFAULT_MODE = "upsert"
-DEFAULT_DELETE_POLICY = "none"
+DEFAULT_MODE = "sync"
+DEFAULT_DELETE_POLICY = "tombstone"
 
 
 def normalize_release_id(value: str | None, *, env: str) -> str:
     raw = (value or "").strip()
     if not raw:
-        raw = f"data_{env}_{NOW_ISO}"
+        raw = f"data_{env}_{now_iso()}"
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw).strip("_")
     return safe or f"data_{env}"
 
@@ -92,7 +92,7 @@ def build_release_contract(
         "mode": mode,
         "deletePolicy": delete_policy,
         "sourceOwner": source_owner,
-        "generatedAt": NOW_ISO,
+        "generatedAt": now_iso(),
         "approvedBy": approved_by or "",
         "sampleBundle": {
             "schemaVersion": bundle.get("schemaVersion"),

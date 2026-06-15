@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/circle/models/circle_page_tab.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_edit_submit_payload.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_media_picker_provider.dart';
 import 'package:quwoquan_app/ui/circle/services/circle_create_merge_wire.dart';
@@ -236,13 +237,7 @@ class _CircleEditSettingsPageState
   }
 
   String _sectionTitle(String type) {
-    return switch (type) {
-      'works' => UITextConstants.circleWorksTab,
-      'interaction' => UITextConstants.circleInteractionTab,
-      'chat' => UITextConstants.circleGroups,
-      'storage' => UITextConstants.circleAssetsTab,
-      _ => type,
-    };
+    return circleSectionLabel(type);
   }
 
   String _visibilityDescription(String value) {
@@ -652,13 +647,7 @@ class _CircleEditSettingsPageState
                                 : AppSpacing.sm,
                           ),
                           child: _buildSwitchTile(
-                            icon: switch (entry.value.sectionType) {
-                              'works' => CupertinoIcons.sparkles,
-                              'interaction' => CupertinoIcons.heart,
-                              'chat' => CupertinoIcons.chat_bubble_2,
-                              'storage' => CupertinoIcons.folder,
-                              _ => CupertinoIcons.square_grid_2x2,
-                            },
+                            icon: circleSectionIcon(entry.value.sectionType),
                             title: _sectionTitle(entry.value.sectionType),
                             subtitle: UITextConstants.circleSectionVisible,
                             value: entry.value.visible,

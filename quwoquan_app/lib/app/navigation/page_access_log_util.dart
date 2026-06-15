@@ -306,10 +306,8 @@ String pageNameFromRouteLocation(String location) {
     if (path.contains('/stats')) return 'circle_stats';
     return 'circle_detail';
   }
-  if (path.startsWith('/article/')) return 'article_detail';
+  if (path.startsWith('/works/browser/')) return 'work_browser';
   if (path.startsWith('/user/')) return 'user_profile';
-  if (path.startsWith('/media-viewer/')) return 'media_viewer';
-  if (path.startsWith('/video-viewer/')) return 'video_viewer';
   if (path == AppRoutePaths.assistantManagement) return 'assistant_management';
   if (path == AppRoutePaths.assistantSkills) return 'assistant_skills';
   if (path == AppRoutePaths.settings) return 'settings';
@@ -318,6 +316,13 @@ String pageNameFromRouteLocation(String location) {
   if (path == AppRoutePaths.profilePersonas) return 'profile_personas';
   if (path == AppRoutePaths.profileComments) return 'profile_comments';
   if (path.startsWith('/profile/stats')) return 'profile_stats';
+  if (path == AppRoutePaths.myIntersectionsPathTemplate) {
+    return 'my_intersections';
+  }
+  if (path == AppRoutePaths.objectIntersectionsPathTemplate) {
+    return 'object_intersections';
+  }
+  if (path == AppRoutePaths.myFootprintPathTemplate) return 'my_footprint';
   if (path.startsWith('/rtc/outgoing/')) return 'rtc_outgoing';
   if (path.startsWith('/rtc/incoming/')) return 'rtc_incoming';
   if (path.startsWith('/rtc/voice/')) return 'rtc_voice';

@@ -24,8 +24,6 @@ class AppStrings {
   // 向后兼容的旧常量（保留，但标记为已废弃）
   @Deprecated('使用 AppStrings.reward')
   static const String rewardFeatureDeveloping = '打赏功能开发中';
-  @Deprecated('使用 AppStrings.save')
-  static const String saveFeatureDeveloping = '收藏功能开发中';
   @Deprecated('使用 AppStrings.message')
   static const String messageFeatureDeveloping = '私信功能开发中';
   static const String linkCopied = '链接已复制';

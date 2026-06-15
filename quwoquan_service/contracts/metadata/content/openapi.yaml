@@ -296,7 +296,7 @@ components:
           type: object
           additionalProperties: true
           description: |
-            圈子/tagRefs/visibility/articleDocument 等扩展可放此对象；亦允许与扁平 FeedItemDto 字段并存（见 discovery_feed projection）。
+            圈子/tagRefs/visibility 等扩展可放此对象；亦允许与扁平 FeedItemDto 字段并存（见 discovery_feed projection）。
     BehaviorEvent:
       type: object
       required: [contentId, eventType, timestamp]
@@ -304,7 +304,7 @@ components:
         contentId: { type: string }
         eventType:
           type: string
-          enum: [impression, click, dwell, like, favorite, dislike, report, share]
+          enum: [impression, click, dwell, like, dislike, report, share]
         timestamp: { type: string }
         durationMs: { type: integer }
         metadata:
@@ -415,14 +415,12 @@ components:
       type: object
       properties:
         liked: { type: boolean }
-        favorited: { type: boolean }
         reported: { type: boolean }
     Counters:
       type: object
       properties:
         likeCount: { type: integer }
         commentCount: { type: integer }
-        favoriteCount: { type: integer }
         shareCount: { type: integer }
     MediaAsset:
       type: object

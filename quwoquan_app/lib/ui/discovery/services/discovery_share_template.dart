@@ -3,7 +3,6 @@ import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.da
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 
@@ -26,5 +25,9 @@ ContentShareTemplate buildDiscoveryShareTemplate({
 }
 
 String discoverySourceCircleName(WidgetRef ref, String postId) {
-  return ref.read(contentRepositoryProvider).discoveryPresentationWireForPost(postId)?.circleName ?? '';
+  return ref
+          .read(contentRepositoryProvider)
+          .discoveryPresentationWireForPost(postId)
+          ?.circleName ??
+      '';
 }

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/article_post_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
@@ -11,9 +13,15 @@ import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_interaction.dart';
 
-Widget _wrap(Widget child, {double textScaleFactor = 1.0}) => ProviderScope(
+Widget _wrap(
+  Widget child, {
+  double textScaleFactor = 1.0,
+  CircleRepository? repository,
+}) => ProviderScope(
   overrides: [
-    circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+    circleRepositoryProvider.overrideWithValue(
+      repository ?? MockCircleRepository(),
+    ),
   ],
   child: MaterialApp.router(
     builder: (context, childWidget) {
@@ -32,7 +40,10 @@ Widget _wrap(Widget child, {double textScaleFactor = 1.0}) => ProviderScope(
           path: '/',
           builder: (_, _) => Scaffold(body: child),
         ),
-        GoRoute(path: '/article/:id', builder: (_, _) => const SizedBox()),
+        GoRoute(
+          path: '/works/browser/:workId',
+          builder: (_, _) => const SizedBox(),
+        ),
         GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
       ],
     ),
@@ -47,7 +58,7 @@ void main() {
           const SizedBox(
             height: 800,
             child: SectionCreations(
-              circleId: 'circle_photo_01',
+              circleId: 'fixture_circle_photo',
               isDark: false,
               role: CircleRole.owner,
             ),
@@ -56,31 +67,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(SectionCreations), findsOneWidget);
-      expect(find.text('点滴'), findsAtLeastNWidgets(1));
-      expect(find.text('作品'), findsWidgets);
-
-      await tester.tap(find.text('作品').first);
-      await tester.pumpAndSettle();
-      expect(find.text('文章'), findsOneWidget);
-    });
-
-    test('圈子文章 mock 覆盖封面/标题四种组合', () {
-      final items = CircleMockData.circleFeedItems
-          .where((item) => (item['contentType'] ?? '').toString() == 'article')
-          .toList(growable: false);
-      bool hasCase({required bool expectCover, required bool expectTitle}) {
-        return items.any((raw) {
-          final hasCover = (raw['coverUrl'] ?? '').toString().trim().isNotEmpty;
-          final hasTitle = (raw['title'] ?? '').toString().trim().isNotEmpty;
-          final hasBody = (raw['body'] ?? '').toString().trim().isNotEmpty;
-          return hasBody && hasCover == expectCover && hasTitle == expectTitle;
-        });
-      }
-
-      expect(hasCase(expectCover: true, expectTitle: true), isTrue);
-      expect(hasCase(expectCover: false, expectTitle: true), isTrue);
-      expect(hasCase(expectCover: true, expectTitle: false), isTrue);
-      expect(hasCase(expectCover: false, expectTitle: false), isTrue);
+      expect(find.text('全部'), findsAtLeastNWidgets(1));
+      expect(find.text('图片'), findsWidgets);
+      expect(find.text('视频'), findsWidgets);
+      expect(find.text('文字'), findsWidgets);
     });
 
     testWidgets('空数据安全渲染', (tester) async {
@@ -144,7 +134,7 @@ void main() {
           const SizedBox(
             height: 800,
             child: SectionCreations(
-              circleId: 'circle_photo_01',
+              circleId: 'fixture_circle_photo',
               isDark: false,
               role: CircleRole.owner,
             ),
@@ -176,7 +166,7 @@ void main() {
             const SizedBox(
               height: 800,
               child: SectionCreations(
-                circleId: 'circle_photo_01',
+                circleId: 'fixture_circle_photo',
                 isDark: false,
                 role: CircleRole.owner,
               ),
@@ -198,28 +188,30 @@ void main() {
     });
 
     testWidgets('笔记双列区分封面卡与文字卡并展示频道推荐', (tester) async {
+      final repository = _ArticleFixtureCircleRepository();
       await tester.pumpWidget(
         _wrap(
           const SizedBox(
             height: 800,
             child: SectionCreations(
-              circleId: 'circle_photo_01',
+              circleId: 'fixture_circle_photo',
               isDark: false,
               role: CircleRole.owner,
             ),
           ),
+          repository: repository,
         ),
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('作品').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('文章'));
+      await tester.tap(find.text('文字').first);
       await tester.pumpAndSettle();
 
       expect(
         find.byKey(
-          const ValueKey<String>('circle-article-grid-circle_journal_cover'),
+          const ValueKey<String>(
+            'circle-article-grid-fixture_article_with_cover',
+          ),
         ),
         findsOneWidget,
       );
@@ -227,11 +219,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.byKey(
-          const ValueKey<String>('circle-article-grid-circle_ritual_plain'),
+          const ValueKey<String>(
+            'circle-article-grid-fixture_article_text_only',
+          ),
         ),
         findsOneWidget,
       );
-      expect(find.textContaining('频道推荐'), findsWidgets);
+      expect(find.textContaining('讨论推荐'), findsWidgets);
     });
   });
 
@@ -240,8 +234,8 @@ void main() {
       await tester.pumpWidget(
         _wrap(
           SectionChat(
-            circleId: 'circle_photo_01',
-            conversationId: 'conv_circle_photo_01',
+            circleId: 'fixture_circle_photo',
+            conversationId: 'conv_fixture_circle_photo',
             isDark: false,
           ),
         ),
@@ -266,7 +260,7 @@ void main() {
       await tester.pumpWidget(
         _wrap(
           SectionStorage(
-            circleId: 'circle_photo_01',
+            circleId: 'fixture_circle_photo',
             isDark: false,
             storageUsedBytes: 52428800,
             storageQuotaBytes: 1073741824,
@@ -296,7 +290,9 @@ void main() {
   group('SectionInteraction — Widget 契约', () {
     testWidgets('正常渲染', (tester) async {
       await tester.pumpWidget(
-        _wrap(SectionInteraction(circleId: 'circle_photo_01', isDark: false)),
+        _wrap(
+          SectionInteraction(circleId: 'fixture_circle_photo', isDark: false),
+        ),
       );
       await tester.pump();
       expect(find.byType(SectionInteraction), findsOneWidget);
@@ -310,4 +306,79 @@ void main() {
       expect(find.byType(SectionInteraction), findsOneWidget);
     });
   });
+}
+
+class _ArticleFixtureCircleRepository extends MockCircleRepository {
+  @override
+  Future<CircleDetailPayload> getCircle(String circleId) async {
+    return CircleDetailPayload.fromWire(<String, dynamic>{
+      'id': circleId,
+      'name': '契约摄影社',
+      'ownerId': 'fixture_user_owner',
+      'categoryId': 'photography',
+      'visibility': 'public',
+      'joinPolicy': 'approval',
+      'createdAt': '2026-05-06T00:00:00Z',
+      'updatedAt': '2026-05-06T00:00:00Z',
+      'sectionConfig': const <Map<String, dynamic>>[],
+    });
+  }
+
+  @override
+  Future<List<PostBaseDto>> getCircleFeed(
+    String circleId, {
+    String? identity,
+    String? type,
+    String? cursor,
+    int limit = 20,
+    String sort = 'latest',
+  }) async {
+    final rows = <Map<String, dynamic>>[
+      {
+        'postId': 'fixture_article_with_cover',
+        'id': 'fixture_article_with_cover',
+        'contentType': 'article',
+        'type': 'article',
+        'contentIdentity': 'work',
+        'identity': 'work',
+        'authorId': 'fixture_user_photo',
+        'authorNickname': '契约摄影师',
+        'authorAvatarUrl': 'media/avatar/fixture_user_photo.png',
+        'title': '山路晨雾手账',
+        'summary': '把徒步笔记做成可翻页的旅途册。',
+        'body': '把徒步笔记做成可翻页的旅途册。',
+        'coverUrl': 'media/image/fixture_article_with_cover.jpg',
+        'articleTemplate': 'journal',
+        'articleFontPreset': 'handwritten',
+        'likeCount': 164,
+        'commentCount': 12,
+        'shareCount': 11,
+        'circleId': circleId,
+        'createdAt': '2026-05-13T00:00:00Z',
+      },
+      {
+        'postId': 'fixture_article_text_only',
+        'id': 'fixture_article_text_only',
+        'contentType': 'article',
+        'type': 'article',
+        'contentIdentity': 'work',
+        'identity': 'work',
+        'authorId': 'fixture_user_owner',
+        'authorNickname': '纸上居',
+        'authorAvatarUrl': 'media/avatar/fixture_user_owner.png',
+        'title': '',
+        'summary': '没有标题也没封面，只保留真正想被圈友读到的正文。',
+        'body': '没有标题也没封面，只保留真正想被圈友读到的正文。',
+        'coverUrl': '',
+        'articleTemplate': 'gentle',
+        'articleFontPreset': 'clean',
+        'likeCount': 88,
+        'commentCount': 6,
+        'shareCount': 4,
+        'circleId': circleId,
+        'createdAt': '2026-05-13T01:00:00Z',
+      },
+    ];
+    return rows.map(ArticlePostDto.fromMap).toList(growable: false);
+  }
 }

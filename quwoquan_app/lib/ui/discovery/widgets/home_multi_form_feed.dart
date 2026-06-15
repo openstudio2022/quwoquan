@@ -354,12 +354,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
           if (onMoreTap != null) {
             onMoreTap!(dto);
           } else {
-            _showMoreActions(
-              context,
-              ref,
-              dto,
-              panelMaxWidth: cardWidth,
-            );
+            _showMoreActions(context, ref, dto, panelMaxWidth: cardWidth);
           }
         },
       );
@@ -585,10 +580,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
         wire: _rawDiscoveryItem(ref, post.id),
         enableIdentityTemplate: enableIdentityTemplate,
       ),
-      ContentShareAction(
-        id: 'copy_link',
-        label: UITextConstants.copyLink,
-      ),
+      ContentShareAction(id: 'copy_link', label: UITextConstants.copyLink),
     );
     if (result.success) {
       await _recordShare(ref, post.id, result.actionId);
@@ -1028,7 +1020,8 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
       builder: (context, constraints) {
         final item = widget.item;
         final isDark = widget.isDark;
-        final cardWidth = constraints.hasBoundedWidth && constraints.maxWidth > 0
+        final cardWidth =
+            constraints.hasBoundedWidth && constraints.maxWidth > 0
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
         final fg = AppColorsFunctional.getColor(
@@ -1048,6 +1041,11 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
         final borderRadius = widget.wideLayout
             ? BorderRadius.circular(AppSpacing.contentPreviewCornerRadius)
             : BorderRadius.zero;
+        final reasonChip = IntersectionReasonChip.fromReasons(
+          widget.item.intersectionReasons,
+          isDark: isDark,
+          key: const ValueKey('home-relation-card-reason'),
+        );
 
         return DecoratedBox(
           key: widget.cardContainerKey,
@@ -1067,6 +1065,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  key: const ValueKey('home-relation-card-header'),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     CupertinoButton(
@@ -1135,56 +1134,59 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                   ],
                 ),
 
-                // 交集理由位（一行 displayText，只读；无来源不展示）
-                if (_intersectionReasonText != null) ...[
+                if (reasonChip != null) ...[
                   const SizedBox(height: _feedCardSectionGap),
-                  IntersectionReasonChip(
-                    text: _intersectionReasonText!,
-                    isDark: isDark,
-                  ),
+                  reasonChip,
                 ],
 
-                // 正文（5 行截断 + 就地展开）
                 if (item.normalizedBody.isNotEmpty) ...[
                   const SizedBox(height: _feedCardSectionGap),
-                  _ExpandableText(
-                    text: item.normalizedBody,
-                    maxLines: _maxLines,
-                    isDark: isDark,
-                    expanded: _isExpanded,
-                    onToggle: () => setState(() => _isExpanded = !_isExpanded),
+                  KeyedSubtree(
+                    key: const ValueKey('home-relation-card-body'),
+                    child: _ExpandableText(
+                      text: item.normalizedBody,
+                      maxLines: _maxLines,
+                      isDark: isDark,
+                      expanded: _isExpanded,
+                      onToggle: () =>
+                          setState(() => _isExpanded = !_isExpanded),
+                    ),
                   ),
                 ],
 
-                // 图片区域（自适应宫格）
                 if (item.hasImages) ...[
                   const SizedBox(height: _feedCardSectionGap),
-                  widget.inlineImageCarousel
-                      ? _HomeFeedImageCarousel(
-                          urls: item.imageUrls,
-                          isDark: isDark,
-                          onTap: widget.onImageTap,
-                        )
-                      : _HomeFeedImageGrid(
-                          urls: item.imageUrls,
-                          isDark: isDark,
-                          onTap: widget.onImageTap,
-                        ),
-                ],
-
-                // 视频卡片
-                if (item.hasVideo && !item.hasImages) ...[
-                  const SizedBox(height: _feedCardSectionGap),
-                  _HomeFeedVideoCard(
-                    dto: item,
-                    isDark: isDark,
-                    onTap: () => widget.onImageTap(0),
+                  KeyedSubtree(
+                    key: const ValueKey('home-relation-card-media'),
+                    child: widget.inlineImageCarousel
+                        ? _HomeFeedImageCarousel(
+                            urls: item.imageUrls,
+                            isDark: isDark,
+                            onTap: widget.onImageTap,
+                          )
+                        : _HomeFeedImageGrid(
+                            urls: item.imageUrls,
+                            isDark: isDark,
+                            onTap: widget.onImageTap,
+                          ),
                   ),
                 ],
 
-                // 互动栏
+                if (item.hasVideo && !item.hasImages) ...[
+                  const SizedBox(height: _feedCardSectionGap),
+                  KeyedSubtree(
+                    key: const ValueKey('home-relation-card-media'),
+                    child: _HomeFeedVideoCard(
+                      dto: item,
+                      isDark: isDark,
+                      onTap: () => widget.onImageTap(0),
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: _feedCardSectionGap),
                 _ActionRow(
+                  key: const ValueKey('home-relation-card-actions'),
                   item: item,
                   isDark: isDark,
                   isLiked: widget.isLiked,
@@ -1205,11 +1207,6 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
       },
     );
   }
-
-  /// 交集理由首条 displayText（只读）；无来源/空文案返回 null → 不展示。
-  /// 口径真相源 = [IntersectionReasonChip.primaryText]，与沉浸/转发/详情同源。
-  String? get _intersectionReasonText =>
-      IntersectionReasonChip.primaryText(widget.item.intersectionReasons);
 
   String _buildMetaLine(BuildContext context) {
     final time = _timeAgo(context, widget.item.createdAt);
@@ -1729,13 +1726,11 @@ class _HomeFeedVideoCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 互动操作行（赞/藏/评/分享）
-// ─────────────────────────────────────────────────────────────────────────────
-
 /// Action row for moment (微趣) posts.
 /// 赞 / 转 / 评三列等宽，数字变化不挤压图标位置。
 class _ActionRow extends StatelessWidget {
   const _ActionRow({
+    super.key,
     required this.item,
     required this.isDark,
     required this.isLiked,
@@ -1825,6 +1820,7 @@ class _ActionRow extends StatelessWidget {
   }
 
   Widget _chip({
+    Key? key,
     required BuildContext context,
     required Widget child,
     required String label,
@@ -1835,6 +1831,7 @@ class _ActionRow extends StatelessWidget {
     final foreground = selected ? AppColors.worksLike : muted;
 
     return CupertinoButton(
+      key: key,
       padding: EdgeInsets.zero,
       minimumSize: Size.zero,
       onPressed: onTap,

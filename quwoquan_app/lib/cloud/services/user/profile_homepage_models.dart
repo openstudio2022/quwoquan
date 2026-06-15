@@ -23,6 +23,7 @@ class SubAccountProfileViewData {
     required this.avatarUrl,
     required this.backgroundUrl,
     required this.bio,
+    this.identityTags = const <String>[],
     required this.followerCount,
     required this.followingCount,
     required this.postCount,
@@ -44,6 +45,9 @@ class SubAccountProfileViewData {
   final String avatarUrl;
   final String backgroundUrl;
   final String bio;
+
+  /// 主页单行身份标签（云侧 identityTags，端以 · 分隔单行展示）。
+  final List<String> identityTags;
   final int followerCount;
   final int followingCount;
   final int postCount;
@@ -79,6 +83,7 @@ class SubAccountProfileViewData {
       avatarUrl: w.avatarUrl,
       backgroundUrl: w.backgroundUrl,
       bio: w.bio,
+      identityTags: w.identityTags,
       followerCount: w.followerCount,
       followingCount: w.followingCount,
       postCount: w.postCount,
@@ -111,6 +116,7 @@ class SubAccountProfileViewData {
       avatarUrl: avatarUrl,
       backgroundUrl: backgroundUrl,
       bio: bio,
+      identityTags: identityTags,
       followerCount: stats.followerCount,
       followingCount: stats.followingCount,
       postCount: stats.postCount,
@@ -170,76 +176,6 @@ class UserProfileStatsViewData {
       postCount: p.postCount,
     );
   }
-}
-
-/// 创作者影响力读模型（来自 content-service `rm_author_impact`）。
-@immutable
-class CreatorImpactReadModel {
-  const CreatorImpactReadModel({
-    required this.authorId,
-    required this.total,
-    required this.items,
-  });
-
-  final String authorId;
-  final int total;
-  final List<CreatorImpactItem> items;
-
-  bool get isEmpty => total <= 0 || items.isEmpty;
-
-  factory CreatorImpactReadModel.fromMap(Map<String, dynamic> map) {
-    final rawItems = map['items'];
-    return CreatorImpactReadModel(
-      authorId: (map['authorId'] ?? '').toString(),
-      total: _intValue(map['total']),
-      items: rawItems is List
-          ? rawItems
-                .whereType<Map>()
-                .map(
-                  (item) => CreatorImpactItem.fromMap(
-                    Map<String, dynamic>.from(item),
-                  ),
-                )
-                .toList(growable: false)
-          : const <CreatorImpactItem>[],
-    );
-  }
-}
-
-@immutable
-class CreatorImpactItem {
-  const CreatorImpactItem({
-    required this.helpType,
-    required this.action,
-    required this.intersectionDimension,
-    required this.tagRef,
-    required this.source,
-    required this.count,
-  });
-
-  final String helpType;
-  final String action;
-  final String intersectionDimension;
-  final String tagRef;
-  final String source;
-  final int count;
-
-  factory CreatorImpactItem.fromMap(Map<String, dynamic> map) {
-    return CreatorImpactItem(
-      helpType: (map['helpType'] ?? '').toString(),
-      action: (map['action'] ?? '').toString(),
-      intersectionDimension: (map['intersectionDimension'] ?? '').toString(),
-      tagRef: (map['tagRef'] ?? '').toString(),
-      source: (map['source'] ?? '').toString(),
-      count: _intValue(map['count']),
-    );
-  }
-}
-
-int _intValue(Object? value) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return int.tryParse((value ?? '').toString()) ?? 0;
 }
 
 /// 关注关系查询视图（[UserProfileRepository.getRelationship] wire 归一化后）。

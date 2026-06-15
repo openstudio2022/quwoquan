@@ -33,6 +33,7 @@ class _GuestAuthStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
   @override
   Future<void> saveRefreshedTokens({
@@ -43,6 +44,9 @@ class _GuestAuthStore implements AuthSessionStore {
   Future<void> updateActiveSubAccount(String subAccountId) async {}
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> softLogout() async {}
   @override
   Future<void> markLaunchPromptDismissed() async {}
   @override
@@ -128,24 +132,6 @@ void main() {
       await tester.pump();
 
       expect(ref.read(postInteractionStateProvider).isLiked('post_x'), isTrue);
-      await tester.pumpAndSettle();
-    });
-
-    testWidgets('游客收藏被拦截：不写乐观态（收藏仍需登录）', (tester) async {
-      final ref = await pumpRef(tester);
-      syncPostSaveIntent(
-        ref,
-        postId: 'post_y',
-        isSaved: true,
-        bookmarkCount: 5,
-      );
-      await tester.pump();
-
-      expect(
-        ref.read(postInteractionStateProvider).isSaved('post_y'),
-        isFalse,
-        reason: '收藏属个人资产，游客不得写入',
-      );
       await tester.pumpAndSettle();
     });
   });

@@ -68,11 +68,7 @@ class _MyIntersectionInboxCardState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _buildSummaryHeader(
-            context,
-            totalCount: summary.totalCount,
-            totalNew: summary.totalNewCount,
-          ),
+          _buildSummaryHeader(context, totalNew: summary.totalNewCount),
           SizedBox(height: AppSpacing.intraGroupSm),
           AnimatedSize(
             duration: const Duration(milliseconds: 280),
@@ -95,6 +91,7 @@ class _MyIntersectionInboxCardState
                     ),
                   _BriefRow(
                     tally: visible[i],
+                    isPrimary: i == 0,
                     onTap: () => _openList(dimension: visible[i].dimension),
                   ),
                 ],
@@ -130,7 +127,7 @@ class _MyIntersectionInboxCardState
         padding: EdgeInsets.all(AppSpacing.containerMd),
         decoration: BoxDecoration(
           color: surface,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
           border: Border.all(color: border, width: AppSpacing.hairline),
         ),
         child: child,
@@ -138,11 +135,7 @@ class _MyIntersectionInboxCardState
     );
   }
 
-  Widget _buildSummaryHeader(
-    BuildContext context, {
-    required int totalCount,
-    required int totalNew,
-  }) {
+  Widget _buildSummaryHeader(BuildContext context, {required int totalNew}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -167,45 +160,26 @@ class _MyIntersectionInboxCardState
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  Text(
-                    '$totalCount',
-                    style: TextStyle(
-                      fontSize: AppTypography.iosLargeTitle,
-                      fontWeight: AppTypography.bold,
-                      color: AppColors.iosLabel(context),
-                      height: AppSpacing.textLineHeightSingle,
+                  Expanded(
+                    child: Text(
+                      UITextConstants.myIntersectionsTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosSubheadline,
+                        fontWeight: AppTypography.semiBold,
+                        color: AppColors.iosLabel(context),
+                        height: AppSpacing.textLineHeightSingle,
+                      ),
                     ),
                   ),
-                  SizedBox(width: AppSpacing.intraGroupXs),
-                  // §7.5 红点消除：清零后 fade+scale 收起，给「已读」确定感。
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 240),
-                    switchInCurve: Curves.easeOutBack,
-                    switchOutCurve: Curves.easeIn,
-                    transitionBuilder: (child, anim) => ScaleTransition(
-                      scale: anim,
-                      child: FadeTransition(opacity: anim, child: child),
-                    ),
-                    child: totalNew > 0
-                        ? _RedCountBadge(
-                            key: ValueKey<int>(totalNew),
-                            count: totalNew,
-                          )
-                        : const SizedBox.shrink(key: ValueKey<String>('no-new')),
-                  ),
+                  if (totalNew > 0) ...<Widget>[
+                    SizedBox(width: AppSpacing.intraGroupXs),
+                    _RedCountBadge(count: totalNew),
+                  ],
                 ],
               ),
               SizedBox(height: AppSpacing.intraGroupXs),
-              Text(
-                UITextConstants.myIntersectionsTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosSubheadline,
-                  fontWeight: AppTypography.semiBold,
-                  color: AppColors.iosLabel(context),
-                ),
-              ),
               Text(
                 UITextConstants.myIntersectionsSubtitle,
                 maxLines: 1,
@@ -256,9 +230,14 @@ class _MyIntersectionInboxCardState
 
 /// 动态简报行：云侧实例化一句话（briefText）优先；缺省回落 label + 新增数。
 class _BriefRow extends StatelessWidget {
-  const _BriefRow({required this.tally, required this.onTap});
+  const _BriefRow({
+    required this.tally,
+    required this.isPrimary,
+    required this.onTap,
+  });
 
   final IntersectionDimensionTally tally;
+  final bool isPrimary;
   final VoidCallback onTap;
 
   @override
@@ -270,6 +249,8 @@ class _BriefRow extends StatelessWidget {
         : (hasNew
               ? '${tally.label} ${tally.newCount} ${UITextConstants.intersectionNewBadgeSuffix}'
               : '${tally.label} ${tally.count}');
+    final accent = AppColors.iosAccent(context);
+    final primaryColor = isPrimary ? accent : AppColors.iosLabel(context);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -278,13 +259,21 @@ class _BriefRow extends StatelessWidget {
         child: Row(
           children: <Widget>[
             Container(
-              width: AppSpacing.sm,
-              height: AppSpacing.sm,
+              width: AppSpacing.avatarUserSm,
+              height: AppSpacing.avatarUserSm,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: hasNew
-                    ? AppColors.error
-                    : AppColors.iosTertiaryLabel(context),
+                color: isPrimary
+                    ? accent.withValues(alpha: 0.12)
+                    : AppColors.iosFill(context),
+              ),
+              child: Icon(
+                CupertinoIcons.person_2_fill,
+                size: AppSpacing.iconSmall,
+                color: isPrimary
+                    ? accent
+                    : AppColors.iosSecondaryLabel(context),
               ),
             ),
             SizedBox(width: AppSpacing.intraGroupSm),
@@ -295,10 +284,10 @@ class _BriefRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: AppTypography.iosSubheadline,
-                  fontWeight: hasNew
+                  fontWeight: isPrimary || hasNew
                       ? AppTypography.medium
                       : AppTypography.regular,
-                  color: AppColors.iosLabel(context),
+                  color: primaryColor,
                 ),
               ),
             ),
@@ -351,7 +340,7 @@ class _MorePill extends StatelessWidget {
 
 /// 仅用于「未读/新增」数字的红色提醒徽标。
 class _RedCountBadge extends StatelessWidget {
-  const _RedCountBadge({super.key, required this.count});
+  const _RedCountBadge({required this.count});
 
   final int count;
 

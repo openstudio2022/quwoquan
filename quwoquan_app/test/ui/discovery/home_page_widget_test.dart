@@ -876,7 +876,6 @@ void main() {
         closeTo(tester.getSize(page).height, 2.0),
       );
       expect(find.text('打赏'), findsOneWidget);
-      expect(find.text('保存'), findsOneWidget);
       expect(find.text('私信'), findsOneWidget);
       expect(find.text('复制链接'), findsOneWidget);
       expect(find.text('字体设置'), findsOneWidget);
@@ -989,8 +988,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // V1.0：顶部不再有形态分段，仅保留返回与更多。
       expect(
         find.byKey(const ValueKey<String>('works-format-tab-strip')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('works-top-back')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('works-top-more')),
         findsOneWidget,
       );
       expect(find.byType(WorksImmersiveViewer), findsOneWidget);

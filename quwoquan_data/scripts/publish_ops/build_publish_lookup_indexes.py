@@ -212,7 +212,9 @@ def build_post_index(entity_lookup: dict[str, dict]) -> tuple[int, list[Path]]:
             "tagCount": len(data.get("tagRefs", [])),
             "sourceTaskId": data.get("sourceTaskId"),
             "sourceBatchId": data.get("sourceBatchId"),
-            "updatedAt": data.get("updatedAt", NOW_ISO),
+            "createdAt": data.get("createdAt", ""),
+            "updatedAt": data.get("updatedAt", ""),
+            "publishedAt": data.get("publishedAt", ""),
         }
         records_by_file[f"{safe_slug(content_type)}__{safe_slug(angle)}__{fanout}.ndjson"].append(record)
         post_count += 1

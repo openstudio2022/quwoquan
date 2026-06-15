@@ -2,7 +2,7 @@
 
 覆盖：
 - 套路化开头（评审痛点原句）在所选体裁下判 revision；落地体裁允许的开篇策略则放行。
-- draft_meta 声明的 openingStrategy 与正文开篇不符时判 revision（诚信校验）。
+- draft_meta 声明的 openingStrategy 与正文开篇不符时记录 observation，不触发重写。
 - 同批多篇开篇雷同（换实体名不换句式）被跨篇相似度门拦截；切换角度则放行。
 
 可直接运行：python3 quwoquan_data/tests/produce/test_style_gates.py
@@ -65,14 +65,14 @@ def test_scene_immersion_passes_for_journal_family():
     assert res["passed"], res["issues"]
 
 
-def test_declared_opening_strategy_must_match_body():
-    # 声明 scene_immersion，实际开篇是 conclusion_first → 诚信门拦截。
+def test_declared_opening_strategy_mismatch_is_observation_not_revision():
+    # 声明 scene_immersion，实际开篇是 conclusion_first；记录审计观察，不为元数据分类差异重写正文。
     article = "先说结论：值得专门来一趟。\n\n## 正文\n后续。"
     res = _check_travelogue_density(
         article, DENSITY_BRIEF, style_family="实用攻略风", opening_strategy="scene_immersion"
     )
-    assert not res["passed"], res
-    assert any("not reflected" in i for i in res["issues"]), res["issues"]
+    assert res["passed"], res
+    assert any("not reflected" in i for i in res["observations"]), res
 
 
 _TASK = "风格门_gwt"
@@ -82,7 +82,15 @@ _BATCH = "pilot"
 def _seed_draft(ref: str, article: str) -> None:
     register_content_object(_TASK, _BATCH, ref, content_type="article", angle="体验", title=ref)
     write_agent_draft(
-        _TASK, _BATCH, ref, article, model="test-agent/style-gate", cited_source_paths=[], covered_facts=[]
+        _TASK,
+        _BATCH,
+        ref,
+        article,
+        model="test-agent/style-gate",
+        cited_source_paths=[],
+        covered_facts=[],
+        agent_run_id=f"run-{ref}",
+        agent_id=f"agent-{ref}",
     )
 
 
@@ -105,6 +113,37 @@ def test_cross_article_similarity_passes_distinct_opening():
     c = "先说结论：这条线淡季来最划算，预算能省一半，还完全避开了排队和人挤人的扫兴时刻。\n\n## 正文\n稻城亚丁的完全不同的展开内容与判断。"
     _seed_draft("稻城亚丁_攻略", c)
     res = _check_cross_article_similarity(_TASK, _BATCH, "稻城亚丁_攻略", c)
+    assert res["passed"], res["issues"]
+
+
+def test_cross_article_similarity_ignores_frontmatter_only_overlap():
+    ensure_task_layout(_TASK)
+    ensure_batch_layout(_TASK, _BATCH, "produce")
+    article = (
+        "---\n"
+        "title: 峨眉山·攻略\n"
+        "template: journal\n"
+        "fontPreset: clean\n"
+        "articleMarkdownVersion: qwq-rich-md/1\n"
+        "---\n\n"
+        "先说结论：报国寺到清音阁适合作为第一天，金顶放到第二天清晨更稳妥。\n\n"
+        "## 正文\n"
+        "攻略展开。"
+    )
+    gallery = (
+        "---\n"
+        "title: 峨眉山·金顶图集\n"
+        "template: journal\n"
+        "fontPreset: clean\n"
+        "articleMarkdownVersion: qwq-rich-md/1\n"
+        "---\n\n"
+        "站上金顶时，先撞进视线的是华藏寺、普贤像和被风推开的云海。\n\n"
+        "## 正文\n"
+        "图集展开。"
+    )
+    _seed_draft("峨眉山_攻略_frontmatter", article)
+    _seed_draft("峨眉山_画报_frontmatter", gallery)
+    res = _check_cross_article_similarity(_TASK, _BATCH, "峨眉山_攻略_frontmatter", article)
     assert res["passed"], res["issues"]
 
 

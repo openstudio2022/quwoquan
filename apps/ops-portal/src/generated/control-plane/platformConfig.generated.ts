@@ -25,6 +25,17 @@ export const platformConfigSchema = {
       "ui_editable": true
     },
     {
+      "key": "sys.error_message",
+      "type": "string",
+      "owner": "platform-ops",
+      "default": null,
+      "scope": "environment",
+      "reload": "hot",
+      "rollout": "progressive",
+      "risk_level": "high",
+      "ui_editable": true
+    },
+    {
       "key": "sys.gateway.rate_limit.per_user_rps",
       "type": "int",
       "owner": "platform-ops",

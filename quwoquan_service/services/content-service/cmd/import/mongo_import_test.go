@@ -39,7 +39,10 @@ func testDB(t *testing.T) (*mongo.Database, func()) {
 func samplePosts() []PostDoc {
 	return []PostDoc{
 		{PostRef: "posts/article/体验/甲居藏寨体验/1", ContentType: "article", Title: "甲居藏寨体验", Angle: "体验", Seq: 1,
-			EntityRefs: []string{"地点/景区/甲居藏寨"}, TagRefs: []string{"Topic/旅行"}, Template: "journal",
+			EntityRefs: []string{"地点/景区/甲居藏寨"}, NormalizedEntityRefs: []string{"entity:景区:甲居藏寨"}, TagRefs: []string{"Topic/旅行"}, Template: "journal",
+			AuthorID: "builtin_travel_blogger", CreatorProfileID: "qwq_creator_travel_blogger_001", CreatorArchetype: "travel_blogger",
+			CreatorProfileVersion: "1.0.0", CreatorDisclosure: map[string]any{"type": "platform_virtual_creator", "displayText": "平台虚拟创作者", "visible": true},
+			ExperienceClaimMode: "editorial_synthesis", AuthorQualitySignals: map[string]any{"qualityScore": 0.85, "fatigueScore": 0.2, "riskTier": "low"},
 			GeneratorModel: "agent/x", ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
 			ArticleAssetManifest: &ArticleAssetManifestDoc{
 				SchemaVersion:          1,
@@ -52,9 +55,15 @@ func samplePosts() []PostDoc {
 					{AssetID: "cover", ObjectKey: "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", CDNURL: "https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", Sha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 				},
 			},
-			SourceTaskId:         "旅行/环线/川西环线/川西大环线自驾"},
+			SourceTaskId: "旅行/环线/川西环线/川西大环线自驾",
+			CreatedAt:    time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC),
+			UpdatedAt:    time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC),
+			PublishedAt:  time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)},
 		{PostRef: "posts/article/攻略/色达攻略/1", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
-			EntityRefs: []string{"地点/景区/色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444"},
+			EntityRefs: []string{"地点/景区/色达"}, NormalizedEntityRefs: []string{"entity:景区:色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+			CreatedAt:   time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
+			UpdatedAt:   time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
+			PublishedAt: time.Date(2026, 4, 2, 8, 0, 0, 0, time.UTC)},
 	}
 }
 
@@ -90,20 +99,26 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 		t.Fatalf("want 2 docs, got %d", count)
 	}
 	var got struct {
-		ID                   string         `bson:"_id"`
-		Title                string         `bson:"title"`
-		Angle                string         `bson:"angle"`
-		EntityRefs           []string       `bson:"entityRefs"`
-		TagRefs              []string       `bson:"tagRefs"`
-		Body                 string         `bson:"body"`
-		Summary              string         `bson:"summary"`
-		ArticleMarkdown      string         `bson:"articleMarkdown"`
-		ArticleTemplate      string         `bson:"articleTemplate"`
+		ID                   string                   `bson:"_id"`
+		Title                string                   `bson:"title"`
+		Angle                string                   `bson:"angle"`
+		EntityRefs           []string                 `bson:"entityRefs"`
+		TagRefs              []string                 `bson:"tagRefs"`
+		Body                 string                   `bson:"body"`
+		Summary              string                   `bson:"summary"`
+		ArticleMarkdown      string                   `bson:"articleMarkdown"`
+		ArticleTemplate      string                   `bson:"articleTemplate"`
 		MarkdownDigest       string                   `bson:"articleMarkdownDigest"`
 		ArticleAssetManifest *ArticleAssetManifestDoc `bson:"articleAssetManifest"`
-		SourceTaskId         string         `bson:"sourceTaskId"`
-		CreatedAt            time.Time      `bson:"createdAt"`
-		UpdatedAt            time.Time      `bson:"updatedAt"`
+		SourceTaskId         string                   `bson:"sourceTaskId"`
+		AuthorID             string                   `bson:"authorId"`
+		CreatorProfileID     string                   `bson:"creatorProfileId"`
+		CreatorArchetype     string                   `bson:"creatorArchetype"`
+		CreatorDisclosure    map[string]any           `bson:"creatorDisclosure"`
+		ExperienceClaimMode  string                   `bson:"experienceClaimMode"`
+		CreatedAt            time.Time                `bson:"createdAt"`
+		UpdatedAt            time.Time                `bson:"updatedAt"`
+		PublishedAt          time.Time                `bson:"publishedAt"`
 	}
 	if err := coll.FindOne(ctx, bson.M{"postRef": "posts/article/体验/甲居藏寨体验/1"}).Decode(&got); err != nil {
 		t.Fatal(err)
@@ -114,7 +129,7 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	if got.ID != "posts/article/体验/甲居藏寨体验/1" {
 		t.Fatalf("post _id must use stable postRef, got %q", got.ID)
 	}
-	if len(got.EntityRefs) != 1 || got.EntityRefs[0] != "地点/景区/甲居藏寨" {
+	if len(got.EntityRefs) != 1 || got.EntityRefs[0] != "entity:景区:甲居藏寨" {
 		t.Fatalf("entityRefs wrong: %+v", got.EntityRefs)
 	}
 	if len(got.TagRefs) != 1 || got.TagRefs[0] != "Topic/旅行" {
@@ -132,6 +147,12 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	if got.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
 		t.Fatalf("sourceTaskId not persisted: %q", got.SourceTaskId)
 	}
+	if got.AuthorID != "builtin_travel_blogger" || got.CreatorProfileID != "qwq_creator_travel_blogger_001" || got.CreatorArchetype != "travel_blogger" {
+		t.Fatalf("creator projection not persisted: %+v", got)
+	}
+	if got.CreatorDisclosure["visible"] != true || got.ExperienceClaimMode != "editorial_synthesis" {
+		t.Fatalf("creator boundary not persisted: %+v", got)
+	}
 	if got.ArticleAssetManifest == nil {
 		t.Fatalf("articleAssetManifest not persisted: %+v", got)
 	}
@@ -140,6 +161,15 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	}
 	if got.CreatedAt.IsZero() || got.UpdatedAt.IsZero() {
 		t.Fatalf("createdAt/updatedAt must be set: %+v", got)
+	}
+	if !got.CreatedAt.Equal(time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("createdAt must come from manifest fact: %+v", got.CreatedAt)
+	}
+	if !got.UpdatedAt.Equal(time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("updatedAt must come from manifest fact: %+v", got.UpdatedAt)
+	}
+	if !got.PublishedAt.Equal(time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("publishedAt must come from manifest fact: %+v", got.PublishedAt)
 	}
 }
 
@@ -163,7 +193,7 @@ func TestMongoUpsertIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 重跑同一批（更晚时间）：文档数不变；createdAt 不变；updatedAt 刷新。
+	// 重跑同一批（更晚时间）但内容未变：文档数不变；三类时间事实都保持 manifest 真值。
 	t2 := t1.Add(2 * time.Second)
 	if _, err := UpsertPosts(ctx, coll, samplePosts(), t2); err != nil {
 		t.Fatal(err)
@@ -182,8 +212,35 @@ func TestMongoUpsertIsIdempotent(t *testing.T) {
 	if !second.CreatedAt.Equal(first.CreatedAt) {
 		t.Fatalf("createdAt must be stable: %v vs %v", first.CreatedAt, second.CreatedAt)
 	}
-	if !second.UpdatedAt.After(first.UpdatedAt) {
-		t.Fatalf("updatedAt must advance: %v -> %v", first.UpdatedAt, second.UpdatedAt)
+	if !second.UpdatedAt.Equal(first.UpdatedAt) {
+		t.Fatalf("updatedAt must stay on manifest fact on unchanged re-run: %v -> %v", first.UpdatedAt, second.UpdatedAt)
+	}
+
+	// 内容发生实质变更时，只有上游 manifest.updatedAt 变化才应反映到运行库；
+	// importer 不再用导入时刻自行推进更新时间。
+	t3 := t2.Add(2 * time.Second)
+	changed := samplePosts()
+	changed[1].ArticleMarkdown = "# 色达攻略\n新增更新段落\n"
+	changed[1].UpdatedAt = time.Date(2026, 4, 5, 8, 0, 0, 0, time.UTC)
+	if _, err := UpsertPosts(ctx, coll, changed, t3); err != nil {
+		t.Fatal(err)
+	}
+	var third struct {
+		CreatedAt   time.Time `bson:"createdAt"`
+		UpdatedAt   time.Time `bson:"updatedAt"`
+		PublishedAt time.Time `bson:"publishedAt"`
+	}
+	if err := coll.FindOne(ctx, filter).Decode(&third); err != nil {
+		t.Fatal(err)
+	}
+	if !third.CreatedAt.Equal(first.CreatedAt) {
+		t.Fatalf("createdAt must stay stable across content change: %v vs %v", first.CreatedAt, third.CreatedAt)
+	}
+	if !third.UpdatedAt.Equal(time.Date(2026, 4, 5, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("updatedAt must track manifest fact when content changes: %v", third.UpdatedAt)
+	}
+	if !third.PublishedAt.Equal(time.Date(2026, 4, 2, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("publishedAt must stay on first public time: %v", third.PublishedAt)
 	}
 }
 
@@ -418,6 +475,8 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 		Visibility       string         `bson:"visibility"`
 		TagRefs          []string       `bson:"tagRefs"`
 		SourceTaskId     string         `bson:"sourceTaskId"`
+		CreatorProfileID string         `bson:"creatorProfileId"`
+		CreatorArchetype string         `bson:"creatorArchetype"`
 		ConditionProfile map[string]any `bson:"conditionProfile"`
 		RecScore         float64        `bson:"recScore"`
 	}
@@ -429,6 +488,9 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	}
 	if item.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
 		t.Fatalf("feed sourceTaskId missing: %+v", item)
+	}
+	if item.CreatorProfileID != "qwq_creator_travel_blogger_001" || item.CreatorArchetype != "travel_blogger" {
+		t.Fatalf("feed creator projection missing: %+v", item)
 	}
 	if item.ConditionProfile == nil {
 		t.Fatalf("feed conditionProfile not joined from entity: %+v", item)

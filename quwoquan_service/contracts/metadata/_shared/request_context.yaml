@@ -70,11 +70,11 @@ domain_operation_page_ids:
     CreateReport: content.report.create
     DeleteComment: content.comment.delete
     DeletePost: content.post.delete
-    FavoritePost: content.post.favorite
     GenerateArticleSummary: content.article.summary
     GetCounters: content.post.counters
     GetFeed: content.feed.list
     GetMediaAsset: content.media.get
+    GetMyFootprint: content.footprint.list
     GetPost: content.post.get
     GetReactionState: content.post.reactions
     GetRecommendation: content.recommend
@@ -91,7 +91,6 @@ domain_operation_page_ids:
     SelectAutoVideoCover: content.media.cover.auto
     SelectManualVideoCover: content.media.cover.manual
     SearchPosts: content.search
-    UnfavoritePost: content.post.unfavorite
     UnlikePost: content.post.unlike
     UpdatePost: content.post.update
     UpdatePostCircles: content.post.circles
@@ -102,6 +101,7 @@ domain_operation_page_ids:
     CreateHomepageClaimRequest: entity.homepage.claim.create
     CreateHomepageStatusReport: entity.homepage.status_report.create
     GetHomepageDetail: entity.homepage.detail
+    GetHomepageIntroduction: entity.homepage.introduction
     GetHomepageRelatedGroups: entity.homepage.related_groups
     GetHomepageReviewSummary: entity.homepage.review_summary
     GetHomepageShell: entity.homepage.shell
@@ -179,6 +179,7 @@ standalone_page_ids:
   homepagePicker: entity.homepage.picker
   suggestHomepage: entity.homepage.suggest.page
   homepageDetail: entity.homepage.detail.page
+  homepageIntroduction: entity.homepage.introduction.page
   homepageClaim: entity.homepage.claim.page
   homepageMaintenance: entity.homepage.maintenance.page
   homepageStatusReport: entity.homepage.status_report.page

@@ -12,6 +12,7 @@ class SubAccountProfileWireDto {
   final String avatarUrl;
   final String backgroundUrl;
   final String bio;
+  final List<String> identityTags;
   final int followerCount;
   final int followingCount;
   final int postCount;
@@ -34,6 +35,7 @@ class SubAccountProfileWireDto {
     this.avatarUrl = '',
     this.backgroundUrl = '',
     this.bio = '',
+    this.identityTags = const <String>[],
     this.followerCount = 0,
     this.followingCount = 0,
     this.postCount = 0,
@@ -58,6 +60,7 @@ class SubAccountProfileWireDto {
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       backgroundUrl: m['backgroundUrl']?.toString() ?? m['backgroundImage']?.toString() ?? '',
       bio: m['bio']?.toString() ?? '',
+      identityTags: _parseStringList(m['identityTags']) ?? <String>[],
       followerCount: (m['followerCount'] as num?)?.toInt() ?? 0,
       followingCount: (m['followingCount'] as num?)?.toInt() ?? 0,
       postCount: (m['postCount'] as num?)?.toInt() ?? 0,
@@ -83,6 +86,7 @@ class SubAccountProfileWireDto {
       'avatarUrl': avatarUrl,
       'backgroundUrl': backgroundUrl,
       'bio': bio,
+      'identityTags': identityTags,
       'followerCount': followerCount,
       'followingCount': followingCount,
       'postCount': postCount,
@@ -107,6 +111,7 @@ class SubAccountProfileWireDto {
     String? avatarUrl,
     String? backgroundUrl,
     String? bio,
+    List<String>? identityTags,
     int? followerCount,
     int? followingCount,
     int? postCount,
@@ -129,6 +134,7 @@ class SubAccountProfileWireDto {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       backgroundUrl: backgroundUrl ?? this.backgroundUrl,
       bio: bio ?? this.bio,
+      identityTags: identityTags ?? this.identityTags,
       followerCount: followerCount ?? this.followerCount,
       followingCount: followingCount ?? this.followingCount,
       postCount: postCount ?? this.postCount,

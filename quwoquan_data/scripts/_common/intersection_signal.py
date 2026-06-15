@@ -58,7 +58,7 @@ def contract_field_names() -> frozenset[str]:
 def build_intersection_hints(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
     """据 manifest 的 entityRefs / tagRefs / conditionContext 预生成内容侧交集锚点。"""
     hints: list[dict[str, Any]] = []
-    entity_refs = [str(r) for r in (manifest.get("entityRefs") or []) if r]
+    entity_refs = [str(r) for r in (manifest.get("normalizedEntityRefs") or []) if r]
     tag_refs = [str(t) for t in (manifest.get("tagRefs") or []) if t]
     condition = manifest.get("conditionContext") or {}
 
@@ -70,11 +70,15 @@ def build_intersection_hints(manifest: Mapping[str, Any]) -> list[dict[str, Any]
                 "tagRefs": [],
                 "actionType": "view_object",
                 "actionTargetId": ref,
-                "label": ref.strip("/").split("/")[-1],
+                "label": ref.split(":")[-1],
             }
         )
-    topic_tags = [t for t in tag_refs if t.startswith("Topic/")]
-    for tag in topic_tags[:3]:
+    interest_tags = [
+        t
+        for t in tag_refs
+        if t and not t.startswith("地理/")
+    ]
+    for tag in interest_tags[:3]:
         hints.append(
             {
                 "dimension": "interest",
@@ -113,7 +117,7 @@ def intersection_hint_issues(
         hints = hints if isinstance(hints, list) else []
 
     contract_fields = contract_field_names()
-    entity_set = {str(r) for r in (manifest.get("entityRefs") or [])}
+    entity_set = {str(r) for r in (manifest.get("normalizedEntityRefs") or [])}
     tag_set = {str(t) for t in (manifest.get("tagRefs") or [])}
     dims_seen: set[str] = set()
 

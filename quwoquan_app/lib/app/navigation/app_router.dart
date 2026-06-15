@@ -15,13 +15,12 @@ import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show ReferralSource;
+    show ReferralSource, ReferralSourceExt;
 import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
-import 'package:quwoquan_app/ui/content/pages/article_detail_page.dart';
-import 'package:quwoquan_app/ui/content/pages/photo_detail_page.dart';
 import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
-import 'package:quwoquan_app/ui/content/pages/video_detail_page.dart';
+import 'package:quwoquan_app/ui/content/pages/work_browser_entry_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
@@ -32,6 +31,7 @@ import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dar
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/developer_settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
@@ -45,15 +45,18 @@ import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_claim_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
+import 'package:quwoquan_app/ui/entity/pages/homepage_introduction_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_maintenance_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_status_report_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/suggest_homepage_page.dart';
+import 'package:quwoquan_app/ui/intersection/pages/object_intersection_list_page.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
 import 'package:quwoquan_app/ui/user/pages/legal_document_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
+import 'package:quwoquan_app/ui/user/pages/my_footprint_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_intersection_inbox_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
@@ -68,6 +71,8 @@ import 'package:quwoquan_app/ui/rtc/pages/video_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
+
+part 'app_router_create_entry_route.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshListenable = ValueNotifier<int>(0);
@@ -91,7 +96,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     refreshListenable: refreshListenable,
-    observers: <NavigatorObserver>[AppPageAccessNavigatorObserver.instance],
+    observers: <NavigatorObserver>[
+      AppPageAccessNavigatorObserver.instance,
+      chatRouteObserver,
+    ],
     initialLocation: ref.read(welcomeCompletedProvider)
         ? AppRoutePaths.home
         : AppRoutePaths.welcome,
@@ -339,6 +347,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: AppRoutePaths.homepageIntroductionPathTemplate.replaceAll(
+          '{id}',
+          ':id',
+        ),
+        pageBuilder: (context, state) {
+          final homepageId = state.pathParameters['id'] ?? '';
+          final source = state.uri.queryParameters['source'] ?? '';
+          return appRoutePage<void>(
+            state: state,
+            child: HomepageIntroductionPage(
+              homepageId: homepageId,
+              referralSource: _referralSourceFromRoute(source),
+            ),
+          );
+        },
+      ),
+      GoRoute(
         path: AppRoutePaths.homepageClaimPathTemplate.replaceAll('{id}', ':id'),
         pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
@@ -517,24 +542,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
-        path: AppRoutePaths.articleDetailPathTemplate.replaceAll('{id}', ':id'),
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id'] ?? '0';
-          final extra = state.extra is ArticleDetailPageRouteExtra
-              ? state.extra! as ArticleDetailPageRouteExtra
-              : null;
-          return appRoutePage<void>(
-            state: state,
-            child: ArticleDetailPage(
-              articleId: id,
-              referralSource:
-                  extra?.referralSource ?? ReferralSource.organicFeed,
-              feedRequestId: extra?.feedRequestId,
-            ),
-          );
-        },
-      ),
-      GoRoute(
         path: AppRoutePaths.userProfilePathTemplate.replaceAll(
           '{username}',
           ':username',
@@ -600,56 +607,40 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: AppRoutePaths.mediaViewerPathTemplate
-            .replaceAll('{category}', ':category')
-            .replaceAll('{index}', ':index'),
-        pageBuilder: (context, state) {
-          final category = state.pathParameters['category'] ?? 'images';
-          final indexStr = state.pathParameters['index'] ?? '0';
-          final index = int.tryParse(indexStr) ?? 0;
-          final extra = state.extra is MediaViewerExtra
-              ? state.extra! as MediaViewerExtra
-              : null;
-
-          if (extra != null && extra.dtoPosts.isNotEmpty) {
-            return appRoutePage<void>(
-              state: state,
-              child: UnifiedMediaViewerPage(extra: extra),
-            );
-          }
-
-          return appRoutePage<void>(
-            state: state,
-            child: PhotoDetailPage(
-              category: category,
-              initialIndex: index,
-              initialExtra: extra,
-            ),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutePaths.videoViewerPathTemplate.replaceAll(
-          '{index}',
-          ':index',
+        path: AppRoutePaths.workBrowserPathTemplate.replaceAll(
+          '{workId}',
+          ':workId',
         ),
         pageBuilder: (context, state) {
-          final indexStr = state.pathParameters['index'] ?? '0';
-          final index = int.tryParse(indexStr) ?? 0;
+          final commentContext = MediaViewerCommentContext.fromQueryParameters(
+            state.uri.queryParameters,
+          );
           final extra = state.extra is MediaViewerExtra
               ? state.extra! as MediaViewerExtra
               : null;
 
-          if (extra != null && extra.dtoPosts.isNotEmpty) {
+          if (extra != null &&
+              (extra.dtoPosts.isNotEmpty || extra.posts.isNotEmpty)) {
             return appRoutePage<void>(
               state: state,
-              child: UnifiedMediaViewerPage(extra: extra),
+              child: UnifiedMediaViewerPage(
+                extra: extra.copyWith(commentContext: commentContext),
+              ),
             );
           }
 
+          // 直达 / 深链 / 评论跳原文：只有 :workId、无预置列表。按 id 直拉该帖
+          // 组装单帖 viewer，避免丢弃 workId 回退到发现页推荐流（先前断点）。
+          final workId = Uri.decodeComponent(
+            state.pathParameters['workId'] ?? '',
+          );
           return appRoutePage<void>(
             state: state,
-            child: VideoDetailPage(initialIndex: index, initialExtra: extra),
+            child: WorkBrowserEntryPage(
+              workId: workId,
+              source: state.uri.queryParameters['source'] ?? 'workBrowser',
+              commentContext: commentContext,
+            ),
           );
         },
       ),
@@ -727,30 +718,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutePaths.profileEdit,
-        pageBuilder: (context, state) {
-          return appRoutePage<void>(
-            state: state,
-            child: const EditProfilePage(),
-          );
-        },
+        pageBuilder: (context, state) =>
+            appRoutePage<void>(state: state, child: const EditProfilePage()),
       ),
       GoRoute(
         path: AppRoutePaths.profilePersonas,
-        pageBuilder: (context, state) {
-          return appRoutePage<void>(
-            state: state,
-            child: const PersonaManagementPage(),
-          );
-        },
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: const PersonaManagementPage(),
+        ),
       ),
       GoRoute(
         path: AppRoutePaths.profileComments,
-        pageBuilder: (context, state) {
-          return appRoutePage<void>(
-            state: state,
-            child: const ProfileCommentsPage(),
-          );
-        },
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: const ProfileCommentsPage(),
+        ),
       ),
       GoRoute(
         path: AppRoutePaths.profileStatsPathTemplate,
@@ -765,13 +748,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutePaths.myIntersectionsPathTemplate,
-        pageBuilder: (context, state) {
-          final dimension = state.uri.queryParameters['dimension'] ?? '';
-          return appRoutePage<void>(
-            state: state,
-            child: MyIntersectionInboxPage(dimension: dimension),
-          );
-        },
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: MyIntersectionInboxPage(
+            dimension: state.uri.queryParameters['dimension'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.objectIntersectionsPathTemplate,
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: ObjectIntersectionListPage(
+            objectId: state.uri.queryParameters['objectId'] ?? '',
+            objectType: state.uri.queryParameters['objectType'] ?? '',
+            title: state.uri.queryParameters['title'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.myFootprintPathTemplate,
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: MyFootprintPage(type: state.uri.queryParameters['type'] ?? ''),
+        ),
       ),
       GoRoute(
         path: AppRoutePaths.chatDetailPathTemplate.replaceAll('{id}', ':id'),
@@ -1004,34 +1004,14 @@ void _completeWelcome(WidgetRef ref) {
   );
 }
 
-/// 创作入口抽屉的独立路由页（避免在 Shell 内 setState 导致 build scope 断言）
-class _CreateEntryRoutePage extends ConsumerWidget {
-  const _CreateEntryRoutePage();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return CreateEntrySheet(
-      isOpen: true,
-      onClose: () => context.pop(),
-      onSelect: (EditorStartAction action) {
-        context.pop();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!context.mounted) {
-            return;
-          }
-          context.go(AppRoutePaths.create(type: action.name));
-        });
-      },
-      onContinueFromDraft: () {
-        final router = GoRouter.of(context);
-        context.pop();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final navContext = router.routerDelegate.navigatorKey.currentContext;
-          if (navContext != null) {
-            unawaited(presentCreateDraftPickerAndGo(navContext, router));
-          }
-        });
-      },
-    );
+ReferralSource _referralSourceFromRoute(String value) {
+  if (value.trim().isEmpty) {
+    return ReferralSource.deepLink;
   }
+  for (final source in ReferralSource.values) {
+    if (source.value == value) {
+      return source;
+    }
+  }
+  return ReferralSource.deepLink;
 }

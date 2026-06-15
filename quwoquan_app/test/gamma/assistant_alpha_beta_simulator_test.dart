@@ -10,56 +10,64 @@ import '../common/assistant/assistant_scenario_fixtures.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
+const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
+  'ASSISTANT_SCENARIO_FIXTURE_JSON_B64',
+);
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('私人助理 alpha/beta 模拟器自动验证', (tester) async {
-    final scenarioPack = await loadAssistantScenarioPackAsync();
-    final runtimeEnv = CloudRuntimeConfig.appRuntimeEnv;
-    final repositoryMode = expectedRepositoryModeForCurrentRuntimeEnv(
-      scenarioPack,
-    );
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          if (runtimeEnv == 'alpha')
-            assistantRepositoryProvider.overrideWithValue(
-              ScenarioMockAssistantRepository(pack: scenarioPack),
-            ),
-        ],
-        child: const MaterialApp(home: PersonalAssistantConversationPage()),
-      ),
-    );
-    await _pumpFrames(tester);
-    _expectScreenClass(tester);
+  testWidgets(
+    '私人助理 alpha/beta 模拟器自动验证',
+    (tester) async {
+      final scenarioPack = await loadAssistantScenarioPackAsync();
+      final runtimeEnv = CloudRuntimeConfig.appRuntimeEnv;
+      final repositoryMode = expectedRepositoryModeForCurrentRuntimeEnv(
+        scenarioPack,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            if (runtimeEnv == 'alpha')
+              assistantRepositoryProvider.overrideWithValue(
+                ScenarioMockAssistantRepository(pack: scenarioPack),
+              ),
+          ],
+          child: const MaterialApp(home: PersonalAssistantConversationPage()),
+        ),
+      );
+      await _pumpFrames(tester);
+      _expectScreenClass(tester);
 
-    expect(find.text('找私助'), findsOneWidget);
-    expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
+      expect(find.text('找私助'), findsOneWidget);
+      expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
 
-    expect(_modeFromWidgetTree(tester), repositoryMode);
-    const scenarioId = String.fromEnvironment('ASSISTANT_SCENARIO_ID');
-    final allScenarios = scenarioPack.assistantTurnScenariosFor(runtimeEnv);
-    final scenarios = scenarioId.trim().isEmpty
-        ? allScenarios
-        : allScenarios
-              .where((scenario) => scenario.id == scenarioId)
-              .toList(growable: false);
-    expect(scenarios, isNotEmpty);
+      expect(_modeFromWidgetTree(tester), repositoryMode);
+      const scenarioId = String.fromEnvironment('ASSISTANT_SCENARIO_ID');
+      final allScenarios = scenarioPack.assistantTurnScenariosFor(runtimeEnv);
+      final scenarios = scenarioId.trim().isEmpty
+          ? allScenarios
+          : allScenarios
+                .where((scenario) => scenario.id == scenarioId)
+                .toList(growable: false);
+      expect(scenarios, isNotEmpty);
 
-    switch (runtimeEnv) {
-      case 'alpha':
-      case 'beta':
-        for (final scenario in scenarios) {
-          await _sendAndExpect(
-            tester,
-            scenario: scenario,
-            runtimeEnv: runtimeEnv,
-          );
-        }
-      default:
-        fail('APP_RUNTIME_ENV=$runtimeEnv 不属于本测试覆盖范围');
-    }
-  });
+      switch (runtimeEnv) {
+        case 'alpha':
+        case 'beta':
+          for (final scenario in scenarios) {
+            await _sendAndExpect(
+              tester,
+              scenario: scenario,
+              runtimeEnv: runtimeEnv,
+            );
+          }
+        default:
+          fail('APP_RUNTIME_ENV=$runtimeEnv 不属于本测试覆盖范围');
+      }
+    },
+    skip: _assistantScenarioFixtureJsonBase64.trim().isEmpty,
+  );
 }
 
 AppDataSourceMode _modeFromWidgetTree(WidgetTester tester) {

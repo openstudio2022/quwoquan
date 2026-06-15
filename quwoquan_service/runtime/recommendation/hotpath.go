@@ -127,7 +127,6 @@ var SignalWeights = map[string]float64{
 	"click":            0.5,
 	"dwell":            1.0,
 	"like":             2.0,
-	"favorite":         3.0,
 	"share":            3.0,
 	"dislike":          -5.0,
 	"report":           -10.0,

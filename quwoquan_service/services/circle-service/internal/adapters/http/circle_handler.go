@@ -144,6 +144,8 @@ func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Req
 		h.handleFeed(w, r, circleID, parts[2:])
 	case "stats":
 		h.handleGetStats(w, r, circleID)
+	case "impact":
+		h.handleGetImpact(w, r, circleID)
 	case "sections":
 		h.handleUpdateSections(w, r, circleID)
 	case "files":
@@ -322,6 +324,19 @@ func (h *CircleHandler) handleGetStats(w http.ResponseWriter, r *http.Request, c
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": stats})
+}
+
+func (h *CircleHandler) handleGetImpact(w http.ResponseWriter, r *http.Request, circleID string) {
+	if r.Method != http.MethodGet {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
+		return
+	}
+	impact, err := h.circleService.GetCircleImpact(r.Context(), circleID)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": impact})
 }
 
 // --- Sections ---

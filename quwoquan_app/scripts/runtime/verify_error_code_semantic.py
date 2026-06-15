@@ -24,10 +24,17 @@ BASELINE_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), ".verify_error_code_semantic_baseline.txt"
 )
 
-# Match string literals that look like metadata error codes: DOMAIN.KIND.reason
-# e.g. 'INTEGRATION.USER.location_unavailable', "CONTENT.USER.post_not_found"
+# Match string literals that look like metadata error codes: MODULE.KIND.reason
+# e.g. 'INTEGRATION.USER.location_unavailable', "CONTENT.USER.post_not_found",
+# 'ASSISTANT.MIDDLEWARE.upstream_timeout', "CIRCLE.USER.not_found".
+#
+# 覆盖全部业务 MODULE（USER/CONTENT/INTEGRATION/RTC/CIRCLE/CHAT/ASSISTANT/ENTITY）
+# 与全部 KIND（含 AUTH/SUB_ACCOUNT/GREETING/INVITE/CONTACT/SETTING 等用户域细分），
+# 唯一真相源为 contracts/metadata/**/errors.yaml。新增模块/类别时在此同步扩展。
+_MODULES = "USER|CONTENT|INTEGRATION|RTC|CIRCLE|CHAT|ASSISTANT|ENTITY"
+_KINDS = "USER|AUTH|SUB_ACCOUNT|GREETING|INVITE|CONTACT|SETTING|MIDDLEWARE|SYSTEM"
 PATTERN = re.compile(
-    r"['\"](?:INTEGRATION|CONTENT|CHAT)\.(?:USER|MIDDLEWARE|SYSTEM)\.[a-z0-9_]+['\"]"
+    rf"['\"](?:{_MODULES})\.(?:{_KINDS})\.[a-z0-9_]+['\"]"
 )
 HINT = "错误码应使用 *ErrorCode.xxx.code，禁止硬编码字符串；见 01-arch-constraints.mdc §3.3"
 

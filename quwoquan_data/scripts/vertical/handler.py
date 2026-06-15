@@ -4,11 +4,13 @@ from __future__ import annotations
 import argparse
 import json
 
+from download.fetch import SUPPORTED_TEXT_EXTRACTORS
 from vertical.benchmark import evaluate_benchmark, render_benchmark, write_benchmark_report
 from vertical.coverage import evaluate_registry, list_verticals, render_report
 from vertical.governance import verify_vertical_script_governance
 from vertical.maturity import evaluate_maturity, render_maturity
 from vertical.quality import verify_vertical_quality
+from vertical.source_registry import verify_travel_source_registry
 
 
 def handle_campus_bootstrap(args: argparse.Namespace) -> None:
@@ -69,6 +71,16 @@ def handle_quality(args: argparse.Namespace) -> None:
     print("[vertical quality] PASSED")
 
 
+def handle_source_registry(args: argparse.Namespace) -> None:
+    issues = verify_travel_source_registry(allowed_extractors=set(SUPPORTED_TEXT_EXTRACTORS))
+    if issues:
+        print("[vertical source-registry] FAILED")
+        for issue in issues:
+            print(f"  - {issue}")
+        raise SystemExit(1)
+    print("[vertical source-registry] PASSED")
+
+
 def handle_maturity(args: argparse.Namespace) -> None:
     reports = [evaluate_registry(v) for v in list_verticals()]
     coverage_status = "passed" if reports and all(r["status"] == "passed" for r in reports) else "gap"
@@ -113,6 +125,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     pq = sub.add_parser("quality", help="校验垂类 golden samples 与专项质量门")
     pq.set_defaults(handler=handle_quality)
+
+    psr = sub.add_parser("source-registry", help="校验 travel source registry 与 extractor 白名单")
+    psr.set_defaults(handler=handle_source_registry)
 
     pm = sub.add_parser("maturity", help="输出规模化成熟度评估")
     pm.add_argument("--has-license-policy", action="store_true")

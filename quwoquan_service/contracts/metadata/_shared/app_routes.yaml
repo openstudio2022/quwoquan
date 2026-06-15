@@ -34,14 +34,11 @@ routes:
   - id: circleStats
     path: /circle/{id}/stats
     query_params: [type]
-  - id: articleDetail
-    path: /article/{id}
   - id: userProfile
     path: /user/{username}
-  - id: mediaViewer
-    path: /media-viewer/{category}/{index}
-  - id: videoViewer
-    path: /video-viewer/{index}
+  - id: workBrowser
+    path: /works/browser/{workId}
+    query_params: [filter, source, index]
   - id: assistant
     path: /assistant
   - id: assistantPersonal
@@ -59,6 +56,9 @@ routes:
     query_params: [query]
   - id: homepageDetail
     path: /homepages/{id}
+  - id: homepageIntroduction
+    path: /homepages/{id}/introduction
+    query_params: [source]
   - id: homepageClaim
     path: /homepages/{id}/claim
   - id: homepageMaintenance
@@ -85,6 +85,12 @@ routes:
   - id: myIntersections
     path: /profile/intersections
     query_params: [dimension]
+  - id: objectIntersections
+    path: /object/intersections
+    query_params: [objectId, objectType, title]
+  - id: myFootprint
+    path: /profile/footprint
+    query_params: [type]
   - id: chatDetail
     path: /chat/{id}
   - id: chatSettings

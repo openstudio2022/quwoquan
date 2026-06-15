@@ -77,7 +77,10 @@ Widget _scopedApp({CircleRepository? mock, double textScaleFactor = 1.0}) {
             builder: (_, _) => const Scaffold(body: CirclesHubPage()),
           ),
           GoRoute(path: '/circle/:id', builder: (_, _) => const SizedBox()),
-          GoRoute(path: '/article/:id', builder: (_, _) => const SizedBox()),
+          GoRoute(
+            path: '/works/browser/:workId',
+            builder: (_, _) => const SizedBox(),
+          ),
         ],
       ),
     ),

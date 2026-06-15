@@ -46,6 +46,7 @@ class ArticleEditor extends StatefulWidget {
     this.onRedo,
     this.onUpdateNodeType,
     this.onToggleInlineStyle,
+    this.onInsertEntityMention,
     this.onCommitTextEdit,
     this.onUpdateNodeAlignment,
   });
@@ -90,6 +91,8 @@ class ArticleEditor extends StatefulWidget {
     bool? strikethrough,
   })?
   onToggleInlineStyle;
+  final Future<void> Function(String nodeId, int start, int end)?
+  onInsertEntityMention;
   final VoidCallback? onCommitTextEdit;
   final void Function(String nodeId, String alignment)? onUpdateNodeAlignment;
 
@@ -551,6 +554,18 @@ class _ArticleEditorState extends State<ArticleEditor> {
     );
   }
 
+  Future<void> _onInsertEntityMention() async {
+    final focusedId = _focusedNodeId;
+    if (focusedId == null || focusedId == 'title') return;
+    final selection = _nodeSelections[focusedId];
+    if (selection == null || selection.isCollapsed) return;
+    await widget.onInsertEntityMention?.call(
+      focusedId,
+      selection.start,
+      selection.end,
+    );
+  }
+
   /// 检查当前焦点节点选区内某个行内样式是否全部激活。
   bool _isInlineStyleActive(bool Function(ArticleInlineSpan) predicate) {
     final focusedId = _focusedNodeId;
@@ -708,6 +723,7 @@ class _ArticleEditorState extends State<ArticleEditor> {
                 _togglePanel(ArticleEditorAccessoryPanelType.emoji),
             onStyleTap: () =>
                 _togglePanel(ArticleEditorAccessoryPanelType.style),
+            onMentionTap: _onInsertEntityMention,
             onEmojiSelected: _onEmojiSelected,
             onStructureActionSelected: _onStructureAction,
             activeStructureAction: _activeStructureAction(),

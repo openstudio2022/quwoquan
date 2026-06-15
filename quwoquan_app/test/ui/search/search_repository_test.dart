@@ -13,6 +13,7 @@ import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
@@ -79,6 +80,7 @@ void main() {
         contentRepository: MockContentRepository(),
         homepageRepository: MockHomepageRepository(),
         integrationRepository: const MockIntegrationRepository(),
+        userProfileRepository: const MockUserProfileRepository(),
         localChatSearchStore: chatStore,
         localChatSearchSyncService: chatSyncService,
         localCircleGroupSnapshotStore: circleStore,
@@ -137,6 +139,7 @@ void main() {
           contentRepository: MockContentRepository(),
           homepageRepository: MockHomepageRepository(),
           integrationRepository: const MockIntegrationRepository(),
+          userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
           localCircleGroupSnapshotStore: circleStore,
@@ -199,6 +202,7 @@ void main() {
           contentRepository: MockContentRepository(),
           homepageRepository: MockHomepageRepository(),
           integrationRepository: const MockIntegrationRepository(),
+          userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
           localCircleGroupSnapshotStore: circleStore,
@@ -245,6 +249,7 @@ void main() {
           contentRepository: MockContentRepository(),
           homepageRepository: MockHomepageRepository(),
           integrationRepository: const MockIntegrationRepository(),
+          userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
           localCircleGroupSnapshotStore: circleStore,
@@ -292,6 +297,7 @@ void main() {
           contentRepository: _ThrowingContentRepository(),
           homepageRepository: _ThrowingHomepageRepository(),
           integrationRepository: _ThrowingIntegrationRepository(),
+          userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
           localCircleGroupSnapshotStore: circleStore,
@@ -346,6 +352,7 @@ void main() {
         contentRepository: MockContentRepository(),
         homepageRepository: MockHomepageRepository(),
         integrationRepository: const MockIntegrationRepository(),
+        userProfileRepository: const MockUserProfileRepository(),
         localChatSearchStore: chatStore,
         localChatSearchSyncService: chatSyncService,
         localCircleGroupSnapshotStore: circleStore,
@@ -387,6 +394,7 @@ void main() {
           contentRepository: MockContentRepository(),
           homepageRepository: MockHomepageRepository(),
           integrationRepository: const MockIntegrationRepository(),
+          userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
           localCircleGroupSnapshotStore: circleStore,
@@ -427,6 +435,7 @@ void main() {
           contentRepository: MockContentRepository(),
           homepageRepository: MockHomepageRepository(),
           integrationRepository: const MockIntegrationRepository(),
+          userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
           localCircleGroupSnapshotStore: circleStore,
@@ -468,6 +477,7 @@ void main() {
         contentRepository: MockContentRepository(),
         homepageRepository: MockHomepageRepository(),
         integrationRepository: const MockIntegrationRepository(),
+        userProfileRepository: const MockUserProfileRepository(),
         localChatSearchStore: chatStore,
         localChatSearchSyncService: chatSyncService,
         localCircleGroupSnapshotStore: circleStore,

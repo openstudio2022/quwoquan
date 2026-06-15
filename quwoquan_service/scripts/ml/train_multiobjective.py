@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Multi-objective ranking: train separate LightGBM models for click, dwell, like,
-favorite, share, comment, follow — then combine with weighted fusion.
+share, comment, follow — then combine with weighted fusion.
 
 Usage: python scripts/ml/train_multiobjective.py --scenario content_feed [--production]
 """
@@ -42,7 +42,7 @@ ITEM_NUMERIC_FEATURES = [
 ]
 RECALL_PATH_MAP = {"tag_recall": 0, "hot_recall": 1, "social_friend": 2, "social_circle": 3, "explore_recall": 4}
 USER_NUMERIC_FEATURES = [
-    "engagementRate", "totalLikes", "totalFavorites", "totalShares", "totalEvents",
+    "engagementRate", "totalLikes", "totalShares", "totalEvents",
 ]
 CONTEXT_NUMERIC_FEATURES = [
     "requestHour", "requestDayOfWeek",
@@ -54,7 +54,6 @@ OBJECTIVES = {
     "click":    {"type": "binary",     "weight": 0.30},
     "dwell_s":  {"type": "regression", "weight": 0.25},
     "like":     {"type": "binary",     "weight": 0.15},
-    "favorite": {"type": "binary",     "weight": 0.10},
     "share":    {"type": "binary",     "weight": 0.08},
     "comment":  {"type": "binary",     "weight": 0.07},
     "follow":   {"type": "binary",     "weight": 0.05},

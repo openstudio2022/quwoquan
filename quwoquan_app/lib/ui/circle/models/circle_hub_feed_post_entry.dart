@@ -55,12 +55,6 @@ class CircleHubFeedPostEntry {
       dto?.likeCount ??
       0;
 
-  int get wireBookmarkCount =>
-      (raw['favoriteCount'] as num?)?.toInt() ??
-      (raw['bookmarkCount'] as num?)?.toInt() ??
-      dto?.favoriteCount ??
-      0;
-
   int get wireShareCount =>
       (raw['shareCount'] as num?)?.toInt() ?? dto?.shareCount ?? 0;
 
@@ -212,12 +206,6 @@ class CircleHubFeedPostEntry {
       raw['likes'] = likeCount;
     }
 
-    final bookmarkCount = result.postBookmarksCount[id];
-    if (bookmarkCount != null) {
-      raw['favoriteCount'] = bookmarkCount;
-      raw['bookmarkCount'] = bookmarkCount;
-    }
-
     final shareCount = result.postSharesCount[id];
     if (shareCount != null) {
       raw['shareCount'] = shareCount;
@@ -230,7 +218,6 @@ class CircleHubFeedPostEntry {
     }
 
     raw['isLiked'] = result.likedPosts.contains(id);
-    raw['isSaved'] = result.savedPosts.contains(id);
     if (authorId.isNotEmpty &&
         (result.effectiveScopeProfileIds.isEmpty ||
             result.effectiveScopeProfileIds.contains(authorId))) {

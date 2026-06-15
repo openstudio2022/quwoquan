@@ -13,6 +13,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+from _common import content_review as cr  # noqa: E402
 from _common import quality_gates as qg  # noqa: E402
 
 
@@ -79,6 +80,33 @@ def test_semantic_duplicate_simhash():
     assert qg.semantic_duplicate_issues(a, [c]) == [], "不同内容不应误判语义重复"
 
 
+def test_intra_doc_repetition_blocks_padding_loops():
+    repeated_para = "另外，碧峰峡在碧峰峡_a2这篇里强调慢看与错峰，别用赶场心态压缩体验。"
+    article = (
+        "# 碧峰峡慢游一日体验\n\n"
+        "先写一段正常引入。\n\n"
+        "再写一段正常判断。\n\n"
+        f"{repeated_para}\n\n"
+        f"{repeated_para}\n\n"
+        f"{repeated_para}\n\n"
+        f"{repeated_para}\n"
+    )
+    issues = qg.intra_doc_repetition_issues(article)
+    assert issues, "复读 padding 应被拦截"
+    assert any("repeated paragraph" in issue or "duplicated paragraphs occupy" in issue for issue in issues), issues
+
+
+def test_intra_doc_repetition_allows_normal_reuse():
+    article = (
+        "# 青城山\n\n"
+        "清晨上山时路边潮气很重，但风一吹就觉得值回票价。\n\n"
+        "午后人流明显增多，我更建议把主景线放在前半程。\n\n"
+        "如果你带老人同行，摆渡和步道的取舍要先想好。\n\n"
+        "回头看这趟行程，最值得复盘的是节奏，而不是打卡数量。"
+    )
+    assert qg.intra_doc_repetition_issues(article) == []
+
+
 def test_rubric_consistency():
     assert qg.rubric_consistency_issues([8.0, 8.0, 8.0]) == []
     assert qg.rubric_consistency_issues([2.0, 9.0, 5.0])  # 方差过大判官不可信
@@ -118,6 +146,14 @@ def test_public_contacts_catalog_loads():
     nums = pc.default_public_numbers()
     assert "110" in nums and "12301" in nums
     assert pc.normalize_number("0836-6966022") == "08366966022"
+
+
+def test_numeric_traceability_normalizes_thousand_separators():
+    issues = cr.numeric_traceability_issues(
+        "峨眉山最高峰万佛顶海拔3099米，金顶海拔3077米。",
+        ["最高峰万佛顶海拔3,099米，金顶（3,077米）是旅游高点。"],
+    )
+    assert issues == []
 
 
 def test_goldenset_calibration():

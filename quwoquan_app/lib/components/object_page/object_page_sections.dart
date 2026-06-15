@@ -31,9 +31,18 @@ class ObjectContextTabs {
 
   static const List<ObjectContextTabSpec> entity = <ObjectContextTabSpec>[
     ObjectContextTabSpec(id: 'home', label: '首页'),
-    ObjectContextTabSpec(id: 'content', label: '内容'),
-    ObjectContextTabSpec(id: 'reviews', label: '口碑'),
-    ObjectContextTabSpec(id: 'related', label: '关联'),
+    ObjectContextTabSpec(
+      id: 'content',
+      label: UITextConstants.objectTabContent,
+    ),
+    ObjectContextTabSpec(
+      id: 'discussion',
+      label: UITextConstants.objectTabDiscussion,
+    ),
+    ObjectContextTabSpec(
+      id: 'interest_circles',
+      label: UITextConstants.objectTabInterestCircles,
+    ),
   ];
 }
 
@@ -82,7 +91,9 @@ class ObjectIdentityHeader extends StatelessWidget {
                 children: <Widget>[
                   Expanded(
                     child: Text(
-                      title.trim().isEmpty ? '对象主页' : title.trim(),
+                      title.trim().isEmpty
+                          ? UITextConstants.objectHomepageDefaultTitle
+                          : title.trim(),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -479,7 +490,7 @@ class _ObjectIdentityMedia extends StatelessWidget {
             AppSpacing.avatarCircleBorderRadiusRatio,
       ),
       ObjectIdentityKind.entity => BorderRadius.circular(
-        AppSpacing.radiusTwenty,
+        ObjectIdentityHeader.mediaOuterExtent,
       ),
     };
     return Container(
@@ -828,9 +839,9 @@ class ObjectRelationRibbon extends StatelessWidget {
       'author_of' => '创作了',
       'posted_to_circle' => '发布到圈子',
       'reshared_to_circle' => '转发到圈子',
-      'mentions_entity' => '提到了实体',
-      'comment_about_entity' => '评论关联实体',
-      'circle_under_entity' => '圈子隶属该对象',
+      'mentions_entity' => '提到了这个主页',
+      'comment_about_entity' => '评论了这个主页',
+      'circle_under_entity' => '圈子围绕这个主页',
       'member_of' => '成员关系',
       'co_tagged' => '共同标签',
       'review_of' => '口碑评价',

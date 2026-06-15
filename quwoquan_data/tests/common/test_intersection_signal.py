@@ -2,7 +2,7 @@
 
 覆盖：
 - 契约字段对齐：hint 字段集 ⊆ intersection_reason.yaml 的 client_projection.fields。
-- build_intersection_hints：entityRefs→content、Topic tag→interest、region→location。
+- build_intersection_hints：entityRefs→content、非地理 tag→interest、region→location。
 - 完备性门：缺维度/不足条数/枚举非法/锚点悬空/off-contract 字段均报。
 - materialize 端到端：产出 manifest.intersectionHints 且完备性门全绿。
 
@@ -35,6 +35,7 @@ from _common.intersection_signal import (  # noqa: E402
     contract_field_names,
     intersection_hint_issues,
 )
+from _common.draft_io import write_agent_draft  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import batch_command_root, ensure_batch_layout, ensure_task_layout  # noqa: E402
 from _common.stage_reports import write_stage_result  # noqa: E402
@@ -42,7 +43,8 @@ from produce.materialize import materialize_posts  # noqa: E402
 
 _MANIFEST = {
     "entityRefs": ["/entity/地点/景区/九寨沟"],
-    "tagRefs": ["Topic/旅行/景区", "Format/内容角度/攻略"],
+    "normalizedEntityRefs": ["entity:景区:九寨沟"],
+    "tagRefs": ["主题/山水风光", "Format/内容角度/攻略"],
     "conditionContext": {"region": "四川"},
 }
 
@@ -61,7 +63,11 @@ def test_build_hints_covers_content_interest_location():
 
 
 def test_missing_interest_dimension_flagged():
-    manifest = {"entityRefs": ["/entity/地点/景区/九寨沟"], "tagRefs": ["Format/内容角度/攻略"]}
+    manifest = {
+        "entityRefs": ["/entity/地点/景区/九寨沟"],
+        "normalizedEntityRefs": ["entity:景区:九寨沟"],
+        "tagRefs": ["地理/行政区/四川省"],
+    }
     hints = build_intersection_hints(manifest)
     issues = intersection_hint_issues(hints, manifest)
     assert any("dimension missing: interest" in i for i in issues), issues
@@ -76,7 +82,7 @@ def test_too_few_hints_flagged():
 def test_ungrounded_and_offcontract_and_enum_flagged():
     manifest = _MANIFEST
     bad = [
-        {"dimension": "content", "source": "entityRef", "actionType": "view_object", "actionTargetId": "/entity/地点/景区/稻城亚丁", "tagRefs": [], "label": "稻城亚丁"},
+        {"dimension": "content", "source": "entityRef", "actionType": "view_object", "actionTargetId": "entity:景区:稻城亚丁", "tagRefs": [], "label": "稻城亚丁"},
         {"dimension": "xxx", "source": "tagRef", "actionType": "join", "actionTargetId": "Topic/x", "tagRefs": ["Topic/x"], "label": "x", "foo": 1},
     ]
     issues = intersection_hint_issues(bad, manifest)
@@ -113,10 +119,23 @@ def _seed_and_materialize() -> Path:
             "publishTitle": "九寨沟看水攻略",
             "carrier": "article",
             "entityRefs": ["/entity/地点/景区/九寨沟"],
-            "tagRefs": ["Topic/旅行/景区", "Format/内容角度/攻略"],
+            "normalizedEntityRefs": ["entity:景区:九寨沟"],
+            "tagRefs": ["主题/山水风光", "Format/内容角度/攻略"],
             "conditionContext": {"region": "四川"},
             "assets": [],
         },
+    )
+    article = "# 九寨沟看水攻略\n\n正文真实展开，长度足够通过字数门校验。" * 12
+    write_agent_draft(
+        task,
+        batch,
+        ref,
+        article,
+        model="test-agent/intersection",
+        cited_source_paths=[],
+        covered_facts=[],
+        agent_run_id="run-intersection",
+        agent_id="agent-intersection",
     )
     paths = materialize_posts(task, batch, "article")
     assert len(paths) == 1, paths
@@ -128,6 +147,8 @@ def test_materialize_emits_complete_intersection_hints():
     manifest = read_json(post_dir / "manifest.json")
     hints = manifest.get("intersectionHints")
     assert isinstance(hints, list) and hints, "materialize 必须产出 intersectionHints"
+    assert manifest.get("normalizedEntityRefs") == ["entity:景区:九寨沟"]
+    assert hints[0]["actionTargetId"] == "entity:景区:九寨沟"
     assert intersection_hint_issues(hints, manifest) == []
 
 

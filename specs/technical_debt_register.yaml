@@ -8,3 +8,21 @@ debts:
     expires_at: "2026-08-31"
     cleanup_condition: 正式短信 provider 完成 T3/T4 后删除 pass_through_enabled、debugCode reveal 与 App 联调提示
     prod_allowed: false
+
+  - id: TECHDEBT-LOGIN-SANDBOX-ALLOWLIST-GAMMA-001
+    title: gamma 登录受控放通沙箱白名单（短信OTP/一键/社交测试账号）
+    owner: backend-team
+    domain: integration
+    status: active
+    expires_at: "2026-08-31"
+    cleanup_condition: 四环境登录 T3/T4 完成、真实运营商与社交 OAuth 凭证接入后，删除 gamma sandbox_allowlist 与沙箱身份/号段回填
+    prod_allowed: false
+
+  - id: TECHDEBT-SOCIAL-PROD-OAUTH-ALIPAY-QQ-001
+    title: 支付宝/QQ 生产票据置换待接入真实 OAuth 凭证与签名流程
+    owner: backend-team
+    domain: integration
+    status: active
+    expires_at: "2026-12-31"
+    cleanup_condition: 接入支付宝/QQ 开放平台 app 凭证与签名置换后，HTTPExternalAuthProviderClient 支持 alipay/qq 真实 Exchange 并补 T3/T4；当前未配置时返回结构化 unavailable，不伪造成功
+    prod_allowed: true

@@ -23,12 +23,18 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
 
-from produce.route_workflow import _check_image_gate, _check_carrier_consistency, _review_fallback_stage  # noqa: E402
+from produce.route_workflow import (  # noqa: E402
+    _check_image_gate,
+    _check_carrier_consistency,
+    _image_caption_from_article,
+    _review_fallback_stage,
+)
 
 FIXTURE_MEDIA = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[3]
     / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media"
 )
+FACE_FIXTURE = FIXTURE_MEDIA / "avatar/user/fixture_user_article/v1/avatar.png"
 _TMP = Path(tempfile.mkdtemp(prefix="review_img_"))
 
 
@@ -48,17 +54,7 @@ def _watermark(path: Path) -> Path:
 
 
 def _face_fixture() -> Path | None:
-    user_dir = FIXTURE_MEDIA / "background" / "user"
-    if not user_dir.is_dir():
-        return None
-    cas = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    for f in sorted(user_dir.rglob("*.jpg")):
-        img = cv2.imread(str(f))
-        if img is None:
-            continue
-        if len(cas.detectMultiScale(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 1.1, 6, minSize=(36, 36))) > 0:
-            return f
-    return None
+    return FACE_FIXTURE if FACE_FIXTURE.is_file() else None
 
 
 def test_clean_assets_pass():
@@ -91,7 +87,7 @@ def test_face_requires_human_review():
     """新 HITL 契约：含人脸图片不再硬阻断 review，而是标记 humanReview 并记入账本，
     由发布门 + annotate 在发布前裁决（存疑必须人确认）。"""
     face = _face_fixture()
-    assert face is not None, "未找到人脸 fixture"
+    assert face is not None, f"缺少仓库固定人脸 fixture: {FACE_FIXTURE}"
     gate = _check_image_gate({"assets": [{"assetId": "f", "sourcePath": str(face)}]})
     # 不因人脸阻断 review（无 unsafe/重复时 passed=True）
     assert gate["passed"] is True, gate["issues"]
@@ -112,11 +108,91 @@ def test_face_requires_human_review():
     assert fallback == "review"
 
 
+def test_image_only_fallback_does_not_require_prose_checks():
+    fallback = _review_fallback_stage({
+        "generatorProvenance": {"passed": True},
+        "imageGate": {"passed": True},
+        "carrierConsistency": {"passed": True},
+    })
+
+    assert fallback == "review"
+
+
+def test_image_caption_extraction_ignores_structural_gallery_markup():
+    article = """# 毕棚沟龙王海与红石滩秋色
+
+这组图只看两件事：湖面倒影够不够稳，红石与彩林是不是在同一条秋色线上。
+
+:::figure
+asset://bipenggou_01
+caption: 龙王海
+:::
+
+授权归因：CC BY-SA 4.0 / Photographer
+"""
+
+    assert _image_caption_from_article(article) == (
+        "这组图只看两件事：湖面倒影够不够稳，红石与彩林是不是在同一条秋色线上。"
+    )
+
+
 def test_carrier_consistency_article_needs_sections():
     bad = _check_carrier_consistency({"carrier": "article", "articleMarkdown": "# t\n\n只有一段没有小节。\n"})
     assert bad["passed"] is False
     good = _check_carrier_consistency({"carrier": "article", "articleMarkdown": "# t\n\n## a\n\nx\n\n## b\n\ny\n\n## c\n\nz" * 40})
     assert good["passed"] is True
+
+
+def test_carrier_consistency_gallery_tracks_pack_assets():
+    article = '\n'.join([
+        '# 图集',
+        '',
+        ':::figure',
+        'asset://a1',
+        ':::',
+        '',
+        ':::figure',
+        'asset://a2',
+        ':::',
+    ])
+    gate = _check_carrier_consistency(
+        {
+            "carrier": "gallery",
+            "articleMarkdown": article,
+            "assets": [
+                {"assetId": "a1", "sourceCollectionId": "collection-a"},
+                {"assetId": "a2", "sourceCollectionId": "collection-a"},
+            ],
+        }
+    )
+    assert gate["passed"] is True, gate["issues"]
+
+
+def test_carrier_consistency_gallery_blocks_mixed_source_collections():
+    article = '\n'.join([
+        '# 图集',
+        '',
+        ':::figure',
+        'asset://a1',
+        ':::',
+        '',
+        ':::figure',
+        'asset://a2',
+        ':::',
+    ])
+    gate = _check_carrier_consistency(
+        {
+            "carrier": "gallery",
+            "articleMarkdown": article,
+            "assets": [
+                {"assetId": "a1", "sourceCollectionId": "collection-a"},
+                {"assetId": "a2", "sourceCollectionId": "collection-a"},
+                {"assetId": "a3", "sourceCollectionId": "collection-b"},
+            ],
+        }
+    )
+    assert gate["passed"] is False
+    assert any("one sourceCollectionId" in issue for issue in gate["issues"]), gate["issues"]
 
 
 def _run_all() -> None:

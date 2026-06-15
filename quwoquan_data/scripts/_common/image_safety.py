@@ -3,7 +3,7 @@
 后端能力：
 - 人脸检测：OpenCV Haar cascade（人物风景常见，检出 -> needs_review 交人工复核，不自动删）。
 - 水印/平台文字/文字占比：pytesseract OCR（命中平台名/@handle/版权串 -> unsafe）。
-- 近重复：imagehash average_hash 像素级感知哈希。
+- 近重复：imagehash pHash 感知哈希。
 
 降级原则（不放水）：关键后端缺失时 status 至少为 needs_review，而非静默判 safe。
 
@@ -79,7 +79,7 @@ _HANDLE_RE = re.compile(r"@[\w\u4e00-\u9fff][\w\u4e00-\u9fff\-_.]{1,30}")
 
 # ─── 阈值 ──────────────────────────────────────────────────────────
 TEXT_HEAVY_RATIO = 0.16  # OCR 文字框面积占比 >= 此值视为"图中带交叠文字 = 文章"
-NEAR_DUP_HAMMING = 5  # average_hash 海明距离 <= 此值视为近重复
+NEAR_DUP_HAMMING = 5  # pHash 海明距离 <= 此值视为近重复
 _OCR_MIN_CONF = 45
 _PLACEHOLDER_MAX_EDGE_DELTA = 7.0
 
@@ -144,8 +144,29 @@ def _detect_faces(path: Path) -> int:
     cascade = cv2.CascadeClassifier(cascade_path)
     if cascade.empty():
         return -1
-    faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=6, minSize=(36, 36))
-    return int(len(faces))
+    min_face = max(48, round(min(gray.shape[:2]) * 0.08))
+    candidates = cascade.detectMultiScale(
+        gray,
+        scaleFactor=1.12,
+        minNeighbors=8,
+        minSize=(min_face, min_face),
+    )
+    eye_path = cv2.data.haarcascades + "haarcascade_eye_tree_eyeglasses.xml"
+    eye_cascade = cv2.CascadeClassifier(eye_path)
+    if eye_cascade.empty():
+        return -1
+    confirmed = 0
+    for x, y, width, height in candidates:
+        upper_face = gray[y:y + max(1, round(height * 0.65)), x:x + width]
+        eyes = eye_cascade.detectMultiScale(
+            upper_face,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(max(12, width // 8), max(8, height // 10)),
+        )
+        if len(eyes) > 0:
+            confirmed += 1
+    return confirmed
 
 
 def _ocr_text_and_ratio(path: Path) -> tuple[str, float, bool]:
@@ -346,7 +367,7 @@ def _avg_hash(path: Path):
         return None
     try:
         with Image.open(path) as im:
-            return imagehash.average_hash(im.convert("RGB"))
+            return imagehash.phash(im.convert("RGB"))
     except Exception:
         return None
 
@@ -366,7 +387,7 @@ def _avg_hash_bytes(data: bytes):
 
     try:
         with Image.open(io.BytesIO(data)) as im:
-            return imagehash.average_hash(im.convert("RGB"))
+            return imagehash.phash(im.convert("RGB"))
     except Exception:
         return None
 

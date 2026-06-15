@@ -4,20 +4,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
-import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 
 /// 聊天设置/聊天信息页；全屏表单布局复用 [SettingsInsetFormPageScaffold]。
 class ChatSettingsPage extends ConsumerStatefulWidget {
@@ -33,7 +27,6 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   bool _mute = false;
   bool _pin = false;
   bool _membersExpanded = false;
-  String _groupName = '';
 
   static const int _memberColumns = 5;
 
@@ -41,26 +34,6 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   static const int _memberRowsCollapsed = 4;
   static int get _collapsedMemberCapacity =>
       _memberColumns * _memberRowsCollapsed - 1;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadConversation();
-  }
-
-  Future<void> _loadConversation() async {
-    try {
-      final repo = ref.read(chatRepositoryProvider);
-      final conv = await repo.getConversation(widget.conversationId);
-      if (mounted) {
-        setState(() {
-          _groupName = conv.title ?? '';
-        });
-      }
-    } catch (_) {
-      /* best-effort: 拉取会话标题失败时保留空名占位，页面其余内容仍可正常展示 */
-    }
-  }
 
   /// 退出群聊：二次确认 → removeMember(self) 走 Remote → 返回会话列表。
   Future<void> _confirmExitGroup() async {
@@ -91,14 +64,22 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       if (!mounted) return;
       AppToast.show(context, UITextConstants.exitGroupChatSuccess);
       context.go(AppRoutePaths.chat);
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
-      AppToast.show(context, runtimeErrorDisplayMessage(e));
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      await AppActionErrorFeedback.show(context, semantic: resolved);
     }
   }
 
   void _showEditGroupNameDialog() {
-    final controller = TextEditingController(text: _groupName);
+    final groupHome = ref.read(groupHomeProvider(widget.conversationId)).value;
+    final currentName = groupHome?.title ?? '';
+    final controller = TextEditingController(text: currentName);
     final membersState = ref.read(
       conversationMembersProvider(widget.conversationId),
     );
@@ -146,7 +127,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             onPressed: () async {
               final newName = controller.text.trim();
               Navigator.pop(ctx);
-              if (newName.isNotEmpty && newName != _groupName) {
+              if (newName.isNotEmpty && newName != currentName) {
                 try {
                   await ref
                       .read(
@@ -156,7 +137,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       )
                       .updateGroupDisplayTitle(newName);
                   if (mounted) {
-                    setState(() => _groupName = newName);
+                    ref.invalidate(groupHomeProvider(widget.conversationId));
                     AppToast.show(context, UITextConstants.groupNameUpdated);
                   }
                 } catch (error) {
@@ -209,6 +190,8 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
+    final groupHomeAsync = ref.watch(groupHomeProvider(widget.conversationId));
+    final groupHome = groupHomeAsync.value;
     final membersState = ref.watch(
       conversationMembersProvider(widget.conversationId),
     );
@@ -221,10 +204,22 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       isDark,
       ColorType.borderPrimary,
     );
-    final memberCount = members.length;
-    final memberGridOverflow = memberCount > _collapsedMemberCapacity;
+    final memberCount = groupHome?.memberCount == 0 || groupHome == null
+        ? members.length
+        : groupHome.memberCount;
+    final groupTitle = groupHome?.title.trim().isNotEmpty == true
+        ? groupHome!.title.trim()
+        : UITextConstants.groupNameHint;
+    final sourceText = _formatGroupSource(
+      groupHome?.sourceEntityTitle,
+      groupHome?.sourceCircleTitle,
+      memberCount,
+    );
+    final announcement = groupHome?.announcement.trim() ?? '';
+    final memberGridCount = members.length;
+    final memberGridOverflow = memberGridCount > _collapsedMemberCapacity;
     final visibleMemberCount = !memberGridOverflow || _membersExpanded
-        ? memberCount
+        ? memberGridCount
         : _collapsedMemberCapacity;
 
     final secondaryText = AppColorsFunctional.getColor(
@@ -256,6 +251,58 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             bottom: AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
+            if (groupHomeAsync.isLoading && groupHome == null) ...[
+              const Center(child: CupertinoActivityIndicator()),
+              SizedBox(
+                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+              ),
+            ],
+            if (sourceText.isNotEmpty || announcement.isNotEmpty) ...[
+              SettingsInsetGroupedSection(
+                isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
+                child: Padding(
+                  padding: EdgeInsets.all(AppSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        groupTitle,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosTitle3,
+                          fontWeight: AppTypography.bold,
+                          color: fgPrimary,
+                        ),
+                      ),
+                      if (sourceText.isNotEmpty) ...[
+                        SizedBox(height: AppSpacing.xs),
+                        Text(
+                          sourceText,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: secondaryText,
+                          ),
+                        ),
+                      ],
+                      if (announcement.isNotEmpty) ...[
+                        SizedBox(height: AppSpacing.sm),
+                        Text(
+                          '${UITextConstants.groupAnnouncement}：$announcement',
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: secondaryText,
+                            height: AppTypography.lineHeightRelaxed,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+              ),
+            ],
             SettingsInsetGroupedSection(
               isDark: isDark,
               density: SettingsInsetSectionDensity.standard,
@@ -384,9 +431,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                             maxWidth: MediaQuery.of(context).size.width * 0.4,
                           ),
                           child: Text(
-                            _groupName.isEmpty
-                                ? UITextConstants.groupNameHint
-                                : _groupName,
+                            groupTitle,
                             style: TextStyle(
                               fontSize: AppTypography.base,
                               fontWeight: AppTypography.medium,
@@ -407,7 +452,24 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     ),
                     onTap: _showEditGroupNameDialog,
                   ),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
+                  SettingsInsetFormRow(
+                    isDark: isDark,
+                    label: UITextConstants.groupAnnouncement,
+                    trailing: Text(
+                      announcement.isEmpty
+                          ? UITextConstants.groupAnnouncementEmpty
+                          : announcement,
+                      style: TextStyle(
+                        fontSize: AppTypography.base,
+                        color: secondaryText,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   if (isAdminOrOwner) ...[
+                    SettingsInsetFormSectionDivider(isDark: isDark),
                     SettingsInsetFormRow(
                       isDark: isDark,
                       label: UITextConstants.groupManagement,
@@ -422,6 +484,21 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     ),
                   ],
                 ],
+              ),
+            ),
+            SizedBox(
+              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+            ),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              density: SettingsInsetSectionDensity.compact,
+              child: _GroupCapabilityGrid(
+                isDark: isDark,
+                enabledCapabilities:
+                    groupHome?.capabilities ?? const <String>[],
+                onMembersTap: () => context.push(
+                  AppRoutePaths.chatMemberSearch(id: widget.conversationId),
+                ),
               ),
             ),
             SizedBox(
@@ -531,6 +608,118 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       ),
     );
   }
+
+  String _formatGroupSource(
+    String? entityTitle,
+    String? circleTitle,
+    int memberCount,
+  ) {
+    final parts = <String>[
+      if ((entityTitle ?? '').trim().isNotEmpty) entityTitle!.trim(),
+      if ((circleTitle ?? '').trim().isNotEmpty) circleTitle!.trim(),
+      '$memberCount${UITextConstants.groupMemberCountSuffix}',
+    ];
+    return '${UITextConstants.groupSourcePrefix}${parts.join(' · ')}';
+  }
+}
+
+class _GroupCapabilityGrid extends StatelessWidget {
+  const _GroupCapabilityGrid({
+    required this.isDark,
+    required this.enabledCapabilities,
+    required this.onMembersTap,
+  });
+
+  final bool isDark;
+  final List<String> enabledCapabilities;
+  final VoidCallback onMembersTap;
+
+  bool _enabled(String capability) {
+    return enabledCapabilities.isEmpty ||
+        enabledCapabilities.contains(capability);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <_GroupCapabilityItem>[
+      _GroupCapabilityItem(
+        label: UITextConstants.groupCapabilityAlbum,
+        icon: CupertinoIcons.photo,
+        enabled: _enabled('album'),
+      ),
+      _GroupCapabilityItem(
+        label: UITextConstants.groupCapabilityFile,
+        icon: CupertinoIcons.folder,
+        enabled: _enabled('file'),
+      ),
+      _GroupCapabilityItem(
+        label: UITextConstants.groupCapabilityActivity,
+        icon: CupertinoIcons.calendar,
+        enabled: _enabled('activity'),
+      ),
+      _GroupCapabilityItem(
+        label: UITextConstants.groupCapabilityMembers,
+        icon: CupertinoIcons.person_2,
+        enabled: true,
+        onTap: onMembersTap,
+      ),
+    ];
+    final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        children: items
+            .map(
+              (item) => Expanded(
+                child: CupertinoButton(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  onPressed: item.enabled ? item.onTap : null,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        item.icon,
+                        size: AppSpacing.iconLarge,
+                        color: item.enabled ? fgPrimary : fgSecondary,
+                      ),
+                      SizedBox(height: AppSpacing.xs),
+                      Text(
+                        item.label,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosFootnote,
+                          color: item.enabled ? fgPrimary : fgSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+  }
+}
+
+class _GroupCapabilityItem {
+  const _GroupCapabilityItem({
+    required this.label,
+    required this.icon,
+    required this.enabled,
+    this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback? onTap;
 }
 
 class _MemberAvatar extends StatelessWidget {

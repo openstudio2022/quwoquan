@@ -38,7 +38,7 @@ def handle_build(args: argparse.Namespace) -> None:
             print("[build] WARN: coverageTargets 为空，无实体可下发")
 
     if stage in ("validate", "all"):
-        issues = validate_entity_pages(task_id, spec)
+        issues = validate_entity_pages(task_id, batch_id, spec)
         if issues:
             print(f"[build] validate FAILED ({len(issues)} 项):")
             for issue in issues:

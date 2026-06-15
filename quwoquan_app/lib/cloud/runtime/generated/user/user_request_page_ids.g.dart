@@ -52,9 +52,11 @@ class UserRequestPageIds {
     'ListUserWorks': 'user.works',
     'LoginAnonymous': 'user.login.anonymous',
     'LoginOneTap': 'user.login.one.tap',
+    'LoginWithAlipay': 'user.login.with.alipay',
     'LoginWithApple': 'user.login.with.apple',
     'LoginWithPasskey': 'user.login.with.passkey',
     'LoginWithPhone': 'user.login.with.phone',
+    'LoginWithQq': 'user.login.with.qq',
     'LoginWithWechat': 'user.login.with.wechat',
     'Logout': 'user.logout',
     'MarkFollowingSubjectVisited': 'user.mark.following.subject.visited',
@@ -63,6 +65,7 @@ class UserRequestPageIds {
     'RegisterDevice': 'user.register.device',
     'RejectProposal': 'user.reject.proposal',
     'ReplyGreetingRequest': 'user.reply.greeting.request',
+    'ResolveOneTapLoginHint': 'user.resolve.one.tap.login.hint',
     'RetirePersona': 'user.personas.retire',
     'SearchSocialRelations': 'user.social.search',
     'SendGreetingRequest': 'user.send.greeting.request',
@@ -126,9 +129,11 @@ class UserRequestPageIds {
   static const String listUserWorks = 'user.works';
   static const String loginAnonymous = 'user.login.anonymous';
   static const String loginOneTap = 'user.login.one.tap';
+  static const String loginWithAlipay = 'user.login.with.alipay';
   static const String loginWithApple = 'user.login.with.apple';
   static const String loginWithPasskey = 'user.login.with.passkey';
   static const String loginWithPhone = 'user.login.with.phone';
+  static const String loginWithQq = 'user.login.with.qq';
   static const String loginWithWechat = 'user.login.with.wechat';
   static const String logout = 'user.logout';
   static const String markFollowingSubjectVisited = 'user.mark.following.subject.visited';
@@ -137,6 +142,7 @@ class UserRequestPageIds {
   static const String registerDevice = 'user.register.device';
   static const String rejectProposal = 'user.reject.proposal';
   static const String replyGreetingRequest = 'user.reply.greeting.request';
+  static const String resolveOneTapLoginHint = 'user.resolve.one.tap.login.hint';
   static const String retirePersona = 'user.personas.retire';
   static const String searchSocialRelations = 'user.social.search';
   static const String sendGreetingRequest = 'user.send.greeting.request';

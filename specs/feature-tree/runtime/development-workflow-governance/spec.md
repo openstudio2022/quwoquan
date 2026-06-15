@@ -47,7 +47,7 @@
 
 - R2.1：`/explore` 负责定位 `L1_domain_service`、`L2_business_capability` 与目标 `L3_story`，并给出初步 Task 拆解方向，不再输出旧层级归属。
 - R2.2：`/prd` 只创建或更新 `L3_story` 的 `spec.md` 与 `acceptance.yaml`。
-- R2.3：`/design` 只面向 `L3_story` 设计方案，并产出该 Story 的 Task 执行清单。
+- R2.3：`/design` 只面向 AppRoot、`L1_domain_service` 与 `L2_business_capability` 冻结设计；`L3_story` 只引用上层设计，并在 `spec.md` / `acceptance.yaml` 中表达实现约束与验收。
 - R2.4：`/dev` 以 `L3_story` 为唯一实施单位，逐个完成其 Task。
 - R2.5：`/verify`、`/commit`、`/deliver` 只检查 `L3_story` 的完成度、验收闭环和 Task 完成状态。
 - R2.6：`/deploy` 与测试规则中不再使用 `L3/L4` 表示测试层，统一改用 `T3/T4`。

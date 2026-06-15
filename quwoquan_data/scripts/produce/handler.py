@@ -2,7 +2,7 @@
 
 正文由会话模型（Agent）创作，CLI 不再拼接任何句子：
   --stage compose-brief : 准备写作契约 writing_pack.json + prompt.md + 占位草稿（posts/.../4.draft/）。
-  （人/Agent 据 prompt.md 创作正文写回 4.draft/article.md，generator=agent）
+  （人/Agent 据 prompt.md 创作正文写回 4.draft/draft.article.md，generator=agent）
   --stage review        : 读 agent 草稿，过模板指纹/事实可回溯/出处三道门 + 质量门；--materialize 落地 approved。
 """
 from __future__ import annotations
@@ -25,6 +25,7 @@ from _common.entity_annotation import (
 )
 from _common.batch_orchestration import batch_dir, plan_batches, write_batch
 from _common.batch_manifest import write_batch_manifest
+from _common.content_object import content_type_from_brief, write_brief_object
 from _common.io import write_json
 from _common.paths import ensure_batch_layout, batch_command_root
 from produce.materialize import materialize_posts
@@ -45,6 +46,10 @@ CONTENT_TYPES = ("article", "image", "video")
 STAGES = ("compose-brief", "annotate-entities", "review")
 
 
+def _is_image_carrier(brief) -> bool:
+    return str(brief.get("carrier") or "").lower() in ("image", "gallery")
+
+
 def _collect_briefs(task_id: str, batch_id: str, refs):
     routes = iter_route_briefs(task_id, batch_id, refs)
     entities = iter_entity_briefs(task_id, batch_id, refs)
@@ -56,17 +61,49 @@ def _apply_writing_intent_override(brief, override):
     if not override:
         return brief
     merged = dict(brief)
-    if override.get("writingIntent"):
-        merged["writingIntent"] = override["writingIntent"]
-    if override.get("baseSourceRef") and not merged.get("baseSourceRef"):
-        merged["baseSourceRef"] = override["baseSourceRef"]
+    for field in (
+        "writingIntent",
+        "baseSourceRef",
+        "carrier",
+        "sourceCollectionId",
+        "assetRefs",
+    ):
+        if field in override and override.get(field) not in (None, ""):
+            merged[field] = override[field]
+    if _is_image_carrier(merged) and not override.get("baseSourceRef"):
+        merged.pop("baseSourceRef", None)
+        merged.pop("_contentPlanBaseSourceLocked", None)
+    if override.get("baseSourceRef"):
+        merged["_contentPlanBaseSourceLocked"] = True
     return merged
 
 
 def _assign_base_draft(task_id: str, batch_id: str, ref: str, brief):
     """认领唯一底稿（baseSourceRef 永远非空目标）；返回(brief, 缺底稿告警)。"""
-    from _common.base_draft import assign_base_draft
+    from _common.base_draft import (
+        assign_base_draft,
+        load_base_draft_ledger,
+        occupied_source_refs,
+        save_base_draft_ledger,
+    )
 
+    declared = str(brief.get("baseSourceRef") or "").strip()
+    if brief.get("_contentPlanBaseSourceLocked") and declared:
+        ledger = load_base_draft_ledger(task_id, batch_id)
+        taken = occupied_source_refs(ledger, exclude_post=ref)
+        if declared in taken:
+            raise RuntimeError(
+                f"{ref}: content_plan baseSourceRef already assigned to another ref: {declared}"
+            )
+        assignments = {
+            source: post
+            for source, post in dict(ledger.get("assignments") or {}).items()
+            if post != ref
+        }
+        assignments[declared] = ref
+        ledger["assignments"] = assignments
+        save_base_draft_ledger(task_id, batch_id, ledger)
+        return brief, None
     chosen = assign_base_draft(task_id, batch_id, ref, brief)
     if chosen and chosen != brief.get("baseSourceRef"):
         merged = dict(brief)
@@ -87,7 +124,10 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
     base_draft_warnings: list[str] = []
     for ref, brief in routes:
         brief = _apply_writing_intent_override(brief, overrides.get(ref))
-        brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        warn = None
+        if not _is_image_carrier(brief):
+            brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        write_brief_object(task_id, batch_id, ref, brief, content_type=content_type_from_brief(brief))
         if warn:
             base_draft_warnings.append(warn)
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
@@ -99,7 +139,10 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
         prepared_refs.append(ref)
     for ref, brief in entities:
         brief = _apply_writing_intent_override(brief, overrides.get(ref))
-        brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        warn = None
+        if not _is_image_carrier(brief):
+            brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        write_brief_object(task_id, batch_id, ref, brief, content_type=content_type_from_brief(brief))
         if warn:
             base_draft_warnings.append(warn)
         quality = analyze_route_ref(task_id, batch_id, ref, brief)
@@ -146,7 +189,7 @@ def _stage_annotate_entities(task_id: str, batch_id: str, refs, *, allow_partial
             print(f"[produce] annotate-entities SKIP {ref}: draft 未由 agent 创作", file=sys.stderr)
             continue
         draft_meta = read_draft_meta(task_id, batch_id, ref) or {}
-        dictionary, required = build_entity_dictionary(task_id, brief, draft_meta)
+        dictionary, required = build_entity_dictionary(task_id, batch_id, brief, draft_meta)
         new_article, annotated = annotate_inline(article, dictionary)
         if new_article != article:
             draft_article_path(task_id, batch_id, ref).write_text(new_article, encoding="utf-8")
@@ -175,8 +218,8 @@ def _stage_review(task_id: str, batch_id: str, refs, *, materialize: bool, allow
     from media.handler import check_images
 
     check_refs = [ref for ref, _ in [*routes, *entities]]
-    media_statuses = check_images(task_id, batch_id, check_refs, allow_needs_review=False)
-    media_issues = gate_media_check(task_id, batch_id, allow_needs_review=False)
+    media_statuses = check_images(task_id, batch_id, check_refs, allow_needs_review=True)
+    media_issues = gate_media_check(task_id, batch_id, allow_needs_review=True)
     if media_statuses:
         passed = sum(1 for row in media_statuses if row["passed"])
         failed = len(media_statuses) - passed
@@ -202,6 +245,7 @@ def _stage_review(task_id: str, batch_id: str, refs, *, materialize: bool, allow
     print(f"[produce] review handled {len(statuses)} ref(s); approved={approved} failed={len(failed)}")
     if materialize and approved:
         paths = materialize_posts(task_id, batch_id, "article")
+        paths += materialize_posts(task_id, batch_id, "image")
         print(f"[produce] Materialized {len(paths)} approved post package(s).")
     if failed:
         for row in failed[:10]:

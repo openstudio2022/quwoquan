@@ -118,7 +118,7 @@ void main() {
 
     test('listUserPosts 支持按 identity 过滤', () async {
       final page = await repo.listUserPosts(
-        userId: 'nature_photographer',
+        userId: 'fixture_user_photo',
         identity: 'work',
       );
       expect(page.items, isNotEmpty);
@@ -128,11 +128,6 @@ void main() {
     test('likePost / unlikePost 不崩溃', () async {
       await repo.likePost(postId: 'test');
       await repo.unlikePost(postId: 'test');
-    });
-
-    test('favoritePost / unfavoritePost 不崩溃', () async {
-      await repo.favoritePost(postId: 'test');
-      await repo.unfavoritePost(postId: 'test');
     });
 
     test('sharePost / unsharePost 返回幂等变化标记', () async {

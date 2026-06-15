@@ -55,8 +55,13 @@ void main() {
         expect(h.homepageType, 'sight');
         expect(h.city, '杭州');
         expect(h.status, 'published');
+        expect(h.canonicalEntityId, isNotEmpty);
       }
       expect(rows.any((h) => h.id == 'homepage_sight_west_lake'), isTrue);
+      expect(
+        rows.any((h) => h.canonicalEntityId == 'entity:sight:west_lake'),
+        isTrue,
+      );
     });
 
     test('getHomepageDetail / Shell / ReviewSummary / RelatedGroups', () async {
@@ -93,7 +98,7 @@ void main() {
 
       expect(bundle.objectType, 'homepage');
       expect(bundle.objectId, id);
-      expect(bundle.canonicalEntityId, 'entity:homepage:$id');
+      expect(bundle.canonicalEntityId, 'entity:sight:west_lake');
       expect(bundle.objectPageTemplate, isNotEmpty);
       expect(bundle.tagRefs, isNotEmpty);
       expect(bundle.intersectionReasons, isNotEmpty);
@@ -110,6 +115,28 @@ void main() {
       expect(bundle.rolloutContext?.relationEvidenceEnabled, isTrue);
     });
 
+    test(
+      'getHomepageDetail 支持 homepageId / canonicalEntityId / 数据工程 entityRef',
+      () async {
+        const homepageId = 'homepage_sight_emeishan';
+        final byHomepageId = await repo.getHomepageDetail(homepageId);
+        expect(byHomepageId.title, '峨眉山');
+
+        final byCanonical = await repo.getHomepageDetail(
+          'entity:sight:homepage_sight_emeishan',
+        );
+        expect(byCanonical.id, homepageId);
+
+        final byEntityRef = await repo.getHomepageDetail('Entity/旅行/景区/峨眉山');
+        expect(byEntityRef.id, homepageId);
+
+        final bundle = await repo.getObjectPageBundle('Entity/旅行/景区/峨眉山');
+        expect(bundle.objectId, homepageId);
+        expect(bundle.highlightItems, isNotEmpty);
+        expect(bundle.relatedObjects, isNotEmpty);
+      },
+    );
+
     test('getHomepageRelatedGroups 缺省 groups 时返回空列表', () async {
       final r = MockHomepageRepository();
       final created = await r.intakeHomepageCandidate(
@@ -121,6 +148,18 @@ void main() {
       );
       final emptyGroups = await r.getHomepageRelatedGroups(created.id);
       expect(emptyGroups, isEmpty);
+    });
+
+    test('followHomepage / unfollowHomepage 更新关注态与计数', () async {
+      const id = 'homepage_sight_west_lake';
+      final before = await repo.getHomepageDetail(id);
+      final followed = await repo.followHomepage(id);
+      expect(followed.viewerFollowsHomepage, isTrue);
+      expect(followed.followerCount, before.followerCount + 1);
+
+      final unfollowed = await repo.unfollowHomepage(id);
+      expect(unfollowed.viewerFollowsHomepage, isFalse);
+      expect(unfollowed.followerCount, before.followerCount);
     });
 
     test(
@@ -342,6 +381,43 @@ void main() {
       expect(detail.id, 'h-min');
       expect(detail.homepageType, 'sight');
       expect(detail.title, 'Minimal');
+    });
+
+    test('followHomepage / unfollowHomepage 使用 metadata 路径并解析关注态', () async {
+      final methods = <String>[];
+      final paths = <String>[];
+      final client = MockClient((request) async {
+        methods.add(request.method);
+        paths.add(request.url.path);
+        return http.Response(
+          json.encode({
+            'homepageId': 'h-follow',
+            'homepageType': 'sight',
+            'title': 'Followable',
+            'viewerFollowsHomepage': request.method == 'POST',
+            'followerCount': request.method == 'POST' ? 12 : 11,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final repo = RemoteHomepageRepository(
+        httpClient: CloudHttpClient(client: client),
+        baseUrl: 'https://gw.test',
+      );
+
+      final followed = await repo.followHomepage('h-follow');
+      final unfollowed = await repo.unfollowHomepage('h-follow');
+
+      expect(methods, <String>['POST', 'DELETE']);
+      expect(paths, <String>[
+        EntityApiMetadata.followHomepagePath(homepageId: 'h-follow'),
+        EntityApiMetadata.unfollowHomepagePath(homepageId: 'h-follow'),
+      ]);
+      expect(followed.viewerFollowsHomepage, isTrue);
+      expect(followed.followerCount, 12);
+      expect(unfollowed.viewerFollowsHomepage, isFalse);
+      expect(unfollowed.followerCount, 11);
     });
 
     test('getObjectPageBundle 解析 query 上下文和嵌套 projection', () async {

@@ -11,6 +11,8 @@ import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_s
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
@@ -24,7 +26,6 @@ enum BehaviorAction {
   click('click'),
   dwell('dwell'),
   like('like'),
-  favorite('favorite'),
   share('share'),
   dislike('dislike'),
   report('report'),
@@ -251,22 +252,6 @@ class MockBehaviorRepository extends BehaviorRepository {
   }
 }
 
-/// Non-retryable behavior report error (e.g. 400 schema mismatch).
-class BehaviorReportException implements Exception {
-  BehaviorReportException(
-    this.statusCode,
-    this.reason, {
-    this.retryable = false,
-  });
-  final int statusCode;
-  final String reason;
-  final bool retryable;
-
-  @override
-  String toString() =>
-      'BehaviorReportException($statusCode, $reason, retryable=$retryable)';
-}
-
 /// Remote 实现：对接云侧 POST /v1/content/behaviors。
 const String kBehaviorPendingQueueBoxName = 'behavior_pending_queue';
 const int _maxRetries = 3;
@@ -357,9 +342,9 @@ class RemoteBehaviorRepository extends BehaviorRepository
 
     try {
       await _flushPending();
-      await _postWithRetry(uri, body);
-    } on BehaviorReportException catch (e) {
-      if (e.retryable) {
+      await _postBehaviorBatch(uri, body);
+    } on CloudException catch (e) {
+      if (_shouldEnqueueBehaviorFailure(e)) {
         await _enqueue(events);
       }
     } catch (e) {
@@ -462,11 +447,11 @@ class RemoteBehaviorRepository extends BehaviorRepository
               .map((event) => event.toJson())
               .toList(growable: false),
         };
-        await _postWithRetry(uri, body);
+        await _postBehaviorBatch(uri, body);
         await box.delete(key);
         consecutiveFailures = 0;
-      } on BehaviorReportException catch (e) {
-        if (!e.retryable) {
+      } on CloudException catch (e) {
+        if (!_shouldEnqueueBehaviorFailure(e)) {
           await box.delete(key);
           continue;
         }
@@ -508,7 +493,7 @@ class RemoteBehaviorRepository extends BehaviorRepository
     }
   }
 
-  Future<void> _postWithRetry(Uri uri, Map<String, dynamic> body) async {
+  Future<void> _postBehaviorBatch(Uri uri, Map<String, dynamic> body) async {
     final jsonStr = jsonEncode(body);
     final headers = Map<String, String>.from(
       CloudRequestHeaders.forPage(ContentRequestPageIds.reportBehaviors),
@@ -533,45 +518,37 @@ class RemoteBehaviorRepository extends BehaviorRepository
           body: payload,
         );
         if (response.statusCode >= 200 && response.statusCode < 300) return;
-        if (response.statusCode == 400) {
-          throw BehaviorReportException(
-            response.statusCode,
-            'schema error',
-            retryable: false,
-          );
-        }
-        if (response.statusCode == 429) {
-          throw BehaviorReportException(
-            response.statusCode,
-            'rate limited',
-            retryable: true,
-          );
-        }
-        if (response.statusCode >= 400 && response.statusCode < 500) {
-          throw BehaviorReportException(
-            response.statusCode,
-            'client error',
-            retryable: false,
-          );
-        }
         if (response.statusCode >= 500) {
           developer.log(
             'behavior POST 5xx: ${response.statusCode} (attempt ${attempt + 1}/${_maxRetries + 1})',
             name: 'BehaviorRepository',
           );
-          throw BehaviorReportException(
-            response.statusCode,
-            'server error',
-            retryable: true,
-          );
         }
+        throw CloudErrorMapper.fromStatusCode(
+          response.statusCode,
+          body: response.body,
+          requestPath: uri.path,
+        );
       } catch (e) {
-        if (e is BehaviorReportException && !e.retryable) rethrow;
-        if (attempt == _maxRetries) rethrow;
+        final cloudError = e is CloudException
+            ? e
+            : CloudErrorMapper.fromException(e, requestPath: uri.path);
+        if (!_shouldRetryBehaviorFailure(cloudError) || attempt == _maxRetries) {
+          throw cloudError;
+        }
       }
       final delayMs = math.min(1000 * math.pow(2, attempt).toInt(), 8000);
       await Future<void>.delayed(Duration(milliseconds: delayMs));
     }
+  }
+
+  bool _shouldRetryBehaviorFailure(CloudException error) {
+    final statusCode = error.statusCode ?? 0;
+    return statusCode == 0 || statusCode == 429 || statusCode >= 500;
+  }
+
+  bool _shouldEnqueueBehaviorFailure(CloudException error) {
+    return _shouldRetryBehaviorFailure(error);
   }
 
   BehaviorEvent _behaviorEventFromJson(Map<String, dynamic> json) {

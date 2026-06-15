@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
 import 'package:quwoquan_app/components/comment_system/immersive_comment_split_sheet.dart';
 import 'package:quwoquan_app/components/comment_system/comment_thread_view.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/components/comment_system/inline_article_comment_section.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -105,6 +106,11 @@ void main() {
   testWidgets(
     '沉浸式评论分屏：保留内容上下文、默认占据评论区且无 Material 报错',
     testImmersiveCommentSplitJourney,
+  );
+
+  testWidgets(
+    '平铺文章评论区内联展示且不推入 modal 路由',
+    testArticleInlineCommentJourney,
   );
 
   testWidgets(
@@ -448,4 +454,67 @@ Future<void> testImmersiveCommentSplitJourney(WidgetTester tester) async {
   expect(find.byKey(TestKeys.commentInputOverlay), findsOneWidget);
   expect(find.byType(CupertinoTextField), findsOneWidget);
   expect(tester.takeException(), isNull);
+}
+
+Future<void> testArticleInlineCommentJourney(WidgetTester tester) async {
+  final repo = MockContentRepository()
+    ..commentsStub = [
+      CommentDto(
+        id: 'comment_inline_1',
+        postId: 'post_article_inline_001',
+        authorId: 'user_1',
+        displayName: '读者甲',
+        content: '文章结构很清晰。',
+        createdAt: DateTime.utc(2026, 6, 1),
+      ),
+    ];
+  final routeObserver = _RoutePushCountObserver();
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+      child: CupertinoApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        navigatorObservers: [routeObserver],
+        home: const CupertinoPageScaffold(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: Text('article-flat-body')),
+              SliverToBoxAdapter(
+                child: InlineArticleCommentSection(
+                  postId: 'post_article_inline_001',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  await tester.pump();
+  await tester.pump();
+  final pushesAfterFirstFrame = routeObserver.pushCount;
+
+  // 评论区平铺在正文之后，与正文同处一条滚动流。
+  expect(find.byKey(TestKeys.inlineArticleCommentSection), findsOneWidget);
+  expect(find.text('article-flat-body'), findsOneWidget);
+  expect(find.byKey(TestKeys.commentThreadView), findsOneWidget);
+
+  // 内联展示评论不推入任何 modal 路由。
+  expect(routeObserver.pushCount, pushesAfterFirstFrame);
+  expect(tester.takeException(), isNull);
+}
+
+class _RoutePushCountObserver extends NavigatorObserver {
+  int pushCount = 0;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (previousRoute != null) {
+      pushCount += 1;
+    }
+    super.didPush(route, previousRoute);
+  }
 }

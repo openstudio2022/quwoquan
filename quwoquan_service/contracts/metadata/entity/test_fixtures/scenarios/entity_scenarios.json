@@ -34,8 +34,103 @@
           "geo": { "lat": 30.2431, "lng": 120.1505 }
         },
         {
+          "homepageId": "homepage_sight_west_lake",
+          "type": "sight",
+          "canonicalEntityId": "entity:sight:west_lake",
+          "title": "西湖景区",
+          "subtitle": "杭州西湖核心游览区",
+          "summary": "杭州西湖核心游览区，由湖面、堤岸、园林、人文节点和城市公共生活共同构成，适合散步、骑行、摄影与长期内容沉淀。",
+          "city": "杭州",
+          "status": "published",
+          "categoryTags": ["景点", "城市地标", "赏景"],
+          "introduction": {
+            "homepageId": "homepage_sight_west_lake",
+            "displayName": "西湖景区",
+            "homepageType": "sight",
+            "coverUrl": "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+            "summary": "杭州西湖核心游览区，由湖面、堤岸、园林、人文节点和城市公共生活共同构成，适合散步、骑行、摄影与长期内容沉淀。",
+            "sections": [
+              {
+                "kind": "overview",
+                "title": "概况",
+                "bodyMarkdown": "西湖景区位于浙江省杭州市西部，是由湖面、环湖山体、人文街区、园林遗迹与城市公共生活共同构成的开放型景区。它并不是单一景点，而是一组可步行、可骑行、可乘船、可反复进入的城市风景系统。白堤、苏堤、断桥、孤山、曲院风荷、花港观鱼、雷峰塔、南屏晚钟等区域把自然水面、堤岸植物、人文故事和日常休闲连接在一起，形成了杭州最具识别度的城市名片。\n\n从旅行体验看，西湖适合第一次到杭州的人建立城市方位感，也适合本地用户在清晨、傍晚、雨后或节假日选择不同节奏重新进入。游客可以把它理解为一个低门槛的城市漫游起点：从湖滨到断桥偏城市界面，从白堤到孤山偏人文与湖景，从苏堤到花港观鱼偏长线散步和植物景观，从杨公堤到茅家埠偏安静骑行与餐饮停留。不同入口之间距离不短，完整绕湖需要较长时间，因此更适合按半日或一日主题拆分，而不是一次性打卡所有点。\n\n西湖的价值不只在风景好看，也在它持续承接真实内容和讨论：有人分享日落机位，有人记录骑行路线，有人讨论节假日避开拥堵的方式，也有人围绕摄影、亲子散步、人文建筑和城市更新形成长期兴趣圈。趣我圈里的西湖主页因此不只是介绍文字，而是一个连接入口：你可以看到哪些朋友去过、哪些内容绑定了这里、哪些讨论正在发生，以及有哪些兴趣圈围绕这个地方长期沉淀。",
+                "assets": [
+                  {
+                    "assetId": "west_lake_cover",
+                    "url": "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+                    "caption": "西湖湖面与城市天际线",
+                    "sourceRef": "manifest.assets[0]"
+                  }
+                ],
+                "timelineItems": []
+              },
+              {
+                "kind": "keyFacts",
+                "title": "核心信息",
+                "bodyMarkdown": "- 所在城市：杭州\n- 推荐方式：步行、骑行、分段游览\n- 适合场景：日落散步、湖边摄影、亲子慢游、城市初访\n- 相关内容：路线攻略、摄影机位、避峰建议、人文节点介绍",
+                "assets": [],
+                "timelineItems": []
+              },
+              {
+                "kind": "timeline",
+                "title": "时间线",
+                "bodyMarkdown": "",
+                "assets": [],
+                "timelineItems": [
+                  {
+                    "dateLabel": "唐宋以来",
+                    "text": "西湖与杭州城市治理、堤岸建设和文人书写长期相互塑造。",
+                    "sourceRef": "quwoquan_data/entities/地点/景区/西湖景区/page.md"
+                  },
+                  {
+                    "dateLabel": "今天",
+                    "text": "围绕西湖的内容、讨论和兴趣圈持续沉淀，形成可被推荐和解释的同趣连接。",
+                    "sourceRef": "quwoquan_data/entities/地点/景区/西湖景区/_entity.json"
+                  }
+                ]
+              },
+              {
+                "kind": "history",
+                "title": "沿革与城市关系",
+                "bodyMarkdown": "西湖在杭州城市文脉中长期是公共生活、文人书写与风景营造的核心空间。白居易、苏轼等人文人物与湖堤治理、诗文传播形成了持久关联；近现代以后，西湖又逐步成为城市公园、公共景区和旅游目的地。今天用户实际接触到的西湖，是人文遗存、城市道路、公共交通、商业街区与生态景观共同运转的结果。\n\n理解西湖时不宜只把它看成一张静态照片。断桥、白堤、苏堤、孤山、雷峰塔等名称之所以被反复提起，是因为它们既是空间节点，也是故事节点。用户在这些节点拍照、散步、会面、写攻略、发起讨论，都会让这个主页不断生成新的内容和交集。",
+                "assets": [],
+                "timelineItems": []
+              },
+              {
+                "kind": "relatedObjects",
+                "title": "相关地点和事物",
+                "bodyMarkdown": "断桥残雪、曲院风荷、灵隐寺、河坊街等地点共同构成杭州旅行与城市漫游的关联网络。",
+                "assets": [],
+                "timelineItems": []
+              }
+            ],
+            "relatedObjects": [
+              {
+                "circleId": "west_lake_circle_1",
+                "name": "西湖散步兴趣群",
+                "memberCount": 146,
+                "linkedHomepageId": "homepage_sight_west_lake",
+                "linkedHomepageTitle": "西湖景区"
+              }
+            ],
+            "sourceRefs": [
+              "quwoquan_data/entities/地点/景区/西湖景区/page.md",
+              "quwoquan_data/entities/地点/景区/西湖景区/_entity.json",
+              "quwoquan_data/entities/地点/景区/西湖景区/manifest.json"
+            ],
+            "updatedAt": "2026-06-12T00:00:00Z"
+          },
+          "seedSource": {
+            "pageMd": "quwoquan_data/entities/地点/景区/西湖景区/page.md",
+            "entityJson": "quwoquan_data/entities/地点/景区/西湖景区/_entity.json",
+            "manifestJson": "quwoquan_data/entities/地点/景区/西湖景区/manifest.json",
+            "mappingHelper": "quwoquan_data/scripts/build/homepage.py::homepage_introduction_seed_from_triplet"
+          }
+        },
+        {
           "homepageId": "fixture_homepage_university_pku",
           "type": "university",
+          "canonicalEntityId": "entity:university:pku",
           "title": "北京大学",
           "subtitle": "校园大学主页模板样本",
           "summary": "以百科资料、关联内容、校友圈和问小趣入口承接校园冷启动",
@@ -63,6 +158,7 @@
         {
           "homepageId": "fixture_homepage_university_tsinghua",
           "type": "university",
+          "canonicalEntityId": "entity:university:tsinghua",
           "title": "清华大学",
           "subtitle": "校园大学主页模板样本",
           "summary": "承接校园介绍、内容、圈子和活跃贡献者的组织型主页",
@@ -82,6 +178,7 @@
         {
           "homepageId": "fixture_homepage_university_fudan",
           "type": "university",
+          "canonicalEntityId": "entity:university:fudan",
           "title": "复旦大学",
           "subtitle": "上海高校主页样本",
           "summary": "面向校园生活、校友圈、问答与内容聚合的组织型主页",
@@ -92,6 +189,7 @@
         {
           "homepageId": "fixture_homepage_university_zju",
           "type": "university",
+          "canonicalEntityId": "entity:university:zju",
           "title": "浙江大学",
           "subtitle": "杭州高校主页样本",
           "summary": "聚合校园资料、创作内容、同城圈子和校友关系",
@@ -102,6 +200,7 @@
         {
           "homepageId": "fixture_homepage_university_nju",
           "type": "university",
+          "canonicalEntityId": "entity:university:nju",
           "title": "南京大学",
           "subtitle": "南京高校主页样本",
           "summary": "作为校园冷启动样本沉淀可信资料与同趣关系",
@@ -112,6 +211,7 @@
         {
           "homepageId": "fixture_homepage_travel_photo_west_lake",
           "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_photo:west_lake",
           "title": "西湖旅行摄影机位",
           "subtitle": "旅行摄影主页模板样本",
           "summary": "聚合机位说明、最佳时段、作品与摄影同好圈",
@@ -129,8 +229,51 @@
           ]
         },
         {
+          "homepageId": "homepage_restaurant_night_market",
+          "type": "restaurant",
+          "canonicalEntityId": "entity:restaurant:night_market",
+          "title": "夜巷小馆",
+          "subtitle": "本地人常去的深夜小馆",
+          "summary": "聚合夜宵推荐、本地吃法、真实口碑与杭州老城夜色内容。",
+          "city": "杭州",
+          "status": "published",
+          "categoryTags": ["餐厅", "夜宵", "本地推荐"],
+          "relatedGroups": [
+            {
+              "circleId": "night_market_circle_1",
+              "name": "杭州夜宵地图",
+              "memberCount": 203,
+              "linkedHomepageId": "homepage_restaurant_night_market",
+              "linkedHomepageTitle": "夜巷小馆"
+            }
+          ]
+        },
+        {
+          "homepageId": "homepage_sight_emeishan",
+          "type": "sight",
+          "canonicalEntityId": "entity:sight:emeishan",
+          "title": "峨眉山",
+          "subtitle": "世界遗产与川西南山地旅行代表目的地",
+          "summary": "承接登山路线、寺院游览、云海日出与川西南旅行内容沉淀。",
+          "city": "乐山",
+          "status": "published",
+          "categoryTags": ["景点", "山地旅行", "乐山"]
+        },
+        {
+          "homepageId": "homepage_sight_leshan_giant_buddha",
+          "type": "sight",
+          "canonicalEntityId": "entity:sight:leshan_giant_buddha",
+          "title": "乐山大佛",
+          "subtitle": "岷江、青衣江、大渡河交汇处的石刻造像与城市地标",
+          "summary": "聚合大佛观景位、江岸路线、城市停留与乐山旅行内容。",
+          "city": "乐山",
+          "status": "published",
+          "categoryTags": ["景点", "石刻", "乐山"]
+        },
+        {
           "homepageId": "fixture_homepage_travel_photo_dali",
           "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_photo:dali",
           "title": "大理洱海旅行摄影",
           "subtitle": "目的地摄影主页样本",
           "summary": "沉淀环海路线、机位建议、作品和结伴交流",
@@ -141,6 +284,7 @@
         {
           "homepageId": "fixture_homepage_travel_photo_tokyo",
           "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_photo:tokyo",
           "title": "东京城市摄影路线",
           "subtitle": "海外旅行摄影主页样本",
           "summary": "覆盖街拍路线、作品精选、问答和旅行摄影圈",
@@ -163,13 +307,16 @@
     },
     "entity_picker_core": {
       "description": "发布/搜索可选择主页列表。",
-        "candidateHomepageIds": [
-          "fixture_homepage_author",
-          "fixture_homepage_circle",
-          "fixture_homepage_poi",
-          "fixture_homepage_university_pku",
-          "fixture_homepage_travel_photo_west_lake"
-        ]
+      "candidateHomepageIds": [
+        "fixture_homepage_author",
+        "fixture_homepage_circle",
+        "fixture_homepage_poi",
+        "homepage_sight_west_lake",
+        "fixture_homepage_university_pku",
+        "fixture_homepage_travel_photo_west_lake",
+        "homepage_restaurant_night_market",
+        "homepage_sight_emeishan"
+      ]
     }
   },
   "scenarios": [

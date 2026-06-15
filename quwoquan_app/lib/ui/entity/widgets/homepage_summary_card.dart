@@ -399,7 +399,7 @@ String _homepageTypeLabel(String type) {
     case 'circle':
       return '圈子';
     default:
-      return '共享主页';
+      return '主页';
   }
 }
 

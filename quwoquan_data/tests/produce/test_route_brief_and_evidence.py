@@ -39,7 +39,7 @@ from _common.evidence_contract import quality_payload_contract_issues  # noqa: E
 from _common.batch_manifest import write_batch_manifest  # noqa: E402
 from _common.io import write_json  # noqa: E402
 from _common.paths import batch_inputs_dir, ensure_batch_layout, ensure_task_layout  # noqa: E402
-from _common.content_evidence import public_byline_label  # noqa: E402
+from _common.content_evidence import extract_source_evidence, public_byline_label  # noqa: E402
 from _common.draft_io import read_writing_pack, write_agent_draft, prompt_path, read_draft_meta  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from plan.brief import resolve_compose_brief  # noqa: E402
@@ -76,6 +76,17 @@ def test_route_brief_includes_narrative_contract():
     assert brief["continuityExpectations"]["requireProgression"] is True
     assert brief["routeCoverageExpectations"]["minCoveredEntityRefs"] == 3
     assert len(brief["narrativePlan"]["routeNodes"]) == 4
+
+
+def test_extract_source_evidence_recognizes_scenic_appreciation_as_like():
+    evidence = extract_source_evidence(
+        "峨眉山风景秀丽，素有峨眉天下秀的美誉。金顶日出、云海、佛光与圣灯常被并称为可遇不可求的景观。",
+        entity_name="峨眉山",
+    )
+
+    likes = [entry["sentence"] for entry in evidence["emotionEvidence"] if entry.get("kind") == "like"]
+    assert likes
+    assert any("风景秀丽" in sentence or "峨眉天下秀" in sentence for sentence in likes)
 
 
 def test_route_workflow_generates_real_review_green():
@@ -186,6 +197,8 @@ retained: true
         model="test-agent/contract",
         cited_source_paths=quality_payload.get("sourcePaths") or [],
         covered_facts=pack.get("mustIncludeFacts") or [],
+        agent_run_id="run-route-green",
+        agent_id="agent-route-green",
     )
     assert read_draft_meta(task_id, batch_id, ref)["generator"] == "agent"
 
@@ -202,7 +215,278 @@ retained: true
     assert review_payload["generator"] == "agent"
 
 
+def test_agent_draft_time_facts_are_stable_and_monotonic():
+    task_id = "route_workflow_time_facts"
+    batch_id = "pilot"
+    ensure_task_layout(task_id)
+    ensure_batch_layout(task_id, batch_id, "download")
+    ensure_batch_layout(task_id, batch_id, "produce")
+    write_batch_manifest(task_id, batch_id, command="produce")
+
+    registry = TemplateRegistry.load()
+    brief = resolve_compose_brief(
+        registry,
+        RouteRequest(
+            vertical="travel",
+            subject_kind="topic",
+            subject_type="旅行/线路",
+            intent="跟团指南",
+            audience="groupTourTraveler",
+            region="高原",
+            season="夏",
+        ),
+        title="时间事实校验线路",
+        entity_refs=["地点/景区/九寨沟"],
+    )
+    ref = "时间事实校验线路"
+    write_json(batch_inputs_dir(task_id, batch_id, "produce", "compose") / f"{ref}.json", brief)
+    obj = resolve_entity_object_dir(task_id, batch_id, "九寨沟", etype_hint="景区")
+    source_text = """---
+url: https://example.com/jzg
+platform: curated
+license: internal-curated
+allowedUse: internal_reference
+title: sample
+entity: 九寨沟
+retained: true
+---
+
+九寨沟的清晨让人愿意慢下来。"""
+    image_path = Path(tempfile.mkdtemp(prefix="route_time_facts_")) / "九寨沟_0.jpg"
+    _write_clean_image(image_path, seed=7)
+    write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="curated_story",
+        source_md=source_text,
+        quality={
+            "sourceId": "curated_story",
+            "quality": "A-story",
+            "score": 8,
+            "reasons": ["length_ok"],
+            "excerpt": "九寨沟清晨体验",
+            "url": "https://example.com/jzg",
+        },
+        platform="curated",
+        source_category="internal-curated",
+        url="https://example.com/jzg",
+        title="sample",
+        target_ref="/entity/地点/景区/九寨沟",
+        relevance="九寨沟路线证据",
+        images=[{"sourcePath": str(image_path), "caption": "九寨沟", "relevance": "九寨沟"}],
+    )
+    quality_payload = analyze_route_ref(task_id, batch_id, ref, brief)
+    pack = build_route_writing_pack(task_id, batch_id, ref, brief, quality_payload)
+    write_agent_draft(
+        task_id,
+        batch_id,
+        ref,
+        route_article(brief["titleHint"], public_byline_label(str(brief.get("templateId")), brief.get("creator") or {}), ["九寨沟"], pack.get("mustIncludeFacts") or []),
+        model="test-agent/contract",
+        cited_source_paths=quality_payload.get("sourcePaths") or [],
+        covered_facts=pack.get("mustIncludeFacts") or [],
+        agent_run_id="run-route-time-1",
+        agent_id="agent-route-time",
+    )
+    first_meta = read_draft_meta(task_id, batch_id, ref)
+    assert first_meta is not None
+    assert first_meta["createdAt"] == first_meta["updatedAt"]
+
+    write_agent_draft(
+        task_id,
+        batch_id,
+        ref,
+        route_article(brief["titleHint"], public_byline_label(str(brief.get("templateId")), brief.get("creator") or {}), ["九寨沟"], ["新增事实"]),
+        model="test-agent/contract",
+        cited_source_paths=quality_payload.get("sourcePaths") or [],
+        covered_facts=["新增事实"],
+        agent_run_id="run-route-time-2",
+        agent_id="agent-route-time",
+    )
+    second_meta = read_draft_meta(task_id, batch_id, ref)
+    assert second_meta is not None
+    assert second_meta["createdAt"] == first_meta["createdAt"]
+    assert second_meta["updatedAt"] >= first_meta["updatedAt"]
+
+
+def test_route_skip_does_not_prepare_writing_pack():
+    task_id = "route_workflow_skip_test"
+    batch_id = "pilot"
+    ensure_task_layout(task_id)
+    ensure_batch_layout(task_id, batch_id, "download")
+    ensure_batch_layout(task_id, batch_id, "produce")
+    write_batch_manifest(task_id, batch_id, command="produce")
+
+    registry = TemplateRegistry.load()
+    brief = resolve_compose_brief(
+        registry,
+        RouteRequest(
+            vertical="travel",
+            subject_kind="topic",
+            subject_type="旅行/线路",
+            intent="跟团指南",
+            audience="groupTourTraveler",
+            region="高原",
+            season="夏",
+        ),
+        title="川西大环线慢游跟团深度攻略（夏季）",
+        entity_refs=[
+            "地点/景区/九寨沟",
+            "地点/景区/稻城亚丁",
+            "地点/景区/色达",
+            "地点/景区/新都桥",
+        ],
+    )
+    write_json(batch_inputs_dir(task_id, batch_id, "produce", "compose") / "川西大环线慢游_跟团_夏.json", brief)
+
+    reject_text = """---
+url: https://example.com/probe
+platform: mafengwo
+license: fetch-required
+allowedUse: internal_reference
+entity: 九寨沟
+retained: false
+taskProvidedBody: true
+---
+
+manual_source_plan_note: 探针页，正文抓取失败。
+"""
+    for entity in ("九寨沟", "稻城亚丁", "色达", "新都桥"):
+        obj = resolve_entity_object_dir(task_id, batch_id, entity, etype_hint="景区")
+        write_source_unit(
+            obj,
+            ordinal=1,
+            source_id="failed_probe",
+            source_md=reject_text.replace("九寨沟", entity),
+            quality={
+                "sourceId": "failed_probe",
+                "quality": "Reject",
+                "score": 0,
+                "reasons": ["fetch_failed"],
+                "excerpt": "",
+                "url": f"https://example.com/{entity}",
+                "fetchSucceeded": False,
+            },
+            platform="mafengwo",
+            source_category="travelogue",
+            url=f"https://example.com/{entity}",
+            title="probe",
+            target_ref=f"/entity/地点/景区/{entity}",
+            relevance=f"{entity} 探针页",
+        )
+
+    ref = "川西大环线慢游_跟团_夏"
+    quality_payload = analyze_route_ref(task_id, batch_id, ref, brief)
+    assert quality_payload["recommendation"] == "skip", quality_payload
+    assert read_writing_pack(task_id, batch_id, ref) is None
+
+
+def test_route_review_blocks_intra_doc_repetition_padding():
+    task_id = "route_workflow_repeat_test"
+    batch_id = "pilot"
+    ensure_task_layout(task_id)
+    ensure_batch_layout(task_id, batch_id, "download")
+    ensure_batch_layout(task_id, batch_id, "produce")
+    write_batch_manifest(task_id, batch_id, command="produce")
+
+    registry = TemplateRegistry.load()
+    brief = resolve_compose_brief(
+        registry,
+        RouteRequest(
+            vertical="travel",
+            subject_kind="topic",
+            subject_type="旅行/线路",
+            intent="跟团指南",
+            audience="groupTourTraveler",
+            region="高原",
+            season="夏",
+        ),
+        title="川西大环线慢游跟团深度攻略（夏季）",
+        entity_refs=[
+            "地点/景区/九寨沟",
+            "地点/景区/稻城亚丁",
+            "地点/景区/色达",
+            "地点/景区/新都桥",
+        ],
+    )
+    write_json(batch_inputs_dir(task_id, batch_id, "produce", "compose") / "川西大环线慢游_跟团_夏.json", brief)
+
+    source_text = """---
+url: https://example.com/a
+platform: curated
+license: internal-curated
+allowedUse: internal_reference
+title: sample
+entity: 九寨沟
+retained: true
+---
+
+清晨从成都集合出发，先到九寨沟，真正让人愿意慢下来的不是打卡，而是一路进入景区之后雪山和湖水的层次。
+
+门票和观光车都要提前确认，午后雷阵雨容易把转场节奏打乱，排队和返程都要留缓冲。
+
+很多人喜欢九寨沟的清晨光线，但也会抱怨暑期排队、高反和连续坐车太累。
+"""
+    image_root = Path(tempfile.mkdtemp(prefix="route_brief_repeat_sources_"))
+    for entity in ("九寨沟", "稻城亚丁", "色达", "新都桥"):
+        obj = resolve_entity_object_dir(task_id, batch_id, entity, etype_hint="景区")
+        image_path = image_root / f"{entity}.jpg"
+        _write_clean_image(image_path, seed=hash(entity) % 50 + 1)
+        write_source_unit(
+            obj,
+            ordinal=1,
+            source_id="curated_story",
+            source_md=source_text.replace("九寨沟", entity),
+            quality={
+                "sourceId": "curated_story",
+                "quality": "A-story",
+                "score": 8,
+                "reasons": ["length_ok", "scene_rich"],
+                "excerpt": f"{entity} 这一段真正影响体验的是转场和停留的平衡。",
+                "url": f"https://example.com/{entity}",
+            },
+            platform="curated",
+            source_category="internal-curated",
+            url=f"https://example.com/{entity}",
+            title="sample",
+            target_ref=f"/entity/地点/景区/{entity}",
+            relevance=f"{entity} 路线证据",
+            images=[{"sourcePath": str(image_path), "caption": f"{entity} 图", "relevance": f"{entity} 图"}],
+        )
+
+    ref = "川西大环线慢游_跟团_夏"
+    quality_payload = analyze_route_ref(task_id, batch_id, ref, brief)
+    pack = build_route_writing_pack(task_id, batch_id, ref, brief, quality_payload)
+    repeated = "另外，九寨沟在这篇里强调慢看与错峰，别用赶场心态压缩体验。"
+    article = (
+        f"# {brief['titleHint']}\n\n"
+        f"> {public_byline_label(str(brief.get('templateId')), brief.get('creator') or {})}\n\n"
+        "先把正常开头写清楚。\n\n"
+        "再补一段正常行程判断。\n\n"
+        f"{repeated}\n\n"
+        f"{repeated}\n\n"
+        f"{repeated}\n\n"
+        f"{repeated}\n"
+    )
+    write_agent_draft(
+        task_id,
+        batch_id,
+        ref,
+        article,
+        model="test-agent/repetition",
+        cited_source_paths=quality_payload.get("sourcePaths") or [],
+        covered_facts=pack.get("mustIncludeFacts") or [],
+        agent_run_id="run-route-repeat",
+        agent_id="agent-route-repeat",
+    )
+    review_payload = review_route_draft(task_id, batch_id, ref, brief, quality_payload)
+    assert review_payload["decision"] == "revision_needed"
+    assert any("intraDocRepetition" in issue for issue in review_payload["checks"]["provenanceRewrite"]["issues"]), review_payload
+
+
 if __name__ == "__main__":
     test_route_brief_includes_narrative_contract()
     test_route_workflow_generates_real_review_green()
+    test_route_skip_does_not_prepare_writing_pack()
+    test_route_review_blocks_intra_doc_repetition_padding()
     print("route brief and evidence tests passed")

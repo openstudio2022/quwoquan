@@ -11,13 +11,12 @@
 |---------------|------|------|------|----------|
 | 03. Delivery Gate | `delivery-gate.yml` | `pull_request(main)`、手动 | PR 主门禁：拓扑、L1、L2 | G0~G3 |
 | 05. App Env Device Matrix | `app-env-device-matrix-self-hosted.yml` | `pull_request(main)`、`workflow_call`、手动 | 本地 self-hosted alpha/beta Android/iOS 设备矩阵与证据校验 | G3 / G5b |
-| 04. Pre-Release Gate | `pre-release-gate.yml` | `pull_request(main)`、手动 | PR 轻量 gamma preflight（共享 gamma readiness 阻断 + smoke 漂移告警）；显式 manual_full 可触发完整 ECS 链 | G3 |
+| 04. Pre-Release Gate | `pre-release-gate.yml` | `pull_request(main)`、手动 | PR 轻量 local-gamma preflight（local-gamma readiness 阻断 + smoke 漂移告警）；真实远端集成复验已下沉到 prod `gray-initial` | G3 |
 | 02. Service Pipeline | `service_pipeline.yml` | `push main`、手动 | main 后 Go 构建、Python 镜像、prod 校验 | G2 / post-main |
-| 07. Deploy To Prod (Auto) | `deploy-prod-auto.yml` | `push main`、手动 | main 后自动推进 prod 占位链路 | G5c |
+| 07. Deploy To Prod (Auto) | `deploy-prod-auto.yml` | `push main`、手动 | main 后自动推进 prod 主链，并在 `gray-initial` 承接真实远端集成与 curated 媒体路由复验 | G5c |
 | 01. App Pipeline | `app_pipeline.yml` | `v*` tag、手动 | 端侧发布构建（macOS） | 发布 |
 | 06. Deploy To Prod (Gray) | 手动触发的半自动生产灰度 workflow（见 `.github/workflows`） | 手动 | 半自动灰度 | G5c |
-| 08. Deploy Gamma ECS | `deploy-gamma-ecs.yml` | 手动 | ECS gamma / onebox 手动发布与 prod 复验（完整 ECS pre 链 + prod 升级） | G5a → G5b |
-| 09. Gamma Full Validation | `gamma-full-validation.yml` | 每晚 22:00 UTC+8、手动 | Nightly 全量验证：完整 ECS deploy + full semantic smoke + Patrol UI + 设备矩阵 | G5b |
+| 09. Gamma Full Validation | `gamma-full-validation.yml` | 每晚 22:00 UTC+8、手动 | Nightly 全量验证：local-gamma full semantic smoke + Patrol UI + 设备矩阵（远端 gamma 已退役，无远端 ECS deploy） | G5b |
 
 ## 2. 进入 `main` 的主链
 
@@ -40,36 +39,38 @@ feature / dev1.0
 
 | Profile | 用途 | 部署 gamma | readiness 阻断 | smoke 阻断 | UI 旅程 | 设备矩阵 |
 |---------|------|-----------|---------------|-----------|---------|---------|
-| `pr_light` | PR 默认 | 否（探针共享 gamma） | 是 | 否（漂移告警） | 无 | alpha/beta, allow_missing |
-| `manual_full` | 手动 08 触发 | 是（ECS full deploy） | 是 | 是 | 无 | gamma, allow_missing |
-| `nightly_full` | 每晚 22:00 自动 | 是（ECS full deploy） | 是 | 是 | 全量 Patrol UI | gamma, require_all |
+| `pr_light` | PR 默认 | 否（探针 local-gamma） | 是 | 否（漂移告警） | 无 | alpha/beta, allow_missing |
+| `manual_full` | 手动触发 | 是（local-gamma full） | 是 | 是 | 无 | gamma, allow_missing |
+| `nightly_full` | 每晚 22:00 自动 | 是（local-gamma full） | 是 | 是 | 全量 Patrol UI | gamma, require_all |
 | `release_candidate` | 发布前回归 | 是 | 是 | 是 | 全量 Patrol UI | gamma, require_all |
+
+> 远端真实集成 / curated 媒体路由复验不再由 gamma profile 承担，已下沉到 prod `gray-initial`（见 `07`）。
 
 ## 3.1 Stackctl 对应关系
 
 | 能力 | 统一入口 |
 |---|---|
 | 环境包 | `stackctl package --env <env> [--include-services]` |
-| 本地起停 | `stackctl up/down/status --target alpha-local|beta-local|gamma-local` |
+| 本地起停 | `stackctl up --env <alpha|beta|gamma|prod-sim|prod>`；底层 target 仍为 `alpha-local|beta-local|gamma-local|prod-hosted` |
 | 拓扑/打包/纯度校验 | `stackctl verify --env <env>` |
 | 健康检查 | `stackctl health --target <target>` |
 | 巡检 | `stackctl inspect --target <target> --scope logs|network|data|metrics|config|security|all` |
 | 聚合诊断 | `stackctl doctor --target <target>` |
 | 修复 | `stackctl repair --target <target> --fix <class>` |
-| hosted/prod 发布 | `stackctl deploy --target gamma-hosted|prod-hosted ...` |
+| hosted prod rollout（唯一远端目标） | `stackctl deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>` |
 
-## 4. `04` / `05` / `08` / `09` 的职责分工
+## 4. `04` / `05` / `09` 的职责分工
 
 ### 4.1 `04. Pre-Release Gate`
 
-PR 轻量 gamma preflight（默认 `pr_light` profile）：
+PR 轻量 local-gamma preflight（默认 `pr_light` profile）：
 
-1. 通过 `gamma-pr-hosted-core.yml` 探针已运行的共享 gamma：
-   - gamma readiness（/healthz + product-ops + 公网路由）→ **阻断**
+1. 对 local-gamma mirror 执行探针：
+   - local-gamma readiness（/healthz + product-ops + 路由）→ **阻断**
    - assistant protocol smoke → 漂移告警（不阻断）
    - chat avatar API probe → 漂移告警（不阻断）
-2. 支持通过 `workflow_dispatch` 的 `validation_profile=manual_full` 显式触发完整 ECS 链（调用 `gamma-ecs-pre-hosted-core.yml`）。
-3. 共享 gamma 的活性由 09 nightly deploy 保障；gamma 宕机时 04 会快速失败（readiness timeout），发出修复信号。
+2. 支持通过 `workflow_dispatch` 的 `validation_profile=manual_full` 触发完整 local-gamma 复验链。
+3. 真实远端集成 / curated 媒体路由复验不在 PR 阶段执行，已下沉到 prod `gray-initial`（`07`）。
 4. readiness、artifact purity、routing 证据必须可通过 `stackctl health/inspect/doctor` 复放。
 
 ### 4.2 `05. App Env Device Matrix`
@@ -82,25 +83,19 @@ PR 轻量 gamma preflight（默认 `pr_light` profile）：
 - 通过 `flutter devices --machine` 动态发现设备。
 - alpha/beta 环境包与 public URL 由 `stackctl package --env alpha|beta` 统一生成。
 
-### 4.3 `08. Deploy Gamma ECS`
+### 4.3 远端 gamma 部署（已退役）
 
-手动完整验证与发布复验：
-
-- preflight 检查（验证 03/04/05 已通过）
-- 调用 `gamma-ecs-pre-hosted-core.yml`（完整 ECS deploy + readiness + API contract + smoke）
-- pre 门禁通过后执行 ECS prod 就地升级
-- prod 后运行 T3 API contract + chat avatar probe + self-hosted 设备矩阵（`manual_full` profile）
-- 等价 CLI 入口：`stackctl deploy --target gamma-hosted --stage pre ...`
+旧 `08. Deploy Gamma ECS` 远端 ECS gamma 部署与 prod 复验链已退役。真实远端发布、就地升级与 prod 复验统一由 `07. Deploy To Prod (Auto)` 在 `gray-initial -> carry-on/checks -> full` rollout stage 完成；`gray-initial` 同时承接旧 gamma-hosted 的 readiness、T3 API contract、chat avatar probe 等真实远端集成与 curated 媒体路由复验。等价 CLI 入口：`stackctl deploy --target prod-hosted ...`。
 
 ### 4.4 `09. Gamma Full Validation`
 
-Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`）：
+Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`），全部针对 local-gamma：
 
-- 调用 `gamma-ecs-pre-hosted-core.yml`（`full_semantic` profile）
+- local-gamma full semantic 复验（`full_semantic` profile，无远端 ECS deploy）
 - Patrol full UI profile（全量 UI 旅程）
 - gamma assistant 设备矩阵（`nightly_full` profile）
 - gamma chat-avatar 设备矩阵（`nightly_full` profile）
-- `stackctl inspect --target gamma-hosted --scope all` 报告归档到 nightly artifact。
+- `stackctl inspect --target gamma-local --scope all` 报告归档到 nightly artifact。
 
 ## 5. 依赖与前置
 
@@ -108,14 +103,14 @@ Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`）：
 
 | 名称 | 用途 |
 |------|------|
-| `GAMMA_ECS_PASSWORD` 或 `GAMMA_ECS_SSH_KEY` | ECS gamma 部署认证（`08` / `09` 必需其一） |
-| `GAMMA_TEST_AUTH_TOKEN` | gamma hosted/self-hosted 鉴权 |
-| `vars.GAMMA_ECS_HOST` / `vars.GAMMA_ECS_PUBLIC_HOST` | ECS 主机与公网入口 |
-| `vars.GAMMA_BASE_URL` / `vars.GAMMA_PRODUCT_OPS_BASE_URL` | 可选 URL 覆盖 |
+| `secrets.PROD_KUBECONFIG` | prod-hosted 部署唯一远端凭证（base64 kubeconfig，`07` 使用） |
+| prod kubeconfig 同步 ops SSH 凭据 | 专用 PROD/OPS secret（非 `GAMMA_ECS_*`），用于从 ops 同步 prod kubeconfig |
+| `GAMMA_TEST_AUTH_TOKEN` | local-gamma / self-hosted 链路鉴权 |
+| `vars.GAMMA_BASE_URL` / `vars.GAMMA_PRODUCT_OPS_BASE_URL` | local-gamma mirror URL 覆盖 |
 | `vars.MEDIA_AVATAR_CDN_BASE_URL` | chat-avatar 媒体基址 |
 | `vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX` | 控制 PR 是否启用 self-hosted 设备矩阵 |
 
-完整矩阵见 [environment_matrix.md](environment_matrix.md)。
+远端 gamma 已退役，不再需要任何 `GAMMA_ECS_*` secret/var。完整矩阵见 [environment_matrix.md](environment_matrix.md)。
 
 ### 5.2 Self-hosted Runner
 
@@ -124,19 +119,19 @@ Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`）：
 - PR 默认允许缺席平台跳过（`pr_light`）；nightly/release 要求全平台通过。
 - artifact 必须包含设备清单、原始日志、命令清单与截图/失败截图。
 
-### 5.3 共享 Gamma 活性
+### 5.3 local-gamma 活性
 
-- 共享 gamma 由 09 nightly deploy 每晚 22:00 UTC+8 自动刷新部署。
-- 如果 gamma 在两次 nightly 之间宕机，04 会因 readiness 失败阻断 PR，发出修复信号。
-- 手动恢复：通过 08 `workflow_dispatch` 重新部署 gamma。
+- gamma 仅本地（local-gamma mirror），无远端共享 gamma 需要长期维护。
+- PR `04` 在 runner 内对 local-gamma 做 readiness 探针；起栈失败即快速失败并发出修复信号。
+- 真实远端可用性在 prod `gray-initial` rollout stage 通过 `stackctl health/inspect/doctor` 复验。
 
 ## 6. 验证清单
 
 1. `main` 分支保护中 required checks 配置为 `03`、`04`、`05`。
-2. `04` 默认轻量探针共享 gamma：readiness 阻断，smoke 仅告警。
+2. `04` 默认轻量探针 local-gamma：readiness 阻断，smoke 仅告警。
 3. `05` PR 默认 alpha/beta `pr_light` profile，允许缺席平台跳过。
-4. `08` 手动触发完整 ECS deploy + prod 复验。
-5. `09` nightly 22:00 自动执行全量验证（ECS deploy + full semantic + Patrol UI + 全设备矩阵）。
+4. 远端真实集成 / curated 媒体路由复验由 `07` 在 prod `gray-initial` 承接（远端 gamma 已退役）。
+5. `09` nightly 22:00 自动执行全量验证（local-gamma full semantic + Patrol UI + 全设备矩阵）。
 6. `deploy/shared/gamma_validation_suites.json` 是 profile/suite 唯一真相源。
 7. 门禁脚本 `verify_gamma_validation_profiles.py`、`verify_ci_profile_consistency.py`、`verify_environment_topology_manifest.py`、`verify_local_env_port_manifest.py`、`verify_public_vs_upstream_url_contract.py`、`verify_environment_packaging_contract.py`、`verify_env_artifact_isolation.py`、`verify_prod_package_purity.py` 已串联 `make gate` 或 `stackctl verify`。
 8. T1~T4 证据均可从 `artifacts/stackctl/**`、`artifacts/local-gamma/**`、workflow artifact 回放。

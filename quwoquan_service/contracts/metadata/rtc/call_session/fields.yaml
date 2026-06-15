@@ -26,7 +26,7 @@ enums:
     values: [known, possibly_unknown]
     description: >-
       信任关系两态：known=联系人/同好/当前会话或群成员（可信）；
-      possibly_unknown=其他群成员/链接加入者/无共同关系者（提示注意隐私）。富信息（共同好友数等）后续增强。
+      possibly_unknown=其他群成员/链接加入者/无共同关系者（提示注意隐私）。富信息（共同关注的人数量等）后续增强。
 
   CallInviteStatus:
     values: [pending, ringing, accepted, declined, expired, cancelled]
@@ -363,7 +363,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 富信息预留（共同好友数量、共同群列表序列化），本轮 UI 不强制展示
+        description: 富信息预留（共同关注的人数量、共同群列表序列化），本轮 UI 不强制展示
 
       - name: inviteStatus
         type: enum

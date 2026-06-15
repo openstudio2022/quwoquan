@@ -16,6 +16,8 @@ import 'package:flutter/services.dart';
 /// structured "unavailable" instead of crashing.
 enum NativeAuthProvider {
   wechat,
+  alipay,
+  qq,
   apple,
   systemCredential,
   passkey,
@@ -205,6 +207,61 @@ class MethodChannelNativeAuthBridge implements NativeAuthBridge {
           ? const <String, dynamic>{}
           : Map<String, dynamic>.from(result),
     );
+  }
+}
+
+/// Release-safe sandbox bridge for non-production environments (alpha/beta/gamma).
+///
+/// It is the端侧 counterpart of the server's mock/sandbox social provider client:
+/// instead of invoking a real vendor SDK, it returns a short-lived sandbox
+/// authorization ticket. The ticket is prefixed `sandbox-<provider>-` so the
+/// gamma server-side controlled pass-through allowlist can recognize it; in
+/// alpha/beta the server uses the mock provider client and accepts any ticket.
+///
+/// This is NOT test code: it is selected by runtime environment in
+/// [nativeAuthBridgeProvider] and never wired in production.
+class SandboxNativeAuthBridge implements NativeAuthBridge {
+  SandboxNativeAuthBridge({Set<NativeAuthProvider>? socialProviders})
+      : _socialProviders = socialProviders ??
+            const <NativeAuthProvider>{
+              NativeAuthProvider.wechat,
+              NativeAuthProvider.alipay,
+              NativeAuthProvider.qq,
+            };
+
+  final Set<NativeAuthProvider> _socialProviders;
+
+  @override
+  Future<NativeAuthCapability> getCapability(NativeAuthProvider provider) async {
+    final available = _socialProviders.contains(provider);
+    return NativeAuthCapability(
+      provider: provider,
+      availability: available
+          ? NativeAuthAvailability.available
+          : NativeAuthAvailability.unavailable,
+      reason: available ? 'sandbox' : 'unsupported_in_sandbox',
+    );
+  }
+
+  @override
+  Future<NativeAuthResult> signIn(NativeAuthProvider provider) async {
+    if (!_socialProviders.contains(provider)) {
+      throw StateError('${provider.name} sandbox auth is unavailable');
+    }
+    final entropy = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+    return NativeAuthResult(
+      provider: provider,
+      ticket: 'sandbox-${provider.name}-$entropy',
+      displayLabel: 'sandbox-${provider.name}',
+    );
+  }
+
+  @override
+  Future<NativeAuthResult> signInWithPasskey({
+    String? relyingPartyId,
+    String? challenge,
+  }) async {
+    throw StateError('passkey sandbox auth is unavailable');
   }
 }
 

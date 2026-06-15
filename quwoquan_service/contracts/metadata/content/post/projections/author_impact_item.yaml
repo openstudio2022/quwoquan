@@ -1,0 +1,61 @@
+version: 1
+read_model: AuthorImpactItem
+description: |
+  创作者影响力单条事实（「TA的影响 / 我的影响力」模块行真相源）。
+  云侧按 helpType + action + intersectionDimension 反向聚合真实动作计数，
+  并产出 displayText 结论句（如「23人加入相关圈子」「7人读完了TA的长文」），
+  端只读直出，禁止本地拼装文案（全局验收 G2）；禁止下发转化率/漏斗/增长率等运营指标。
+
+  闭集枚举（端按字符串解析）：
+    helpType: relationship | community | decision | knowledge | spread
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: AuthorImpactItem
+  base_class: ""
+  output_path: cloud/runtime/generated/content/author_impact_item.g.dart
+  fields:
+    - name: helpType
+      dart_type: String
+      nullable: false
+      source: helpType
+      aliases: [helpType]
+      default: "''"
+    - name: action
+      dart_type: String
+      nullable: false
+      source: action
+      aliases: [action]
+      default: "''"
+    - name: intersectionDimension
+      dart_type: String
+      nullable: false
+      source: intersectionDimension
+      aliases: [intersectionDimension]
+      default: "''"
+    - name: tagRef
+      dart_type: String
+      nullable: false
+      source: tagRef
+      aliases: [tagRef]
+      default: "''"
+    - name: source
+      dart_type: String
+      nullable: false
+      source: source
+      aliases: [source]
+      default: "''"
+    - name: count
+      dart_type: int
+      nullable: false
+      source: count
+      aliases: [count]
+      default: "0"
+    - name: displayText
+      dart_type: String
+      nullable: false
+      source: displayText
+      aliases: [displayText]
+      default: "''"

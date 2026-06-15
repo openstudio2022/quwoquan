@@ -7,3 +7,6 @@
 .git/
 .cursor/
 state/
+# gamma/local-hosted 运行时会单独同步 curated media；镜像构建不需要把 1GB+ fixture 资源打包进上下文。
+contracts/metadata/_shared/test_fixtures/media/
+contracts/metadata/_shared/test_fixtures/original_media/

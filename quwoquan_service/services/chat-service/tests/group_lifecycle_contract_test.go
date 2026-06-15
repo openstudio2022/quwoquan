@@ -143,13 +143,13 @@ func TestDissolveCircleConversation_Forbidden(t *testing.T) {
 	}
 }
 
-func TestCreateConversation_RejectsLegacyCircleType(t *testing.T) {
+func TestCreateConversation_RejectsRetiredCircleType(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	doPost(
 		t,
 		"/v1/chat/conversations",
-		`{"type":"circle","title":"旧圈子会话","circleId":"circle_legacy","maxGroupSize":500}`,
+		`{"type":"circle","title":"旧圈子会话","circleId":"circle_retired","maxGroupSize":500}`,
 		"user_test_001",
 		http.StatusBadRequest,
 	)

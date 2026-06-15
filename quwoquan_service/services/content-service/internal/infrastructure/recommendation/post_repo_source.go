@@ -6,6 +6,7 @@ import (
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
@@ -25,12 +26,18 @@ func (s *PostRepositorySource) Recall(ctx context.Context, req rtrec.RecallReque
 	posts := s.store.ListPublished(ctx, limit, req.Cursor)
 	out := make([]rtrec.ContentCandidate, 0, len(posts))
 	for _, p := range posts {
+		if postsemantic.Present(p.SemanticMentions) {
+			projection := postsemantic.Project(p.SemanticMentions)
+			p.TagRefs = projection.TagRefs
+			p.EntityRefs = projection.EntityRefs
+		}
 		out = append(out, rtrec.ContentCandidate{
 			ContentID:    p.ID,
 			ContentType:  p.ContentType,
 			AuthorID:     p.AuthorId,
 			Title:        p.Title,
 			Tags:         candidateTagsFromAny(p.TagRefs),
+			EntityRefs:   candidateTagsFromAny(p.EntityRefs),
 			PublishedAt:  p.PublishedAt,
 			ViewCount:    p.ViewCount,
 			LikeCount:    p.LikeCount,

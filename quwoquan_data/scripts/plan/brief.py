@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from _common.entity_object import find_entity_object_dir
 from _common.io import read_json
 from _common.paths import PUBLISH_ROOT, TASKS_ROOT
 from _common.quality_gates import normalize_writing_intent
@@ -126,7 +127,12 @@ def _normalize_optional_mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
-def _entity_condition_profile(entity_ref: str) -> dict[str, Any] | None:
+def _entity_condition_profile(
+    entity_ref: str,
+    *,
+    task_id: str | None = None,
+    batch_id: str | None = None,
+) -> dict[str, Any] | None:
     """L3：按 entityRef（形如 地点/景区/稻城亚丁，可含 /entity/ 前缀）读取实体真实条件画像。
 
     从实体 _entity.json 的 conditionProfile 取真实地形(regions)/最佳季节(seasons)/海拔，
@@ -138,6 +144,18 @@ def _entity_condition_profile(entity_ref: str) -> dict[str, Any] | None:
     if len(parts) < 3:
         return None
     domain, etype, name = parts[0], parts[1], "/".join(parts[2:])
+    if task_id:
+        obj = find_entity_object_dir(task_id, domain, etype, name, batch_id=batch_id or "")
+        if obj is not None:
+            path = obj / "_entity.json"
+            if path.is_file():
+                try:
+                    data = read_json(path)
+                except Exception:
+                    data = None
+                profile = data.get("conditionProfile") if isinstance(data, dict) else None
+                if isinstance(profile, dict) and (profile.get("regions") or profile.get("seasons")):
+                    return profile
     rel = Path("entities") / domain / etype / name / "_entity.json"
     candidates: list[Path] = [PUBLISH_ROOT / rel]
     if TASKS_ROOT.exists():
@@ -153,6 +171,74 @@ def _entity_condition_profile(entity_ref: str) -> dict[str, Any] | None:
         if isinstance(profile, dict) and (profile.get("regions") or profile.get("seasons")):
             return profile
     return None
+
+
+def hydrate_entity_condition_context(
+    brief: dict[str, Any],
+    *,
+    task_id: str | None = None,
+    batch_id: str | None = None,
+) -> dict[str, Any]:
+    """为缺失 conditionContext 的实体 brief 自动回填实体条件画像。
+
+    content_plan checkpoint 下的 agent brief 可能只写标题/事实/主线，不携带
+    `conditionContext`。对实体内容而言，这会让后续 writing_pack/prompt/materialize
+    丢失由实体主页产出的 region/season/altitude 条件，从而把本应由代码补齐的地域授权
+    误判成作者正文问题。
+
+    这里按实体画像主值补齐：
+    - `conditionContext.entityProfile`
+    - 顶层 `conditionContext.region/season`（供 prompt 与 manifest 授权消费）
+    """
+    refs = [str(r) for r in (brief.get("entityRefs") or []) if r]
+    if not refs:
+        return dict(brief)
+
+    raw_context = brief.get("conditionContext")
+    if raw_context is None:
+        context: dict[str, Any] = {}
+    elif isinstance(raw_context, dict):
+        context = dict(raw_context)
+    else:
+        return dict(brief)
+
+    profile = _entity_condition_profile(refs[0], task_id=task_id, batch_id=batch_id)
+    if not isinstance(profile, dict):
+        return dict(brief)
+
+    changed = False
+    regions = [str(v) for v in (profile.get("regions") or []) if v]
+    seasons = [str(v) for v in (profile.get("seasons") or []) if v]
+    if "entityProfile" not in context:
+        context["entityProfile"] = {
+            "entityRef": refs[0],
+            "regions": regions,
+            "seasons": seasons,
+            "altitudeMeters": profile.get("altitudeMeters"),
+            "notes": profile.get("notes"),
+            "conditionSource": "entityConditionProfile",
+        }
+        changed = True
+    if regions and not context.get("region"):
+        context["region"] = {
+            "name": regions[0],
+            "label": regions[0],
+            "source": "entityProfile",
+        }
+        changed = True
+    if seasons and not context.get("season"):
+        context["season"] = {
+            "name": seasons[0],
+            "label": seasons[0],
+            "source": "entityProfile",
+        }
+        changed = True
+
+    if not changed and raw_context is not None:
+        return dict(brief)
+    merged = dict(brief)
+    merged["conditionContext"] = context
+    return merged
 
 
 def _resolve_condition(

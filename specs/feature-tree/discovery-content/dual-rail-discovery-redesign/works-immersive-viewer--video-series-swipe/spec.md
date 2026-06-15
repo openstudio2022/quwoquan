@@ -1,22 +1,29 @@
-# L4 契约/任务：video-series-swipe
+# L4 契约/任务：video-series-swipe（Work Browser V1.0）
+
+> 2026-06-11 更新：「同作者关联系列 / AuthorWorksCard」方案废弃；视频集由契约 `mediaItems` 表达。平台默认控制层（Chewie/Material 控件）在 Work Browser 内禁止。
 
 ## 功能说明
-视频作品的全屏沉浸播放：进入视口自动播放，音量 500ms 淡入，水平滑切换同作者关联系列片段；无关联时水平滑展示"作者作品集卡片"。
+
+视频作品的全屏沉浸播放：进入视口自动播放、音量 500ms 淡入；自绘极简控制行（播放状态 + 当前时间 + 细进度条 + 总时长）；视频集状态以 `视频集 · 1/4 ↔` 胶囊表达，水平滑切换集内片段。
 
 ## 范围
-- `VideoAutoPlayItem`（接收 `VideoPostDto`）
+
+- 视频舞台 Widget（消费 Work Browser 视频作品的 `mediaItems`）
 - 全屏 `VideoPlayer`，无边框，自动循环
-- 进入视口 → `VideoPlayerController.play()` + 音量 0→1 Tween 500ms
-- 水平滑：若 `VideoPostDto.seriesIds` 非空 → 切换系列片段；否则展示 `AuthorWorksCard`
-- 离开视口 → 暂停并重置音量
+- 进入视口 → 播放 + 音量 0→1 Tween 500ms；离开视口 → 暂停并重置音量
+- 自绘控制行：播放/暂停态、当前时间、可拖动细进度条、总时长；位于内容下方
+- 视频集胶囊：`视频集 · n/m ↔`，位于时间轴下方、标题上方；水平滑或点击切换集内片段
+- 单视频不显示胶囊
 
 ## 适用范围与约束
-- 适用：`VideoPostDto`（`videoUrl` 非空）
-- 约束：视频加载失败时展示缩略图 + 加载指示器；音量淡入用 Dart `Timer.periodic` 渐进设置
-- `seriesIds` 字段若当前 `VideoPostDto` 缺失，视为无系列
+
+- 适用：`workType == video`（`mediaItems[kind=video]` 非空）
+- 约束：禁止缩略图轨道、截图列表、预览帧；禁止点状指示器表达视频集；禁止端侧按同作者从队列临时拼集合
+- 视频加载失败时展示封面图 + 加载指示器
 
 ## 验收标准概要
-- A1：进入视口自动播放，音量 500ms 淡入到 1.0
-- A2：有系列：水平滑切换系列片段（复用 `VideoAutoPlayItem`）
-- A3：无系列：水平滑出现 `AuthorWorksCard`（作者头像 + 作品缩略图列表）
-- A4：离开视口暂停，音量重置为 0
+
+- A1：进入视口自动播放，音量 500ms 淡入到 1.0；离开视口暂停
+- A2：控制行只含播放状态、当前时间、进度条、总时长；无平台默认控制层
+- A3：多集视频显示 `视频集 · n/m ↔` 且随切集更新；单视频无胶囊
+- A4：无点状指示器、无缩略图轨道

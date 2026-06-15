@@ -155,6 +155,13 @@ api_routes:
     operation: GetCircleStats
     description: 圈子统计
 
+  - method: GET
+    path: /v1/circles/{circleId}/impact
+    operation: GetCircleImpact
+    description: 圈子影响摘要（连接型帮助结果，端侧圈子影响模块使用）
+    response_entity: CircleImpactSummary
+    auth: required
+
   - method: POST
     path: /v1/circles/behaviors
     operation: ReportCircleBehavior

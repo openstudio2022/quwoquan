@@ -77,8 +77,7 @@ func normalizeCreatePostPayloadForTest(t *testing.T, payload string) string {
 		t.Fatalf("normalize create post payload: %v", err)
 	}
 	if strings.TrimSpace(asTestString(body["contentType"])) == "article" &&
-		strings.TrimSpace(asTestString(body["articleMarkdown"])) == "" &&
-		body["articleDocument"] == nil {
+		strings.TrimSpace(asTestString(body["articleMarkdown"])) == "" {
 		title := strings.TrimSpace(asTestString(body["title"]))
 		summary := strings.TrimSpace(asTestString(body["summary"]))
 		articleBody := strings.TrimSpace(asTestString(body["body"]))

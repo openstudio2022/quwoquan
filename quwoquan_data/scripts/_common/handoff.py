@@ -47,7 +47,7 @@ def build_execution_contract(
 ) -> dict[str, Any]:
     return {
         "inputs": inputs
-        or ["4.draft/author_job_packet.json", "3.compose/writing_pack.json", "2.quality/*"],
+        or ["4.draft/author_job_packet.json", "3.compose/writing_pack.json", "2.quality/*", "5.review/repair_report.json"],
         "budget": {
             "maxWallClockSeconds": int(max_wall_clock_seconds),
             "maxAttempts": int(max_attempts),
@@ -90,6 +90,7 @@ def build_author_job_packet(
     brief: Mapping[str, Any],
     writing_pack: Mapping[str, Any],
     prompt_rel: str,
+    content_object_rel: str | None = None,
 ) -> dict[str, Any]:
     return {
         "schemaVersion": "quwoquan_data.author_job_packet/1",
@@ -98,8 +99,11 @@ def build_author_job_packet(
         "baseSourceRef": writing_pack.get("baseSourceRef") or brief.get("baseSourceRef"),
         "title": writing_pack.get("title") or brief.get("titleHint"),
         "carrier": writing_pack.get("carrier") or brief.get("carrier"),
+        "contentObjectDir": content_object_rel,
         "promptRef": prompt_rel,
         "writingPackRef": "3.compose/writing_pack.json",
+        "sourcePaths": list(writing_pack.get("sourcePaths") or []),
+        "sourceUrls": list(writing_pack.get("sourceUrls") or []),
         "mustIncludeFacts": list(writing_pack.get("mustIncludeFacts") or []),
         "bannedRegisterTerms": list(writing_pack.get("bannedRegisterTerms") or []),
         "assets": [

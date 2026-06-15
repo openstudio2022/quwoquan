@@ -4,11 +4,24 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from _common.paths import release_root, task_root, task_data
-from _common.io import write_json
+from _common.entity_object import collect_task_entity_objects
+from _common.paths import release_root, task_root
+from _common.io import read_json, write_json
+
+_REVIEW_SIDECARS = {
+    "review.json",
+    "review_gate.json",
+    "ref_review_gate.json",
+    "media_check.json",
+    "media_check_gate.json",
+    "review_ledger.json",
+    "review_entities.json",
+    "provenance.json",
+    "finalization_report.json",
+}
 
 
-def assemble_release(task_id: str, release_id: str) -> Path:
+def assemble_release(task_id: str, release_id: str, *, batch_id: str = "") -> Path:
     """Merge all task outputs into a release directory.
 
     发布链直接消费 task/entities 与 batch/posts 真相源；不再依赖 runtime task 根
@@ -19,45 +32,108 @@ def assemble_release(task_id: str, release_id: str) -> Path:
         shutil.rmtree(root)
     root.mkdir(parents=True, exist_ok=True)
 
-    _copy_release_entities(task_id, root)
+    _copy_release_entities(task_id, root, batch_id=batch_id)
 
     # Posts from all batches（对象优先：成品落 batch/posts 对象根）。
     # release 包保留 5.review 侧车，供 publish_filter / ship 读取；其余过程阶段不进 release。
-    _process_dirs = {"1.download", "2.quality", "3.compose", "3.brief", "3.build", "4.draft"}
     posts_dst = root / "posts"
     posts_dst.mkdir(exist_ok=True)
     batches_dir = task_root(task_id) / "batches"
     if batches_dir.exists():
-        for batch_dir in sorted(batches_dir.iterdir()):
+        batch_dirs = [batches_dir / batch_id] if batch_id else sorted(batches_dir.iterdir())
+        for batch_dir in batch_dirs:
             src = batch_dir / "posts"
             if not src.is_dir():
                 continue
-            for manifest in sorted(src.rglob("manifest.json")):
-                leaf = manifest.parent
-                if not ((leaf / "article.md").exists() or (leaf / "gallery.md").exists()):
+            for manifest_path in sorted(src.rglob("manifest.json")):
+                leaf = manifest_path.parent
+                manifest = read_json(manifest_path)
+                if not isinstance(manifest, dict):
+                    continue
+                is_image = _is_image_manifest(manifest)
+                if not is_image and not (leaf / "article.md").exists():
                     continue
                 dst_leaf = posts_dst / leaf.relative_to(src)
                 if dst_leaf.exists():
                     shutil.rmtree(dst_leaf)
-                dst_leaf.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(
-                    leaf, dst_leaf,
-                    ignore=lambda _d, names: [n for n in names if n in _process_dirs],
-                )
+                _copy_post_surface(leaf, dst_leaf, manifest=manifest)
 
     # Release manifest
     write_json(root / "release_manifest.json", {
         "schemaVersion": "quwoquan_data.release_manifest",
         "releaseId": release_id,
         "sourceTaskId": task_id,
+        "sourceBatchId": batch_id,
         "status": "assembled",
     })
 
     return root
 
 
-def _copy_release_entities(task_id: str, release_dir: Path) -> None:
+def _copy_entity_surface(src_dir: Path, dst_dir: Path) -> None:
+    dst_dir.parent.mkdir(parents=True, exist_ok=True)
+    if dst_dir.exists():
+        shutil.rmtree(dst_dir)
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("_entity.json", "page.md", "manifest.json"):
+        src = src_dir / name
+        if src.is_file():
+            shutil.copy2(src, dst_dir / name)
+    src_assets = src_dir / "assets"
+    if src_assets.is_dir():
+        shutil.copytree(src_assets, dst_dir / "assets")
+    _copy_review_sidecars(src_dir / "5.review", dst_dir / "5.review")
+
+
+def _copy_review_sidecars(src: Path, dst: Path) -> None:
+    if not src.is_dir():
+        return
+    for name in sorted(_REVIEW_SIDECARS):
+        path = src / name
+        if not path.is_file():
+            continue
+        dst.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, dst / name)
+
+
+def _is_image_manifest(manifest: dict) -> bool:
+    return str(manifest.get("contentType") or "") == "image" or str(
+        manifest.get("carrier") or ""
+    ) in ("image", "gallery")
+
+
+def _copy_post_surface(src: Path, dst: Path, *, manifest: dict) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        shutil.rmtree(dst)
+    dst.mkdir(parents=True, exist_ok=True)
+    is_image = _is_image_manifest(manifest)
+    release_manifest = dict(manifest)
+    if is_image:
+        # Legacy gallery packages are upgraded to the structured image surface.
+        release_manifest["contentType"] = "image"
+    else:
+        article = src / "article.md"
+        if article.is_file():
+            shutil.copy2(article, dst / "article.md")
+    write_json(dst / "manifest.json", release_manifest)
+    assets = src / "assets"
+    if assets.is_dir():
+        shutil.copytree(assets, dst / "assets")
+    _copy_review_sidecars(src / "5.review", dst / "5.review")
+
+
+def _copy_release_entities(task_id: str, release_dir: Path, *, batch_id: str = "") -> None:
     entities_dst = release_dir / "entities"
-    entities_dir = task_data(task_id).entities_dir()
-    if entities_dir.is_dir():
-        shutil.copytree(entities_dir, entities_dst)
+    rows = collect_task_entity_objects(
+        task_id,
+        batch_id=batch_id,
+        include_task_mirror_fallback=True,
+        approved_only=True,
+        enforce_type_consistency=True,
+    )
+    for row in rows:
+        src_dir = Path(row["entityDir"])
+        rel = Path(str(row["entityRel"]))
+        dst_dir = release_dir / rel
+        _copy_entity_surface(src_dir, dst_dir)

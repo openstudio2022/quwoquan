@@ -28,11 +28,11 @@ categories:
     evidenceFocus: [fact, season]
     examplePlatforms: [官网, 文旅, 文旅局, 景区官网, 官方公众号, gov, 官方网站]
   - id: travelogue
-    label: 社区游记
+    label: 社区游记/旅行指南
     verticals: [travel]
-    description: 真实第一人称体验/动机/取舍/避坑，提供 emotionEvidence 与叙事线。
+    description: 真实第一人称体验、社区攻略或可抓旅行指南，提供 emotionEvidence、mainline 与决策线。
     evidenceFocus: [emotion, mainline, decision]
-    examplePlatforms: [马蜂窝, 携程, 携程攻略, 携程游记, 小红书, 穷游, 知乎, 游记, 蚂蜂窝]
+    examplePlatforms: [马蜂窝, 携程, 携程攻略, 携程游记, 去哪儿攻略, 小红书, 穷游, 知乎, 游记, 蚂蜂窝, 维基导游, Wikivoyage]
   - id: video
     label: 短视频/中视频
     verticals: [travel, campus]
@@ -135,6 +135,8 @@ platformAliases:
   unknown: null
   mafengwo: travelogue
   ctrip: travelogue
+  qunar: travelogue
+  wikivoyage: travelogue
   xiaohongshu: travelogue
   rednote: travelogue
   douyin: video

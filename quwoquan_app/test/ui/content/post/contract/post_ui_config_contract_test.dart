@@ -323,15 +323,16 @@ void main() {
       expect(ids, equals(<String>['all', 'moment', 'work']));
     });
 
-    test('work format filters expose all / image / video / note', () {
+    test('work format filters expose all / image / video / article', () {
       final ids = ContentUIConfig.workFormatFilters
           .map((filter) => filter.id)
           .toList();
-      expect(ids, equals(<String>['all', 'image', 'video', 'note']));
-      final note = ContentUIConfig.workFormatFilters.firstWhere(
-        (filter) => filter.id == 'note',
+      expect(ids, equals(<String>['all', 'image', 'video', 'article']));
+      final article = ContentUIConfig.workFormatFilters.firstWhere(
+        (filter) => filter.id == 'article',
       );
-      expect(note.contentType, 'article');
+      expect(article.contentType, 'article');
+      expect(article.labelKey, 'work_format_article');
     });
 
     test('article template configs freeze five book presets', () {

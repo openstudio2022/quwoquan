@@ -481,7 +481,7 @@ class _CallParticipantPickerPageState
       return Padding(
         padding: EdgeInsets.all(AppSpacing.md),
         child: Text(
-          '暂无可切换群聊',
+          '暂无可切换讨论',
           style: TextStyle(
             color: AppColors.overlayMedium,
             fontSize: AppTypography.sm,

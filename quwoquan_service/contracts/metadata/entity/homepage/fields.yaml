@@ -135,6 +135,33 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: ownerSubAccountId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 已认领主页的可私信公开主体 ID，端侧私信复用 user→user direct 会话
+
+      - name: viewerFollowsHomepage
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前 viewer 是否关注该实体主页；为空 viewer 时恒为 false
+
+      - name: followerCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 关注该实体主页的人数，用于主页 CTA 状态与轻量说明，不作为数据面板主视觉
+
       - name: averageRating
         type: float64
         constraints: [NULLABLE]
@@ -237,6 +264,14 @@ entities:
     description: 共享主页搜索结果项
     fields:
       - name: homepageId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: canonicalEntityId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC

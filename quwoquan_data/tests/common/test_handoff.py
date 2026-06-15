@@ -33,6 +33,7 @@ def test_author_job_packet_isolation_and_exit_gates():
     assert packet["assets"][0]["assetId"] == "a1"
     # 执行合约 5 要素必须随 packet 下发
     assert handoff.execution_contract_issues(packet.get("executionContract")) == []
+    assert "5.review/repair_report.json" in packet["executionContract"]["inputs"]
 
 
 def test_execution_contract_requires_five_elements():
@@ -93,6 +94,16 @@ def test_batch_reducer_flags_source_reuse():
     assert "sources/shared.md" in gate["sourceReuse"]
     assert set(gate["affectedRefs"]) == {"r1", "r2"}
     assert gate["intentDistribution"]["decision_experience"] == 1
+
+
+def test_batch_reducer_passes_for_distinct_refs():
+    payload = [
+        {"ref": "r1", "article": "先坐车到景区，再步行上山，最后回城。 asset://a1", "writingIntent": "planning_consultation", "baseSourceRef": "sources/a.md"},
+        {"ref": "r2", "article": "上午走老街，下午看博物馆，傍晚吃完再回酒店。 asset://a2", "writingIntent": "post_trip_journal", "baseSourceRef": "sources/b.md"},
+    ]
+    gate = handoff.build_batch_reducer_gate(payload)
+    assert gate["passed"] is True, gate["issues"]
+    assert gate["affectedRefs"] == []
 
 
 def _run_all() -> None:

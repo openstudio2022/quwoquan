@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
@@ -53,11 +54,13 @@ void main() {
       isTrue,
     );
     expect(prompts.any((prompt) => prompt.contains('四口之家')), isTrue);
-  });
+  }, skip: CloudRuntimeConfig.appRuntimeEnv != 'beta');
 }
 
 PersonalAssistantStreamState _controllerState(WidgetTester tester) {
-  final context = tester.element(find.byType(PersonalAssistantConversationPage));
+  final context = tester.element(
+    find.byType(PersonalAssistantConversationPage),
+  );
   return ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider);
@@ -78,7 +81,9 @@ Future<void> _send(WidgetTester tester, String text) async {
 }
 
 Future<void> _sendThroughController(WidgetTester tester, String text) async {
-  final context = tester.element(find.byType(PersonalAssistantConversationPage));
+  final context = tester.element(
+    find.byType(PersonalAssistantConversationPage),
+  );
   await ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider.notifier).send(text);

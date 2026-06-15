@@ -65,6 +65,7 @@ def handle_init(args: argparse.Namespace) -> None:
         args.vertical,
         partition_dimension=args.partition_dimension or "",
         defaults=defaults,
+        source_task_id=str(getattr(args, "source_task_id", "") or ""),
     )
     cov: dict = {}
     if args.coverage_partitions is not None:
@@ -188,6 +189,7 @@ def register_decompose_parser(sub: argparse._SubParsersAction) -> None:
     pi.add_argument("--goal", required=True, help="顶层目标，如『全国景点主页』")
     pi.add_argument("--vertical", required=True, choices=["travel", "campus", "photography", "tech", "car"])
     pi.add_argument("--partition-dimension", dest="partition_dimension", help="分片维度人读标签（省/区县/类别/批）")
+    pi.add_argument("--source-task-id", dest="source_task_id", help="源任务 taskId（派生分区 task 继承 baseline/spec 用）")
     pi.add_argument("--organize-by", dest="organize_by", choices=["地域", "环线", "主题"], help="task new organizeBy（默认地域）")
     pi.add_argument("--category", help="叶子分区默认 category（如 景区/学校）")
     pi.add_argument("--entity-type", dest="entity_type", help="叶子默认 entityType（如 地点/景区）")

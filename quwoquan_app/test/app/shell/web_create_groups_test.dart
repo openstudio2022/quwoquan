@@ -11,7 +11,7 @@ void main() {
   });
 
   group('Web 添加页', () {
-    testWidgets('按内容创作/社交关系两组呈现，含发起群聊，且无小趣创作助手', (tester) async {
+    testWidgets('按内容创作/社交关系两组呈现，含发起讨论，且无小趣创作助手', (tester) async {
       WebShellTestHarness.suppressExpectedErrors();
       WebShellTestHarness.useWideViewport(tester);
 
@@ -43,7 +43,7 @@ void main() {
         findsOneWidget,
       );
 
-      // 社交关系组：发起群聊 / 添加联系人 / 创建圈子。
+      // 社交关系组：发起讨论 / 添加联系人 / 创建圈子。
       expect(
         find.byKey(const ValueKey<String>('web-create-card-group-chat')),
         findsOneWidget,

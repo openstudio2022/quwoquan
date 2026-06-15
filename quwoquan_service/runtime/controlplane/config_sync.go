@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	rterr "quwoquan_service/runtime/errors"
 )
 
 type RateLimitSetter interface {
@@ -34,6 +36,12 @@ func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 
 	client := NewClient(baseURL, &http.Client{Timeout: 4 * time.Second})
 	snapshotPath := defaultSnapshotPath(opts.ConfigRoot, opts.ServiceName, opts.InstanceID)
+
+	// 注册运营态错误提示语 override 解析器：闭包持有 HotStore 引用，每次错误出口实时查表，
+	// 热配置变更后无需重启即生效；未命中回退 codegen 静态 baseline。
+	if opts.HotStore != nil {
+		rterr.SetUserMessageResolver(NewErrorMessageResolver(opts.HotStore))
+	}
 
 	applyRuntimeSettings := func() {
 		if opts.HotStore == nil {

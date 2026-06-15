@@ -5,7 +5,10 @@
 .PHONY: verify-chat-avatar-commercial-matrix
 .PHONY: run-chat-avatar-commercial-matrix-local
 .PHONY: verify-app-mock-isolation
+.PHONY: verify-app-concept-naming
 .PHONY: verify-app-auth-policy
+.PHONY: verify-app-domain-error-code-registry
+.PHONY: verify-app-behavior-error-stack-convergence
 .PHONY: verify-app-login-entry-loop-contract
 .PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
@@ -33,10 +36,10 @@
 .PHONY: probe-avatar-user-pool-gateway
 .PHONY: verify-business-env-data-inventory
 .PHONY: verify-quwoquan-data
-.PHONY: verify-markdown-article-no-article-document
+.PHONY: verify-markdown-article-no-article-document verify-article-contract-purity
 .PHONY: verify-app-env-package
 .PHONY: verify-service-env-package
-.PHONY: verify-env-topology
+.PHONY: verify-env-topology verify-prod-plane-access-isolation
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
 .PHONY: verify-sms-otp-fail-open-gate
@@ -57,6 +60,8 @@
 .PHONY: beta-status
 .PHONY: verify
 .PHONY: verify-global-increment-constraints
+.PHONY: verify-agent-context-contract
+.PHONY: verify-data-role-gate-inventory
 .PHONY: codegen
 .PHONY: codegen-app
 .PHONY: codegen-ops-portal
@@ -81,6 +86,23 @@
 # 客户端：UI/App/Core 不得直连 cloud/services/*/mock（过渡期见 specs/gates/ui_mock_isolation_allowlist.yaml）
 verify-app-mock-isolation:
 	@python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
+
+verify-app-concept-naming:
+	@python3 quwoquan_app/scripts/runtime/verify_concept_naming.py
+
+# 端云错误码全集一致：云 errors.yaml code 集 == 客户端生成 *ErrorCode 枚举集
+verify-app-error-endcloud-parity:
+	@python3 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py
+
+verify-app-domain-error-code-registry:
+	@python3 quwoquan_app/scripts/runtime/verify_domain_error_code_registry.py
+
+verify-app-behavior-error-stack-convergence:
+	@python3 quwoquan_app/scripts/runtime/verify_behavior_error_stack_convergence.py
+
+# recovery 对齐：errors.yaml recovery_action -> 生成 Go .WithRecovery（factory 风格域）
+verify-service-error-recovery-alignment:
+	@python3 quwoquan_service/scripts/verify/verify_error_recovery_alignment.py
 
 # API 鉴权契约：security.auth_mode 真相源与端侧鉴权快照一致，核心受限入口必须 required
 verify-app-auth-policy:
@@ -133,6 +155,9 @@ verify-business-env-data-inventory:
 verify-quwoquan-data:
 	@bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh
 
+verify-data-role-gate-inventory:
+	@python3 quwoquan_data/scripts/cli.py verify data-role-gate
+
 verify-data-release-consistency:
 	@if [ -z "$(RELEASE_FILE)" ]; then \
 		echo "FAIL: RELEASE_FILE is required. Example: make verify-data-release-consistency RELEASE_FILE=quwoquan_data/publish/env_releases/<releaseId>/gamma.json"; \
@@ -151,6 +176,9 @@ verify-sms-otp-fail-open-gate:
 
 verify-markdown-article-no-article-document:
 	@python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py
+
+verify-article-contract-purity:
+	@python3 quwoquan_app/scripts/content/verify_article_contract_purity.py
 
 .PHONY: verify-quwoquan-data-stages
 verify-quwoquan-data-stages:
@@ -175,6 +203,9 @@ verify-service-env-package:
 
 verify-env-topology:
 	@python3 agent_ops/gate/verify_environment_topology_manifest.py
+
+verify-prod-plane-access-isolation:
+	@python3 agent_ops/gate/verify_prod_plane_access_isolation.py
 
 verify-local-port-manifest:
 	@python3 agent_ops/gate/verify_local_env_port_manifest.py
@@ -269,7 +300,7 @@ stackctl-status:
 
 stackctl-health:
 	@if [ -z "$(TARGET)" ]; then \
-		echo "FAIL: TARGET is required. Example: make stackctl-health TARGET=gamma-hosted"; \
+		echo "FAIL: TARGET is required. Example: make stackctl-health TARGET=prod-hosted"; \
 		exit 2; \
 	fi
 	@python3 agent_ops/deploy/stackctl.py health --target "$(TARGET)" --scope "$(or $(SCOPE),full)"
@@ -380,12 +411,16 @@ verify-app-cloud-tag-strict-typing:
 verify-global-increment-constraints:
 	@bash agent_ops/scaffold/verify_global_increment_constraints.sh
 
+verify-agent-context-contract:
+	@python3 agent_ops/gate/verify_agent_context_contract.py
+
 # 助手手写（排除 generated）+ search_repository：Map/dynamic 计数棘轮（见 specs/gates/assistant_search_weak_typing_governance.md）
 verify-app-assistant-search-weak-typing-ratchet:
 	@python3 agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py
 
 gate:
 	@$(MAKE) verify-global-increment-constraints
+	@$(MAKE) verify-agent-context-contract
 	@bash quwoquan_service/scripts/deploy/verify_deployment_domain_mapping.sh
 	@bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
 	@$(MAKE) verify-workload-topology-inventory
@@ -393,6 +428,7 @@ gate:
 	@$(MAKE) verify-avatar-user-pool
 	@$(MAKE) probe-avatar-user-pool-gateway
 	@$(MAKE) verify-markdown-article-no-article-document
+	@$(MAKE) verify-article-contract-purity
 	@bash quwoquan_service/scripts/deploy/report_deployment_mapping_impact.sh
 	@bash agent_ops/gate/gate_repo.sh
 
@@ -441,6 +477,7 @@ run-chat-avatar-commercial-matrix-local:
 
 verify:
 	@$(MAKE) verify-global-increment-constraints
+	@$(MAKE) verify-agent-context-contract
 	@bash agent_ops/scaffold/verify_feature_traceability.sh
 	@bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
 	@bash agent_ops/scaffold/verify_acceptance_standard.sh
@@ -524,7 +561,7 @@ config-slo-gate:
 	fi
 	@bash agent_ops/deploy/prod/config_release_slo_gate.sh --error-rate "$(ERROR_RATE)" --p95-ms "$(P95_MS)" --redis-error-rate "$(REDIS_ERROR_RATE)"
 
-.PHONY: l2-content gate-full test-api-contract test-api-contract-chat gamma-validate-smoke-full gamma-validate-ui-full gamma-validate-full
+.PHONY: l2-content gate-full test-api-contract test-api-contract-chat
 
 # 本地 L2 契约测试（content-service，需 MongoDB 在 localhost:27017）
 # 提交前运行以避免 CI 失败。详见 .cursor/rules/03-testing.mdc §2.1
@@ -577,69 +614,16 @@ test-api-contract-chat:
 # PR 日常开发用 make gate；pre-release 用 make gate-full。
 gate-full:
 	@bash agent_ops/gate/gate_repo.sh
-	@if [ -n "$${GAMMA_BASE_URL:-}" ] && [ -n "$${GAMMA_PRODUCT_OPS_BASE_URL:-}" ]; then \
-		$(MAKE) test-api-contract; \
+	@if [ -n "$${PROD_BASE_URL:-}" ] && [ -n "$${PROD_PRODUCT_OPS_BASE_URL:-}" ]; then \
+		echo "[gate-full] PROD_* set; running prod remote API contract (remote gamma retired)"; \
+		$(MAKE) test-api-contract API_CONTRACT_ENV=prod; \
 	else \
-		echo "[gate-full] GAMMA_* not set; running local gamma T3/T4 mirror gate"; \
+		echo "[gate-full] PROD_* not set; running local gamma T3/T4 mirror gate"; \
 		$(MAKE) gate-local-gamma LOCAL_GAMMA_SKIP_GATE=1; \
 	fi
 
-gamma-validate-smoke-full:
-	@TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}"; \
-	if [ -z "$${GAMMA_BASE_URL:-}" ] || [ -z "$${GAMMA_PRODUCT_OPS_BASE_URL:-}" ] || [ -z "$$TOKEN" ]; then \
-		echo "FAIL: GAMMA_BASE_URL / GAMMA_PRODUCT_OPS_BASE_URL / GAMMA_TEST_AUTH_TOKEN(or TEST_AUTH_TOKEN) are required"; \
-		exit 2; \
-	fi; \
-	python3 quwoquan_service/scripts/gamma/verify_gamma_environment_ready.py \
-		--base-url "$${GAMMA_BASE_URL}" \
-		--product-ops-base-url "$${GAMMA_PRODUCT_OPS_BASE_URL}" \
-		--report artifacts/gamma-validation/smoke/readiness.json && \
-	( \
-		cd quwoquan_app && \
-		flutter pub get && \
-		python3 scripts/env/run_flutter_test_guarded.py test/common/assistant/assistant_environment_smoke_test.dart \
-			--dart-define=APP_RUNTIME_ENV=gamma \
-			--dart-define=APP_DATA_SOURCE=remote \
-			--dart-define=CLOUD_GATEWAY_BASE_URL="$${GAMMA_BASE_URL}" \
-			--dart-define=ASSISTANT_SMOKE_PROFILE=full_semantic \
-			--dart-define=ASSISTANT_SMOKE_MAX_TICKS=$${ASSISTANT_SMOKE_MAX_TICKS:-1500} \
-			--dart-define=ASSISTANT_SMOKE_MAX_IDLE_TICKS=$${ASSISTANT_SMOKE_MAX_IDLE_TICKS:-180} \
-	) && \
-	python3 agent_ops/avatar/run_chat_avatar_e2e_probe.py \
-		--env cloud-gamma-full \
-		--base-url "$${GAMMA_BASE_URL}" \
-		--media-base-url "$${MEDIA_AVATAR_CDN_BASE_URL:-$${GAMMA_BASE_URL}}" \
-		--test-auth-token "$$TOKEN" \
-		--report artifacts/gamma-validation/smoke/chat_avatar_api_probe.json
-
-gamma-validate-ui-full:
-	@TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}"; \
-	if [ -z "$${GAMMA_BASE_URL:-}" ] || [ -z "$${GAMMA_PRODUCT_OPS_BASE_URL:-}" ] || [ -z "$$TOKEN" ]; then \
-		echo "FAIL: GAMMA_BASE_URL / GAMMA_PRODUCT_OPS_BASE_URL / GAMMA_TEST_AUTH_TOKEN(or TEST_AUTH_TOKEN) are required"; \
-		exit 2; \
-	fi; \
-	python3 quwoquan_service/scripts/gamma/verify_gamma_environment_ready.py \
-		--base-url "$${GAMMA_BASE_URL}" \
-		--product-ops-base-url "$${GAMMA_PRODUCT_OPS_BASE_URL}" \
-		--report artifacts/gamma-validation/ui/readiness.json && \
-	python3 agent_ops/deploy/gamma/run_gamma_patrol_profile.py \
-		--profile "$${GAMMA_UI_PROFILE:-nightly_full}" \
-		--report "artifacts/gamma-validation/ui/$${GAMMA_UI_PROFILE:-nightly_full}/report.json" \
-		--gateway-base-url "$${GAMMA_BASE_URL}" \
-		--product-ops-base-url "$${GAMMA_PRODUCT_OPS_BASE_URL}" \
-		--test-auth-token "$$TOKEN" \
-		--platform "$${GAMMA_UI_PLATFORM:-all}"
-
-gamma-validate-full:
-	@$(MAKE) gamma-validate-smoke-full
-	@$(MAKE) gamma-validate-ui-full
-
-# Deploy to beta/gamma integration K8s. CLOUD_PROVIDER=aliyun|volcengine|huaweicloud (default: aliyun).
+# Deploy to beta integration K8s. CLOUD_PROVIDER=aliyun|volcengine|huaweicloud (default: aliyun).
 # Usage: make deploy-beta-k8s [CLOUD_PROVIDER=volcengine]
-#        make deploy-gamma-k8s [CLOUD_PROVIDER=volcengine]
-.PHONY: deploy-beta-k8s deploy-gamma-k8s
+.PHONY: deploy-beta-k8s
 deploy-beta-k8s:
 	@bash agent_ops/deploy/beta/deploy_beta_k8s.sh
-deploy-gamma-k8s:
-	@bash agent_ops/deploy/gamma/deploy_gamma_k8s.sh
-

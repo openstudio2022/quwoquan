@@ -34,7 +34,7 @@ description: 归一化工作流 · 单来源抓取与原始 bundle 落盘
 ## 真实实现
 
 ```bash
-python3 quwoquan_data/tools/cli.py data source-fetch \
+python3 quwoquan_data/scripts/cli.py data source-fetch \
   --batch-label "<batch>" \
   --source-url "<url>" \
   --page-title "<page title>" \
@@ -46,7 +46,7 @@ python3 quwoquan_data/tools/cli.py data source-fetch \
 ## 结构化检查
 
 ```bash
-python3 quwoquan_data/tools/cli.py data normalize-validate-output --stage fetch --result "<result.json>"
+python3 quwoquan_data/scripts/cli.py data normalize-validate-output --stage fetch --result "<result.json>"
 ```
 
 ## 输出
@@ -65,9 +65,13 @@ python3 quwoquan_data/tools/cli.py data normalize-validate-output --stage fetch 
 - 页面抓取失败：重试或更换来源 URL
 - 图片抓取失败：保留页面 bundle，后续可单独补抓图片
 
+自然语言等价触发：用户说“抓这个来源”“落 source bundle”“补 source.md/asset manifest”时，也按本命令语义执行。
+
 ## Trace Keys
 
 - `sourceUrl`
 - `pageTitle`
 - `sourceMarkdownPath`
 - `catalogTopicId`
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

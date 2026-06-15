@@ -26,7 +26,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -43,11 +45,18 @@ for _p in (_DATA_ROOT, _DATA_SCRIPTS):
 
 from _common import fanout_plan as fp  # noqa: E402
 from _common import fanout_strategies as fs  # noqa: E402
+from _common.article_package import compute_document_sha256, sha256_file, sha256_text  # noqa: E402
+from _common.draft_io import draft_article_path, draft_meta_path, prompt_path, read_draft_meta, writing_pack_path  # noqa: E402
+from _common.io import read_json, write_json  # noqa: E402
+from _common.paths import batch_root, fanout_run_matrix_path, relative_batch_ref  # noqa: E402
 from task import object_queue as oq  # noqa: E402
 
 # startup 失败/运行失败的退避基数（秒）。
 STARTUP_BACKOFF_BASE = 5
 MAX_STARTUP_RETRIES = 3
+_RUN_MATRIX_LOCK = threading.Lock()
+ASSIGNMENT_MIN_POLL_SECONDS = 0.05
+ASSIGNMENT_MAX_BACKOFF_WAIT_SECONDS = 900.0
 
 # 分区 orchestrator 必须推进到位的三个 checkpoint（plan Phase C 缺口）。
 ORCHESTRATOR_CHECKPOINTS = ("download_plan", "build_homepage", "content_plan")
@@ -73,6 +82,7 @@ class RunOutcome:
     retryable: bool = False
     agent_id: str | None = None
     run_id: str | None = None
+    envelope_path: str | None = None
 
 
 AgentRunner = Callable[[Mapping[str, Any]], RunOutcome]
@@ -93,6 +103,9 @@ class OrchestrationResult:
     reached: bool
     missing: list[str] = field(default_factory=list)
     error: str | None = None
+    run_id: str | None = None
+    agent_id: str | None = None
+    prepared_refs: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -101,20 +114,24 @@ class WorkerStats:
     leased: int = 0
     completed: int = 0
     failed: int = 0
+    attempt_failures: int = 0
     startup_failures: int = 0
     orchestrated: int = 0
     orchestration_failed: int = 0
     refs_completed: list[str] = field(default_factory=list)
     refs_failed: list[str] = field(default_factory=list)
     orchestrations: list[OrchestrationResult] = field(default_factory=list)
+    run_records: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _build_prompt(packet: Mapping[str, Any]) -> str:
     """把 lease packet 渲染为 cloud agent 的执行 prompt（含执行合约 + Ralph 出口门）。"""
     contract = packet.get("executionContract") or {}
+    object_refs = packet.get("objectPacketRefs") or {}
     return (
         f"你是单篇内容创作 Subagent。严格隔离：{packet.get('isolation')}\n"
         f"目标 ref: {packet.get('ref')} / stage: {packet.get('stage')}\n"
+        f"对象目录: {object_refs.get('contentObjectDir') or '(见 author_job_packet.contentObjectDir)'}\n"
         f"执行合约（必须全部满足）：\n{json.dumps(contract, ensure_ascii=False, indent=2)}\n"
         f"Ralph 自纠环：{packet.get('ralphLoop')}\n"
         f"完成判据：ref_review_gate.passed == true（reviewDecision == approved）。"
@@ -124,6 +141,37 @@ def _build_prompt(packet: Mapping[str, Any]) -> str:
 RUNTIME_LOCAL = "local"
 RUNTIME_CLOUD = "cloud"
 VALID_RUNTIMES = (RUNTIME_LOCAL, RUNTIME_CLOUD)
+
+
+def _git_output(args: list[str], *, cwd: str | None = None) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=cwd or str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"git {' '.join(args)} failed")
+    return result.stdout.strip()
+
+
+def _default_cloud_repos(cwd: str | None) -> list[dict[str, Any]]:
+    repo_cwd = cwd or str(_REPO_ROOT)
+    remote = _git_output(["remote", "get-url", "origin"], cwd=repo_cwd)
+    branch = _git_output(["branch", "--show-current"], cwd=repo_cwd)
+    if not remote:
+        raise RuntimeError("git origin remote missing for cloud runtime")
+    if remote.startswith("git@"):
+        host_and_path = remote[4:]
+        if ":" in host_and_path:
+            host, path = host_and_path.split(":", 1)
+            host = host.replace("-quwoquan", "")
+            remote = f"https://{host}/{path}"
+    repo: dict[str, Any] = {"url": remote}
+    if branch:
+        repo["startingRef"] = branch
+    return [repo]
 
 
 def _build_agent_options(
@@ -146,11 +194,36 @@ def _build_agent_options(
             model=model,
             local=LocalAgentOptions(cwd=cwd or os.getcwd()),
         )
+    resolved_repos = repos or _default_cloud_repos(cwd)
     return AgentOptions(
         api_key=api_key,
         model=model,
-        cloud=CloudAgentOptions(repos=repos or []),
+        cloud=CloudAgentOptions(repos=resolved_repos),
     )
+
+
+def _discover_result_envelope(packet: Mapping[str, Any]) -> str | None:
+    """Find the canonical AgentResultEnvelope written by a local Agent run."""
+    if not bool(packet.get("resultEnvelopeRequired")):
+        return None
+    try:
+        root = batch_root(str(packet["taskId"]), str(packet["batchId"]))
+    except Exception:  # noqa: BLE001
+        return None
+    job_id = str(packet.get("jobId") or "").strip()
+    candidates = []
+    if job_id:
+        candidates.extend(
+            [
+                root / "_shared" / "envelopes" / f"{job_id}.json",
+                root / "_shared" / "agent_result_envelopes" / f"{job_id}.json",
+            ]
+        )
+    candidates.append(root / "_shared" / "agent_result_envelope.json")
+    for path in candidates:
+        if path.is_file():
+            return str(path)
+    return None
 
 
 def default_agent_runner(
@@ -194,6 +267,7 @@ def default_agent_runner(
         passed=status == "finished",
         agent_id=getattr(result, "agent_id", None),
         run_id=getattr(result, "id", None),
+        envelope_path=_discover_result_envelope(packet),
         error=None if status == "finished" else f"run status={status}",
     )
 
@@ -319,14 +393,143 @@ def _missing_orchestrator_checkpoints(task_id: str, batch_id: str) -> list[str]:
     return [c for c in ORCHESTRATOR_CHECKPOINTS if c not in completed]
 
 
+def _load_run_matrix(plan_id: str) -> dict[str, Any]:
+    path = fanout_run_matrix_path(plan_id)
+    if not path.is_file():
+        return {
+            "schemaVersion": "quwoquan_data.fanout_run_matrix/1",
+            "planId": plan_id,
+            "orchestrators": [],
+            "refs": {},
+            "workers": [],
+        }
+    data = read_json(path)
+    if not isinstance(data, dict):
+        return {
+            "schemaVersion": "quwoquan_data.fanout_run_matrix/1",
+            "planId": plan_id,
+            "orchestrators": [],
+            "refs": {},
+            "workers": [],
+        }
+    data.setdefault("schemaVersion", "quwoquan_data.fanout_run_matrix/1")
+    data.setdefault("planId", plan_id)
+    data.setdefault("orchestrators", [])
+    data.setdefault("refs", {})
+    data.setdefault("workers", [])
+    return data
+
+
+def _save_run_matrix(plan_id: str, matrix: Mapping[str, Any]) -> None:
+    path = fanout_run_matrix_path(plan_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(path, dict(matrix))
+
+
+def _upsert_ref_run_record(
+    plan_id: str,
+    *,
+    ref: str,
+    record: Mapping[str, Any],
+) -> None:
+    if not plan_id:
+        return
+    with _RUN_MATRIX_LOCK:
+        matrix = _load_run_matrix(plan_id)
+        refs = dict(matrix.get("refs") or {})
+        refs[ref] = dict(record)
+        matrix["refs"] = refs
+        _save_run_matrix(plan_id, matrix)
+
+
+def _append_orchestrator_record(
+    plan_id: str,
+    record: Mapping[str, Any],
+) -> None:
+    if not plan_id:
+        return
+    with _RUN_MATRIX_LOCK:
+        matrix = _load_run_matrix(plan_id)
+        rows = list(matrix.get("orchestrators") or [])
+        rows.append(dict(record))
+        matrix["orchestrators"] = rows
+        _save_run_matrix(plan_id, matrix)
+
+
+def _replace_worker_records(plan_id: str, records: list[Mapping[str, Any]]) -> None:
+    if not plan_id:
+        return
+    with _RUN_MATRIX_LOCK:
+        matrix = _load_run_matrix(plan_id)
+        matrix["workers"] = [dict(record) for record in records]
+        _save_run_matrix(plan_id, matrix)
+
+
+def _source_bundle_sha(task_id: str, batch_id: str, paths: list[str]) -> str | None:
+    if not paths:
+        return None
+    base = batch_root(task_id, batch_id)
+    payload: list[dict[str, Any]] = []
+    for rel in paths:
+        candidate = base / rel
+        if not candidate.is_file():
+            continue
+        payload.append({"path": rel, "sha256": sha256_file(candidate)})
+    if not payload:
+        return None
+    return sha256_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+
+
+def _backfill_draft_meta_run_context(
+    task_id: str,
+    batch_id: str,
+    ref: str,
+    *,
+    outcome: RunOutcome,
+) -> dict[str, Any] | None:
+    try:
+        path = draft_meta_path(task_id, batch_id, ref)
+    except KeyError:
+        return None
+    if not path.is_file():
+        return None
+    meta = read_draft_meta(task_id, batch_id, ref) or {}
+    try:
+        article_path = draft_article_path(task_id, batch_id, ref)
+        wp_path = writing_pack_path(task_id, batch_id, ref)
+        pr_path = prompt_path(task_id, batch_id, ref)
+    except KeyError:
+        return None
+    prompt_digest = sha256_file(pr_path) if pr_path.is_file() else None
+    wp_digest = sha256_file(wp_path) if wp_path.is_file() else None
+    draft_digest = compute_document_sha256(article_path.read_text(encoding="utf-8")) if article_path.is_file() else None
+    source_digest = _source_bundle_sha(task_id, batch_id, [str(x) for x in (meta.get("citedSourcePaths") or []) if x])
+    session_trace = str(meta.get("sessionTrace") or "").strip()
+    session_parts = [part for part in (session_trace, outcome.agent_id, outcome.run_id) if part]
+    meta["sessionTrace"] = " / ".join(session_parts) if session_parts else None
+    meta["agentRunId"] = outcome.run_id
+    meta["agentId"] = outcome.agent_id
+    if prompt_digest:
+        meta["promptSha256"] = prompt_digest
+    if wp_digest:
+        meta["writingPackSha256"] = wp_digest
+    if source_digest:
+        meta["sourceBundleSha256"] = source_digest
+    if draft_digest:
+        meta["draftSha256"] = draft_digest
+    write_json(path, meta)
+    return meta
+
+
 def orchestrate_partition(
     target: Mapping[str, Any],
     *,
     orchestrator_runner: OrchestratorRunner,
     partition_path: list[str] | None = None,
     refs: list[str] | None = None,
+    force_refs: list[str] | None = None,
     until: str = ORCHESTRATOR_UNTIL,
-    verify_checkpoints: bool = True,
+    plan: Mapping[str, Any] | None = None,
 ) -> OrchestrationResult:
     """拉起一个分区 orchestrator，推进三个 checkpoint，并以 workflow_state 校验是否到位。"""
     task_id = str(target["taskId"])
@@ -337,20 +540,28 @@ def orchestrate_partition(
         return OrchestrationResult(
             task_id=task_id, batch_id=batch_id, started=False, reached=False,
             missing=list(ORCHESTRATOR_CHECKPOINTS), error=f"startup: {outcome.error}",
-        )
-    if not verify_checkpoints:
-        # dry-run / 自检：不读真相源，按 run 终态判定。
-        reached = outcome.status == "finished" and outcome.passed
-        return OrchestrationResult(
-            task_id=task_id, batch_id=batch_id, started=True, reached=reached,
-            missing=[] if reached else list(ORCHESTRATOR_CHECKPOINTS),
-            error=outcome.error,
+            run_id=outcome.run_id, agent_id=outcome.agent_id,
         )
     missing = _missing_orchestrator_checkpoints(task_id, batch_id)
+    prepared_refs: list[str] = []
+    if not missing and plan is not None:
+        from task import fanout_dispatch as fd  # noqa: E402
+
+        prepared = fd.sync_content_author_jobs(
+            plan,
+            target,
+            partition_path=partition_path,
+            refs=refs,
+            force_refs=force_refs,
+        )
+        prepared_refs = list(prepared.get("preparedRefs") or [])
     return OrchestrationResult(
         task_id=task_id, batch_id=batch_id, started=True, reached=not missing,
         missing=missing,
         error=outcome.error if missing else None,
+        run_id=outcome.run_id,
+        agent_id=outcome.agent_id,
+        prepared_refs=prepared_refs,
     )
 
 
@@ -360,6 +571,7 @@ def _process_job(
     *,
     agent_runner: AgentRunner,
     stats: WorkerStats,
+    plan_id: str,
 ) -> None:
     task_id = str(target["taskId"])
     batch_id = str(target["batchId"])
@@ -368,33 +580,226 @@ def _process_job(
     ref = str(job["ref"])
     packet = oq.build_lease_packet(job)
     outcome = agent_runner(packet)
+    record: dict[str, Any] = {
+        "ref": ref,
+        "taskId": task_id,
+        "batchId": batch_id,
+        "worker": stats.worker,
+        "jobId": job_id,
+        "status": "running",
+        "attempt": job.get("attempt"),
+        "agentRunId": outcome.run_id,
+        "agentId": outcome.agent_id,
+        "started": outcome.started,
+    }
 
     if outcome.tokens or outcome.cost_usd:
         usage_job = oq.record_usage(task_id, batch_id, job_id, lease, tokens=outcome.tokens, cost_usd=outcome.cost_usd)
+        record["tokens"] = outcome.tokens
+        record["costUsd"] = outcome.cost_usd
         # 用量超预算时 record_usage 已强制 dead 并清空 lease：不能再 complete/fail（lease 失配）。
         if usage_job.get("state") in (oq.STATE_DEAD, oq.STATE_FAILED) or usage_job.get("lease") != lease:
+            stats.attempt_failures += 1
             stats.failed += 1
             stats.refs_failed.append(ref)
+            record["status"] = str(usage_job.get("state") or "failed")
+            record["error"] = str(usage_job.get("lastError") or "budget_exceeded")
+            stats.run_records.append(record)
+            _upsert_ref_run_record(plan_id, ref=ref, record=record)
             return
 
     if not outcome.started:
         # 启动失败：从未执行，按 retryable 退避；fail_job 走退避/dead 状态机。
-        stats.startup_failures += 1
-        oq.fail_job(task_id, batch_id, job_id, lease, error=f"startup: {outcome.error}")
+        retryable_startup = bool(outcome.retryable)
+        startup_attempt = int(job.get("attempt") or 0)
+        if retryable_startup and startup_attempt < MAX_STARTUP_RETRIES:
+            time.sleep(STARTUP_BACKOFF_BASE * startup_attempt)
+            oq.fail_job(
+                task_id,
+                batch_id,
+                job_id,
+                lease,
+                error=f"startup: {outcome.error}",
+                same_run_retryable=True,
+                startup_failure=True,
+            )
+        else:
+            stats.startup_failures += 1
+            oq.fail_job(
+                task_id,
+                batch_id,
+                job_id,
+                lease,
+                error=f"startup: {outcome.error}",
+                same_run_retryable=False,
+                startup_failure=True,
+            )
+        record["status"] = "startup_failed"
+        record["error"] = outcome.error
+        stats.run_records.append(record)
+        _upsert_ref_run_record(plan_id, ref=ref, record=record)
         return
 
     if outcome.status == "finished" and outcome.passed:
-        oq.complete_job(task_id, batch_id, job_id, lease)
+        if outcome.envelope_path:
+            completed_job = oq.complete_job_with_envelope(
+                task_id,
+                batch_id,
+                job_id,
+                lease,
+                envelope_path=outcome.envelope_path,
+                workspace_root=batch_root(task_id, batch_id),
+            )
+            record["resultEnvelopeRef"] = completed_job.get("resultEnvelopeRef")
+        elif packet.get("resultEnvelopeRequired"):
+            completed_job = oq.fail_job(
+                task_id,
+                batch_id,
+                job_id,
+                lease,
+                error="missing result envelope",
+                fingerprint=oq.issues_fingerprint(["missing result envelope"]),
+                same_run_retryable=True,
+            )
+        else:
+            completed_job = oq.complete_job(task_id, batch_id, job_id, lease)
+        if completed_job.get("state") != oq.STATE_SUCCEEDED:
+            stats.attempt_failures += 1
+            stats.failed += 1
+            stats.refs_failed.append(ref)
+            record["status"] = str(completed_job.get("state") or "failed")
+            record["error"] = str(completed_job.get("lastError") or "result envelope rejected")
+            record["fingerprint"] = (completed_job.get("failureFingerprints") or [None])[-1]
+            stats.run_records.append(record)
+            _upsert_ref_run_record(plan_id, ref=ref, record=record)
+            return
         stats.completed += 1
         stats.refs_completed.append(ref)
+        meta = _backfill_draft_meta_run_context(task_id, batch_id, ref, outcome=outcome) or {}
+        record["status"] = "succeeded"
+        try:
+            record["draftMetaPath"] = relative_batch_ref(draft_meta_path(task_id, batch_id, ref), task_id, batch_id)
+            record["draftPath"] = relative_batch_ref(draft_article_path(task_id, batch_id, ref), task_id, batch_id)
+        except KeyError:
+            pass
+        record["agentRunId"] = meta.get("agentRunId") or outcome.run_id
+        record["agentId"] = meta.get("agentId") or outcome.agent_id
+        record["sessionTrace"] = meta.get("sessionTrace")
+        record["promptSha256"] = meta.get("promptSha256")
+        record["writingPackSha256"] = meta.get("writingPackSha256")
+        record["sourceBundleSha256"] = meta.get("sourceBundleSha256")
+        record["draftSha256"] = meta.get("draftSha256")
+        stats.run_records.append(record)
+        _upsert_ref_run_record(plan_id, ref=ref, record=record)
     else:
+        stats.attempt_failures += 1
         stats.failed += 1
         stats.refs_failed.append(ref)
         oq.fail_job(
             task_id, batch_id, job_id, lease,
             error=outcome.error or "run failed",
             fingerprint=outcome.fingerprint,
+            same_run_retryable=True,
         )
+        record["status"] = "failed"
+        record["error"] = outcome.error or "run failed"
+        record["fingerprint"] = outcome.fingerprint
+        stats.run_records.append(record)
+        _upsert_ref_run_record(plan_id, ref=ref, record=record)
+
+
+def _collect_assignment_snapshot(
+    targets: list[Mapping[str, Any]],
+    *,
+    stage: str,
+    refs: list[str] | None,
+) -> dict[str, Any]:
+    aggregate = {
+        "total": 0,
+        "byState": {},
+        "waitableLive": 0,
+        "leaseableNow": 0,
+        "failedBackoffSameRun": 0,
+        "nextRetryEpoch": None,
+        "nextLeaseExpiryEpoch": None,
+        "nextDeadlineEpoch": None,
+    }
+    for target in targets:
+        snap = oq.queue_runtime_snapshot(
+            str(target["taskId"]),
+            str(target["batchId"]),
+            stage=stage,
+            refs=refs,
+        )
+        aggregate["total"] += int(snap.get("total") or 0)
+        aggregate["waitableLive"] += int(snap.get("waitableLive") or 0)
+        aggregate["leaseableNow"] += int(snap.get("leaseableNow") or 0)
+        aggregate["failedBackoffSameRun"] += int(snap.get("failedBackoffSameRun") or 0)
+        by_state = aggregate["byState"]
+        for state, count in dict(snap.get("byState") or {}).items():
+            by_state[state] = int(by_state.get(state) or 0) + int(count or 0)
+        for key in ("nextRetryEpoch", "nextLeaseExpiryEpoch", "nextDeadlineEpoch"):
+            value = snap.get(key)
+            if value is None:
+                continue
+            current = aggregate.get(key)
+            aggregate[key] = value if current is None else min(float(current), float(value))
+    return aggregate
+
+
+def _wait_seconds_for_snapshot(snapshot: Mapping[str, Any]) -> float | None:
+    """基于队列真相源决定当前 assignment 是否还应该继续等下一次 lease。"""
+    if int(snapshot.get("waitableLive") or 0) <= 0:
+        return None
+    if int(snapshot.get("leaseableNow") or 0) > 0:
+        return 0.0
+    now = time.time()
+    waits: list[float] = []
+    next_retry = snapshot.get("nextRetryEpoch")
+    if next_retry is not None:
+        waits.append(max(0.0, float(next_retry) - now))
+    next_lease_expiry = snapshot.get("nextLeaseExpiryEpoch")
+    if next_lease_expiry is not None:
+        waits.append(max(0.0, float(next_lease_expiry) - now))
+    next_deadline = snapshot.get("nextDeadlineEpoch")
+    if next_deadline is not None:
+        waits.append(max(0.0, float(next_deadline) - now))
+    if not waits:
+        # 仍有 waitableLive，但既不是 queued/failed(backoff)，也没有下一时间点；视为无需等待，交给上层收口。
+        return None
+    wait_for = max(min(waits), ASSIGNMENT_MIN_POLL_SECONDS)
+    return min(wait_for, ASSIGNMENT_MAX_BACKOFF_WAIT_SECONDS)
+
+
+def _collect_final_stage_refs(
+    units: list[Mapping[str, Any]],
+    *,
+    stage: str,
+    refs: list[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """按最终 object_queue 状态汇总整次 run 的 ref 终态（策略无关、避免多 worker 重复计数）。"""
+    completed: set[str] = set()
+    failed: set[str] = set()
+    seen_targets: set[tuple[str, str]] = set()
+    ref_filter = {str(ref) for ref in (refs or []) if str(ref).strip()} if refs else None
+    for unit in units:
+        key = (str(unit["taskId"]), str(unit["batchId"]))
+        if key in seen_targets:
+            continue
+        seen_targets.add(key)
+        for job in oq._load_jobs(key[0], key[1]):  # noqa: SLF001 - runner 汇总最终真相源
+            if job.get("stage") != stage:
+                continue
+            ref = str(job.get("ref") or "")
+            if ref_filter is not None and ref not in ref_filter:
+                continue
+            state = str(job.get("state") or "")
+            if state == oq.STATE_SUCCEEDED:
+                completed.add(ref)
+            elif state in (oq.STATE_FAILED, oq.STATE_DEAD, oq.STATE_BLOCKED):
+                failed.add(ref)
+    failed -= completed
+    return sorted(completed), sorted(failed)
 
 
 def run_assignment(
@@ -407,7 +812,9 @@ def run_assignment(
     ttl_seconds: int = oq.DEFAULT_LEASE_TTL_SECONDS,
     orchestrator_runner: OrchestratorRunner | None = None,
     orchestrator_until: str = ORCHESTRATOR_UNTIL,
-    verify_checkpoints: bool = True,
+    plan: Mapping[str, Any] | None = None,
+    refs_filter: list[str] | None = None,
+    force_refs: list[str] | None = None,
 ) -> WorkerStats:
     """一个 assignment = 一次 worker 拉起：循环 lease→agent→complete/fail 直到无活。
 
@@ -419,9 +826,33 @@ def run_assignment(
     """
     worker = worker or str(assignment.get("assignmentId") or "worker")
     stats = WorkerStats(worker=worker)
-    refs = list(assignment.get("refs") or [])
+    assignment_refs = list(assignment.get("refs") or [])
     targets = list(assignment.get("targets") or [])
     partition_path = list(assignment.get("partitionPath") or [])
+    use_assignment_refs = not bool(str((plan or {}).get("sourceTaskId") or "").strip())
+    requested_refs = [str(ref).strip() for ref in ((refs_filter or force_refs) or []) if str(ref).strip()]
+    requested_ref_set = set(requested_refs)
+    refs: list[str] | None
+    if requested_ref_set:
+        refs = [ref for ref in assignment_refs if ref in requested_ref_set] if use_assignment_refs else requested_refs
+    else:
+        refs = list(assignment_refs) if use_assignment_refs else None
+    force_ref_set = {str(ref) for ref in (force_refs or []) if str(ref).strip()}
+
+    if requested_ref_set and refs == [] and use_assignment_refs:
+        return stats
+
+    if plan is not None and not use_assignment_refs and orchestrator_runner is None:
+        from task import fanout_dispatch as fd  # noqa: E402
+
+        for target in targets:
+            fd.sync_content_author_jobs(
+                plan,
+                target,
+                partition_path=partition_path,
+                refs=refs,
+                force_refs=sorted(force_ref_set) if force_ref_set else None,
+            )
 
     if orchestrator_runner is not None:
         blocked: set[tuple[str, str]] = set()
@@ -431,10 +862,27 @@ def run_assignment(
                 orchestrator_runner=orchestrator_runner,
                 partition_path=partition_path,
                 refs=refs,
+                force_refs=sorted(force_ref_set) if force_ref_set else None,
                 until=orchestrator_until,
-                verify_checkpoints=verify_checkpoints,
+                plan=plan,
             )
             stats.orchestrations.append(res)
+            if plan is not None:
+                _append_orchestrator_record(
+                    str(plan.get("planId")),
+                    {
+                        "taskId": res.task_id,
+                        "batchId": res.batch_id,
+                        "worker": worker,
+                        "started": res.started,
+                        "reached": res.reached,
+                        "missing": list(res.missing),
+                        "error": res.error,
+                        "agentRunId": res.run_id,
+                        "agentId": res.agent_id,
+                        "preparedRefs": list(res.prepared_refs),
+                    },
+                )
             if res.reached:
                 stats.orchestrated += 1
             else:
@@ -445,9 +893,9 @@ def run_assignment(
         if not targets:
             return stats
 
-    guard = 0
-    while guard < max_jobs:
-        guard += 1
+    while stats.leased < max_jobs:
+        for target in targets:
+            oq.reap_jobs(str(target["taskId"]), str(target["batchId"]))
         job = None
         chosen_target = None
         for target in targets:
@@ -470,9 +918,25 @@ def run_assignment(
             if job is not None:
                 break
         if job is None:
-            break
+            snapshot = _collect_assignment_snapshot(
+                targets,
+                stage=stage,
+                refs=refs,
+            )
+            wait_seconds = _wait_seconds_for_snapshot(snapshot)
+            if wait_seconds is None:
+                break
+            if wait_seconds > 0:
+                time.sleep(wait_seconds)
+            continue
         stats.leased += 1
-        _process_job(chosen_target, job, agent_runner=agent_runner, stats=stats)
+        _process_job(
+            chosen_target,
+            job,
+            agent_runner=agent_runner,
+            stats=stats,
+            plan_id=str((plan or {}).get("planId") or ""),
+        )
     return stats
 
 
@@ -486,7 +950,8 @@ def run_fanout(
     max_workers: int = 0,
     orchestrator_runner: OrchestratorRunner | None = None,
     orchestrator_until: str = ORCHESTRATOR_UNTIL,
-    verify_checkpoints: bool = True,
+    refs: list[str] | None = None,
+    force_refs: list[str] | None = None,
 ) -> dict[str, Any]:
     """加载冻结计划 → 展开 assignment → 多 worker 执行。返回聚合统计。
 
@@ -500,6 +965,11 @@ def run_fanout(
         raise ValueError(f"plan not found: {plan_id}")
     expansion = fs.expand(plan, strategy=strategy, concurrency=concurrency)
     assignments = expansion["assignments"]
+    matrix = _load_run_matrix(plan_id)
+    matrix["strategy"] = expansion["strategy"]
+    matrix["concurrency"] = expansion["concurrency"]
+    matrix["assignments"] = len(assignments)
+    _save_run_matrix(plan_id, matrix)
 
     def _run(a: Mapping[str, Any]) -> WorkerStats:
         return run_assignment(
@@ -508,7 +978,9 @@ def run_fanout(
             stage=stage,
             orchestrator_runner=orchestrator_runner,
             orchestrator_until=orchestrator_until,
-            verify_checkpoints=verify_checkpoints,
+            plan=plan,
+            refs_filter=refs,
+            force_refs=force_refs,
         )
 
     if max_workers and max_workers > 1 and len(assignments) > 1:
@@ -518,28 +990,66 @@ def run_fanout(
         results = [_run(a) for a in assignments]
 
     orchestrations = [o for r in results for o in r.orchestrations]
+    final_refs_completed, final_refs_failed = _collect_final_stage_refs(expansion["units"], stage=stage, refs=refs)
+    total_attempt_failures = sum(r.attempt_failures for r in results)
+    total_completed = len(final_refs_completed)
+    total_failed = len(final_refs_failed)
+    total_startup_failures = sum(r.startup_failures for r in results)
+    total_orchestrated = sum(r.orchestrated for r in results)
+    total_orchestration_failed = sum(r.orchestration_failed for r in results)
+    final_matrix = _load_run_matrix(plan_id)
+    final_matrix["summary"] = {
+        "assignments": len(assignments),
+        "leased": sum(r.leased for r in results),
+        "completed": total_completed,
+        "failed": total_failed,
+        "attemptFailures": total_attempt_failures,
+        "startupFailures": total_startup_failures,
+        "orchestrated": total_orchestrated,
+        "orchestrationFailed": total_orchestration_failed,
+        "startupFailureRate": round((total_startup_failures / max(1, total_completed + total_failed)), 4),
+        "retryConvergence": round((total_completed / max(1, total_completed + total_failed)), 4),
+        "spilloverRate": 0.0,
+    }
+    worker_records = [
+        {
+            "worker": r.worker,
+            "leased": r.leased,
+            "completed": len(r.refs_completed),
+            "failed": len(r.refs_failed),
+            "refsCompleted": sorted(r.refs_completed),
+            "refsFailed": sorted(r.refs_failed),
+            "attemptFailures": r.attempt_failures,
+            "startupFailures": r.startup_failures,
+            "orchestrated": r.orchestrated,
+            "orchestrationFailed": r.orchestration_failed,
+        }
+        for r in results
+    ]
+    final_matrix["workers"] = worker_records
+    _save_run_matrix(plan_id, final_matrix)
     return {
         "planId": plan_id,
         "strategy": expansion["strategy"],
         "assignments": len(assignments),
         "leased": sum(r.leased for r in results),
-        "completed": sum(r.completed for r in results),
-        "failed": sum(r.failed for r in results),
-        "startupFailures": sum(r.startup_failures for r in results),
-        "orchestrated": sum(r.orchestrated for r in results),
-        "orchestrationFailed": sum(r.orchestration_failed for r in results),
+        "completed": total_completed,
+        "failed": total_failed,
+        "attemptFailures": total_attempt_failures,
+        "startupFailures": total_startup_failures,
+        "orchestrated": total_orchestrated,
+        "orchestrationFailed": total_orchestration_failed,
         "orchestrations": [
             {"taskId": o.task_id, "batchId": o.batch_id, "started": o.started,
              "reached": o.reached, "missing": o.missing, "error": o.error}
             for o in orchestrations
         ],
-        "refsCompleted": sorted([r for s in results for r in s.refs_completed]),
-        "refsFailed": sorted([r for s in results for r in s.refs_failed]),
+        "refsCompleted": final_refs_completed,
+        "refsFailed": final_refs_failed,
         "perWorker": [
-            {"worker": r.worker, "leased": r.leased, "completed": r.completed, "failed": r.failed,
-             "orchestrated": r.orchestrated, "orchestrationFailed": r.orchestration_failed}
-            for r in results
+            dict(record) for record in worker_records
         ],
+        "runMatrixPath": str(fanout_run_matrix_path(plan_id)),
     }
 
 
@@ -560,6 +1070,8 @@ def main(argv: list[str] | None = None) -> int:
         help="local runtime 的工作目录（默认仓库根）；多 worker 共享 cwd，文件写入由 object_queue mutex 隔离",
     )
     parser.add_argument("--spend-limit-usd", dest="spend_limit", type=float, default=None)
+    parser.add_argument("--refs", help="仅运行逗号分隔的 ref 列表（content-mode 为内容对象 ref）")
+    parser.add_argument("--force-refs", dest="force_refs", help="强制重跑逗号分隔的已成稿 ref")
     parser.add_argument(
         "--orchestrate",
         dest="orchestrate",
@@ -575,7 +1087,6 @@ def main(argv: list[str] | None = None) -> int:
         "--orchestrator-until", dest="orchestrator_until", default=ORCHESTRATOR_UNTIL,
         help=f"orchestrator 推进到的 stage（默认 {ORCHESTRATOR_UNTIL}）",
     )
-    parser.add_argument("--dry-run", action="store_true", help="不起真实 agent，只 lease→complete（连通性自检）")
     args = parser.parse_args(argv)
 
     # by-partition 默认开启 orchestrator（与策略语义一致）；其它策略默认关闭，除非显式 --orchestrate。
@@ -585,28 +1096,20 @@ def main(argv: list[str] | None = None) -> int:
     else:
         orchestrate = bool(args.orchestrate)
 
-    if args.dry_run:
-        def runner(_packet: Mapping[str, Any]) -> RunOutcome:
-            return RunOutcome(started=True, status="finished", passed=True)
-        orchestrator_runner: OrchestratorRunner | None = (
-            (lambda _p: RunOutcome(started=True, status="finished", passed=True))
-            if orchestrate else None
+    def runner(packet: Mapping[str, Any]) -> RunOutcome:
+        return default_agent_runner(
+            packet, model=args.model, runtime=args.runtime, cwd=args.cwd,
+            spend_limit_usd=args.spend_limit,
         )
-    else:
-        def runner(packet: Mapping[str, Any]) -> RunOutcome:
-            return default_agent_runner(
-                packet, model=args.model, runtime=args.runtime, cwd=args.cwd,
-                spend_limit_usd=args.spend_limit,
-            )
 
-        def orchestrator_runner(packet: Mapping[str, Any]) -> RunOutcome:  # type: ignore[misc]
-            return default_orchestrator_runner(
-                packet, model=args.model, runtime=args.runtime, cwd=args.cwd,
-                spend_limit_usd=args.spend_limit,
-            )
+    def orchestrator_runner(packet: Mapping[str, Any]) -> RunOutcome:  # type: ignore[misc]
+        return default_orchestrator_runner(
+            packet, model=args.model, runtime=args.runtime, cwd=args.cwd,
+            spend_limit_usd=args.spend_limit,
+        )
 
-        if not orchestrate:
-            orchestrator_runner = None  # type: ignore[assignment]
+    if not orchestrate:
+        orchestrator_runner = None  # type: ignore[assignment]
 
     report = run_fanout(
         args.plan,
@@ -617,8 +1120,8 @@ def main(argv: list[str] | None = None) -> int:
         max_workers=args.max_workers,
         orchestrator_runner=orchestrator_runner,
         orchestrator_until=args.orchestrator_until,
-        # dry-run 无法到达真实 checkpoint，跳过真相源校验；真实运行必须校验。
-        verify_checkpoints=not args.dry_run,
+        refs=[item.strip() for item in str(args.refs or "").split(",") if item.strip()] or None,
+        force_refs=[item.strip() for item in str(args.force_refs or "").split(",") if item.strip()] or None,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     # 退出码：运行失败或 orchestrator checkpoint 未到位=2，否则 0（startup 失败已退避入队，不视为致命）。

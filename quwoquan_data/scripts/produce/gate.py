@@ -31,7 +31,7 @@ def gate_produce(task_id: str, batch_id: str, content_type: str) -> list[str]:
         issues.append("No quality_analysis results produced")
     if not iter_stage_envelopes(task_id, batch_id, "produce", "review"):
         issues.append("No review results produced")
-    issues.extend(gate_media_check(task_id, batch_id))
+    issues.extend(gate_media_check(task_id, batch_id, allow_needs_review=True))
 
     post_dirs = _content_post_leaves(task_id, batch_id, content_type)
     if not post_dirs:

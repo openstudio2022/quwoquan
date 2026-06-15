@@ -32,6 +32,8 @@ LITE_REFS: dict[str, list[str]] = {
     ],
     "entity/test_fixtures/scenarios/entity_scenarios.json": [
         "entity_homepage_core",
+        "entity_claim_core",
+        "entity_picker_core",
     ],
     "integration/test_fixtures/scenarios/integration_scenarios.json": [
         "location_poi_core",

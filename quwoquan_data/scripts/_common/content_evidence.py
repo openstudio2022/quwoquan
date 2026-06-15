@@ -72,8 +72,29 @@ _FACT_CATEGORY_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("risk", ("风险", "路况", "落石", "雨季", "应急", "封山", "末班")),
     ("ticket", ("门票", "预约", "开放", "观光车")),
 )
-_POSITIVE_EMOTION_MARKERS = ("喜欢", "惊喜", "值", "值得", "震撼", "舒服", "推荐", "松弛")
-_NEGATIVE_EMOTION_MARKERS = ("累", "槽点", "麻烦", "失望", "排队", "高反", "后悔", "拥挤", "赶")
+_POSITIVE_EMOTION_MARKERS = ("喜欢", "愿意", "惊喜", "值", "值得", "震撼", "舒服", "推荐", "松弛", "治愈")
+_NEGATIVE_EMOTION_MARKERS = ("累", "怕", "槽点", "麻烦", "失望", "排队", "高反", "后悔", "拥挤", "赶", "湿滑")
+_SCENIC_VIEW_MARKERS = (
+    "日出",
+    "云海",
+    "佛光",
+    "圣灯",
+    "金顶",
+    "古木参天",
+    "清幽",
+    "景色",
+    "风景",
+)
+_SCENIC_APPRAISAL_MARKERS = (
+    "风景秀丽",
+    "天下秀",
+    "名胜云集",
+    "奇观",
+    "壮丽",
+    "美誉",
+    "景色优美",
+    "清静雅致",
+)
 _TRANSITION_MARKERS = (
     "先",
     "再",
@@ -91,6 +112,7 @@ _TRANSITION_MARKERS = (
     "下午",
 )
 _FORBIDDEN_EXCERPT_MARKERS = ("来源平台：", "url:", "platform:", "title:", "entity:", "retained:")
+_MANUAL_SOURCE_PLAN_RE = re.compile(r"(?mi)^manual_source_plan_note:\s.*$")
 
 
 def entity_names_from_refs(entity_refs: Sequence[str] | None) -> list[str]:
@@ -143,6 +165,7 @@ def anonymize_source_markdown(text: str) -> str:
             continue
         lines.append(line)
     cleaned = "\n".join(lines)
+    cleaned = _MANUAL_SOURCE_PLAN_RE.sub("", cleaned)
     cleaned = cleaned.replace("游记里还提到：", "")
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
@@ -226,8 +249,18 @@ def _fact_category(sentence: str) -> str | None:
     return None
 
 
+def _looks_like_scenic_admiration(sentence: str) -> bool:
+    if any(marker in sentence for marker in ("风景秀丽", "峨眉天下秀", "名胜云集", "景色优美")):
+        return True
+    scenic_hits = sum(1 for marker in _SCENIC_VIEW_MARKERS if marker in sentence)
+    appraisal_hits = sum(1 for marker in _SCENIC_APPRAISAL_MARKERS if marker in sentence)
+    return scenic_hits >= 2 and appraisal_hits >= 1
+
+
 def _classify_emotion(sentence: str) -> str | None:
     if any(marker in sentence for marker in _POSITIVE_EMOTION_MARKERS):
+        return "like"
+    if _looks_like_scenic_admiration(sentence):
         return "like"
     if any(marker in sentence for marker in _NEGATIVE_EMOTION_MARKERS):
         return "pain"
@@ -304,22 +337,43 @@ def extract_source_evidence(text: str, *, entity_name: str | None = None) -> dic
     }
 
 
-def _source_dirs_for_entity(task_id: str, batch_id: str, entity_name: str) -> list[Path]:
-    """优先对象同构来源单元（entities/**/{name}/1.download/sources/*）。"""
+def _source_dirs_for_entity(
+    task_id: str,
+    batch_id: str,
+    entity_name: str,
+    *,
+    entity_ref: str = "",
+) -> list[Path]:
+    """优先对象同构来源单元；有显式 entityRef 时禁止回退到按名字跨类型模糊搜。"""
     from _common.source_unit import find_entity_object_dirs, iter_source_units
 
     dirs: list[Path] = []
-    for obj in find_entity_object_dirs(task_id, batch_id, entity_name):
-        dirs.extend(iter_source_units(obj))
+    if entity_ref:
+        for obj in find_entity_object_dirs(task_id, batch_id, entity_ref):
+            dirs.extend(iter_source_units(obj))
+    else:
+        for obj in find_entity_object_dirs(task_id, batch_id, entity_name):
+            dirs.extend(iter_source_units(obj))
     if dirs:
         return dirs
     return []
 
 
-def load_source_records(task_id: str, batch_id: str, entity_names: Sequence[str]) -> list[dict[str, Any]]:
+def load_source_records(task_id: str, batch_id: str, entity_names: Sequence[str], entity_refs: Sequence[str] | None = None) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
+    ref_by_name: dict[str, str] = {}
+    for raw_ref in entity_refs or []:
+        ref = str(raw_ref or "").strip()
+        if not ref:
+            continue
+        ref_by_name.setdefault(ref.split("/")[-1], ref)
     for entity_name in entity_names:
-        for source_dir in _source_dirs_for_entity(task_id, batch_id, entity_name):
+        for source_dir in _source_dirs_for_entity(
+            task_id,
+            batch_id,
+            entity_name,
+            entity_ref=ref_by_name.get(entity_name, ""),
+        ):
             if not source_dir.is_dir():
                 continue
             source_md = source_dir / "source.md"
@@ -392,8 +446,11 @@ def build_route_evidence_bundle(
                 source_quality.append({**asdict(assessment), "entityName": entity_name})
             evidence = extract_source_evidence(str(row.get("text") or ""), entity_name=entity_name)
             fact_entries.extend(evidence.get("factEvidence", []))
-            emotion_entries.extend(evidence.get("emotionEvidence", []))
             mainline_entries.extend(evidence.get("mainlineEvidence", []))
+        # 诚实评价：Reject 源不进入后续加工，不再贡献情感/主线线索。
+        for row in retained_items:
+            evidence = extract_source_evidence(str(row.get("text") or ""), entity_name=entity_name)
+            emotion_entries.extend(evidence.get("emotionEvidence", []))
 
         node_likes = _unique_strings(
             (entry.get("sentence", "") for entry in emotion_entries if entry.get("kind") == "like"),

@@ -34,7 +34,7 @@ EMBEDDING_DIM = 64
 LEARNING_RATE = 0.001
 
 USER_FEATURE_KEYS = [
-    "engagementRate", "totalLikes", "totalFavorites", "totalShares", "totalEvents",
+    "engagementRate", "totalLikes", "totalShares", "totalEvents",
 ]
 ITEM_FEATURE_KEYS = [
     "ageHours", "viewCount", "likeCount", "commentCount", "shareCount",

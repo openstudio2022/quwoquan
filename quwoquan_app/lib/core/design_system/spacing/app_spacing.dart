@@ -29,6 +29,7 @@ class AppSpacing {
   static const double radiusTen = 10.0;
   static const double radiusEighteen = 18.0;
   static const double radiusTwenty = 20.0;
+  static const double radiusTwentyFour = 24.0;
   static const double radiusTwentyEight = 28.0;
   static const double radiusThirtyTwo = 32.0;
   static const double radiusNinetyNine = 99.0;
@@ -115,6 +116,85 @@ class AppSpacing {
   /// 小按钮尺寸: 32.0
   static const double smallButtonSize = 32.0;
 
+  /// 两状态登录品牌图标容器尺寸（完整应用图标：蓝底圆角 + 花瓣）。
+  static const double loginBrandMarkSize = 64.0;
+
+  /// 两状态登录品牌图标字号。
+  static const double loginBrandMarkIconSize = 36.0;
+
+  /// 两状态登录品牌图标圆角（≈ iOS 图标圆角比例 0.2237 * 尺寸）。
+  static const double loginBrandMarkRadius = 14.5;
+
+  /// 两状态登录 Account Area 固定高度（容纳加高输入框 + 发码后验证码区，保持各状态等高）。
+  /// 收紧到常见 iPhone 安全区一屏可容纳，避免底部"其他方式"被截断或触发滚动。
+  static const double loginAccountAreaHeight = 196.0;
+
+  /// 两状态登录已记住账号头像尺寸。
+  static const double loginAvatarSize = 72.0;
+
+  /// 两状态登录主按钮高度。
+  static const double loginPrimaryButtonHeight = 56.0;
+
+  /// 两状态登录其他方式圆形入口尺寸。
+  static const double loginOtherMethodSize = 46.0;
+
+  /// 两状态登录其他方式品牌图标字号（微信/QQ/支付宝/手机均为白色字形，圆内视觉较满）。
+  static const double loginOtherMethodIconSize = 17.0;
+
+  /// 手机号验证码输入框高度。
+  static const double loginPhoneFieldHeight = 56.0;
+
+  /// 验证码单格尺寸。
+  static const double loginOtpBoxSize = 48.0;
+
+  /// 验证码单格最小尺寸，窄屏下允许轻微收缩避免横向溢出。
+  static const double loginOtpBoxMinSize = 44.0;
+
+  /// 验证码单格间距。
+  static const double loginOtpBoxGap = 10.0;
+
+  /// 登录页整体最大内容宽度（iPhone 高保宽度内收敛，iPad/Web 居中）。
+  static const double loginFrameMaxWidth = 430.0;
+
+  /// 登录页左右安全边距。
+  static const double loginFrameHorizontalPadding = 28.0;
+
+  /// 登录页正文纵向边距。
+  static const double loginFrameVerticalPadding = 18.0;
+
+  /// 登录页顶部栏到品牌区距离。
+  static const double loginTopBarToHeroGap = 18.0;
+
+  /// 登录页品牌名到标题距离。
+  static const double loginBrandToTitleGap = 14.0;
+
+  /// 登录页标题到账号区距离。
+  static const double loginHeroToAccountGap = 24.0;
+
+  /// 登录页账号区到主按钮距离。
+  static const double loginAccountToButtonGap = 20.0;
+
+  /// 登录页主按钮到协议距离。
+  static const double loginButtonToAgreementGap = 20.0;
+
+  /// 登录页协议到其他登录方式距离。
+  static const double loginAgreementToOtherGap = 18.0;
+
+  /// 登录页其他方式标题到图标行距离。
+  static const double loginOtherTitleToIconsGap = 12.0;
+
+  /// 手机号输入初始态账号区高度，只容纳单行输入框，避免挤压首屏底部入口。
+  static const double loginPhoneIdleAccountAreaHeight = loginPhoneFieldHeight;
+
+  /// 登录页输入框圆角。
+  static const double loginInputRadius = 18.0;
+
+  /// 登录页验证码格圆角。
+  static const double loginOtpBoxRadius = 12.0;
+
+  /// 登录页返回账号态三列其他方式最大宽度。
+  static const double loginOtherMethodsThreeColumnWidth = 320.0;
+
   // ==================== 按钮语义尺寸（小、正常、中、大，不受容器约束） ====================
   /// 按钮高度 xs: 28.0
   static const double buttonHeightXs = 28.0;
@@ -139,6 +219,7 @@ class AppSpacing {
 
   /// 首页统一对象推荐卡最大宽度（横滑流内单卡上限，避免过宽）。
   static const double homeObjectCardMaxWidth = 260.0;
+
   /// 首页统一对象推荐卡横滑流固定高度（含两行文案 + 行动按钮触控余量）。
   static const double homeObjectCardRailHeight = 88.0;
   static const double objectIntersectionCardWideWidth = 132.0;
@@ -295,8 +376,8 @@ class AppSpacing {
   /// 圈子头像圆角比例（border-radius: 20%）
   static const double avatarCircleBorderRadiusRatio = 0.2;
 
-  /// 底部导航高度: 56.0
-  static const double bottomNavHeight = 56.0;
+  /// 底部导航高度: 54.0
+  static const double bottomNavHeight = 54.0;
 
   /// 标签导航高度: 48.0
   static const double tabNavigationHeight = 48.0;
@@ -325,9 +406,14 @@ class AppSpacing {
   static const double _primaryTabFontSize = 14.0;
 
   /// 主壳底部导航的响应式内容区高度（icon + gap + label 区域）。
-  /// 手机紧凑 50（与 iOS CupertinoTabBar 标准一致），平板/宽屏保持 56。
-  static double bottomNavBarHeight(BuildContext context) =>
-      responsiveValue(context, compact: 50.0, regular: 50.0, expanded: 56.0);
+  /// 在保留可读性的前提下压紧底栏垂直占位。
+  static double bottomNavBarHeight(BuildContext context) => responsiveWideValue(
+    context,
+    compact: 44.0,
+    regular: 46.0,
+    expanded: 48.0,
+    wide: 52.0,
+  );
 
   /// 工具栏统一上下内边距。
   /// 顶部/底部工具栏共享，让间距与顶部工具栏 label-to-underline 视觉距离一致。
@@ -622,6 +708,28 @@ class AppSpacing {
   /// 创作入口抽屉顶部拖拽手柄高度
   static const double createEntrySheetHandleHeight = 4.0;
 
+  /// 创作入口动作图标 halo 尺寸，低于旧 72px 以贴近底栏蓝白体系。
+  static const double createActionSheetActionHaloSize = 64.0;
+
+  /// 创作入口动作图标尺寸，保留 Fluent 线性图标的呼吸感。
+  static const double createActionSheetActionIconSize = 30.0;
+
+  /// 创作入口动作图标与短文案间距。
+  static const double createActionSheetActionLabelGap = containerSm;
+
+  /// 创作入口分组标题左侧强调条宽度。
+  static const double createActionSheetSectionMarkerWidth = 4.0;
+
+  /// 创作入口分组标题左侧强调条高度。
+  static const double createActionSheetSectionMarkerHeight = 24.0;
+
+  /// 创作入口分组标题与动作行间距。
+  static const double createActionSheetSectionTitleGap = containerMd;
+
+  /// 创作入口组内/组间底部间距。
+  static const double createActionSheetGroupTrailingGap = containerMd;
+  static const double createActionSheetGroupGap = containerLg;
+
   /// 私人助理半屏面板高度比例 (55-60vh)
   static const double assistantPanelHeightRatioMin = 0.55;
   static const double assistantPanelHeightRatioMax = 0.60;
@@ -654,17 +762,35 @@ class AppSpacing {
   /// 媒体查看器顶栏位置指示器预估宽度（如 "1/9"）: 44.0
   static const double mediaViewerPositionIndicatorWidth = 44.0;
 
-  /// 底部导航中间创作按钮圆形直径，靠主色突出而不高于普通项视觉块。
-  static const double primaryActionCircleSize = 32.0;
+  /// 底部导航中间创作按钮宽度，使用小圆角正方形避免压过普通导航项。
+  static const double primaryActionPillWidth = 40.0;
+
+  /// 底部导航中间创作按钮高度，与宽度一致形成正方形主操作入口。
+  static const double primaryActionPillHeight = 40.0;
+
+  /// 底部导航中间创作按钮圆形直径，保留给存量测试或旧样式引用。
+  static const double primaryActionCircleSize = primaryActionPillHeight;
 
   /// 底部导航普通项图标尺寸，保持当前主壳视觉基线。
-  static const double bottomNavItemIconSize = 22.0;
+  static const double bottomNavItemIconSize = iconMedium;
 
-  /// 底部导航主操作内图标尺寸。
-  static const double bottomNavPrimaryActionIconSize = 18.0;
+  /// 底部导航普通项图标的响应式尺寸，按设备形态匹配高保多尺寸规格：
+  /// 手机 28、平板 32、宽屏 Web 40（极窄机降到 24 防溢出）。
+  /// 图标为矢量绘制，任意尺寸均像素级清晰。
+  static double bottomNavBarItemIconSize(BuildContext context) =>
+      responsiveWideValue(
+        context,
+        compact: iconMedium,
+        regular: 28.0,
+        expanded: 32.0,
+        wide: 40.0,
+      );
 
-  /// 底部导航图标与标签间距，保留小幅呼吸感。
-  static const double bottomNavIconLabelGap = six;
+  /// 底部导航主操作内图标尺寸，随胶囊缩小避免 “+” 过重。
+  static const double bottomNavPrimaryActionIconSize = 22.0;
+
+  /// 底部导航图标与标签间距，压紧图文关系以降低底栏视觉高度。
+  static const double bottomNavIconLabelGap = one;
 
   /// 底部导航标签字距。
   static const double bottomNavLabelLetterSpacing = -0.08;

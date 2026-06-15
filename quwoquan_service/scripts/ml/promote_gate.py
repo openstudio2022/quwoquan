@@ -77,7 +77,7 @@ def collect_shadow_metrics(db, scenario: str, days: int) -> dict:
         content_id = ev.get("targetId", "")
         if action == "click":
             clicked_ids.add(content_id)
-        if action in ("click", "like", "favorite", "share", "comment", "follow"):
+        if action in ("click", "like", "share", "comment", "follow"):
             engaged_ids.add(content_id)
 
     common_ids = set(champion_scores.keys()) & set(challenger_scores.keys())

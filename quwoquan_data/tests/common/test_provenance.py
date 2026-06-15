@@ -30,9 +30,11 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp()
 
 from _common.content_object import register_content_object  # noqa: E402
+from _common.draft_io import write_prompt, write_writing_pack  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
     batch_command_root,
+    batch_entity_object_dir,
     ensure_batch_layout,
     ensure_task_layout,
 )
@@ -41,6 +43,7 @@ from _common.provenance import (  # noqa: E402
     build_provenance,
     provenance_issues,
 )
+from _common.source_unit import write_source_unit  # noqa: E402
 from _common.stage_reports import write_stage_result  # noqa: E402
 from produce.materialize import materialize_posts  # noqa: E402
 
@@ -50,6 +53,58 @@ BATCH = "pilot"
 
 def _seed_post(produce_root: Path, ref: str, title: str) -> None:
     register_content_object(TASK, BATCH, ref, content_type="article", angle="攻略", title=title)
+    obj = batch_entity_object_dir(TASK, BATCH, "地点", "景区", "九寨沟")
+    write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="base",
+        source_md="# 九寨沟\n\nsource a",
+        clean_md="# 九寨沟\n\nsource a",
+        platform="curated",
+        source_category="overview_baike",
+        url="https://example.com/a",
+        title="source a",
+        target_ref="/entity/地点/景区/九寨沟",
+        relevance="九寨沟基础事实",
+        task_id=TASK,
+        batch_id=BATCH,
+    )
+    write_source_unit(
+        obj,
+        ordinal=2,
+        source_id="supplement",
+        source_md="# 九寨沟补充\n\nsource b",
+        clean_md="# 九寨沟补充\n\nsource b",
+        platform="curated",
+        source_category="travelogue",
+        url="https://example.com/b",
+        title="source b",
+        target_ref="/entity/地点/景区/九寨沟",
+        relevance="九寨沟补充事实",
+        task_id=TASK,
+        batch_id=BATCH,
+    )
+    rel_a = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
+    rel_b = "entities/地点/景区/九寨沟/1.download/sources/02.supplement/source.md"
+    write_writing_pack(
+        TASK,
+        BATCH,
+        ref,
+        {
+            "ref": ref,
+            "title": title,
+            "kind": "route",
+            "carrier": "article",
+            "writingIntent": "planning_consultation",
+            "styleFamily": "route-guide",
+            "mustIncludeFacts": [],
+            "baseSourceRef": rel_a,
+            "sourcePaths": [rel_a, rel_b],
+            "sourceUrls": ["https://example.com/a", "https://example.com/b"],
+            "assets": [],
+        },
+    )
+    write_prompt(TASK, BATCH, ref, f"# {title}\n\n提示。")
     write_stage_result(
         TASK,
         BATCH,
@@ -82,13 +137,30 @@ def _seed_post(produce_root: Path, ref: str, title: str) -> None:
             "entityRefs": [],
             "tagRefs": ["Topic/旅行", "Format/内容角度/攻略"],
             "assets": [],
-            "sourcePaths": ["sources/a.md", "sources/b.md"],
+            "sourcePaths": [rel_a, rel_b],
             "sourceUrls": ["https://example.com/a", "https://example.com/b"],
-            "citedSourceRefs": ["sources/a.md"],
+            "citedSourceRefs": [rel_a],
             "storySpine": {"sourceQuality": [{"sourceId": "a", "score": 0.9}]},
             "relatedSearchPlan": {"queries": ["开放时间"]},
             "evidenceBundle": {"routeNodes": [{"entityName": "九寨沟"}]},
         },
+    )
+    from _common.draft_io import write_agent_draft
+
+    write_agent_draft(
+        TASK,
+        BATCH,
+        ref,
+        f"# {title}\n\n正文：{ref} 的真实叙事展开，足够长以通过字数门校验。" * 12,
+        model="cursor-agent",
+        cited_source_paths=[
+            str(obj / "1.download" / "sources" / "01.base" / "source.md"),
+            str(obj / "1.download" / "sources" / "02.supplement" / "source.md"),
+        ],
+        covered_facts=[],
+        session_trace="test-session",
+        agent_run_id="run-provenance",
+        agent_id="agent-provenance",
     )
 
 
@@ -132,6 +204,117 @@ def test_provenance_minimal_partitions_present():
     assert "routeCoverage" in data["gateResults"]["checks"]
 
 
+def test_materialize_writes_source_refs_snapshot_and_finalization_report():
+    post_dir = _materialize_one()
+    source_refs = read_json(post_dir / "1.download" / "source_refs.json")
+    assert source_refs["baseSourceRef"].endswith("01.base/source.md")
+    assert len(source_refs["sources"]) == 2
+    assert source_refs["sources"][0]["sourceUnitRef"].endswith("01.base")
+    assert source_refs["sources"][0]["sourceMarkdown"].startswith("# 九寨沟")
+    report = read_json(post_dir / "5.review" / "finalization_report.json")
+    assert report["articleSource"] == "4.draft/draft.article.md"
+    assert report["draftSha256"]
+    assert report["finalSha256"]
+    assert report["composeSnapshotMatchesDraft"] is True
+    assert report["frontmatterInjected"] is True
+    assert report["bodyChanged"] is False
+    assert report["frontmatterOnlyChange"] is True
+
+
+def test_materialize_relativizes_repo_runtime_cited_source_paths():
+    post_dir = _materialize_one()
+    manifest = read_json(post_dir / "manifest.json")
+    provenance = read_json(post_dir / "5.review" / "provenance.json")
+    expected = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
+    assert manifest["citedSourceRefs"][0] == expected
+    assert provenance["citedSourcePaths"][0] == expected
+
+
+def test_materialize_relativizes_repo_absolute_runtime_paths():
+    task = "出处记录_repo_relative_gwt"
+    batch = "pilot_repo"
+    ensure_task_layout(task)
+    ensure_batch_layout(task, batch, "produce")
+    register_content_object(task, batch, "repo_ref", content_type="article", angle="攻略", title="repo 路径攻略")
+    write_writing_pack(
+        task,
+        batch,
+        "repo_ref",
+        {
+            "ref": "repo_ref",
+            "title": "repo 路径攻略",
+            "kind": "route",
+            "carrier": "article",
+            "writingIntent": "planning_consultation",
+            "styleFamily": "route-guide",
+            "mustIncludeFacts": [],
+            "baseSourceRef": "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md",
+            "sourcePaths": [],
+            "sourceUrls": ["https://example.com/a"],
+            "assets": [],
+        },
+    )
+    write_prompt(task, batch, "repo_ref", "# repo 路径攻略\n\n提示。")
+    write_stage_result(task, batch, "produce", "review", "repo_ref", {"decision": "approved", "checks": {}})
+    repo_relative = (
+        f"quwoquan_data/runtime/tasks/{task}/batches/{batch}/"
+        "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
+    )
+    write_stage_result(
+        task,
+        batch,
+        "produce",
+        "compose",
+        "repo_ref",
+        {
+            "generator": "agent",
+            "generatorModel": "cursor-agent",
+            "articleMarkdown": "# repo 路径攻略\n\n正文足够长。" * 20,
+            "title": "repo 路径攻略",
+            "publishTitle": "repo 路径攻略",
+            "carrier": "article",
+            "entityRefs": [],
+            "tagRefs": ["主题/山水风光", "Format/内容角度/攻略"],
+            "assets": [],
+            "sourcePaths": [repo_relative],
+            "sourceUrls": ["https://example.com/a"],
+            "citedSourceRefs": [repo_relative],
+            "storySpine": {"beats": ["b1"]},
+        },
+    )
+    from _common.draft_io import write_agent_draft
+
+    source_abs = (
+        Path(os.environ["QWQ_RUNTIME_ROOT"])
+        / "tasks"
+        / task
+        / "batches"
+        / batch
+        / "entities/地点/景区/九寨沟/1.download/sources/01.base"
+    )
+    source_abs.mkdir(parents=True, exist_ok=True)
+    (source_abs / "source.md").write_text("# source\n\nrepo relative source", encoding="utf-8")
+    write_agent_draft(
+        task,
+        batch,
+        "repo_ref",
+        "# repo 路径攻略\n\n正文足够长。" * 20,
+        model="cursor-agent",
+        cited_source_paths=[str(source_abs / "source.md")],
+        covered_facts=[],
+        session_trace="test-session",
+        agent_run_id="run-repo-relative",
+        agent_id="agent-repo-relative",
+    )
+    materialized = materialize_posts(task, batch, "article")
+    assert len(materialized) == 1
+    manifest = read_json(materialized[0] / "manifest.json")
+    provenance = read_json(materialized[0] / "5.review" / "provenance.json")
+    expected = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
+    assert manifest["citedSourceRefs"] == [expected]
+    assert provenance["citedSourcePaths"] == [expected]
+
+
 def test_missing_file_flagged():
     empty = Path(tempfile.mkdtemp())
     issues = provenance_issues(empty, {"articleMarkdownDigest": "x"})
@@ -142,8 +325,14 @@ def _write_provenance(post_dir: Path, *, digest: str, generator: str, originals,
     payload = {
         "schemaVersion": PROVENANCE_SCHEMA,
         "ref": "r",
-        "final": {"generator": generator, "articleDigest": digest},
-        "agentInput": {"title": "t"},
+        "final": {"generator": generator, "articleDigest": digest, "agentRunId": "run-1"},
+        "agentInput": {
+            "title": "t",
+            "promptSha256": "sha256:a",
+            "writingPackSha256": "sha256:b",
+            "sourceBundleSha256": "sha256:c",
+            "draftSha256": "sha256:d",
+        },
         "originalSources": originals,
         "gateResults": {"decision": decision, "checks": {}},
         "citedSourcePaths": cited,
@@ -187,7 +376,19 @@ def test_build_provenance_uses_meta_over_compose():
     data = build_provenance(
         "ref1",
         writing_pack={"title": "T", "styleFamily": "实用攻略风", "mustIncludeFacts": ["门票"]},
-        draft_meta={"generator": "agent", "model": "cursor-agent", "styleFamily": "旅途随笔风", "openingStrategy": "scene_immersion"},
+        draft_meta={
+            "generator": "agent",
+            "model": "cursor-agent",
+            "agentRunId": "run-1",
+            "agentId": "agent-1",
+            "sessionTrace": "session-1",
+            "styleFamily": "旅途随笔风",
+            "openingStrategy": "scene_immersion",
+            "promptSha256": "sha256:a",
+            "writingPackSha256": "sha256:b",
+            "sourceBundleSha256": "sha256:c",
+            "draftSha256": "sha256:d",
+        },
         review_payload={"decision": "approved", "checks": {}},
         compose_payload={"sourcePaths": ["sources/a.md"], "generator": "agent", "articleMarkdownDigest": "d"},
         manifest={"publishTitle": "T", "publishSeq": 1},
@@ -195,8 +396,10 @@ def test_build_provenance_uses_meta_over_compose():
     # draft_meta 的 styleFamily 优先于 writing_pack。
     assert data["final"]["styleFamily"] == "旅途随笔风"
     assert data["final"]["openingStrategy"] == "scene_immersion"
+    assert data["final"]["agentRunId"] == "run-1"
     assert data["final"]["articleDigest"] == "d"
     assert "mustIncludeFacts" not in data["agentInput"]
+    assert data["agentInput"]["promptSha256"] == "sha256:a"
 
 
 def _run_all() -> None:

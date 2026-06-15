@@ -33,6 +33,33 @@ domain_acceptance:
       - quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
       - quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
     status: partial
+  DA2:
+    title: 商用消息体系真实数据边界验收
+    done_when:
+    - 消息页与联系页作为消息模块内两个独立一级页面状态，底栏保持五项不变。
+    - 消息、联系、群主页、交集和通知事实均来自 metadata/codegen 对齐的 Remote DTO 与真实服务 read model。
+    - 生产路径不依赖 App Mock、PrototypeBundle、mock-user、memory store、noop resolver 或退役字段。
+    - 群头像由服务端预合成 avatarUrl 驱动，App 不触发群成员九宫格 fallback。
+    boundary_points:
+    - Entity/Homepage 不直接拥有 conversation，只通过 related groups 进入群聊。
+    - Circle 是成员池，Group/CircleGroup 是协作单元，Conversation 只负责消息。
+    - Contact 与 Intersection 均为云端聚合 read model，App 不拼业务事实。
+    evidence:
+      primary:
+      - T1_static_contract
+      - T3_service_contract
+      supporting:
+      - T2_module_interaction
+      - T4_device_journey
+    tests:
+      planned:
+      - specs/feature-tree/chat-conversation/commercial-message-system/acceptance.yaml
+      - quwoquan_service/services/chat-service/tests/message_home_projection_contract_test.go
+      - quwoquan_service/services/chat-service/tests/contact_home_projection_contract_test.go
+      - quwoquan_service/services/notification-service/tests/app_message_inbox_contract_test.go
+      - quwoquan_app/test/ui/chat/journeys/commercial_message_system_journey_test.dart
+      recorded: []
+    status: pending
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -11,6 +11,16 @@
     "headline",
     "bio",
     "creatorArchetype",
+    "status",
+    "verticalRefs",
+    "scenarioRefs",
+    "claimPolicy",
+    "disclosure",
+    "publishCadence",
+    "qualityScore",
+    "fatigueScore",
+    "riskTier",
+    "profileVersion",
     "publicProfileTagRefs",
     "recommendationTagRefs",
     "preferredBlueprintIds",
@@ -29,6 +39,47 @@
     "headline": { "type": "string" },
     "bio": { "type": "string" },
     "creatorArchetype": { "type": "string" },
+    "status": { "enum": ["draft", "ai_reviewed", "active", "throttled", "suspended", "retired"] },
+    "verticalRefs": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "scenarioRefs": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "claimPolicy": {
+      "type": "object",
+      "required": ["experienceClaimMode", "mayUseFirstPerson", "mustCiteEvidenceForClaims", "forbiddenClaims"],
+      "properties": {
+        "experienceClaimMode": {
+          "enum": ["editorial_synthesis", "authorized_first_person", "public_data_analysis", "visual_discovery"]
+        },
+        "mayUseFirstPerson": { "type": "boolean" },
+        "mustCiteEvidenceForClaims": { "const": true },
+        "forbiddenClaims": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "disclosure": {
+      "type": "object",
+      "required": ["type", "displayText", "visible"],
+      "properties": {
+        "type": { "const": "platform_virtual_creator" },
+        "displayText": { "type": "string" },
+        "visible": { "const": true }
+      }
+    },
+    "publishCadence": {
+      "type": "object",
+      "required": ["intervalDays", "randomizedRangeDays", "maxDailyPosts"],
+      "properties": {
+        "intervalDays": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "randomizedRangeDays": {
+          "type": "array",
+          "prefixItems": [{ "const": 1 }, { "const": 5 }],
+          "items": false
+        },
+        "maxDailyPosts": { "type": "integer", "maximum": 1 }
+      }
+    },
+    "qualityScore": { "type": "number", "minimum": 0, "maximum": 1 },
+    "fatigueScore": { "type": "number", "minimum": 0, "maximum": 1 },
+    "riskTier": { "enum": ["low", "medium", "high"] },
+    "profileVersion": { "type": "string" },
     "publicProfileTagRefs": { "type": "array", "items": { "type": "string" } },
     "recommendationTagRefs": { "type": "array", "items": { "type": "string" } },
     "preferredBlueprintIds": { "type": "array", "items": { "type": "string" } },

@@ -57,3 +57,7 @@ entities/
 - `_entity.json` 必填 `label/domain/type/sourceTaskId`，且 domain/type 与目录一致
 - 若写 `conditionProfile`：须含 regions 或 seasons，且取值 ∈ `region_catalog`/`season_catalog`
 - 通过即「采纳」，`promote --copy-entities` 据此把主页拷入 publish，发布门 `entity_homepage_exists` 放行 entityRefs
+
+自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/data-build` 语义执行；执行前仍需按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

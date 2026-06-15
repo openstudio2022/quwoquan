@@ -38,7 +38,7 @@ class _MyIntersectionInboxPageState
     return UiErrorSemantic(
       category: resolved.category,
       scope: resolved.scope,
-      title: '我的交集暂不可用',
+      title: '${UITextConstants.myIntersectionsTitle}暂不可用',
       message: resolved.message,
       secondaryMessage: resolved.secondaryMessage,
       primaryAction:
@@ -87,14 +87,18 @@ class _MyIntersectionInboxPageState
           intersectionClass: reason.intersectionClass,
           intersectionTagRefs: reason.tagRefs,
         );
-    final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);
+    final kind = UnifiedObjectKind.resolve(
+      objectKind: reason.objectKind,
+      relationKind: reason.relationKind,
+    );
     switch (kind) {
       case UnifiedObjectKind.person:
         context.push(AppRoutePaths.userProfile(username: id));
       case UnifiedObjectKind.circle:
         context.push(AppRoutePaths.circleDetail(id: id));
       case UnifiedObjectKind.place:
-      case UnifiedObjectKind.org:
+      case UnifiedObjectKind.school:
+      case UnifiedObjectKind.enterprise:
         context.push(AppRoutePaths.homepageDetail(id: id));
     }
   }

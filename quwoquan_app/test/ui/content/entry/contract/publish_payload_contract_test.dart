@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_post_mutation_wires.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 
@@ -22,6 +23,11 @@ void main() {
         expect(writable, contains('primaryHomepageId'));
         expect(writable, contains('primaryHomepageType'));
         expect(writable, contains('primaryHomepageSnapshot'));
+        expect(writable, contains('summary'));
+        expect(writable, contains('semanticMentions'));
+        expect(writable, isNot(contains('tagRefs')));
+        expect(writable, isNot(contains('entityRefs')));
+        expect(writable, contains('assistantUsePolicy'));
       },
     );
 
@@ -63,6 +69,7 @@ void main() {
         homepage: HomepageCanonicalReference(
           id: 'homepage_sight_west_lake',
           homepageType: 'sight',
+          canonicalEntityId: 'entity:sight:west_lake',
           title: '西湖景区',
           subtitle: '杭州西湖核心游览区',
           coverUrl: 'https://example.com/west-lake.jpg',
@@ -77,7 +84,40 @@ void main() {
         'subtitle': '杭州西湖核心游览区',
         'coverUrl': 'https://example.com/west-lake.jpg',
         'status': 'published',
+        'canonicalEntityId': 'entity:sight:west_lake',
       });
+    });
+
+    test('payload 可携带摘要、标签、附加关联对象与 assistant policy', () {
+      const settings = PublishSettings(
+        summary: '西湖一日游摘要',
+        tagRefs: <String>['Topic/旅行/城市漫步', 'Entity/地点/西湖'],
+        tagLabels: <String>['城市漫步', '西湖'],
+        entityRefs: <String>['entity:sight:west_lake'],
+        entityNames: <String>['西湖景区'],
+        assistantUsePolicy: 'allow_summary',
+      );
+      final payload = settings.toPayloadFields();
+      expect(payload['summary'], '西湖一日游摘要');
+      expect(payload['tagRefs'], isA<List<String>>());
+      expect(payload['tagRefs'], contains('Topic/旅行/城市漫步'));
+      expect(payload['entityRefs'], isA<List<String>>());
+      expect(payload['entityRefs'], contains('entity:sight:west_lake'));
+      expect(payload['assistantUsePolicy'], 'allow_summary');
+    });
+
+    test('CreatePostRequestWire semanticMentions 保持可写语义', () {
+      final wire = CreatePostRequestWire.fromMap(<String, dynamic>{
+        'type': 'article',
+        'contentType': 'article',
+        'summary': '摘要',
+        'semanticMentions': 'Topic/旅行/城市漫步',
+        'assistantUsePolicy': 'inherit',
+      });
+      final body = wire.toWire();
+      expect(body['semanticMentions'], 'Topic/旅行/城市漫步');
+      expect(body.containsKey('tagRefs'), isFalse);
+      expect(body.containsKey('entityRefs'), isFalse);
     });
 
     test('payload 私密时 circleIds 必须为空', () {
@@ -110,6 +150,7 @@ void main() {
         homepage: HomepageCanonicalReference(
           id: 'homepage_sight_daocheng',
           homepageType: 'sight',
+          canonicalEntityId: 'entity:sight:daocheng',
           title: '稻城亚丁',
           subtitle: '川西高原核心景区',
           coverUrl: 'https://example.com/daocheng.jpg',

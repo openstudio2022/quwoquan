@@ -27,6 +27,17 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "ui_editable": true
     },
     {
+      "key": "sys.error_message",
+      "key_namespace": true,
+      "owner": "platform-ops",
+      "reload": "hot",
+      "risk_level": "high",
+      "rollout": "progressive",
+      "scope": "environment",
+      "type": "string",
+      "ui_editable": true
+    },
+    {
       "default": 30,
       "key": "sys.gateway.rate_limit.per_user_rps",
       "owner": "platform-ops",

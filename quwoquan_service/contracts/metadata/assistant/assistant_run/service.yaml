@@ -161,6 +161,22 @@ api_routes:
     query_params: [limit]
     response_entity: AssistantSkillCatalogListView
 
+  - method: POST
+    path: /v1/assistant/skills/creation-suggest
+    operation: SuggestCreationAssistance
+    description: |
+      创作辅助建议：基于草稿摘要、已绑定圈子与主关联主页，返回可溯源标签、关联主页、标题与摘要建议。
+      不生成收藏、稍后看、关注内容等已退场动作建议。
+    request_entity: AssistantCreationSuggestRequest
+    request_fields: [draftTitle, draftSummary, bodyDigest, boundCircleIds, primaryHomepageId]
+    response_entity: AssistantCreationSuggestResponse
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
   - method: GET
     path: /v1/assistant/skill-subscriptions
     operation: ListSkillSubscriptions

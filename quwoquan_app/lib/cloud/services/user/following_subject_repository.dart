@@ -204,17 +204,19 @@ class MockFollowingSubjectRepository implements FollowingSubjectRepository {
 }
 
 class RemoteFollowingSubjectRepository implements FollowingSubjectRepository {
-  RemoteFollowingSubjectRepository({CloudHttpClient? httpClient, String? baseUrl})
-    : _httpClient = httpClient ?? CloudHttpClient(),
-      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteFollowingSubjectRepository({
+    CloudHttpClient? httpClient,
+    String? baseUrl,
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
-    return Uri.parse('$_baseUrl$path').replace(
-      queryParameters: queryParameters,
-    );
+    return Uri.parse(
+      '$_baseUrl$path',
+    ).replace(queryParameters: queryParameters);
   }
 
   @override

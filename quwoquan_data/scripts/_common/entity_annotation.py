@@ -59,6 +59,7 @@ def _link_spans(body: str) -> list[tuple[int, int]]:
 
 def build_entity_dictionary(
     task_id: str,
+    batch_id: str,
     brief: Mapping[str, Any],
     draft_meta: Mapping[str, Any] | None,
 ) -> tuple[dict[str, str], list[str]]:
@@ -77,7 +78,7 @@ def build_entity_dictionary(
         if not name or name in dictionary:
             continue
         domain, etype = resolve_domain_etype(ent.get("type"))
-        if homepage_exists(domain, etype, name, task_id):
+        if homepage_exists(domain, etype, name, task_id, batch_id):
             dictionary[name] = entity_ref(domain, etype, name)
     return dictionary, required
 

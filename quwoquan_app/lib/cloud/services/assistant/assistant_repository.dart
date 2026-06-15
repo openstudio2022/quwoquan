@@ -18,6 +18,7 @@ import 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart';
 import 'package:quwoquan_app/core/models/app_content_prototype_models.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_codec.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
     show
@@ -25,11 +26,14 @@ export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_a
         AssistantPolicyView,
         AssistantEntryPersonalizationChipView,
         AssistantEntryPersonalizationView,
+        AssistantCreationSuggestRequest,
+        AssistantCreationSuggestResponse,
         AssistantReportPageContextRequestWire,
         AssistantScorecardReportBatchAck,
         AssistantSearchCitationView,
         AssistantSearchResultView,
         AssistantSearchXiaoquRequestWire,
+        AssistantSuggestedHomepageView,
         AssistantSkillCatalogItemView,
         AssistantUserMemoryView,
         AssistantUserTaskView,
@@ -52,7 +56,8 @@ export 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.
         SkillSubscriptionWire;
 export 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart'
     show ToolUseWire;
-import 'package:shared_preferences/shared_preferences.dart';
+
+part 'assistant_creation_suggest.dart';
 
 const String kPersonalContentAccessSkillId = 'personal_content_access';
 
@@ -115,8 +120,8 @@ AssistantSearchResultView _buildFallbackSearchResult({
 }) {
   final trimmedQuery = query.trim();
   final summary = trimmedQuery.isEmpty
-      ? '小趣搜会结合圈子频道结果和已有公开内容，为你梳理当前最相关的线索。'
-      : '小趣搜正在整理“$trimmedQuery”的公开线索，会优先总结当前最相关的话题、圈子频道与内容方向。';
+      ? '小趣搜会结合圈子讨论结果和已有公开内容，为你梳理当前最相关的线索。'
+      : '小趣搜正在整理“$trimmedQuery”的公开线索，会优先总结当前最相关的话题、圈子讨论与内容方向。';
   return AssistantSearchResultView(
     queryEcho: trimmedQuery,
     summary: summary,
@@ -195,12 +200,10 @@ Map<String, dynamic> assistantContextSnapshotFromOpenContext(
       ],
     if (context.intersectionRefs.isNotEmpty)
       'intersectionRefs': context.intersectionRefs,
-    if ((context.tab ?? '').trim().isNotEmpty) 'matchedSegments': <String>[
-      context.tab!.trim(),
-    ],
-    if ((context.dimension ?? '').trim().isNotEmpty) 'matchedInterestTags': <String>[
-      context.dimension!.trim(),
-    ],
+    if ((context.tab ?? '').trim().isNotEmpty)
+      'matchedSegments': <String>[context.tab!.trim()],
+    if ((context.dimension ?? '').trim().isNotEmpty)
+      'matchedInterestTags': <String>[context.dimension!.trim()],
     'consentMatrix': const <String, dynamic>{
       'canReadCurrentPage': true,
       'canReadConversation': false,
@@ -214,7 +217,10 @@ Map<String, dynamic> assistantContextSnapshotFromOpenContext(
   };
 }
 
-abstract class AssistantRepository {
+abstract class AssistantRepository
+    implements
+        AssistantConversationRepository,
+        AssistantSkillSubscriptionRepository {
   Future<AssistantPolicyView> getPolicySnapshot({
     String policyVersionHint = '',
   });
@@ -272,56 +278,9 @@ abstract class AssistantRepository {
     int limit = _kAssistantSkillCatalogDefaultLimit,
   });
 
-  Future<List<SkillSubscriptionWire>> listSkillSubscriptions({
-    int limit = _kAssistantSkillSubscriptionsDefaultLimit,
-    String status = '',
+  Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
+    required AssistantCreationSuggestRequest request,
   });
-
-  Future<SkillSubscriptionWire> createSkillSubscription({
-    required String skillId,
-    String domainId = 'assistant',
-    List<String> tagRefs = const <String>[],
-    required String rawText,
-    List<String> queries = const <String>[],
-    String cron = '0 8 * * *',
-  });
-
-  Future<SkillSubscriptionWire> updateSkillSubscriptionStatus({
-    required String subscriptionId,
-    required String status,
-  });
-
-  Future<AssistantConversationWire> createAssistantConversation({
-    String summary = '',
-  }) {
-    throw UnimplementedError('createAssistantConversation');
-  }
-
-  Future<AssistantConversationWire> getAssistantConversation({
-    required String conversationId,
-  }) {
-    throw UnimplementedError('getAssistantConversation');
-  }
-
-  Future<AssistantTurnEnvelopeWire> createAssistantTurn({
-    required String conversationId,
-    required String text,
-    String turnType = 'user',
-    String skillId = '',
-    String domainId = '',
-  }) {
-    throw UnimplementedError('createAssistantTurn');
-  }
-
-  Future<AssistantTurnEnvelopeWire> getAssistantTurn({required String turnId}) {
-    throw UnimplementedError('getAssistantTurn');
-  }
-
-  Stream<AssistantStreamEventWire> streamAssistantTurn({
-    required String turnId,
-  }) {
-    throw UnimplementedError('streamAssistantTurn');
-  }
 }
 
 class MockAssistantRepository implements AssistantRepository {
@@ -535,6 +494,14 @@ class MockAssistantRepository implements AssistantRepository {
         requiresConsent: false,
         iconHint: 'airplane',
       ),
+      const AssistantSkillCatalogItemView(
+        skillId: 'creation_assistant',
+        displayName: '创作助手',
+        description: '帮助整理草稿摘要、推荐标签和关联主页。',
+        category: 'content_creation',
+        requiresConsent: false,
+        iconHint: 'sparkles',
+      ),
     ];
     final prototypeSkills = AppContentPrototypeBundle
         .instance
@@ -552,6 +519,11 @@ class MockAssistantRepository implements AssistantRepository {
       ...prototypeSkills,
     ].take(limit).toList(growable: false);
   }
+
+  @override
+  Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
+    required AssistantCreationSuggestRequest request,
+  }) => mockSuggestCreationAssistance(_subscriptions, request: request);
 
   @override
   Future<List<SkillSubscriptionWire>> listSkillSubscriptions({
@@ -1113,10 +1085,11 @@ class RemoteAssistantRepository implements AssistantRepository {
             searchIntensity: searchIntensity,
             sourceSurfaceId: AppUiSurfaces.globalSearchNetworkResults.id,
             fromGlobalSearch: true,
-          ).toJson()
-            ..addAll(<String, dynamic>{
-              if (contextSnapshot != null) 'contextSnapshot': contextSnapshot,
-            }),
+          ).toJson()..addAll(
+            contextSnapshot == null
+                ? const <String, dynamic>{}
+                : <String, dynamic>{'contextSnapshot': contextSnapshot},
+          ),
         ),
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -1177,8 +1150,7 @@ class RemoteAssistantRepository implements AssistantRepository {
             businessObjects: businessObjects,
             userAction: userAction,
             userActions: userActions.isEmpty ? null : userActions,
-          ).toJson()
-            ..addAll(<String, dynamic>{'contextSnapshot': snapshot}),
+          ).toJson()..addAll(<String, dynamic>{'contextSnapshot': snapshot}),
         ),
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -1279,7 +1251,8 @@ class RemoteAssistantRepository implements AssistantRepository {
             : CloudResponseDecoder.asObject(
                 jsonDecode(response.body),
                 context: _personalAssistantDialogContext(
-                  operationId: AssistantApiMetadata.getSuggestedActionsOperation,
+                  operationId:
+                      AssistantApiMetadata.getSuggestedActionsOperation,
                 ),
               );
         return SuggestedActionListView.fromJson(decoded);
@@ -1417,6 +1390,11 @@ class RemoteAssistantRepository implements AssistantRepository {
       return const <AssistantSkillCatalogItemView>[];
     }
   }
+
+  @override
+  Future<AssistantCreationSuggestResponse> suggestCreationAssistance({
+    required AssistantCreationSuggestRequest request,
+  }) => remoteSuggestCreationAssistance(this, request: request);
 
   @override
   Future<List<SkillSubscriptionWire>> listSkillSubscriptions({

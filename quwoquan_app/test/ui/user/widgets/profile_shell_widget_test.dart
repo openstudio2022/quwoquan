@@ -5,16 +5,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+
+import '../../../support/harness/profile_shell_scroll_utils.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 
@@ -148,7 +156,28 @@ void main() {
       await tester.pumpWidget(
         _scopedApp(
           mode: ProfileMode.other,
+          userId: 'u_lin',
           capabilityRepository: _StaticCapabilityRepository(),
+          overrides: [
+            objectSharedReasonsProvider.overrideWith((ref, query) async {
+              return <IntersectionReason>[
+                IntersectionReason(
+                  dimension: 'relationship',
+                  intersectionPoints: <IntersectionPoint>[
+                    IntersectionPoint(
+                      pointId: 'shared-followees',
+                      pointClass: 'fact',
+                      dimension: 'relationship',
+                      sourceRef: 'sharedFollowees',
+                      label: '共同关注的人',
+                      displayText: '共同关注的人',
+                      count: 2,
+                    ),
+                  ],
+                ),
+              ];
+            }),
+          ],
         ),
       );
       await _pumpFrames(tester);
@@ -163,10 +192,86 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.text('作品'), findsOneWidget);
+      await revealProfilePrimaryTabs(tester);
+      // 统计行也有「作品」标签，主 Tab 断言一律限定在 inline tabs 容器内。
+      expect(_inlinePrimaryTab('作品'), findsOneWidget);
       expect(_inlinePrimaryTab('圈子'), findsOneWidget);
-      expect(find.text('互动'), findsOneWidget);
-      expect(find.text('看点'), findsOneWidget);
+      expect(_inlinePrimaryTab('互动'), findsOneWidget);
+      expect(_inlinePrimaryTab('生活'), findsNothing);
+    });
+
+    testWidgets('mine 模式四段式文案不串入 other 口径', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
+      await _pumpFrames(tester);
+
+      expect(find.text(UITextConstants.myIntersectionsTitle), findsWidgets);
+      expect(find.text(UITextConstants.profileImpactTitleMine), findsOneWidget);
+      expect(
+        find.text(UITextConstants.profileMutualIntersectionTitle),
+        findsNothing,
+      );
+      expect(find.text(UITextConstants.profileImpactTitleOther), findsNothing);
+    });
+
+    testWidgets('other 模式四段式文案不串入 mine 口径', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          userId: 'u_lin',
+          capabilityRepository: _StaticCapabilityRepository(),
+          overrides: [
+            objectSharedReasonsProvider.overrideWith((ref, query) async {
+              return <IntersectionReason>[
+                IntersectionReason(
+                  dimension: 'relationship',
+                  intersectionPoints: <IntersectionPoint>[
+                    IntersectionPoint(
+                      pointId: 'shared-followees',
+                      pointClass: 'fact',
+                      dimension: 'relationship',
+                      sourceRef: 'sharedFollowees',
+                      label: '共同关注的人',
+                      displayText: '共同关注的人',
+                      count: 2,
+                    ),
+                  ],
+                ),
+              ];
+            }),
+            authorImpactProvider.overrideWith((ref, userId) async {
+              return AuthorImpactSummary(
+                authorId: userId,
+                total: 2,
+                items: <AuthorImpactItem>[
+                  AuthorImpactItem(
+                    helpType: 'community',
+                    action: 'join',
+                    intersectionDimension: 'interest',
+                    count: 2,
+                    displayText: '2人加入相关圈子',
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
+      );
+      await _pumpFrames(tester);
+
+      expect(
+        find.text(UITextConstants.profileImpactTitleOther),
+        findsOneWidget,
+      );
+      expect(find.text(UITextConstants.myIntersectionsTitle), findsNothing);
+      expect(find.text(UITextConstants.profileImpactTitleMine), findsNothing);
     });
 
     testWidgets('用户主页主区块表面使用更多功能同源语义 token', (tester) async {
@@ -176,6 +281,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
+      await revealProfilePrimaryTabs(tester);
 
       final tabsSurface = tester.widget<Container>(
         find.byKey(const ValueKey<String>('profile-shell-primary-tabs-inline')),
@@ -331,7 +437,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      await tester.tap(_inlinePrimaryTab('圈子'));
+      await tapProfilePrimaryTab(tester, '圈子');
       await _pumpFrames(tester, count: 20);
       expect(find.byType(ProfileCirclesTab), findsOneWidget);
     });
@@ -343,7 +449,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      await tester.tap(_inlinePrimaryTab('互动'));
+      await tapProfilePrimaryTab(tester, '互动');
       await _pumpFrames(tester, count: 20);
       expect(find.byType(ProfileInteractionTab), findsOneWidget);
     });
@@ -380,7 +486,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      await tester.tap(_inlinePrimaryTab('互动'));
+      await tapProfilePrimaryTab(tester, '互动');
       await _pumpFrames(tester, count: 20);
 
       final subTabFinder = find.descendant(
@@ -409,8 +515,15 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester, count: 20);
+      // 左滑切二级 Tab 需要 fling 落在创作列表区（works grid），先滚到其可见。
+      await revealProfileSummaryWidget(
+        tester,
+        find.byKey(const ValueKey<String>('profile-works-grid')),
+      );
 
-      final swipeSurface = find.byType(CustomScrollView);
+      final swipeSurface = find.byKey(
+        const ValueKey<String>('profile-works-grid'),
+      );
 
       for (var i = 0; i < UserProfileUIConfig.creationSubTabs.length - 1; i++) {
         await tester.fling(
@@ -477,6 +590,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester, count: 20);
+      await revealProfilePrimaryTabs(tester);
 
       final tabsFinder = find.byKey(
         const ValueKey<String>('profile-works-secondary-tabs'),

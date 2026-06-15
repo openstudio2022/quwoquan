@@ -20,7 +20,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--service-pipeline-root", default="")
     parser.add_argument("--delivery-gate-root", default="")
     parser.add_argument("--beta-summary-root", default="")
-    parser.add_argument("--gamma-summary-root", default="")
     parser.add_argument("--mainline-summary", required=True)
     parser.add_argument("--commit-summary", required=True)
     parser.add_argument("--alpha-stackctl-root", default="")
@@ -222,7 +221,6 @@ def recommendation_lines(over_budget_keys: set[str], missing_evidence: list[str]
         "delivery_gate": "优先检查 03 Delivery Gate 的最长 fanout（service/app/portal），避免主链被非关键扫描拖慢。",
         "alpha_stage": "优先检查 alpha-local 的 package/up/inspect 链路，能复用的本地产物尽量复用。",
         "beta_device_matrix": "优先检查 beta bootstrap 与 mobile matrix fanout，坏环境要尽早 fail-fast，避免继续空转。",
-        "gamma_hosted": "优先检查 gamma tar/upload/deploy/readiness，继续复用 minimal bundle 与远端镜像缓存。",
         "prod_initial_checks": "优先检查 prod initial rollout 的 deploy 与 post-deploy 探针，避免首段放量过慢。",
         "prod_full": "优先检查 prod full rollout 与回滚探针，继续收敛重复 health/inspect/doctor。",
         "main_commit_to_prod": "commit-to-prod 已触达 15 分钟红线，先处理上面首个超预算阶段，再看总链路余量。",
@@ -372,10 +370,6 @@ def main() -> int:
         resolve_path(args.beta_summary_root),
         "app-env-device-matrix-summary.json",
     )
-    gamma_summary, gamma_summary_path = find_named_json(
-        resolve_path(args.gamma_summary_root),
-        "gamma-hosted-summary.json",
-    )
 
     alpha_evidence = collect_stackctl_primary_summaries(resolve_path(args.alpha_stackctl_root))
     beta_evidence = collect_stackctl_primary_summaries(resolve_path(args.beta_stackctl_root))
@@ -394,7 +388,6 @@ def main() -> int:
     delivery_phase = mainline_phases.get("delivery_gate", {"seconds": 0, "budgetSeconds": 0})
     alpha_phase = mainline_phases.get("alpha_stage", {"seconds": 0, "budgetSeconds": 0})
     beta_phase = mainline_phases.get("beta_device_matrix", {"seconds": 0, "budgetSeconds": 0})
-    gamma_phase = mainline_phases.get("gamma_hosted", {"seconds": 0, "budgetSeconds": 0})
     prod_initial_phase = mainline_phases.get("prod_initial_checks", {"seconds": 0, "budgetSeconds": 0})
     prod_full_phase = mainline_phases.get("prod_full", {"seconds": 0, "budgetSeconds": 0})
     service_pipeline_phase = commit_phases.get("service_pipeline_02", {"seconds": 0, "budgetSeconds": 0})
@@ -458,22 +451,6 @@ def main() -> int:
             ),
         ),
         build_environment_entry(
-            key="gamma_hosted",
-            label="gamma-hosted",
-            seconds=int(gamma_phase["seconds"]),
-            budget_seconds=int(gamma_phase["budgetSeconds"]),
-            phase_breakdown=subphases(gamma_summary),
-            hotspots=[],
-            evidence_paths=[display_path(gamma_summary_path)],
-            notes=(
-                [
-                    "gamma 子阶段明细复用 hosted validation summary 证据；07 诊断是否超预算仍以 mainline 的 gamma_hosted share 为准。"
-                ]
-                if gamma_summary
-                else []
-            ),
-        ),
-        build_environment_entry(
             key="prod_hosted",
             label="prod-hosted",
             seconds=prod_total_seconds,
@@ -529,8 +506,6 @@ def main() -> int:
         missing_evidence.append("缺少 03.delivery_gate timing artifact（delivery-gate-summary.json）。")
     if beta_summary is None:
         missing_evidence.append("缺少 05.app_env_device_matrix timing artifact（app-env-device-matrix-summary.json）。")
-    if gamma_summary is None:
-        missing_evidence.append("缺少 gamma hosted timing artifact（gamma-hosted-summary.json）。")
     if not alpha_evidence:
         missing_evidence.append("缺少 alpha-local stackctl summary.json 证据。")
     if not beta_evidence:
@@ -546,7 +521,6 @@ def main() -> int:
         "servicePipelineSummaryPath": display_path(service_summary_path),
         "deliveryGateSummaryPath": display_path(delivery_summary_path),
         "betaSummaryPath": display_path(beta_summary_path),
-        "gammaSummaryPath": display_path(gamma_summary_path),
         "mainlineSummaryPath": display_path(mainline_summary_path),
         "commitSummaryPath": display_path(commit_summary_path),
         "chain": chain,

@@ -20,6 +20,10 @@ type IntersectionReasonView struct {
 	AvatarURL              string                           `json:"avatarUrl"`
 	Label                  string                           `json:"label"`
 	DisplayText            string                           `json:"displayText"`
+	PrimaryText            string                           `json:"primaryText"`   // 主交集结论句（蓝色，云侧产出，端只读直出）
+	SecondaryText          string                           `json:"secondaryText"` // 副交集辅助说明（灰色；缺省端不展示）
+	WeightTier             string                           `json:"weightTier"`    // light | heavy（内容卡交集轻重等级，云侧离散产出）
+	ObjectKind             string                           `json:"objectKind"`    // person | circle | school | place | enterprise
 	SharedCount            int                              `json:"sharedCount"`
 	Strength               float64                          `json:"strength"`
 	ConfidenceLabel        string                           `json:"confidenceLabel"`
@@ -398,6 +402,26 @@ func hydratePointSummary(r IntersectionReasonView) IntersectionReasonView {
 	if r.RankState == "" {
 		r.RankState = "fresh"
 	}
+	return hydrateDisplayLanguage(r)
+}
+
+// hydrateDisplayLanguage 云侧统一产出主/副交集结论句与轻重等级（G2：端禁止本地拼装文案）。
+// primaryText 缺省时回退 displayText/label；weightTier 缺省时按 strength + intersectionClass 离散化。
+func hydrateDisplayLanguage(r IntersectionReasonView) IntersectionReasonView {
+	if strings.TrimSpace(r.PrimaryText) == "" {
+		if text := strings.TrimSpace(r.DisplayText); text != "" {
+			r.PrimaryText = text
+		} else if label := strings.TrimSpace(r.Label); label != "" {
+			r.PrimaryText = label
+		}
+	}
+	if strings.TrimSpace(r.WeightTier) == "" {
+		if r.IntersectionClass == "fact" && r.Strength >= 0.8 {
+			r.WeightTier = "heavy"
+		} else {
+			r.WeightTier = "light"
+		}
+	}
 	return r
 }
 
@@ -514,6 +538,11 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 			continue
 		}
 		r = hydratePointSummary(r)
+		// T3 空窗治理：展示语言不完备的 reason 不进 spotlight 候选窗
+		// （primaryText 必备；人级 reason 必须有头像，物级由对象头图承载）。
+		if !isSpotlightDisplayComplete(r) {
+			continue
+		}
 		r.LastRecommendedAt = now
 		if _, ok := seen[r.coolKey()]; ok {
 			r.RankState = "seen"
@@ -549,25 +578,40 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 	return merged, nil
 }
 
+// isSpotlightDisplayComplete 候选窗完备性（WP1·T3）：primaryText 非空，
+// 且人级 reason（objectKind==person）必须带 avatarUrl；非人对象的头图由
+// 端侧对象卡承载，不在 reason 上强制。
+func isSpotlightDisplayComplete(r IntersectionReasonView) bool {
+	if strings.TrimSpace(r.PrimaryText) == "" {
+		return false
+	}
+	if r.ObjectKind == "person" && strings.TrimSpace(r.AvatarURL) == "" {
+		return false
+	}
+	return true
+}
+
 // evidenceKindRank 证据组 kind 的挖掘强度（§9.8）：值越小越靠前；
-// 人物 > 事物 > 地点 > 内容 > 兴趣fact > recommended。未知 kind 落中段，
-// 保证未来新增维度优雅降级（不写死闭集，缺省排在已知 fact 之后、recommended 之前）。
+// 人物 > 事物 > 地点 > 内容 > 身份 > 兴趣fact > recommended。
+// kind 取值集合 = 交集词典 §5.4 唯一注册表标准名（云侧唯一真相源，端侧不解析语义）。
+// 未知 kind 落中段，保证未来新增维度优雅降级（不写死闭集，缺省排在已知 fact 之后、recommended 之前）。
 func evidenceKindRank(kind, pointClass string) int {
 	if pointClass == "recommended" {
 		return 900
 	}
 	switch kind {
-	case "mutualFriend", "commonContact", "commonFollow",
-		"friendInCircle", "contactInCircle", "friendActiveHere",
-		"friendVisited", "contactVisited", "friendJoinedRelatedCircle":
+	case "sharedFollowees", "commonFollower", "commonContact",
+		"followeeInObject", "followeeVisited", "followeeViewing", "followeeDiscussedThis":
 		return 10
-	case "coMemberCircle", "sameOrg", "sameBrand", "coCollectedEntity":
+	case "coMemberCircle", "sharedCircle", "sameCompany", "sameTeam", "sameIndustry",
+		"sharedEntityAttention", "coWishlistedEntity":
 		return 20
-	case "coVisitedEntity", "coCity", "youInteracted":
+	case "coVisitedEntity":
 		return 30
-	case "coLiked", "coCommented", "coShared":
+	case "coCommented", "coSharedContent", "coCreatedContent", "sharedDiscussion":
 		return 40
-	case "coCohort", "coEra":
+	case "sameSchool", "sameDepartment", "sameMajor", "sameCohort", "alumni",
+		"alumniHere", "colleagueHere":
 		return 50
 	case "sharedTagSample":
 		return 60

@@ -24,6 +24,7 @@ import (
 	"quwoquan_service/runtime/repository"
 	rtsearch "quwoquan_service/runtime/search"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
 	"quwoquan_service/services/content-service/internal/generated"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
@@ -55,6 +56,17 @@ type ProjectionRebuildReport struct {
 	BackfilledAssistantUsePolicy int  `json:"backfilledAssistantUsePolicy"`
 	DiscoveryEligiblePosts       int  `json:"discoveryEligiblePosts"`
 	DiscoveryRevokedPosts        int  `json:"discoveryRevokedPosts"`
+	SemanticMentionPosts         int  `json:"semanticMentionPosts"`
+	ActiveReferenceChanges       int  `json:"activeReferenceChanges"`
+	InvalidPublishedMentions     int  `json:"invalidPublishedMentions"`
+}
+
+type SemanticMentionReprojectionReport struct {
+	CandidateID            string `json:"candidateId"`
+	Status                 string `json:"status"`
+	MatchedPosts           int    `json:"matchedPosts"`
+	UpdatedMentions        int    `json:"updatedMentions"`
+	ActiveReferenceChanges int    `json:"activeReferenceChanges"`
 }
 
 type StoryCanaryStage struct {
@@ -67,15 +79,6 @@ type StoryRuntimeConfig struct {
 	ExperimentBucket string             `json:"experimentBucket"`
 	CurrentStage     string             `json:"currentStage"`
 	CanaryMatrix     []StoryCanaryStage `json:"canaryMatrix"`
-}
-
-type articleDocumentSnapshot struct {
-	Title      string
-	Body       string
-	MediaURLs  []string
-	CoverURL   string
-	Template   string
-	FontPreset string
 }
 
 type PostService struct {
@@ -125,8 +128,7 @@ func NewPostService(store persistence.PostRepository, opts ...PostServiceOption)
 }
 
 type contentReactionState struct {
-	Liked     bool
-	Favorited bool
+	Liked bool
 }
 
 func directShareKey(userID string) string {
@@ -368,7 +370,50 @@ func normalizePostForRead(post *postmodel.Post) *postmodel.Post {
 		copy.AssistantUsePolicy = "inherit"
 	}
 	copy.Visibility = normalizeVisibility(copy.Visibility)
+	projectSemanticMentionRefs(&copy)
 	return &copy
+}
+
+func projectSemanticMentionRefs(post *postmodel.Post) postsemantic.Projection {
+	if post == nil || !postsemantic.Present(post.SemanticMentions) {
+		return postsemantic.Projection{}
+	}
+	projection := postsemantic.Project(post.SemanticMentions)
+	post.EntityRefs = append([]string(nil), projection.EntityRefs...)
+	post.TagRefs = append([]string(nil), projection.TagRefs...)
+	return projection
+}
+
+func applySemanticMentionPayload(post *postmodel.Post, payload map[string]any) error {
+	if post == nil {
+		return nil
+	}
+	if semanticMentions, exists := payload["semanticMentions"]; exists {
+		post.SemanticMentions = semanticMentions
+	}
+	if err := postsemantic.ValidateSuppliedRefs(
+		post.SemanticMentions,
+		asStringSlice(payload["entityRefs"]),
+		asStringSlice(payload["tagRefs"]),
+	); err != nil {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"活动实体或标签引用不合法",
+			err.Error(),
+		)
+	}
+	if postsemantic.Present(post.SemanticMentions) {
+		projectSemanticMentionRefs(post)
+		return nil
+	}
+	if err := postsemantic.RejectCandidateRefs(post.EntityRefs, post.TagRefs); err != nil {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"候选对象不能作为活动引用",
+			err.Error(),
+		)
+	}
+	return nil
 }
 
 func canViewPost(post *postmodel.Post, viewerID string, viewerCircleIDs []string) bool {
@@ -435,6 +480,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 		Body:                strings.TrimSpace(asString(payload["body"])),
 		TagRefs:             asStringSlice(payload["tagRefs"]),
 		EntityRefs:          asStringSlice(payload["entityRefs"]),
+		SemanticMentions:    payload["semanticMentions"],
 		MediaUrls:           asStringSlice(payload["mediaUrls"]),
 		CoverUrl:            strings.TrimSpace(asString(payload["coverUrl"])),
 		VideoUrl:            strings.TrimSpace(asString(payload["videoUrl"])),
@@ -463,6 +509,10 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 		ModerationStatus:     "pending",
 		CreatedAt:            now,
 		UpdatedAt:            now,
+	}
+	normalizePostObjectAnchors(post, payload)
+	if err := applySemanticMentionPayload(post, payload); err != nil {
+		return nil, err
 	}
 	if post.AuthorId == "" {
 		return nil, rterr.NewInvalidArgument(
@@ -534,6 +584,8 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 				"circleIds":          asStringSlice(post.CircleIds),
 				"title":              post.Title,
 				"tagRefs":            post.TagRefs,
+				"entityRefs":         post.EntityRefs,
+				"semanticMentions":   post.SemanticMentions,
 				"coverUrl":           post.CoverUrl,
 			},
 			OccurredAt: now,
@@ -627,6 +679,10 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 	if articleRenderProfile, exists := payload["articleRenderProfile"]; exists {
 		post.ArticleRenderProfile = asMap(articleRenderProfile)
 	}
+	normalizePostObjectAnchors(post, payload)
+	if err := applySemanticMentionPayload(post, payload); err != nil {
+		return nil, err
+	}
 	post.UpdatedAt = time.Now().UTC()
 	s.syncArticleMarkdownSnapshot(post)
 	if err := validateCreatePostPayload(post); err != nil {
@@ -706,6 +762,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
 				"tagRefs":            asStringSlice(post.TagRefs),
 				"entityRefs":         asStringSlice(post.EntityRefs),
+				"semanticMentions":   post.SemanticMentions,
 			},
 			OccurredAt: now.Format(time.RFC3339),
 		})
@@ -727,6 +784,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
 				"tagRefs":            asStringSlice(post.TagRefs),
 				"entityRefs":         asStringSlice(post.EntityRefs),
+				"semanticMentions":   post.SemanticMentions,
 			},
 			OccurredAt: now,
 		})
@@ -844,6 +902,9 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if tags, exists := payload["tagRefs"]; exists {
 		post.TagRefs = asStringSlice(tags)
 	}
+	if entityRefs, exists := payload["entityRefs"]; exists {
+		post.EntityRefs = asStringSlice(entityRefs)
+	}
 	if coverURL, exists := payload["coverUrl"]; exists {
 		post.CoverUrl = strings.TrimSpace(asString(coverURL))
 	}
@@ -861,6 +922,10 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	}
 	if articleRenderProfile, exists := payload["articleRenderProfile"]; exists {
 		post.ArticleRenderProfile = asMap(articleRenderProfile)
+	}
+	normalizePostObjectAnchors(post, payload)
+	if err := applySemanticMentionPayload(post, payload); err != nil {
+		return nil, err
 	}
 	if err := applyPostSettingsPayload(post, promoteSettingsPayload(payload)); err != nil {
 		return nil, err
@@ -889,6 +954,8 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
 		"tagRefs":            asStringSlice(post.TagRefs),
+		"entityRefs":         asStringSlice(post.EntityRefs),
+		"semanticMentions":   post.SemanticMentions,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 	}, now)
 	s.projectPostEvent(ctx, "PostPromotedToWork", post, map[string]any{
@@ -904,6 +971,8 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
 		"tagRefs":            asStringSlice(post.TagRefs),
+		"entityRefs":         asStringSlice(post.EntityRefs),
+		"semanticMentions":   post.SemanticMentions,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 	}, now)
 	return post, nil
@@ -1466,7 +1535,10 @@ func (s *PostService) GenerateArticleSummary(title, body string) string {
 
 func (s *PostService) GetPostOrTombstone(ctx context.Context, postID string) (*postmodel.Post, bool, bool) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if ok && !strings.EqualFold(strings.TrimSpace(post.Status), "deleted") {
+	if ok {
+		if strings.EqualFold(strings.TrimSpace(post.Status), "deleted") {
+			return nil, false, true
+		}
 		return normalizePostForRead(post), true, false
 	}
 	s.mu.Lock()
@@ -1558,77 +1630,9 @@ func (s *PostService) UnlikePost(ctx context.Context, postID, userID, deviceActo
 	return post.LikeCount, changed, nil
 }
 
-func (s *PostService) FavoritePost(ctx context.Context, postID, userID string) (int64, bool, error) {
-	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if !ok {
-		return 0, false, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
-	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = AnonymousFallbackSubAccountID
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	byPost, ok := s.reactions[post.ID]
-	if !ok {
-		byPost = map[string]contentReactionState{}
-		s.reactions[post.ID] = byPost
-	}
-	state := byPost[userID]
-	changed := !state.Favorited
-	if changed {
-		state.Favorited = true
-		byPost[userID] = state
-		post.FavoriteCount++
-		post.UpdatedAt = time.Now().UTC()
-		_ = s.store.Update(ctx, post.ID, post)
-	}
-	return post.FavoriteCount, changed, nil
-}
-
-func (s *PostService) UnfavoritePost(ctx context.Context, postID, userID string) (int64, bool, error) {
-	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if !ok {
-		return 0, false, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
-	}
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = AnonymousFallbackSubAccountID
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	byPost, ok := s.reactions[post.ID]
-	if !ok {
-		byPost = map[string]contentReactionState{}
-		s.reactions[post.ID] = byPost
-	}
-	state := byPost[userID]
-	changed := state.Favorited
-	if changed {
-		state.Favorited = false
-		byPost[userID] = state
-		if post.FavoriteCount > 0 {
-			post.FavoriteCount--
-		}
-		post.UpdatedAt = time.Now().UTC()
-		_ = s.store.Update(ctx, post.ID, post)
-	}
-	return post.FavoriteCount, changed, nil
-}
-
 // GetReactionState 读取当前 actor 的互动状态。actor 维度由 userID（账号）优先、
 // 否则 deviceActorID（游客设备维度）解析，使游客也能读回自身设备态点赞/分享。
-func (s *PostService) GetReactionState(postID, userID, deviceActorID string) (liked, favorited, shared bool) {
+func (s *PostService) GetReactionState(postID, userID, deviceActorID string) (liked, shared bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	normalizedPostID := strings.TrimSpace(postID)
@@ -1636,13 +1640,13 @@ func (s *PostService) GetReactionState(postID, userID, deviceActorID string) (li
 	shared = hasActiveShareForUser(s.reshares[normalizedPostID], actorKey)
 	byPost, ok := s.reactions[normalizedPostID]
 	if !ok {
-		return false, false, shared
+		return false, shared
 	}
 	state, ok := byPost[actorKey]
 	if !ok {
-		return false, false, shared
+		return false, shared
 	}
-	return state.Liked, state.Favorited, shared
+	return state.Liked, shared
 }
 
 func (s *PostService) ListProfileInteractionActivities(
@@ -1824,123 +1828,6 @@ func parseActivityTime(raw any) time.Time {
 		}
 	}
 	return time.Now().UTC()
-}
-
-func deriveArticleDocumentSnapshot(document map[string]any) articleDocumentSnapshot {
-	snapshot := articleDocumentSnapshot{
-		Template: strings.TrimSpace(asString(document["template"])),
-		FontPreset: strings.TrimSpace(
-			asString(document["fontPreset"]),
-		),
-		CoverURL: strings.TrimSpace(asString(document["coverImageUrl"])),
-	}
-	if snapshot.Template == "" {
-		snapshot.Template = strings.TrimSpace(asString(document["articleTemplate"]))
-	}
-	if snapshot.FontPreset == "" {
-		snapshot.FontPreset = strings.TrimSpace(asString(document["articleFontPreset"]))
-	}
-	if snapshot.CoverURL == "" {
-		snapshot.CoverURL = strings.TrimSpace(asString(document["coverUrl"]))
-	}
-	if len(document) == 0 {
-		return snapshot
-	}
-	appendLine := func(lines []string, line string) []string {
-		normalized := strings.TrimSpace(line)
-		if normalized == "" {
-			return lines
-		}
-		return append(lines, normalized)
-	}
-	var lines []string
-	orderedIndex := 0
-	rawNodes, _ := document["nodes"].([]any)
-	for _, rawNode := range rawNodes {
-		node := asMap(rawNode)
-		if len(node) == 0 {
-			continue
-		}
-		nodeType := strings.TrimSpace(asString(node["type"]))
-		text := strings.TrimSpace(asString(node["text"]))
-		switch nodeType {
-		case "documentTitle", "title":
-			if snapshot.Title == "" {
-				snapshot.Title = text
-			}
-			orderedIndex = 0
-		case "headingMajor", "headingMinor", "heading2", "heading3", "sectionTitle":
-			orderedIndex = 0
-			lines = appendLine(lines, text)
-		case "orderedItem":
-			if text == "" {
-				continue
-			}
-			orderedIndex++
-			lines = appendLine(lines, fmt.Sprintf("%d. %s", orderedIndex, text))
-		case "bulletItem":
-			orderedIndex = 0
-			lines = appendLine(lines, "• "+text)
-		case "figure", "image":
-			orderedIndex = 0
-			imageURL := strings.TrimSpace(asString(node["imageUrl"]))
-			if imageURL == "" {
-				continue
-			}
-			snapshot.MediaURLs = append(snapshot.MediaURLs, imageURL)
-			if snapshot.CoverURL == "" {
-				snapshot.CoverURL = imageURL
-			}
-		default:
-			orderedIndex = 0
-			lines = appendLine(lines, text)
-		}
-	}
-	if len(rawNodes) == 0 {
-		snapshot.Title = strings.TrimSpace(asString(document["title"]))
-		snapshot.Body = strings.TrimSpace(asString(document["body"]))
-		rawAssets, _ := document["assets"].([]any)
-		for _, rawAsset := range rawAssets {
-			asset := asMap(rawAsset)
-			if len(asset) == 0 {
-				continue
-			}
-			imageURL := strings.TrimSpace(asString(asset["imageUrl"]))
-			if imageURL == "" {
-				continue
-			}
-			snapshot.MediaURLs = append(snapshot.MediaURLs, imageURL)
-			if snapshot.CoverURL == "" {
-				snapshot.CoverURL = imageURL
-			}
-		}
-		if snapshot.CoverURL == "" && len(snapshot.MediaURLs) > 0 {
-			snapshot.CoverURL = snapshot.MediaURLs[0]
-		}
-		return snapshot
-	}
-	snapshot.Body = strings.Join(lines, "\n")
-	if snapshot.CoverURL == "" && len(snapshot.MediaURLs) > 0 {
-		snapshot.CoverURL = snapshot.MediaURLs[0]
-	}
-	return snapshot
-}
-
-func (s *PostService) syncArticleDocumentSnapshot(post *postmodel.Post) {
-	if post == nil || strings.TrimSpace(post.ContentType) != "article" {
-		return
-	}
-	if strings.TrimSpace(post.ArticleMarkdown) != "" {
-		return
-	}
-	snapshot := deriveArticleDocumentSnapshot(post.ArticleDocument)
-	post.Title = snapshot.Title
-	post.Body = snapshot.Body
-	post.MediaUrls = snapshot.MediaURLs
-	post.CoverUrl = snapshot.CoverURL
-	post.ArticleTemplate = snapshot.Template
-	post.ArticleFontPreset = snapshot.FontPreset
-	post.Summary = generateArticleSummary(snapshot.Title, snapshot.Body)
 }
 
 func shareActorID(shareKey string) string {
@@ -3007,10 +2894,9 @@ func (s *PostService) GetCounters(ctx context.Context, postID string) (map[strin
 		)
 	}
 	return map[string]any{
-		"like":     post.LikeCount,
-		"comment":  post.CommentCount,
-		"favorite": post.FavoriteCount,
-		"share":    post.ShareCount,
+		"like":    post.LikeCount,
+		"comment": post.CommentCount,
+		"share":   post.ShareCount,
 	}, nil
 }
 
@@ -3146,7 +3032,7 @@ func (s *PostService) SearchPosts(
 			BadgeLabel:   "内容",
 			Tags:         asStringSlice(post.TagRefs),
 			Entities:     asStringSlice(post.EntityRefs),
-			Popularity:   float64(post.LikeCount + post.CommentCount + post.FavoriteCount + post.ShareCount),
+			Popularity:   float64(post.LikeCount + post.CommentCount + post.ShareCount),
 			Freshness:    post.PublishedAt,
 			Fields: map[string]string{
 				"tagRefs":           strings.Join(asStringSlice(post.TagRefs), " "),
@@ -3292,9 +3178,19 @@ func (s *PostService) RebuildProjectionDryRun(
 	for _, stored := range posts {
 		rawIdentity := strings.TrimSpace(strings.ToLower(stored.ContentIdentity))
 		rawAssistantUsePolicy := strings.TrimSpace(strings.ToLower(stored.AssistantUsePolicy))
+		rawEntityRefs := append([]string(nil), stored.EntityRefs...)
+		rawTagRefs := append([]string(nil), stored.TagRefs...)
 		post := normalizePostForRead(&stored)
 		if post == nil {
 			continue
+		}
+		if postsemantic.Present(stored.SemanticMentions) {
+			report.SemanticMentionPosts++
+			projection := postsemantic.Project(stored.SemanticMentions)
+			report.InvalidPublishedMentions += projection.InvalidPublishedCount
+			if !sameStringSet(rawEntityRefs, post.EntityRefs) || !sameStringSet(rawTagRefs, post.TagRefs) {
+				report.ActiveReferenceChanges++
+			}
 		}
 		report.TotalPosts++
 		switch strings.TrimSpace(strings.ToLower(post.Status)) {
@@ -3330,8 +3226,74 @@ func (s *PostService) RebuildProjectionDryRun(
 		if !apply {
 			continue
 		}
+		if postsemantic.Present(stored.SemanticMentions) &&
+			(!sameStringSet(rawEntityRefs, post.EntityRefs) || !sameStringSet(rawTagRefs, post.TagRefs)) {
+			post.UpdatedAt = now
+			if !s.store.Update(ctx, post.ID, post) {
+				return report, rterr.NewAppError(
+					rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
+					"语义引用回填失败",
+					"post disappeared while rebuilding semantic mention projection",
+				)
+			}
+		}
 		eventType := projectionEventTypeForPost(post)
 		s.projectPostEvent(ctx, eventType, post, projectionPayloadForPost(post), now)
+	}
+	return report, nil
+}
+
+func (s *PostService) ApplySemanticMentionGovernanceEvent(
+	ctx context.Context,
+	event postsemantic.GovernanceEvent,
+) (SemanticMentionReprojectionReport, error) {
+	report := SemanticMentionReprojectionReport{
+		CandidateID: strings.TrimSpace(event.CandidateID),
+		Status:      strings.ToLower(strings.TrimSpace(event.Status)),
+	}
+	if err := postsemantic.ValidateGovernanceEvent(event); err != nil {
+		return report, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"语义标注治理事件不合法",
+			err.Error(),
+		)
+	}
+
+	now := time.Now().UTC()
+	for _, stored := range s.store.ListAll(ctx) {
+		updatedMentions, updatedCount, err := postsemantic.ApplyGovernanceEvent(
+			stored.SemanticMentions,
+			event,
+		)
+		if err != nil {
+			return report, err
+		}
+		if updatedCount == 0 {
+			continue
+		}
+		report.MatchedPosts++
+		report.UpdatedMentions += updatedCount
+
+		post := stored
+		beforeEntityRefs := append([]string(nil), post.EntityRefs...)
+		beforeTagRefs := append([]string(nil), post.TagRefs...)
+		post.SemanticMentions = updatedMentions
+		projectSemanticMentionRefs(&post)
+		if !sameStringSet(beforeEntityRefs, post.EntityRefs) || !sameStringSet(beforeTagRefs, post.TagRefs) {
+			report.ActiveReferenceChanges++
+		}
+		post.UpdatedAt = now
+		if !s.store.Update(ctx, post.ID, &post) {
+			return report, rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
+				"语义标注回填失败",
+				"post disappeared while applying semantic mention governance event",
+			)
+		}
+
+		payload := projectionPayloadForPost(&post)
+		s.publishPostEvent(ctx, "PostUpdated", &post, payload, now)
+		s.projectPostEvent(ctx, projectionEventTypeForPost(&post), &post, payload, now)
 	}
 	return report, nil
 }
@@ -3427,10 +3389,16 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"circleIds":          asStringSlice(post.CircleIds),
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
+		"createdAt":          formatTimePtr(post.CreatedAt),
+		"updatedAt":          formatTimePtr(post.UpdatedAt),
 		"title":              post.Title,
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
+		"semanticMentions":   post.SemanticMentions,
 		"tagRefs":            asStringSlice(post.TagRefs),
+		"entityRefs":         asStringSlice(post.EntityRefs),
+		"primaryHomepageId":  strings.TrimSpace(post.PrimaryHomepageId),
+		"canonicalEntityId":  strings.TrimSpace(post.CanonicalEntityId),
 	}
 }
 
@@ -3466,6 +3434,138 @@ func behaviorTagsFromPost(p *postmodel.Post) []string {
 		tags = []string{p.ContentType}
 	}
 	return tags
+}
+
+func normalizePostObjectAnchors(post *postmodel.Post, payload map[string]any) {
+	if post == nil {
+		return
+	}
+	if primaryHomepageID, exists := payload["primaryHomepageId"]; exists {
+		post.PrimaryHomepageId = strings.TrimSpace(asString(primaryHomepageID))
+	}
+	if primaryHomepageType, exists := payload["primaryHomepageType"]; exists {
+		post.PrimaryHomepageType = strings.TrimSpace(asString(primaryHomepageType))
+	}
+	if primaryHomepageSnapshot, exists := payload["primaryHomepageSnapshot"]; exists {
+		post.PrimaryHomepageSnapshot = asMap(primaryHomepageSnapshot)
+	}
+	if entityRefs, exists := payload["entityRefs"]; exists {
+		post.EntityRefs = normalizeRuntimeEntityRefs(asStringSlice(entityRefs))
+	} else {
+		post.EntityRefs = normalizeRuntimeEntityRefs(post.EntityRefs)
+	}
+	if canonicalEntityID := strings.TrimSpace(canonicalEntityIDFromPayload(payload)); canonicalEntityID != "" {
+		post.CanonicalEntityId = canonicalEntityID
+	} else if canonicalEntityID := strings.TrimSpace(canonicalEntityIDFromHomepage(post.PrimaryHomepageId, post.PrimaryHomepageType)); canonicalEntityID != "" {
+		post.CanonicalEntityId = canonicalEntityID
+	} else {
+		post.CanonicalEntityId = strings.TrimSpace(post.CanonicalEntityId)
+	}
+	if post.CanonicalEntityId != "" && !containsString(post.EntityRefs, post.CanonicalEntityId) {
+		post.EntityRefs = append([]string{post.CanonicalEntityId}, post.EntityRefs...)
+	}
+}
+
+func canonicalEntityIDFromPayload(payload map[string]any) string {
+	if payload == nil {
+		return ""
+	}
+	if explicit := strings.TrimSpace(asString(payload["canonicalEntityId"])); explicit != "" {
+		return explicit
+	}
+	snapshot := asMap(payload["primaryHomepageSnapshot"])
+	return strings.TrimSpace(asString(snapshot["canonicalEntityId"]))
+}
+
+func canonicalEntityIDFromHomepage(homepageID, homepageType string) string {
+	id := strings.TrimSpace(homepageID)
+	if id == "" {
+		return ""
+	}
+	normalizedType := strings.TrimSpace(homepageType)
+	if normalizedType == "" {
+		normalizedType = inferHomepageTypeFromID(id)
+	}
+	if normalizedType == "" {
+		return ""
+	}
+	trimmedID := strings.TrimSpace(strings.TrimPrefix(id, "homepage_"))
+	prefix := normalizedType + "_"
+	if strings.HasPrefix(trimmedID, prefix) {
+		trimmedID = strings.TrimPrefix(trimmedID, prefix)
+	}
+	trimmedID = strings.Trim(trimmedID, "_")
+	if trimmedID == "" {
+		return ""
+	}
+	return "entity:" + normalizedType + ":" + trimmedID
+}
+
+func inferHomepageTypeFromID(homepageID string) string {
+	id := strings.TrimSpace(homepageID)
+	switch {
+	case strings.HasPrefix(id, "homepage_sight_"):
+		return "sight"
+	case strings.HasPrefix(id, "homepage_restaurant_"):
+		return "restaurant"
+	case strings.HasPrefix(id, "homepage_hotel_"):
+		return "hotel"
+	case strings.HasPrefix(id, "homepage_vehicle_"):
+		return "vehicle"
+	case strings.HasPrefix(id, "fixture_homepage_travel_photo_"):
+		return "travel_photo"
+	case strings.HasPrefix(id, "fixture_homepage_university_"):
+		return "university"
+	default:
+		return ""
+	}
+}
+
+func normalizeRuntimeEntityRefs(refs []string) []string {
+	out := make([]string, 0, len(refs))
+	seen := map[string]struct{}{}
+	for _, ref := range refs {
+		normalized := strings.TrimSpace(ref)
+		if normalized == "" {
+			continue
+		}
+		if strings.Contains(normalized, "/") && !strings.HasPrefix(normalized, "entity:") {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	return out
+}
+
+func containsString(items []string, want string) bool {
+	for _, item := range items {
+		if strings.TrimSpace(item) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func sameStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	leftSet := make(map[string]int, len(left))
+	for _, item := range left {
+		leftSet[strings.TrimSpace(item)]++
+	}
+	for _, item := range right {
+		normalized := strings.TrimSpace(item)
+		if leftSet[normalized] == 0 {
+			return false
+		}
+		leftSet[normalized]--
+	}
+	return true
 }
 
 func normalizeContentIdentity(contentType, requested string) string {
@@ -3575,7 +3675,6 @@ func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) erro
 		"summary",
 		"mediaUrls",
 		"coverUrl",
-		"articleDocument",
 		"articleTemplate",
 		"articleFontPreset",
 	} {
@@ -3604,6 +3703,7 @@ func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) erro
 			strings.TrimSpace(asString(assistantUsePolicy)),
 		)
 	}
+	normalizePostObjectAnchors(post, payload)
 	if post.ContentIdentity == "" {
 		post.ContentIdentity = normalizeContentIdentity(post.ContentType, "")
 	}
@@ -3727,136 +3827,4 @@ func articleManifestAssetIDs(manifest map[string]any) map[string]bool {
 		}
 	}
 	return result
-}
-
-type RequestOriginalImageAccessInput struct {
-	MediaID   string
-	Purpose   string
-	ViewerID  string
-	SessionID string
-}
-
-type OriginalImageAccessResponse struct {
-	MediaID     string         `json:"mediaId"`
-	Status      string         `json:"status"`
-	OriginalURL string         `json:"originalUrl,omitempty"`
-	Format      string         `json:"format,omitempty"`
-	SizeBytes   int64          `json:"sizeBytes,omitempty"`
-	Width       int64          `json:"width,omitempty"`
-	Height      int64          `json:"height,omitempty"`
-	ExpiresAt   *time.Time     `json:"expiresAt,omitempty"`
-	TtlSeconds  int            `json:"ttlSeconds,omitempty"`
-	Watermark   map[string]any `json:"watermark,omitempty"`
-	AuditID     string         `json:"auditId,omitempty"`
-}
-
-func (s *PostService) UpdateMediaAssetAccessPolicy(mediaID string, patch map[string]any) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	asset, ok := s.mediaAssets[strings.TrimSpace(mediaID)]
-	if !ok {
-		return false
-	}
-	if asset.AccessPolicy == nil {
-		asset.AccessPolicy = map[string]any{}
-	}
-	for key, value := range patch {
-		asset.AccessPolicy[key] = value
-	}
-	asset.UpdatedAt = time.Now().UTC()
-	s.mediaAssets[asset.ID] = asset
-	return true
-}
-
-func (s *PostService) RequestOriginalImageAccess(ctx context.Context, in RequestOriginalImageAccessInput) (*OriginalImageAccessResponse, error) {
-	mediaID := strings.TrimSpace(in.MediaID)
-	if mediaID == "" {
-		return nil, rterr.NewAppError(rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_found"), "媒体资源不存在或已过期", "missing mediaId")
-	}
-	purpose := strings.ToLower(strings.TrimSpace(in.Purpose))
-	if purpose == "" {
-		purpose = "view"
-	}
-	if purpose != "view" && purpose != "save" {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "purpose 仅支持 view/save", "unsupported purpose: "+purpose)
-	}
-	s.mu.Lock()
-	asset, ok := s.mediaAssets[mediaID]
-	s.mu.Unlock()
-	if !ok {
-		return nil, rterr.NewAppError(rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_found"), "媒体资源不存在或已过期", "media not found")
-	}
-	if strings.ToLower(strings.TrimSpace(asset.Type)) != "image" && strings.ToLower(strings.TrimSpace(asset.Type)) != "video" {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "原图/原视频申请仅支持图片或视频类型资产", "unsupported asset type")
-	}
-	if !originalAccessPolicyAllows(asset, purpose) {
-		return nil, rterr.NewAppError(rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "original_access_denied"), "当前内容不支持查看或保存原图", "denied by policy")
-	}
-	now := time.Now().UTC()
-	ttl := 300
-	if raw, ok := asset.AccessPolicy["originalTtlSeconds"]; ok {
-		if parsed := positiveIntFromAny(raw); parsed > 0 {
-			ttl = parsed
-		}
-	}
-	expiresAt := now.Add(time.Duration(ttl) * time.Second)
-	base := strings.TrimSpace(asset.OriginUrl)
-	if base == "" {
-		base = strings.TrimSpace(asset.CdnUrl)
-	}
-	if base == "" {
-		base = mediaURL(s.mediaCDNBase, mediaObjectKey(asset.AssetScope, asset.OwnerId, "archived", mediaID, asset.Type))
-	}
-	sep := "?"
-	if strings.Contains(base, "?") {
-		sep = "&"
-	}
-	signed := fmt.Sprintf("%s%sx-original=%s&x-purpose=%s&x-exp=%d&x-sig=%x", base, sep, mediaID, purpose, expiresAt.Unix(), len(base)+len(mediaID)+len(purpose))
-	auditID := fmt.Sprintf("audit_orig_%d", now.UnixNano())
-	if s.publisher != nil {
-		_ = s.publisher.Publish(ctx, repository.DomainEvent{Type: "MediaOriginalAccessGranted", AggregateType: "MediaAsset", AggregateID: mediaID, Payload: map[string]any{"mediaId": mediaID, "purpose": purpose, "viewerId": in.ViewerID, "sessionId": in.SessionID, "auditId": auditID, "expiresAt": expiresAt.Format(time.RFC3339)}, OccurredAt: now.Format(time.RFC3339)})
-	}
-	return &OriginalImageAccessResponse{MediaID: mediaID, Status: "granted", OriginalURL: signed, Format: asset.MimeType, SizeBytes: asset.FileSizeBytes, Width: asset.Width, Height: asset.Height, ExpiresAt: &expiresAt, TtlSeconds: ttl, AuditID: auditID}, nil
-}
-
-func originalAccessPolicyAllows(asset postmodel.MediaAsset, purpose string) bool {
-	if asset.AccessPolicy == nil {
-		return true
-	}
-	if purpose == "save" {
-		if v, ok := asset.AccessPolicy["allowOriginalSave"].(bool); ok {
-			return v
-		}
-	}
-	if purpose == "view" {
-		if v, ok := asset.AccessPolicy["allowOriginalView"].(bool); ok {
-			return v
-		}
-	}
-	if v, ok := asset.AccessPolicy["originalAllowed"].(bool); ok {
-		return v
-	}
-	return true
-}
-
-func positiveIntFromAny(v any) int {
-	switch tv := v.(type) {
-	case int:
-		if tv > 0 {
-			return tv
-		}
-	case int64:
-		if tv > 0 {
-			return int(tv)
-		}
-	case float64:
-		if tv > 0 {
-			return int(tv)
-		}
-	case string:
-		if parsed, err := strconv.Atoi(strings.TrimSpace(tv)); err == nil && parsed > 0 {
-			return parsed
-		}
-	}
-	return 0
 }

@@ -150,7 +150,6 @@ PostBaseDto _postDto(String id, {String avatarUrl = ''}) {
     'mediaUrls': <String>[],
     'likeCount': 0,
     'commentCount': 0,
-    'favoriteCount': 0,
     'shareCount': 0,
     'createdAt': '2026-05-19T00:00:00.000Z',
     'updatedAt': '2026-05-19T00:00:00.000Z',

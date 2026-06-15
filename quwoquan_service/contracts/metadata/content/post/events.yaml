@@ -8,7 +8,7 @@ events:
     consumers: [recommendation-engine, notification-service, assistant-service]
     channel: event_store
     payload_entity: Post
-    payload_fields: [_id, authorId, contentType, contentIdentity, title, tagRefs, entityRefs, location, primaryHomepageId, circleIds, groupId, nodeId, createdAt, sourceTaskId]
+    payload_fields: [_id, authorId, creatorProfileId, creatorArchetype, creatorProfileVersion, creatorDisclosure, experienceClaimMode, contentType, contentIdentity, title, semanticMentions, tagRefs, entityRefs, location, primaryHomepageId, circleIds, groupId, nodeId, createdAt, sourceTaskId]
     recommend_impact: content_index_refresh
 
   - name: PostPublished
@@ -17,7 +17,7 @@ events:
     consumers: [recommendation-engine, notification-service]
     channel: event_store
     payload_entity: Post
-    payload_fields: [_id, authorId, contentType, contentIdentity, status, primaryHomepageId, groupId, nodeId, publishedAt, lastActiveAt, sourceTaskId]
+    payload_fields: [_id, authorId, creatorProfileId, creatorArchetype, creatorProfileVersion, creatorDisclosure, experienceClaimMode, contentType, contentIdentity, status, primaryHomepageId, groupId, nodeId, publishedAt, lastActiveAt, sourceTaskId]
 
   - name: PostUpdated
     description: 内容更新
@@ -25,7 +25,7 @@ events:
     consumers: [recommendation-engine]
     channel: event_store
     payload_entity: Post
-    payload_fields: [_id, contentIdentity, title, body, tagRefs, primaryHomepageId, groupId, nodeId, updatedAt]
+    payload_fields: [_id, contentIdentity, title, body, semanticMentions, tagRefs, entityRefs, primaryHomepageId, groupId, nodeId, updatedAt]
 
   - name: PostSettingsUpdated
     description: 发布后可变设置更新（可见性 / 圈子分发 / 小趣排除）
@@ -99,16 +99,16 @@ events:
     recommend_impact: engagement_signal
 
   - name: ContentReacted
-    description: 互动状态变更（点赞/收藏/权威分享记录/举报）
+    description: 互动状态变更（点赞/权威分享记录/举报）
     producer: content-service
     consumers: [recommendation-engine, notification-service]
     channel: direct
     payload_entity: ContentReaction
-    payload_fields: [postId, userId, liked, favorited, shared, reported]
+    payload_fields: [postId, userId, liked, shared, reported]
     recommend_impact: hot_path_signal
     description_detail: |
       写入 Redis 推荐热路径（direct channel），同时写入 Event Store。
-      点赞/收藏等显式喜好信号 → 实时影响下一批推荐。
+      点赞等显式喜好信号 → 实时影响下一批推荐。
 
   - name: ContentViewed
     description: 内容浏览

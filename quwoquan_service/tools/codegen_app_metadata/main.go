@@ -331,6 +331,26 @@ type articleTemplateRecommendationDef struct {
 	RecommendedArticleTemplates []string `yaml:"recommended_article_templates"`
 }
 
+type articlePaperThemeOptionDef struct {
+	ID       string `yaml:"id"`
+	LabelKey string `yaml:"label_key"`
+}
+
+type articlePaperThemeDef struct {
+	ID            string `yaml:"id"`
+	Stage         string `yaml:"stage"`
+	Paper         string `yaml:"paper"`
+	Text          string `yaml:"text"`
+	SecondaryText string `yaml:"secondary_text"`
+}
+
+type articleDarkPaperThemesDef struct {
+	DefaultTheme          string                       `yaml:"default_theme"`
+	ReadingSettingOptions []articlePaperThemeOptionDef `yaml:"reading_setting_options"`
+	VerticalDefaults      map[string]string            `yaml:"vertical_defaults"`
+	Themes                []articlePaperThemeDef       `yaml:"themes"`
+}
+
 type featureFlagDef struct {
 	Flag        string `yaml:"flag"`
 	Default     bool   `yaml:"default"`
@@ -353,11 +373,15 @@ type uiConfigFile struct {
 	HeaderLayout                   profileHeaderLayoutDef             `yaml:"header_layout"`
 	ScrollMotion                   profileScrollMotionDef             `yaml:"scroll_motion"`
 	ProfileTabs                    []profileTabDef                    `yaml:"profile_tabs"`
+	HomepageTabs                   []homepageTabDef                   `yaml:"homepage_tabs"`
+	CircleTabs                     []circleTabDef                     `yaml:"circle_tabs"`
+	CircleSections                 []circleSectionDef                 `yaml:"circle_sections"`
 	ShareTemplateProfiles          []shareTemplateProfileDef          `yaml:"share_template_profiles"`
 	ArticleDistributionProfiles    []articleDistributionProfileDef    `yaml:"article_distribution_profiles"`
 	ArticleReaderProfiles          []articleReaderProfileDef          `yaml:"article_reader_profiles"`
 	ArticleTemplateConfigs         []articleTemplateConfigDef         `yaml:"article_template_configs"`
 	ArticleTemplateRecommendations []articleTemplateRecommendationDef `yaml:"article_template_recommendations"`
+	ArticleDarkPaperThemes         articleDarkPaperThemesDef          `yaml:"article_dark_paper_themes"`
 	FeatureFlags                   []featureFlagDef                   `yaml:"feature_flags"`
 	EmptyStates                    map[string]emptyStateDef           `yaml:"empty_states"`
 }
@@ -610,6 +634,28 @@ func main() {
 		}
 	}
 
+	// 3a3. 生成 assistant/circle/entity 客户端 *ErrorCode 枚举（端云错误码全集一致）。
+	// 这三个域此前缺少客户端 typed enum，导致端侧只能硬编码字符串比对错误码；
+	// 统一通过 renderSimpleErrorsDart 生成，唯一真相源各自 errors.yaml。
+	if assistantErrs, err := readErrors(filepath.Join(metadataDir, "assistant", "assistant_run", "errors.yaml")); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "assistant", "generated", "assistant_errors.g.dart"),
+			renderSimpleErrorsDart("AssistantErrorCode", "assistant/assistant_run/errors.yaml", "找私助暂时不可用，请稍后重试", assistantErrs),
+		)
+	}
+	if circleErrs, err := readErrors(filepath.Join(metadataDir, "social", "circle", "errors.yaml")); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "circle", "generated", "circle_errors.g.dart"),
+			renderSimpleErrorsDart("CircleErrorCode", "social/circle/errors.yaml", "圈子服务异常，请稍后重试", circleErrs),
+		)
+	}
+	if entityErrs, err := readErrors(filepath.Join(metadataDir, "entity", "homepage", "errors.yaml")); err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", "cloud", "entity", "generated", "entity_errors.g.dart"),
+			renderSimpleErrorsDart("EntityErrorCode", "entity/homepage/errors.yaml", "主页服务异常，请稍后重试", entityErrs),
+		)
+	}
+
 	// 3b. 生成 content_behaviors.g.dart（ContentBehaviorTracker）
 	if behDef, err := readBehaviors(filepath.Join(postDir, "behaviors.yaml")); err == nil {
 		out := renderContentBehaviorsDart(behDef)
@@ -641,6 +687,7 @@ func main() {
 		out := renderUserProfileUIConfigDart(userUIDef)
 		writeFile(filepath.Join(appDir, "lib", "cloud", "user", "generated", "user_profile_ui_config.g.dart"), out)
 	}
+	writeEntityCircleUIConfigs(metadataDir, appDir)
 	if userErrsDef, err := readUserDomainErrors(metadataDir); err == nil {
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "user", "user_errors.g.dart"),
@@ -2230,6 +2277,8 @@ var postBaseDtoFields = map[string]bool{
 	"favoriteCount":       true,
 	"shareCount":          true,
 	"createdAt":           true,
+	"updatedAt":           true,
+	"publishedAt":         true,
 	"intersectionReasons": true,
 }
 
@@ -3207,6 +3256,65 @@ func renderChatErrorsDart(ef *errorsFile) string {
 	return b.String()
 }
 
+// renderSimpleErrorsDart 生成一个 *ErrorCode Dart enum + *ErrorMessages 文案表，
+// 模式与 renderChatErrorsDart 完全一致，抽成通用渲染以避免每个客户端域复制一份
+// （军规 R25：横切关注提取统一抽象）。enumName 形如 "AssistantErrorCode"，
+// unknownMessage 是 unknown 兜底的 zh 文案。
+func renderSimpleErrorsDart(enumName, sourcePath, unknownMessage string, ef *errorsFile) string {
+	var b strings.Builder
+	messagesClass := strings.TrimSuffix(enumName, "Code") + "Messages"
+	b.WriteString(fmt.Sprintf("// Code generated by tools/codegen_app_metadata from %s. DO NOT EDIT.\n", sourcePath))
+	b.WriteString("// ignore_for_file: constant_identifier_names\n\n")
+
+	b.WriteString(fmt.Sprintf("enum %s {\n", enumName))
+	for _, e := range ef.Errors {
+		if e.DartConst == "" {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("  %s('%s', '%s', %d),\n", e.DartConst, e.Code, strings.ReplaceAll(e.UserMessage["zh"], "'", "\\'"), e.HTTPStatus))
+	}
+	b.WriteString(fmt.Sprintf("  unknown('', '%s', 500);\n\n", strings.ReplaceAll(unknownMessage, "'", "\\'")))
+
+	b.WriteString("  final String code;\n")
+	b.WriteString("  final String defaultMessage;\n")
+	b.WriteString("  final int httpStatus;\n\n")
+	b.WriteString(fmt.Sprintf("  const %s(this.code, this.defaultMessage, this.httpStatus);\n\n", enumName))
+	b.WriteString(fmt.Sprintf("  static %s fromCode(String code) {\n", enumName))
+	b.WriteString("    for (final value in values) {\n")
+	b.WriteString("      if (value.code == code) return value;\n")
+	b.WriteString("    }\n")
+	b.WriteString(fmt.Sprintf("    return %s.unknown;\n", enumName))
+	b.WriteString("  }\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
+	b.WriteString(fmt.Sprintf("class %s {\n", messagesClass))
+	b.WriteString(fmt.Sprintf("  const %s._();\n\n", messagesClass))
+	b.WriteString(fmt.Sprintf("  static const Map<%s, String> zh = <%s, String>{\n", enumName, enumName))
+	for _, e := range ef.Errors {
+		if e.DartConst == "" {
+			continue
+		}
+		if msg, ok := e.UserMessage["zh"]; ok {
+			b.WriteString(fmt.Sprintf("    %s.%s: '%s',\n", enumName, e.DartConst, strings.ReplaceAll(msg, "'", "\\'")))
+		}
+	}
+	b.WriteString("  };\n\n")
+	b.WriteString(fmt.Sprintf("  static const Map<%s, String> en = <%s, String>{\n", enumName, enumName))
+	for _, e := range ef.Errors {
+		if e.DartConst == "" {
+			continue
+		}
+		if msg, ok := e.UserMessage["en"]; ok {
+			b.WriteString(fmt.Sprintf("    %s.%s: '%s',\n", enumName, e.DartConst, strings.ReplaceAll(msg, "'", "\\'")))
+		}
+	}
+	b.WriteString("  };\n")
+	b.WriteString("}\n")
+
+	return b.String()
+}
+
 func renderUserErrorsDart(ef *errorsFile) string {
 	var b strings.Builder
 	b.WriteString("// Code generated by tools/codegen_app_metadata from user/**/errors.yaml. DO NOT EDIT.\n")
@@ -3260,6 +3368,17 @@ func goErrorUserMessage(e errorDef) string {
 	return msg
 }
 
+// goErrorRecoveryCall 据 errors.yaml 的 recovery_action / recovery_after_seconds
+// 生成 .WithRecovery(...) 链式调用；未声明 recovery_action 时返回空串，由 runtime 按
+// kind/reason 静态推导默认恢复指令。
+func goErrorRecoveryCall(e errorDef) string {
+	action := strings.TrimSpace(e.RecoveryAction)
+	if action == "" {
+		return ""
+	}
+	return fmt.Sprintf(".WithRecovery(%q, %d)", action, e.RecoveryAfterSecs)
+}
+
 func renderGoErrorsFile(ef *errorsFile, opts goErrorsFileOptions) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("// Code generated by tools/codegen_app_metadata from %s. DO NOT EDIT.\n", opts.sourcePath))
@@ -3291,7 +3410,7 @@ func renderGoErrorsFile(ef *errorsFile, opts goErrorsFileOptions) string {
 		b.WriteString(fmt.Sprintf("// %s returns *AppError for %s (user_message from errors.yaml).\n", funcName, e.Code))
 		b.WriteString(fmt.Sprintf("func %s(debugMessage string) *rerrors.AppError {\n", funcName))
 		b.WriteString(fmt.Sprintf("\tcode, _ := rerrors.ParseCode(string(%s.Error()))\n", e.GoConst))
-		b.WriteString(fmt.Sprintf("\treturn rerrors.NewAppError(code, %q, debugMessage)\n", goErrorUserMessage(e)))
+		b.WriteString(fmt.Sprintf("\treturn rerrors.NewAppError(code, %q, debugMessage)%s\n", goErrorUserMessage(e), goErrorRecoveryCall(e)))
 		b.WriteString("}\n\n")
 	}
 	if opts.trailer != "" {
@@ -3827,6 +3946,30 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("  });\n")
 	b.WriteString("}\n\n")
 
+	b.WriteString("class ArticlePaperThemeOptionConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String labelKey;\n\n")
+	b.WriteString("  const ArticlePaperThemeOptionConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.labelKey,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("class ArticleDarkPaperThemeConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String stage;\n")
+	b.WriteString("  final String paper;\n")
+	b.WriteString("  final String text;\n")
+	b.WriteString("  final String secondaryText;\n\n")
+	b.WriteString("  const ArticleDarkPaperThemeConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.stage,\n")
+	b.WriteString("    required this.paper,\n")
+	b.WriteString("    required this.text,\n")
+	b.WriteString("    required this.secondaryText,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
+
 	tabs := append([]discoveryTabDef(nil), uc.DiscoveryTabs...)
 	sort.Slice(tabs, func(i, j int) bool { return tabs[i].Order < tabs[j].Order })
 	rails := append([]discoveryRailDef(nil), uc.DiscoveryRails...)
@@ -3847,6 +3990,9 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	sort.Slice(articleTemplateRecommendations, func(i, j int) bool {
 		return articleTemplateRecommendations[i].CategoryID < articleTemplateRecommendations[j].CategoryID
 	})
+	articlePaperThemeOptions := append([]articlePaperThemeOptionDef(nil), uc.ArticleDarkPaperThemes.ReadingSettingOptions...)
+	articleDarkPaperThemes := append([]articlePaperThemeDef(nil), uc.ArticleDarkPaperThemes.Themes...)
+	sort.Slice(articleDarkPaperThemes, func(i, j int) bool { return articleDarkPaperThemes[i].ID < articleDarkPaperThemes[j].ID })
 
 	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
 	b.WriteString("class ContentUIConfig {\n")
@@ -3967,6 +4113,41 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 			b.WriteString(dartStringLiteral(templateID))
 		}
 		b.WriteString("]),\n")
+	}
+	b.WriteString("  ];\n\n")
+
+	b.WriteString(fmt.Sprintf("  static const String articleDarkPaperDefaultTheme = %s;\n\n",
+		dartStringLiteral(uc.ArticleDarkPaperThemes.DefaultTheme)))
+
+	b.WriteString("  static const List<ArticlePaperThemeOptionConfig> articlePaperThemeOptions = <ArticlePaperThemeOptionConfig>[\n")
+	for _, option := range articlePaperThemeOptions {
+		b.WriteString(fmt.Sprintf("    ArticlePaperThemeOptionConfig(id: %s, labelKey: %s),\n",
+			dartStringLiteral(option.ID),
+			dartStringLiteral(option.LabelKey)))
+	}
+	b.WriteString("  ];\n\n")
+
+	b.WriteString("  static const Map<String, String> articlePaperVerticalDefaults = <String, String>{\n")
+	verticalKeys := make([]string, 0, len(uc.ArticleDarkPaperThemes.VerticalDefaults))
+	for k := range uc.ArticleDarkPaperThemes.VerticalDefaults {
+		verticalKeys = append(verticalKeys, k)
+	}
+	sort.Strings(verticalKeys)
+	for _, k := range verticalKeys {
+		b.WriteString(fmt.Sprintf("    %s: %s,\n",
+			dartStringLiteral(k),
+			dartStringLiteral(uc.ArticleDarkPaperThemes.VerticalDefaults[k])))
+	}
+	b.WriteString("  };\n\n")
+
+	b.WriteString("  static const List<ArticleDarkPaperThemeConfig> articleDarkPaperThemes = <ArticleDarkPaperThemeConfig>[\n")
+	for _, theme := range articleDarkPaperThemes {
+		b.WriteString(fmt.Sprintf("    ArticleDarkPaperThemeConfig(id: %s, stage: %s, paper: %s, text: %s, secondaryText: %s),\n",
+			dartStringLiteral(theme.ID),
+			dartStringLiteral(theme.Stage),
+			dartStringLiteral(theme.Paper),
+			dartStringLiteral(theme.Text),
+			dartStringLiteral(theme.SecondaryText)))
 	}
 	b.WriteString("  ];\n\n")
 
@@ -4223,8 +4404,6 @@ func renderIntegrationLocationMetadataDart(svc *integrationLocationServiceFile) 
 	return b.String()
 }
 
-// renderIntegrationLocationMetadataGo 生成 integration-service Go 元数据常量。
-// 路径、response key、LocationPoi 字段名全部来自 contracts/metadata。
 func renderIntegrationLocationMetadataGo(svc *integrationLocationServiceFile, projFields []projectionFieldDef) string {
 	var b strings.Builder
 	b.WriteString("// Code generated by tools/codegen_app_metadata from integration/location metadata. DO NOT EDIT.\n")
@@ -4257,7 +4436,6 @@ func renderIntegrationLocationMetadataGo(svc *integrationLocationServiceFile, pr
 	b.WriteString(fmt.Sprintf("const NearbyPath = %q\n", nearbyPath))
 	b.WriteString(fmt.Sprintf("const SearchPath = %q\n\n", searchPath))
 
-	// 去重 query param 名称
 	paramSet := make(map[string]struct{})
 	for _, r := range svc.APIRoutes {
 		for _, p := range r.QueryParams {
@@ -4275,7 +4453,6 @@ func renderIntegrationLocationMetadataGo(svc *integrationLocationServiceFile, pr
 			b.WriteString(fmt.Sprintf("const %s = %q\n", goName, p))
 		}
 	}
-	// 补充 paramSet 剩余
 	for p := range paramSet {
 		goName := "QueryParam" + toGoExportedName(p)
 		b.WriteString(fmt.Sprintf("const %s = %q\n", goName, p))

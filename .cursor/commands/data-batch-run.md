@@ -20,7 +20,7 @@ python3 quwoquan_data/scripts/cli.py task decompose freeze --plan <planId> --con
 # 阶段 B：确定性分层调度（建 task/batch + 入队叶子，幂等可重放）
 python3 quwoquan_data/scripts/cli.py task run --mode fanout --plan <planId> --strategy by-partition --concurrency 8
 
-# 外部多 worker 执行（cursor-sdk；--dry-run 自检连通）+ 归并治理
+# 外部多 worker 执行（cursor-sdk 真实执行）+ 归并治理
 python3 agent_ops/runners/fanout_runner.py --plan <planId> --strategy by-partition --concurrency 8
 python3 quwoquan_data/scripts/cli.py task rollup --plan <planId>
 ```
@@ -98,3 +98,7 @@ python3 quwoquan_data/scripts/verify/verify_content_quality.py --task <task> --b
 - 禁止跳过 `template lint`。
 - 禁止把 `creatorProfileId`、`isSystemBuiltin`、推荐权重写进正文。
 - 禁止没有真实 sources 时直接 promote。
+
+自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/data-batch-run` 语义执行；执行前仍需按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

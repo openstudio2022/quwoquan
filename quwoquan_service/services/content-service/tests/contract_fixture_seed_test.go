@@ -48,9 +48,10 @@ type contentFixturePost struct {
 	LocationName  string   `json:"locationName"`
 	LikeCount     int64    `json:"likeCount"`
 	CommentCount  int64    `json:"commentCount"`
-	FavoriteCount int64    `json:"favoriteCount"`
 	ShareCount    int64    `json:"shareCount"`
 	CreatedAt     string   `json:"createdAt"`
+	UpdatedAt     string   `json:"updatedAt"`
+	PublishedAt   string   `json:"publishedAt"`
 }
 
 type contentFixtureComment struct {
@@ -61,10 +62,9 @@ type contentFixtureComment struct {
 }
 
 type contentFixtureReaction struct {
-	PostID    string `json:"postId"`
-	UserID    string `json:"userId"`
-	Liked     bool   `json:"liked"`
-	Favorited bool   `json:"favorited"`
+	PostID string `json:"postId"`
+	UserID string `json:"userId"`
+	Liked  bool   `json:"liked"`
 }
 
 func seedContentContractFixture(t *testing.T, seedRef string) contractSeedEvidence {
@@ -94,12 +94,6 @@ func seedContentContractFixture(t *testing.T, seedRef string) contractSeedEviden
 		if reaction.Liked {
 			if _, _, err := testPostService.LikePost(ctx, reaction.PostID, reaction.UserID, ""); err != nil {
 				t.Fatalf("seed content like %s: %v", reaction.PostID, err)
-			}
-			inserted++
-		}
-		if reaction.Favorited {
-			if _, _, err := testPostService.FavoritePost(ctx, reaction.PostID, reaction.UserID); err != nil {
-				t.Fatalf("seed content favorite %s: %v", reaction.PostID, err)
 			}
 			inserted++
 		}
@@ -156,6 +150,14 @@ func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 		id = strings.TrimSpace(fp.ID)
 	}
 	createdAt := parseFixtureTime(fp.CreatedAt)
+	updatedAt := createdAt
+	if value := strings.TrimSpace(fp.UpdatedAt); value != "" {
+		updatedAt = parseFixtureTime(value)
+	}
+	publishedAt := createdAt
+	if value := strings.TrimSpace(fp.PublishedAt); value != "" {
+		publishedAt = parseFixtureTime(value)
+	}
 	mediaURLs := append([]string{}, fp.ImageURLs...)
 	if len(mediaURLs) == 0 && fp.CoverURL != "" && fp.ContentType == "image" {
 		mediaURLs = []string{fp.CoverURL}
@@ -180,13 +182,12 @@ func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 		Summary:                   fp.Summary,
 		LikeCount:                 fp.LikeCount,
 		CommentCount:              fp.CommentCount,
-		FavoriteCount:             fp.FavoriteCount,
 		ShareCount:                fp.ShareCount,
 		ModerationStatus:          "approved",
 		CreatedAt:                 createdAt,
-		UpdatedAt:                 createdAt,
-		PublishedAt:               createdAt,
-		LastActiveAt:              createdAt,
+		UpdatedAt:                 updatedAt,
+		PublishedAt:               publishedAt,
+		LastActiveAt:              updatedAt,
 	}
 }
 

@@ -41,3 +41,7 @@ python3 quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_tags.py --dry-run
 - 总标签数 >= 1900
 - 7 大维度 _dimension.json 完整
 - 四川省 21 市州行政区完备
+
+自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/data-tag-bootstrap` 语义执行；执行前仍需按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

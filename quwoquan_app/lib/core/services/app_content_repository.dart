@@ -19,6 +19,16 @@ enum AppDataSourceMode { mock, remote }
 class AppDataSourceModeNotifier extends Notifier<AppDataSourceMode> {
   @override
   AppDataSourceMode build() {
+    // 环境优先于手动开关：alpha 必须本地可用，beta/gamma/prod 必须走远端契约。
+    // APP_DATA_SOURCE 只作为未知环境/本地实验兜底，避免 flutter run 默认 alpha 误连网关。
+    if (CloudRuntimeConfig.appRuntimeEnv == 'alpha') {
+      return AppDataSourceMode.mock;
+    }
+    if (CloudRuntimeConfig.appRuntimeEnv == 'beta' ||
+        CloudRuntimeConfig.appRuntimeEnv == 'gamma' ||
+        CloudRuntimeConfig.appRuntimeEnv == 'prod') {
+      return AppDataSourceMode.remote;
+    }
     const v = String.fromEnvironment('APP_DATA_SOURCE', defaultValue: '');
     if (v == 'remote') {
       return AppDataSourceMode.remote;
@@ -26,17 +36,20 @@ class AppDataSourceModeNotifier extends Notifier<AppDataSourceMode> {
     if (v == 'mock') {
       return AppDataSourceMode.mock;
     }
-    if (CloudRuntimeConfig.appRuntimeEnv == 'beta' ||
-        CloudRuntimeConfig.appRuntimeEnv == 'gamma') {
-      return AppDataSourceMode.remote;
-    }
-    if (CloudRuntimeConfig.appRuntimeEnv == 'alpha') {
-      return AppDataSourceMode.mock;
-    }
     return kReleaseMode ? AppDataSourceMode.remote : AppDataSourceMode.mock;
   }
 
   void setMode(AppDataSourceMode mode) {
+    if (CloudRuntimeConfig.appRuntimeEnv == 'alpha') {
+      state = AppDataSourceMode.mock;
+      return;
+    }
+    if (CloudRuntimeConfig.appRuntimeEnv == 'beta' ||
+        CloudRuntimeConfig.appRuntimeEnv == 'gamma' ||
+        CloudRuntimeConfig.appRuntimeEnv == 'prod') {
+      state = AppDataSourceMode.remote;
+      return;
+    }
     state = mode;
   }
 }

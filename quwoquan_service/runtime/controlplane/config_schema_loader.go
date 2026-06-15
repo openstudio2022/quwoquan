@@ -20,6 +20,10 @@ type configSchemaEntry struct {
 	Reload     string `yaml:"reload"`
 	RiskLevel  string `yaml:"risk_level"`
 	UIEditable bool   `yaml:"ui_editable"`
+	// KeyNamespace 标记该条目为「前缀命名空间」而非具体 key（如运营态错误提示语
+	// override：完整 key 形如 sys.error_message.<code>.<locale> 动态生成）。
+	// 命名空间条目仅用于治理/UI/reload 语义登记，不作为具体 resolved 默认值下发。
+	KeyNamespace bool `yaml:"key_namespace"`
 }
 
 func LoadConfigKeysFromSchema(path string) ([]Document, error) {
@@ -33,6 +37,9 @@ func LoadConfigKeysFromSchema(path string) ([]Document, error) {
 	}
 	docs := make([]Document, 0, len(schema.Configs))
 	for _, entry := range schema.Configs {
+		if entry.KeyNamespace {
+			continue
+		}
 		docs = append(docs, Document{
 			"id":         entry.Key,
 			"key":        entry.Key,

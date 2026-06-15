@@ -6,13 +6,19 @@ cd "$ROOT"
 
 # CLI-first ratchet：拦截新增直跑业务入口脚本（必须经 qwq-data 暴露给 skill）
 python3 quwoquan_data/scripts/verify/verify_cli_first.py
+python3 quwoquan_data/scripts/cli.py verify data-role-gate
 python3 quwoquan_data/scripts/verify/verify_no_flat_roots.py
 # 单一门库 quality_gates：writingIntent 契约 + 图文闭环 + 写作主线一致性 + 模板骨架相似度 + 语域 + source reject 阻断
 python3 quwoquan_data/tests/common/test_quality_gates.py
 # 扫描门：禁止 scripts/tasks/runtime 复用测试专用正文骨架 agent_draft_kit（脚本拼正文反模式）
 python3 quwoquan_data/scripts/verify/verify_no_runtime_draft_kit.py
+python3 quwoquan_data/tests/verify/test_no_runtime_draft_kit.py
 # object-stage job 队列：幂等/lease/崩溃恢复/同源互斥/失败升级
 python3 quwoquan_data/tests/task/test_object_queue.py
+# 生产级内容供给闭环：current 契约 / reliabletask 后端 / AgentResultEnvelope / token ledger
+python3 quwoquan_data/scripts/cli.py verify single-contract-source
+python3 quwoquan_data/scripts/cli.py verify content-supply-production
+python3 quwoquan_data/tests/verify/test_scale_readiness.py
 # Subagent handoff packet 与出口门（single ref gate + batch reducer gate + 执行合约 5 要素）
 python3 quwoquan_data/tests/common/test_handoff.py
 # LLM-as-judge 严格性门：判官元数据 pin / 族分离 / 二元+理由 / 偏差缓解 / jury 多数表决 / kappa
@@ -37,6 +43,7 @@ python3 quwoquan_data/scripts/cli.py verify --scope current
 python3 quwoquan_data/scripts/cli.py task lint
 # 垂类规模化治理：coverage registry / 脚本目录 / golden samples / 摄影版权策略
 python3 quwoquan_data/scripts/cli.py vertical governance
+python3 quwoquan_data/scripts/cli.py vertical source-registry
 python3 quwoquan_data/scripts/cli.py vertical quality
 # 任务工程 + 采样回填契约测试
 python3 quwoquan_data/tests/task/test_task_cli.py

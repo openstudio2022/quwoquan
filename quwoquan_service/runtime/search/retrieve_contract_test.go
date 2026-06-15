@@ -31,7 +31,7 @@ func metadataPath(rel string) string {
 	return filepath.Join("..", "..", "contracts", "metadata", "_shared", rel)
 }
 
-func TestRetrieveContractMetadataForbidsLegacyFields(t *testing.T) {
+func TestRetrieveContractMetadataForbidsRetiredFields(t *testing.T) {
 	data, err := os.ReadFile(metadataPath("search_contract.yaml"))
 	if err != nil {
 		t.Fatalf("read search_contract.yaml: %v", err)

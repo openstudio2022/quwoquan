@@ -37,6 +37,28 @@ POST_MANIFEST_FORBIDDEN_KEYS = {
     "articleMarkdownDigest",
 }
 
+POST_MANIFEST_REQUIRED_TIME_KEYS = {
+    "createdAt",
+    "updatedAt",
+}
+
+POST_MANIFEST_CREATOR_KEYS = {
+    "authorId",
+    "creatorProfileId",
+    "creatorArchetype",
+    "creatorProfileVersion",
+    "creatorDisclosure",
+    "experienceClaimMode",
+    "authorQualitySignals",
+}
+
+VALID_EXPERIENCE_CLAIM_MODES = {
+    "editorial_synthesis",
+    "authorized_first_person",
+    "public_data_analysis",
+    "visual_discovery",
+}
+
 # 阶段输入/输出路径以内容对象树为真相源（规格 §15.1）：实体对象在 entities/…，
 # 内容对象在 posts/{contentType}/{angle}/{title}/{seq}/，过程阶段统一编号挂对象目录下。
 STAGE_EVIDENCE_CONTRACT = {
@@ -80,8 +102,31 @@ def quality_payload_contract_issues(payload: Mapping[str, Any]) -> list[str]:
 
 
 def post_manifest_contract_issues(manifest: Mapping[str, Any]) -> list[str]:
-    return [
+    issues = [
         f"post manifest must not contain intermediate field {key}"
         for key in sorted(POST_MANIFEST_FORBIDDEN_KEYS)
         if key in manifest
     ]
+    for key in sorted(POST_MANIFEST_REQUIRED_TIME_KEYS):
+        value = str(manifest.get(key) or "").strip()
+        if not value:
+            issues.append(f"post manifest missing required time fact {key}")
+    creator_keys_present = [key for key in POST_MANIFEST_CREATOR_KEYS if key in manifest]
+    system_author = str(manifest.get("authorId") or "").startswith(("agent_author_", "builtin_"))
+    if creator_keys_present or system_author:
+        for key in sorted(POST_MANIFEST_CREATOR_KEYS):
+            if key not in manifest or manifest.get(key) in (None, "", {}):
+                issues.append(f"post manifest missing required creator projection {key}")
+        disclosure = manifest.get("creatorDisclosure")
+        if not isinstance(disclosure, Mapping):
+            issues.append("post manifest creatorDisclosure must be an object")
+        else:
+            if disclosure.get("type") != "platform_virtual_creator":
+                issues.append("post manifest creatorDisclosure.type must be platform_virtual_creator")
+            if disclosure.get("visible") is not True:
+                issues.append("post manifest creatorDisclosure.visible must be true")
+            if not str(disclosure.get("displayText") or "").strip():
+                issues.append("post manifest creatorDisclosure.displayText is required")
+        if manifest.get("experienceClaimMode") not in VALID_EXPERIENCE_CLAIM_MODES:
+            issues.append("post manifest experienceClaimMode is unsupported")
+    return issues

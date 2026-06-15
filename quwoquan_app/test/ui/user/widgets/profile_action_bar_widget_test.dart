@@ -5,30 +5,11 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 
-/// T2 Widget 测试：ProfileActionBar 五态按钮矩阵
-///
-/// 守护：
-/// - 五种关系状态下按钮布局的正确渲染
-/// - 回调在正确条件下触发
-/// - 空 capability 时他人主页不渲染操作条（不崩溃）
-
-RelationshipCapabilityDto _cap(
-  String relationState, {
-  bool? canGreet,
-  bool? canSendMessage,
-  bool? canCreateDirectConversation,
-  bool canStartVoiceCall = false,
-  bool canStartVideoCall = false,
-}) {
+RelationshipCapabilityDto _cap(String relationState) {
   return RelationshipCapabilityDto(
     viewerSubAccountId: 'viewer',
     targetSubAccountId: 'target',
     relationState: relationState,
-    canGreet: canGreet,
-    canSendMessage: canSendMessage,
-    canCreateDirectConversation: canCreateDirectConversation,
-    canStartVoiceCall: canStartVoiceCall,
-    canStartVideoCall: canStartVideoCall,
     isBlocked: false,
     isBlockedBy: false,
   );
@@ -40,294 +21,92 @@ Widget _wrap(Widget child) => MaterialApp(
   ),
 );
 
-Finder _actionBarText(String label) {
-  return find.descendant(
-    of: find.byType(ProfileActionBar),
-    matching: find.text(label),
-  );
-}
-
 void main() {
-  // ── 渲染契约 ─────────────────────────────────────────────────────────────────
+  group('ProfileActionBar — 四类主页首屏 CTA 契约', () {
+    testWidgets('mine 模式固定渲染编辑资料和分享主页', (tester) async {
+      var edited = false;
+      var shared = false;
 
-  group('ProfileActionBar — 渲染契约', () {
-    testWidgets('mine 模式渲染编辑资料和分身管理按钮', (tester) async {
       await tester.pumpWidget(
         _wrap(
           ProfileActionBar(
             mode: ProfileMode.mine,
             isDark: false,
-            onManagePersonas: () {},
+            isFollowing: false,
+            onEditProfile: () => edited = true,
+            onShareProfile: () => shared = true,
           ),
         ),
       );
       await tester.pump();
 
       expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
-      expect(find.text(UITextConstants.profilePersonasLabel), findsOneWidget);
-    });
-
-    testWidgets('mine 模式未提供分身回调时隐藏分身管理按钮', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          const ProfileActionBar(
-            mode: ProfileMode.mine,
-            isDark: false,
-            onManagePersonas: null,
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
+      expect(find.text(UITextConstants.profileShareHomepage), findsOneWidget);
       expect(find.text(UITextConstants.profilePersonasLabel), findsNothing);
-    });
 
-    testWidgets('mutual 渲染私信、视频通话、语音通话三等分按钮', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          ProfileActionBar(
-            mode: ProfileMode.other,
-            isDark: false,
-            capability: _cap(
-              'mutual',
-              canSendMessage: true,
-              canCreateDirectConversation: true,
-              canStartVoiceCall: true,
-              canStartVideoCall: true,
-            ),
-          ),
-        ),
-      );
+      await tester.tap(find.text(UITextConstants.profileEditLabel));
+      await tester.tap(find.text(UITextConstants.profileShareHomepage));
       await tester.pump();
 
-      expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
-      expect(find.text(UITextConstants.callVideo), findsOneWidget);
-      expect(find.text(UITextConstants.callVoice), findsOneWidget);
+      expect(edited, isTrue);
+      expect(shared, isTrue);
     });
 
-    testWidgets('followed_by 渲染回关和打招呼', (tester) async {
+    testWidgets('other 未关注时固定渲染关注和私信', (tester) async {
+      var followed = false;
+      var messaged = false;
+
       await tester.pumpWidget(
         _wrap(
           ProfileActionBar(
             mode: ProfileMode.other,
             isDark: false,
-            capability: _cap('followed_by', canGreet: true),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.text(UITextConstants.followBack), findsOneWidget);
-      expect(find.text(UITextConstants.profileGreet), findsOneWidget);
-      expect(find.text(UITextConstants.callVideo), findsNothing);
-      expect(find.text(UITextConstants.callVoice), findsNothing);
-    });
-
-    testWidgets('following 渲染已关注和打招呼', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          ProfileActionBar(
-            mode: ProfileMode.other,
-            isDark: false,
-            capability: _cap('following', canGreet: true),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.text(UITextConstants.following), findsOneWidget);
-      expect(find.text(UITextConstants.profileGreet), findsOneWidget);
-    });
-
-    testWidgets('not_following 渲染关注和打招呼', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          ProfileActionBar(
-            mode: ProfileMode.other,
-            isDark: false,
-            capability: _cap('not_following', canGreet: true),
+            isFollowing: false,
+            capability: _cap('not_following'),
+            onFollow: () => followed = true,
+            onMessage: () => messaged = true,
           ),
         ),
       );
       await tester.pump();
 
       expect(find.text(UITextConstants.follow), findsOneWidget);
-      expect(find.text(UITextConstants.profileGreet), findsOneWidget);
-    });
+      expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+      expect(find.text(UITextConstants.profileGreet), findsNothing);
+      expect(find.text(UITextConstants.callVoice), findsNothing);
+      expect(find.text(UITextConstants.callVideo), findsNothing);
 
-    testWidgets('capability 为 null 时他人主页不渲染操作按钮', (tester) async {
-      await tester.pumpWidget(
-        _wrap(const ProfileActionBar(mode: ProfileMode.other, isDark: false)),
-      );
-      await tester.pump();
-
-      expect(find.text(UITextConstants.follow), findsNothing);
-      expect(find.text(UITextConstants.profileDirectMessage), findsNothing);
-    });
-  });
-
-  // ── 交互契约 ─────────────────────────────────────────────────────────────────
-
-  group('ProfileActionBar — 交互契约', () {
-    testWidgets('mine 模式 onEditProfile 回调被触发', (tester) async {
-      var tapped = false;
-      await tester.pumpWidget(
-        _wrap(
-          ProfileActionBar(
-            mode: ProfileMode.mine,
-            isDark: false,
-            onEditProfile: () => tapped = true,
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.tap(find.text(UITextConstants.profileEditLabel));
-      await tester.pump();
-
-      expect(tapped, true);
-    });
-
-    testWidgets('following 状态点击已关注按钮时 onFollow 被触发', (tester) async {
-      var followed = false;
-      await tester.pumpWidget(
-        _wrap(
-          ProfileActionBar(
-            mode: ProfileMode.other,
-            isDark: false,
-            capability: _cap('following', canGreet: true),
-            onFollow: () => followed = true,
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.tap(find.text(UITextConstants.following));
-      await tester.pump();
-
-      expect(followed, true);
-    });
-
-    testWidgets('mutual 且 canStartVoiceCall=true 时 onVoiceCall 被触发', (
-      tester,
-    ) async {
-      var voiceCalled = false;
-      await tester.pumpWidget(
-        _wrap(
-          ProfileActionBar(
-            mode: ProfileMode.other,
-            isDark: false,
-            capability: _cap(
-              'mutual',
-              canSendMessage: true,
-              canCreateDirectConversation: true,
-              canStartVoiceCall: true,
-              canStartVideoCall: true,
-            ),
-            onVoiceCall: () => voiceCalled = true,
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.tap(find.text(UITextConstants.callVoice));
-      await tester.pump();
-
-      expect(voiceCalled, true);
-    });
-
-    testWidgets('mutual 且 canStartVideoCall=true 时 onVideoCall 被触发', (
-      tester,
-    ) async {
-      var videoCalled = false;
-      await tester.pumpWidget(
-        _wrap(
-          ProfileActionBar(
-            mode: ProfileMode.other,
-            isDark: false,
-            capability: _cap(
-              'mutual',
-              canSendMessage: true,
-              canCreateDirectConversation: true,
-              canStartVoiceCall: true,
-              canStartVideoCall: true,
-            ),
-            onVideoCall: () => videoCalled = true,
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.tap(find.text(UITextConstants.callVideo));
-      await tester.pump();
-
-      expect(videoCalled, true);
-    });
-
-    testWidgets('not_following 状态 onFollow 被触发', (tester) async {
-      var followed = false;
-      await tester.pumpWidget(
-        _wrap(
-          ProfileActionBar(
-            mode: ProfileMode.other,
-            isDark: false,
-            capability: _cap('not_following', canGreet: true),
-            onFollow: () => followed = true,
-          ),
-        ),
-      );
-      await tester.pump();
       await tester.tap(find.text(UITextConstants.follow));
+      await tester.tap(find.text(UITextConstants.profileDirectMessage));
       await tester.pump();
 
-      expect(followed, true);
-    });
-  });
-
-  // ── 错误态渲染 ────────────────────────────────────────────────────────────────
-
-  group('ProfileActionBar — 错误态渲染', () {
-    testWidgets('capability 为 null 且所有回调为 null 不崩溃', (tester) async {
-      await tester.pumpWidget(
-        _wrap(const ProfileActionBar(mode: ProfileMode.other, isDark: false)),
-      );
-      await tester.pump();
-      expect(_actionBarText(UITextConstants.follow), findsNothing);
-      expect(
-        _actionBarText(UITextConstants.profileDirectMessage),
-        findsNothing,
-      );
+      expect(followed, isTrue);
+      expect(messaged, isTrue);
     });
 
-    testWidgets('未知 relationState 不崩溃（按 not_following 展示）', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          ProfileActionBar(
-            mode: ProfileMode.other,
-            isDark: false,
-            capability: _cap('future_unknown_state'),
-          ),
-        ),
-      );
-      await tester.pump();
-      expect(find.byType(ProfileActionBar), findsOneWidget);
-    });
+    testWidgets('other 已关注时保留关注态和私信', (tester) async {
+      var followed = false;
 
-    testWidgets('暗色模式渲染不崩溃', (tester) async {
       await tester.pumpWidget(
         _wrap(
           ProfileActionBar(
             mode: ProfileMode.other,
             isDark: true,
-            capability: _cap(
-              'mutual',
-              canSendMessage: true,
-              canCreateDirectConversation: true,
-              canStartVoiceCall: true,
-              canStartVideoCall: true,
-            ),
+            isFollowing: true,
+            capability: _cap('following'),
+            onFollow: () => followed = true,
           ),
         ),
       );
       await tester.pump();
+
+      expect(find.text(UITextConstants.following), findsOneWidget);
       expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.following));
+      await tester.pump();
+
+      expect(followed, isTrue);
     });
   });
 }

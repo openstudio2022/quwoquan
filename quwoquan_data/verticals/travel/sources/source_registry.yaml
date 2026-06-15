@@ -1,0 +1,135 @@
+schemaVersion: quwoquan.travel_source_registry.v1
+vertical: travel
+defaultAction: block
+qualityTiers:
+  - A
+  - B
+  - C
+licensePolicies:
+  - factual_citation_only
+  - cc_or_pd_only
+  - official_terms_required
+extractors:
+  - wikipedia_api
+  - baidu_baike_html
+  - sogou_baike_html
+  - static_official_html
+  - qunar_html
+  - generic_html
+sites:
+  - siteId: wikipedia_zh
+    platform: 维基百科
+    category: encyclopedia
+    domains: [zh.wikipedia.org]
+    urlPatterns:
+      - https://zh.wikipedia.org/wiki/*
+    fetchable: true
+    extractor: wikipedia_api
+    licensePolicy: factual_citation_only
+    qualityTier: A
+    notes: 中文百科正文真相源，允许抽取 facts/sections，不得整段搬运。
+  - siteId: wikivoyage_zh
+    platform: 维基导游
+    category: travelogue
+    domains: [zh.wikivoyage.org]
+    urlPatterns:
+      - https://zh.wikivoyage.org/wiki/*
+    fetchable: true
+    extractor: wikipedia_api
+    licensePolicy: factual_citation_only
+    qualityTier: B
+    notes: 中文维基导游旅行指南，可抓取目的地攻略/交通/游览分区；仅作事实与决策参考，不复现原文。
+  - siteId: baidu_baike
+    platform: 百度百科
+    category: encyclopedia
+    domains: [baike.baidu.com]
+    urlPatterns:
+      - https://baike.baidu.com/item/*
+    fetchable: true
+    extractor: baidu_baike_html
+    licensePolicy: factual_citation_only
+    qualityTier: A
+    notes: 中文结构化百科补充源，用于实体事实和章节骨架校验。
+  - siteId: sogou_baike
+    platform: 搜狗百科
+    category: encyclopedia
+    domains: [baike.sogou.com]
+    urlPatterns:
+      - https://baike.sogou.com/*
+    fetchable: true
+    extractor: sogou_baike_html
+    licensePolicy: factual_citation_only
+    qualityTier: B
+    notes: 作为百科补充源，抓取成功才使用。
+  - siteId: scenic_official
+    platform: 景区官网
+    category: official
+    domains: [ems517.com]
+    urlPatterns:
+      - http://www.ems517.com/new/*
+      - https://www.ems517.com/new/*
+      - http://www.ems517.com/new_api/*
+      - https://www.ems517.com/new_api/*
+    fetchable: true
+    extractor: static_official_html
+    licensePolicy: official_terms_required
+    qualityTier: A
+    notes: 景区官网正文与公开 API 真相源；支持官方 SPA 页面与其公开 JSON 接口。
+  - siteId: cultural_tourism_bureau
+    platform: 文旅局
+    category: official
+    domains: [gov.cn]
+    urlPatterns:
+      - http://*.gov.cn/*
+      - https://*.gov.cn/*
+    fetchable: true
+    extractor: static_official_html
+    licensePolicy: official_terms_required
+    qualityTier: A
+    notes: 政务/文旅公告类正文源，若主页或 JS 门户无正文则应在 source_screen 判 Reject。
+  - siteId: amap_geo
+    platform: 高德地图
+    category: map_geo
+    domains: [ditu.amap.com, amap.com]
+    urlPatterns:
+      - https://ditu.amap.com/*
+      - https://www.amap.com/*
+    fetchable: false
+    extractor: generic_html
+    licensePolicy: factual_citation_only
+    qualityTier: B
+    notes: 仅作为地理定位/路线辅助类别，不直接抓正文。
+  - siteId: mafengwo_travelogue
+    platform: 马蜂窝
+    category: travelogue
+    domains: [www.mafengwo.cn, mafengwo.cn]
+    urlPatterns:
+      - https://www.mafengwo.cn/i/*
+    fetchable: false
+    extractor: generic_html
+    licensePolicy: factual_citation_only
+    qualityTier: C
+    notes: 当前常见反爬探针页，不允许当稳定可抓正文源；仅保留为 coverage 候选，抓不到即 Reject。
+  - siteId: ctrip_travelogue
+    platform: 携程攻略
+    category: travelogue
+    domains: [you.ctrip.com]
+    urlPatterns:
+      - https://you.ctrip.com/*
+    fetchable: false
+    extractor: generic_html
+    licensePolicy: factual_citation_only
+    qualityTier: C
+    notes: 当前未实现专用抽取器，未验证前不得当稳定正文源。
+  - siteId: qunar_guide
+    platform: 去哪儿攻略
+    category: travelogue
+    domains: [touch.travel.qunar.com, travel.qunar.com]
+    urlPatterns:
+      - https://touch.travel.qunar.com/*
+      - https://travel.qunar.com/*
+    fetchable: true
+    extractor: qunar_html
+    licensePolicy: factual_citation_only
+    qualityTier: B
+    notes: 去哪儿攻略静态页可稳定抓取，用于路线/门票/避坑类社区攻略证据。

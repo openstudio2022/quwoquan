@@ -144,8 +144,6 @@ class TestKeys {
   // ── Post Interaction ────────────────────────────────────────────────
   static const likeButton = ValueKey<String>('like_button');
   static const likeCountText = ValueKey<String>('like_count_text');
-  static const favoriteButton = ValueKey<String>('favorite_button');
-  static const favoriteCountText = ValueKey<String>('favorite_count_text');
   static const commentButton = ValueKey<String>('comment_button');
   static const commentCountText = ValueKey<String>('comment_count_text');
   static const shareButton = ValueKey<String>('share_button');
@@ -171,9 +169,6 @@ class TestKeys {
   );
   static const commentRecentEmojiStrip = ValueKey<String>(
     'comment_recent_emoji_strip',
-  );
-  static const commentToolbarFavoriteButton = ValueKey<String>(
-    'comment_toolbar_favorite_button',
   );
   static const assistantChatInputField = ValueKey<String>(
     'assistant_chat_input_field',
@@ -257,6 +252,30 @@ class TestKeys {
   );
   static const createPublishConfirmButton = ValueKey<String>(
     'create_publish_confirm_button',
+  );
+  static const createPublishSummaryField = ValueKey<String>(
+    'create_publish_summary_field',
+  );
+  static const createPublishGenerateSummaryButton = ValueKey<String>(
+    'create_publish_generate_summary_button',
+  );
+  static const createPublishTagInput = ValueKey<String>(
+    'create_publish_tag_input',
+  );
+  static const createPublishAddTagButton = ValueKey<String>(
+    'create_publish_add_tag_button',
+  );
+  static const createPublishEntityInput = ValueKey<String>(
+    'create_publish_entity_input',
+  );
+  static const createPublishAddEntityButton = ValueKey<String>(
+    'create_publish_add_entity_button',
+  );
+  static const createPublishAssistantSuggestButton = ValueKey<String>(
+    'create_publish_assistant_suggest_button',
+  );
+  static const createPublishAssistantSuggestError = ValueKey<String>(
+    'create_publish_assistant_suggest_error',
   );
   static const homepagePickerPage = ValueKey<String>('homepage_picker_page');
   static const homepagePickerSearchField = ValueKey<String>(
@@ -342,6 +361,9 @@ class TestKeys {
   );
   static const createAccessoryEmojiButton = ValueKey<String>(
     'create_accessory_emoji_button',
+  );
+  static const createAccessoryMentionButton = ValueKey<String>(
+    'create_accessory_mention_button',
   );
   static const createAccessoryStructureButton = ValueKey<String>(
     'create_accessory_structure_button',

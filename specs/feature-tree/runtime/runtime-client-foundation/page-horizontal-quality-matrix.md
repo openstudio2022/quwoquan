@@ -26,6 +26,7 @@
 | `lib/app/shell/bottom_navigation.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏底栏；C 位创作触发 `/create-entry`；底栏背景 / `forceDark` 与壳一致；2026-05-17 底栏内容改为占满含底部安全区总高、顶部留白与底部安全区对称，并在有圆角/indicator 机型增加左右保护量；2026-05-19 图标/label/阴影接入 chrome 语义 token，视觉基线不变 |
 | `lib/app/shell/web_app_install_banner.dart` | T1 | ✓ | — | — | — | — | ✓ | ✓ | ✓ | Web 顶部 App 安装提示；由 `PlatformCapabilities.promotesAppInstall` 控制，手机/Pad 提供下载与分享安装页，PC 提供 iOS/Android(鸿蒙)安装包入口；P7 走 `AppSpacing.wideBreakpoint`/`webContentMaxWidth`，P8 走 `UITextConstants`/`AppColors`/`AppTypography` |
 | `lib/app/shell/web_main_app_shell.dart` | T1 | ✓ | — | ✓ | ✓ | — | ✓ | ✓ | ✓ | PC Web 独立宽屏壳；顶部短欢迎区复用移动端 `WelcomeFlowerMark` 花瓣动效并居中展示品牌簇，不放登录/下载提示，内容页在欢迎区下方并随滚动推入/拉回，工具栏吸顶后再出现 `趣我圈` 花瓣图标/名称且左侧 tab 槽位稳定；Web 启动欢迎已改为 `QuWoQuanAppRoot` 上的 intro overlay（`WelcomeScreen.deferSequenceStart`），shell 仅承载内容首屏 hero，不再作为独立欢迎/登录主流程；右侧五个一级操作仅显示同尺寸图标并保留语义 label；**2026-06-06 商用收口**：首页/精品内容区改为复用移动端 `HomeMultiFormFeed`（多列瀑布 + 四态 + `referralSource: organicFeed`/`feedRequestId` 同源埋点），post 点击经统一 `openHomeFeedPost` → `MediaViewerExtra(dtoPosts)` 进沉浸 viewer（P3 端云一体复用 `discoveryFeed`/`PostBaseDto`，不另起 Web 数据/埋点链）；精品移除「精品队列」改干净多列墙；添加页复用分组模型分「内容创作/社交关系」两组（含发起群聊/加同好/创建圈子）并去掉「小趣创作助手」；消息右栏「消息助手」→「消息中心」且去掉「小趣」助手 tab；「我的」右栏去掉「多端同步」；字号/列宽/最大宽度走 Web PC 专用语义 token；P7 走 `PlatformCapabilities.wideScreenLayout`/`AppSpacing.wideBreakpoint`，P8 走既有 `AppColors`/`AppTypography`/`AppSpacing` token |
+| `lib/app/shell/web_main_app_shell_auth.dart` | T0 | — | — | — | — | — | — | — | — | `web_main_app_shell.dart` 的 `part` helper；仅承载 PC Web 登录守卫与规格类，不是独立页面，验收归入父壳 |
 
 ---
 
@@ -62,10 +63,10 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/chat/pages/chat_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Tab 根；消息 capsule 增加 `@小趣` 与 `提醒`；P2 联系人 `ChatContactsRow`+`listContacts` DTO；P6 on-accent 字色走 `badgeForeground`；会话列表头像统一走共享 token，群头像优先预渲染 URL，组合头像仅兜底；2026-05-17 顶部工具栏改为与搜索壳同源的 safeTop 基线，并复用收紧后的 regular 档主顶栏高度；2026-05-19 切换为 appChrome 顶栏别名与主底栏真实高度留白 |
+| `lib/ui/chat/pages/chat_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 消息体系商用重构入口；消息/联系为消息模块内两个独立一级页面状态，均无内联搜索框并统一走顶部工具栏搜索入口；消息筛选收口为 `全部/未读/群聊/私聊/通知`，联系筛选收口为 `全部/互关/圈子/群聊`；P2 以 `MessageHomeRowDto`、`ContactHomeRowDto`、`AppMessage`/notification inbox 和交集摘要 read model 为真相源，App 不拼来源/交集/成员数；打开会话后统一刷新全部消息筛选引用的已读状态；群头像只消费服务端预合成 `avatarUrl`，禁止端侧群成员九宫格 fallback；P3 生产 Remote-only，Mock 仅作 contract fixture |
 | `lib/ui/chat/pages/chat_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 委托 `ChatConversationPage`；P2 消息链 `ChatMessageDto` + Repository 强类型 |
 | `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`；P2 消息列表 `ChatMessageDto` + `ChatMessageDisplayItem` 强类型展示链；2026-05-19 三点入口、选择态文字操作与默认单行输入栏统一到 appChrome/chatInput token；2026-05-30 语音消息接入 `VoiceRecorder`/`voiceSendProvider`，compact 输入栏收敛 `@小趣` 防挤压，语音发送沿 metadata `audio` 契约；2026-06-06 body 外包统一 `WebPageMaxWidthFrame`（宽屏内容区限宽居中、左右用 page background 区分阅读区，移动端透传），时间分隔按 `sentAtIso` 间隔（≥5min）降噪 |
-| `lib/ui/chat/pages/chat_settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `ChatGroupSettingsDto`；聊天信息；`AppScaffold`；P7 成员网格按头像与文字高度计算；2026-05-19 登记为三点入口链路设置 Inset chrome |
+| `lib/ui/chat/pages/chat_settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `GroupHomeDto` + `ChatGroupSettingsDto`；聊天信息/群主页入口消费 `GetGroupHome` 的来源、公告、成员数和能力；`AppScaffold`；P7 成员网格按头像与文字高度计算；2026-05-19 登记为三点入口链路设置 Inset chrome |
 | `lib/ui/chat/pages/start_group_chat_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `ChatInboxDto`/`CircleDto`/`ChatConversationCreatedDto` + 向导 ViewModel；模态建群；选择群聊页与主列表共享会话头像 token / 占位视觉 |
 | `lib/ui/chat/pages/transfer_ownership_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 成员 DTO 过滤/展示；`SettingsInsetMemberPickerPageScaffold` |
 | `lib/ui/chat/pages/group_member_search_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `ChatConversationMemberDto`；**P5** `shell=search_embedded`（`settings_canonical_manifest`）；**P7** 按默认 B 验收 |
@@ -80,7 +81,7 @@
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/ui/circle/pages/home_circles_hub_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`CircleHubFeedPostEntry` presentation + dto/raw 同步；viewer `immersive`+wire；频道管理改为五垂类阶段隐藏；2026-05-21 首页垂类固定为校园/旅行/摄影/科技/车之家，群组瀑布流恢复默认双列自适应，旅行/摄影图片使用页内轮播，P7/P8 分列保持 ✓ |
 | `lib/ui/circle/pages/circles_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `List<CircleDto>`；`AppScaffold`；P4 MainAppShell |
-| `lib/ui/circle/pages/circle_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`section_creations` DTO+`PostReadSurfaceId.circleWorks`；壳 `CircleDto` 已合规；对象页网络 IA 收敛为 `首页/内容/群或组织/成员`，首屏接 `ObjectPageContext` 小趣行动 dock |
+| `lib/ui/circle/pages/circle_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`section_creations` DTO+`PostReadSurfaceId.circleWorks`；壳 `CircleDto` 已合规；2026-06-14 首屏 IA 收敛为身份区、加入/私信、与你的交集、圈子影响力、内容/讨论/成员；管理/编辑/分享等操作进入更多菜单；内容二级筛选为全部/图片/视频/文字 |
 | `lib/ui/circle/pages/circle_edit_settings_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `CircleEditSubmitPayload` |
 | `lib/ui/circle/pages/circle_stats_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `CircleStats*RowViewData`；`AppScaffold` |
 | `lib/ui/circle/pages/circles_hub_page.dart` | T0 | — | — | — | — | — | — | — | — | 仅 `export` `home_circles_hub_page`，不单独验收 |
@@ -91,10 +92,8 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/content/pages/article_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`PostReadUiBundle.detailArticle` + `projectArticleDetailView` 同 wire。P7：底部 `viewPadding.bottom` + 圆弧左右保护；P8：底部动作图标接入 `bottomNavItemIconSize` |
-| `lib/ui/content/pages/photo_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`PostSummaryView` + `PostReadSurfaceId.detailPhoto` |
-| `lib/ui/content/pages/video_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`PostReadSurfaceId.detailVideo` |
 | `lib/ui/content/pages/unified_media_viewer_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | **P2 ✓**：薄壳→`WorksImmersiveViewer`+`readPresentation`；**P6** 仍 exempt（S6-2）；2026-05-19 进入沉浸媒体时使用 appChrome 压缩 safeTop，对齐首页精品顶栏 |
+| `lib/ui/content/pages/work_browser_entry_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | `workBrowser` 统一深链入口；P2 `WorkBrowserItemDto`/`PostReadPresentation` + `ContentRepository` 定位队列；P3 走 `contentRepositoryProvider` Mock/Remote；P6 跟随 `WorksImmersiveViewer` 深色沉浸与文章 Dark Paper |
 
 ---
 
@@ -102,7 +101,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/content/entry/pages/create_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`postReadPreviewBundleFromPublishConfirmSummary`（draftPreview）；P6 full。P7/P8：reader host 口径不变 |
+| `lib/ui/content/entry/pages/create_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`postReadPreviewBundleFromPublishConfirmSummary`（draftPreview）+ `CreatePostRequestWire` 写入 `summary/tagRefs/entityRefs/assistantUsePolicy`；P6 full。P7/P8：reader host 与发布 sheet token 口径不变 |
 | `lib/ui/content/entry/pages/article_typography_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`postReadPreviewBundleFromCreateEditorState` 标题/投影；书页分页不变；2026-05-19 黑场顶栏 safeTop/按钮尺寸接入 appChrome |
 | `lib/ui/content/entry/pages/publish_location_selector_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：帖子投影 N/A；`LocationPoiDto`+Settings；主预览在 create 链 |
 | `lib/ui/content/entry/pages/video_editor_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：回写草稿；与 draftPreview 桥一致（类注释） |
@@ -119,7 +118,16 @@
 | `lib/ui/entity/pages/homepage_claim_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageClaimRequestDraft` |
 | `lib/ui/entity/pages/homepage_maintenance_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageBasicDraft` |
 | `lib/ui/entity/pages/homepage_status_report_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageStatusReportDraft` |
-| `lib/ui/entity/pages/homepage_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageDetail`/`HomepageShellData`/`ObjectPageBundle`；对象页网络 IA 为 `首页/内容/口碑/关联`，首屏消费 `IntersectionReason`/`ObjectRelationEdge`/`ObjectPageContext`；2026-05-19 overlay 顶栏 safeTop/按钮节奏接入资料页 appChrome token |
+| `lib/ui/entity/pages/homepage_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageDetail`/`HomepageShellData`/`ObjectPageBundle`；2026-06-14 地点和事物主页 IA 收敛为身份区、关注/私信、与你的交集、认识对象、内容/讨论/兴趣圈；用户可见文案不用“实体”；认领/维护/状态上报进入更多菜单；主视觉使用品牌蓝 |
+| `lib/ui/entity/pages/homepage_introduction_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageIntroduction`/`HomepageIntroductionSection`；完整介绍页，P5 非设置/半屏表单 |
+
+---
+
+## intersection
+
+| 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
+|------|------|----|----|----|----|----|----|----|----|------|
+| `lib/ui/intersection/pages/object_intersection_list_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：全部交集页，消费 `IntersectionReason` + `ObjectIntersectionQuery(limit: 50)`；路由 `objectIntersections` 由 metadata codegen 生成；纵向列表复用 `ObjectIntersectionCard`，无交集/错误独立降级 |
 
 ---
 
@@ -157,11 +165,12 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：对象页网络 Tab 显示口径收敛为 `看点/作品/圈子/互动`（底层仍由 codegen `UserProfileUIConfig.profileTabs` 驱动）；创作/生活强类型 DTO 不变；首屏接 `ObjectPageContext` 小趣行动 dock。**V5 埋点**：进入曝光 + dispose 停留（`contentBehaviorTracker`，contentType=user，referralSource=authorProfile）；other 模式交集卡 `onReasonTap` → `BehaviorEvent.intersectionDimension/intersectionTagRefs` 归因 |
+| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：2026-06-14 我的主页首屏固定为身份区、编辑资料/分享主页、我的新交集、我的影响力、作品/圈子/互动、双列内容流；作品二级筛选仅全部/图片/视频/文字；进入曝光 + dispose 停留（`contentBehaviorTracker`） |
 | `lib/ui/user/pages/login_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap/loginWechat/loginApple/loginPasskey` + `AuthLoginResultDto`；P3 Mock/Remote 由 `authRepositoryProvider` 切换；微信 / Apple / Credential Manager / passkey 入口由 `PlatformCapabilities + NativeAuthBridge` 预留并降级，协议勾选前不调用原生登录 SDK |
 | `lib/ui/user/pages/legal_document_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 远端 WebView 展示用户协议/隐私政策；P2/P3 —，内容来自配置 URL；禁用 JS，保留返回与失败重试 |
-| `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：同 my_profile；other 模式展示真实交集卡 |
+| `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：2026-06-14 用户主页首屏固定为身份区、关注/私信、你们的交集、TA的影响力、作品/圈子/互动、双列内容流；交集卡 `onReasonTap` → `BehaviorEvent.intersectionDimension/intersectionTagRefs` 归因 |
 | `lib/ui/user/pages/my_intersection_inbox_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：我的交集分维度列表，消费 `GET /v1/content/intersections`（list）+ `POST /v1/content/intersections/visit`（打开即推进已读水位清零）；强类型 `IntersectionReason`；统一原子 `IntersectionEntity`（头像+名字+维度chip，概率标「推荐」）；P3 Mock/Remote 经 `intersectionRepositoryProvider` 切换；空/错误兜底；点条目带 `relationKind` 进对象页 |
+| `lib/ui/user/pages/my_footprint_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：我的足迹私有只读列表，消费 `GET /v1/content/footprint`（type 过滤 + cursor 分页）；强类型 `FootprintEntry`；P3 Mock/Remote 经 `footprintRepositoryProvider` 切换；type 枚举由云侧定义、端侧只透传；空/错误/分页兜底；点条目按 R21 带 referralSource 进作品浏览器 |
 | `lib/ui/user/pages/edit_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ProfileEditUpdatePayload |
 | `lib/ui/user/pages/persona_management_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | UserRepository summary / PersonaDtoSurface |
 | `lib/ui/user/pages/profile_stats_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | ProfileCircleViewData / ProfileSocialRelationRowViewData |
@@ -185,16 +194,16 @@
 
 | 类别 | 数量 |
 |------|------|
-| `ui/**/pages/*_page.dart`（含 T0 一行） | 58 |
+| `ui/**/pages/*_page.dart`（含 T0 一行） | 59 |
 | `welcome_screen.dart`（额外入口） | 1 |
 | `components/**/*_page.dart` | 5 |
 | `app/shell/*.dart`（主壳 + 底栏 + Web 安装提示 + PC Web 宽屏壳） | 4 |
-| **矩阵数据行（含 T0 + shell）** | **67** |
-| **需验收的独立页面行（排除 T0）** | **63** |
-| **P6 = ✓（full）** | **54** |
+| **矩阵数据行（含 T0 + shell）** | **68** |
+| **需验收的独立页面行（排除 T0）** | **64** |
+| **P6 = ✓（full）** | **55** |
 | **P6 = ○（partial，待收敛 S6）** | **8** |
 | **P6 = —（exempt 或整行 —）** | **3**（`circles_hub` T0 全列 — + `unified_media_viewer` + `one_tap_movie_preview`） |
-| **P2 = ✓（compliant）** | **52**（含帖子全链路 17 页/面，2026-04-11 收口） |
+| **P2 = ✓（compliant）** | **53**（含帖子全链路 17 页/面，2026-04-11 收口） |
 | **P2 = ○（partial，待 metadata/UI 收敛）** | **0**（帖子管线已 ✓；后续非帖子 P2 另开项） |
 | **当前横向列** | **P1–P8**（可扩展至 P9…） |
 

@@ -1,0 +1,55 @@
+version: 1
+read_model: HomepageIntroductionSection
+
+description: |
+  主页完整介绍页分节。kind 为稳定展示闭集：
+  overview | keyFacts | timeline | history | relatedPeople | relatedObjects | map | gallery。
+  端侧按 kind 选择渲染形态，正文仍以 bodyMarkdown 为主，避免 Map 穿透 UI。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: HomepageIntroductionSection
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/homepage_introduction_section.g.dart
+  dart_imports:
+    - homepage_introduction_asset.g.dart
+    - homepage_introduction_timeline_item.g.dart
+  fields:
+    - name: kind
+      dart_type: String
+      nullable: false
+      source: kind
+      aliases: [kind]
+      default: "'overview'"
+
+    - name: title
+      dart_type: String
+      nullable: false
+      source: title
+      aliases: [title]
+      default: "''"
+
+    - name: bodyMarkdown
+      dart_type: String
+      nullable: true
+      source: bodyMarkdown
+      aliases: [bodyMarkdown, body, markdown]
+
+    - name: assets
+      dart_type: List<HomepageIntroductionAsset>
+      nullable: false
+      source: assets
+      aliases: [assets]
+      list_element_dart_class: HomepageIntroductionAsset
+
+    - name: timelineItems
+      dart_type: List<HomepageIntroductionTimelineItem>
+      nullable: false
+      source: timelineItems
+      aliases: [timelineItems, items]
+      list_element_dart_class: HomepageIntroductionTimelineItem

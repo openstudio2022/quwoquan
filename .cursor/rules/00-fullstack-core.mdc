@@ -8,6 +8,7 @@ alwaysApply: true
 ## 必守
 
 - 一棵树：`AppRoot -> L1_domain_service -> L2_business_capability -> L3_story`。
+- 命令和自然语言输入等价：用户未显式输入 slash command 时，也必须按 `docs/agent_context_contract.md` 识别阶段、区域、规格和证据层。
 - 正式文档：应用根/领域/能力用 `spec.md + design.md + acceptance.yaml`；Story 只用 `spec.md + acceptance.yaml`。
 - 测试语言：验收意图为 UAT/SIT/GWT/contract，证据层只用 T1/T2/T3/T4。
 - DDD 依赖方向固定：`domain <- application <- adapters <- infrastructure`。
@@ -24,6 +25,7 @@ alwaysApply: true
 - 硬编码错误码、路径、surface、operation、route。
 - 用户可见能力缺 SLO/KPI、权限、生命周期、灰度、回滚或观测。
 - `implemented/completed` 但无测试证据。
+- 跨 App / Service / Data / Ops 任意两个以上区域却没有端到端证据闭环。
 
 ## 交付
 

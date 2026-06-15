@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
@@ -13,6 +14,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_memb
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_codec.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
@@ -352,6 +356,49 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
+  Future<List<MessageHomeRowDto>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final rows = (await listInbox(cursor: cursor, limit: limit))
+        .where((item) {
+          switch (filter) {
+            case 'unread':
+              return item.unreadCount > 0;
+            case 'group':
+              return item.type == 'group';
+            case 'direct':
+              return item.type == 'direct' || item.type == 'encrypted';
+            case 'notification':
+              return false;
+            default:
+              return true;
+          }
+        })
+        .map(
+          (item) => MessageHomeRowDto(
+            id: item.id,
+            kind: 'conversation',
+            conversationId: item.id,
+            conversationType: item.type,
+            title: item.title,
+            summary: item.lastMessagePreview,
+            avatarUrl: item.avatarUrl,
+            groupAvatarVersion: item.groupAvatarVersion,
+            lastActiveAt: item.lastMessageTime,
+            unreadCount: item.unreadCount,
+            mentionUnreadCount: item.mentionUnreadCount,
+            muted: item.muted,
+            pinned: item.pinned,
+            read: item.unreadCount == 0,
+          ),
+        )
+        .toList(growable: false);
+    return rows.take(limit).toList(growable: false);
+  }
+
+  @override
   Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
@@ -409,7 +456,10 @@ class MockChatRepository implements ChatRepository {
         initialMemberIds != null &&
         initialMemberIds.length == 1) {
       final peerId = initialMemberIds.first.trim();
-      final reusedId = _matchDirectConversationId(peerId, ChatMockData.nameFor(peerId));
+      final reusedId = _matchDirectConversationId(
+        peerId,
+        ChatMockData.nameFor(peerId),
+      );
       if (reusedId.isNotEmpty) {
         return ChatConversationCreatedDto(conversationId: reusedId);
       }
@@ -425,8 +475,7 @@ class MockChatRepository implements ChatRepository {
       circleGroupId: circleGroupId,
       originType:
           originType ?? _defaultOriginType(type, circleId, circleGroupId),
-      bindingType:
-          bindingType ?? _defaultBindingType(circleId, circleGroupId),
+      bindingType: bindingType ?? _defaultBindingType(circleId, circleGroupId),
       lifecyclePolicy:
           lifecyclePolicy ?? _defaultLifecyclePolicy(circleId, circleGroupId),
       maxSeq: 0,
@@ -572,7 +621,7 @@ class MockChatRepository implements ChatRepository {
   }) async {
     final conversation = _findConversation(conversationId);
     if (conversation != null && conversation.status == 'blocked') {
-      throw StateError('CHAT.USER.blocked');
+      throw StateError(ChatErrorCode.blocked.code);
     }
     _seqCounter += 1;
     final now = DateTime.now().toUtc();
@@ -773,6 +822,83 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
+  Future<List<ContactHomeRowDto>> listContactHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final rows = <ContactHomeRowDto>[];
+    if (filter == 'all' || filter == 'mutual') {
+      for (final contact in _contactRows) {
+        if (filter == 'mutual' && contact.relationState != 'mutual') {
+          continue;
+        }
+        rows.add(
+          ContactHomeRowDto(
+            id: contact.userId,
+            kind: 'user',
+            objectId: contact.userId,
+            userId: contact.userId,
+            conversationId: _matchDirectConversationId(
+              contact.userId,
+              contact.displayName,
+            ),
+            title: contact.displayName,
+            subtitle: _firstNonEmpty(
+              contact.bio,
+              contact.metFrom,
+              contact.lastInteraction,
+            ),
+            avatarUrl: contact.avatarUrl,
+            relationState: contact.relationState,
+            summaryIntersections: _firstTwoNonEmpty(
+              contact.metFrom,
+              contact.bio,
+            ),
+            lastActiveAt: _parseIso(contact.lastInteraction),
+            sortKey: contact.lastInteraction,
+            isStarred: contact.isStarred,
+          ),
+        );
+      }
+    }
+    if (filter == 'all' || filter == 'circle') {
+      final circles = await listContactTabCircles(limit: limit);
+      rows.addAll(
+        circles.map(
+          (circle) => ContactHomeRowDto(
+            id: circle.circleId,
+            kind: 'circle',
+            objectId: circle.circleId,
+            circleId: circle.circleId,
+            title: circle.displayName,
+            subtitle: circle.subtitle,
+            avatarUrl: circle.avatarUrl,
+          ),
+        ),
+      );
+    }
+    if (filter == 'all' || filter == 'group') {
+      final groups = await listContactTabFunGroups(limit: limit);
+      rows.addAll(
+        groups.map(
+          (group) => ContactHomeRowDto(
+            id: group.conversationId,
+            kind: 'group',
+            objectId: group.conversationId,
+            conversationId: group.conversationId,
+            title: group.displayName,
+            subtitle: group.subtitle,
+            avatarUrl: group.avatarUrl,
+            summaryIntersections: _firstTwoNonEmpty(group.subtitle),
+          ),
+        ),
+      );
+    }
+    return rows.take(limit).toList(growable: false);
+  }
+
+  @override
   Future<List<ChatContactRowDto>> listGroupCandidates({
     String? conversationId,
     int limit = CloudApiDefaults.pageLimit,
@@ -938,6 +1064,39 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
+  Future<GroupHomeDto> getGroupHome(String conversationId) async {
+    final conversation = _findConversation(conversationId);
+    if (conversation == null) {
+      return GroupHomeDto();
+    }
+    final members = _ensureMembersCache(conversationId);
+    final current = members.firstWhere(
+      (member) => member.isCurrentUser,
+      orElse: () =>
+          members.isNotEmpty ? members.first : ChatConversationMemberDto(),
+    );
+    final canManage = current.role == 'owner' || current.role == 'admin';
+    final canDissolve =
+        current.role == 'owner' && conversation.circleId.trim().isEmpty;
+    return GroupHomeDto(
+      conversationId: conversation.id,
+      title: conversation.title,
+      avatarUrl: conversation.avatarUrl,
+      groupAvatarVersion: conversation.groupAvatarVersion,
+      circleId: conversation.circleId,
+      circleGroupId: conversation.circleGroupId ?? '',
+      sourceCircleTitle: conversation.circleId,
+      memberCount: conversation.memberCount,
+      capabilities: const <String>['album', 'file', 'event', 'member'],
+      originType: conversation.originType,
+      bindingType: conversation.bindingType,
+      lifecyclePolicy: conversation.lifecyclePolicy,
+      canManageMembers: canManage,
+      canDissolve: canDissolve,
+    );
+  }
+
+  @override
   Future<void> updateGroupSettings(
     String conversationId,
     ChatGroupSettingsDto settings,
@@ -1036,4 +1195,28 @@ DateTime? _parseIso(String value) {
     return null;
   }
   return DateTime.tryParse(normalized);
+}
+
+String _firstNonEmpty(String a, String b, String c) {
+  for (final value in <String>[a, b, c]) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty) {
+      return trimmed;
+    }
+  }
+  return '';
+}
+
+List<String> _firstTwoNonEmpty(String a, [String b = '']) {
+  final out = <String>[];
+  for (final value in <String>[a, b]) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty && !out.contains(trimmed)) {
+      out.add(trimmed);
+    }
+    if (out.length == 2) {
+      break;
+    }
+  }
+  return List<String>.unmodifiable(out);
 }

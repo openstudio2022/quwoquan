@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
@@ -12,6 +14,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dt
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
@@ -24,6 +29,8 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_group_settings_extensions.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+
+part 'chat_repository_remote_decoders.dart';
 
 /// 在 surface/operation 基础头之上合并当前用户与分身上下文（如 [CloudRequestHeaders.withPersonaContext]）。
 typedef ChatRemoteMergeRequestContext =
@@ -98,14 +105,46 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.listInbox,
       ),
     );
-    final page = CloudResponseDecoder.asCursorPage(
+    return _decodeCursorPageItems(
       decoded,
       context: _contextForSurface(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listInboxOperation,
       ),
+      fromMap: ChatInboxDto.fromMap,
     );
-    return page.items.map(ChatInboxDto.fromMap).toList(growable: false);
+  }
+
+  @override
+  Future<List<MessageHomeRowDto>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final uri = _uri(
+      ChatApiMetadata.listMessageHomePath,
+      queryParameters: <String, String>{
+        'filter': filter,
+        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+        'limit': '$limit',
+      },
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: await _resolveHeaders(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listMessageHomeOperation,
+        clientPageId: ChatRequestPageIds.listMessageHome,
+      ),
+    );
+    return _decodeCursorPageItems(
+      decoded,
+      context: _contextForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listMessageHomeOperation,
+      ),
+      fromMap: MessageHomeRowDto.fromMap,
+    );
   }
 
   @override
@@ -128,14 +167,14 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.listConversations,
       ),
     );
-    final page = CloudResponseDecoder.asCursorPage(
+    return _decodeCursorPageItems(
       decoded,
       context: _contextForSurface(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listConversationsOperation,
       ),
+      fromMap: ChatInboxDto.fromMap,
     );
-    return page.items.map(ChatInboxDto.fromMap).toList(growable: false);
   }
 
   @override
@@ -155,16 +194,14 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.searchConversations,
       ),
     );
-    final page = CloudResponseDecoder.asCursorPage(
+    return _decodeCursorPageItems(
       decoded,
       context: _contextForSurface(
         AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchConversationsOperation,
       ),
+      fromMap: ConversationSearchItemView.fromMap,
     );
-    return page.items
-        .map(ConversationSearchItemView.fromMap)
-        .toList(growable: false);
   }
 
   @override
@@ -246,8 +283,8 @@ class RemoteChatRepository implements ChatRepository {
       uri,
       headers: await _resolveHeaders(
         AppUiSurfaces.chatSettings,
-        operationId: ChatApiMetadata.getConversationOperation,
-        clientPageId: ChatRequestPageIds.getConversation,
+        operationId: ChatApiMetadata.updateConversationTitleOperation,
+        clientPageId: ChatRequestPageIds.updateConversationTitle,
       ),
       body: <String, dynamic>{'title': title},
     );
@@ -303,16 +340,14 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.searchMessages,
       ),
     );
-    final page = CloudResponseDecoder.asCursorPage(
+    return _decodeCursorPageItems(
       decoded,
       context: _contextForSurface(
         AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchMessagesOperation,
       ),
+      fromMap: MessageSearchItemView.fromMap,
     );
-    return page.items
-        .map(MessageSearchItemView.fromMap)
-        .toList(growable: false);
   }
 
   @override
@@ -346,8 +381,8 @@ class RemoteChatRepository implements ChatRepository {
         'content': content,
         'clientMsgId': clientMsgId,
         if (mediaUrl != null && mediaUrl.isNotEmpty) 'mediaUrl': mediaUrl,
-        if (media != null) 'media': media,
-        if (cardPayload != null) 'cardPayload': cardPayload,
+        'media': ?media,
+        'cardPayload': ?cardPayload,
         if (replyToMessageId != null && replyToMessageId.isNotEmpty)
           'replyToMessageId': replyToMessageId,
         if (mentions != null && mentions.isNotEmpty) 'mentions': mentions,
@@ -462,20 +497,11 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.getReceipts,
       ),
     );
-    final obj = CloudResponseDecoder.asObject(
+    return _decodeObjectItems(
       decoded,
       context: ChatRequestPageIds.getReceipts,
+      fromMap: ChatMessageReceiptDto.fromMap,
     );
-    final items = obj['items'];
-    if (items is List) {
-      return items
-          .whereType<Map>()
-          .map(
-            (m) => ChatMessageReceiptDto.fromMap(Map<String, dynamic>.from(m)),
-          )
-          .toList(growable: false);
-    }
-    return const [];
   }
 
   // ── 成员管理 ──────────────────────────────────────────────────────────────
@@ -505,18 +531,11 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.listMembers,
       ),
     );
-    final obj = CloudResponseDecoder.asObject(
+    return _decodeObjectItems(
       decoded,
       context: ChatRequestPageIds.listMembers,
+      fromMap: ChatConversationMemberDto.fromMap,
     );
-    final items = obj['items'];
-    if (items is! List) {
-      return [];
-    }
-    return items
-        .whereType<Map<String, dynamic>>()
-        .map(ChatConversationMemberDto.fromMap)
-        .toList(growable: false);
   }
 
   @override
@@ -615,10 +634,7 @@ class RemoteChatRepository implements ChatRepository {
         operationId: ChatApiMetadata.updateConversationSettingsOperation,
         clientPageId: ChatRequestPageIds.updateConversationSettings,
       ),
-      body: {
-        if (muted != null) 'muted': muted,
-        if (pinned != null) 'pinned': pinned,
-      },
+      body: {'muted': ?muted, 'pinned': ?pinned},
     );
   }
 
@@ -644,16 +660,43 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.listContacts,
       ),
     );
-    final obj = CloudResponseDecoder.asObject(
+    return _decodeObjectItems(
       decoded,
       context: ChatRequestPageIds.listContacts,
+      fromMap: ChatContactRowDto.fromMap,
     );
-    final items = CloudResponseDecoder.mapList(obj, 'items');
-    return items
-        .map((item) {
-          return ChatContactRowDto.fromMap(Map<String, dynamic>.from(item));
-        })
-        .toList(growable: false);
+  }
+
+  @override
+  Future<List<ContactHomeRowDto>> listContactHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final uri = _uri(
+      ChatApiMetadata.listContactHomePath,
+      queryParameters: <String, String>{
+        'filter': filter,
+        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+        'limit': '$limit',
+      },
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: await _resolveHeaders(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listContactHomeOperation,
+        clientPageId: ChatRequestPageIds.listContactHome,
+      ),
+    );
+    return _decodeCursorPageItems(
+      decoded,
+      context: _contextForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listContactHomeOperation,
+      ),
+      fromMap: ContactHomeRowDto.fromMap,
+    );
   }
 
   @override
@@ -678,14 +721,11 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.listGroupCandidates,
       ),
     );
-    final obj = CloudResponseDecoder.asObject(
+    return _decodeObjectItems(
       decoded,
       context: ChatRequestPageIds.listGroupCandidates,
+      fromMap: ChatContactRowDto.fromMap,
     );
-    final items = CloudResponseDecoder.mapList(obj, 'items');
-    return items
-        .map((item) => ChatContactRowDto.fromMap(Map<String, dynamic>.from(item)))
-        .toList(growable: false);
   }
 
   @override
@@ -774,18 +814,11 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.searchContacts,
       ),
     );
-    final obj = CloudResponseDecoder.asObject(
+    return _decodeObjectItems(
       decoded,
       context: ChatRequestPageIds.searchContacts,
+      fromMap: ChatContactSearchItemDto.fromMap,
     );
-    final items = obj['items'];
-    if (items is! List) {
-      return [];
-    }
-    return items
-        .whereType<Map<String, dynamic>>()
-        .map(ChatContactSearchItemDto.fromMap)
-        .toList(growable: false);
   }
 
   // ── 会话时间戳索引 ──────────────────────────────────────────────────────────
@@ -801,22 +834,11 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.listConversationTimestamps,
       ),
     );
-    final obj = CloudResponseDecoder.asObject(
+    return _decodeObjectItems(
       decoded,
       context: ChatRequestPageIds.listConversationTimestamps,
+      fromMap: ChatConversationTimestampDto.fromMap,
     );
-    final items = obj['items'];
-    if (items is List) {
-      return items
-          .whereType<Map>()
-          .map(
-            (m) => ChatConversationTimestampDto.fromMap(
-              Map<String, dynamic>.from(m),
-            ),
-          )
-          .toList(growable: false);
-    }
-    return const [];
   }
 
   @override
@@ -831,18 +853,11 @@ class RemoteChatRepository implements ChatRepository {
       ),
       body: {'ids': ids},
     );
-    final obj = CloudResponseDecoder.asObject(
+    return _decodeObjectItems(
       decoded,
       context: ChatRequestPageIds.batchGetConversations,
+      fromMap: ConversationDto.fromMap,
     );
-    final items = obj['items'];
-    if (items is List) {
-      return items
-          .whereType<Map>()
-          .map((m) => ConversationDto.fromMap(Map<String, dynamic>.from(m)))
-          .toList(growable: false);
-    }
-    return const [];
   }
 
   // ── 群管理 ──────────────────────────────────────────────────────────────────
@@ -864,6 +879,30 @@ class RemoteChatRepository implements ChatRepository {
       CloudResponseDecoder.asObject(
         decoded,
         context: ChatRequestPageIds.getConversation,
+      ),
+    );
+  }
+
+  @override
+  Future<GroupHomeDto> getGroupHome(String conversationId) async {
+    final uri = _uri(
+      ChatApiMetadata.getGroupHomePath(conversationId: conversationId),
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: await _resolveHeaders(
+        AppUiSurfaces.chatSettings,
+        operationId: ChatApiMetadata.getGroupHomeOperation,
+        clientPageId: ChatRequestPageIds.getGroupHome,
+      ),
+    );
+    return GroupHomeDto.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: _contextForSurface(
+          AppUiSurfaces.chatSettings,
+          operationId: ChatApiMetadata.getGroupHomeOperation,
+        ),
       ),
     );
   }

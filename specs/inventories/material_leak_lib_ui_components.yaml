@@ -708,19 +708,7 @@ files:
     material_import: show
     material_show: show Colors
     imports_cupertino: true
-  - path: quwoquan_app/lib/ui/content/pages/article_detail_page.dart
-    zone: ui
-    material_import: full
-    imports_cupertino: true
-  - path: quwoquan_app/lib/ui/content/pages/photo_detail_page.dart
-    zone: ui
-    material_import: none
-    imports_cupertino: true
   - path: quwoquan_app/lib/ui/content/pages/unified_media_viewer_page.dart
-    zone: ui
-    material_import: none
-    imports_cupertino: true
-  - path: quwoquan_app/lib/ui/content/pages/video_detail_page.dart
     zone: ui
     material_import: none
     imports_cupertino: true

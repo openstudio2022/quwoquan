@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -29,6 +30,8 @@ import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dar
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+
+part 'user_profile_contract_seed_helpers.dart';
 
 PersonaDto _personaDtoFromWire(Map<String, dynamic> json) {
   final m = Map<String, dynamic>.from(json);
@@ -66,7 +69,9 @@ abstract class ProfileReadRepository {
     int limit = CloudApiDefaults.userCirclesLimit,
   });
   Future<UserProfileStatsViewData> getUserStats(String userId);
-  Future<CreatorImpactReadModel> getCreatorImpact(String userId);
+
+  /// 创作者影响力摘要（GetAuthorImpact，codegen DTO；displayText 云侧产出端只读直出）。
+  Future<AuthorImpactSummary> getAuthorImpact(String userId);
 
   Future<List<SocialRelationSearchItemView>> searchSocialRelations({
     required String query,
@@ -203,120 +208,6 @@ abstract class UserProfileRepository
   }
 }
 
-/// 预置用户档案 JSON：`jsonDecode` 后与远程 `getUserProfile` 同形进入 [SubAccountProfileWireDto]。
-const String _kBundledMockUserProfilesJson = r'''
-{
-  "user_001": {
-    "userId": "user_001",
-    "nickname": "趣我圈用户",
-    "avatarUrl": "https://i.pravatar.cc/150?u=user_001",
-    "bio": "关心时事、关注新闻、思考人生、思索生命",
-    "backgroundUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200",
-    "followerCount": 120,
-    "followingCount": 85,
-    "postCount": 30,
-    "circleCount": 3,
-    "likeCount": 480
-  },
-  "nature_photographer": {
-    "userId": "nature_photographer",
-    "nickname": "自然摄影师",
-    "avatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100",
-    "bio": "用镜头记录自然之美",
-    "backgroundUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200",
-    "followerCount": 1200,
-    "followingCount": 284,
-    "postCount": 156,
-    "circleCount": 8,
-    "likeCount": 4800
-  },
-  "travel_photographer": {
-    "userId": "travel_photographer",
-    "nickname": "旅行摄影师",
-    "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100",
-    "bio": "在路上，遇见世界",
-    "backgroundUrl": "https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200",
-    "followerCount": 890,
-    "followingCount": 156,
-    "postCount": 89,
-    "circleCount": 5,
-    "likeCount": 3200
-  },
-  "a1": {
-    "userId": "a1",
-    "nickname": "楹语小筑",
-    "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100",
-    "bio": "分享美好生活",
-    "backgroundUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200",
-    "followerCount": 2400,
-    "followingCount": 320,
-    "postCount": 230,
-    "circleCount": 12,
-    "likeCount": 9600
-  }
-}
-''';
-
-Map<String, Map<String, dynamic>> _decodeBundledMockUserProfiles(String raw) {
-  final root = CloudResponseDecoder.asObject(
-    json.decode(raw),
-    context: UserRequestPageIds.getUserProfile,
-  );
-  return root.map(
-    (k, v) => MapEntry(
-      k,
-      CloudResponseDecoder.asObject(
-        v,
-        context: UserRequestPageIds.getUserProfile,
-      ),
-    ),
-  );
-}
-
-List<Map<String, dynamic>> _decodeJsonObjectList(String raw) {
-  final decoded = json.decode(raw);
-  if (decoded is! List) {
-    return const <Map<String, dynamic>>[];
-  }
-  return decoded
-      .whereType<Map>()
-      .map((e) => Map<String, dynamic>.from(e))
-      .toList(growable: false);
-}
-
-const String _kMockRelationUsersJson = r'''
-[
-  {"userId":"u1","nickname":"你的皮炎有点辣","avatarUrl":"https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100","bio":"美食探索者","isFollowing":true},
-  {"userId":"u2","nickname":"仅分组可见","avatarUrl":"https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100","bio":"设计师","isFollowing":false},
-  {"userId":"u3","nickname":"原价帝吧","avatarUrl":"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100","bio":"数码爱好者","isFollowing":true},
-  {"userId":"u4","nickname":"李想","avatarUrl":"https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100","bio":"产品经理","isFollowing":false}
-]
-''';
-
-const String _kMockInteractionsJson = r'''
-[
-  {"userId":"u1","nickname":"你的皮炎有点辣","avatarUrl":"https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100","activityType":"like","contentType":"like","targetTitle":"赞了你的《川西秘境摄影集》","createdAt":"2025-12-21T10:00:00Z"},
-  {"userId":"u2","nickname":"王小明","avatarUrl":"https://images.unsplash.com/photo-1643816831234-e7cb32194e92?w=100","activityType":"comment","contentType":"comment","targetTitle":"评论了你的《摄影器材交流区》","createdAt":"2025-12-20T10:05:00Z"},
-  {"userId":"u3","nickname":"原价帝吧","avatarUrl":"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100","activityType":"share","contentType":"share","targetTitle":"转发了你的《森林的呼吸》","createdAt":"2025-12-20T08:00:00Z"},
-  {"userId":"u4","nickname":"李想","avatarUrl":"https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100","activityType":"like","contentType":"like","targetTitle":"赞了你的《光影的节奏》","createdAt":"2025-12-19T16:00:00Z"}
-]
-''';
-
-const String _kMockInteractionsSentJson = r'''
-[
-  {"userId":"u3","nickname":"原价帝吧","avatarUrl":"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100","activityType":"comment","contentType":"comment","targetTitle":"你评论了《森林的呼吸》","createdAt":"2025-12-19T14:00:00Z"},
-  {"userId":"u1","nickname":"你的皮炎有点辣","avatarUrl":"https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100","activityType":"share","contentType":"share","targetTitle":"你转发了《川西秘境摄影集》","createdAt":"2025-12-18T20:00:00Z"},
-  {"userId":"u4","nickname":"李想","avatarUrl":"https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100","activityType":"like","contentType":"like","targetTitle":"你赞了《光影的节奏》","createdAt":"2025-12-17T18:30:00Z"}
-]
-''';
-
-const String _kMockLikesJson = r'''
-[
-  {"postId":"p1","title":"光影的节奏","coverUrl":"https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400","likerNickname":"你的皮炎有点辣","likerAvatarUrl":"https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100","likedAt":"2025-12-21T10:00:00Z"},
-  {"postId":"p2","title":"森林的呼吸","coverUrl":"https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400","likerNickname":"原价帝吧","likerAvatarUrl":"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100","likedAt":"2025-12-20T15:00:00Z"}
-]
-''';
-
 // ─── Mock 实现（本地数据，不发 HTTP）──────────────────────────────────────────
 
 class MockUserProfileRepository extends UserProfileRepository {
@@ -331,9 +222,7 @@ class MockUserProfileRepository extends UserProfileRepository {
     if (contractWire != null) {
       return SubAccountProfileViewData.fromSubAccountProfileWire(contractWire);
     }
-    final wire =
-        _mockProfileWireByUserId[userId] ??
-        SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
+    final wire = SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
     return SubAccountProfileViewData.fromSubAccountProfileWire(wire);
   }
 
@@ -426,38 +315,19 @@ class MockUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<CreatorImpactReadModel> getCreatorImpact(String userId) async {
-    final stats = await getUserStats(userId);
-    return CreatorImpactReadModel.fromMap(<String, dynamic>{
-      'authorId': userId,
-      'total': stats.followerCount + stats.likeCount + stats.circleCount,
-      'items': <Map<String, dynamic>>[
-        if (stats.followerCount > 0)
-          <String, dynamic>{
-            'helpType': 'relationship_help',
-            'action': 'follow',
-            'intersectionDimension': 'relationship',
-            'count': stats.followerCount,
-            'source': 'mock',
-          },
-        if (stats.circleCount > 0)
-          <String, dynamic>{
-            'helpType': 'community_help',
-            'action': 'join_circle',
-            'intersectionDimension': 'interest',
-            'count': stats.circleCount,
-            'source': 'mock',
-          },
-        if (stats.likeCount > 0)
-          <String, dynamic>{
-            'helpType': 'decision_help',
-            'action': 'like',
-            'intersectionDimension': 'content',
-            'count': stats.likeCount,
-            'source': 'mock',
-          },
-      ],
-    });
+  Future<AuthorImpactSummary> getAuthorImpact(String userId) async {
+    // Contract seed（intersection_core.authorImpact）驱动；无 seed/未登记作者时返回空摘要（不造假）。
+    final seed = ContractFixtureRuntimeLoader.contentSeedSet(
+      'intersection_core',
+    );
+    final impactByAuthor = seed?['authorImpact'];
+    if (impactByAuthor is Map) {
+      final entry = impactByAuthor[userId];
+      if (entry is Map) {
+        return AuthorImpactSummary.fromMap(entry.cast<String, dynamic>());
+      }
+    }
+    return AuthorImpactSummary(authorId: userId);
   }
 
   @override
@@ -469,44 +339,36 @@ class MockUserProfileRepository extends UserProfileRepository {
     if (normalizedQuery.isEmpty) {
       return const <SocialRelationSearchItemView>[];
     }
-    return _mockRelationUsers
+    return _contractProfileRows()
         .where((user) {
-          final displayName = (user['displayName'] ?? user['nickname'] ?? '')
-              .toString();
-          final headline = (user['headline'] ?? user['bio'] ?? '').toString();
+          final displayName = (user['displayName'] ?? '').toString();
+          final headline = (user['bio'] ?? '').toString();
           return displayName.toLowerCase().contains(normalizedQuery) ||
               headline.toLowerCase().contains(normalizedQuery);
         })
         .take(limit)
         .map((user) {
-          final subAccountId =
-              user['subAccountId']?.toString() ??
-              user['userId']?.toString() ??
-              '';
-          final relationState = UserProfileMockData.relationStateValueFor(
-            subAccountId,
-          );
-          final isFollowing = UserProfileMockData.viewerFollowsTarget(
-            subAccountId,
-          );
+          final subAccountId = user['userId']?.toString() ?? '';
+          final relationship =
+              _contractRelationshipByTargetUserId[subAccountId];
+          final relationState =
+              relationship?['relationState']?.toString() ?? 'not_following';
+          final isFollowing = relationship?['isFollowing'] == true;
           final hasFormalConversation =
-              UserProfileMockData.viewerFollowsTarget(subAccountId) &&
-              !UserProfileMockData.targetFollowsViewer(subAccountId);
+              relationState == 'mutual' || isFollowing;
           final wire = SocialRelationSearchItemWireDto(
             subAccountId: subAccountId,
-            username: (user['username'] ?? user['nickname'] ?? '').toString(),
-            displayName: (user['displayName'] ?? user['nickname'] ?? '')
-                .toString(),
+            username: subAccountId,
+            displayName: (user['displayName'] ?? subAccountId).toString(),
             avatarUrl: user['avatarUrl']?.toString(),
-            headline: (user['headline'] ?? user['bio'] ?? '').toString(),
+            headline: (user['bio'] ?? '').toString(),
             chatAvailable: true,
             relationshipCapability: <String, dynamic>{
               'relationState': relationState,
               'canFollow': !isFollowing,
               'canUnfollow': isFollowing,
               'hasFormalConversation': hasFormalConversation,
-              'canOpenConversation':
-                  relationState == 'mutual' || hasFormalConversation,
+              'canOpenConversation': hasFormalConversation,
             },
           );
           return SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
@@ -577,12 +439,19 @@ class MockUserProfileRepository extends UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _mockRelationUsers
-        .where(
-          (user) =>
-              UserProfileMockData.viewerFollowsTarget(_subAccountIdOf(user)),
-        )
-        .map(_withMockRelationship)
+    final contractRows = _contractFollowingWiresFor(userId);
+    if (contractRows.isNotEmpty) {
+      return contractRows
+          .take(limit)
+          .map(
+            (m) =>
+                ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+                  ProfileSocialRelationRowWireDto.fromMap(m),
+                ),
+          )
+          .toList(growable: false);
+    }
+    return _mockFollowingWiresFor(userId)
         .take(limit)
         .map(
           (m) =>
@@ -599,12 +468,19 @@ class MockUserProfileRepository extends UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _mockRelationUsers
-        .where(
-          (user) =>
-              UserProfileMockData.targetFollowsViewer(_subAccountIdOf(user)),
-        )
-        .map(_withMockRelationship)
+    final contractRows = _contractFollowerWiresFor(userId);
+    if (contractRows.isNotEmpty) {
+      return contractRows
+          .take(limit)
+          .map(
+            (m) =>
+                ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+                  ProfileSocialRelationRowWireDto.fromMap(m),
+                ),
+          )
+          .toList(growable: false);
+    }
+    return _mockFollowerWiresFor(userId)
         .take(limit)
         .map(
           (m) =>
@@ -623,15 +499,12 @@ class MockUserProfileRepository extends UserProfileRepository {
         RelationshipNormalizedWireDto.fromMap(contractRelationship),
       );
     }
-    final relationState = UserProfileMockData.relationStateValueFor(userId);
-    final isFollowing = UserProfileMockData.viewerFollowsTarget(userId);
-    final isFollowedBy = UserProfileMockData.targetFollowsViewer(userId);
     return RelationshipViewData.fromRelationshipNormalizedWire(
       RelationshipNormalizedWireDto(
-        relationState: relationState,
-        isFollowing: isFollowing,
-        isFollowedBy: isFollowedBy,
-        isMutual: relationState == 'mutual',
+        relationState: 'not_following',
+        isFollowing: false,
+        isFollowedBy: false,
+        isMutual: false,
       ),
     );
   }
@@ -642,14 +515,18 @@ class MockUserProfileRepository extends UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _mockLikes
-        .take(limit)
-        .map(
-          (m) => ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
-            ProfileUserLikeRowWireDto.fromMap(m),
-          ),
-        )
-        .toList(growable: false);
+    final contractLikes = _contractLikeWiresFor(userId);
+    if (contractLikes.isNotEmpty) {
+      return contractLikes
+          .take(limit)
+          .map(
+            (m) => ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
+              ProfileUserLikeRowWireDto.fromMap(m),
+            ),
+          )
+          .toList(growable: false);
+    }
+    return const <ProfileUserLikeRowViewData>[];
   }
 
   @override
@@ -658,7 +535,19 @@ class MockUserProfileRepository extends UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _mockInteractions
+    final contractItems = _contractInteractionReceivedWiresFor(userId);
+    if (contractItems.isNotEmpty) {
+      return contractItems
+          .take(limit)
+          .map(
+            (m) =>
+                ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+                  ProfileInteractionActivityWireDto.fromMap(m),
+                ),
+          )
+          .toList(growable: false);
+    }
+    return _mockInteractionReceivedWiresFor(userId)
         .take(limit)
         .map(
           (m) =>
@@ -675,7 +564,19 @@ class MockUserProfileRepository extends UserProfileRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _mockInteractionsSent
+    final contractItems = _contractInteractionSentWiresFor(userId);
+    if (contractItems.isNotEmpty) {
+      return contractItems
+          .take(limit)
+          .map(
+            (m) =>
+                ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+                  ProfileInteractionActivityWireDto.fromMap(m),
+                ),
+          )
+          .toList(growable: false);
+    }
+    return _mockInteractionSentWiresFor(userId)
         .take(limit)
         .map(
           (m) =>
@@ -688,7 +589,11 @@ class MockUserProfileRepository extends UserProfileRepository {
 
   @override
   Future<List<PersonaDto>> listPersonas() async {
-    return _mockPersonas.map(_personaDtoFromWire).toList(growable: false);
+    final contractPersonas = _contractPersonaRows();
+    if (contractPersonas.isNotEmpty) {
+      return contractPersonas.map(_personaDtoFromWire).toList(growable: false);
+    }
+    return const <PersonaDto>[];
   }
 
   @override
@@ -718,48 +623,6 @@ class MockUserProfileRepository extends UserProfileRepository {
   Future<void> activatePersona(String subAccountId) async {}
 
   // ── Mock 数据 ─────────────────────────────────────────────────────────────
-
-  static Map<String, dynamic> _defaultProfile(String userId) {
-    final chatName = ChatMockData.nameFor(userId);
-    final hasChatIdentity = chatName != userId;
-    return {
-      'userId': userId,
-      'nickname': hasChatIdentity ? chatName : userId,
-      'avatarUrl': ChatMockData.avatarFor(userId),
-      'bio': hasChatIdentity ? '趣屋圈用户' : '',
-      'backgroundUrl':
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200',
-      'followerCount': hasChatIdentity ? 120 : 0,
-      'followingCount': hasChatIdentity ? 85 : 0,
-      'postCount': hasChatIdentity ? 30 : 0,
-      'circleCount': hasChatIdentity ? 3 : 0,
-      'likeCount': hasChatIdentity ? 480 : 0,
-    };
-  }
-
-  static List<Map<String, dynamic>> _contractProfileRows() {
-    final seed = ContractFixtureRuntimeLoader.userSeedSet('user_profile_core');
-    final profiles = seed?['profiles'];
-    if (profiles is! List) {
-      return const <Map<String, dynamic>>[];
-    }
-    return profiles
-        .whereType<Map>()
-        .map((item) => item.cast<String, dynamic>())
-        .toList(growable: false);
-  }
-
-  static List<Map<String, dynamic>> _contractRelationshipRows() {
-    final seed = ContractFixtureRuntimeLoader.userSeedSet('relationship_core');
-    final relationships = seed?['relationships'];
-    if (relationships is! List) {
-      return const <Map<String, dynamic>>[];
-    }
-    return relationships
-        .whereType<Map>()
-        .map((item) => item.cast<String, dynamic>())
-        .toList(growable: false);
-  }
 
   static List<PostBaseDto> _contractPostsForUser(String userId) {
     if (!_contractProfileWireByUserId.containsKey(userId)) {
@@ -818,50 +681,6 @@ class MockUserProfileRepository extends UserProfileRepository {
         .toList(growable: false);
   }
 
-  static Map<String, dynamic> _contractProfileWire(Map<String, dynamic> item) {
-    final stats =
-        (item['stats'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final userId = item['userId'].toString();
-    return <String, dynamic>{
-      'subAccountId': userId,
-      'ownerUserId': userId,
-      'subjectType': 'user',
-      'userHandle': userId,
-      'username': userId,
-      'displayName': item['displayName']?.toString() ?? userId,
-      'nickname': item['displayName']?.toString() ?? userId,
-      'avatarUrl': item['avatarUrl']?.toString() ?? '',
-      'backgroundUrl': item['backgroundUrl']?.toString() ?? '',
-      'bio': item['bio']?.toString() ?? '',
-      'followerCount': (stats['followerCount'] as num?)?.toInt() ?? 0,
-      'followingCount': (stats['followingCount'] as num?)?.toInt() ?? 0,
-      'postCount': (stats['postCount'] as num?)?.toInt() ?? 0,
-      'circleCount': (stats['circleCount'] as num?)?.toInt() ?? 0,
-      'likeCount': (stats['likeCount'] as num?)?.toInt() ?? 0,
-      'isolationLevel': 'normal',
-      'profileVisibility': 'public',
-      'inheritsFromOwner': false,
-      'overriddenFields': const <String>[],
-    };
-  }
-
-  static final Map<String, SubAccountProfileWireDto> _mockProfileWireByUserId =
-      {
-        for (final e in _decodeBundledMockUserProfiles(
-          _kBundledMockUserProfilesJson,
-        ).entries)
-          e.key: SubAccountProfileWireDto.fromMap(e.value),
-      };
-
-  static final Map<String, SubAccountProfileWireDto>
-  _contractProfileWireByUserId = {
-    for (final item in _contractProfileRows())
-      item['userId'].toString(): SubAccountProfileWireDto.fromMap(
-        _contractProfileWire(item),
-      ),
-  };
-
   static final Map<String, Map<String, dynamic>>
   _contractRelationshipByTargetUserId = {
     for (final item in _contractRelationshipRows())
@@ -876,66 +695,6 @@ class MockUserProfileRepository extends UserProfileRepository {
         'isMutual': item['mutualFollow'] == true,
       },
   };
-
-  static final List<Map<String, dynamic>> _mockRelationUsers =
-      _decodeJsonObjectList(_kMockRelationUsersJson);
-
-  static final List<Map<String, dynamic>> _mockInteractions =
-      _decodeJsonObjectList(_kMockInteractionsJson);
-
-  static final List<Map<String, dynamic>> _mockInteractionsSent =
-      _decodeJsonObjectList(_kMockInteractionsSentJson);
-
-  static final List<Map<String, dynamic>> _mockLikes = _decodeJsonObjectList(
-    _kMockLikesJson,
-  );
-
-  /// Wire 键与 [PersonaDto] / user_profile `ListPersonas` 响应字段对齐（见 contracts/metadata/user/user_profile）。
-  static final List<Map<String, dynamic>> _mockPersonas = [
-    {
-      'id': 'persona_primary',
-      'userId': 'user_persona_primary',
-      'displayName': '主身份',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
-      'isPrimary': true,
-      'isPrivate': false,
-      'isActive': true,
-      'createdAt': '2025-01-01T00:00:00Z',
-      'updatedAt': '2025-01-01T00:00:00Z',
-    },
-    {
-      'id': 'persona_anon',
-      'userId': 'user_persona_anon',
-      'displayName': '匿名身份',
-      'avatarUrl':
-          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100',
-      'isPrimary': false,
-      'isPrivate': true,
-      'isActive': false,
-      'createdAt': '2025-01-01T00:00:00Z',
-      'updatedAt': '2025-01-01T00:00:00Z',
-    },
-  ];
-
-  static String _subAccountIdOf(Map<String, dynamic> user) {
-    return user['subAccountId']?.toString() ?? user['userId']?.toString() ?? '';
-  }
-
-  static Map<String, dynamic> _withMockRelationship(Map<String, dynamic> user) {
-    final subAccountId = _subAccountIdOf(user);
-    final relationState = UserProfileMockData.relationStateValueFor(
-      subAccountId,
-    );
-    return <String, dynamic>{
-      ...user,
-      'subAccountId': subAccountId,
-      'relationState': relationState,
-      'isFollowing': UserProfileMockData.viewerFollowsTarget(subAccountId),
-      'isFollowedBy': UserProfileMockData.targetFollowsViewer(subAccountId),
-      'isMutual': relationState == 'mutual',
-    };
-  }
 }
 
 // ─── Remote 实现（调用云侧 API）───────────────────────────────────────────────
@@ -1193,7 +952,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<CreatorImpactReadModel> getCreatorImpact(String userId) async {
+  Future<AuthorImpactSummary> getAuthorImpact(String userId) async {
     final url = _uri(
       ContentApiMetadata.getAuthorImpactPath(subAccountId: userId),
       queryParameters: const <String, String>{'limit': '12'},
@@ -1205,9 +964,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       ),
     );
     if (resp.statusCode != 200) {
-      throw Exception('getCreatorImpact failed: ${resp.statusCode}');
+      throw Exception('getAuthorImpact failed: ${resp.statusCode}');
     }
-    return CreatorImpactReadModel.fromMap(
+    return AuthorImpactSummary.fromMap(
       _decodeObject(resp, ContentRequestPageIds.getAuthorImpact),
     );
   }

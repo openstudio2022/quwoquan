@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 
 void main() {
-  testWidgets('创作入口收口为相册/相机/写文字/从草稿继续', (tester) async {
+  Icon iconFor(WidgetTester tester, IconData icon) =>
+      tester.widget<Icon>(find.byIcon(icon));
+
+  testWidgets('创作入口收口为图片/视频/长文/续草稿', (tester) async {
     EditorStartAction? selected;
 
     await tester.pumpWidget(
@@ -32,21 +37,59 @@ void main() {
 
     expect(find.text('创作'), findsNothing);
     expect(find.text('连接'), findsNothing);
-    expect(find.text('从相册选择'), findsOneWidget);
-    expect(find.text('写文字'), findsOneWidget);
-    expect(find.text('相机'), findsOneWidget);
-    expect(find.text('发起群聊'), findsOneWidget);
-    expect(find.text('添加联系人'), findsOneWidget);
-    expect(find.text('取消'), findsOneWidget);
+    expect(
+      find.text(UITextConstants.createActionPostPhotoShort),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
+    expect(
+      find.text(UITextConstants.createActionPostVideoShort),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.createActionResumeDraft), findsOneWidget);
+    expect(
+      find.text(UITextConstants.createActionCreateGroupShort),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionAddContactShort),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.cancel), findsOneWidget);
+    expect(
+      tester
+          .getCenter(find.text(UITextConstants.createActionPostPhotoShort))
+          .dx,
+      lessThan(
+        tester
+            .getCenter(find.text(UITextConstants.createActionPostVideoShort))
+            .dx,
+      ),
+    );
+    expect(
+      tester
+          .getCenter(find.text(UITextConstants.createActionPostVideoShort))
+          .dx,
+      lessThan(
+        tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dx,
+      ),
+    );
+    expect(
+      tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dx,
+      lessThan(
+        tester.getCenter(find.text(UITextConstants.createActionResumeDraft)).dx,
+      ),
+    );
     expect(find.text('作品'), findsNothing);
     expect(find.text('文章'), findsNothing);
     expect(find.byKey(TestKeys.modalBottomSheetPanel), findsOneWidget);
+    expect(find.byType(ConversationSheetCancelBar), findsOneWidget);
     expect(
       tester.getTopLeft(find.byKey(TestKeys.modalBottomSheetPanel)).dy,
       greaterThan(0),
     );
 
-    await tester.tap(find.text('相机'));
+    await tester.tap(find.text(UITextConstants.createActionPostVideoShort));
     await tester.pump();
 
     expect(selected, EditorStartAction.capture);
@@ -73,9 +116,13 @@ void main() {
     );
     await tester.pump();
 
-    final groupChatY = tester.getCenter(find.text('发起群聊')).dy;
-    final galleryY = tester.getCenter(find.text('从相册选择')).dy;
-    expect(groupChatY, lessThan(galleryY));
+    final discussionY = tester
+        .getCenter(find.text(UITextConstants.createActionCreateGroupShort))
+        .dy;
+    final galleryY = tester
+        .getCenter(find.text(UITextConstants.createActionPostPhotoShort))
+        .dy;
+    expect(discussionY, lessThan(galleryY));
   });
 
   testWidgets('社交动作组支持新建圈子入口', (tester) async {
@@ -103,9 +150,53 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('创建圈子'), findsOneWidget);
+    expect(
+      find.text(UITextConstants.createActionCreateCircleShort),
+      findsOneWidget,
+    );
+    expect(find.byIcon(FluentIcons.image_add_24_regular), findsOneWidget);
+    expect(find.byIcon(FluentIcons.video_add_24_regular), findsOneWidget);
+    expect(find.byIcon(FluentIcons.document_edit_24_regular), findsOneWidget);
+    expect(
+      find.byIcon(FluentIcons.folder_arrow_right_24_regular),
+      findsOneWidget,
+    );
+    expect(find.byIcon(FluentIcons.person_add_24_regular), findsOneWidget);
+    expect(find.byIcon(FluentIcons.chat_multiple_24_regular), findsOneWidget);
+    expect(
+      find.byIcon(FluentIcons.people_community_add_24_regular),
+      findsOneWidget,
+    );
+    expect(
+      iconFor(tester, FluentIcons.image_add_24_regular).color,
+      SettingsSemanticConstants.createSheetActionIconColor(false),
+    );
+    expect(
+      iconFor(tester, FluentIcons.video_add_24_regular).color,
+      SettingsSemanticConstants.createSheetActionIconColor(false),
+    );
+    expect(
+      iconFor(tester, FluentIcons.document_edit_24_regular).color,
+      SettingsSemanticConstants.createSheetActionIconColor(false),
+    );
+    expect(
+      iconFor(tester, FluentIcons.folder_arrow_right_24_regular).color,
+      SettingsSemanticConstants.createSheetDraftActionIconColor(false),
+    );
+    expect(
+      iconFor(tester, FluentIcons.person_add_24_regular).color,
+      SettingsSemanticConstants.createSheetActionIconColor(false),
+    );
+    expect(
+      iconFor(tester, FluentIcons.chat_multiple_24_regular).color,
+      SettingsSemanticConstants.createSheetActionIconColor(false),
+    );
+    expect(
+      iconFor(tester, FluentIcons.people_community_add_24_regular).color,
+      SettingsSemanticConstants.createSheetActionIconColor(false),
+    );
 
-    await tester.tap(find.text('创建圈子'));
+    await tester.tap(find.text(UITextConstants.createActionCreateCircleShort));
     await tester.pump();
 
     expect(createCircleTapped, isTrue);

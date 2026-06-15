@@ -315,15 +315,6 @@ scenarios:
     go_func: TestGetReactionStateContract
     status: pending
     command: GetReactionState
-  - name: favorite_post_contract
-    operation: FavoritePost
-    go_func: TestFavoritePost
-    command: FavoritePost
-  - name: unfavorite_post_contract
-    operation: UnfavoritePost
-    go_func: TestUnfavoritePostContract
-    status: pending
-    command: UnfavoritePost
   - name: get_counters_contract
     operation: GetCounters
     go_func: TestGetCounters

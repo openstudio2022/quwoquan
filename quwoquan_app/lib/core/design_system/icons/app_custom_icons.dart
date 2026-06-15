@@ -1,91 +1,361 @@
-import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
-// ─── 圆润星星图标 ───────────────────────────────────────────
-/// 使用 StrokeJoin.round 画出尖角完全圆润的五角星，
-/// 对标原型图中圆润收藏图标。
-class AppStarIcon extends StatelessWidget {
-  final double size;
-  final Color color;
-  final bool filled;
-
-  const AppStarIcon({
+// ─── 精品「钻石」图标 ───────────────────────────────────────
+/// 底部导航「精品」专用图标：极简钻石轮廓，表达精选与高价值内容。
+/// 公开类名沿用 AppOpenWindowIcon，避免底栏装配层跟随视觉命名 churn。
+class AppOpenWindowIcon extends StatelessWidget {
+  const AppOpenWindowIcon({
     super.key,
     required this.size,
     required this.color,
     this.filled = false,
   });
 
+  final double size;
+  final Color color;
+  final bool filled;
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
+    return SizedBox.square(
+      dimension: size,
       child: CustomPaint(
-        size: Size(size, size),
-        painter: _RoundStarPainter(color: color, filled: filled),
+        size: Size.square(size),
+        painter: _PremiumDiamondPainter(color: color, filled: filled),
       ),
     );
   }
 }
 
-class _RoundStarPainter extends CustomPainter {
+class _PremiumDiamondPainter extends CustomPainter {
+  _PremiumDiamondPainter({required this.color, required this.filled});
+
   final Color color;
   final bool filled;
 
-  _RoundStarPainter({required this.color, required this.filled});
+  // 与首页/联系底栏图标保持同级线性视觉重量。
+  static const double _strokeRatio = 1.42 / 24.0;
+
+  double _x(Size size, double value) => size.width * value / 24.0;
+
+  double _y(Size size, double value) => size.height * value / 24.0;
+
+  Path _diamondPath(Size size) => Path()
+    ..moveTo(_x(size, 7.3), _y(size, 3.8))
+    ..lineTo(_x(size, 16.7), _y(size, 3.8))
+    ..lineTo(_x(size, 21.2), _y(size, 9.6))
+    ..lineTo(_x(size, 12.0), _y(size, 21.0))
+    ..lineTo(_x(size, 2.8), _y(size, 9.6))
+    ..close();
 
   @override
   void paint(Canvas canvas, Size size) {
-    final sw = size.width * 0.075;
-    final path = _starPath(size, sw);
+    final strokeWidth = size.width * _strokeRatio;
 
-    if (filled) {
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.fill,
-      );
-    }
-
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = sw
-        ..strokeJoin = StrokeJoin.round
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  Path _starPath(Size size, double sw) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final outerR = (size.width / 2) - sw;
-    final innerR = outerR * 0.42;
-
-    final path = Path();
-    for (int i = 0; i < 10; i++) {
-      final r = i.isEven ? outerR : innerR;
-      final angle = -pi / 2 + pi * i / 5;
-      final x = cx + r * cos(angle);
-      final y = cy + r * sin(angle);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    path.close();
-    return path;
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(_diamondPath(size), stroke);
   }
 
   @override
-  bool shouldRepaint(covariant _RoundStarPainter old) =>
+  bool shouldRepaint(covariant _PremiumDiamondPainter old) =>
+      color != old.color || filled != old.filled;
+}
+
+// ─── 联系「双气泡」图标 ─────────────────────────────────────
+/// 底部导航「联系」专用图标：双聊天气泡，表达「联系/沟通」。
+/// 24pt 下不绘制笑脸细节，避免缩放后糊成噪点；视觉口径与「建群聊」图标一致。
+/// 按高保规范 24×24pt 矢量复刻，支持任意尺寸像素级缩放。
+class AppContactsIcon extends StatelessWidget {
+  const AppContactsIcon({
+    super.key,
+    required this.size,
+    required this.color,
+    this.filled = false,
+  });
+
+  final double size;
+  final Color color;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: size,
+      child: CustomPaint(
+        size: Size.square(size),
+        painter: _ContactsPainter(color: color, filled: filled),
+      ),
+    );
+  }
+}
+
+class _ContactsPainter extends CustomPainter {
+  _ContactsPainter({required this.color, required this.filled});
+
+  final Color color;
+  final bool filled;
+
+  static const double _strokeRatio = 1.28 / 24.0;
+
+  double _x(Size size, double value) => size.width * value / 24.0;
+
+  double _y(Size size, double value) => size.height * value / 24.0;
+
+  Rect _scaledRect(Size size, Rect rect) => Rect.fromLTRB(
+    _x(size, rect.left),
+    _y(size, rect.top),
+    _x(size, rect.right),
+    _y(size, rect.bottom),
+  );
+
+  double _rad(double degrees) => degrees * math.pi / 180.0;
+
+  Offset _ellipsePoint(Rect body, double degrees) {
+    final angle = _rad(degrees);
+    return Offset(
+      body.center.dx + body.width / 2 * math.cos(angle),
+      body.center.dy + body.height / 2 * math.sin(angle),
+    );
+  }
+
+  double _longArcSweep(double fromDegrees, double toDegrees) {
+    final delta = toDegrees - fromDegrees;
+    return _rad(delta > 0 ? delta - 360.0 : delta + 360.0);
+  }
+
+  Path _bubblePath(
+    Size size, {
+    required Rect body,
+    required double tailStartDegrees,
+    required double tailEndDegrees,
+    required Offset tipA,
+    required Offset tipB,
+    required Offset roundA,
+    required Offset roundTip,
+    required Offset roundB,
+  }) {
+    final attachA = _ellipsePoint(body, tailStartDegrees);
+    final attachB = _ellipsePoint(body, tailEndDegrees);
+    final scaledBody = _scaledRect(size, body);
+    return Path()
+      ..moveTo(_x(size, attachA.dx), _y(size, attachA.dy))
+      ..quadraticBezierTo(
+        _x(size, roundA.dx),
+        _y(size, roundA.dy),
+        _x(size, tipA.dx),
+        _y(size, tipA.dy),
+      )
+      ..quadraticBezierTo(
+        _x(size, roundTip.dx),
+        _y(size, roundTip.dy),
+        _x(size, tipB.dx),
+        _y(size, tipB.dy),
+      )
+      ..quadraticBezierTo(
+        _x(size, roundB.dx),
+        _y(size, roundB.dy),
+        _x(size, attachB.dx),
+        _y(size, attachB.dy),
+      )
+      ..arcTo(
+        scaledBody,
+        _rad(tailEndDegrees),
+        _longArcSweep(tailEndDegrees, tailStartDegrees),
+        false,
+      )
+      ..close();
+  }
+
+  Path _largeBubblePath(Size size) {
+    return _bubblePath(
+      size,
+      body: const Rect.fromLTRB(0.55, 1.92, 15.45, 16.22),
+      tailStartDegrees: 130.0,
+      tailEndDegrees: 97.0,
+      tipA: const Offset(3.08, 19.12),
+      tipB: const Offset(4.16, 18.72),
+      roundA: const Offset(3.92, 16.42),
+      roundTip: const Offset(3.14, 19.52),
+      roundB: const Offset(5.40, 17.82),
+    );
+  }
+
+  Path _smallBubblePath(Size size) {
+    return _bubblePath(
+      size,
+      body: const Rect.fromLTRB(12.52, 5.78, 23.62, 16.88),
+      tailStartDegrees: 65.0,
+      tailEndDegrees: 43.0,
+      tipA: const Offset(21.86, 19.02),
+      tipB: const Offset(22.44, 18.78),
+      roundA: const Offset(21.20, 17.28),
+      roundTip: const Offset(22.30, 19.36),
+      roundB: const Offset(22.08, 17.22),
+    );
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokeWidth = size.width * _strokeRatio;
+    final largeBubble = _largeBubblePath(size);
+    final smallBubble = _smallBubblePath(size);
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+    final fill = Paint()
+      ..color = color.withValues(alpha: filled ? 0.10 : 0.0)
+      ..style = PaintingStyle.fill;
+
+    canvas.saveLayer(Offset.zero & size, Paint());
+    if (filled) {
+      canvas.drawPath(largeBubble, fill);
+    }
+    canvas.drawPath(largeBubble, stroke);
+
+    // 小气泡在视觉上压在大气泡上层，先清出小气泡面再绘制，
+    // 让它遮挡住大气泡底部/右侧线条，形成高保稿的堆叠关系。
+    canvas.drawPath(
+      smallBubble,
+      Paint()
+        ..blendMode = BlendMode.clear
+        ..style = PaintingStyle.fill,
+    );
+    if (filled) {
+      canvas.drawPath(smallBubble, fill);
+    }
+    canvas.drawPath(smallBubble, stroke);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _ContactsPainter old) =>
+      color != old.color || filled != old.filled;
+}
+
+// ─── 我的「单人」图标 ───────────────────────────────────────
+/// 底部导航「我的」专用图标：正圆头 + 敞口肩弧（无外圆圈）。
+/// 按高保规范 24×24pt 矢量复刻，支持任意尺寸像素级缩放。
+class AppProfilePersonIcon extends StatelessWidget {
+  const AppProfilePersonIcon({
+    super.key,
+    required this.size,
+    required this.color,
+    this.filled = false,
+  });
+
+  final double size;
+  final Color color;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: size,
+      child: CustomPaint(
+        size: Size.square(size),
+        painter: _ProfilePersonPainter(color: color, filled: filled),
+      ),
+    );
+  }
+}
+
+/// 底部导航「我的」高保人形图标的 24pt 几何算法。
+///
+/// 与欢迎页花瓣的 `petalPath()` 同思路：把高保稿抽成可复用的标准坐标，
+/// 任何尺寸只做等比缩放，避免后续出现第二套头像轮廓。
+class AppProfilePersonIconGeometry {
+  const AppProfilePersonIconGeometry._();
+
+  static const double designSize = 24.0;
+  static const double inactiveStrokeWidth = 1.38;
+  static const double selectedStrokeWidth = 1.46;
+
+  static double _x(Size size, double value) => size.width * value / designSize;
+
+  static double _y(Size size, double value) => size.height * value / designSize;
+
+  static Rect headRect(Size size) {
+    final radius = _x(size, 4.35);
+    final center = Offset(_x(size, 12.0), _y(size, 6.05));
+    return Rect.fromCircle(center: center, radius: radius);
+  }
+
+  static Path bodyPath(Size size) {
+    return Path()
+      ..moveTo(_x(size, 4.20), _y(size, 19.85))
+      ..lineTo(_x(size, 4.20), _y(size, 16.90))
+      ..cubicTo(
+        _x(size, 4.20),
+        _y(size, 14.25),
+        _x(size, 6.25),
+        _y(size, 12.45),
+        _x(size, 9.50),
+        _y(size, 12.45),
+      )
+      ..lineTo(_x(size, 14.50), _y(size, 12.45))
+      ..cubicTo(
+        _x(size, 17.75),
+        _y(size, 12.45),
+        _x(size, 19.80),
+        _y(size, 14.25),
+        _x(size, 19.80),
+        _y(size, 16.90),
+      )
+      ..lineTo(_x(size, 19.80), _y(size, 19.85))
+      ..lineTo(_x(size, 4.20), _y(size, 19.85));
+  }
+
+  static void paintIcon(
+    Canvas canvas,
+    Size size, {
+    required Color color,
+    required bool selected,
+  }) {
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth =
+          size.width *
+          (selected ? selectedStrokeWidth : inactiveStrokeWidth) /
+          designSize
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+    canvas
+      ..drawOval(headRect(size), stroke)
+      ..drawPath(bodyPath(size), stroke);
+  }
+}
+
+class _ProfilePersonPainter extends CustomPainter {
+  _ProfilePersonPainter({required this.color, required this.filled});
+
+  final Color color;
+  final bool filled;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    AppProfilePersonIconGeometry.paintIcon(
+      canvas,
+      size,
+      color: color,
+      selected: filled,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ProfilePersonPainter old) =>
       color != old.color || filled != old.filled;
 }
 

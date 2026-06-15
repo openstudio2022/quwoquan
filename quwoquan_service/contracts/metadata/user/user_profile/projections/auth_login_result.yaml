@@ -78,3 +78,19 @@ client_projection:
       source: subAccountCount
       aliases: [subAccountCount]
       default: "0"
+
+    # 快速登录有效期（秒），云端系统配置下发，端侧据此推算软退出后免验证码快速登录的过期时间。
+    # 0/缺省表示云端未下发，端侧用默认 30 天（kDefaultSessionRememberTtlSeconds）兜底。
+    - name: sessionRememberTtlSeconds
+      dart_type: int
+      nullable: false
+      source: sessionRememberTtlSeconds
+      aliases: [sessionRememberTtlSeconds, rememberTtlSeconds]
+      default: "0"
+
+    - name: accountHint
+      dart_type: Map<String, dynamic>
+      nullable: true
+      source: accountHint
+      aliases: [accountHint]
+      default: "null"

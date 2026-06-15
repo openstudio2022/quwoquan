@@ -28,6 +28,8 @@ class ArticleReaderFlipHost extends StatelessWidget {
       onPageCurlAborted: config.onPageCurlAborted,
       onSceneChanged: config.onSceneChanged,
       onDebugStateChanged: config.onDebugStateChanged,
+      onEntityTap: config.onEntityTap,
+      headerLabel: config.headerLabel,
       showFooterPageLabel: config.showFooterPageLabel,
       paperTexture: config.paperTexture,
       presentationStyle: config.presentationStyle,

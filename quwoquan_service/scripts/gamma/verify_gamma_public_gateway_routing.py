@@ -17,8 +17,16 @@ import json
 import os
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
+
+RETRY_MARKERS = (
+    "timed out",
+    "Remote end closed connection without response",
+    "Connection reset",
+    "Connection closed",
+)
 
 
 def _req(
@@ -28,17 +36,29 @@ def _req(
     data: bytes | None = None,
     headers: dict[str, str] | None = None,
     timeout: float = 12.0,
+    retry_attempts: int = 3,
+    retry_sleep_seconds: float = 2.0,
 ) -> tuple[int, str]:
-    ctx = ssl._create_unverified_context()
-    h = dict(headers or {})
-    r = urllib.request.Request(url, data=data, headers=h, method=method)
-    try:
-        with urllib.request.urlopen(r, timeout=timeout, context=ctx) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            return int(resp.status), body
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8", errors="replace") if e.fp else ""
-        return int(e.code), raw
+    total_attempts = max(1, retry_attempts)
+    last_error = "unknown"
+    for attempt in range(1, total_attempts + 1):
+        ctx = ssl._create_unverified_context()
+        h = dict(headers or {})
+        r = urllib.request.Request(url, data=data, headers=h, method=method)
+        try:
+            with urllib.request.urlopen(r, timeout=timeout, context=ctx) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                return int(resp.status), body
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode("utf-8", errors="replace") if e.fp else ""
+            return int(e.code), raw
+        except Exception as exc:  # noqa: BLE001
+            last_error = str(exc)
+            lowered = last_error.lower()
+            if attempt >= total_attempts or not any(marker.lower() in lowered for marker in RETRY_MARKERS):
+                return 0, last_error
+            time.sleep(max(0.0, retry_sleep_seconds) * attempt)
+    return 0, last_error
 
 
 def main() -> int:
@@ -47,12 +67,23 @@ def main() -> int:
         "--base-url",
         default=os.environ.get("GAMMA_BASE_URL", "http://127.0.0.1:19000").rstrip("/"),
     )
+    ap.add_argument("--request-timeout-seconds", type=float, default=12.0)
+    ap.add_argument("--retry-attempts", type=int, default=3)
+    ap.add_argument("--retry-sleep-seconds", type=float, default=2.0)
     args = ap.parse_args()
     base = args.base_url.rstrip("/")
+    timeout_seconds = max(1.0, float(args.request_timeout_seconds))
+    retry_attempts = max(1, int(args.retry_attempts))
+    retry_sleep_seconds = max(0.0, float(args.retry_sleep_seconds))
 
     failures: list[str] = []
 
-    code, health = _req(f"{base}/healthz", timeout=8.0)
+    code, health = _req(
+        f"{base}/healthz",
+        timeout=timeout_seconds,
+        retry_attempts=retry_attempts,
+        retry_sleep_seconds=retry_sleep_seconds,
+    )
     if code < 200 or code >= 300 or '"ok"' not in health and '"status"' not in health:
         failures.append(f"healthz: http {code} body={health[:200]!r}")
 
@@ -60,7 +91,12 @@ def main() -> int:
     code, content_body = _req(
         f"{base}/v1/content/posts?limit=1",
         headers={"X-Client-User-Id": "gamma_route_smoke", "X-Test-Local-Gamma": "true"},
+        timeout=timeout_seconds,
+        retry_attempts=retry_attempts,
+        retry_sleep_seconds=retry_sleep_seconds,
     )
+    if code == 0:
+        failures.append(f"content: request failed: {content_body[:200]!r}")
     if "local-gamma mirror http endpoint is ready" in content_body:
         failures.append("content: still hitting Caddy catch-all (plain 'ready' text)")
     if "route is not ready" in content_body and code == 404:
@@ -82,7 +118,12 @@ def main() -> int:
             "X-Client-User-Id": "gamma_smoke_m01",
             "X-Test-Local-Gamma": "true",
         },
+        timeout=timeout_seconds,
+        retry_attempts=retry_attempts,
+        retry_sleep_seconds=retry_sleep_seconds,
     )
+    if code == 0:
+        failures.append(f"chat: request failed: {chat_body[:200]!r}")
     if "local-gamma mirror http endpoint is ready" in chat_body:
         failures.append("chat: still hitting Caddy plain-text catch-all — 部署的 Caddyfile 可能过旧")
     if "local-gamma mirror route is not ready" in chat_body:
@@ -106,7 +147,12 @@ def main() -> int:
             "X-Client-User-Id": "gamma_route_smoke",
             "X-Test-Local-Gamma": "true",
         },
+        timeout=timeout_seconds,
+        retry_attempts=retry_attempts,
+        retry_sleep_seconds=retry_sleep_seconds,
     )
+    if code == 0:
+        failures.append(f"user: request failed: {user_body[:200]!r}")
     if "local-gamma mirror http endpoint is ready" in user_body:
         failures.append("user: still hitting Caddy plain-text catch-all — /v1/user* 未反代到 user-service")
     if "local-gamma mirror route is not ready" in user_body:
@@ -134,7 +180,12 @@ def main() -> int:
             "X-Client-User-Id": "gamma_route_smoke",
             "X-Test-Local-Gamma": "true",
         },
+        timeout=timeout_seconds,
+        retry_attempts=retry_attempts,
+        retry_sleep_seconds=retry_sleep_seconds,
     )
+    if code == 0:
+        failures.append(f"assistant: request failed: {assistant_body[:200]!r}")
     if "local-gamma mirror http endpoint is ready" in assistant_body:
         failures.append(
             "assistant: still hitting Caddy plain-text catch-all — /v1/assistant* 未反代到 assistant-service",

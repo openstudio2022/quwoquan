@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_ui_config.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/components/object_page/object_page_sections.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -15,6 +14,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 
 part 'homepage_detail_shell_components.dart';
 part 'homepage_detail_shell_components2.dart';
@@ -30,12 +30,16 @@ class HomepageDetailShell extends StatefulWidget {
     required this.detail,
     required this.shell,
     required this.objectPageBundle,
+    required this.introductionSummary,
     required this.viewerOwnerUserId,
     required this.onBack,
     required this.onClaim,
     required this.onMaintain,
     required this.onReport,
+    required this.onToggleFollow,
+    required this.onMessageOwner,
     required this.onCreateContent,
+    required this.onOpenIntroduction,
     required this.onAttach,
     this.onIntersectionReasonTap,
   });
@@ -47,12 +51,16 @@ class HomepageDetailShell extends StatefulWidget {
   final HomepageDetail? detail;
   final HomepageShellData? shell;
   final ObjectPageBundle? objectPageBundle;
+  final String? introductionSummary;
   final String? viewerOwnerUserId;
   final VoidCallback onBack;
   final VoidCallback onClaim;
   final VoidCallback onMaintain;
   final VoidCallback onReport;
+  final VoidCallback onToggleFollow;
+  final VoidCallback onMessageOwner;
   final ValueChanged<HomepageCanonicalReference> onCreateContent;
+  final VoidCallback onOpenIntroduction;
   final ValueChanged<HomepageCanonicalReference> onAttach;
   final ValueChanged<IntersectionReason>? onIntersectionReasonTap;
 
@@ -61,15 +69,17 @@ class HomepageDetailShell extends StatefulWidget {
 }
 
 class _HomepageDetailShellState extends State<HomepageDetailShell> {
-  static const double _cardRadius = AppSpacing.radiusTwenty;
-  static const List<_HomepagePrimaryTabSpec> _tabs = <_HomepagePrimaryTabSpec>[
-    _HomepagePrimaryTabSpec(id: 'overview', label: '首页'),
-    _HomepagePrimaryTabSpec(id: 'content', label: '内容'),
-    _HomepagePrimaryTabSpec(id: 'reviews', label: '口碑'),
-    _HomepagePrimaryTabSpec(id: 'related', label: '关联'),
-  ];
+  static const double _cardRadius = AppSpacing.radiusTwentyFour;
+  static final List<_HomepagePrimaryTabSpec> _tabs = HomepageUIConfig.tabs
+      .map(
+        (tab) => _HomepagePrimaryTabSpec(
+          id: tab.id,
+          label: homepageTabLabelForKey(tab.labelKey),
+        ),
+      )
+      .toList(growable: false);
 
-  String _activeTabId = _tabs.first.id;
+  String _activeTabId = HomepageUIConfig.defaultTabId;
 
   HomepageCanonicalReference? get _reference =>
       widget.detail?.canonicalReference ??
@@ -132,30 +142,6 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
   bool get _hasMoreActions =>
       !widget.selectionMode && (_isOwnerLike || _canClaim || _canReport);
 
-  List<_HomepageSummaryChip> _summaryChips() {
-    final chips = <_HomepageSummaryChip>[
-      _HomepageSummaryChip(label: _typeLabel(_reference?.homepageType ?? '')),
-      _HomepageSummaryChip(label: _statusLabel(_reference?.status)),
-    ];
-    final detail = widget.detail;
-    if (detail != null && (detail.claimStatus ?? '').trim().isNotEmpty) {
-      chips.add(_HomepageSummaryChip(label: _claimLabel(detail.claimStatus)));
-    }
-    final averageRating =
-        _reviewSummary?.averageRating ??
-        widget.detail?.averageRating ??
-        widget.initialSummary?.averageRating;
-    if (averageRating != null) {
-      chips.add(
-        _HomepageSummaryChip(
-          label: '${averageRating.toStringAsFixed(1)} 分',
-          accent: true,
-        ),
-      );
-    }
-    return chips;
-  }
-
   Future<void> _showMoreActions(BuildContext context) async {
     if (!_hasMoreActions) {
       return;
@@ -166,7 +152,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       primaryItems.add(
         const AppActionSheetItem<_HomepageMoreAction>(
           value: _HomepageMoreAction.maintain,
-          label: '维护主页',
+          label: UITextConstants.homepageMaintainAction,
           icon: CupertinoIcons.pencil,
         ),
       );
@@ -174,7 +160,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       primaryItems.add(
         const AppActionSheetItem<_HomepageMoreAction>(
           value: _HomepageMoreAction.claim,
-          label: '认领主页',
+          label: UITextConstants.homepageClaimAction,
           icon: CupertinoIcons.check_mark_circled,
         ),
       );
@@ -190,7 +176,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
           items: <AppActionSheetItem<_HomepageMoreAction>>[
             AppActionSheetItem<_HomepageMoreAction>(
               value: _HomepageMoreAction.report,
-              label: '状态上报',
+              label: UITextConstants.homepageStatusReportAction,
               icon: CupertinoIcons.flag,
               isDestructive: true,
             ),
@@ -200,7 +186,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     }
     final action = await showAppActionSheet<_HomepageMoreAction>(
       context,
-      title: _reference?.title ?? '主页',
+      title: _reference?.title ?? UITextConstants.objectHomepageDefaultTitle,
       sections: sections,
     );
     if (!context.mounted || action == null) {
@@ -216,75 +202,72 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     }
   }
 
-  void _handlePrimaryAction() {
-    final reference = _reference;
-    if (reference == null || !_canCreateFromHomepage) {
-      return;
-    }
-    widget.onCreateContent(reference);
-  }
-
   Widget _buildContentTab(BuildContext context) {
-    if (_contentPreview.isEmpty && _questionPreview.isEmpty) {
+    if (_contentPreview.isEmpty) {
       return _buildMessageCard(
         context,
-        title: '相关内容',
+        title: UITextConstants.homepageContentSectionTitle,
         child: _HomepageEmptyState(
           icon: CupertinoIcons.square_stack_3d_up,
-          title: '还没有内容沉淀',
-          description: '后续围绕该主页发布的内容与提问会按频道沉淀在这里。',
+          title: UITextConstants.homepageContentEmptyTitle,
+          description: UITextConstants.homepageContentEmptyDescription,
         ),
       );
     }
 
-    final sections = <Widget>[];
-    if (_contentPreview.isNotEmpty) {
-      sections.add(
-        _buildSectionBlock(
-          context: context,
-          title: '相关内容',
-          child: ProfileIosGroupedSection(
-            margin: EdgeInsets.zero,
-            children: _contentPreview
-                .map(
-                  (item) => _HomepagePreviewCell(
-                    title: item.title,
-                    subtitle: item.summary ?? '',
-                    label: _contentTypeLabel(item.contentType ?? ''),
-                    coverUrl: item.coverUrl,
-                    icon: _contentTypeIcon(item.contentType ?? ''),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-        ),
-      );
-    }
-    if (_questionPreview.isNotEmpty) {
-      sections.add(
-        _buildSectionBlock(
-          context: context,
-          title: '相关提问',
-          child: ProfileIosGroupedSection(
-            margin: EdgeInsets.zero,
-            children: _questionPreview
-                .map(
-                  (item) => _HomepagePreviewCell(
-                    title: item.title,
-                    subtitle: item.summary ?? '',
-                    label: '提问',
-                    icon: CupertinoIcons.question_circle,
-                  ),
-                )
-                .toList(growable: false),
-          ),
+    return _buildSectionBlock(
+      context: context,
+      title: UITextConstants.homepageContentSectionTitle,
+      child: ProfileIosGroupedSection(
+        margin: EdgeInsets.zero,
+        children: _contentPreview
+            .map(
+              (item) => _HomepagePreviewCell(
+                title: item.title,
+                subtitle: item.summary ?? '',
+                label: _contentTypeLabel(item.contentType ?? ''),
+                coverUrl: item.coverUrl,
+                icon: _contentTypeIcon(item.contentType ?? ''),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  Widget _buildDiscussionTab(BuildContext context) {
+    final objectName = (_reference?.title ?? '').trim();
+    final sectionTitle = objectName.isEmpty
+        ? UITextConstants.homepageDiscussionSectionTitle
+        : UITextConstants.homepageDiscussionSectionTitleFor(objectName);
+    if (_questionPreview.isEmpty) {
+      return _buildMessageCard(
+        context,
+        title: sectionTitle,
+        child: _HomepageEmptyState(
+          icon: CupertinoIcons.chat_bubble_2_fill,
+          title: UITextConstants.homepageDiscussionEmptyTitle,
+          description: UITextConstants.homepageDiscussionEmptyDescription,
         ),
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: sections,
+    return _buildSectionBlock(
+      context: context,
+      title: sectionTitle,
+      child: ProfileIosGroupedSection(
+        margin: EdgeInsets.zero,
+        children: _questionPreview
+            .map(
+              (item) => _HomepagePreviewCell(
+                title: item.title,
+                subtitle: item.summary ?? '',
+                label: UITextConstants.objectTabDiscussion,
+                icon: CupertinoIcons.chat_bubble_2,
+              ),
+            )
+            .toList(growable: false),
+      ),
     );
   }
 
@@ -292,32 +275,33 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     if (_relatedGroups.isEmpty) {
       return _buildMessageCard(
         context,
-        title: '关联圈子',
+        title: UITextConstants.homepageInterestCircleSectionTitle,
         child: _HomepageEmptyState(
           icon: CupertinoIcons.person_3_fill,
-          title: '还没有关联圈子',
-          description: '与该主页绑定的圈子、官方群或兴趣分组会展示在这里。',
+          title: UITextConstants.homepageInterestCircleEmptyTitle,
+          description: UITextConstants.homepageInterestCircleEmptyDescription,
         ),
       );
     }
 
     return _buildSectionBlock(
       context: context,
-      title: '关联圈子',
+      title: UITextConstants.homepageInterestCircleSectionTitle,
       child: ProfileIosGroupedSection(
         margin: EdgeInsets.zero,
         children: _relatedGroups
             .map(
               (group) => ProfileIosGroupedCell(
                 title: group.name,
-                subtitle: '${group.memberCount} 位成员 · 已关联主页',
+                subtitle:
+                    '${group.memberCount} ${UITextConstants.homepageRelatedGroupSubtitle}',
                 leading: Container(
                   width: AppSpacing.buttonHeightSm,
                   height: AppSpacing.buttonHeightSm,
                   decoration: BoxDecoration(
                     color: AppColors.iosTintedFill(context),
                     borderRadius: BorderRadius.circular(
-                      AppSpacing.radiusTwenty,
+                      AppSpacing.radiusTwentyFour,
                     ),
                   ),
                   child: Icon(
@@ -334,40 +318,11 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     );
   }
 
-  Widget _buildReviewsTab(BuildContext context) {
-    final detail = widget.detail;
-    if (_reviewSummary == null &&
-        detail?.averageRating == null &&
-        widget.initialSummary?.averageRating == null) {
-      return _buildMessageCard(
-        context,
-        title: '口碑',
-        child: _HomepageEmptyState(
-          icon: CupertinoIcons.chat_bubble_2_fill,
-          title: '还没有口碑沉淀',
-          description: '评论、评分和与实体相关的讨论会按对象维度沉淀在这里。',
-        ),
-      );
-    }
-
-    return _buildSectionBlock(
-      context: context,
-      title: '口碑摘要',
-      child: _HomepageReviewCard(
-        summary: _reviewSummary,
-        fallbackAverageRating:
-            detail?.averageRating ?? widget.initialSummary?.averageRating,
-        fallbackRatingCount:
-            detail?.ratingCount ?? widget.initialSummary?.ratingCount ?? 0,
-      ),
-    );
-  }
-
   Widget _buildActiveTabContent(BuildContext context) {
-    return switch (_activeTabId) {
+    return switch (homepageTabBodySlotForId(_activeTabId)) {
       'content' => _buildContentTab(context),
-      'reviews' => _buildReviewsTab(context),
-      'related' => _buildRelatedTab(context),
+      'discussion' => _buildDiscussionTab(context),
+      'interest_circles' => _buildRelatedTab(context),
       _ => _buildOverviewTab(context),
     };
   }

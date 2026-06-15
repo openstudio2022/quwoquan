@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 
@@ -25,7 +26,13 @@ TASKS_ROOT = RUNTIME_ROOT / "tasks"
 # committed 任务规格根（受版本控制；与 runtime/tasks 同 taskId 对应）
 COMMITTED_TASKS_ROOT = Path(os.environ.get("QWQ_COMMITTED_TASKS_ROOT", DATA_ROOT / "tasks"))
 COMMANDS = ("explore", "build", "download", "produce", "publish")
-NOW_ISO = "2026-05-15T00:00:00+08:00"
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+NOW_ISO = now_iso()
 TASK_SHARED_LEDGER_FILENAMES = (
     "catalog.ndjson",
     "dedup_ledger.json",
@@ -275,6 +282,16 @@ def fanout_rollup_path(plan_id: str) -> Path:
     return fanout_plan_dir(plan_id) / "rollup.json"
 
 
+def fanout_summary_path(plan_id: str) -> Path:
+    """fanout 计划级汇总：把 rollup/run_matrix/workflow_state 对齐成单独摘要。"""
+    return fanout_plan_dir(plan_id) / "summary.json"
+
+
+def fanout_run_matrix_path(plan_id: str) -> Path:
+    """fanout 运行矩阵：每个 ref/worker/orchestrator 的运行证据账本。"""
+    return fanout_plan_dir(plan_id) / "run_matrix.json"
+
+
 # ─── publish 同构（单一主线）─────────────────────────────────────
 def publish_data() -> DataRoot:
     return DataRoot(PUBLISH_ROOT)
@@ -346,6 +363,16 @@ OBJECT_STAGES = (
 def batch_shared_dir(task_id: str, batch_id: str) -> Path:
     """批次级公共产物（跨对象共享，不属于任一对象）。"""
     return batch_root(task_id, batch_id) / "_shared"
+
+
+def batch_audit_summary_path(task_id: str, batch_id: str) -> Path:
+    """批次级审计摘要（脚本验收结果 + 抽检锚点）。"""
+    return batch_shared_dir(task_id, batch_id) / "audit_summary.json"
+
+
+def batch_audit_markdown_path(task_id: str, batch_id: str) -> Path:
+    """批次级人工抽检清单。"""
+    return batch_shared_dir(task_id, batch_id) / "audit_summary.md"
 
 
 def batch_content_plan_packet_path(task_id: str, batch_id: str) -> Path:

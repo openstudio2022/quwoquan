@@ -1575,7 +1575,7 @@ class PrototypeMockData {
       {
         'id': 3,
         'type': 'discovery',
-        'title': '收藏了"4:5美学"圈子的文章',
+        'title': '评论了"4:5美学"圈子的文章',
         'date': '2月2日',
         'icon': '🔖',
       },

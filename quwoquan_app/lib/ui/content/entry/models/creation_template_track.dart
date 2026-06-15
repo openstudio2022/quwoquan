@@ -86,7 +86,7 @@ const List<CreationTemplatePrompt> creationTemplateTracks =
       CreationTemplatePrompt(
         id: CreationTemplateTrackId.checklist,
         label: '清单整理',
-        helperText: '把可复用的信息整理成清单，方便别人收藏和执行。',
+        helperText: '把可复用的信息整理成清单，方便别人参考和执行。',
         titlePlaceholder: '一份可以直接照着用的清单',
         bodySkeleton: '准备清单：\n1. \n2. \n3. \n\n注意事项：\n\n适用场景：',
         suggestedIdentity: CreateContentIdentity.work,

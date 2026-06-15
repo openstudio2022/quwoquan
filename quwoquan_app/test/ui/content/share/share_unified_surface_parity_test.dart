@@ -34,7 +34,6 @@ void main() {
           'likeCount': 0,
           'commentCount': 0,
           'shareCount': 0,
-          'favoriteCount': 0,
           'createdAt': '2026-01-01T00:00:00.000Z',
         }),
       );
@@ -57,7 +56,6 @@ void main() {
           'likeCount': 0,
           'commentCount': 0,
           'shareCount': 0,
-          'favoriteCount': 0,
           'createdAt': '2026-01-01T00:00:00.000Z',
         }),
       );
@@ -80,7 +78,6 @@ void main() {
           'likeCount': 0,
           'commentCount': 0,
           'shareCount': 0,
-          'favoriteCount': 0,
           'createdAt': '2026-01-01T00:00:00.000Z',
         }),
       );
@@ -101,7 +98,6 @@ void main() {
           'likeCount': 0,
           'commentCount': 0,
           'shareCount': 0,
-          'favoriteCount': 0,
           'createdAt': '2026-01-01T00:00:00.000Z',
         }),
       );

@@ -35,9 +35,26 @@ abstract class PostBaseDto {
   String get assistantUsePolicy;
   int get likeCount;
   int get commentCount;
-  int get favoriteCount;
   int get shareCount;
+
+  /// 创作时间（内容首次进入系统）。
   DateTime get createdAt;
+
+  /// 最后实质更新时间；null 或不晚于 [createdAt] 表示未编辑过。
+  DateTime? get updatedAt => null;
+
+  /// 首次公开时间（仅首次发布置位）；null 表示尚未发布或未知。
+  DateTime? get publishedAt => null;
+
+  /// 是否在创作之后发生过实质更新（决定 UI 是否展示「更新于」）。
+  /// 容忍秒级抖动：仅当更新时间比创作时间晚超过 1 秒才算更新。
+  bool get hasMeaningfulUpdate {
+    final updated = updatedAt;
+    if (updated == null) {
+      return false;
+    }
+    return updated.difference(createdAt).inSeconds > 1;
+  }
 
   /// Optional canonical title for note/article-like posts.
   String get title => '';

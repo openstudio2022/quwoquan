@@ -103,67 +103,28 @@ void main() {
     await const MockUserProfileRepository().clearRecentSearches();
   });
 
-  testWidgets('无记录记录时隐藏最近搜索区块', (tester) async {
+  testWidgets('默认页固定 Tab 与结果页一致且空历史隐藏最近搜索', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('最近在搜'), findsNothing);
+    expect(find.text('小趣'), findsOneWidget);
+    expect(find.text('全部'), findsWidgets);
+    expect(find.text('交集'), findsOneWidget);
+    expect(find.text('图片'), findsOneWidget);
+    expect(find.text('视频'), findsOneWidget);
+    expect(find.text('长文'), findsOneWidget);
+    expect(find.byKey(TestKeys.searchContentSelectorButton), findsNothing);
+    expect(find.byKey(TestKeys.globalSearchScopeRail), findsNothing);
+    expect(find.text('搜索历史'), findsNothing);
     expect(find.byKey(TestKeys.searchHistoryManageButton), findsNothing);
   });
 
-  testWidgets('内容选择行可打开弹窗并回写摘要', (tester) async {
-    await tester.pumpWidget(_buildApp());
-    await tester.pumpAndSettle();
+  testWidgets('搜索历史手机默认两列五行并可展开收起', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-    expect(find.byKey(TestKeys.searchContentSelectorButton), findsOneWidget);
-    expect(find.byKey(TestKeys.globalSearchScopeRail), findsOneWidget);
-    expect(find.byKey(TestKeys.searchScopeAllChip), findsOneWidget);
-    expect(find.byKey(TestKeys.searchScopeContactsChip), findsOneWidget);
-    expect(find.byKey(TestKeys.searchScopeDirectChatChip), findsOneWidget);
-    expect(find.byKey(TestKeys.searchScopeGroupChatChip), findsOneWidget);
-    expect(find.byKey(TestKeys.searchScopeCirclesChip), findsOneWidget);
-
-    final allChipText = tester.widget<Text>(
-      find.descendant(
-        of: find.byKey(TestKeys.searchScopeAllChip),
-        matching: find.text('全部'),
-      ),
-    );
-    expect(allChipText.style?.color, AppColors.primaryColor);
-
-    expect(find.text('全部内容'), findsOneWidget);
-
-    await tester.tap(find.byKey(TestKeys.searchContentSelectorButton));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(TestKeys.searchContentSheet), findsOneWidget);
-    expect(find.byKey(TestKeys.searchContentArticleToggle), findsOneWidget);
-    expect(find.byKey(TestKeys.searchContentImageToggle), findsOneWidget);
-    expect(find.byKey(TestKeys.searchContentVideoToggle), findsOneWidget);
-    expect(find.byKey(TestKeys.searchContentMicroToggle), findsOneWidget);
-
-    await tester.tap(find.text('图片').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('视频').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('微趣').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(TestKeys.searchContentSheetDoneButton));
-    await tester.pumpAndSettle();
-
-    expect(find.text('文章'), findsOneWidget);
-
-    await tester.tap(find.byKey(TestKeys.searchContentSelectorButton));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(TestKeys.searchContentSheetResetButton));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(TestKeys.searchContentSheetDoneButton));
-    await tester.pumpAndSettle();
-
-    expect(find.text('全部内容'), findsOneWidget);
-  });
-
-  testWidgets('最近搜索默认折叠三行并可进入删除态删除单条记录', (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'global_search_recent_entries_v1': jsonEncode(<Map<String, dynamic>>[
         _historyEntry('摄影圈'),
@@ -173,39 +134,38 @@ void main() {
         _historyEntry('咖啡俱乐部'),
         _historyEntry('夜景延时'),
         _historyEntry('圈子搭子'),
+        _historyEntry('厦门大学'),
+        _historyEntry('鼓浪屿'),
+        _historyEntry('九寨沟'),
+        _historyEntry('环岛路'),
+        _historyEntry('旅行'),
+        _historyEntry('武夷山'),
+        _historyEntry('黄山'),
+        _historyEntry('西湖'),
       ]),
     });
 
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('最近在搜'), findsOneWidget);
+    expect(find.text('搜索历史'), findsOneWidget);
+    expect(find.text('展开'), findsOneWidget);
     expect(find.byKey(TestKeys.searchHistoryExpandButton), findsOneWidget);
-    expect(find.text('圈子搭子'), findsNothing);
+    expect(find.text('环岛路'), findsNothing);
 
-    await tester.tap(find.byKey(TestKeys.searchHistoryManageButton));
+    await tester.tap(find.byKey(TestKeys.searchHistoryExpandButton));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(TestKeys.searchHistoryClearButton), findsOneWidget);
-    expect(find.byKey(TestKeys.searchHistoryDoneButton), findsOneWidget);
-    expect(find.text('摄影圈'), findsOneWidget);
-    expect(find.text('圈子搭子'), findsOneWidget);
+    expect(find.text('环岛路'), findsOneWidget);
+    expect(find.text('收起'), findsOneWidget);
 
-    final doneText = tester.widget<Text>(
-      find.descendant(
-        of: find.byKey(TestKeys.searchHistoryDoneButton),
-        matching: find.text('完成'),
-      ),
-    );
-    expect(doneText.style?.color, AppColors.primaryColor);
-
-    await tester.tap(find.byIcon(CupertinoIcons.xmark).first);
+    await tester.tap(find.byKey(TestKeys.searchHistoryExpandButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('摄影圈'), findsNothing);
+    expect(find.text('环岛路'), findsNothing);
   });
 
-  testWidgets('删除态清空前需要确认', (tester) async {
+  testWidgets('搜索历史删除态支持单条删除与全部删除', (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'global_search_recent_entries_v1': jsonEncode(<Map<String, dynamic>>[
         _historyEntry('摄影圈'),
@@ -219,62 +179,35 @@ void main() {
     await tester.tap(find.byKey(TestKeys.searchHistoryManageButton));
     await tester.pumpAndSettle();
 
+    expect(find.text('全部删除'), findsOneWidget);
+    expect(find.byKey(TestKeys.searchHistoryDoneButton), findsOneWidget);
+
+    await tester.tap(find.byIcon(CupertinoIcons.xmark).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('摄影圈'), findsNothing);
+    expect(find.text('旅行手账'), findsWidgets);
+
     await tester.tap(find.byKey(TestKeys.searchHistoryClearButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('清空最近搜索'), findsOneWidget);
-    expect(find.text('将移除全部最近搜索记录，且无法恢复。'), findsOneWidget);
+    expect(find.text('清空搜索历史'), findsOneWidget);
+    expect(find.text('将移除全部搜索历史记录，且无法恢复。'), findsOneWidget);
 
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
 
-    expect(find.text('最近在搜'), findsOneWidget);
+    expect(find.text('搜索历史'), findsOneWidget);
 
     await tester.tap(find.byKey(TestKeys.searchHistoryClearButton));
     await tester.pumpAndSettle();
     await tester.tap(find.text('清空').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('最近在搜'), findsNothing);
+    expect(find.text('搜索历史'), findsNothing);
   });
 
-  testWidgets('指定搜索对象可切换到联系人并过滤联想区块', (tester) async {
-    await tester.pumpWidget(_buildApp());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(TestKeys.searchScopeContactsChip));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.byKey(const ValueKey<String>('global_search_field')),
-      '李',
-    );
-    await tester.pump(const Duration(milliseconds: 220));
-    await tester.pumpAndSettle();
-
-    expect(find.text('更多联系人'), findsOneWidget);
-    expect(find.text('更多聊天记录'), findsNothing);
-  });
-
-  testWidgets('指定搜索对象可切换到群聊', (tester) async {
-    await tester.pumpWidget(_buildApp());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(TestKeys.searchScopeGroupChatChip));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.byKey(const ValueKey<String>('global_search_field')),
-      '群',
-    );
-    await tester.pump(const Duration(milliseconds: 220));
-    await tester.pumpAndSettle();
-
-    expect(find.text('更多群聊'), findsOneWidget);
-    expect(find.text('更多联系人'), findsNothing);
-  });
-
-  testWidgets('输入关键词后展示实时联想并可展开联系人', (tester) async {
+  testWidgets('输入关键词后展示实时联想联系人与推荐搜索', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
@@ -285,20 +218,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
     await tester.pumpAndSettle();
 
-    expect(find.text('最常使用'), findsOneWidget);
+    expect(find.text('推荐搜索'), findsOneWidget);
     expect(find.text('联系人'), findsWidgets);
-    expect(find.text('更多联系人'), findsOneWidget);
-
-    final moreContactsButton = find.ancestor(
-      of: find.text('更多联系人'),
-      matching: find.byType(CupertinoButton),
-    );
-    await tester.ensureVisible(moreContactsButton);
-    await tester.pumpAndSettle();
-    await tester.tap(moreContactsButton);
-    await tester.pumpAndSettle();
-
-    expect(find.text('李泽'), findsOneWidget);
 
     final liXiangButton = find.ancestor(
       of: find.text('李想').last,
@@ -343,7 +264,7 @@ void main() {
     expect(find.text('chat:conv_grid_3'), findsOneWidget);
   });
 
-  testWidgets('聊天记录群聊缺失 avatarUrl 时显示稳定群占位', (tester) async {
+  testWidgets('聊天记录讨论缺失 avatarUrl 时显示稳定群占位', (tester) async {
     _suppressImageErrors();
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
@@ -364,7 +285,7 @@ void main() {
     expect(avatar.imageUrl, isNull);
   });
 
-  testWidgets('联系人没有单聊时回退到已存在群聊会话', (tester) async {
+  testWidgets('联系人没有单聊时回退到已存在讨论会话', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
@@ -398,16 +319,16 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
     await _pumpUntil(
       tester,
-      condition: () => find.text('冰 相关主页').evaluate().isNotEmpty,
+      condition: () => find.text('冰').evaluate().isNotEmpty,
     );
 
     await tester.tap(find.text('冰').last);
     await _pumpUntil(
       tester,
-      condition: () => find.text('综合').evaluate().isNotEmpty,
+      condition: () => find.text('全部').evaluate().isNotEmpty,
     );
 
-    expect(find.text('综合'), findsWidgets);
+    expect(find.text('全部'), findsWidgets);
     expect(find.text('推荐'), findsNothing);
   });
 
@@ -422,22 +343,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
     await _pumpUntil(
       tester,
-      condition: () => find.text('西湖 相关主页').evaluate().isNotEmpty,
+      condition: () => find.text('西湖 交集').evaluate().isNotEmpty,
     );
 
-    expect(find.text('西湖 相关主页'), findsOneWidget);
+    expect(find.text('西湖 交集'), findsOneWidget);
 
-    await tester.tap(find.text('西湖 相关主页'));
+    await tester.tap(find.text('西湖 交集'));
     await _pumpUntil(
       tester,
-      condition: () => find.text('主页').evaluate().isNotEmpty,
+      condition: () => find.text('交集').evaluate().isNotEmpty,
     );
 
-    expect(
-      find.byKey(const ValueKey<String>('network_results_homepages')),
-      findsOneWidget,
-    );
-    expect(find.text('西湖景区'), findsWidgets);
+    expect(find.text('交集'), findsWidgets);
   });
 }
 
@@ -730,6 +647,7 @@ class _FakeAssistantRepository implements AssistantRepository {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
     String searchIntensity = 'balanced',
+    Map<String, dynamic>? contextSnapshot,
   }) async {
     return AssistantSearchResultView(
       queryEcho: query,

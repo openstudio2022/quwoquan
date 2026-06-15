@@ -10,6 +10,7 @@ import re
 from typing import Any, Mapping, Sequence
 
 from _common.content_evidence import gate_route_evidence_bundle, public_byline_label
+from _common.content_object import require_title_hint
 from _common.entity_extract import normalize_entity_refs
 from _common.entity_annotation import merge_entity_refs
 from _common.content_review import fact_traceability_issues, generator_provenance_issues
@@ -24,6 +25,7 @@ from _common.draft_io import (
     write_prompt,
     write_writing_pack,
 )
+from _common.content_tags import resolved_content_tag_refs
 from _common.stage_reports import write_gate_report, write_repair_report, write_stage_result
 from _common.template_fingerprints import template_fingerprint_issues
 from _common.writing_pack import build_writing_pack, render_prompt_md
@@ -42,6 +44,7 @@ from produce.route_workflow import (
     _check_prose_style,
     _check_provenance_rewrite,
     _check_travelogue_density,
+    _image_caption_from_article,
     _jaccard,
     _load_source_texts,
     _persisted_review_payload,
@@ -60,14 +63,18 @@ def is_entity_brief(brief: Mapping[str, Any]) -> bool:
 
 
 def iter_entity_briefs(task_id: str, batch_id: str, refs: Sequence[str] | None = None) -> list[tuple[str, dict[str, Any]]]:
-    from _common.content_object import iter_briefs
+    from produce.route_workflow import load_compose_brief
+    from _common.content_object import iter_content_refs
 
     wanted = {ref for ref in (refs or []) if ref}
-    return [
-        (ref, brief)
-        for ref, brief in iter_briefs(task_id, batch_id)
-        if (not wanted or ref in wanted) and is_entity_brief(brief)
-    ]
+    rows: list[tuple[str, dict[str, Any]]] = []
+    for ref in iter_content_refs(task_id, batch_id):
+        if wanted and ref not in wanted:
+            continue
+        brief = load_compose_brief(task_id, batch_id, ref)
+        if brief and is_entity_brief(brief):
+            rows.append((ref, brief))
+    return rows
 
 
 def _entity_name(evidence_bundle: Mapping[str, Any], brief: Mapping[str, Any]) -> str:
@@ -75,7 +82,7 @@ def _entity_name(evidence_bundle: Mapping[str, Any], brief: Mapping[str, Any]) -
     if nodes:
         return str(nodes[0]["entityName"])
     refs = [str(x) for x in (brief.get("entityRefs") or []) if x]
-    return refs[0].split("/")[-1] if refs else str(brief.get("titleHint") or "")
+    return refs[0].split("/")[-1] if refs else ""
 
 
 # 实体类别名词：用于 prompt 指代，避免线路话术（这条线/长线/转场/节点）。
@@ -123,14 +130,16 @@ def build_entity_writing_pack(
     brief: Mapping[str, Any],
     quality_payload: Mapping[str, Any],
 ) -> dict[str, Any]:
-    from _common.content_object import register_from_brief
+    if str(quality_payload.get("recommendation") or "") == "skip":
+        raise ValueError(f"{ref}: evidence too weak (recommendation=skip), writing_pack must not be prepared")
+    from _common.content_object import content_type_from_brief, register_from_brief
 
-    register_from_brief(task_id, batch_id, ref, brief, content_type="article")
+    register_from_brief(task_id, batch_id, ref, brief, content_type=content_type_from_brief(brief))
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
     name = _entity_name(evidence_bundle, brief)
     assets = _build_route_assets(task_id, batch_id, ref, brief, evidence_bundle)
     carrier = resolve_carrier(brief, evidence_bundle, assets)
-    publish_layout = "gallery" if carrier == "gallery" else "entity"
+    publish_layout = "image" if carrier in ("image", "gallery") else "entity"
     byline = public_byline_label(str(brief.get("templateId") or ""), brief.get("creator") or {})
     pack = build_writing_pack(
         ref=ref,
@@ -203,19 +212,23 @@ def _compose_payload_from_pack(
     meta = draft_meta or {}
     payload = {
         "topicId": ref,
-        "title": brief.get("titleHint") or ref,
+        "title": require_title_hint(brief, ref=ref),
         "summary": _build_summary(article),
         "articleMarkdown": article,
         "carrier": carrier,
         "entityRefs": merge_entity_refs(brief, draft_meta),
-        "tagRefs": list(brief.get("tagRefs") or []),
+        "tagRefs": resolved_content_tag_refs(brief, carrier),
         "sourceUrls": list(quality_payload.get("sourceUrls") or []),
         "sourcePaths": list(quality_payload.get("sourcePaths") or []),
         "template": template,
         "assets": list(pack.get("assets") or []),
-        "publishLayout": "gallery" if carrier == "gallery" else "entity",
+        "publishLayout": "image" if carrier in ("image", "gallery") else "entity",
         "publishAngle": _publish_angle(brief),
-        "publishTitle": brief.get("titleHint") or ref,
+        "publishTitle": (
+            str(brief.get("titleHint") or "")
+            if carrier in ("image", "gallery")
+            else require_title_hint(brief, ref=ref)
+        ),
         "publishSeq": 1,
         "conditionContext": brief.get("conditionContext"),
         "composeBriefRef": ref,
@@ -223,13 +236,16 @@ def _compose_payload_from_pack(
         "generator": str(meta.get("generator") or "pending"),
         "generatorModel": meta.get("model"),
         "citedSourceRefs": list(meta.get("citedSourcePaths") or []),
+        "createdAt": meta.get("createdAt"),
+        "updatedAt": meta.get("updatedAt"),
         "articleRenderProfile": {
             "template": template,
             "fontPreset": (brief.get("render") or {}).get("fontPreset", "clean"),
         },
     }
-    if carrier == "gallery":
-        payload["galleryMarkdown"] = article
+    if carrier in ("image", "gallery"):
+        payload["title"] = str(brief.get("titleHint") or "")
+        payload["caption"] = _image_caption_from_article(article)
     return payload
 
 
@@ -256,6 +272,7 @@ def review_entity_draft(
     traceability = fact_traceability_issues(body, dict(brief), source_texts)
 
     compose_payload = _compose_payload_from_pack(ref, brief, quality_payload, pack, body, draft_meta)
+    carrier = str(compose_payload.get("carrier") or brief.get("carrier") or "article")
     write_stage_result(task_id, batch_id, "produce", "compose", ref, compose_payload)
 
     checks = _entity_review_checks(
@@ -279,10 +296,19 @@ def review_entity_draft(
         "issues": traceability,
         "suggestions": ["补齐 mustIncludeFacts，并确保门票/开放时间/海拔等数字能在 source 证据中找到。"] if traceability else [],
     }
-    from _common.base_draft import base_draft_fidelity_issues, load_base_draft_text
+    from _common.base_draft import base_draft_fidelity_issues, base_source_use_mode, load_base_draft_text
 
-    base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
-    fidelity = base_draft_fidelity_issues(body, base_text)
+    if carrier in ("image", "gallery"):
+        fidelity = []
+    else:
+        base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
+        source_use_mode = base_source_use_mode(task_id, batch_id, brief.get("baseSourceRef"))
+        fidelity = base_draft_fidelity_issues(
+            body,
+            base_text,
+            carrier=carrier,
+            source_use_mode=source_use_mode,
+        )
     checks["baseDraftFidelity"] = {
         "passed": not fidelity,
         "issues": fidelity,
@@ -290,12 +316,17 @@ def review_entity_draft(
     }
     from _common import quality_gates as qg
 
-    wi_issues = qg.writing_intent_consistency_issues(body, brief.get("writingIntent"))
-    checks["writingIntentConsistency"] = {
-        "passed": not wi_issues,
-        "issues": wi_issues,
-        "suggestions": ["按 writingIntent 主线补齐结构（攻略=步骤/交通/票务/取舍；体验=适合人群/价值/取舍；游记=时间线/现场/复盘）。"] if wi_issues else [],
-    }
+    if carrier in ("image", "gallery"):
+        checks["writingIntentConsistency"] = {"passed": True, "issues": [], "suggestions": []}
+    else:
+        wi_issues = qg.writing_intent_consistency_issues(body, brief.get("writingIntent"))
+        checks["writingIntentConsistency"] = {
+            "passed": not wi_issues,
+            "issues": wi_issues,
+            "suggestions": [
+                "按 writingIntent 主线补齐结构（攻略=步骤/交通/票务/取舍；体验=适合人群/价值/取舍；游记=时间线/现场/复盘）。"
+            ] if wi_issues else [],
+        }
     banned_terms = [str(b) for b in (pack.get("bannedRegisterTerms") or brief.get("bannedRegisterTerms") or [])]
     reg_issues = qg.register_lexicon_issues(body, banned_terms)
     checks["registerMismatch"] = {
@@ -381,6 +412,11 @@ def _entity_review_checks(
     ref: str = "",
     draft_meta: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
+    if str(compose_payload.get("carrier") or "article") in ("image", "gallery"):
+        return {
+            "carrierConsistency": _check_carrier_consistency(compose_payload),
+            "imageGate": _check_image_gate(compose_payload),
+        }
     checks = {
         "entityCoverage": _check_entity_coverage(article, brief, evidence_bundle),
         "provenanceRewrite": _check_provenance_rewrite(article, brief, quality_payload),
@@ -389,7 +425,7 @@ def _entity_review_checks(
         "proseStyle": _check_prose_style(article),
         "imageGate": _check_image_gate(compose_payload),
     }
-    if str(compose_payload.get("carrier") or "article") != "gallery":
+    if str(compose_payload.get("carrier") or "article") not in ("image", "gallery"):
         style_family, opening_strategy = _resolve_style_opening(brief, draft_meta)
         checks["travelogueDensity"] = _check_travelogue_density(
             article, brief, style_family=style_family, opening_strategy=opening_strategy
@@ -434,15 +470,15 @@ def _check_section_shape(article: str) -> dict[str, Any]:
 def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks.get("generatorProvenance", {"passed": True})["passed"]:
         return "agent_compose"
-    if not checks["evidenceQuality"]["passed"]:
+    if not checks.get("evidenceQuality", {"passed": True})["passed"]:
         return "download"
     if not checks.get("factTraceability", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("baseDraftFidelity", {"passed": True})["passed"]:
         return "agent_compose"
-    if not checks["provenanceRewrite"]["passed"]:
+    if not checks.get("provenanceRewrite", {"passed": True})["passed"]:
         return "agent_compose"
-    if not checks["entityCoverage"]["passed"]:
+    if not checks.get("entityCoverage", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("travelogueDensity", {"passed": True})["passed"]:
         return "agent_compose"

@@ -266,9 +266,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'TODO: translate';
 
   @override
-  String get bookmarks => 'TODO: translate';
-
-  @override
   String get createCircle => 'TODO: translate';
 
   @override
@@ -745,9 +742,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get assistantReferenceHostBlocked => 'TODO: translate';
-
-  @override
-  String get assistantBookmarked => 'TODO: translate';
 
   @override
   String get assistantDevReplayTitle => 'TODO: translate';

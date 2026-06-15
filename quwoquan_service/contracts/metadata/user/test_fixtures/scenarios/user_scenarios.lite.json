@@ -168,7 +168,12 @@
               "sizeBytes": 2570495,
               "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
             }
-          }
+          },
+          "identityTags": [
+            "lifestyle",
+            "coffee",
+            "parenting"
+          ]
         },
         {
           "userId": "fixture_user_photo",
@@ -318,7 +323,12 @@
               "sizeBytes": 1857474,
               "sourceHash": "sha256:bf14a1065a7e7777b5f691810e888d68d600c0b736f7535850e6d641f547f29c"
             }
-          }
+          },
+          "identityTags": [
+            "photography",
+            "travel",
+            "cityWalk"
+          ]
         },
         {
           "userId": "fixture_user_travel",
@@ -469,7 +479,12 @@
               "sizeBytes": 2522887,
               "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
             }
-          }
+          },
+          "identityTags": [
+            "travel",
+            "photography",
+            "outdoor"
+          ]
         },
         {
           "userId": "fixture_user_article",
@@ -568,7 +583,12 @@
               "sizeBytes": 1794125,
               "sourceHash": "sha256:68d9a9303e0a5b685f978f1c13681d23d159303304e1e09750fe7c4f55da35d5"
             }
-          }
+          },
+          "identityTags": [
+            "designWriting",
+            "tech",
+            "coffee"
+          ]
         },
         {
           "userId": "fixture_user_friend",
@@ -720,7 +740,12 @@
               "sizeBytes": 1117608,
               "sourceHash": "sha256:37dc09790fcc630ecfe492e0332a73575e571006a14b5836f03f5c82951a6bea"
             }
-          }
+          },
+          "identityTags": [
+            "coffee",
+            "food",
+            "designWriting"
+          ]
         },
         {
           "userId": "fixture_user_weekend_1",
@@ -879,7 +904,12 @@
               "sizeBytes": 2570495,
               "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
             }
-          }
+          },
+          "identityTags": [
+            "lifestyle",
+            "coffee",
+            "parenting"
+          ]
         },
         {
           "userId": "fixture_user_weekend_2",
@@ -1042,7 +1072,28 @@
               "sizeBytes": 2062449,
               "sourceHash": "sha256:bacfe716b92a789d7c398acd22465ba316a038490b4a242e3acd024c8f8db438"
             }
-          }
+          },
+          "identityTags": [
+            "food",
+            "coffee",
+            "lifestyle"
+          ]
+        }
+      ]
+    },
+    "persona_core": {
+      "description": "当前 sub-account、候选 sub-account 与 active context。",
+      "activeSubAccountId": "fixture_persona_daily",
+      "personas": [
+        {
+          "subAccountId": "fixture_persona_daily",
+          "name": "日常我",
+          "description": "默认日常 sub-account"
+        },
+        {
+          "subAccountId": "fixture_persona_work",
+          "name": "工作我",
+          "description": "工作场景 sub-account"
         }
       ]
     },
@@ -1092,6 +1143,59 @@
           "canCall": true
         }
       ]
+    },
+    "following_subject_core": {
+      "description": "关注对象动态 strip 种子。",
+      "items": [
+        {
+          "subjectId": "user_travel_photographer",
+          "subjectType": "user",
+          "displayName": "旅行摄影师",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "coverUrl": "",
+          "subtitle": "刚更新了川西路线",
+          "targetRouteId": "user_profile",
+          "targetObjectId": "user_travel_photographer",
+          "followedAt": "2026-05-20T08:00:00Z",
+          "lastVisitedAt": "2026-06-01T08:00:00Z",
+          "latestChangedAt": "2026-06-02T00:30:00Z",
+          "unreadChangeCount": 2,
+          "hasUnreadChanges": true,
+          "latestChangeReason": "发布了新内容"
+        },
+        {
+          "subjectId": "circle_sichuan_travel",
+          "subjectType": "circle",
+          "displayName": "四川旅行圈",
+          "avatarUrl": "",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_003/v1/cover.png",
+          "subtitle": "圈内有新攻略",
+          "targetRouteId": "circle_detail",
+          "targetObjectId": "circle_sichuan_travel",
+          "followedAt": "2026-05-22T08:00:00Z",
+          "lastVisitedAt": "2026-06-02T01:00:00Z",
+          "latestChangedAt": "2026-06-02T01:00:00Z",
+          "unreadChangeCount": 0,
+          "hasUnreadChanges": false,
+          "latestChangeReason": ""
+        },
+        {
+          "subjectId": "homepage_sight_emeishan",
+          "subjectType": "homepage",
+          "displayName": "峨眉山",
+          "avatarUrl": "",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
+          "subtitle": "地点动态有更新",
+          "targetRouteId": "homepage_detail",
+          "targetObjectId": "homepage_sight_emeishan",
+          "followedAt": "2026-05-24T08:00:00Z",
+          "lastVisitedAt": "2026-05-30T08:00:00Z",
+          "latestChangedAt": "2026-06-01T12:20:00Z",
+          "unreadChangeCount": 1,
+          "hasUnreadChanges": true,
+          "latestChangeReason": "新增问答和口碑"
+        }
+      ]
     }
   },
   "scenarios": [
@@ -1105,6 +1209,7 @@
         "persona_core",
         "profile_feed_core",
         "relationship_core",
+        "following_subject_core",
         "settings_core"
       ],
       "uiExpectations": {

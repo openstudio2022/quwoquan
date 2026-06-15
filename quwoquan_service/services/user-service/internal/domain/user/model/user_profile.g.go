@@ -17,6 +17,7 @@ type UserProfile struct {
 	AvatarAssetID            string    `json:"avatarAssetId" db:"avatar_asset_id"`
 	AvatarVersion            int       `json:"avatarVersion" db:"avatar_version"`
 	Bio                      string    `json:"bio" db:"bio"`
+	IdentityTags             string    `json:"identityTags" db:"identity_tags"`
 	Gender                   string    `json:"gender" db:"gender"`
 	BirthDate                *string   `json:"birthDate" db:"birth_date"`
 	Region                   string    `json:"region" db:"region"`

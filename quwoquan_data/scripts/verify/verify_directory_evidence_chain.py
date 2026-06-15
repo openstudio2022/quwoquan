@@ -30,6 +30,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.batch_scan import iter_batch_object_dirs  # noqa: E402
+from _common.article_package import compute_document_sha256, sha256_text  # noqa: E402
 from _common.io import read_json  # noqa: E402
 from _common.image_rules import pixel_size_issue, relevance_issue  # noqa: E402
 from _common.paths import (  # noqa: E402
@@ -45,14 +46,31 @@ from _common.paths import (  # noqa: E402
 )
 from _common.prose_style import mechanical_ending_title_issues  # noqa: E402
 from _common.source_catalog import source_unit_category_issues  # noqa: E402
+from _common.entity_object import batch_entity_type_conflicts  # noqa: E402
 from verify.verify_asset_id_zero_collision import scan_batch as scan_asset_ids  # noqa: E402
 
-_REF_FIELDS = ("citedSourceRefs", "sourceAssetRef", "sourceRef", "sourcePaths", "citedSourcePaths")
+_REF_FIELDS = (
+    "baseSourceRef",
+    "citedSourceRefs",
+    "sourceAssetRef",
+    "sourceRef",
+    "sourcePaths",
+    "citedSourcePaths",
+    "sourceUnitRef",
+    "metaRef",
+    "qualityRef",
+    "cleanSourceRef",
+    "objectRef",
+    "draftArticleRef",
+    "finalArticleRef",
+    "composeSnapshotRef",
+)
 _UNIT_RE = __import__("re").compile(r"^(\d{2})\.(.+)$")
 _OBJECT_CHILD_ALLOW = set(OBJECT_STAGES) | {"assets"}
 _TASK_SHARED_ALLOW = {
     *TASK_SHARED_LEDGER_FILENAMES,
     "baseline_freeze_packet.json",
+    "baseline_report.json",
     "explore_packet.json",
     "discovery_adopt",
 }
@@ -144,6 +162,198 @@ def _scan_json_for_absolute(path: Path, issues: list[str]) -> None:
     walk(data)
 
 
+def _source_refs_issues(obj: Path, batch: Path) -> list[str]:
+    """post `1.download/source_refs.json` 必须能回查实体 source units，且镜像自洽。"""
+    rel = obj.relative_to(batch)
+    has_final = (obj / "article.md").is_file() or (obj / "gallery.md").is_file()
+    if not has_final:
+        return []
+    snapshot_path = obj / "1.download" / "source_refs.json"
+    if not snapshot_path.is_file():
+        return [f"{rel}: 内容对象缺 `1.download/source_refs.json`（post 必须自持来源索引/镜像）"]
+    try:
+        data = read_json(snapshot_path)
+    except Exception as exc:  # noqa: BLE001
+        return [f"{rel}: source_refs.json unreadable ({exc})"]
+    issues: list[str] = []
+    sources = data.get("sources") or []
+    if not isinstance(sources, list) or not sources:
+        issues.append(f"{rel}: source_refs.json.sources 为空（至少需登记 base/cited 来源单元）")
+        return issues
+    source_refs = {
+        str(entry.get("sourceRef") or "")
+        for entry in sources
+        if isinstance(entry, dict) and str(entry.get("sourceRef") or "")
+    }
+    base_source_ref = str(data.get("baseSourceRef") or "")
+    if base_source_ref and base_source_ref not in source_refs:
+        issues.append(f"{rel}: baseSourceRef 未落入 source_refs.json.sources：{base_source_ref}")
+    for field in ("citedSourceRefs", "sourcePaths"):
+        for ref in data.get(field) or []:
+            text = str(ref or "")
+            if text and text not in source_refs:
+                issues.append(f"{rel}: {field} 未落入 source_refs.json.sources：{text}")
+    for entry in sources:
+        if not isinstance(entry, dict):
+            issues.append(f"{rel}: source_refs.json.sources 含非法条目")
+            continue
+        source_ref = str(entry.get("sourceRef") or "")
+        unit_ref = str(entry.get("sourceUnitRef") or "")
+        if not source_ref:
+            issues.append(f"{rel}: source_refs.json.sources 缺 sourceRef")
+            continue
+        source_path = batch / source_ref
+        if not source_path.is_file():
+            issues.append(f"{rel}: sourceRef 源文件缺失（证据链断裂）：{source_ref}")
+            continue
+        if unit_ref and not (batch / unit_ref).is_dir():
+            issues.append(f"{rel}: sourceUnitRef 源单元缺失（不可回查）：{unit_ref}")
+        source_markdown = entry.get("sourceMarkdown")
+        if isinstance(source_markdown, str):
+            digest = str(entry.get("sourceMarkdownSha256") or "")
+            if digest and digest != sha256_text(source_markdown):
+                issues.append(f"{rel}: sourceMarkdownSha256 与 sourceMarkdown 不一致：{source_ref}")
+            if source_path.read_text(encoding="utf-8") != source_markdown:
+                issues.append(f"{rel}: sourceMarkdown 与 sourceRef 实际内容不一致：{source_ref}")
+    return issues
+
+
+def _finalization_report_issues(obj: Path, batch: Path) -> list[str]:
+    rel = obj.relative_to(batch)
+    has_final = (obj / "article.md").is_file() or (obj / "gallery.md").is_file()
+    if not has_final:
+        return []
+    report_path = obj / "5.review" / "finalization_report.json"
+    if not report_path.is_file():
+        return [f"{rel}: 缺 `5.review/finalization_report.json`（draft->final 差异报告必须落盘）"]
+    try:
+        data = read_json(report_path)
+    except Exception as exc:  # noqa: BLE001
+        return [f"{rel}: finalization_report.json unreadable ({exc})"]
+    issues: list[str] = []
+    draft_ref = str(data.get("draftArticleRef") or "")
+    final_ref = str(data.get("finalArticleRef") or "")
+    if draft_ref != "4.draft/draft.article.md":
+        issues.append(f"{rel}: finalization_report.draftArticleRef 非法：{draft_ref}")
+    if final_ref != "article.md":
+        issues.append(f"{rel}: finalization_report.finalArticleRef 非法：{final_ref}")
+    draft_path = obj / "4.draft" / "draft.article.md"
+    final_path = obj / "article.md"
+    if not draft_path.is_file():
+        issues.append(f"{rel}: finalization_report 引用的 draft.article.md 缺失")
+        return issues
+    if not final_path.is_file():
+        issues.append(f"{rel}: finalization_report 引用的 article.md 缺失")
+        return issues
+    draft_text = draft_path.read_text(encoding="utf-8")
+    final_text = final_path.read_text(encoding="utf-8")
+    if str(data.get("draftSha256") or "") != compute_document_sha256(draft_text):
+        issues.append(f"{rel}: finalization_report.draftSha256 与 draft.article.md 不一致")
+    if str(data.get("finalSha256") or "") != compute_document_sha256(final_text):
+        issues.append(f"{rel}: finalization_report.finalSha256 与 article.md 不一致")
+    return issues
+
+
+def _entity_quality_stage_issues(obj: Path, batch: Path) -> list[str]:
+    rel = obj.relative_to(batch)
+    if not ((obj / "page.md").is_file() or (obj / "_entity.json").is_file()):
+        return []
+    path = obj / "2.quality" / "quality_analysis.json"
+    if not path.is_file():
+        return [f"{rel}: 缺 `2.quality/quality_analysis.json`（实体主页必须显式记录底稿选择/来源准备度）"]
+    try:
+        data = read_json(path)
+    except Exception as exc:  # noqa: BLE001
+        return [f"{rel}: quality_analysis.json unreadable ({exc})"]
+    issues: list[str] = []
+    source_paths = data.get("sourcePaths") or []
+    if not isinstance(source_paths, list) or not source_paths:
+        issues.append(f"{rel}: quality_analysis.sourcePaths 为空（实体主页必须声明可回查来源）")
+    recommendation = str(data.get("recommendation") or "")
+    if recommendation not in {"proceed", "needs_source_repair"}:
+        issues.append(f"{rel}: quality_analysis.recommendation 非法：{recommendation}")
+    base_draft = data.get("baseDraft")
+    if recommendation == "proceed":
+        if not isinstance(base_draft, dict):
+            issues.append(f"{rel}: quality_analysis.recommendation=proceed 但 baseDraft 缺失")
+        elif not str(base_draft.get("sourceRef") or "").strip():
+            issues.append(f"{rel}: quality_analysis.baseDraft.sourceRef 缺失")
+    return issues
+
+
+def _entity_review_sidecar_issues(obj: Path, batch: Path) -> list[str]:
+    rel = obj.relative_to(batch)
+    if not ((obj / "page.md").is_file() or (obj / "_entity.json").is_file()):
+        return []
+    review_dir = obj / "5.review"
+    review_path = review_dir / "review.json"
+    provenance_path = review_dir / "provenance.json"
+    finalization_path = review_dir / "finalization_report.json"
+    draft_path = obj / "4.draft" / "page.md"
+    issues: list[str] = []
+    if not draft_path.is_file():
+        issues.append(f"{rel}: 缺 `4.draft/page.md`（实体主页 draft→final 必须留档）")
+    review: dict[str, Any] | None = None
+    if not review_path.is_file():
+        issues.append(f"{rel}: 缺 `5.review/review.json`（实体主页必须有独立审校结果）")
+    else:
+        try:
+            review = read_json(review_path)
+        except Exception as exc:  # noqa: BLE001
+            issues.append(f"{rel}: review.json unreadable ({exc})")
+        else:
+            decision = str(review.get("decision") or "")
+            if decision not in {"approved", "revision_needed"}:
+                issues.append(f"{rel}: review.decision 非法：{decision}")
+            checks = review.get("checks") or {}
+            if not isinstance(checks, dict):
+                issues.append(f"{rel}: review.checks 须为对象")
+            else:
+                source_readiness = checks.get("sourceReadiness") or {}
+                if not isinstance(source_readiness, dict):
+                    issues.append(f"{rel}: review.checks.sourceReadiness 须为对象")
+                elif "passed" not in source_readiness:
+                    issues.append(f"{rel}: review.checks.sourceReadiness.passed 缺失")
+                page_quality = checks.get("entityPageQuality") or {}
+                if not isinstance(page_quality, dict):
+                    issues.append(f"{rel}: review.checks.entityPageQuality 须为对象")
+                elif "passed" not in page_quality:
+                    issues.append(f"{rel}: review.checks.entityPageQuality.passed 缺失")
+    if not provenance_path.is_file():
+        issues.append(f"{rel}: 缺 `5.review/provenance.json`（实体主页必须可追责原始来源与 agent 输入）")
+    else:
+        try:
+            provenance = read_json(provenance_path)
+        except Exception as exc:  # noqa: BLE001
+            issues.append(f"{rel}: provenance.json unreadable ({exc})")
+        else:
+            originals = provenance.get("originalSources") or []
+            if not isinstance(originals, list) or not originals:
+                issues.append(f"{rel}: provenance.originalSources 为空（实体主页来源不可追责）")
+            final = provenance.get("final") or {}
+            if str(final.get("generator") or "") != "agent":
+                issues.append(f"{rel}: provenance.final.generator 必须为 agent")
+            if not str((provenance.get("agentInput") or {}).get("writingPack") or "").strip():
+                issues.append(f"{rel}: provenance.agentInput.writingPack 缺失")
+    if not finalization_path.is_file():
+        issues.append(f"{rel}: 缺 `5.review/finalization_report.json`（实体主页 draft->final 差异报告必须落盘）")
+    else:
+        try:
+            finalization = read_json(finalization_path)
+        except Exception as exc:  # noqa: BLE001
+            issues.append(f"{rel}: finalization_report.json unreadable ({exc})")
+        else:
+            if str(finalization.get("draftArticleRef") or "") != "4.draft/page.md":
+                issues.append(f"{rel}: finalization_report.draftArticleRef 非法：{finalization.get('draftArticleRef')}")
+            if str(finalization.get("finalArticleRef") or "") != "page.md":
+                issues.append(f"{rel}: finalization_report.finalArticleRef 非法：{finalization.get('finalArticleRef')}")
+            if not str(finalization.get("draftSha256") or "").strip():
+                issues.append(f"{rel}: finalization_report.draftSha256 缺失")
+            if not str(finalization.get("finalSha256") or "").strip():
+                issues.append(f"{rel}: finalization_report.finalSha256 缺失")
+    return issues
+
+
 def _naming_issues(obj: Path, rel: Path) -> list[str]:
     """命名门：对象层级 + 阶段子目录 + 来源单元命名（规格 §2.4/§3）。"""
     issues: list[str] = []
@@ -220,6 +430,45 @@ _POST_REQUIRED_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.r
 _ENTITY_REQUIRED_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
 
 
+def _orphan_post_object_issues(task_id: str, batch_id: str, batch: Path) -> list[str]:
+    """孤儿内容对象门：posts/ 下出现阶段残骸/manifest/成品，但未登记到当前路由，即 BLOCK。"""
+    from _common import content_object  # 延迟导入避免循环依赖
+
+    issues: list[str] = []
+    post_root = batch / "posts"
+    if not post_root.is_dir():
+        return issues
+    registered = {
+        content_object.content_object_rel(task_id, batch_id, ref)
+        for ref in content_object.iter_content_refs(task_id, batch_id)
+    }
+    for obj in sorted(post_root.rglob("*")):
+        if not obj.is_dir():
+            continue
+        rel = obj.relative_to(batch)
+        parts = rel.parts
+        if not parts or parts[0] != "posts":
+            continue
+        if len(parts) < 4:
+            continue
+        has_stage = any((obj / stage).is_dir() for stage in OBJECT_STAGES)
+        has_manifest = (obj / "manifest.json").is_file()
+        has_final = (obj / "article.md").is_file() or (obj / "gallery.md").is_file()
+        if not (has_stage or has_manifest or has_final):
+            continue
+        if len(parts) != 5 or not parts[4].isdigit():
+            issues.append(
+                f"{rel}: 孤儿内容对象残骸（含阶段/manifest/成品，但不符合 posts/{{type}}/{{angle}}/{{title}}/{{seq}} 命名）"
+            )
+            continue
+        rel_posix = rel.as_posix()
+        if rel_posix not in registered:
+            issues.append(
+                f"{rel}: 孤儿内容对象残骸（当前 content_object_index 未登记该对象，需清理旧坐标/旧批次残留）"
+            )
+    return issues
+
+
 def stage_completeness_issues(batch: Path) -> list[str]:
     """阶段树完整性门（opt-in）：成品对象必须物化完整 1-5 过程阶段证据。
 
@@ -261,10 +510,19 @@ def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
         if images_dir.is_dir():
             issues.append(f"{rel}: 禁止对象级散落 images/（图片必须归属来源单元 assets/）：{images_dir.relative_to(batch)}")
     # 2/5. manifest / provenance 绝对路径 + 资产闭环
-    for jname in ("manifest.json", "5.review/provenance.json"):
+    for jname in (
+        "manifest.json",
+        "1.download/source_refs.json",
+        "5.review/provenance.json",
+        "5.review/finalization_report.json",
+    ):
         jpath = obj / jname
         if jpath.is_file():
             _scan_json_for_absolute(jpath, issues)
+    issues.extend(_source_refs_issues(obj, batch))
+    issues.extend(_finalization_report_issues(obj, batch))
+    issues.extend(_entity_quality_stage_issues(obj, batch))
+    issues.extend(_entity_review_sidecar_issues(obj, batch))
     manifest_path = obj / "manifest.json"
     if manifest_path.is_file():
         try:
@@ -322,16 +580,22 @@ def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
                         issues.append(f"{rel}: {px}")
 
 
-def scan_batch(task_id: str, batch_id: str, *, require_stage_tree: bool = False) -> list[str]:
+def scan_batch(task_id: str, batch_id: str, *, require_stage_tree: bool = True) -> list[str]:
     batch = batch_root(task_id, batch_id)
     issues: list[str] = []
     if not batch.is_dir():
         return [f"batch not found: {batch}"]
+    for conflict in batch_entity_type_conflicts(task_id, batch_id):
+        issues.append(
+            "entity type drift: same batch contains dual scenic-location trees "
+            f"for {conflict['domain']}/{conflict['name']} -> {conflict['paths']}"
+        )
     for obj in iter_batch_object_dirs(batch):
         _scan_object(obj, batch, issues)
     issues.extend(_top_level_issues(batch))
     issues.extend(_regression_issues(batch))
     issues.extend(_sync_issues(task_id, batch_id, batch))
+    issues.extend(_orphan_post_object_issues(task_id, batch_id, batch))
     issues.extend(scan_asset_ids(task_id, batch_id))
     if require_stage_tree:
         issues.extend(stage_completeness_issues(batch))
@@ -355,7 +619,9 @@ def scan_all() -> list[str]:
             issues.extend(_regression_issues(batch))
             current_task_id, batch_id = _task_batch_from_path(batch)
             issues.extend(_sync_issues(current_task_id, batch_id, batch))
+            issues.extend(_orphan_post_object_issues(current_task_id, batch_id, batch))
             issues.extend(scan_asset_ids(current_task_id, batch_id))
+            issues.extend(stage_completeness_issues(batch))
     return issues
 
 
@@ -364,15 +630,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--task", default="")
     parser.add_argument("--batch", default="")
     parser.add_argument(
-        "--require-stage-tree",
+        "--no-require-stage-tree",
         action="store_true",
-        help="额外校验对象 1-5 阶段树完整性（新批次收口用；存量批次默认不开启避免误伤）",
+        help="关闭对象 1-5 阶段树完整性校验（默认开启；仅兼容历史批次排障时使用）",
     )
     args = parser.parse_args(argv)
     if args.task and args.batch:
         normalized_task = normalize_task_id(args.task)
         issues = scan_task(normalized_task)
-        issues.extend(scan_batch(normalized_task, args.batch, require_stage_tree=args.require_stage_tree))
+        issues.extend(scan_batch(normalized_task, args.batch, require_stage_tree=not args.no_require_stage_tree))
     elif args.task:
         issues = scan_task(normalize_task_id(args.task))
     else:

@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     avatar_asset_id          VARCHAR(64),
     avatar_version           INTEGER NOT NULL DEFAULT 0,
     bio                      VARCHAR(500),
+    identity_tags            TEXT,
     gender                   VARCHAR(16),
     birth_date               DATE,
     region                   VARCHAR(128),

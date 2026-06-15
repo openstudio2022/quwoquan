@@ -1,16 +1,21 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_section.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_context.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_rollout_context.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 
 void main() {
@@ -45,19 +50,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('西湖景区'), findsWidgets);
-    expect(find.text('你和这里的交集'), findsOneWidget);
-    expect(find.text('从主页发内容'), findsOneWidget);
-    expect(find.text('与你相关'), findsOneWidget);
+    expect(find.text(UITextConstants.objectConnectionWithYou), findsOneWidget);
+    expect(find.text('认领主页'), findsNothing);
+    expect(find.text(UITextConstants.follow), findsWidgets);
+    expect(find.text(UITextConstants.profileDirectMessage), findsWidgets);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -520));
     await tester.pumpAndSettle();
-    expect(find.text('首页'), findsOneWidget);
     expect(find.text('内容'), findsWidgets);
-    expect(find.text('口碑'), findsWidgets);
-    expect(find.text('关联'), findsOneWidget);
-    expect(find.text('统一对象键'), findsOneWidget);
-    expect(find.text('对象页模板'), findsOneWidget);
-    expect(find.text('认领主页'), findsWidgets);
+    expect(find.text('讨论'), findsWidgets);
+    expect(find.text('兴趣圈'), findsOneWidget);
+    expect(find.text('认识西湖景区'), findsOneWidget);
+    expect(find.text('实体介绍'), findsNothing);
+    expect(find.text(UITextConstants.objectIntroMoreLabel), findsOneWidget);
     expect(find.text('治理入口'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('homepage-detail-more-button')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('认领主页'), findsWidgets);
   });
 
   testWidgets('选择模式显示 attach 按钮', (tester) async {
@@ -76,11 +88,30 @@ void main() {
     expect(find.text('关联到本次发布'), findsOneWidget);
   });
 
+  testWidgets('alpha/mock 下支持数据工程 entityRef 直达实体主页', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: HomepageDetailPage(homepageId: 'Entity/旅行/景区/峨眉山'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('峨眉山'), findsWidgets);
+    expect(find.byType(AppPageErrorState), findsNothing);
+  });
+
   testWidgets('对象页 bundle 请求透传推荐与灰度上下文', (tester) async {
     final repository = _RecordingHomepageRepository();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [homepageRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          homepageRepositoryProvider.overrideWithValue(repository),
+          homepageIntroductionRepositoryProvider.overrideWithValue(
+            _RecordingHomepageIntroductionRepository(),
+          ),
+        ],
         child: const MaterialApp(
           home: HomepageDetailPage(
             homepageId: 'hp-context',
@@ -100,7 +131,59 @@ void main() {
     expect(repository.lastRecommendationTraceId, 'trace-1');
     expect(repository.lastExperimentBucket, 'A');
     expect(repository.lastRolloutCohort, 'city-hz');
-    expect(find.text('从主页发内容'), findsOneWidget);
+    expect(find.text('认领主页'), findsNothing);
+    expect(find.text(UITextConstants.follow), findsOneWidget);
+    expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+  });
+
+  testWidgets('认识摘要卡使用 introduction summary 并跳转介绍页', (tester) async {
+    final router = GoRouter(
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoutePaths.homepageDetailPathTemplate.replaceAll(
+            '{id}',
+            ':id',
+          ),
+          builder: (context, state) =>
+              HomepageDetailPage(homepageId: state.pathParameters['id'] ?? ''),
+        ),
+        GoRoute(
+          path: AppRoutePaths.homepageIntroductionPathTemplate.replaceAll(
+            '{id}',
+            ':id',
+          ),
+          builder: (context, state) => Text(
+            '介绍页:${state.pathParameters['id']}',
+            textDirection: TextDirection.ltr,
+          ),
+        ),
+      ],
+      initialLocation: AppRoutePaths.homepageDetail(
+        id: 'homepage_sight_west_lake',
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          homepageIntroductionRepositoryProvider.overrideWithValue(
+            _RecordingHomepageIntroductionRepository(),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('真实 introduction summary'), findsOneWidget);
+    final introButton = find.byKey(
+      const ValueKey<String>('homepage-introduction-entry-button'),
+    );
+    await tester.ensureVisible(introButton);
+    await tester.pumpAndSettle();
+    tester.widget<CupertinoButton>(introButton).onPressed?.call();
+    await tester.pumpAndSettle();
+    expect(find.text('介绍页:homepage_sight_west_lake'), findsOneWidget);
   });
 }
 
@@ -172,6 +255,30 @@ class _RecordingHomepageRepository extends MockHomepageRepository {
         experimentBucket: experimentBucket,
         objectType: 'university',
       ),
+    );
+  }
+}
+
+class _RecordingHomepageIntroductionRepository
+    implements HomepageIntroductionRepository {
+  @override
+  Future<HomepageIntroduction?> getHomepageIntroduction(
+    String homepageId,
+  ) async {
+    return HomepageIntroduction(
+      homepageId: homepageId,
+      displayName: '西湖景区',
+      homepageType: 'sight',
+      summary: '真实 introduction summary',
+      sections: <HomepageIntroductionSection>[
+        HomepageIntroductionSection(
+          kind: 'overview',
+          title: '概况',
+          bodyMarkdown: '真实 introduction summary',
+        ),
+      ],
+      sourceRefs: const <String>['fixture:introduction'],
+      updatedAt: '2026-06-12T00:00:00Z',
     );
   }
 }

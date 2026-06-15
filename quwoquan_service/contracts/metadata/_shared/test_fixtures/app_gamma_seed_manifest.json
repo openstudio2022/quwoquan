@@ -21,7 +21,8 @@
       "domain": "content",
       "fixturePath": "content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
       "refs": [
-        "content_discovery_core"
+        "content_discovery_core",
+        "intersection_core"
       ],
       "resetScope": "fixture_content_*",
       "targetStore": "content-service:gamma_test_namespace",
@@ -76,12 +77,13 @@
       "resetScope": "fixture_user_*",
       "targetStore": "user-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/user/profile"
+        "/v1/user/profile",
+        "/v1/user/following-subjects"
       ]
     },
     {
       "domain": "entity",
-      "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.json",
+      "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.gamma-curated.json",
       "refs": [
         "entity_homepage_core",
         "entity_claim_core",
@@ -91,7 +93,8 @@
       "targetStore": "entity-service:gamma_test_namespace",
       "verifiedEndpoints": [
         "/v1/homepages/search",
-        "/v1/homepages/{homepageId}/object-page-bundle"
+        "/v1/homepages/{homepageId}/object-page-bundle",
+        "/v1/homepages/{homepageId}/introduction"
       ]
     },
     {

@@ -18,7 +18,7 @@ class HomepageIdentityHeader extends StatelessWidget {
 
   static const double _coverBorder = AppSpacing.three;
   static const double coverExtent = AppSpacing.avatarUserXl;
-  static const double coverRadius = AppSpacing.radiusTwenty;
+  static const double coverRadius = AppSpacing.radiusTwentyFour;
   static const double _coverOverlapRatio = 0.34;
 
   static double get coverOuterExtent => coverExtent + (_coverBorder * 2);
@@ -133,22 +133,14 @@ class HomepageIdentityHeader extends StatelessWidget {
 
 class _HomepageActionBar extends StatelessWidget {
   const _HomepageActionBar({
-    required this.canCreate,
-    required this.canClaim,
-    required this.isClaimPending,
-    required this.isOwnerLike,
-    required this.onClaim,
-    required this.onMaintain,
-    required this.onCreateContent,
+    required this.isFollowing,
+    required this.onToggleFollow,
+    required this.onMessageOwner,
   });
 
-  final bool canCreate;
-  final bool canClaim;
-  final bool isClaimPending;
-  final bool isOwnerLike;
-  final VoidCallback onClaim;
-  final VoidCallback onMaintain;
-  final VoidCallback onCreateContent;
+  final bool isFollowing;
+  final VoidCallback onToggleFollow;
+  final VoidCallback onMessageOwner;
 
   @override
   Widget build(BuildContext context) {
@@ -183,160 +175,33 @@ class _HomepageActionBar extends StatelessWidget {
       );
     }
 
-    if (isOwnerLike) {
-      return Row(
-        children: <Widget>[
-          Expanded(
-            child: outlined(
-              label: '维护主页',
-              icon: CupertinoIcons.pencil,
-              onPressed: onMaintain,
-            ),
-          ),
-          SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: filled(
-              label: canCreate ? '从主页发内容' : '主页暂不可发布',
-              icon: CupertinoIcons.add_circled,
-              onPressed: canCreate ? onCreateContent : null,
-            ),
-          ),
-        ],
+    Widget followAction() {
+      if (isFollowing) {
+        return outlined(
+          label: UITextConstants.following,
+          icon: CupertinoIcons.check_mark,
+          onPressed: onToggleFollow,
+        );
+      }
+      return filled(
+        label: UITextConstants.follow,
+        icon: CupertinoIcons.add,
+        onPressed: onToggleFollow,
       );
     }
 
-    if (canClaim || isClaimPending) {
-      return Row(
-        children: <Widget>[
-          Expanded(
-            child: filled(
-              label: canClaim ? '认领主页' : '认领审核中',
-              icon: canClaim
-                  ? CupertinoIcons.check_mark_circled
-                  : CupertinoIcons.time,
-              onPressed: canClaim ? onClaim : null,
-            ),
-          ),
-          SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: outlined(
-              label: canCreate ? '从主页发内容' : '主页暂不可发布',
-              icon: CupertinoIcons.add_circled,
-              onPressed: canCreate ? onCreateContent : null,
-            ),
-          ),
-        ],
-      );
-    }
-
-    return filled(
-      label: canCreate ? '从主页发内容' : '主页暂不可发布',
-      icon: CupertinoIcons.add_circled,
-      onPressed: canCreate ? onCreateContent : null,
-    );
-  }
-}
-
-class _HomepageStatsRow extends StatelessWidget {
-  const _HomepageStatsRow({required this.stats});
-
-  final _HomepageSummaryStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    final dividerColor = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: 0.12);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerSm,
-        vertical: AppSpacing.containerSm,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.iosGroupedSurface(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-        border: Border.all(color: dividerColor, width: AppSpacing.hairline),
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: _HomepageStatItem(
-              label: '评分',
-              value: stats.averageRating?.toStringAsFixed(1) ?? '--',
-            ),
-          ),
-          _HomepageStatDivider(color: dividerColor),
-          Expanded(
-            child: _HomepageStatItem(
-              label: '内容',
-              value: '${stats.contentCount}',
-            ),
-          ),
-          _HomepageStatDivider(color: dividerColor),
-          Expanded(
-            child: _HomepageStatItem(
-              label: '口碑',
-              value: '${stats.ratingCount}',
-            ),
-          ),
-          _HomepageStatDivider(color: dividerColor),
-          Expanded(
-            child: _HomepageStatItem(
-              label: '圈子',
-              value: '${stats.relatedCount}',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HomepageStatItem extends StatelessWidget {
-  const _HomepageStatItem({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Row(
       children: <Widget>[
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            fontWeight: AppTypography.semiBold,
-            color: AppColors.iosLabel(context),
-          ),
-        ),
-        SizedBox(height: AppSpacing.intraGroupXs),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.iosCaption1,
-            color: AppColors.iosSecondaryLabel(context),
+        Expanded(child: followAction()),
+        SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: outlined(
+            label: UITextConstants.profileDirectMessage,
+            icon: CupertinoIcons.chat_bubble,
+            onPressed: onMessageOwner,
           ),
         ),
       ],
-    );
-  }
-}
-
-class _HomepageStatDivider extends StatelessWidget {
-  const _HomepageStatDivider({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: AppSpacing.hairline,
-      height: AppSpacing.iconButtonMinSizeMd,
-      color: color,
     );
   }
 }
@@ -439,4 +304,3 @@ class _HomepageReviewCard extends StatelessWidget {
     );
   }
 }
-

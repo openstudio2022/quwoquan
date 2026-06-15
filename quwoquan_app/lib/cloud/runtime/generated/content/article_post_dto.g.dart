@@ -20,9 +20,10 @@ class ArticlePostDto extends PostBaseDto {
   final String articleFontPreset;
   @override final int likeCount;
   @override final int commentCount;
-  @override final int favoriteCount;
   @override final int shareCount;
   @override final DateTime createdAt;
+  @override final DateTime? updatedAt;
+  @override final DateTime? publishedAt;
 
   const ArticlePostDto({
     required this.id,
@@ -41,9 +42,10 @@ class ArticlePostDto extends PostBaseDto {
     required this.articleFontPreset,
     required this.likeCount,
     required this.commentCount,
-    required this.favoriteCount,
     required this.shareCount,
     required this.createdAt,
+    this.updatedAt,
+    this.publishedAt,
   });
 
   factory ArticlePostDto.fromMap(Map<String, dynamic> m) {
@@ -57,16 +59,17 @@ class ArticlePostDto extends PostBaseDto {
       avatarUrl: m['authorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
       authorBackgroundUrl: m['authorBackgroundUrl']?.toString() ?? null,
       title: m['title']?.toString() ?? '',
-      body: m['body']?.toString() ?? m['description']?.toString() ?? m['content']?.toString() ?? m['summary']?.toString() ?? '',
-      summary: m['summary']?.toString() ?? m['body']?.toString() ?? m['description']?.toString() ?? m['content']?.toString() ?? '',
+      body: m['body']?.toString() ?? m['description']?.toString() ?? m['content']?.toString() ?? '',
+      summary: m['summary']?.toString() ?? '',
       coverUrl: m['coverUrl']?.toString() ?? m['cover']?.toString() ?? m['thumbnail']?.toString() ?? m['thumbnailUrl']?.toString() ?? '',
       articleTemplate: m['articleTemplate']?.toString() ?? 'gentle',
       articleFontPreset: m['articleFontPreset']?.toString() ?? 'clean',
       likeCount: (m['likeCount'] as num?)?.toInt() ?? (m['likesCount'] as num?)?.toInt() ?? (m['likes'] as num?)?.toInt() ?? (m['like_count'] as num?)?.toInt() ?? 0,
       commentCount: (m['commentCount'] as num?)?.toInt() ?? (m['commentsCount'] as num?)?.toInt() ?? (m['comments'] as num?)?.toInt() ?? (m['comment_count'] as num?)?.toInt() ?? 0,
-      favoriteCount: (m['favoriteCount'] as num?)?.toInt() ?? (m['savesCount'] as num?)?.toInt() ?? (m['bookmarks'] as num?)?.toInt() ?? (m['favorite_count'] as num?)?.toInt() ?? 0,
       shareCount: (m['shareCount'] as num?)?.toInt() ?? (m['shares'] as num?)?.toInt() ?? (m['share_count'] as num?)?.toInt() ?? 0,
-      createdAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
+      createdAt: _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
+      updatedAt: _parseDateTime(m['updatedAt']) ?? _parseDateTime(m['updated_at']) ?? null,
+      publishedAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['published_at']) ?? null,
     );
   }
 
@@ -89,9 +92,10 @@ class ArticlePostDto extends PostBaseDto {
       'articleFontPreset': articleFontPreset,
       'likeCount': likeCount,
       'commentCount': commentCount,
-      'favoriteCount': favoriteCount,
       'shareCount': shareCount,
       'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      'publishedAt': publishedAt,
     };
   }
 
@@ -112,9 +116,10 @@ class ArticlePostDto extends PostBaseDto {
     String? articleFontPreset,
     int? likeCount,
     int? commentCount,
-    int? favoriteCount,
     int? shareCount,
     DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? publishedAt,
   }) {
     return ArticlePostDto(
       id: id ?? this.id,
@@ -133,9 +138,10 @@ class ArticlePostDto extends PostBaseDto {
       articleFontPreset: articleFontPreset ?? this.articleFontPreset,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
-      favoriteCount: favoriteCount ?? this.favoriteCount,
       shareCount: shareCount ?? this.shareCount,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      publishedAt: publishedAt ?? this.publishedAt,
     );
   }
 

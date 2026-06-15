@@ -248,6 +248,7 @@ class _TestAuthSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
 
   @override
@@ -261,6 +262,9 @@ class _TestAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> softLogout() async {}
 
   @override
   Future<void> markLaunchPromptDismissed() async {}

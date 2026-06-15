@@ -14,12 +14,12 @@ import (
 const authorImpactCollection = "rm_author_impact"
 
 const (
-	AuthorImpactHelpRelationship = "relationship_help"
-	AuthorImpactHelpCommunity    = "community_help"
-	AuthorImpactHelpDecision     = "decision_help"
-	AuthorImpactHelpKnowledge    = "knowledge_help"
-	AuthorImpactHelpSpread       = "spread_help"
-	AuthorImpactHelpAudience     = "audience_help"
+	AuthorImpactHelpRelationship = "relationship"
+	AuthorImpactHelpCommunity    = "community"
+	AuthorImpactHelpDecision     = "decision"
+	AuthorImpactHelpKnowledge    = "knowledge"
+	AuthorImpactHelpSpread       = "spread"
+	AuthorImpactHelpAudience     = "audience"
 )
 
 // AuthorImpactEvent is the normalized reverse-aggregation event for creator
@@ -49,6 +49,7 @@ type AuthorImpactItem struct {
 	TagRef                string    `json:"tagRef" bson:"tagRef"`
 	Source                string    `json:"source" bson:"source"`
 	Count                 int64     `json:"count" bson:"count"`
+	DisplayText           string    `json:"displayText" bson:"-"` // 云侧按 viewer 视角产出的影响结论句（端只读直出）
 	UpdatedAt             time.Time `json:"updatedAt" bson:"updatedAt"`
 }
 

@@ -1,4 +1,4 @@
-"""HITL 主线契约：manifest 最小化 + 账本 sidecar + 实体挖掘 + 关联实体主页自动生成。
+"""HITL 主线契约：manifest 最小化 + 账本 sidecar + 实体候选治理。
 
 可直接运行：python3 quwoquan_data/tests/integration/test_hitl_pipeline.py
 """
@@ -28,12 +28,13 @@ import cv2  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common.evidence_contract import post_manifest_contract_issues, quality_payload_contract_issues  # noqa: E402
+from _common.entity_object import find_entity_object_dir  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
+    RUNTIME_ROOT,
     batch_inputs_dir,
     ensure_batch_layout,
     ensure_task_layout,
-    task_data,
 )
 from _common.batch_manifest import write_batch_manifest  # noqa: E402
 from _common.content_evidence import public_byline_label  # noqa: E402
@@ -46,6 +47,7 @@ from produce.materialize import materialize_posts  # noqa: E402
 from template.registry import TemplateRegistry  # noqa: E402
 from template.router import RouteRequest  # noqa: E402
 from helpers.agent_draft_kit import route_article  # noqa: E402
+from governance.candidate_store import CandidateRepository  # noqa: E402
 
 TASK = "hitl_task"
 BATCH = "b1"
@@ -136,6 +138,7 @@ def _run_pipeline() -> Path:
     pack = build_route_writing_pack(TASK, BATCH, REF, brief, quality)
     byline = public_byline_label(str(brief.get("templateId")), brief.get("creator") or {})
     article = route_article(brief["titleHint"], byline, ENTITIES, pack.get("mustIncludeFacts") or [])
+    article += f"\n\n返程前经过{MINED}，这里作为沿途自然景观只做短暂停留。\n"
     write_agent_draft(
         TASK,
         BATCH,
@@ -145,6 +148,8 @@ def _run_pipeline() -> Path:
         cited_source_paths=quality.get("sourcePaths") or [],
         covered_facts=pack.get("mustIncludeFacts") or [],
         extracted_entities=[{"name": MINED, "type": "自然景观", "evidenceRef": "curated_story"}],
+        agent_run_id="run-hitl",
+        agent_id="agent-hitl",
     )
     review = review_route_draft(TASK, BATCH, REF, brief, quality)
     assert review["decision"] == "approved", review["issues"]
@@ -157,6 +162,9 @@ def test_manifest_is_minimal_and_trace_offloaded():
     post_dir = _run_pipeline()
     manifest = read_json(post_dir / "manifest.json")
     assert post_manifest_contract_issues(manifest) == []
+    assert manifest["createdAt"]
+    assert manifest["updatedAt"]
+    assert "publishedAt" not in manifest
     for dropped in ("sourceQuality", "relatedSearchPlan", "evidenceBundle", "sourcePaths"):
         assert dropped not in manifest, f"manifest 不应再含中间态 {dropped}"
     assert "articleMarkdownDigest" not in manifest
@@ -179,16 +187,31 @@ def test_ledger_written_and_copied():
     assert any(i["kind"] == KIND_IMAGE for i in copied["images"])
 
 
-def test_mined_entity_homepage_generated():
+def test_mined_entity_enters_review_without_placeholder_homepage():
     post_dir = _run_pipeline()
     sidecar = read_json(post_dir / "5.review" / "review_entities.json")
     names = {e["name"]: e for e in sidecar["entities"]}
     assert MINED in names, "应挖掘出专有实体"
     ent = names[MINED]
-    assert ent["hasHomepage"] is True
-    # 关联实体主页 page.md 真实生成在 task entities 下（无主页的抽取实体会被自动建主页）
-    page = task_data(TASK).entity_page(ent["domain"], ent["type"], MINED)
-    assert page.is_file(), "无主页的抽取实体应自动生成关联实体主页"
+    assert ent["hasHomepage"] is False
+    assert ent["generated"] is False
+    assert ent["governanceStatus"] == "pending_review"
+    assert ent["candidateId"]
+    mentions = [
+        row for row in sidecar["semanticMentions"]
+        if row["targetRef"] == ent["ref"]
+    ]
+    assert mentions and mentions[0]["status"] == "pending_review"
+    assert mentions[0]["mentionId"] in ent["mentionIds"]
+
+    candidate = CandidateRepository(RUNTIME_ROOT / "governance").get(ent["candidateId"])
+    assert candidate is not None
+    assert candidate["status"] == "pending_review"
+    assert candidate["mentionIds"] == ent["mentionIds"]
+
+    # 未经人审不得在 batch 实体对象根生成占位主页。
+    obj = find_entity_object_dir(TASK, ent["domain"], ent["type"], MINED, batch_id=BATCH)
+    assert obj is None or not (obj / "page.md").is_file()
 
 
 def _run_all() -> None:

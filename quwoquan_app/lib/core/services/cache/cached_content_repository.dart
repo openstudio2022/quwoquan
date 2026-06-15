@@ -145,8 +145,10 @@ class CachedContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> deletePost({required String postId}) {
-    return _delegate.deletePost(postId: postId);
+  Future<void> deletePost({required String postId}) async {
+    await _delegate.deletePost(postId: postId);
+    _postCache.removePost(postId);
+    _querySnapshotStore.invalidatePost(postId);
   }
 
   @override
@@ -320,16 +322,6 @@ class CachedContentRepository implements ContentRepository {
   @override
   Future<void> unlikePost({required String postId}) {
     return _delegate.unlikePost(postId: postId);
-  }
-
-  @override
-  Future<void> favoritePost({required String postId}) {
-    return _delegate.favoritePost(postId: postId);
-  }
-
-  @override
-  Future<void> unfavoritePost({required String postId}) {
-    return _delegate.unfavoritePost(postId: postId);
   }
 
   @override

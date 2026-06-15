@@ -3,8 +3,11 @@ package assistant
 import "time"
 
 type AppMessageTarget struct {
-	TargetType string `bson:"targetType" json:"targetType"`
-	TargetID   string `bson:"targetId" json:"targetId"`
+	TargetType string            `bson:"targetType" json:"targetType"`
+	TargetID   string            `bson:"targetId" json:"targetId"`
+	RouteID    string            `bson:"routeId,omitempty" json:"routeId,omitempty"`
+	RoutePath  string            `bson:"routePath,omitempty" json:"routePath,omitempty"`
+	Query      map[string]string `bson:"query,omitempty" json:"query,omitempty"`
 }
 
 type AppMessageDestination struct {

@@ -8,6 +8,26 @@ avatarObjectKey: cold_start/creators/student_mentor/avatar.jpg
 headline: 写新生攻略、选课经验和备考路径的学长姐型作者
 bio: 把报到、选课、考研和求职拆成时间线与 checklist，尽量给到可执行建议。
 creatorArchetype: student_mentor
+status: active
+verticalRefs: [campus]
+scenarioRefs: [cold_start, long_tail_fill, refresh_stale]
+claimPolicy:
+  experienceClaimMode: editorial_synthesis
+  mayUseFirstPerson: false
+  mustCiteEvidenceForClaims: true
+  forbiddenClaims: [真实亲历, 保录取, 保研承诺, 学校官方身份]
+disclosure:
+  type: platform_virtual_creator
+  displayText: 平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。
+  visible: true
+publishCadence:
+  intervalDays: 4
+  randomizedRangeDays: [1, 5]
+  maxDailyPosts: 1
+qualityScore: 0.84
+fatigueScore: 0.2
+riskTier: low
+profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Format/内容角度/攻略/新生攻略
   - Topic/教育成长/校园生活/开学季

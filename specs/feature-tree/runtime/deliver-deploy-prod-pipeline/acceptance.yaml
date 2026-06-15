@@ -21,7 +21,7 @@ sit_acceptance:
     title: deliver deploy prod pipeline 能力 SIT
     story_refs: []
     done_when:
-    - "`main` 入库后存在单一自动 promotion workflow，能按 `alpha-local -> beta-local -> gamma-hosted -> prod-hosted` 固定顺序执行。"
+    - "`main` 入库后存在单一自动 promotion workflow，能按 `alpha-local -> beta-local -> prod-hosted(gray-initial -> carry-on -> full)` 固定顺序执行（gamma 仅本地，旧 gamma-hosted 阶段已退役，远端复验由 prod gray-initial 承接）。"
     - "`stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。"
     - "`prod initial -> prod checks -> prod full` 之间的健康检查、只读集成探针、SLO gate 与 auto rollback 可验证。"
     performance_points:

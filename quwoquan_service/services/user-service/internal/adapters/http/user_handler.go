@@ -62,7 +62,7 @@ func NewUserHandler(
 		auth:             auth,
 		subAccount:       subAccount,
 		contactDiscovery: contactDiscovery,
-		invite:          invite,
+		invite:           invite,
 		interestProfile:  interestProfile,
 	}
 }
@@ -121,13 +121,15 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("PATCH /v1/user/settings/privacy", h.handleUpdatePrivacySettings)
 
 	// Auth & Credentials
-	mux.HandleFunc("POST /v1/auth/login", h.handleLogin)
 	mux.HandleFunc("POST /v1/auth/otp/send", h.handleSendOtp)
 	mux.HandleFunc("POST /internal/auth/otp-deliveries:callback", h.handleOtpDeliveryCallback)
 	mux.HandleFunc("POST /v1/auth/login/phone", h.handleLoginWithPhone)
 	mux.HandleFunc("POST /v1/auth/login/wechat", h.handleLoginWithWechat)
+	mux.HandleFunc("POST /v1/auth/login/alipay", h.handleLoginWithAlipay)
+	mux.HandleFunc("POST /v1/auth/login/qq", h.handleLoginWithQq)
 	mux.HandleFunc("POST /v1/auth/login/apple", h.handleLoginWithApple)
 	mux.HandleFunc("POST /v1/auth/login/one-tap", h.handleOneTapLogin)
+	mux.HandleFunc("POST /v1/auth/login/one-tap/hint", h.handleOneTapLoginHint)
 	mux.HandleFunc("POST /v1/auth/login/anonymous", h.handleAnonymousLogin)
 	mux.HandleFunc("POST /v1/auth/token/refresh", h.handleRefreshToken)
 	mux.HandleFunc("POST /v1/auth/logout", h.handleLogout)
@@ -1166,27 +1168,6 @@ func (h *UserHandler) handleUpdatePrivacySettings(w http.ResponseWriter, r *http
 
 // --- Auth & Credentials ---
 
-func (h *UserHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
-	body, err := readBody(r)
-	if err != nil {
-		writeInvalidArg(w, r, "invalid body")
-		return
-	}
-	credType, _ := body["credentialType"].(string)
-	credKey, _ := body["credentialKey"].(string)
-	label, _ := body["displayLabel"].(string)
-	if credType == "" || credKey == "" {
-		writeInvalidArg(w, r, "credentialType and credentialKey required")
-		return
-	}
-	result, err := h.auth.LoginWithCredential(r.Context(), credType, credKey, label)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
 func (h *UserHandler) handleSendOtp(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(r)
 	if err != nil {
@@ -1194,11 +1175,15 @@ func (h *UserHandler) handleSendOtp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	phone := strings.TrimSpace(anyString(body["phone"]))
+	deviceID := strings.TrimSpace(anyString(body["deviceId"]))
+	platform := strings.TrimSpace(anyString(body["platform"]))
+	appVersion := strings.TrimSpace(anyString(body["appVersion"]))
+	sourceOperation := strings.TrimSpace(anyString(body["sourceOperation"]))
 	if phone == "" {
 		writeInvalidArg(w, r, "phone required")
 		return
 	}
-	result, err := h.auth.SendOtp(r.Context(), phone)
+	result, err := h.auth.SendOtp(r.Context(), phone, deviceID, platform, appVersion, sourceOperation)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -1240,16 +1225,27 @@ func (h *UserHandler) handleLoginWithPhone(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	phone := strings.TrimSpace(anyString(body["phone"]))
-	if phone == "" {
-		phone = strings.TrimSpace(anyString(body["credentialKey"]))
-	}
 	otpCode := strings.TrimSpace(anyString(body["otpCode"]))
-	label := strings.TrimSpace(anyString(body["displayLabel"]))
+	deviceID := strings.TrimSpace(anyString(body["deviceId"]))
+	platform := strings.TrimSpace(anyString(body["platform"]))
+	appVersion := strings.TrimSpace(anyString(body["appVersion"]))
+	agreementVersion := strings.TrimSpace(anyString(body["agreementVersion"]))
+	privacyVersion := strings.TrimSpace(anyString(body["privacyVersion"]))
 	if phone == "" {
 		writeInvalidArg(w, r, "phone required")
 		return
 	}
-	result, err := h.auth.LoginWithPhone(r.Context(), phone, otpCode, label)
+	result, err := h.auth.LoginWithPhone(
+		r.Context(),
+		phone,
+		otpCode,
+		"",
+		deviceID,
+		platform,
+		appVersion,
+		agreementVersion,
+		privacyVersion,
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -1258,11 +1254,42 @@ func (h *UserHandler) handleLoginWithPhone(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *UserHandler) handleLoginWithWechat(w http.ResponseWriter, r *http.Request) {
-	h.handleTypedCredentialLogin(w, r, "wechat", "wechatCode")
+	h.handleSocialProviderLogin(w, r, "wechat", "wechatCode")
+}
+
+func (h *UserHandler) handleLoginWithAlipay(w http.ResponseWriter, r *http.Request) {
+	h.handleSocialProviderLogin(w, r, "alipay", "alipayAuthCode")
+}
+
+func (h *UserHandler) handleLoginWithQq(w http.ResponseWriter, r *http.Request) {
+	h.handleSocialProviderLogin(w, r, "qq", "qqAuthCode")
 }
 
 func (h *UserHandler) handleLoginWithApple(w http.ResponseWriter, r *http.Request) {
 	h.handleTypedCredentialLogin(w, r, "apple", "appleIdToken")
+}
+
+// handleSocialProviderLogin 处理微信/支付宝/QQ：App 只上传短期授权码，服务端置换稳定身份并首次同步资料。
+func (h *UserHandler) handleSocialProviderLogin(w http.ResponseWriter, r *http.Request, provider, primaryField string) {
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	authCode := strings.TrimSpace(anyString(body[primaryField]))
+	deviceID := strings.TrimSpace(anyString(body["deviceId"]))
+	platform := strings.TrimSpace(anyString(body["platform"]))
+	appVersion := strings.TrimSpace(anyString(body["appVersion"]))
+	if authCode == "" {
+		writeInvalidArg(w, r, primaryField+" required")
+		return
+	}
+	result, err := h.auth.LoginWithSocialProvider(r.Context(), provider, authCode, deviceID, platform, appVersion)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *UserHandler) handleTypedCredentialLogin(w http.ResponseWriter, r *http.Request, credType, primaryField string) {
@@ -1272,9 +1299,6 @@ func (h *UserHandler) handleTypedCredentialLogin(w http.ResponseWriter, r *http.
 		return
 	}
 	credKey := strings.TrimSpace(anyString(body[primaryField]))
-	if credKey == "" {
-		credKey = strings.TrimSpace(anyString(body["credentialKey"]))
-	}
 	label := strings.TrimSpace(anyString(body["displayLabel"]))
 	if credKey == "" {
 		writeInvalidArg(w, r, primaryField+" required")
@@ -1298,6 +1322,7 @@ func (h *UserHandler) handleOneTapLogin(w http.ResponseWriter, r *http.Request) 
 	carrierToken := strings.TrimSpace(anyString(body["carrierToken"]))
 	deviceID := strings.TrimSpace(anyString(body["deviceId"]))
 	platform := strings.TrimSpace(anyString(body["platform"]))
+	appVersion := strings.TrimSpace(anyString(body["appVersion"]))
 	agreementVersion := strings.TrimSpace(anyString(body["agreementVersion"]))
 	privacyVersion := strings.TrimSpace(anyString(body["privacyVersion"]))
 	if carrierToken == "" {
@@ -1310,8 +1335,39 @@ func (h *UserHandler) handleOneTapLogin(w http.ResponseWriter, r *http.Request) 
 		carrierToken,
 		deviceID,
 		platform,
+		appVersion,
 		agreementVersion,
 		privacyVersion,
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) handleOneTapLoginHint(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	vendor := strings.TrimSpace(anyString(body["vendor"]))
+	carrierToken := strings.TrimSpace(anyString(body["carrierToken"]))
+	deviceID := strings.TrimSpace(anyString(body["deviceId"]))
+	platform := strings.TrimSpace(anyString(body["platform"]))
+	appVersion := strings.TrimSpace(anyString(body["appVersion"]))
+	if carrierToken == "" {
+		writeInvalidArg(w, r, "carrierToken required")
+		return
+	}
+	result, err := h.auth.ResolveOneTapLoginHint(
+		r.Context(),
+		vendor,
+		carrierToken,
+		deviceID,
+		platform,
+		appVersion,
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)

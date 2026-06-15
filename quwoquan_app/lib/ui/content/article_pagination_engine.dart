@@ -39,7 +39,9 @@ class ArticlePaginationEngine {
               (block) =>
                   block.type == ArticleDocumentBlockType.heading2 ||
                   block.type == ArticleDocumentBlockType.heading3 ||
-                  block.type == ArticleDocumentBlockType.sectionTitle,
+                  block.type == ArticleDocumentBlockType.sectionTitle ||
+                  (block.type == ArticleDocumentBlockType.paragraph &&
+                      block.spans.any((span) => span.isEntity)),
             )
             .toList(growable: false)
           ..sort((left, right) {
@@ -259,6 +261,12 @@ class ArticlePaginationEngine {
         remainingHeight -= spec.spacingAfter;
       }
       pageBlocks.add(block);
+      if (block.type == ArticleDocumentBlockType.paragraph) {
+        nextBodyOffset = math.max(
+          nextBodyOffset,
+          (block.offset + block.text.length).clamp(0, body.length),
+        );
+      }
       nextSemanticIndex += 1;
     }
 
@@ -653,10 +661,7 @@ class ArticlePaginationEngine {
     final trailingStart = start + splitOffset;
     if (trailingStart >= endLimit) {
       // 全部文字都在图旁，无图下部分。
-      return _TextFitResult(
-        endOffset: endLimit,
-        height: besideHeight,
-      );
+      return _TextFitResult(endOffset: endLimit, height: besideHeight);
     }
     final remainingAfterBeside = maxHeight - besideHeight - trailingSpacing;
     if (remainingAfterBeside <= 0) {
@@ -676,10 +681,7 @@ class ArticlePaginationEngine {
       maxHeight: remainingAfterBeside,
     );
     final totalHeight = besideHeight + trailingSpacing + trailFit.height;
-    return _TextFitResult(
-      endOffset: trailFit.endOffset,
-      height: totalHeight,
-    );
+    return _TextFitResult(endOffset: trailFit.endOffset, height: totalHeight);
   }
 
   static _TextFitResult _fitText({

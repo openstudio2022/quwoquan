@@ -1,4 +1,5 @@
 import 'package:quwoquan_runtime_errors/src/runtime_failure.dart';
+import 'package:quwoquan_runtime_errors/src/runtime_recovery_directive.dart';
 
 enum RuntimeRecoveryAction {
   absorb,
@@ -76,6 +77,21 @@ class DefaultRuntimeRecoveryPolicy implements RuntimeRecoveryPolicy {
     EntryContext entryContext,
     BoundaryContext boundaryContext,
   ) {
+    // 唯一真相源：优先消费云侧随响应下发的 recovery 指令（来自 errors.yaml）。
+    final directive = failure.recovery;
+    if (directive.isPresent) {
+      final action = _actionFromName(directive.action);
+      if (action != null) {
+        return RuntimeRecoveryDecision(
+          action: action,
+          disruptionLevel:
+              _levelFromName(directive.disruptionLevel) ??
+              _defaultLevelForAction(action),
+          policyId: 'downlink.recovery',
+        );
+      }
+    }
+    // 防御边界：云侧契约缺失（未下发 recovery）时按 nature 派生，门禁保证云侧必然下发。
     if (failure.nature == RuntimeFailureNature.transient &&
         boundaryContext.remainingBudget > 0) {
       return const RuntimeRecoveryDecision(
@@ -96,5 +112,33 @@ class DefaultRuntimeRecoveryPolicy implements RuntimeRecoveryPolicy {
       disruptionLevel: UserDisruptionLevel.inlineCard,
       policyId: 'default.surface',
     );
+  }
+
+  RuntimeRecoveryAction? _actionFromName(String raw) {
+    for (final value in RuntimeRecoveryAction.values) {
+      if (value.name == raw) return value;
+    }
+    return null;
+  }
+
+  UserDisruptionLevel? _levelFromName(String raw) {
+    for (final value in UserDisruptionLevel.values) {
+      if (value.name == raw) return value;
+    }
+    return null;
+  }
+
+  UserDisruptionLevel _defaultLevelForAction(RuntimeRecoveryAction action) {
+    switch (action) {
+      case RuntimeRecoveryAction.absorb:
+        return UserDisruptionLevel.silent;
+      case RuntimeRecoveryAction.retry:
+        return UserDisruptionLevel.snackbar;
+      case RuntimeRecoveryAction.surface:
+      case RuntimeRecoveryAction.fallback:
+      case RuntimeRecoveryAction.escalate:
+      case RuntimeRecoveryAction.compensate:
+        return UserDisruptionLevel.inlineCard;
+    }
   }
 }

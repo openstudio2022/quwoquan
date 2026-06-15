@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/object_page/evidence_group.dart';
+import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -16,30 +17,31 @@ class IntersectionReasonChip extends StatelessWidget {
     super.key,
     required this.text,
     required this.isDark,
+    this.kind,
+    this.weightTier = '',
   });
 
   static const Key chipKey = ValueKey<String>('intersection-reason-chip');
+  static const Key iconKey = ValueKey<String>('intersection-reason-chip-icon');
+  static const Key textKey = ValueKey<String>('intersection-reason-chip-text');
 
   final String text;
   final bool isDark;
+  final UnifiedObjectKind? kind;
+  final String weightTier;
 
-  /// 交集理由位口径真相源：取首条理由的最强证据组短句 + 计数（事实优先）；
-  /// 如「共同关注 4」；无来源 / 无可展示证据 → null（不展示）。
+  /// 交集理由位口径真相源：云侧主交集结论句 [IntersectionReason.primaryText] 直出，
+  /// 缺省回退整句 displayText；端不本地拼装事实（G2）。
+  /// 无来源 / 无可展示结论句 → null（不展示）。
   /// 所有承载交集理由位的 surface 必须经此函数解析（四口径一致）。
   static String? primaryText(List<IntersectionReason>? reasons) {
     if (reasons == null || reasons.isEmpty) return null;
     final first = reasons.first;
-    // 兼容旧契约：当云侧尚未下发结构化 intersectionPoints，只给了 displayText 时，
-    // 保持原句直出，不在端侧额外拼接 sharedCount，避免把
-    // 「你和 TA 都来自同一校园」误变成「你和 TA 都来自同一校园 2」。
+    final primary = first.primaryText.trim();
+    if (primary.isNotEmpty) return primary;
     final displayOnly = first.displayText.trim();
-    if (displayOnly.isNotEmpty && first.intersectionPoints.isEmpty) {
-      return displayOnly;
-    }
-    final groups = EvidenceGroup.fromReason(reasons.first);
-    if (groups.isEmpty) return null;
-    final g = groups.first;
-    return g.count > 0 ? '${g.label} ${g.count}' : g.label;
+    if (displayOnly.isNotEmpty) return displayOnly;
+    return null;
   }
 
   /// 旅程高亮锚（§7.3）：徽标对应的最强证据组 kind；点击跳作者主页时透传，
@@ -60,27 +62,58 @@ class IntersectionReasonChip extends StatelessWidget {
   }) {
     final text = primaryText(reasons);
     if (text == null) return null;
-    return IntersectionReasonChip(key: key, text: text, isDark: isDark);
+    final first = reasons?.isNotEmpty == true ? reasons!.first : null;
+    return IntersectionReasonChip(
+      key: key,
+      text: text,
+      isDark: isDark,
+      weightTier: first?.weightTier ?? '',
+      kind: first == null
+          ? null
+          : UnifiedObjectKind.resolve(
+              objectKind: first.objectKind,
+              relationKind: first.relationKind,
+            ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final accent = isDark ? AppColors.iosAccentDark : AppColors.primaryColor;
+    final resolvedTier = _resolveWeightTier(weightTier);
+    final isLight = resolvedTier == _IntersectionReasonWeightTier.light;
+    final accent = AppColors.iosAccent(context);
+    final foreground = isLight ? AppColors.iosSecondaryLabel(context) : accent;
+    final iconBackground = isLight
+        ? AppColors.iosSecondaryFill(context)
+        : accent.withValues(alpha: isDark ? 0.2 : 0.12);
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Icon(CupertinoIcons.link, size: AppSpacing.fourteen, color: accent),
+        Container(
+          key: iconKey,
+          width: AppSpacing.iconSmall,
+          height: AppSpacing.iconSmall,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: iconBackground,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(_icon, size: AppSpacing.iconXSmall, color: foreground),
+        ),
         SizedBox(width: AppSpacing.intraGroupXs),
         Flexible(
           child: Text(
+            key: textKey,
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: AppTypography.iosCaption1,
-              fontWeight: AppTypography.medium,
-              color: accent,
+              fontWeight: isLight
+                  ? AppTypography.regular
+                  : AppTypography.medium,
+              color: foreground,
               letterSpacing: -0.04,
             ),
           ),
@@ -88,4 +121,34 @@ class IntersectionReasonChip extends StatelessWidget {
       ],
     );
   }
+
+  IconData get _icon {
+    switch (kind) {
+      case UnifiedObjectKind.person:
+        return CupertinoIcons.person_fill;
+      case UnifiedObjectKind.circle:
+        return CupertinoIcons.person_2_fill;
+      case UnifiedObjectKind.school:
+        return CupertinoIcons.building_2_fill;
+      case UnifiedObjectKind.place:
+        return CupertinoIcons.location_solid;
+      case UnifiedObjectKind.enterprise:
+        return CupertinoIcons.briefcase_fill;
+      case null:
+        return CupertinoIcons.link;
+    }
+  }
+
+  static _IntersectionReasonWeightTier _resolveWeightTier(String raw) {
+    switch (raw.trim().toLowerCase()) {
+      case 'light':
+        return _IntersectionReasonWeightTier.light;
+      case 'heavy':
+      case '':
+      default:
+        return _IntersectionReasonWeightTier.heavy;
+    }
+  }
 }
+
+enum _IntersectionReasonWeightTier { heavy, light }

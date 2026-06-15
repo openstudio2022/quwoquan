@@ -65,10 +65,10 @@ def verify_semantics(posts_root: Path, task: str | None = None, batch: str | Non
 
     for article_path in sorted(posts_root.rglob("article.md")):
         post_dir = article_path.parent
-        ref = post_dir.name
         manifest_path = post_dir / "manifest.json"
         article = article_path.read_text(encoding="utf-8")
         manifest = read_json(manifest_path) if manifest_path.exists() else {}
+        ref = str(manifest.get("topicId") or post_dir.name)
 
         for pattern in FORBIDDEN_BLOCKS:
             if re.search(pattern, article):
@@ -104,11 +104,12 @@ def verify_semantics(posts_root: Path, task: str | None = None, batch: str | Non
                     min_covered = min(len(route_entities), 2)
                     if len(mentioned) < min_covered:
                         issues.append(f"{ref}: routeCoverage insufficient ({len(mentioned)}/{len(route_entities)})")
-                    positions = [article.find(name) for name in route_entities if name in article]
-                    if positions and positions != sorted(positions):
-                        issues.append(f"{ref}: routeCoverage progression order broken")
-                    if sum(article.count(term) for term in ("先", "再", "随后", "最后", "一路", "转场", "返程")) < 2:
-                        issues.append(f"{ref}: narrativeContinuity lacks progression transitions")
+                    if len(route_entities) >= 2:
+                        positions = [article.find(name) for name in route_entities if name in article]
+                        if positions and positions != sorted(positions):
+                            issues.append(f"{ref}: routeCoverage progression order broken")
+                        if sum(article.count(term) for term in ("先", "再", "随后", "最后", "一路", "转场", "返程")) < 2:
+                            issues.append(f"{ref}: narrativeContinuity lacks progression transitions")
                     headings = re.findall(r"(?m)^##\s+(.+)$", article)
                     if headings:
                         from _common.content_object import read_brief_object

@@ -45,7 +45,7 @@ flowchart LR
 1. 先执行：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl spec-discovery --spec <spec>
+python3 quwoquan_data/scripts/cli.py crawl spec-discovery --spec <spec>
 ```
 
 2. 在 `runtime/runs/{spec_id}/topic_tasks.ndjson` 中定位 `topic_id`
@@ -56,7 +56,7 @@ python3 quwoquan_data/tools/cli.py crawl spec-discovery --spec <spec>
 4. 若 source 有真实 URL 但缺少 `pages/*` 证据，先执行：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl fetch-source --spec <spec> --topic <topic_id> --task-type <article|image> --source-id <source_id> --url <url>
+python3 quwoquan_data/scripts/cli.py crawl fetch-source --spec <spec> --topic <topic_id> --task-type <article|image> --source-id <source_id> --url <url>
 ```
 
 5. article 任务要核对：
@@ -74,13 +74,13 @@ python3 quwoquan_data/tools/cli.py crawl fetch-source --spec <spec> --topic <top
 9. 执行：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl compose-topic --spec <spec> --topic <topic_id> --targets alpha,gamma --dry-run
+python3 quwoquan_data/scripts/cli.py crawl compose-topic --spec <spec> --topic <topic_id> --targets alpha,gamma --dry-run
 ```
 
 10. 再执行审核角色：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl audit-topic --spec <spec> --topic <topic_id>
+python3 quwoquan_data/scripts/cli.py crawl audit-topic --spec <spec> --topic <topic_id>
 ```
 
 11. 执行真实性 gate 与 package gate：
@@ -136,3 +136,7 @@ worker 摘要必须包含：
 - 不在 front matter 重复写 `entity_refs / source_urls`
 - 不把第三方原文整段复制进 `article.md`
 - 不因为数量基线压力，把无真实证据 topic 强行发布
+
+自然语言等价触发：用户说“处理这个 topic”“单个 topic worker”“补抓取并审核 topic”时，也按本命令语义执行。所有调用统一经 `python3 quwoquan_data/scripts/cli.py`。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

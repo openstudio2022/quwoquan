@@ -165,6 +165,32 @@ class ArticleTemplateRecommendationConfig {
   });
 }
 
+class ArticlePaperThemeOptionConfig {
+  final String id;
+  final String labelKey;
+
+  const ArticlePaperThemeOptionConfig({
+    required this.id,
+    required this.labelKey,
+  });
+}
+
+class ArticleDarkPaperThemeConfig {
+  final String id;
+  final String stage;
+  final String paper;
+  final String text;
+  final String secondaryText;
+
+  const ArticleDarkPaperThemeConfig({
+    required this.id,
+    required this.stage,
+    required this.paper,
+    required this.text,
+    required this.secondaryText,
+  });
+}
+
 // ignore: avoid_classes_with_only_static_members
 class ContentUIConfig {
   const ContentUIConfig._();
@@ -201,7 +227,7 @@ class ContentUIConfig {
     WorkFormatFilterConfig(id: "all", labelKey: "work_format_all", contentType: null),
     WorkFormatFilterConfig(id: "image", labelKey: "work_format_image", contentType: "image"),
     WorkFormatFilterConfig(id: "video", labelKey: "work_format_video", contentType: "video"),
-    WorkFormatFilterConfig(id: "note", labelKey: "work_format_note", contentType: "article"),
+    WorkFormatFilterConfig(id: "article", labelKey: "work_format_article", contentType: "article"),
   ];
 
   static const List<ShareTemplateProfileConfig> shareTemplateProfiles = <ShareTemplateProfileConfig>[
@@ -234,6 +260,33 @@ class ContentUIConfig {
     ArticleTemplateRecommendationConfig(categoryId: "photography", recommendedArticleTemplates: <String>["journal", "ritual"]),
     ArticleTemplateRecommendationConfig(categoryId: "tech", recommendedArticleTemplates: <String>["tech", "diffuse"]),
     ArticleTemplateRecommendationConfig(categoryId: "travel", recommendedArticleTemplates: <String>["journal", "gentle"]),
+  ];
+
+  static const String articleDarkPaperDefaultTheme = "darkPaper";
+
+  static const List<ArticlePaperThemeOptionConfig> articlePaperThemeOptions = <ArticlePaperThemeOptionConfig>[
+    ArticlePaperThemeOptionConfig(id: "system", labelKey: "article_paper_theme_system"),
+    ArticlePaperThemeOptionConfig(id: "darkPaper", labelKey: "article_paper_theme_dark_paper"),
+    ArticlePaperThemeOptionConfig(id: "coolGray", labelKey: "article_paper_theme_cool_gray"),
+    ArticlePaperThemeOptionConfig(id: "warmBlack", labelKey: "article_paper_theme_warm_black"),
+    ArticlePaperThemeOptionConfig(id: "inkGreen", labelKey: "article_paper_theme_ink_green"),
+    ArticlePaperThemeOptionConfig(id: "deepBrown", labelKey: "article_paper_theme_deep_brown"),
+  ];
+
+  static const Map<String, String> articlePaperVerticalDefaults = <String, String>{
+    "history": "deepBrown",
+    "nature": "inkGreen",
+    "photography": "darkPaper",
+    "tech": "coolGray",
+    "travel": "warmBlack",
+  };
+
+  static const List<ArticleDarkPaperThemeConfig> articleDarkPaperThemes = <ArticleDarkPaperThemeConfig>[
+    ArticleDarkPaperThemeConfig(id: "coolGray", stage: "#101318", paper: "#1A1F26", text: "#E6E8EB", secondaryText: "#8B919C"),
+    ArticleDarkPaperThemeConfig(id: "darkPaper", stage: "#0F1115", paper: "#161A20", text: "#E6E8EB", secondaryText: "#8B919C"),
+    ArticleDarkPaperThemeConfig(id: "deepBrown", stage: "#15110F", paper: "#1F1A17", text: "#E8E4DF", secondaryText: "#8F8882"),
+    ArticleDarkPaperThemeConfig(id: "inkGreen", stage: "#101511", paper: "#161B18", text: "#E6EAE6", secondaryText: "#879086"),
+    ArticleDarkPaperThemeConfig(id: "warmBlack", stage: "#13100D", paper: "#1E1A16", text: "#E8E6E3", secondaryText: "#8D8680"),
   ];
 
   static const Map<String, bool> featureFlags = <String, bool>{

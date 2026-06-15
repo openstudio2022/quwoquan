@@ -1,0 +1,1 @@
+# verify_error_code_semantic baseline: 已知违规，逐步修复

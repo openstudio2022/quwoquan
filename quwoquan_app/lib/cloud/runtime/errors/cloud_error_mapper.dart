@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/domain_error_code.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class CloudErrorMapper {
@@ -16,7 +17,7 @@ class CloudErrorMapper {
     String? requestPath,
   }) {
     final code = _readCode(body);
-    final errorCode = _contentErrorCodeFromRuntimeCode(code);
+    final domainErrorCode = DomainErrorCodeRegistry.fromCode(code);
     final runtimeFailure = runtimeFailureFromStatusCode(
       statusCode,
       body: body,
@@ -29,7 +30,7 @@ class CloudErrorMapper {
         statusCode: statusCode,
         message: 'Unauthorized$suffix',
         code: code,
-        errorCode: errorCode,
+        domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
         userMessage: parsedUserMessage(body),
       );
@@ -40,7 +41,7 @@ class CloudErrorMapper {
         statusCode: statusCode,
         message: 'Forbidden$suffix',
         code: code,
-        errorCode: errorCode,
+        domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
         userMessage: parsedUserMessage(body),
       );
@@ -51,7 +52,7 @@ class CloudErrorMapper {
         statusCode: statusCode,
         message: 'Not found$suffix',
         code: code,
-        errorCode: errorCode,
+        domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
         userMessage: parsedUserMessage(body),
       );
@@ -62,7 +63,7 @@ class CloudErrorMapper {
         statusCode: statusCode,
         message: 'Server error$suffix',
         code: code,
-        errorCode: errorCode,
+        domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
         userMessage: parsedUserMessage(body),
       );
@@ -72,7 +73,7 @@ class CloudErrorMapper {
       statusCode: statusCode,
       message: 'HTTP $statusCode$suffix',
       code: code,
-      errorCode: errorCode,
+      domainErrorCode: domainErrorCode,
       runtimeFailure: runtimeFailure,
       userMessage: parsedUserMessage(body),
     );
@@ -137,6 +138,7 @@ class CloudErrorMapper {
         nature: failure.nature,
         location: failure.location,
         context: failure.context,
+        recovery: failure.recovery,
       );
     }
     if (error is TimeoutException) {
@@ -278,8 +280,9 @@ class CloudErrorMapper {
   /// Returns [ContentErrorCode.unknown] when the code is absent or unrecognised.
   static ContentErrorCode fromErrorResponse(String? body) {
     final code = _readCode(body);
-    if (code == null) return ContentErrorCode.unknown;
-    return _contentErrorCodeFromRuntimeCode(code) ?? ContentErrorCode.unknown;
+    final domain = DomainErrorCodeRegistry.fromCode(code);
+    final value = domain?.value;
+    return value is ContentErrorCode ? value : ContentErrorCode.unknown;
   }
 
   static String? parsedUserMessage(String? body) {
@@ -327,11 +330,6 @@ CloudErrorType _cloudTypeFromFailure(RuntimeFailureBase failure) {
     RuntimeFailureKind.unavailable => CloudErrorType.server,
     _ => CloudErrorType.unknown,
   };
-}
-
-ContentErrorCode? _contentErrorCodeFromRuntimeCode(String? code) {
-  if (code == null || !code.startsWith('CONTENT.')) return null;
-  return ContentErrorCode.fromCode(code);
 }
 
 String _codeFromStatus(int statusCode) {

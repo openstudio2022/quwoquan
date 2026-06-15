@@ -18,7 +18,7 @@ description: 基础设施 · 统一入口（默认先自检再规划，覆盖存
   - `bench`：运行 `/infra-bench` 成本与性能对标
   - `full`：完整流程（audit → bench → plan）
 - `--scope {all|telemetry|storage|cache|messaging|cdn|network|observe|security}` 聚焦范围
-- `--env {dev|gamma|prod}` 环境维度（默认 all）
+- `--env {alpha|beta|gamma|prod}` 环境维度（默认 all）。历史 `dev` 口径应映射到 `alpha`，不得新增 `prod-gray`。
 
 ## 默认行为（`/infra` 无参数）
 
@@ -31,6 +31,23 @@ Step 3: 规划（/infra-plan --from audit）
     ↓
 Step 4: 输出结论与下一步建议
 ```
+
+执行前先读取 `docs/agent_context_contract.md` 与 `docs/agent_command_simulation_matrix.md`，明确环境任务的 Spec Entry、Pre-work Reflection、禁止事项和出口证据。
+
+环境验证、打包、健康检查、巡检和修复统一经 `stackctl`：
+
+```bash
+python3 agent_ops/deploy/stackctl.py verify --env <env> --kind all --tier all
+python3 agent_ops/deploy/stackctl.py health --target <target> --scope full
+python3 agent_ops/deploy/stackctl.py inspect --target <target> --kind all
+```
+
+出口：
+- 输出 topology/config/packaging/health/inspect 证据。
+- 输出风险、修复建议、是否需要人工确认。
+- 若涉及 prod-hosted、密钥、破坏性 repair 或 rollout，必须转 `/deploy` 并请求确认。
+
+自然语言等价触发：用户说“环境/基础设施/拓扑/健康检查/巡检/修复/配置发布”时，也按 `/infra` 或其子命令语义执行。
 
 ## 专家角色定义
 
@@ -167,3 +184,5 @@ Step 4: 输出结论与下一步建议
 ├── /infra-plan    (基础设施规划)
 └── /infra-dev     (实施开发)
 ```
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

@@ -23,6 +23,7 @@ CHAT_SCENARIO = "messages/chat/test_fixtures/scenarios/chat_scenarios.json"
 CURATED_REFS: dict[str, list[str]] = {
     CONTENT_SCENARIO: [
         "content_discovery_core",
+        "intersection_core",
     ],
     USER_SCENARIO: [
         "user_profile_core",
@@ -55,6 +56,7 @@ CURATED_CONTENT_POST_IDS = {
     "fixture_post_outdoor_001",
 }
 CURATED_CONTENT_COMMENT_IDS = {"fixture_comment_photo_001"}
+CURATED_MAX_IMAGES_PER_POST = 4
 CURATED_USER_IDS = {
     "fixture_user_current",
     "fixture_user_photo",
@@ -146,6 +148,12 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
             row for row in seed.get("posts", [])
             if row_id(row, "id", "postId") in CURATED_CONTENT_POST_IDS
         ]
+        # gamma curated 子集对单帖图片列表限幅，守住 100 图预算。
+        for row in seed["posts"]:
+            for field in ("imageUrls", "mediaUrls", "imageObjectKeys", "mediaObjectKeys"):
+                values = row.get(field)
+                if isinstance(values, list) and len(values) > CURATED_MAX_IMAGES_PER_POST:
+                    row[field] = values[:CURATED_MAX_IMAGES_PER_POST]
         seed["reactions"] = [
             row for row in seed.get("reactions", [])
             if row_id(row, "postId", "contentId", "post_id") in CURATED_CONTENT_POST_IDS
@@ -289,12 +297,13 @@ def build_gamma_manifest() -> dict[str, Any]:
     seed_refs: list[dict[str, Any]] = []
     for entry in manifest.get("seedRefs", []):
         fixture_path = str(entry.get("fixturePath") or "").strip()
-        curated_refs = CURATED_REFS.get(fixture_path)
+        source_fixture_path = fixture_path.replace(".gamma-curated.json", ".json")
+        curated_refs = CURATED_REFS.get(source_fixture_path)
         if curated_refs is None:
             seed_refs.append(dict(entry))
             continue
         next_entry = dict(entry)
-        next_entry["fixturePath"] = fixture_path.replace(".json", ".gamma-curated.json")
+        next_entry["fixturePath"] = source_fixture_path.replace(".json", ".gamma-curated.json")
         next_entry["refs"] = curated_refs
         seed_refs.append(next_entry)
     next_manifest = dict(manifest)

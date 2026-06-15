@@ -21,34 +21,31 @@ import 'package:quwoquan_app/components/conversation/conversation_page_scaffold.
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
 import 'package:quwoquan_app/components/conversation/message_action_menu_overlay.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
-import 'package:quwoquan_app/core/auth/auth_gate.dart';
-import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
-import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_offline_queue.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_player_manager.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
+import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
+import 'package:quwoquan_app/ui/rtc/widgets/call_permission_guard.dart';
 
 String formatChatTime(String? raw) {
   if (raw == null || raw.isEmpty) return '';
   return raw;
 }
+
+final RouteObserver<ModalRoute<dynamic>> chatRouteObserver =
+    RouteObserver<ModalRoute<dynamic>>();
 
 class ChatConversationPage extends ConsumerStatefulWidget {
   const ChatConversationPage({
@@ -69,7 +66,8 @@ class ChatConversationPage extends ConsumerStatefulWidget {
       _ChatConversationPageState();
 }
 
-class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
+class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
+    with RouteAware {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocusNode = FocusNode();
@@ -86,39 +84,35 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   final Set<String> _selectedIds = <String>{};
   ChatMessageDisplayItem? _actionMenuMessage;
   Offset? _actionMenuPosition;
+  ModalRoute<dynamic>? _subscribedRoute;
+  bool _realtimeAttached = false;
+  RealtimeConnectionNotifier? _realtimeNotifier;
 
   @override
   void initState() {
     super.initState();
     _inputController.addListener(_onInputChanged);
+    _realtimeNotifier = ref.read(realtimeConnectionManagerProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Future<void>(() async {
-        final notifier = ref.read(
-          chatMessageProvider(widget.conversationId).notifier,
-        );
-        await notifier.loadMessages();
-        final marked = await notifier.markConversationRead();
-        if (marked && mounted) {
-          ref
-              .read(chatInboxListProvider.notifier)
-              .markConversationRead(widget.conversationId);
-        }
-      });
-      ref
-          .read(realtimeConnectionManagerProvider.notifier)
-          .onEnterChatDetail(widget.conversationId);
+      unawaited(_bootstrapConversation(widget.conversationId));
     });
   }
 
   @override
-  void deactivate() {
-    ref.read(realtimeConnectionManagerProvider.notifier).onLeaveChatDetail();
-    super.deactivate();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _subscribeRouteAware();
   }
 
   @override
   void dispose() {
+    final route = _subscribedRoute;
+    if (route != null) {
+      chatRouteObserver.unsubscribe(this);
+      _subscribedRoute = null;
+    }
+    _detachRealtime();
     AppToast.dismiss();
     unawaited(_voiceRecorder.dispose());
     _inputController.removeListener(_onInputChanged);
@@ -126,6 +120,82 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     _scrollController.dispose();
     _inputFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _bootstrapConversation(String conversationId) async {
+    final notifier = ref.read(chatMessageProvider(conversationId).notifier);
+    await notifier.loadMessages();
+    final marked = await notifier.markConversationRead();
+    if (!marked || !mounted) {
+      return;
+    }
+    // 会话列表页 keepAlive 仍在树上；已读回写须在当前帧结束后执行。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      refreshMessageReadState(ref, conversationId);
+    });
+  }
+
+  void _subscribeRouteAware() {
+    if (widget.embedded || !mounted) {
+      return;
+    }
+    final route = ModalRoute.of(context);
+    if (route == null || _subscribedRoute == route) {
+      return;
+    }
+    final previousRoute = _subscribedRoute;
+    if (previousRoute != null) {
+      chatRouteObserver.unsubscribe(this);
+    }
+    _subscribedRoute = route;
+    chatRouteObserver.subscribe(this, route);
+  }
+
+  void _attachRealtime() {
+    if (_realtimeAttached) {
+      return;
+    }
+    final notifier = _realtimeNotifier;
+    if (notifier == null) {
+      return;
+    }
+    _realtimeAttached = true;
+    scheduleMicrotask(() => notifier.onEnterChatDetail(widget.conversationId));
+  }
+
+  void _detachRealtime() {
+    if (!_realtimeAttached) {
+      return;
+    }
+    _realtimeAttached = false;
+    final notifier = _realtimeNotifier;
+    if (notifier == null) {
+      return;
+    }
+    scheduleMicrotask(notifier.onLeaveChatDetail);
+  }
+
+  @override
+  void didPush() {
+    _attachRealtime();
+  }
+
+  @override
+  void didPopNext() {
+    _attachRealtime();
+  }
+
+  @override
+  void didPushNext() {
+    _detachRealtime();
+  }
+
+  @override
+  void didPop() {
+    _detachRealtime();
   }
 
   void _onInputChanged() {
@@ -348,10 +418,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   }
 
   Future<List<ChatInputAttachment>> _pickChatFiles(int remaining) async {
-    final result = await FilePicker.pickFiles(
-      allowMultiple: true,
-      withData: false,
-    );
+    final result = await FilePicker.pickFiles();
     if (result == null) return const <ChatInputAttachment>[];
     final now = DateTime.now().millisecondsSinceEpoch;
     return result.files

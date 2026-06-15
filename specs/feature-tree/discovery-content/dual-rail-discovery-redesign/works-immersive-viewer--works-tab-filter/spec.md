@@ -1,19 +1,25 @@
-# L4 契约/任务：works-tab-filter
+# L4 契约/任务：works-tab-filter（Work Browser V1.0：更多菜单媒体筛选）
+
+> 2026-06-11 更新：Work Browser V1.0 取消顶部常驻二级 Tab（呼吸收起/Elastic 展开方案废弃）。媒体类型是筛选条件，不是一级导航；筛选入口收敛到右上「更多」菜单。
 
 ## 功能说明
-作品频道顶部二级分类 Tab：`[全部][视频][美图][文章]`。进入作品频道后 1.5s 自动向上收起，顶部中央保留半透明克莱因蓝下箭头指示器；点击箭头或向下拉动屏幕以 Elastic 弹性动画重新展开。Tab 切换传递 `filter_type` 至 `WorksFeedNotifier`，触发 cursor 重置和重新加载。
+
+Work Browser 右上「更多」菜单内提供媒体筛选项：`全部作品 / 图片 / 视频 / 文章`。选择后传递 `filter_type` 至作品队列，触发 cursor 重置和重新加载；顶部系统层不出现任何常驻筛选 UI。
 
 ## 范围
-- `WorksTabFilter` Widget：横向 Tab Row + `AnimatedSlide` 收起 + `ExpandMore` 指示器
-- `Timer(1.5s)` 驱动初次自动收起，`worksForceDarkProvider` 重置后重新计时
-- Tab 切换 → `ref.read(worksFeedProvider.notifier).load(filterType: ...)`
-- 指示器：`AnimatedOpacity` + `GestureDetector`（tap + vertical drag 展开）
+
+- 更多菜单筛选区：四个筛选项 + 当前选中态标记
+- 筛选切换 → 作品队列按 `all/image/video/article` 重载
+- 筛选语义来自 `ui_config.yaml#work_format_filters`（metadata 真相源），不暴露 `note` 命名
 
 ## 适用范围与约束
-- 仅在作品频道有效；微趣轨无此组件
-- 收起状态下指示器不占内容区高度（`Overlay` 或 `Stack` 定位）
+
+- 仅在 Work Browser 有效
+- 禁止顶部长期显示媒体筛选 Tab、禁止筛选状态以页码/类型标识形式出现在顶部
+- 当前作品在新筛选下不存在时定位到队首
 
 ## 验收标准概要
-- A1：进入作品频道 1.5s 后 Tab 平滑收起，仅箭头可见
-- A2：点击箭头或向下拉动 → Elastic 弹性动画展开（`ElasticOutCurve`）
-- A3：切换 Tab → `filter_type` 正确传递，`WorksFeedNotifier` cursor 重置，重新加载
+
+- A1：更多菜单出现 `全部作品/图片/视频/文章` 四个筛选项
+- A2：切换筛选 → 队列只含对应媒体类型作品，cursor 重置
+- A3：顶部系统层始终只有返回与更多

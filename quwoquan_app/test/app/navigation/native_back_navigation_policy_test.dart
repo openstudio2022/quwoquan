@@ -53,7 +53,7 @@ void main() {
       expect(
         policy.resolveBack(
           const AppRouteContext(
-            location: '/article/1',
+            location: '/works/browser?workId=1',
             canPop: true,
             isBottomNavRoot: false,
           ),

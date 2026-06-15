@@ -1,5 +1,6 @@
 import 'package:quwoquan_runtime_errors/src/runtime_failure_context.dart';
 import 'package:quwoquan_runtime_errors/src/runtime_failure_location.dart';
+import 'package:quwoquan_runtime_errors/src/runtime_recovery_directive.dart';
 
 enum RuntimeFailureOrigin {
   user,
@@ -43,6 +44,7 @@ abstract interface class RuntimeFailureBase {
   RuntimeFailureNature get nature;
   RuntimeFailureLocation get location;
   RuntimeFailureContext get context;
+  RuntimeRecoveryDirective get recovery;
 }
 
 class RuntimeFailure implements RuntimeFailureBase {
@@ -53,6 +55,7 @@ class RuntimeFailure implements RuntimeFailureBase {
     required this.nature,
     required this.location,
     required this.context,
+    this.recovery = const RuntimeRecoveryDirective.none(),
   });
 
   factory RuntimeFailure.unknown({String code = 'CLOUD.SYSTEM.unknown_error'}) {
@@ -90,6 +93,9 @@ class RuntimeFailure implements RuntimeFailureBase {
       context: RuntimeFailureContext.fromJson(
         (json['context'] as Map?)?.cast<String, dynamic>(),
       ).normalized(),
+      recovery: RuntimeRecoveryDirective.fromJson(
+        (json['recovery'] as Map?)?.cast<String, dynamic>(),
+      ),
     );
   }
 
@@ -105,6 +111,8 @@ class RuntimeFailure implements RuntimeFailureBase {
   final RuntimeFailureLocation location;
   @override
   final RuntimeFailureContext context;
+  @override
+  final RuntimeRecoveryDirective recovery;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -114,6 +122,7 @@ class RuntimeFailure implements RuntimeFailureBase {
       'nature': nature.name,
       'location': location.toJson(),
       'context': context.toJson(),
+      'recovery': recovery.toJson(),
     };
   }
 }

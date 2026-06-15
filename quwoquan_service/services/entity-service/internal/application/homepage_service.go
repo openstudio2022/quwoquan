@@ -60,6 +60,9 @@ type Homepage struct {
 	City               string           `json:"city,omitempty"`
 	Location           *GeoPoint        `json:"location,omitempty"`
 	OwnerUserID        string           `json:"ownerUserId,omitempty"`
+	OwnerSubAccountID  string           `json:"ownerSubAccountId,omitempty"`
+	ViewerFollows      bool             `json:"viewerFollowsHomepage"`
+	FollowerCount      int              `json:"followerCount"`
 	AverageRating      *float64         `json:"averageRating,omitempty"`
 	RatingCount        int              `json:"ratingCount"`
 	ReviewSummary      map[string]any   `json:"reviewSummary,omitempty"`
@@ -75,16 +78,17 @@ type Homepage struct {
 }
 
 type HomepageSearchItemView struct {
-	HomepageID    string   `json:"homepageId"`
-	Title         string   `json:"title"`
-	Subtitle      string   `json:"subtitle,omitempty"`
-	HomepageType  string   `json:"homepageType"`
-	CoverURL      string   `json:"coverUrl,omitempty"`
-	City          string   `json:"city,omitempty"`
-	Address       string   `json:"address,omitempty"`
-	Status        string   `json:"status"`
-	AverageRating *float64 `json:"averageRating,omitempty"`
-	RatingCount   int      `json:"ratingCount"`
+	HomepageID        string   `json:"homepageId"`
+	CanonicalEntityID string   `json:"canonicalEntityId"`
+	Title             string   `json:"title"`
+	Subtitle          string   `json:"subtitle,omitempty"`
+	HomepageType      string   `json:"homepageType"`
+	CoverURL          string   `json:"coverUrl,omitempty"`
+	City              string   `json:"city,omitempty"`
+	Address           string   `json:"address,omitempty"`
+	Status            string   `json:"status"`
+	AverageRating     *float64 `json:"averageRating,omitempty"`
+	RatingCount       int      `json:"ratingCount"`
 }
 
 type HomepageShellView struct {
@@ -209,6 +213,7 @@ type HomepageService struct {
 	mu            sync.RWMutex
 	store         HomepageStateStore
 	homepages     map[string]*Homepage
+	followers     map[string]map[string]bool
 	claimRequests map[string]*HomepageClaimRequest
 	statusReports map[string]*HomepageStatusReport
 	sequence      uint64
@@ -221,6 +226,7 @@ type HomepageStateStore interface {
 
 type HomepageStateSnapshot struct {
 	Homepages     []Homepage             `json:"homepages" bson:"homepages"`
+	Followers     map[string][]string    `json:"followers" bson:"followers"`
 	ClaimRequests []HomepageClaimRequest `json:"claimRequests" bson:"claimRequests"`
 	StatusReports []HomepageStatusReport `json:"statusReports" bson:"statusReports"`
 	Sequence      uint64                 `json:"sequence" bson:"sequence"`
@@ -235,6 +241,7 @@ func NewHomepageServiceWithStore(ctx context.Context, store HomepageStateStore) 
 	svc := &HomepageService{
 		store:         store,
 		homepages:     map[string]*Homepage{},
+		followers:     map[string]map[string]bool{},
 		claimRequests: map[string]*HomepageClaimRequest{},
 		statusReports: map[string]*HomepageStatusReport{},
 	}
@@ -325,16 +332,17 @@ func (s *HomepageService) SearchHomepages(
 			continue
 		}
 		items = append(items, HomepageSearchItemView{
-			HomepageID:    homepage.ID,
-			Title:         homepage.Title,
-			Subtitle:      homepage.Subtitle,
-			HomepageType:  homepage.HomepageType,
-			CoverURL:      homepage.CoverURL,
-			City:          homepage.City,
-			Address:       homepage.Address,
-			Status:        homepage.Status,
-			AverageRating: homepage.AverageRating,
-			RatingCount:   homepage.RatingCount,
+			HomepageID:        homepage.ID,
+			CanonicalEntityID: homepage.CanonicalEntityID,
+			Title:             homepage.Title,
+			Subtitle:          homepage.Subtitle,
+			HomepageType:      homepage.HomepageType,
+			CoverURL:          homepage.CoverURL,
+			City:              homepage.City,
+			Address:           homepage.Address,
+			Status:            homepage.Status,
+			AverageRating:     homepage.AverageRating,
+			RatingCount:       homepage.RatingCount,
 		})
 	}
 	return items
@@ -392,7 +400,7 @@ func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepage
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	homepage, ok := s.homepages[homepageID]
+	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
@@ -402,6 +410,12 @@ func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepage
 	homepage.SourceType = "official_seed"
 	homepage.UpdatedAt = now
 	homepage.PublishedAt = &now
+	if strings.TrimSpace(homepage.CanonicalEntityID) == "" {
+		homepage.CanonicalEntityID = canonicalEntityIDFromTypeAndTitle(
+			homepage.HomepageType,
+			homepage.Title,
+		)
+	}
 	applyDefaultShellData(homepage)
 	if err = s.persistLocked(ctx); err != nil {
 		return nil, err
@@ -411,6 +425,14 @@ func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepage
 }
 
 func (s *HomepageService) GetHomepage(ctx context.Context, homepageID string) (*Homepage, error) {
+	return s.GetHomepageForViewer(ctx, homepageID, "")
+}
+
+func (s *HomepageService) GetHomepageForViewer(
+	ctx context.Context,
+	homepageID string,
+	viewerID string,
+) (*Homepage, error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.GetHomepage",
 		attribute.String("homepage.id", homepageID))
 	var err error
@@ -418,12 +440,87 @@ func (s *HomepageService) GetHomepage(ctx context.Context, homepageID string) (*
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	homepage, ok := s.homepages[homepageID]
+	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
 	}
 	out := cloneHomepage(homepage)
+	s.applyViewerFollowStateLocked(&out, viewerID)
+	return &out, nil
+}
+
+func (s *HomepageService) FollowHomepage(
+	ctx context.Context,
+	homepageID string,
+	viewerID string,
+) (*Homepage, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.FollowHomepage",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	viewerID = strings.TrimSpace(viewerID)
+	if viewerID == "" {
+		err = newAppError(403, codePermissionDenied, "请先登录后再关注", "missing viewer id")
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	homepage, ok := s.resolveHomepageLocked(homepageID)
+	if !ok {
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
+	}
+	if homepage.Status == "offline" {
+		err = newAppError(410, codeHomepageOffline, "主页已下线，仅保留记录信息", "homepage offline")
+		return nil, err
+	}
+	if s.followers[homepage.ID] == nil {
+		s.followers[homepage.ID] = map[string]bool{}
+	}
+	s.followers[homepage.ID][viewerID] = true
+	if err = s.persistLocked(ctx); err != nil {
+		return nil, err
+	}
+	out := cloneHomepage(homepage)
+	s.applyViewerFollowStateLocked(&out, viewerID)
+	return &out, nil
+}
+
+func (s *HomepageService) UnfollowHomepage(
+	ctx context.Context,
+	homepageID string,
+	viewerID string,
+) (*Homepage, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.UnfollowHomepage",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	viewerID = strings.TrimSpace(viewerID)
+	if viewerID == "" {
+		err = newAppError(403, codePermissionDenied, "请先登录后再取消关注", "missing viewer id")
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	homepage, ok := s.resolveHomepageLocked(homepageID)
+	if !ok {
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
+	}
+	if followers := s.followers[homepage.ID]; followers != nil {
+		delete(followers, viewerID)
+		if len(followers) == 0 {
+			delete(s.followers, homepage.ID)
+		}
+	}
+	if err = s.persistLocked(ctx); err != nil {
+		return nil, err
+	}
+	out := cloneHomepage(homepage)
+	s.applyViewerFollowStateLocked(&out, viewerID)
 	return &out, nil
 }
 
@@ -523,7 +620,7 @@ func (s *HomepageService) CreateHomepageClaimRequest(
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	homepage, ok := s.homepages[homepageID]
+	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
@@ -543,7 +640,7 @@ func (s *HomepageService) CreateHomepageClaimRequest(
 	now := time.Now().UTC()
 	request := &HomepageClaimRequest{
 		ID:                   s.nextID("claim"),
-		HomepageID:           homepageID,
+		HomepageID:           homepage.ID,
 		RequesterUserID:      strings.TrimSpace(input.RequesterUserID),
 		ClaimTier:            strings.TrimSpace(input.ClaimTier),
 		BusinessLicenseURL:   strings.TrimSpace(input.BusinessLicenseURL),
@@ -578,16 +675,17 @@ func (s *HomepageService) ReviewHomepageClaimRequest(
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	request, ok := s.claimRequests[claimRequestID]
-	if !ok || request.HomepageID != homepageID {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "claim request not found")
-		return nil, err
-	}
-	homepage, ok := s.homepages[homepageID]
+	resolvedHomepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
 	}
+	request, ok := s.claimRequests[claimRequestID]
+	if !ok || request.HomepageID != resolvedHomepage.ID {
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "claim request not found")
+		return nil, err
+	}
+	homepage := resolvedHomepage
 	now := time.Now().UTC()
 	status := normalize(input.Status)
 	switch status {
@@ -595,6 +693,7 @@ func (s *HomepageService) ReviewHomepageClaimRequest(
 		request.Status = "approved"
 		homepage.ClaimStatus = "claimed"
 		homepage.OwnerUserID = request.RequesterUserID
+		homepage.OwnerSubAccountID = request.RequesterUserID
 	case "rejected":
 		request.Status = "rejected"
 		homepage.ClaimStatus = "rejected"
@@ -624,7 +723,7 @@ func (s *HomepageService) UpdateClaimedHomepageBasics(
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	homepage, ok := s.homepages[homepageID]
+	homepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
@@ -674,13 +773,14 @@ func (s *HomepageService) CreateHomepageStatusReport(
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.homepages[homepageID]; !ok {
+	homepage, ok := s.resolveHomepageLocked(homepageID)
+	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
 	}
 	report := &HomepageStatusReport{
 		ID:             s.nextID("report"),
-		HomepageID:     homepageID,
+		HomepageID:     homepage.ID,
 		ReporterUserID: strings.TrimSpace(input.ReporterUserID),
 		Reason:         strings.TrimSpace(input.Reason),
 		Description:    strings.TrimSpace(input.Description),
@@ -710,16 +810,17 @@ func (s *HomepageService) ReviewHomepageStatusReport(
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	report, ok := s.statusReports[reportID]
-	if !ok || report.HomepageID != homepageID {
-		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "status report not found")
-		return nil, err
-	}
-	homepage, ok := s.homepages[homepageID]
+	resolvedHomepage, ok := s.resolveHomepageLocked(homepageID)
 	if !ok {
 		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 		return nil, err
 	}
+	report, ok := s.statusReports[reportID]
+	if !ok || report.HomepageID != resolvedHomepage.ID {
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "status report not found")
+		return nil, err
+	}
+	homepage := resolvedHomepage
 	now := time.Now().UTC()
 	switch normalize(input.Status) {
 	case "confirmed_offline":
@@ -753,6 +854,55 @@ func (s *HomepageService) seed() {
 	pubA := now.Add(-72 * time.Hour)
 	pubB := now.Add(-48 * time.Hour)
 	pubC := now.Add(-96 * time.Hour)
+	add(&Homepage{
+		ID:                 "fixture_homepage_author",
+		Title:              "契约摄影师主页",
+		HomepageType:       "author",
+		CanonicalEntityID:  "entity:author:fixture_user_photo",
+		ObjectPageTemplate: "standard",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		OwnerUserID:        "fixture_user_photo",
+		CategoryTags:       []string{"作者", "摄影", "契约"},
+		RatingCount:        32,
+		CreatedAt:          now.Add(-6 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
+	add(&Homepage{
+		ID:                 "fixture_homepage_circle",
+		Title:              "契约摄影社主页",
+		HomepageType:       "circle",
+		CanonicalEntityID:  "entity:circle:fixture_circle_photo",
+		ObjectPageTemplate: "standard",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		OwnerUserID:        "fixture_circle_photo",
+		CategoryTags:       []string{"圈子", "摄影", "契约"},
+		RatingCount:        24,
+		CreatedAt:          now.Add(-6 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
+	add(&Homepage{
+		ID:                 "fixture_homepage_poi",
+		Title:              "杭州西湖契约主页",
+		HomepageType:       "poi",
+		CanonicalEntityID:  "entity:poi:west_lake_contract",
+		ObjectPageTemplate: "standard",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"地点", "西湖", "契约"},
+		City:               "杭州",
+		Location:           &GeoPoint{Latitude: 30.2431, Longitude: 120.1505},
+		RatingCount:        18,
+		CreatedAt:          now.Add(-6 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
 	add(&Homepage{
 		ID:                 "homepage_sight_west_lake",
 		Title:              "西湖景区",
@@ -851,6 +1001,48 @@ func (s *HomepageService) seed() {
 		PublishedAt:        &pubA,
 	})
 	add(&Homepage{
+		ID:                 "homepage_sight_emeishan",
+		Title:              "峨眉山",
+		Subtitle:           "世界遗产与川西南山地旅行代表目的地",
+		HomepageType:       "sight",
+		CanonicalEntityID:  "entity:sight:emeishan",
+		ObjectPageTemplate: "travel_photo",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"景点", "山地旅行", "乐山"},
+		CoverURL:           "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee",
+		Address:            "四川省乐山市峨眉山市黄湾镇",
+		City:               "乐山",
+		Location:           &GeoPoint{Latitude: 29.5593, Longitude: 103.3356},
+		AverageRating:      &ratingC,
+		RatingCount:        356,
+		CreatedAt:          now.Add(-12 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-90 * time.Minute),
+		PublishedAt:        &pubC,
+	})
+	add(&Homepage{
+		ID:                 "homepage_sight_leshan_giant_buddha",
+		Title:              "乐山大佛",
+		Subtitle:           "岷江、青衣江、大渡河交汇处的石刻造像与城市地标",
+		HomepageType:       "sight",
+		CanonicalEntityID:  "entity:sight:leshan_giant_buddha",
+		ObjectPageTemplate: "travel_photo",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"景点", "石刻", "乐山"},
+		CoverURL:           "https://images.unsplash.com/photo-1512453979798-5ea266f8880c",
+		Address:            "四川省乐山市市中区凌云路 2435 号",
+		City:               "乐山",
+		Location:           &GeoPoint{Latitude: 29.5447, Longitude: 103.7730},
+		AverageRating:      &ratingB,
+		RatingCount:        241,
+		CreatedAt:          now.Add(-9 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubB,
+	})
+	add(&Homepage{
 		ID:                 "fixture_homepage_travel_photo_west_lake",
 		Title:              "西湖旅行摄影机位",
 		Subtitle:           "旅行摄影主页模板样本",
@@ -863,6 +1055,40 @@ func (s *HomepageService) seed() {
 		CategoryTags:       []string{"旅行摄影", "机位", "杭州"},
 		City:               "杭州",
 		RatingCount:        680,
+		CreatedAt:          now.Add(-8 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
+	add(&Homepage{
+		ID:                 "fixture_homepage_travel_photo_dali",
+		Title:              "大理旅行摄影路线",
+		Subtitle:           "旅行摄影主页模板样本",
+		HomepageType:       "travel_photo",
+		CanonicalEntityID:  "entity:travel_photo:dali",
+		ObjectPageTemplate: "travel_photo",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"旅行摄影", "机位", "大理"},
+		City:               "大理",
+		RatingCount:        352,
+		CreatedAt:          now.Add(-8 * 24 * time.Hour),
+		UpdatedAt:          now.Add(-2 * time.Hour),
+		PublishedAt:        &pubA,
+	})
+	add(&Homepage{
+		ID:                 "fixture_homepage_travel_photo_tokyo",
+		Title:              "东京城市摄影路线",
+		Subtitle:           "旅行摄影主页模板样本",
+		HomepageType:       "travel_photo",
+		CanonicalEntityID:  "entity:travel_photo:tokyo",
+		ObjectPageTemplate: "travel_photo",
+		Status:             "published",
+		SourceType:         "official_seed",
+		ClaimStatus:        "unclaimed",
+		CategoryTags:       []string{"旅行摄影", "机位", "东京"},
+		City:               "东京",
+		RatingCount:        318,
 		CreatedAt:          now.Add(-8 * 24 * time.Hour),
 		UpdatedAt:          now.Add(-2 * time.Hour),
 		PublishedAt:        &pubA,
@@ -1119,7 +1345,7 @@ func defaultIntersectionReasons(homepage *Homepage, edges []map[string]any) []ma
 			"relationKind":      "mutual",
 			"relationObjectId":  relObj,
 			"label":             "相关圈子",
-			"displayName":       "你认识的人在这",
+			"displayName":       "相关圈子里有你的连接",
 			"avatarUrl":         "",
 			"sharedCount":       len(edges),
 			"strength":          intersectionStrengthFromCount(len(edges), 4),
@@ -1219,12 +1445,16 @@ func defaultAssistantContext(
 			edgeIDs = append(edgeIDs, id)
 		}
 	}
+	entityRefs := []string{}
+	if canonical := strings.TrimSpace(homepage.CanonicalEntityID); canonical != "" {
+		entityRefs = []string{canonical}
+	}
 	return map[string]any{
 		"objectType":            "homepage",
 		"objectId":              homepage.ID,
 		"canonicalEntityId":     homepage.CanonicalEntityID,
 		"tagRefs":               cloneStrings(homepage.CategoryTags),
-		"entityRefs":            []string{homepage.CanonicalEntityID},
+		"entityRefs":            entityRefs,
 		"relationEdgeIds":       edgeIDs,
 		"referralSource":        referralSource,
 		"feedRequestId":         feedRequestID,
@@ -1241,13 +1471,6 @@ func relationObjectID(edges []map[string]any) string {
 		}
 	}
 	return ""
-}
-
-func canonicalEntityID(homepageID string, explicit string) string {
-	if trimmed := strings.TrimSpace(explicit); trimmed != "" {
-		return trimmed
-	}
-	return "entity:homepage:" + strings.TrimSpace(homepageID)
 }
 
 func objectPageTemplate(homepageType string, explicit string) string {
@@ -1307,6 +1530,16 @@ func cloneHomepage(in *Homepage) Homepage {
 	return out
 }
 
+func (s *HomepageService) applyViewerFollowStateLocked(homepage *Homepage, viewerID string) {
+	if homepage == nil {
+		return
+	}
+	followers := s.followers[homepage.ID]
+	homepage.FollowerCount = len(followers)
+	viewerID = strings.TrimSpace(viewerID)
+	homepage.ViewerFollows = viewerID != "" && followers != nil && followers[viewerID]
+}
+
 func cloneStrings(values []string) []string {
 	if len(values) == 0 {
 		return nil
@@ -1354,6 +1587,21 @@ func (s *HomepageService) applySnapshot(snapshot *HomepageStateSnapshot) {
 		homepage := cloneHomepage(&snapshot.Homepages[i])
 		s.homepages[homepage.ID] = &homepage
 	}
+	for homepageID, followers := range snapshot.Followers {
+		homepageID = strings.TrimSpace(homepageID)
+		if homepageID == "" {
+			continue
+		}
+		if s.followers[homepageID] == nil {
+			s.followers[homepageID] = map[string]bool{}
+		}
+		for _, viewerID := range followers {
+			viewerID = strings.TrimSpace(viewerID)
+			if viewerID != "" {
+				s.followers[homepageID][viewerID] = true
+			}
+		}
+	}
 	for i := range snapshot.ClaimRequests {
 		request := snapshot.ClaimRequests[i]
 		s.claimRequests[request.ID] = &request
@@ -1374,6 +1622,19 @@ func (s *HomepageService) snapshotLocked() HomepageStateSnapshot {
 	sort.Slice(homepages, func(i, j int) bool {
 		return homepages[i].ID < homepages[j].ID
 	})
+
+	followers := make(map[string][]string, len(s.followers))
+	for homepageID, set := range s.followers {
+		if len(set) == 0 {
+			continue
+		}
+		viewerIDs := make([]string, 0, len(set))
+		for viewerID := range set {
+			viewerIDs = append(viewerIDs, viewerID)
+		}
+		sort.Strings(viewerIDs)
+		followers[homepageID] = viewerIDs
+	}
 
 	claimRequests := make([]HomepageClaimRequest, 0, len(s.claimRequests))
 	for _, request := range s.claimRequests {
@@ -1397,6 +1658,7 @@ func (s *HomepageService) snapshotLocked() HomepageStateSnapshot {
 
 	return HomepageStateSnapshot{
 		Homepages:     homepages,
+		Followers:     followers,
 		ClaimRequests: claimRequests,
 		StatusReports: statusReports,
 		Sequence:      atomic.LoadUint64(&s.sequence),

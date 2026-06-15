@@ -1,0 +1,276 @@
+{
+  "schemaVersion": "quwoquan_data.target_selection.v1",
+  "strategy": "mandatory targets plus deterministic round-robin regional coverage",
+  "discoveryPath": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_data/tasks/旅行/地域/四川省/景区/景区精选/discovery_sichuan_100e.json",
+  "limit": 50,
+  "mandatory": [
+    "四姑娘山",
+    "毕棚沟",
+    "稻城亚丁",
+    "海螺沟",
+    "墨石公园"
+  ],
+  "excluded": [
+    "九皇山",
+    "八台山",
+    "大千园",
+    "太平古镇",
+    "巴山大峡谷",
+    "格萨拉",
+    "诺水河"
+  ],
+  "targets": [
+    {
+      "name": "四姑娘山",
+      "entityType": "地点/景区",
+      "region": "阿坝藏族羌族自治州"
+    },
+    {
+      "name": "毕棚沟",
+      "entityType": "地点/景区",
+      "region": "阿坝藏族羌族自治州"
+    },
+    {
+      "name": "稻城亚丁",
+      "entityType": "地点/景区",
+      "region": "甘孜藏族自治州"
+    },
+    {
+      "name": "海螺沟",
+      "entityType": "地点/景区",
+      "region": "甘孜藏族自治州"
+    },
+    {
+      "name": "墨石公园",
+      "entityType": "地点/景区",
+      "region": "甘孜藏族自治州"
+    },
+    {
+      "name": "都江堰",
+      "entityType": "地点/景区",
+      "region": "成都市"
+    },
+    {
+      "name": "九寨沟",
+      "entityType": "地点/景区",
+      "region": "阿坝藏族羌族自治州"
+    },
+    {
+      "name": "乐山大佛",
+      "entityType": "地点/景区",
+      "region": "乐山市"
+    },
+    {
+      "name": "碧峰峡",
+      "entityType": "地点/景区",
+      "region": "雅安市"
+    },
+    {
+      "name": "蜀南竹海",
+      "entityType": "地点/景区",
+      "region": "宜宾市"
+    },
+    {
+      "name": "阆中古城",
+      "entityType": "地点/景区",
+      "region": "南充市"
+    },
+    {
+      "name": "北川羌城",
+      "entityType": "地点/景区",
+      "region": "绵阳市"
+    },
+    {
+      "name": "剑门关",
+      "entityType": "地点/景区",
+      "region": "广元市"
+    },
+    {
+      "name": "光雾山",
+      "entityType": "地点/景区",
+      "region": "巴中市"
+    },
+    {
+      "name": "邓小平故里",
+      "entityType": "地点/景区",
+      "region": "广安市"
+    },
+    {
+      "name": "泸州老窖景区",
+      "entityType": "地点/景区",
+      "region": "泸州市"
+    },
+    {
+      "name": "三星堆博物馆",
+      "entityType": "地点/景区",
+      "region": "德阳市"
+    },
+    {
+      "name": "三苏祠",
+      "entityType": "地点/景区",
+      "region": "眉山市"
+    },
+    {
+      "name": "自贡恐龙博物馆",
+      "entityType": "地点/景区",
+      "region": "自贡市"
+    },
+    {
+      "name": "灵泉寺",
+      "entityType": "地点/景区",
+      "region": "遂宁市"
+    },
+    {
+      "name": "安岳石刻",
+      "entityType": "地点/景区",
+      "region": "资阳市"
+    },
+    {
+      "name": "邛海",
+      "entityType": "地点/景区",
+      "region": "凉山彝族自治州"
+    },
+    {
+      "name": "青城山",
+      "entityType": "地点/景区",
+      "region": "成都市"
+    },
+    {
+      "name": "黄龙",
+      "entityType": "地点/景区",
+      "region": "阿坝藏族羌族自治州"
+    },
+    {
+      "name": "峨眉山",
+      "entityType": "地点/景区",
+      "region": "乐山市"
+    },
+    {
+      "name": "蒙顶山",
+      "entityType": "地点/景区",
+      "region": "雅安市"
+    },
+    {
+      "name": "李庄古镇",
+      "entityType": "地点/景区",
+      "region": "宜宾市"
+    },
+    {
+      "name": "朱德故里",
+      "entityType": "地点/景区",
+      "region": "南充市"
+    },
+    {
+      "name": "翠云廊",
+      "entityType": "地点/景区",
+      "region": "广元市"
+    },
+    {
+      "name": "华蓥山",
+      "entityType": "地点/景区",
+      "region": "广安市"
+    },
+    {
+      "name": "德阳文庙",
+      "entityType": "地点/景区",
+      "region": "德阳市"
+    },
+    {
+      "name": "瓦屋山",
+      "entityType": "地点/景区",
+      "region": "眉山市"
+    },
+    {
+      "name": "隆昌石牌坊",
+      "entityType": "地点/景区",
+      "region": "内江市"
+    },
+    {
+      "name": "燊海井",
+      "entityType": "地点/景区",
+      "region": "自贡市"
+    },
+    {
+      "name": "二滩国家森林公园",
+      "entityType": "地点/景区",
+      "region": "攀枝花市"
+    },
+    {
+      "name": "广德寺",
+      "entityType": "地点/景区",
+      "region": "遂宁市"
+    },
+    {
+      "name": "陈毅故里",
+      "entityType": "地点/景区",
+      "region": "资阳市"
+    },
+    {
+      "name": "螺髻山",
+      "entityType": "地点/景区",
+      "region": "凉山彝族自治州"
+    },
+    {
+      "name": "武侯祠",
+      "entityType": "地点/景区",
+      "region": "成都市"
+    },
+    {
+      "name": "新都桥",
+      "entityType": "地点/景区",
+      "region": "甘孜藏族自治州"
+    },
+    {
+      "name": "黑竹沟",
+      "entityType": "地点/景区",
+      "region": "乐山市"
+    },
+    {
+      "name": "上里古镇",
+      "entityType": "地点/景区",
+      "region": "雅安市"
+    },
+    {
+      "name": "兴文石海",
+      "entityType": "地点/景区",
+      "region": "宜宾市"
+    },
+    {
+      "name": "凌云山",
+      "entityType": "地点/景区",
+      "region": "南充市"
+    },
+    {
+      "name": "窦圌山",
+      "entityType": "地点/景区",
+      "region": "绵阳市"
+    },
+    {
+      "name": "皇泽寺",
+      "entityType": "地点/景区",
+      "region": "广元市"
+    },
+    {
+      "name": "真佛山",
+      "entityType": "地点/景区",
+      "region": "达州市"
+    },
+    {
+      "name": "米仓山",
+      "entityType": "地点/景区",
+      "region": "巴中市"
+    },
+    {
+      "name": "宝箴塞",
+      "entityType": "地点/景区",
+      "region": "广安市"
+    },
+    {
+      "name": "黄荆老林",
+      "entityType": "地点/景区",
+      "region": "泸州市"
+    }
+  ],
+  "sourceTaskId": "旅行/地域/四川省/景区/景区精选",
+  "taskId": "旅行/地域/四川省/景区/四川50景区多模态并发验收预筛重跑"
+}

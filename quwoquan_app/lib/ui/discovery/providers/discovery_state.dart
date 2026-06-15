@@ -13,10 +13,8 @@ class DiscoveryUiState {
     this.isLoading = const <String, bool>{},
     this.errorMessages = const <String, String?>{},
     this.followingUsers = const {'nature_photographer', 'travel_photographer'},
-    this.savedPosts = const <String>{},
     this.likedPosts = const <String>{},
     this.postLikesCount = const <String, int>{},
-    this.postBookmarksCount = const <String, int>{},
     this.postSharesCount = const <String, int>{},
     this.stories = const <Story>[],
     this.isStoriesLoading = false,
@@ -31,10 +29,8 @@ class DiscoveryUiState {
   final Map<String, bool> isLoading;
   final Map<String, String?> errorMessages;
   final Set<String> followingUsers;
-  final Set<String> savedPosts;
   final Set<String> likedPosts;
   final Map<String, int> postLikesCount;
-  final Map<String, int> postBookmarksCount;
   final Map<String, int> postSharesCount;
   final List<Story> stories;
   final bool isStoriesLoading;
@@ -45,8 +41,6 @@ class DiscoveryUiState {
   /// 优先返回本地维护的展示数；未操作过时返回 0，由调用方用帖子原始数兜底
   int getPostLikesCount(String postId) => postLikesCount[postId] ?? 0;
 
-  int getPostBookmarksCount(String postId) => postBookmarksCount[postId] ?? 0;
-
   int getPostSharesCount(String postId) => postSharesCount[postId] ?? 0;
 
   DiscoveryUiState copyWith({
@@ -56,10 +50,8 @@ class DiscoveryUiState {
     Map<String, bool>? isLoading,
     Map<String, String?>? errorMessages,
     Set<String>? followingUsers,
-    Set<String>? savedPosts,
     Set<String>? likedPosts,
     Map<String, int>? postLikesCount,
-    Map<String, int>? postBookmarksCount,
     Map<String, int>? postSharesCount,
     List<Story>? stories,
     bool? isStoriesLoading,
@@ -75,10 +67,8 @@ class DiscoveryUiState {
       isLoading: isLoading ?? this.isLoading,
       errorMessages: errorMessages ?? this.errorMessages,
       followingUsers: followingUsers ?? this.followingUsers,
-      savedPosts: savedPosts ?? this.savedPosts,
       likedPosts: likedPosts ?? this.likedPosts,
       postLikesCount: postLikesCount ?? this.postLikesCount,
-      postBookmarksCount: postBookmarksCount ?? this.postBookmarksCount,
       postSharesCount: postSharesCount ?? this.postSharesCount,
       stories: stories ?? this.stories,
       isStoriesLoading: isStoriesLoading ?? this.isStoriesLoading,
@@ -173,39 +163,6 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
     state = state.copyWith(likedPosts: liked, postLikesCount: counts);
   }
 
-  /// [baseBookmarksCount] 帖子原始收藏数，首次收藏时用于与本地状态合并
-  void toggleSave(String postId, {int? baseBookmarksCount}) {
-    if (state.savedPosts.contains(postId)) {
-      final saved = Set<String>.from(state.savedPosts)..remove(postId);
-      final currentCount =
-          state.postBookmarksCount[postId] ?? baseBookmarksCount ?? 0;
-      final counts = Map<String, int>.from(state.postBookmarksCount)
-        ..[postId] = (currentCount - 1).clamp(0, double.infinity).toInt();
-      state = state.copyWith(savedPosts: saved, postBookmarksCount: counts);
-    } else {
-      final saved = {...state.savedPosts, postId};
-      final currentCount =
-          state.postBookmarksCount[postId] ?? baseBookmarksCount ?? 0;
-      final counts = Map<String, int>.from(state.postBookmarksCount)
-        ..[postId] = currentCount + 1;
-      state = state.copyWith(savedPosts: saved, postBookmarksCount: counts);
-    }
-  }
-
-  void setSaveState(String postId, bool isSaved, {int? bookmarkCount}) {
-    final saved = Set<String>.from(state.savedPosts);
-    final counts = Map<String, int>.from(state.postBookmarksCount);
-    if (isSaved) {
-      saved.add(postId);
-    } else {
-      saved.remove(postId);
-    }
-    if (bookmarkCount != null) {
-      counts[postId] = bookmarkCount;
-    }
-    state = state.copyWith(savedPosts: saved, postBookmarksCount: counts);
-  }
-
   void incrementShares(String postId) {
     final currentCount = state.postSharesCount[postId] ?? 0;
     final counts = Map<String, int>.from(state.postSharesCount)
@@ -223,10 +180,8 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
     final scopePostIds = result.effectiveScopePostIds;
     final scopeProfileIds = result.effectiveScopeProfileIds;
     final nextFollowing = Set<String>.from(state.followingUsers);
-    final nextSaved = Set<String>.from(state.savedPosts);
     final nextLiked = Set<String>.from(state.likedPosts);
     final nextLikeCounts = Map<String, int>.from(state.postLikesCount);
-    final nextBookmarkCounts = Map<String, int>.from(state.postBookmarksCount);
     final nextShareCounts = Map<String, int>.from(state.postSharesCount);
     for (final profileId in scopeProfileIds) {
       if (result.followingUsers.contains(profileId)) {
@@ -241,18 +196,9 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
       } else {
         nextLiked.remove(postId);
       }
-      if (result.savedPosts.contains(postId)) {
-        nextSaved.add(postId);
-      } else {
-        nextSaved.remove(postId);
-      }
       final likeCount = result.postLikesCount[postId];
       if (likeCount != null) {
         nextLikeCounts[postId] = likeCount;
-      }
-      final bookmarkCount = result.postBookmarksCount[postId];
-      if (bookmarkCount != null) {
-        nextBookmarkCounts[postId] = bookmarkCount;
       }
       final shareCount = result.postSharesCount[postId];
       if (shareCount != null) {
@@ -261,10 +207,8 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
     }
     state = state.copyWith(
       followingUsers: nextFollowing,
-      savedPosts: nextSaved,
       likedPosts: nextLiked,
       postLikesCount: nextLikeCounts,
-      postBookmarksCount: nextBookmarkCounts,
       postSharesCount: nextShareCounts,
     );
   }
@@ -318,6 +262,3 @@ final likedPostsProvider = Provider<Set<String>>((ref) {
   return ref.watch(discoveryStateProvider).likedPosts;
 });
 
-final savedPostsProvider = Provider<Set<String>>((ref) {
-  return ref.watch(discoveryStateProvider).savedPosts;
-});

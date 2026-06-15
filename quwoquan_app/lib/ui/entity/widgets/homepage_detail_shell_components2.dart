@@ -78,7 +78,7 @@ class _HomepagePreviewCover extends StatelessWidget {
     final fallback = DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.iosSecondaryFill(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
       ),
       child: Icon(
         icon,
@@ -88,7 +88,7 @@ class _HomepagePreviewCover extends StatelessWidget {
     );
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
       child: SizedBox(
         width: AppSpacing.oneHundred - AppSpacing.twentyEight,
         height: AppSpacing.oneHundred - AppSpacing.twentyEight,
@@ -127,7 +127,7 @@ class _HomepageEmptyState extends StatelessWidget {
             height: AppSpacing.buttonSize,
             decoration: BoxDecoration(
               color: AppColors.iosSecondaryFill(context),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
             ),
             child: Icon(
               icon,
@@ -193,7 +193,11 @@ class _HomepageBottomActionBar extends StatelessWidget {
         child: CupertinoButton.filled(
           key: TestKeys.homepageDetailAttachButton,
           onPressed: enabled ? onPressed : null,
-          child: Text(enabled ? '关联到本次发布' : '该主页待审核，暂不可操作'),
+          child: Text(
+            enabled
+                ? UITextConstants.homepageAttachPublishEnabled
+                : UITextConstants.homepageAttachPublishDisabled,
+          ),
         ),
       ),
     );
@@ -243,27 +247,6 @@ class _HomepagePrimaryTabSpec {
   final String label;
 }
 
-class _HomepageSummaryStats {
-  const _HomepageSummaryStats({
-    required this.averageRating,
-    required this.ratingCount,
-    required this.contentCount,
-    required this.relatedCount,
-  });
-
-  final double? averageRating;
-  final int ratingCount;
-  final int contentCount;
-  final int relatedCount;
-}
-
-class _HomepageSummaryChip {
-  const _HomepageSummaryChip({required this.label, this.accent = false});
-
-  final String label;
-  final bool accent;
-}
-
 enum _HomepageMoreAction { claim, maintain, report }
 
 String _statusLabel(String? status) {
@@ -309,13 +292,13 @@ String _claimLabel(String? claimStatus) {
 String _contentTypeLabel(String contentType) {
   switch (contentType.trim()) {
     case 'article':
-      return '长文';
+      return UITextConstants.homepageContentTypeArticle;
     case 'video':
-      return '视频';
+      return UITextConstants.homepageContentTypeVideo;
     case 'image':
-      return '图片';
+      return UITextConstants.homepageContentTypeImage;
     default:
-      return '内容';
+      return UITextConstants.homepageContentTypeDefault;
   }
 }
 
@@ -335,18 +318,18 @@ IconData _contentTypeIcon(String contentType) {
 String _typeLabel(String type) {
   switch (type.trim()) {
     case 'hotel':
-      return '酒店';
+      return UITextConstants.homepageTypeHotel;
     case 'restaurant':
-      return '餐厅';
+      return UITextConstants.homepageTypeRestaurant;
     case 'vehicle':
-      return '车型';
+      return UITextConstants.homepageTypeVehicle;
     case 'sight':
-      return '景点';
+      return UITextConstants.homepageTypeSight;
     case 'university':
-      return '大学';
+      return UITextConstants.homepageTypeUniversity;
     case 'travel_photo':
-      return '旅行摄影';
+      return UITextConstants.homepageTypeTravelPhoto;
     default:
-      return '主页';
+      return UITextConstants.homepageTypeDefault;
   }
 }

@@ -5,32 +5,26 @@ import 'package:quwoquan_app/core/test_keys.dart';
 /// 评论贴底工具栏（图一）。
 ///
 /// 左侧是圆角只读「说点什么…」输入条，点击触发统一评论输入浮层；右侧依次为
-/// 点赞、收藏、评论三组「图标 + 计数」。图标以本 app 现有 [CupertinoIcons] 为准。
+/// 点赞、评论两组「图标 + 计数」（内容只有 赞/评/转 三动作）。
 /// 计数由宿主从 `postInteractionStateProvider` / 评论数实时下发，工具栏只负责展示与回调。
 class CommentToolbar extends StatelessWidget {
   const CommentToolbar({
     super.key,
     required this.likeCount,
-    required this.favoriteCount,
     required this.commentCount,
     this.isLiked = false,
-    this.isFavorited = false,
     this.placeholder = UITextConstants.commentPlaceholder,
     this.onInputTap,
     this.onLikeTap,
-    this.onFavoriteTap,
     this.onCommentTap,
   });
 
   final int likeCount;
-  final int favoriteCount;
   final int commentCount;
   final bool isLiked;
-  final bool isFavorited;
   final String placeholder;
   final VoidCallback? onInputTap;
   final VoidCallback? onLikeTap;
-  final VoidCallback? onFavoriteTap;
   final VoidCallback? onCommentTap;
 
   @override
@@ -110,16 +104,6 @@ class CommentToolbar extends StatelessWidget {
             active: isLiked,
             activeColor: AppColors.error,
             onTap: onLikeTap,
-          ),
-          _CountAction(
-            buttonKey: TestKeys.commentToolbarFavoriteButton,
-            icon: isFavorited
-                ? CupertinoIcons.star_fill
-                : CupertinoIcons.star,
-            count: favoriteCount,
-            active: isFavorited,
-            activeColor: AppColors.warning,
-            onTap: onFavoriteTap,
           ),
           _CountAction(
             buttonKey: TestKeys.commentButton,

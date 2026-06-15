@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/governance/backfill_event",
+  "title": "Approved candidate backfill event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "eventType",
+    "candidateId",
+    "candidateKind",
+    "naturalKey",
+    "payload",
+    "sourceRefs",
+    "mentionIds",
+    "approvedBy",
+    "approvedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "quwoquan_data.governance_backfill_event/1"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^backfill_[0-9a-f]{24}$"
+    },
+    "eventType": {
+      "const": "governance.candidate.backfill_requested"
+    },
+    "candidateId": {
+      "type": "string",
+      "pattern": "^candidate_[0-9a-f]{24}$"
+    },
+    "candidateKind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "naturalKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payload": {
+      "type": "object"
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mentionIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^mention_[0-9a-f]{24}$"
+      }
+    },
+    "approvedBy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "approvedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from _common.base_draft import FIDELITY_MAX, FIDELITY_MIN
+from _common.content_object import require_title_hint
 from _common.quality_gates import WRITING_INTENTS
 from _common.style_catalog import opening_guidance
 
@@ -76,7 +78,22 @@ def _compact_condition_context(brief: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _compact_assets(assets: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    keep = ("assetId", "fileName", "caption", "kind", "role", "entityName", "sourcePath", "imageLayout")
+    keep = (
+        "assetId",
+        "fileName",
+        "caption",
+        "kind",
+        "role",
+        "entityName",
+        "sourcePath",
+        "imageLayout",
+        "sourceCollectionId",
+        "creator",
+        "collectionPageUrl",
+        "license",
+        "termsUrl",
+        "authorizationProof",
+    )
     rows: list[dict[str, Any]] = []
     for asset in assets:
         row = {key: asset.get(key) for key in keep if asset.get(key)}
@@ -108,6 +125,7 @@ def build_writing_pack(
     source_urls: Sequence[str],
     source_paths: Sequence[str],
 ) -> dict[str, Any]:
+    title = require_title_hint(brief, ref=ref)
     narrative = {
         "requireMotivation": bool((brief.get("openingTension") or {}).get("required", True)),
         "requireLike": bool((brief.get("explicitFeelings") or {}).get("requireLike", True)),
@@ -120,7 +138,7 @@ def build_writing_pack(
         "schemaVersion": "quwoquan_data.writing_pack",
         "ref": ref,
         "kind": kind,
-        "title": str(brief.get("titleHint") or ref),
+        "title": title,
         "byline": byline,
         "carrier": carrier,
         "publishLayout": publish_layout,
@@ -134,15 +152,22 @@ def build_writing_pack(
         "styleFamily": style_family,
         "evidencePoints": _evidence_points(evidence_bundle),
         "assets": _compact_assets(assets),
+        "sourceUrls": [str(x) for x in source_urls if x],
+        "sourcePaths": [str(x) for x in source_paths if x],
         "sopExampleRef": brief.get("sopExampleRef"),
         "writingIntent": brief.get("writingIntent"),
         "baseSourceRef": brief.get("baseSourceRef"),
+        "sourceUseMode": brief.get("sourceUseMode"),
         "bannedRegisterTerms": [str(x) for x in (brief.get("bannedRegisterTerms") or []) if x],
     }
 
 
 def _fmt_list(items: Sequence[str], bullet: str = "-") -> str:
     return "\n".join(f"{bullet} {x}" for x in items if x) or "（无）"
+
+
+def _base_fidelity_range_label() -> str:
+    return f"{int(FIDELITY_MIN * 100)}%~{int(FIDELITY_MAX * 100)}%"
 
 
 def render_prompt_md(pack: Mapping[str, Any]) -> str:
@@ -168,19 +193,28 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         )
     base = pack.get("baseSourceRef")
     base_text = str(pack.get("baseDraftText") or "")
+    source_use_mode = str(pack.get("sourceUseMode") or "factual_reference_only")
+    has_authorized_base = source_use_mode == "licensed_adaptation"
     if base:
-        lines.append(
-            f"- **主底稿来源**：以 `{base}`（见下方「## 底稿」）为基础做**适度加工（轻改）**——"
-            "保留其叙事顺序与结构，只做去语病/纠错别字/理顺语句/补证据/去版权与平台痕迹；"
-            "**与底稿相似度维持 70%~90%**：不得逐句搬运（≥90% 视为未去版权），也不得从零另写或换稿（≤70% 视为脱离底稿）。"
-            "其它来源只能补充事实证据，不得再当底稿。排版可适度优化。"
-        )
+        if has_authorized_base:
+            lines.append(
+                f"- **授权底稿来源**：`{base}` 可在许可范围内改编；保留事实和必要结构，"
+                f"贴合度控制在 {_base_fidelity_range_label()}，同时保留署名与授权快照。"
+            )
+        else:
+            lines.append(
+                f"- **事实参考来源**：`{base}` 仅用于提取可核验事实。必须独立组织结构和表达，"
+                "禁止复现连续长句、原文小标题和作者个人叙事。"
+            )
     banned = pack.get("bannedRegisterTerms") or []
     if banned:
         lines.append(f"- **禁用语域**：本主体禁止出现 {', '.join(banned)} 等错配语域词。")
     lines.append("")
-    if carrier == "gallery":
-        lines.append("- 载体=画报：以图为主、每图配一句自然小字说明；避免大空白；正文简短但仍要有真实感受。")
+    if carrier in ("image", "gallery"):
+        lines.append(
+            "- 载体=image：只提交同一来源集合的 1..20 张图片。标题可空且不超过 80 字；"
+            "整组配文可空且不超过 300 字。配文独立显示在图片浏览器底部，不得写成长文或与图片混排。"
+        )
     else:
         og = pack.get("openingGuidance") or opening_guidance(str(pack.get("styleFamily") or ""))
         opening_opts = og.get("openingStrategies") or []
@@ -189,6 +223,11 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
             for opt in opening_opts:
                 lines.append(f"  - `{opt.get('id')}`（{opt.get('label')}）：{opt.get('hint')}")
             lines.append("  按原文体裁与证据择一；若该默认体裁与原文体裁不符，可改选下方候选体裁，并在 draft_meta 写明最终 styleFamily 与 openingStrategy。")
+            lines.append(
+                "  首段必须直接体现所选策略：结论先行就用「先说结论/直接说/一句话」开头；"
+                "设问悬念就提出一个真实问题；场景沉浸就用具体时间、天气、动作或身体位置进入现场；"
+                "对比并置就明确写出两种选择/两类人/两个时刻。禁止使用「我在屏幕上看了无数遍/总怕亲眼一看不过如此」这类旧套路。"
+            )
         elif nc.get("requireMotivation"):
             lines.append("- 开篇写出**出发动机/心情铺垫**（为什么想去、出发前的犹豫或期待），不要一上来就罗列行程。")
         if nc.get("requireLike"):
@@ -199,9 +238,12 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         if nc.get("forbidStandaloneTips"):
             lines.append("- 注意事项**就地融入**叙述，禁止另起「实用信息/来源平台」清单块。")
         if base_text:
-            lines.append("- 以下方「## 底稿」为基底做**轻改**：遵从底稿的小标题与叙述顺序，再用证据点补全事实与细节；不要把多个来源平均拼接成模板化清单，也不要每篇都用相同章节套路。")
+            if has_authorized_base:
+                lines.append("- 以下方授权底稿为基底，在许可范围内改编并用其它证据补全事实。")
+            else:
+                lines.append("- 以下方事实参考材料核验信息，自行重组标题、章节和叙事顺序，禁止沿用原文结构。")
         else:
-            lines.append("- 以证据点里**信息最完整、最有现场感**的那条原文叙事线为基底做**适度加工**：遵从其观察顺序与思路，再用其它来源补全事实与细节；不要把多个来源平均拼接成模板化清单，也不要每篇都用相同章节套路。")
+            lines.append("- 综合证据点独立组织内容，不要把多个来源机械拼成清单，也不要每篇都用相同章节套路。")
     lines.append("- 信息必须来自下方素材；**禁止编造**票价/时长/海拔/里程等数字（拿不准就写区间或定性，别杜撰精确值）。")
     lines.append("- 禁止出现平台名/作者名/水印/来源痕迹；禁止逐句搬运素材原文（改写为自己的表达）。")
     lines.append(
@@ -209,23 +251,31 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         "或 source 证据中核实的景区官方接待电话。"
     )
     lines.append(
-        "- **小标题跟随底稿、避免机械清单标题**：禁止 `## 节点顺序` `## 实用信息` `## 注意事项` `## 门票信息` 这类纯功能清单标题；"
-        "底稿已有的小标题尽量沿用，确需调整时改写得自然、有视角即可，**不要套用任何统一的「推荐标题」模板**。"
+        "- **小标题自然、避免机械清单标题**：禁止 `## 节点顺序` `## 实用信息` `## 注意事项` `## 门票信息` 这类纯功能清单标题；"
+        "**不要套用统一标题模板，也不要复制普通网页的原标题或小标题**。"
     )
     forb = pack.get("forbiddenPhrases") or []
     if forb:
         lines.append(f"- 禁用词: {', '.join(forb)}")
     lines.append("")
     if base_text:
-        lines.append("## 底稿（在此基础上适度加工 / 轻改；与其相似度维持 70%~90%）")
+        heading = (
+            f"## 授权底稿（许可范围内改编；贴合度 {_base_fidelity_range_label()}）"
+            if has_authorized_base
+            else "## 事实参考材料（只取可核验事实，必须独立表达）"
+        )
+        lines.append(heading)
         lines.append("")
-        lines.append("> 保留底稿叙事顺序与结构，只做：去语病、纠错别字、理顺语句、补全可回溯证据、去版权与平台痕迹；排版可适度优化。禁止逐句搬运，也禁止从零另写。")
+        if has_authorized_base:
+            lines.append("> 在许可范围内加工，保留必要署名；禁止逐句搬运超出许可或掩盖来源。")
+        else:
+            lines.append("> 只抽取事实，独立拟定标题、结构和句子；不得模仿原作者叙事顺序或复现连续长句。")
         lines.append("")
         lines.append(base_text)
         lines.append("")
     og = pack.get("openingGuidance") or opening_guidance(str(pack.get("styleFamily") or ""))
     candidates = og.get("styleFamilyCandidates") or []
-    if candidates and carrier != "gallery":
+    if candidates and carrier not in ("image", "gallery"):
         lines.append("## 体裁候选（默认已按路由选定；仅当原文体裁明显更贴合另一种时改选，并在 draft_meta 写明）")
         lines.append("")
         for c in candidates:
@@ -251,6 +301,12 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     lines.append("")
     lines.append(_fmt_list(pack.get("mustIncludeFacts") or []))
     lines.append("")
+    source_paths = [str(x) for x in (pack.get("sourcePaths") or []) if x]
+    if source_paths:
+        lines.append("## 允许引用的来源路径")
+        lines.append("")
+        lines.append(_fmt_list(source_paths))
+        lines.append("")
     lines.append("## 章节意图（仅参考；结构以底稿为准，可自然调整，不要照抄为标题）")
     lines.append("")
     lines.append(_fmt_list(pack.get("sectionIntents") or []))
@@ -299,7 +355,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     lines.append("")
     lines.append("## 产出方式")
     lines.append("")
-    lines.append("- 把创作的正文写回同目录 `article.md`（覆盖占位）。")
+    lines.append("- 把创作的正文写回同目录 `draft.article.md`（覆盖占位）。")
     lines.append("- 在同目录 `draft_meta.json` 标注 generator=agent、model、styleFamily、openingStrategy（所选开篇策略 id）、引用了哪些 sourcePath、覆盖了哪些 fact。")
     lines.append("- 之后运行 `produce --stage review` 过门禁；**失败按 repair report 修改正文重跑（Ralph 自纠环），直到 ref_review_gate 全绿（approved）或超墙钟上限**；不得在未过门时宣称完成。")
     return "\n".join(lines) + "\n"

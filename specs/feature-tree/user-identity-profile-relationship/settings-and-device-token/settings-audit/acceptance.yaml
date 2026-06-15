@@ -46,8 +46,11 @@ gwt_acceptance:
       - quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
       - quwoquan_app/test/ui/user/widgets/persona_management_page_test.dart
       - quwoquan_app/test/ui/user/providers/persona_management_provider_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - make verify-app-auth-policy
+      - quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
+      - quwoquan_app/test/app/shell/web_auth_entry_contract_test.dart
+    status: partial
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

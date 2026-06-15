@@ -36,7 +36,6 @@ PSI_ALERT_THRESHOLD = 0.2
 MONITORED_FEATURES = [
     "engagementRate",
     "totalLikes",
-    "totalFavorites",
     "totalShares",
     "totalEvents",
     "avgEngagementDepth",

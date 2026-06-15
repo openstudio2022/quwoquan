@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
@@ -22,21 +23,25 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 /// 单行优先（`sm`），超出则两行紧凑（`xs` + 紧凑行高），必要时末尾省略。
 ///
 /// **关注**：固定接在作者名槽位之后；显隐用透明度与滑入动画，不移动右侧动作组。
+///
+/// **交集**：作者名下方第二行展示推荐解释入口（如「3 个交集 ›」），
+/// 点击触发 [onIntersectionTap] 弹出交集详情；为空时不渲染该行。
 class ImmersiveEngagementBar extends StatelessWidget {
   const ImmersiveEngagementBar({
     super.key,
     required this.avatarUrl,
     required this.displayName,
-    required this.circleName,
     required this.likeCount,
     required this.shareCount,
     required this.commentCount,
     required this.isLiked,
     required this.isFollowing,
     required this.onUserTap,
-    required this.onCircleTap,
     required this.onFollowTap,
     required this.onLikeTap,
+    this.authorBadge = '',
+    this.intersectionSummary = '',
+    this.onIntersectionTap,
     this.onCommentTap,
     this.onShareTap,
     this.onRevealSystemNav,
@@ -47,7 +52,13 @@ class ImmersiveEngagementBar extends StatelessWidget {
 
   final String avatarUrl;
   final String displayName;
-  final String circleName;
+
+  /// 作者认证角标（云侧快照字段，V1.0：头像 + 作者名 + 认证角标 + 关注）；
+  /// 空字符串不渲染。端侧只判空，不本地推断认证语义。
+  final String authorBadge;
+
+  /// 推荐解释摘要（如「3 个交集」）；空字符串不展示第二行。
+  final String intersectionSummary;
   final int likeCount;
   final int shareCount;
   final int commentCount;
@@ -58,7 +69,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final ImmersiveViewerStageLayoutSpec layoutSpec;
 
   final VoidCallback onUserTap;
-  final VoidCallback onCircleTap;
+  final VoidCallback? onIntersectionTap;
   final VoidCallback onFollowTap;
   final VoidCallback onLikeTap;
   final VoidCallback? onCommentTap;
@@ -222,6 +233,24 @@ class ImmersiveEngagementBar extends StatelessWidget {
       );
     }
 
+    // V1.0：作者认证角标紧跟作者名（云侧快照，空不渲染）。
+    if (authorBadge.trim().isNotEmpty) {
+      nameWidget = Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Flexible(child: nameWidget),
+          SizedBox(width: AppSpacing.intraGroupXs / 2),
+          Icon(
+            CupertinoIcons.checkmark_seal_fill,
+            key: const ValueKey('immersive-author-badge'),
+            size: AppTypography.sm,
+            color: AppColors.worksAccent,
+          ),
+        ],
+      );
+    }
+
     final nameColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -231,18 +260,32 @@ class ImmersiveEngagementBar extends StatelessWidget {
           width: nameSlotWidth,
           child: nameWidget,
         ),
-        if (circleName.isNotEmpty) ...[
+        if (intersectionSummary.isNotEmpty) ...[
           SizedBox(height: AppSpacing.intraGroupXs / 2),
           GestureDetector(
-            onTap: onCircleTap,
+            key: const ValueKey('immersive-intersection-entry'),
+            onTap: onIntersectionTap,
             behavior: HitTestBehavior.opaque,
             child: SizedBox(
               width: nameSlotWidth,
-              child: Text(
-                circleName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: secondaryStyle,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      intersectionSummary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: secondaryStyle,
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupXs / 2),
+                  Icon(
+                    CupertinoIcons.chevron_forward,
+                    size: AppTypography.xs,
+                    color: secondaryStyle.color,
+                  ),
+                ],
               ),
             ),
           ),

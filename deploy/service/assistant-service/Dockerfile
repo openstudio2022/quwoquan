@@ -22,7 +22,7 @@ FROM ${ALPINE_BASE_IMAGE}
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /assistant-service /usr/local/bin/assistant-service
-COPY contracts/metadata/ /app/contracts/metadata/
+COPY contracts/metadata/assistant/ /app/contracts/metadata/assistant/
 COPY services/assistant-service/configs/ /etc/assistant-service/
 EXPOSE 18087
 CMD ["assistant-service"]

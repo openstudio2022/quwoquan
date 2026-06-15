@@ -340,7 +340,7 @@ widget_scenarios:
 journey_scenarios:
   - name: discovery_to_detail_route_params
     dart_func: testDiscoveryToDetailRouteParams
-    description: DiscoveryPage → tap PhotoCard → PhotoDetailPage，GoRouter extra 传参正确
+    description: DiscoveryPage → tap PhotoCard → UnifiedMediaViewerPage，GoRouter extra 传参正确
     mock_config: {}
     fixture_seed: { contentType: image, id: "post_001", likeCount: 5 }
     steps:
@@ -348,7 +348,7 @@ journey_scenarios:
       - tap(find.byKey(TestKeys.photoPostCard).first)
       - pumpAndSettle()
     assertions:
-      - find.byType(PhotoDetailPage) findsOneWidget
+      - find.byType(UnifiedMediaViewerPage) findsOneWidget
       - current route extra.postId == "post_001"
 
   - name: like_optimistic_rollback_on_rate_limit
@@ -358,7 +358,7 @@ journey_scenarios:
       throwOnLike: RateLimitException()
     fixture_seed: { contentType: image, id: "post_001", likeCount: 10 }
     steps:
-      - navigate to PhotoDetailPage
+      - navigate to UnifiedMediaViewerPage
       - tap(find.byKey(TestKeys.likeButton))
       - pump() # 乐观更新可见
       - pumpAndSettle() # 异常处理完成
@@ -373,7 +373,7 @@ journey_scenarios:
     mock_config: {}
     fixture_seed: { contentType: image, id: "post_001", commentCount: 3 }
     steps:
-      - navigate to PhotoDetailPage
+      - navigate to UnifiedMediaViewerPage
       - tap(find.byKey(TestKeys.commentInputBar))
       - enterText("这张图真漂亮")
       - tap(find.byKey(TestKeys.submitCommentButton))

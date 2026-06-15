@@ -13,12 +13,16 @@ class ProfileHeader extends StatelessWidget {
     this.avatarUrl,
     this.displayName,
     this.bio,
+    this.identityTags = const <String>[],
   });
 
   final bool isDark;
   final String? avatarUrl;
   final String? displayName;
   final String? bio;
+
+  /// 主页单行身份标签（云侧 identityTags 直出，端以 · 分隔；与 bio 互补不重复）。
+  final List<String> identityTags;
 
   static const double avatarRadius = AppSpacing.xl;
   static const double _avatarBorder = AppSpacing.three;
@@ -66,6 +70,10 @@ class ProfileHeader extends StatelessWidget {
     final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final fg = AppColors.iosLabel(context);
     final fgSecondary = AppColors.iosSecondaryLabel(context);
+    final tags = identityTags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList(growable: false);
 
     return Stack(
       clipBehavior: Clip.none,
@@ -88,6 +96,20 @@ class ProfileHeader extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              if (tags.isNotEmpty) ...[
+                SizedBox(height: AppSpacing.intraGroupXs),
+                Text(
+                  key: const ValueKey<String>('profile-header-identity-tags'),
+                  tags.join(' · '),
+                  style: TextStyle(
+                    fontSize: AppTypography.iosFootnote,
+                    color: fgSecondary,
+                    letterSpacing: -0.08,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
               if (bio != null && bio!.isNotEmpty) ...[
                 SizedBox(height: AppSpacing.intraGroupXs),
                 Text(

@@ -139,9 +139,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
   void setSubTab(CreationSubTab tab) {
     state = state.copyWith(
       activeSubTab: tab,
-      activeWorkFormat: tab == CreationSubTab.work
-          ? state.activeWorkFormat
-          : CreationWorkFormat.all,
+      activeWorkFormat: CreationWorkFormat.all,
     );
   }
 

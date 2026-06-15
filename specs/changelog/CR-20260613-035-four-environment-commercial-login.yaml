@@ -1,0 +1,58 @@
+id: CR-20260613-035-four-environment-commercial-login
+title: 登录四环境商用化：外部依赖注入矩阵、gamma 受控放通与社交三方落地
+slug: four-environment-commercial-login
+revision: 1
+status: specified
+
+affected_nodes:
+  - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity
+  - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry
+
+entries:
+  - timestamp: "2026-06-13T18:05:00+08:00"
+    summary: |
+      将全部登录方式（手机号 OTP、运营商一键、微信/支付宝/QQ、匿名）收敛到统一"环境 × 外部依赖"注入矩阵：
+      三类外部依赖（短信 OTP、运营商置换、社交 OAuth）建立防腐接口与 mock/sandbox/real 分环境注入；
+      gamma 用 SandboxAllowlist 受控放通（沙箱号段/测试授权码），prod 严格无放通；新增 LoginWithAlipay/LoginWithQq
+      与社交错误码并 codegen；user-service 实现 LoginWithSocialProvider 票据置换与首登资料同步；端侧补 loginAlipay/
+      loginQq、NativeAuthBridge sandbox 注入、LoginPage 三方登录无死循环与 gamma 调试码受控回填。
+    reason: |
+      原 two-state 登录 Story 将社交 SDK 列为 Out of Scope，且 gamma 配置为完全严格、社交后端仅打桩，无法满足
+      "四环境可测、社交诚实完成、可商用发布"的目标。本 CR 在不引入第二套登录页/路由的前提下补齐社交与四环境矩阵，
+      并以门禁强制生产纯净。
+    change_type:
+      - extend
+      - governance
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md
+        sections:
+          - 功能说明
+          - 四环境 × 三类外部依赖矩阵（真相源）
+          - 验收标准
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/acceptance.yaml
+        sections:
+          - scope
+          - gwt_acceptance
+          - contract_acceptance
+          - execution
+      - path: quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+        sections:
+          - LoginWithAlipay
+          - LoginWithQq
+      - path: quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
+        sections:
+          - social provider 错误码
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: high
+      breaking_contract: false
+    notes:
+      - gamma 受控放通登记 TECHDEBT-LOGIN-SANDBOX-ALLOWLIST-GAMMA-001，到期清理。
+      - 支付宝/QQ prod 真实 OAuth 待凭证，登记 TECHDEBT-SOCIAL-PROD-OAUTH-ALIPAY-QQ-001；未配置时返回结构化 unavailable，绝不伪造成功。
+      - 一键登录 prod 真实运营商 resolver 待接入；过渡期返回结构化不可用，杜绝 dev 解码后门进入生产。

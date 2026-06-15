@@ -1,6 +1,12 @@
 {
   "version": 1,
   "totalBudgetSeconds": 900,
+  "modeScope": {
+    "prod-hosted": {
+      "supportedModes": [],
+      "notes": "prod-hosted currently remains gray rollout stage driven via stackctl deploy --target prod-hosted with service/image/config/step/SLO inputs; do not infer restart|rollout|cold-build commands for prod."
+    }
+  },
   "gates": {
     "02.service_pipeline": {
       "budgetSeconds": 180,
@@ -32,18 +38,6 @@
         "chat_avatar_api_probe": 90
       }
     },
-    "04.pre_release_gate_full": {
-      "budgetSeconds": 1500,
-      "criticalPath": "gamma_package_bundle + gamma_deploy_ecs_pre + gamma_environment_ready + max(gamma_api_contract, assistant_runtime_smoke, chat_avatar_api_probe)",
-      "phaseBudgetsSeconds": {
-        "gamma_package_bundle": 240,
-        "gamma_deploy_ecs_pre": 900,
-        "gamma_environment_ready": 120,
-        "gamma_api_contract": 180,
-        "assistant_runtime_smoke": 180,
-        "chat_avatar_api_probe": 120
-      }
-    },
     "05.app_env_device_matrix_pr": {
       "budgetSeconds": 30,
       "criticalPath": "summary_only_when_self_hosted_disabled_by_default_on_pr",
@@ -51,26 +45,13 @@
         "pr_default_skip": 30
       }
     },
-    "09.gamma_full_validation": {
-      "budgetSeconds": 2700,
-      "criticalPath": "deploy + readiness + max(api_contract, assistant_ui_semantic_smoke, chat_avatar_api_probe) + ui_full_profile",
-      "phaseBudgetsSeconds": {
-        "deploy": 900,
-        "gamma_environment_ready": 90,
-        "gamma_api_contract": 240,
-        "assistant_ui_semantic_smoke": 600,
-        "chat_avatar_api_probe": 180,
-        "ui_full_profile": 900
-      }
-    },
     "07.mainline_auto_prod": {
       "budgetSeconds": 900,
-      "criticalPath": "delivery_gate + alpha_stage + beta_device_matrix + gamma_hosted + prod_initial_checks + prod_full",
+      "criticalPath": "delivery_gate + alpha_stage + beta_device_matrix + prod_initial_checks + prod_full",
       "phaseBudgetsSeconds": {
         "delivery_gate": 240,
         "alpha_stage": 60,
         "beta_device_matrix": 180,
-        "gamma_hosted": 240,
         "prod_initial_checks": 90,
         "prod_full": 90
       }

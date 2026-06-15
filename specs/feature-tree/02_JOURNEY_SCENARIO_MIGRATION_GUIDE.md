@@ -29,7 +29,7 @@
 去向：
 
 - `L3_story/树内计划文档`
-- `L3_story/design.md`
+- 上层 `design.md`，或 `L3_story/spec.md` / `L3_story/acceptance.yaml`
 - `L3_story/acceptance.yaml`
 
 ### 从 `L3/树内任务文档` 移走

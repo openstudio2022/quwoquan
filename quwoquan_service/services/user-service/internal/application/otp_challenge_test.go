@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -68,7 +69,7 @@ func TestSendOtpPassThroughSkipsCodeCorrectnessOnlyWhenConfigured(t *testing.T) 
 			ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
 		}),
 	)
-	result, err := svc.SendOtp(context.Background(), "+8618013813909")
+	result, err := svc.SendOtp(context.Background(), "+8618013813909", "ios-test", "ios", "1.0.0", "test")
 	if err != nil {
 		t.Fatalf("send otp: %v", err)
 	}
@@ -87,6 +88,29 @@ func TestSendOtpPassThroughSkipsCodeCorrectnessOnlyWhenConfigured(t *testing.T) 
 	}
 }
 
+func TestSendOtpProviderFailureMapsStructuredError(t *testing.T) {
+	store := NewMemoryOtpChallengeStore()
+	svc := NewAuthService(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		WithOtpCodeStore(allowAllOtpRateLimiter{}),
+		WithOtpChallengeStore(store),
+		WithExternalInteractionClient(failingExternalClient{}),
+	)
+
+	_, err := svc.SendOtp(context.Background(), "+8618013813909", "ios-test", "ios", "1.0.0", "test")
+	if err == nil {
+		t.Fatal("expected provider failure")
+	}
+	if !strings.Contains(err.Error(), "USER.AUTH.otp_provider_failed") {
+		t.Fatalf("expected otp_provider_failed, got %v", err)
+	}
+}
+
 func TestOtpDebugRevealDoesNotSkipCodeCorrectness(t *testing.T) {
 	store := NewMemoryOtpChallengeStore()
 	svc := NewAuthService(
@@ -101,7 +125,7 @@ func TestOtpDebugRevealDoesNotSkipCodeCorrectness(t *testing.T) {
 		WithExternalInteractionClient(acceptedExternalClient{}),
 		WithOtpDebugReveal(true),
 	)
-	result, err := svc.SendOtp(context.Background(), "+8618013813909")
+	result, err := svc.SendOtp(context.Background(), "+8618013813909", "ios-test", "ios", "1.0.0", "test")
 	if err != nil {
 		t.Fatalf("send otp: %v", err)
 	}

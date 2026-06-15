@@ -30,6 +30,7 @@ class HomepageCanonicalReference {
     this.subtitle,
     this.coverUrl,
     this.status,
+    this.canonicalEntityId,
   });
 
   final String id;
@@ -38,6 +39,7 @@ class HomepageCanonicalReference {
   final String? subtitle;
   final String? coverUrl;
   final String? status;
+  final String? canonicalEntityId;
 
   static HomepageCanonicalReference? fromOptionalMap(
     Map<String, dynamic>? map,
@@ -64,6 +66,9 @@ class HomepageCanonicalReference {
       status: (map['status'] ?? '').toString().trim().isEmpty
           ? null
           : (map['status'] ?? '').toString().trim(),
+      canonicalEntityId: HomepageWireCodec.optionalTrimmedString(
+        map['canonicalEntityId'],
+      ),
     );
   }
 
@@ -76,6 +81,8 @@ class HomepageCanonicalReference {
         if (subtitle != null && subtitle!.isNotEmpty) 'subtitle': subtitle,
         if (coverUrl != null && coverUrl!.isNotEmpty) 'coverUrl': coverUrl,
         if (status != null && status!.isNotEmpty) 'status': status,
+        if (canonicalEntityId != null && canonicalEntityId!.isNotEmpty)
+          'canonicalEntityId': canonicalEntityId,
       },
     };
   }
@@ -88,6 +95,7 @@ class HomepageCanonicalReference {
       'subtitle': subtitle,
       'coverUrl': coverUrl,
       'status': status,
+      'canonicalEntityId': canonicalEntityId,
     };
   }
 
@@ -99,6 +107,7 @@ class HomepageCanonicalReference {
       subtitle: subtitle,
       coverUrl: coverUrl,
       status: status,
+      canonicalEntityId: canonicalEntityId,
     );
   }
 }
@@ -111,6 +120,7 @@ class HomepageSummary extends HomepageCanonicalReference {
     super.subtitle,
     super.coverUrl,
     super.status,
+    super.canonicalEntityId,
     this.city,
     this.address,
     this.averageRating,
@@ -132,6 +142,9 @@ class HomepageSummary extends HomepageCanonicalReference {
       subtitle: HomepageWireCodec.optionalTrimmedString(map['subtitle']),
       coverUrl: HomepageWireCodec.optionalTrimmedString(map['coverUrl']),
       status: HomepageWireCodec.optionalTrimmedString(map['status']),
+      canonicalEntityId: HomepageWireCodec.optionalTrimmedString(
+        map['canonicalEntityId'],
+      ),
       city: HomepageWireCodec.optionalTrimmedString(map['city']),
       address: HomepageWireCodec.optionalTrimmedString(map['address']),
       averageRating: HomepageWireCodec.optionalDouble(map['averageRating']),
@@ -148,6 +161,7 @@ class HomepageSummary extends HomepageCanonicalReference {
       subtitle: detail.subtitle,
       coverUrl: detail.coverUrl,
       status: detail.status,
+      canonicalEntityId: detail.canonicalEntityId,
       city: detail.city,
       address: detail.address,
       averageRating: detail.averageRating,
@@ -164,6 +178,7 @@ class HomepageDetail extends HomepageCanonicalReference {
     super.subtitle,
     super.coverUrl,
     super.status,
+    super.canonicalEntityId,
     this.sourceType,
     this.claimStatus,
     this.categoryTags = const <String>[],
@@ -171,6 +186,9 @@ class HomepageDetail extends HomepageCanonicalReference {
     this.city,
     this.location,
     this.ownerUserId,
+    this.ownerSubAccountId,
+    this.viewerFollowsHomepage = false,
+    this.followerCount = 0,
     this.averageRating,
     this.ratingCount = 0,
     this.reviewSummary,
@@ -190,6 +208,9 @@ class HomepageDetail extends HomepageCanonicalReference {
   final String? city;
   final HomepageGeoPoint? location;
   final String? ownerUserId;
+  final String? ownerSubAccountId;
+  final bool viewerFollowsHomepage;
+  final int followerCount;
   final double? averageRating;
   final int ratingCount;
   final HomepageReviewSummaryData? reviewSummary;
@@ -213,6 +234,9 @@ class HomepageDetail extends HomepageCanonicalReference {
       status: HomepageWireCodec.optionalTrimmedString(map['status']),
       sourceType: HomepageWireCodec.optionalTrimmedString(map['sourceType']),
       claimStatus: HomepageWireCodec.optionalTrimmedString(map['claimStatus']),
+      canonicalEntityId: HomepageWireCodec.optionalTrimmedString(
+        map['canonicalEntityId'],
+      ),
       categoryTags:
           (map['categoryTags'] as List?)
               ?.map((item) => item.toString())
@@ -223,20 +247,23 @@ class HomepageDetail extends HomepageCanonicalReference {
       location: () {
         final loc = map['location'];
         return loc is Map
-            ? HomepageGeoPoint.fromMap(
-                Map<String, dynamic>.from(loc),
-              )
+            ? HomepageGeoPoint.fromMap(Map<String, dynamic>.from(loc))
             : null;
       }(),
       ownerUserId: HomepageWireCodec.optionalTrimmedString(map['ownerUserId']),
+      ownerSubAccountId: HomepageWireCodec.optionalTrimmedString(
+        map['ownerSubAccountId'],
+      ),
+      viewerFollowsHomepage:
+          map['viewerFollowsHomepage'] == true ||
+          map['viewerFollowsHomepage']?.toString() == 'true',
+      followerCount: (map['followerCount'] as num?)?.toInt() ?? 0,
       averageRating: HomepageWireCodec.optionalDouble(map['averageRating']),
       ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
       reviewSummary: () {
         final rs = map['reviewSummary'];
         return rs is Map
-            ? HomepageReviewSummaryData.fromMap(
-                Map<String, dynamic>.from(rs),
-              )
+            ? HomepageReviewSummaryData.fromMap(Map<String, dynamic>.from(rs))
             : null;
       }(),
       contentPreview: HomepageWireCodec.mapList(
@@ -268,11 +295,15 @@ class HomepageDetail extends HomepageCanonicalReference {
     String? status,
     String? sourceType,
     String? claimStatus,
+    String? canonicalEntityId,
     List<String>? categoryTags,
     String? address,
     String? city,
     HomepageGeoPoint? location,
     String? ownerUserId,
+    String? ownerSubAccountId,
+    bool? viewerFollowsHomepage,
+    int? followerCount,
     double? averageRating,
     int? ratingCount,
     HomepageReviewSummaryData? reviewSummary,
@@ -293,11 +324,16 @@ class HomepageDetail extends HomepageCanonicalReference {
       status: status ?? this.status,
       sourceType: sourceType ?? this.sourceType,
       claimStatus: claimStatus ?? this.claimStatus,
+      canonicalEntityId: canonicalEntityId ?? this.canonicalEntityId,
       categoryTags: categoryTags ?? this.categoryTags,
       address: address ?? this.address,
       city: city ?? this.city,
       location: location ?? this.location,
       ownerUserId: ownerUserId ?? this.ownerUserId,
+      ownerSubAccountId: ownerSubAccountId ?? this.ownerSubAccountId,
+      viewerFollowsHomepage:
+          viewerFollowsHomepage ?? this.viewerFollowsHomepage,
+      followerCount: followerCount ?? this.followerCount,
       averageRating: averageRating ?? this.averageRating,
       ratingCount: ratingCount ?? this.ratingCount,
       reviewSummary: reviewSummary ?? this.reviewSummary,
@@ -329,13 +365,13 @@ class HomepageShellData {
 
   factory HomepageShellData.fromMap(Map<String, dynamic> map) {
     return HomepageShellData(
-      homepage: HomepageDetail.fromMap(HomepageWireCodec.stringKeyMapOrEmpty(map['homepage'])),
+      homepage: HomepageDetail.fromMap(
+        HomepageWireCodec.stringKeyMapOrEmpty(map['homepage']),
+      ),
       reviewSummary: () {
         final rs = map['reviewSummary'];
         return rs is Map
-            ? HomepageReviewSummaryData.fromMap(
-                Map<String, dynamic>.from(rs),
-              )
+            ? HomepageReviewSummaryData.fromMap(Map<String, dynamic>.from(rs))
             : null;
       }(),
       contentPreview: HomepageWireCodec.mapList(

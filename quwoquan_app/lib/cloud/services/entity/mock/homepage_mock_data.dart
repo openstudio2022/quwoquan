@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 
-/// Mock 侧共享主页种子（强类型，与 `fields.yaml` / [HomepageDetail.fromMap] 字段一致）。
+/// Mock 侧主页种子（强类型，与 `fields.yaml` / [HomepageDetail.fromMap] 字段一致）。
 /// 运行时应通过 [cloneHomepageSeeds] 深拷贝后再写入 [MockHomepageRepository]，避免与静态表共享嵌套引用。
 class HomepageMockData {
   const HomepageMockData._();
@@ -14,14 +14,19 @@ class HomepageMockData {
   /// 只读模板（勿直接变异；用于测试取首条等场景）。
   static final List<HomepageDetail> homepageDetailTemplates = <HomepageDetail>[
     _westLakeDetail,
-    _bambooInnDetail,
     _nightMarketDetail,
-    _vehicleCandidateDetail,
     _campusHomepage('fixture_homepage_university_pku', '北京大学', '北京'),
     _campusHomepage('fixture_homepage_university_tsinghua', '清华大学', '北京'),
     _campusHomepage('fixture_homepage_university_fudan', '复旦大学', '上海'),
     _campusHomepage('fixture_homepage_university_zju', '浙江大学', '杭州'),
     _campusHomepage('fixture_homepage_university_nju', '南京大学', '南京'),
+    _sightHomepage('homepage_sight_emeishan', '峨眉山', '乐山', '世界遗产与川西南山地旅行代表目的地'),
+    _sightHomepage(
+      'homepage_sight_leshan_giant_buddha',
+      '乐山大佛',
+      '乐山',
+      '岷江、青衣江、大渡河交汇处的石刻造像与城市地标',
+    ),
     _travelPhotoHomepage(
       'fixture_homepage_travel_photo_west_lake',
       '西湖旅行摄影机位',
@@ -92,7 +97,7 @@ class HomepageMockData {
     relatedGroups: <HomepageRelatedGroupSummary>[
       HomepageRelatedGroupSummary(
         circleId: 'west_lake_circle_1',
-        name: '西湖散步兴趣群',
+        name: '西湖散步讨论',
         memberCount: 146,
         linkedHomepageId: 'homepage_sight_west_lake',
         linkedHomepageTitle: '西湖景区',
@@ -101,63 +106,6 @@ class HomepageMockData {
     createdAt: _dt('2026-03-20T10:00:00.000Z'),
     updatedAt: _dt('2026-03-24T08:30:00.000Z'),
     publishedAt: _dt('2026-03-21T10:00:00.000Z'),
-  );
-
-  static final HomepageDetail _bambooInnDetail = HomepageDetail(
-    id: 'homepage_hotel_bamboo_inn',
-    homepageType: 'hotel',
-    title: '竹隐民宿',
-    subtitle: '近景区山景庭院房',
-    coverUrl: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85',
-    status: 'published',
-    sourceType: 'owner_created',
-    claimStatus: 'claimed',
-    categoryTags: const <String>['民宿', '山景', '亲子'],
-    address: '浙江省杭州市西湖区龙井路 18 号',
-    city: '杭州',
-    location: HomepageGeoPoint(latitude: 30.2250, longitude: 120.1160),
-    ownerUserId: 'owner_bamboo',
-    averageRating: 4.5,
-    ratingCount: 96,
-    reviewSummary: HomepageReviewSummaryData(
-      averageRating: 4.5,
-      ratingCount: 96,
-      highlightTags: const <String>['安静', '早餐好评', '老板热情'],
-      dimensionScores: <HomepageReviewDimensionScore>[
-        HomepageReviewDimensionScore(label: '环境', score: 4.7),
-        HomepageReviewDimensionScore(label: '服务', score: 4.6),
-        HomepageReviewDimensionScore(label: '交通', score: 4.1),
-      ],
-    ),
-    contentPreview: <HomepageContentPreview>[
-      HomepageContentPreview(
-        postId: 'bamboo_inn_post_1',
-        title: '竹隐民宿入住体验',
-        summary: '适合两晚慢住，安静度很高。',
-        contentType: 'article',
-        coverUrl:
-            'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85',
-      ),
-    ],
-    questionPreview: <HomepageQuestionPreview>[
-      HomepageQuestionPreview(
-        postId: 'bamboo_inn_question_1',
-        title: '家庭出游适合订哪种房型？',
-        summary: '问答和内容在同一主页上下文里收敛。',
-      ),
-    ],
-    relatedGroups: <HomepageRelatedGroupSummary>[
-      HomepageRelatedGroupSummary(
-        circleId: 'bamboo_inn_circle_1',
-        name: '杭州民宿体验交流',
-        memberCount: 82,
-        linkedHomepageId: 'homepage_hotel_bamboo_inn',
-        linkedHomepageTitle: '竹隐民宿',
-      ),
-    ],
-    createdAt: _dt('2026-03-18T10:00:00.000Z'),
-    updatedAt: _dt('2026-03-24T09:00:00.000Z'),
-    publishedAt: _dt('2026-03-19T10:00:00.000Z'),
   );
 
   static final HomepageDetail _nightMarketDetail = HomepageDetail(
@@ -214,21 +162,6 @@ class HomepageMockData {
     createdAt: _dt('2026-03-16T10:00:00.000Z'),
     updatedAt: _dt('2026-03-24T09:30:00.000Z'),
     publishedAt: _dt('2026-03-17T10:00:00.000Z'),
-  );
-
-  static final HomepageDetail _vehicleCandidateDetail = HomepageDetail(
-    id: 'homepage_vehicle_modelx_candidate',
-    homepageType: 'vehicle',
-    title: 'Model X 2026 款',
-    subtitle: '纯电中大型 SUV 候选主页',
-    coverUrl: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8',
-    status: 'candidate',
-    sourceType: 'user_suggested',
-    claimStatus: 'unclaimed',
-    categoryTags: const <String>['汽车', '新能源'],
-    city: '上海',
-    createdAt: _dt('2026-03-24T04:00:00.000Z'),
-    updatedAt: _dt('2026-03-24T04:00:00.000Z'),
   );
 }
 
@@ -292,6 +225,67 @@ HomepageDetail _travelPhotoHomepage(String id, String title, String city) {
         circleId: '${id}_circle_001',
         name: '$title 兴趣圈',
         memberCount: 480,
+        linkedHomepageId: id,
+        linkedHomepageTitle: title,
+      ),
+    ],
+    createdAt: _dt('2026-05-01T00:00:00.000Z'),
+    updatedAt: _dt('2026-05-01T00:00:00.000Z'),
+    publishedAt: _dt('2026-05-01T00:00:00.000Z'),
+  );
+}
+
+HomepageDetail _sightHomepage(
+  String id,
+  String title,
+  String city,
+  String subtitle,
+) {
+  return HomepageDetail(
+    id: id,
+    homepageType: 'sight',
+    title: title,
+    subtitle: subtitle,
+    coverUrl: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
+    status: 'published',
+    sourceType: 'data_pipeline_seed',
+    claimStatus: 'unclaimed',
+    categoryTags: <String>['旅行', '景区', city],
+    city: city,
+    averageRating: 4.8,
+    ratingCount: 327,
+    reviewSummary: HomepageReviewSummaryData(
+      averageRating: 4.8,
+      ratingCount: 327,
+      highlightTags: <String>['适合攻略', '适合摄影', '同城讨论多'],
+      dimensionScores: <HomepageReviewDimensionScore>[
+        HomepageReviewDimensionScore(label: '景观', score: 4.9),
+        HomepageReviewDimensionScore(label: '交通', score: 4.4),
+        HomepageReviewDimensionScore(label: '内容丰富度', score: 4.7),
+      ],
+    ),
+    contentPreview: <HomepageContentPreview>[
+      HomepageContentPreview(
+        postId: '${id}_post_001',
+        title: '$title 攻略与真实体验',
+        summary: '承接数据工程生产的实体主页、内容攻略和关联讨论。',
+        contentType: 'article',
+        coverUrl:
+            'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
+      ),
+    ],
+    questionPreview: <HomepageQuestionPreview>[
+      HomepageQuestionPreview(
+        postId: '${id}_question_001',
+        title: '第一次去$title，路线和时间怎么安排？',
+        summary: '主页沉淀用户围绕同一地点的问答。',
+      ),
+    ],
+    relatedGroups: <HomepageRelatedGroupSummary>[
+      HomepageRelatedGroupSummary(
+        circleId: '${id}_circle_001',
+        name: '$title 兴趣圈',
+        memberCount: 327,
         linkedHomepageId: id,
         linkedHomepageTitle: title,
       ),

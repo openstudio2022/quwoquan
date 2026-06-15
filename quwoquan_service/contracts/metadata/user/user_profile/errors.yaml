@@ -132,6 +132,29 @@ errors:
       zh: "验证码错误，请重新输入"
       en: "Incorrect verification code, please try again"
 
+  - code: USER.AUTH.otp_rate_limited
+    kind: AUTH
+    reason: rate_limited
+    http_status: 429
+    recovery_action: retry
+    recovery_after_seconds: 60
+    dart_const: otpRateLimited
+    go_const: ErrOtpRateLimited
+    user_message:
+      zh: "发送过于频繁，请稍后再试"
+      en: "Verification code requests are too frequent, please retry later"
+
+  - code: USER.AUTH.otp_provider_failed
+    kind: AUTH
+    reason: third_party_failure
+    http_status: 502
+    recovery_action: retry
+    dart_const: otpProviderFailed
+    go_const: ErrOtpProviderFailed
+    user_message:
+      zh: "验证码发送失败，请重试或换其它方式"
+      en: "Failed to send verification code, please retry or use another method"
+
   - code: USER.AUTH.credential_conflict
     kind: AUTH
     reason: conflict
@@ -177,6 +200,50 @@ errors:
       zh: "微信授权失败，请重试"
       en: "WeChat authorization failed, please try again"
 
+  - code: USER.AUTH.alipay_auth_failed
+    kind: AUTH
+    reason: third_party_failure
+    http_status: 502
+    recovery_action: retry
+    dart_const: alipayAuthFailed
+    go_const: ErrAlipayAuthFailed
+    user_message:
+      zh: "支付宝授权失败，请重试"
+      en: "Alipay authorization failed, please try again"
+
+  - code: USER.AUTH.qq_auth_failed
+    kind: AUTH
+    reason: third_party_failure
+    http_status: 502
+    recovery_action: retry
+    dart_const: qqAuthFailed
+    go_const: ErrQqAuthFailed
+    user_message:
+      zh: "QQ 授权失败，请重试"
+      en: "QQ authorization failed, please try again"
+
+  - code: USER.AUTH.social_provider_cancelled
+    kind: AUTH
+    reason: cancelled
+    http_status: 400
+    recovery_action: surface
+    dart_const: socialProviderCancelled
+    go_const: ErrSocialProviderCancelled
+    user_message:
+      zh: "已取消第三方授权"
+      en: "Third-party authorization was cancelled"
+
+  - code: USER.AUTH.social_provider_unavailable
+    kind: AUTH
+    reason: third_party_unavailable
+    http_status: 503
+    recovery_action: surface
+    dart_const: socialProviderUnavailable
+    go_const: ErrSocialProviderUnavailable
+    user_message:
+      zh: "第三方登录暂不可用，请改用其他方式"
+      en: "Third-party login is unavailable, please use another method"
+
   - code: USER.AUTH.apple_auth_failed
     kind: AUTH
     reason: third_party_failure
@@ -209,6 +276,83 @@ errors:
     user_message:
       zh: "登录已过期，请重新登录"
       en: "Session expired, please sign in again"
+
+  - code: USER.AUTH.carrier_unavailable
+    kind: AUTH
+    reason: third_party_unavailable
+    http_status: 503
+    recovery_action: surface
+    dart_const: carrierUnavailable
+    go_const: ErrCarrierUnavailable
+    user_message:
+      zh: "本机号码一键登录暂不可用，请改用其他方式"
+      en: "Carrier one-tap login is unavailable, please use another method"
+
+  - code: USER.AUTH.carrier_token_invalid
+    kind: AUTH
+    reason: invalid_token
+    http_status: 400
+    recovery_action: retry
+    dart_const: carrierTokenInvalid
+    go_const: ErrCarrierTokenInvalid
+    user_message:
+      zh: "本机号码授权已失效，请重试"
+      en: "Carrier authorization expired, please try again"
+
+  - code: USER.AUTH.carrier_provider_timeout
+    kind: AUTH
+    reason: upstream_timeout
+    http_status: 504
+    recovery_action: retry
+    dart_const: carrierProviderTimeout
+    go_const: ErrCarrierProviderTimeout
+    user_message:
+      zh: "本机号码校验超时，请稍后重试或改用其他方式"
+      en: "Carrier verification timed out, please retry or use another method"
+
+  - code: USER.AUTH.carrier_phone_mismatch
+    kind: AUTH
+    reason: conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: carrierPhoneMismatch
+    go_const: ErrCarrierPhoneMismatch
+    user_message:
+      zh: "本机号码与上次账号不一致，请选择其他登录方式"
+      en: "Carrier phone does not match the remembered account, please use another method"
+
+  - code: USER.AUTH.consent_required
+    kind: AUTH
+    reason: consent_required
+    http_status: 400
+    recovery_action: surface
+    dart_const: consentRequired
+    go_const: ErrConsentRequired
+    user_message:
+      zh: "请先阅读并同意用户协议与隐私政策"
+      en: "Please agree to the user agreement and privacy policy first"
+
+  - code: USER.AUTH.account_suspended
+    kind: AUTH
+    reason: suspended
+    http_status: 403
+    recovery_action: surface
+    dart_const: accountSuspended
+    go_const: ErrAccountSuspended
+    user_message:
+      zh: "账号已被限制登录，请按页面提示处理"
+      en: "This account is currently restricted"
+
+  - code: USER.AUTH.account_deleted
+    kind: AUTH
+    reason: deleted
+    http_status: 410
+    recovery_action: surface
+    dart_const: accountDeleted
+    go_const: ErrAccountDeleted
+    user_message:
+      zh: "账号已注销或进入删除流程，无法直接登录"
+      en: "This account has been deleted or is being deleted"
 
   # ── 子账号错误 ─────────────────────────────────────────────────────────────
 

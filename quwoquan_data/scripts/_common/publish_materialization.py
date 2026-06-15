@@ -9,16 +9,19 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from _common.entity_object import collect_task_entity_objects
 from _common.io import read_json, write_ndjson
-from _common.paths import batch_post_roots, task_data, task_entities, task_root, task_tags
+from _common.paths import batch_post_roots, task_entities, task_root, task_tags
 
 
-def _entity_row(entity_dir: Path, task_id: str) -> dict[str, Any] | None:
+def _entity_row(entity_dir: Path, task_id: str, *, entity_rel: str) -> dict[str, Any] | None:
     entity_json = entity_dir / "_entity.json"
     if not entity_json.is_file():
         return None
     data = read_json(entity_json)
-    parts = entity_dir.relative_to(task_data(task_id).entities_dir()).parts
+    parts = Path(entity_rel).parts
+    if parts and parts[0] == "entities":
+        parts = parts[1:]
     if len(parts) < 3:
         return None
     domain, etype = parts[0], parts[1]
@@ -53,28 +56,30 @@ def _candidate_batches(task_id: str, batch_id: str) -> list[str]:
 
 def _collect_task_publish_inputs(task_id: str, batch_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:
     """聚合任务级 publish 输入，不决定落盘位置。"""
-    entities_dir = task_data(task_id).entities_dir()
-
     entity_rows: list[dict[str, Any]] = []
     tag_counts: Counter[str] = Counter()
     graph_rows: list[dict[str, Any]] = []
 
-    if entities_dir.is_dir():
-        for entity_json in sorted(entities_dir.rglob("_entity.json")):
-            row = _entity_row(entity_json.parent, task_id)
-            if not row:
-                continue
-            entity_rows.append(row)
-            for tag in row["tagRefs"]:
-                tag_counts[tag] += 1
-                graph_rows.append(
-                    {
-                        "source": row["entityRef"],
-                        "target": tag,
-                        "kind": "entity-tag",
-                        "weight": 1,
-                    }
-                )
+    for item in collect_task_entity_objects(
+        task_id,
+        batch_id=batch_id,
+        include_task_mirror_fallback=True,
+        enforce_type_consistency=True,
+    ):
+        row = _entity_row(Path(item["entityDir"]), task_id, entity_rel=str(item["entityRel"]))
+        if not row:
+            continue
+        entity_rows.append(row)
+        for tag in row["tagRefs"]:
+            tag_counts[tag] += 1
+            graph_rows.append(
+                {
+                    "source": row["entityRef"],
+                    "target": tag,
+                    "kind": "entity-tag",
+                    "weight": 1,
+                }
+            )
 
     post_tag_counts: Counter[str] = Counter()
     post_count = 0

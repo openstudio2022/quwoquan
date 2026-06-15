@@ -182,264 +182,71 @@ ArticleTemplatePalette resolveArticlePaperPalette(
   BuildContext context,
   ArticlePaperTexture texture,
 ) {
-  final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-
-  Color paper(Color light, Color dark) => isDark ? dark : light;
-  Color text(Color light, Color dark) => isDark ? dark : light;
-
   switch (texture) {
-    case ArticlePaperTexture.white:
+    case ArticlePaperTexture.darkPaper:
       return ArticleTemplatePalette(
-        stageBackground: paper(
-          ArticlePaperPaletteColors.whiteStageLight,
-          ArticlePaperPaletteColors.whiteStageDark,
-        ),
-        paperColor: paper(
-          ArticlePaperPaletteColors.whitePaperLight,
-          ArticlePaperPaletteColors.whitePaperDark,
-        ),
-        paperBorderColor: paper(
-          ArticlePaperPaletteColors.whitePaperBorderLight,
-          ArticlePaperPaletteColors.whitePaperBorderDark,
-        ),
-        textColor: text(
-          ArticlePaperPaletteColors.whiteTextLight,
-          ArticlePaperPaletteColors.whiteTextDark,
-        ),
-        secondaryTextColor: text(
-          ArticlePaperPaletteColors.whiteSecondaryTextLight,
-          ArticlePaperPaletteColors.whiteSecondaryTextDark,
-        ),
-        accentColor: text(
-          ArticlePaperPaletteColors.whiteAccentLight,
-          ArticlePaperPaletteColors.whiteAccentDark,
-        ),
-        badgeBackground: paper(
-          ArticlePaperPaletteColors.whiteBadgeBackgroundLight,
-          ArticlePaperPaletteColors.whiteBadgeBackgroundDark,
-        ),
-        badgeTextColor: text(
-          ArticlePaperPaletteColors.whiteBadgeTextLight,
-          ArticlePaperPaletteColors.whiteBadgeTextDark,
-        ),
-        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.08),
-        overlayColor: paper(
-          ArticlePaperPaletteColors.whiteOverlayLight,
-          ArticlePaperPaletteColors.whiteOverlayDark,
-        ),
-      );
-    case ArticlePaperTexture.cream:
-      return ArticleTemplatePalette(
-        stageBackground: paper(
-          ArticlePaperPaletteColors.creamStageLight,
-          ArticlePaperPaletteColors.creamStageDark,
-        ),
-        paperColor: paper(
-          ArticlePaperPaletteColors.creamPaperLight,
-          ArticlePaperPaletteColors.creamPaperDark,
-        ),
-        paperBorderColor: paper(
-          ArticlePaperPaletteColors.creamPaperBorderLight,
-          ArticlePaperPaletteColors.creamPaperBorderDark,
-        ),
-        textColor: text(
-          ArticlePaperPaletteColors.creamTextLight,
-          ArticlePaperPaletteColors.creamTextDark,
-        ),
-        secondaryTextColor: text(
-          ArticlePaperPaletteColors.creamSecondaryTextLight,
-          ArticlePaperPaletteColors.creamSecondaryTextDark,
-        ),
-        accentColor: text(
-          ArticlePaperPaletteColors.creamAccentLight,
-          ArticlePaperPaletteColors.creamAccentDark,
-        ),
-        badgeBackground: paper(
-          ArticlePaperPaletteColors.creamBadgeBackgroundLight,
-          ArticlePaperPaletteColors.creamBadgeBackgroundDark,
-        ),
-        badgeTextColor: text(
-          ArticlePaperPaletteColors.creamBadgeTextLight,
-          ArticlePaperPaletteColors.creamBadgeTextDark,
-        ),
-        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.09),
-        overlayColor: paper(
-          ArticlePaperPaletteColors.creamOverlayLight,
-          ArticlePaperPaletteColors.creamOverlayDark,
-        ),
-      );
-    case ArticlePaperTexture.sepia:
-      return ArticleTemplatePalette(
-        stageBackground: paper(
-          ArticlePaperPaletteColors.sepiaStageLight,
-          ArticlePaperPaletteColors.sepiaStageDark,
-        ),
-        paperColor: paper(
-          ArticlePaperPaletteColors.sepiaPaperLight,
-          ArticlePaperPaletteColors.sepiaPaperDark,
-        ),
-        paperBorderColor: paper(
-          ArticlePaperPaletteColors.sepiaPaperBorderLight,
-          ArticlePaperPaletteColors.sepiaPaperBorderDark,
-        ),
-        textColor: text(
-          ArticlePaperPaletteColors.sepiaTextLight,
-          ArticlePaperPaletteColors.sepiaTextDark,
-        ),
-        secondaryTextColor: text(
-          ArticlePaperPaletteColors.sepiaSecondaryTextLight,
-          ArticlePaperPaletteColors.sepiaSecondaryTextDark,
-        ),
-        accentColor: text(
-          ArticlePaperPaletteColors.sepiaAccentLight,
-          ArticlePaperPaletteColors.sepiaAccentDark,
-        ),
-        badgeBackground: paper(
-          ArticlePaperPaletteColors.sepiaBadgeBackgroundLight,
-          ArticlePaperPaletteColors.sepiaBadgeBackgroundDark,
-        ),
-        badgeTextColor: text(
-          ArticlePaperPaletteColors.sepiaBadgeTextLight,
-          ArticlePaperPaletteColors.sepiaBadgeTextDark,
-        ),
-        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.10),
-        overlayColor: paper(
-          ArticlePaperPaletteColors.sepiaOverlayLight,
-          ArticlePaperPaletteColors.sepiaOverlayDark,
-        ),
-      );
-    case ArticlePaperTexture.parchment:
-      return ArticleTemplatePalette(
-        stageBackground: paper(
-          ArticlePaperPaletteColors.parchmentStageLight,
-          ArticlePaperPaletteColors.parchmentStageDark,
-        ),
-        paperColor: paper(
-          ArticlePaperPaletteColors.parchmentPaperLight,
-          ArticlePaperPaletteColors.parchmentPaperDark,
-        ),
-        paperBorderColor: paper(
-          ArticlePaperPaletteColors.parchmentPaperBorderLight,
-          ArticlePaperPaletteColors.parchmentPaperBorderDark,
-        ),
-        textColor: text(
-          ArticlePaperPaletteColors.parchmentTextLight,
-          ArticlePaperPaletteColors.parchmentTextDark,
-        ),
-        secondaryTextColor: text(
-          ArticlePaperPaletteColors.parchmentSecondaryTextLight,
-          ArticlePaperPaletteColors.parchmentSecondaryTextDark,
-        ),
-        accentColor: text(
-          ArticlePaperPaletteColors.parchmentAccentLight,
-          ArticlePaperPaletteColors.parchmentAccentDark,
-        ),
-        badgeBackground: paper(
-          ArticlePaperPaletteColors.parchmentBadgeBackgroundLight,
-          ArticlePaperPaletteColors.parchmentBadgeBackgroundDark,
-        ),
-        badgeTextColor: text(
-          ArticlePaperPaletteColors.parchmentBadgeTextLight,
-          ArticlePaperPaletteColors.parchmentBadgeTextDark,
-        ),
-        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.12),
-        overlayColor: paper(
-          ArticlePaperPaletteColors.parchmentOverlayLight,
-          ArticlePaperPaletteColors.parchmentOverlayDark,
-        ),
-      );
-    case ArticlePaperTexture.eyeCare:
-      return ArticleTemplatePalette(
-        stageBackground: paper(
-          ArticlePaperPaletteColors.eyeCareStageLight,
-          ArticlePaperPaletteColors.eyeCareStageDark,
-        ),
-        paperColor: paper(
-          ArticlePaperPaletteColors.eyeCarePaperLight,
-          ArticlePaperPaletteColors.eyeCarePaperDark,
-        ),
-        paperBorderColor: paper(
-          ArticlePaperPaletteColors.eyeCarePaperBorderLight,
-          ArticlePaperPaletteColors.eyeCarePaperBorderDark,
-        ),
-        textColor: text(
-          ArticlePaperPaletteColors.eyeCareTextLight,
-          ArticlePaperPaletteColors.eyeCareTextDark,
-        ),
-        secondaryTextColor: text(
-          ArticlePaperPaletteColors.eyeCareSecondaryTextLight,
-          ArticlePaperPaletteColors.eyeCareSecondaryTextDark,
-        ),
-        accentColor: text(
-          ArticlePaperPaletteColors.eyeCareAccentLight,
-          ArticlePaperPaletteColors.eyeCareAccentDark,
-        ),
-        badgeBackground: paper(
-          ArticlePaperPaletteColors.eyeCareBadgeBackgroundLight,
-          ArticlePaperPaletteColors.eyeCareBadgeBackgroundDark,
-        ),
-        badgeTextColor: text(
-          ArticlePaperPaletteColors.eyeCareBadgeTextLight,
-          ArticlePaperPaletteColors.eyeCareBadgeTextDark,
-        ),
-        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.08),
-        overlayColor: paper(
-          ArticlePaperPaletteColors.eyeCareOverlayLight,
-          ArticlePaperPaletteColors.eyeCareOverlayDark,
-        ),
-      );
-    case ArticlePaperTexture.quiet:
-      return ArticleTemplatePalette(
-        stageBackground: paper(
-          ArticlePaperPaletteColors.quietStageLight,
-          ArticlePaperPaletteColors.quietStageDark,
-        ),
-        paperColor: paper(
-          ArticlePaperPaletteColors.quietPaperLight,
-          ArticlePaperPaletteColors.quietPaperDark,
-        ),
-        paperBorderColor: paper(
-          ArticlePaperPaletteColors.quietPaperBorderLight,
-          ArticlePaperPaletteColors.quietPaperBorderDark,
-        ),
-        textColor: text(
-          ArticlePaperPaletteColors.quietTextLight,
-          ArticlePaperPaletteColors.quietTextDark,
-        ),
-        secondaryTextColor: text(
-          ArticlePaperPaletteColors.quietSecondaryTextLight,
-          ArticlePaperPaletteColors.quietSecondaryTextDark,
-        ),
-        accentColor: text(
-          ArticlePaperPaletteColors.quietAccentLight,
-          ArticlePaperPaletteColors.quietAccentDark,
-        ),
-        badgeBackground: paper(
-          ArticlePaperPaletteColors.quietBadgeBackgroundLight,
-          ArticlePaperPaletteColors.quietBadgeBackgroundDark,
-        ),
-        badgeTextColor: text(
-          ArticlePaperPaletteColors.quietBadgeTextLight,
-          ArticlePaperPaletteColors.quietBadgeTextDark,
-        ),
-        shadowColor: AppColors.black.withValues(alpha: isDark ? 0.28 : 0.08),
-        overlayColor: paper(
-          ArticlePaperPaletteColors.quietOverlayLight,
-          ArticlePaperPaletteColors.quietOverlayDark,
-        ),
-      );
-    case ArticlePaperTexture.night:
-      return ArticleTemplatePalette(
-        stageBackground: ArticlePaperPaletteColors.nightStage,
-        paperColor: ArticlePaperPaletteColors.nightPaper,
-        paperBorderColor: ArticlePaperPaletteColors.nightPaperBorder,
-        textColor: ArticlePaperPaletteColors.nightText,
-        secondaryTextColor: ArticlePaperPaletteColors.nightSecondaryText,
-        accentColor: ArticlePaperPaletteColors.nightAccent,
-        badgeBackground: ArticlePaperPaletteColors.nightBadgeBackground,
-        badgeTextColor: ArticlePaperPaletteColors.nightBadgeText,
+        stageBackground: ArticlePaperPaletteColors.darkPaperStage,
+        paperColor: ArticlePaperPaletteColors.darkPaperPaper,
+        paperBorderColor: ArticlePaperPaletteColors.darkPaperBorder,
+        textColor: ArticlePaperPaletteColors.darkPaperText,
+        secondaryTextColor: ArticlePaperPaletteColors.darkPaperSecondaryText,
+        accentColor: ArticlePaperPaletteColors.darkPaperAccent,
+        badgeBackground: ArticlePaperPaletteColors.darkPaperBadgeBackground,
+        badgeTextColor: ArticlePaperPaletteColors.darkPaperBadgeText,
         shadowColor: AppColors.black.withValues(alpha: 0.42),
-        overlayColor: ArticlePaperPaletteColors.nightOverlay,
+        overlayColor: ArticlePaperPaletteColors.darkPaperOverlay,
+      );
+    case ArticlePaperTexture.coolGray:
+      return ArticleTemplatePalette(
+        stageBackground: ArticlePaperPaletteColors.coolGrayStage,
+        paperColor: ArticlePaperPaletteColors.coolGrayPaper,
+        paperBorderColor: ArticlePaperPaletteColors.coolGrayBorder,
+        textColor: ArticlePaperPaletteColors.coolGrayText,
+        secondaryTextColor: ArticlePaperPaletteColors.coolGraySecondaryText,
+        accentColor: ArticlePaperPaletteColors.coolGrayAccent,
+        badgeBackground: ArticlePaperPaletteColors.coolGrayBadgeBackground,
+        badgeTextColor: ArticlePaperPaletteColors.coolGrayBadgeText,
+        shadowColor: AppColors.black.withValues(alpha: 0.42),
+        overlayColor: ArticlePaperPaletteColors.coolGrayOverlay,
+      );
+    case ArticlePaperTexture.warmBlack:
+      return ArticleTemplatePalette(
+        stageBackground: ArticlePaperPaletteColors.warmBlackStage,
+        paperColor: ArticlePaperPaletteColors.warmBlackPaper,
+        paperBorderColor: ArticlePaperPaletteColors.warmBlackBorder,
+        textColor: ArticlePaperPaletteColors.warmBlackText,
+        secondaryTextColor: ArticlePaperPaletteColors.warmBlackSecondaryText,
+        accentColor: ArticlePaperPaletteColors.warmBlackAccent,
+        badgeBackground: ArticlePaperPaletteColors.warmBlackBadgeBackground,
+        badgeTextColor: ArticlePaperPaletteColors.warmBlackBadgeText,
+        shadowColor: AppColors.black.withValues(alpha: 0.42),
+        overlayColor: ArticlePaperPaletteColors.warmBlackOverlay,
+      );
+    case ArticlePaperTexture.inkGreen:
+      return ArticleTemplatePalette(
+        stageBackground: ArticlePaperPaletteColors.inkGreenStage,
+        paperColor: ArticlePaperPaletteColors.inkGreenPaper,
+        paperBorderColor: ArticlePaperPaletteColors.inkGreenBorder,
+        textColor: ArticlePaperPaletteColors.inkGreenText,
+        secondaryTextColor: ArticlePaperPaletteColors.inkGreenSecondaryText,
+        accentColor: ArticlePaperPaletteColors.inkGreenAccent,
+        badgeBackground: ArticlePaperPaletteColors.inkGreenBadgeBackground,
+        badgeTextColor: ArticlePaperPaletteColors.inkGreenBadgeText,
+        shadowColor: AppColors.black.withValues(alpha: 0.42),
+        overlayColor: ArticlePaperPaletteColors.inkGreenOverlay,
+      );
+    case ArticlePaperTexture.deepBrown:
+      return ArticleTemplatePalette(
+        stageBackground: ArticlePaperPaletteColors.deepBrownStage,
+        paperColor: ArticlePaperPaletteColors.deepBrownPaper,
+        paperBorderColor: ArticlePaperPaletteColors.deepBrownBorder,
+        textColor: ArticlePaperPaletteColors.deepBrownText,
+        secondaryTextColor: ArticlePaperPaletteColors.deepBrownSecondaryText,
+        accentColor: ArticlePaperPaletteColors.deepBrownAccent,
+        badgeBackground: ArticlePaperPaletteColors.deepBrownBadgeBackground,
+        badgeTextColor: ArticlePaperPaletteColors.deepBrownBadgeText,
+        shadowColor: AppColors.black.withValues(alpha: 0.42),
+        overlayColor: ArticlePaperPaletteColors.deepBrownOverlay,
       );
   }
 }

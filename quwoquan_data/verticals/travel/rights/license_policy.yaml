@@ -1,0 +1,56 @@
+schemaVersion: quwoquan.travel_license_policy.v1
+vertical: travel
+defaultAction: block
+blockedDiscoveryOnlyPlatforms:
+  - Pinterest
+  - pinterest
+  - 小红书
+  - 抖音
+  - 微博
+requiredImageFields:
+  - license
+  - credit
+  - sourceUrl
+  - termsUrl
+  - usageScope
+allowedLicenseKinds:
+  - CC0
+  - CC0 1.0
+  - CC0 1.0 Universal
+  - CC-BY
+  - CC BY
+  - CC-BY 2.0
+  - CC BY 2.0
+  - CC-BY 2.5
+  - CC BY 2.5
+  - CC-BY 3.0
+  - CC BY 3.0
+  - CC-BY 4.0
+  - CC BY 4.0
+  - CC-BY-SA
+  - CC BY-SA
+  - CC-BY-SA 2.0
+  - CC BY-SA 2.0
+  - CC-BY-SA 2.5
+  - CC BY-SA 2.5
+  - CC-BY-SA 3.0
+  - CC BY-SA 3.0
+  - CC-BY-SA 4.0
+  - CC BY-SA 4.0
+  - Public Domain
+  - AI Generated Original
+  - government_open_data
+  - scenic_official_authorized
+  - photographer_authorized
+  - museum_open_access
+usageScopes:
+  - internal_reference
+  - app_publish
+  - editorial
+humanSubjectPolicy:
+  modelReleaseRequiredWhenFaceDetected: true
+  requiredField: modelReleaseStatus
+  allowedStatuses:
+    - not_required
+    - obtained
+    - editorial_only

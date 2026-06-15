@@ -11,6 +11,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_memb
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
@@ -55,6 +58,12 @@ abstract class ChatConversationRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
+  Future<List<MessageHomeRowDto>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+
   /// 记录 wire 形态会话列表；新实现应优先 [listInbox]。
   Future<List<ChatInboxDto>> listConversations({
     String? cursor,
@@ -80,7 +89,7 @@ abstract class ChatConversationRepository {
 
   Future<ConversationDto> getConversation(String conversationId);
 
-  /// 更新会话展示标题（群名等）。Remote 侧按资源 PATCH；无独立 operation 元数据时用 GetConversation 上下文。
+  /// 更新会话展示标题（群名等），对齐 UpdateConversationTitle operation。
   Future<void> updateConversationTitle(String conversationId, String title);
 
   // ── 用户设置 ──────────────────────────────────────────────────────────────
@@ -198,6 +207,12 @@ abstract class ChatContactRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
+  Future<List<ContactHomeRowDto>> listContactHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+
   Future<List<ChatContactRowDto>> listGroupCandidates({
     String? conversationId,
     int limit = CloudApiDefaults.pageLimit,
@@ -225,6 +240,8 @@ abstract class ChatContactRepository {
 abstract class ChatGroupAdminRepository {
   // ── 群管理 ──────────────────────────────────────────────────────────────────
   Future<ChatGroupSettingsDto> getGroupSettings(String conversationId);
+
+  Future<GroupHomeDto> getGroupHome(String conversationId);
 
   Future<void> updateGroupSettings(
     String conversationId,

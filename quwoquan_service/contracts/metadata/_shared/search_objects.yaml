@@ -22,7 +22,7 @@ object_types:
     execution_strategy: local_only
     provider: chat_local
   - id: circle.group
-    label: 群组
+    label: 讨论
     domain: circle
     execution_strategy: hybrid_remote_fallback_local
     provider: circle_remote_local
@@ -88,9 +88,9 @@ ai_targets:
     object_type: circle.circle
     description: 圈子
   - id: group
-    label: 群组
+    label: 讨论
     object_type: circle.group
-    description: 群组/群聊组
+    description: 圈子或组织下的讨论
   - id: chat
     label: 聊天
     object_type: chat.message
@@ -107,7 +107,7 @@ section_kinds:
       - chat.conversation
       - chat.message
   - id: groups
-    title: 群组
+    title: 讨论
     default_object_types:
       - circle.group
       - circle.circle

@@ -37,6 +37,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
         return;
       }
       unawaited(hydrateRecentSearches());
+      unawaited(hydrateSearchInspiration());
       if (state.hasQuery) {
         scheduleSearch(immediate: true);
       }
@@ -45,10 +46,8 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
   }
 
   static const Duration _searchDebounce = Duration(milliseconds: 180);
-  static const int _collapsedHistoryCount = 6;
-  static const int _collapsedContactsCount = 3;
+  static const int _collapsedContactsCount = 4;
   static const int _collapsedChatRecordsCount = 3;
-  static const int _maxMostUsedCount = 3;
   static const int _conversationSearchLimit = 12;
   static const int _maxNetworkSuggestions = 6;
 
@@ -141,7 +140,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
   }
 
   void toggleHistoryExpanded() {
-    if (state.recentSearches.length <= _collapsedHistoryCount) {
+    if (state.recentSearches.isEmpty) {
       return;
     }
     _setState(state.copyWith(isHistoryExpanded: !state.isHistoryExpanded));
@@ -225,6 +224,127 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
       }
       _setState(state.copyWith(isHydratingHistory: false));
     }
+  }
+
+  Future<void> hydrateSearchInspiration() async {
+    _setState(
+      state.copyWith(inspiration: state.inspiration.copyWith(isLoading: true)),
+    );
+    try {
+      final circles = await ref
+          .read(circleRepositoryProvider)
+          .listCircles(limit: 9);
+      final homepageRepository = ref.read(homepageRepositoryProvider);
+      var locations = await homepageRepository.searchHomepages(
+        query: '',
+        homepageType: 'location',
+        limit: 9,
+      );
+      if (locations.isEmpty) {
+        locations = await homepageRepository.searchHomepages(
+          query: '',
+          limit: 9,
+        );
+      }
+      final currentUserId = ref.read(currentUserIdProvider).trim();
+      final effectiveUserId = currentUserId.isNotEmpty
+          ? currentUserId
+          : 'current_user';
+      final people = await ref
+          .read(userProfileRepositoryProvider)
+          .listFollowing(effectiveUserId, limit: 4);
+      final todaySeeds = <SearchInspirationChipView>[
+        ...circles
+            .take(2)
+            .map(
+              (item) => SearchInspirationChipView(
+                title: item.name,
+                subtitle:
+                    '${_positiveCount(item.weeklyActiveCount, item.memberCount)}个交集',
+                query: item.name,
+              ),
+            ),
+        ...locations
+            .take(2)
+            .map(
+              (item) => SearchInspirationChipView(
+                title: item.title,
+                subtitle: '地点交集',
+                query: item.title,
+              ),
+            ),
+      ].where((item) => item.title.trim().isNotEmpty).take(4).toList(growable: false);
+
+      if (!ref.mounted) {
+        return;
+      }
+      _setState(
+        state.copyWith(
+          inspiration: SearchInspirationState(
+            todayIntersections: todaySeeds,
+            hotCircles: circles
+                .where((item) => item.name.trim().isNotEmpty)
+                .take(6)
+                .map(
+                  (item) => SearchInspirationCardView(
+                    id: item.id,
+                    title: item.name,
+                    subtitle:
+                        '${_positiveCount(item.memberCount, item.weeklyActiveCount)}人',
+                    coverUrl: item.coverUrl,
+                    query: item.name,
+                  ),
+                )
+                .toList(growable: false),
+            hotLocations: locations
+                .where((item) => item.title.trim().isNotEmpty)
+                .take(6)
+                .map(
+                  (item) => SearchInspirationCardView(
+                    id: item.id,
+                    title: item.title,
+                    subtitle: (item.city ?? item.address ?? '地点').trim(),
+                    coverUrl: item.coverUrl,
+                    query: item.title,
+                  ),
+                )
+                .toList(growable: false),
+            people: people
+                .where((item) => item.displayName.trim().isNotEmpty)
+                .take(4)
+                .map(
+                  (item) => SearchInspirationPersonView(
+                    id: item.subAccountId,
+                    displayName: item.displayName,
+                    avatarUrl: item.avatarUrl,
+                    headline: item.isFollowing ? '已关注' : '摄影圈活跃',
+                    reason: '共同兴趣 3 个',
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!ref.mounted) {
+        return;
+      }
+      _setState(
+        state.copyWith(
+          inspiration: state.inspiration.copyWith(isLoading: false),
+        ),
+      );
+    }
+  }
+
+  int _positiveCount(int primary, int secondary) {
+    if (primary > 0) {
+      return primary;
+    }
+    if (secondary > 0) {
+      return secondary;
+    }
+    return 1;
   }
 
   Future<void> useRecentSearch(RecentSearchEntryView entry) async {
@@ -346,27 +466,24 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
           ),
         );
 
-    final contacts = response.hits
+    final responseHits = _hitsFromResponse(response);
+    final contacts = responseHits
         .where((hit) => hit.objectType == SearchObjectType.chatContact)
         .map((hit) => ChatContactSearchItemDto.fromMap(hit.payload.toWireMap()))
         .toList(growable: false);
-    final conversationHits = response.hits
+    final conversationHits = responseHits
         .where((hit) => hit.objectType == SearchObjectType.chatConversation)
         .map(
           (hit) => ConversationSearchItemView.fromMap(hit.payload.toWireMap()),
         )
         .toList(growable: false);
-    final messageHits = response.hits
+    final messageHits = responseHits
         .where((hit) => hit.objectType == SearchObjectType.chatMessage)
         .map((hit) => MessageSearchItemView.fromMap(hit.payload.toWireMap()))
         .toList(growable: false);
     final circleSuggestions = includesCircles
-        ? response.hits
-              .where(
-                (hit) =>
-                    hit.objectType == SearchObjectType.circleGroup ||
-                    hit.objectType == SearchObjectType.circleCircle,
-              )
+        ? responseHits
+              .where((hit) => hit.objectType == SearchObjectType.circleGroup)
               .map(
                 (hit) =>
                     hit.asCircleCircleItem ??
@@ -374,6 +491,26 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
               )
               .toList(growable: false)
         : const <CircleSearchItemView>[];
+    final locationSuggestions = responseHits
+        .where(
+          (hit) => hit.objectType == SearchObjectType.integrationLocationPoi,
+        )
+        .map((hit) => LocationPoiDto.fromMap(hit.payload.toWireMap()))
+        .where((item) => item.name.trim().isNotEmpty)
+        .toList(growable: false);
+    final followedPeopleSuggestions = responseHits
+        .where((hit) => hit.objectType == SearchObjectType.userProfile)
+        .map(
+          (hit) =>
+              SocialRelationSearchItemView.fromMap(hit.payload.toWireMap()),
+        )
+        .where(
+          (item) =>
+              item.relationshipCapability.canOpenConversation ||
+              item.relationshipCapability.canUnfollow,
+        )
+        .where((item) => item.displayName.trim().isNotEmpty)
+        .toList(growable: false);
     final allConversations = ref
         .read(conversationCacheProvider)
         .getAll()
@@ -402,26 +539,11 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
           return includesDirectChats;
         })
         .toList(growable: false);
-    final mostUsedSuggestions =
-        _buildMostUsedSuggestions(
-              contacts: contactSuggestions,
-              chatRecords: filteredChatRecordSuggestions,
-              circles: circleSuggestions,
-            )
-            .where((item) => _allowsMostUsedItem(selection, item))
-            .toList(growable: false);
     final networkSuggestions = includesNetwork
         ? _buildNetworkSuggestions(normalizedQuery)
         : const <NetworkSearchSuggestion>[];
 
     final sections = <SearchSuggestionSection>[
-      if (mostUsedSuggestions.isNotEmpty)
-        SearchSuggestionSection(
-          kind: SearchSuggestionSectionKind.mostUsed,
-          items: mostUsedSuggestions
-              .map<SearchSuggestionEntry>(SearchSuggestionEntry.mostUsed)
-              .toList(growable: false),
-        ),
       if (includesContacts && contactSuggestions.isNotEmpty)
         SearchSuggestionSection(
           kind: SearchSuggestionSectionKind.contacts,
@@ -442,12 +564,12 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
           collapsedItemCount: _collapsedChatRecordsCount,
           moreLabel: switch (objectTarget) {
             SearchObjectTarget.directChats => '更多单聊',
-            SearchObjectTarget.groupChats => '更多群聊',
+            SearchObjectTarget.groupChats => '更多讨论',
             _ => '更多聊天记录',
           },
           titleOverride: switch (objectTarget) {
             SearchObjectTarget.directChats => '单聊',
-            SearchObjectTarget.groupChats => '群聊',
+            SearchObjectTarget.groupChats => '讨论',
             _ => null,
           },
         ),
@@ -456,6 +578,20 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
           kind: SearchSuggestionSectionKind.circles,
           items: circleSuggestions
               .map<SearchSuggestionEntry>(SearchSuggestionEntry.circle)
+              .toList(growable: false),
+        ),
+      if (locationSuggestions.isNotEmpty)
+        SearchSuggestionSection(
+          kind: SearchSuggestionSectionKind.locations,
+          items: locationSuggestions
+              .map<SearchSuggestionEntry>(SearchSuggestionEntry.location)
+              .toList(growable: false),
+        ),
+      if (followedPeopleSuggestions.isNotEmpty)
+        SearchSuggestionSection(
+          kind: SearchSuggestionSectionKind.followedPeople,
+          items: followedPeopleSuggestions
+              .map<SearchSuggestionEntry>(SearchSuggestionEntry.followedPerson)
               .toList(growable: false),
         ),
       if (includesNetwork)
@@ -469,29 +605,11 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
     return _applyExpansionFlags(sections);
   }
 
-  bool _allowsMostUsedItem(
-    SearchObjectSelection selection,
-    MostUsedSearchItem item,
-  ) {
-    final normalizedSelection = selection.normalized();
-    final objectTarget = normalizedSelection.activeObjectTarget;
-    if (objectTarget == null) {
-      return true;
+  Iterable<SearchHit> _hitsFromResponse(SearchResponse response) {
+    if (response.hits.isNotEmpty) {
+      return response.hits;
     }
-    switch (item.targetKind) {
-      case MostUsedTargetKind.contact:
-        return objectTarget == SearchObjectTarget.contacts;
-      case MostUsedTargetKind.chatRecord:
-        if (objectTarget == SearchObjectTarget.directChats) {
-          return !_isGroupConversation(item.conversationType);
-        }
-        if (objectTarget == SearchObjectTarget.groupChats) {
-          return _isGroupConversation(item.conversationType);
-        }
-        return false;
-      case MostUsedTargetKind.circle:
-        return objectTarget == SearchObjectTarget.circles;
-    }
+    return response.sections.expand((section) => section.hits);
   }
 
   bool _isGroupConversation(String? conversationType) {
@@ -521,6 +639,8 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
         SearchObjectType.chatMessage,
         SearchObjectType.circleGroup,
         SearchObjectType.circleCircle,
+        SearchObjectType.integrationLocationPoi,
+        SearchObjectType.userProfile,
       },
     };
   }
@@ -548,8 +668,9 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
               return section.copyWith(expanded: nextContactsExpanded);
             case SearchSuggestionSectionKind.chatRecords:
               return section.copyWith(expanded: nextChatRecordsExpanded);
-            case SearchSuggestionSectionKind.mostUsed:
             case SearchSuggestionSectionKind.circles:
+            case SearchSuggestionSectionKind.locations:
+            case SearchSuggestionSectionKind.followedPeople:
             case SearchSuggestionSectionKind.network:
               return section;
           }
@@ -692,87 +813,38 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
     return results;
   }
 
-  List<MostUsedSearchItem> _buildMostUsedSuggestions({
-    required List<ContactSearchSuggestion> contacts,
-    required List<ChatRecordSearchSuggestion> chatRecords,
-    required List<CircleSearchItemView> circles,
-  }) {
-    final items = <MostUsedSearchItem>[];
-    for (var i = 0; i < contacts.length; i++) {
-      final contact = contacts[i];
-      items.add(
-        MostUsedSearchItem(
-          itemId: 'contact:${contact.contactId}',
-          targetKind: MostUsedTargetKind.contact,
-          title: contact.displayName,
-          subtitle: contact.subtitle ?? '联系人',
-          avatarUrl: contact.avatarUrl,
-          conversationId: contact.conversationId,
-          usageScore: 320 - (i * 10),
-        ),
-      );
-    }
-    for (var i = 0; i < chatRecords.length; i++) {
-      final record = chatRecords[i];
-      items.add(
-        MostUsedSearchItem(
-          itemId: 'chat:${record.conversationId}',
-          targetKind: MostUsedTargetKind.chatRecord,
-          title: record.conversationTitle,
-          subtitle: record.matchedPreview,
-          avatarUrl: record.avatarUrl,
-          conversationId: record.conversationId,
-          conversationType: record.conversationType,
-          messageAnchorId: record.messageAnchorId,
-          timestamp: record.timestamp,
-          matchCount: record.matchCount,
-          usageScore: 240 + record.matchCount - (i * 6),
-        ),
-      );
-    }
-    for (var i = 0; i < circles.length; i++) {
-      final circle = circles[i];
-      items.add(
-        MostUsedSearchItem(
-          itemId: 'circle:${circle.circleId}',
-          targetKind: MostUsedTargetKind.circle,
-          title: circle.name,
-          subtitle: circle.description ?? circle.subCategory ?? '群组',
-          avatarUrl: circle.coverUrl,
-          circleId: circle.circleId,
-          usageScore: 160 + (circle.memberCount ~/ 100) - (i * 4),
-        ),
-      );
-    }
-    items.sort((left, right) => right.usageScore.compareTo(left.usageScore));
-    final deduped = <String, MostUsedSearchItem>{};
-    for (final item in items) {
-      deduped.putIfAbsent(item.itemId, () => item);
-    }
-    return deduped.values.take(_maxMostUsedCount).toList(growable: false);
-  }
-
   List<NetworkSearchSuggestion> _buildNetworkSuggestions(String query) {
     final seeds = <NetworkSearchSuggestion>[
       NetworkSearchSuggestion(
         query: query,
-        title: '$query 相关主页',
-        subtitle: '搜索 $query 的共享主页',
-        initialTabId: 'homepages',
+        title: query,
+        subtitle: '搜索全部结果',
+        initialTabId: 'all',
       ),
       NetworkSearchSuggestion(
         query: query,
-        title: '$query 相关群组',
-        subtitle: '搜索 $query 的圈子与群组',
-        initialTabId: 'groups',
+        title: '$query 交集',
+        subtitle: '查看最值得连接的结果',
+        initialTabId: 'intersection',
       ),
       NetworkSearchSuggestion(
         query: query,
-        title: '$query 相关位置',
-        subtitle: '搜索 $query 的位置结果',
-        initialTabId: 'locations',
+        title: '$query 图片',
+        subtitle: '只看图片结果',
+        initialTabId: 'image',
       ),
-      NetworkSearchSuggestion(query: query, subtitle: '直接搜索 $query'),
+      NetworkSearchSuggestion(
+        query: query,
+        title: '$query 视频',
+        subtitle: '只看视频结果',
+        initialTabId: 'video',
+      ),
+      NetworkSearchSuggestion(
+        query: query,
+        title: '$query 长文',
+        subtitle: '只看长文结果',
+        initialTabId: 'article',
+      ),
     ];
     final unique = <String>{};
     return seeds
@@ -843,7 +915,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
     }
     final values = merged.values.toList(growable: false);
     values.sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
-    return values.take(12).toList(growable: false);
+    return values.take(15).toList(growable: false);
   }
 
   String _historyKeyForEntry(RecentSearchEntryView entry) {

@@ -34,6 +34,7 @@ class AssistantApiMetadata {
     'RevokeSkillConsent': '/v1/assistant/skills/{skillId}/consent',
     'SearchXiaoquResults': '/v1/assistant/search/xiaoqu',
     'StreamAssistantTurn': '/v1/assistant/turns/{turnId}/stream',
+    'SuggestCreationAssistance': '/v1/assistant/skills/creation-suggest',
     'TickSkillSubscriptionCron': '/v1/assistant/skill-subscriptions/cron/tick',
     'UpdateSkillSubscriptionStatus': '/v1/assistant/skill-subscriptions/{subscriptionId}/status',
   };
@@ -61,6 +62,7 @@ class AssistantApiMetadata {
     'RevokeSkillConsent': 'DELETE',
     'SearchXiaoquResults': 'POST',
     'StreamAssistantTurn': 'POST',
+    'SuggestCreationAssistance': 'POST',
     'TickSkillSubscriptionCron': 'POST',
     'UpdateSkillSubscriptionStatus': 'PATCH',
   };
@@ -89,6 +91,7 @@ class AssistantApiMetadata {
     'RevokeSkillConsent': 'required',
     'SearchXiaoquResults': 'required',
     'StreamAssistantTurn': 'required',
+    'SuggestCreationAssistance': 'required',
     'TickSkillSubscriptionCron': 'required',
     'UpdateSkillSubscriptionStatus': 'required',
   };
@@ -115,6 +118,7 @@ class AssistantApiMetadata {
   static const String revokeSkillConsentOperation = 'RevokeSkillConsent';
   static const String searchXiaoquResultsOperation = 'SearchXiaoquResults';
   static const String streamAssistantTurnOperation = 'StreamAssistantTurn';
+  static const String suggestCreationAssistanceOperation = 'SuggestCreationAssistance';
   static const String tickSkillSubscriptionCronOperation = 'TickSkillSubscriptionCron';
   static const String updateSkillSubscriptionStatusOperation = 'UpdateSkillSubscriptionStatus';
 
@@ -175,6 +179,7 @@ class AssistantApiMetadata {
       'turnId': turnId,
     });
   }
+  static const String suggestCreationAssistancePath = '/v1/assistant/skills/creation-suggest';
   static const String tickSkillSubscriptionCronPath = '/v1/assistant/skill-subscriptions/cron/tick';
   static const String updateSkillSubscriptionStatusPathTemplate = '/v1/assistant/skill-subscriptions/{subscriptionId}/status';
   static String updateSkillSubscriptionStatusPath({required String subscriptionId}) {

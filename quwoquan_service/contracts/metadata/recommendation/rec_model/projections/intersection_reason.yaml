@@ -10,8 +10,10 @@ description: |
     dimension: identity | location | content | interest | relationship（5 源闭集，稳定用户语言来源）
     source:    tagRef | geoTagRef | entityRef | followEdge | contact
     actionType: follow | join | add_contact | view_object
-    relationKind: follow | contact | mutual（relationship 维度无标签锚点时使用）
+    relationKind: follow | contact | mutual（relationship 维度无标签锚点时使用；禁止再承载对象类型语义）
+    objectKind: person | circle | school | place | enterprise（对象类型闭集，统一品牌蓝角标「人/圈/校/地/企」真相源）
     intersectionClass: fact | affinity（fact = 可向用户说明的事实交集；affinity = 算法概率推荐，不伪装事实）
+    weightTier: light | heavy（内容卡交集轻/重等级，云侧离散产出；无 reason 即无交集，承载 70/20/10 频率契约）
 
   展示字段（统一视觉系统消费）：
     avatarUrl / displayName 用于头像 + 名字卡（端不再用整句 displayText 占位）。
@@ -22,6 +24,9 @@ description: |
     不得成为第二套事实来源。
     connectionSummary 是云侧实例化的「连接说明」一句话（由具体实例构成，如"北京大学、摄影把你们连在一起"），
     对象页交集卡顶部展示；缺省时端不展示该行，禁止端本地用维度词空说。
+    primaryText 是主交集结论句（蓝色，云侧产出，端只读直出，如"4位共同关注的人"）；
+    secondaryText 是副交集辅助说明（灰色；缺省端不展示）。
+    端禁止再用 intersectionPoints/EvidenceGroup 本地拼装主/副交集文案（G2）。
 
 consumers:
   - app
@@ -50,6 +55,12 @@ client_projection:
       nullable: false
       source: relationKind
       aliases: [relationKind]
+      default: "''"
+    - name: objectKind
+      dart_type: String
+      nullable: false
+      source: objectKind
+      aliases: [objectKind]
       default: "''"
     - name: relationObjectId
       dart_type: String
@@ -80,6 +91,24 @@ client_projection:
       nullable: false
       source: displayText
       aliases: [displayText]
+      default: "''"
+    - name: primaryText
+      dart_type: String
+      nullable: false
+      source: primaryText
+      aliases: [primaryText]
+      default: "''"
+    - name: secondaryText
+      dart_type: String
+      nullable: false
+      source: secondaryText
+      aliases: [secondaryText]
+      default: "''"
+    - name: weightTier
+      dart_type: String
+      nullable: false
+      source: weightTier
+      aliases: [weightTier]
       default: "''"
     - name: actionType
       dart_type: String

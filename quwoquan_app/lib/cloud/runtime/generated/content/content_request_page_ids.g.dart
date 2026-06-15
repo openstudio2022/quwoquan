@@ -14,7 +14,6 @@ class ContentRequestPageIds {
     'CreateReport': 'content.report.create',
     'DeleteComment': 'content.comment.delete',
     'DeletePost': 'content.post.delete',
-    'FavoritePost': 'content.post.favorite',
     'GenerateArticleSummary': 'content.article.summary',
     'GetAppConfig': 'content.get.app.config',
     'GetAuthorImpact': 'content.get.author.impact',
@@ -23,6 +22,7 @@ class ContentRequestPageIds {
     'GetFeedIntersections': 'content.get.feed.intersections',
     'GetHelperRead': 'content.get.helper.read',
     'GetMediaAsset': 'content.media.get',
+    'GetMyFootprint': 'content.footprint.list',
     'GetMyIntersectionSummary': 'content.get.my.intersection.summary',
     'GetObjectIntersections': 'content.get.object.intersections',
     'GetPost': 'content.post.get',
@@ -53,7 +53,6 @@ class ContentRequestPageIds {
     'SelectAutoVideoCover': 'content.media.cover.auto',
     'SelectManualVideoCover': 'content.media.cover.manual',
     'SharePost': 'content.share.post',
-    'UnfavoritePost': 'content.post.unfavorite',
     'UnlikePost': 'content.post.unlike',
     'UnsharePost': 'content.unshare.post',
     'UpdatePost': 'content.post.update',
@@ -70,7 +69,6 @@ class ContentRequestPageIds {
   static const String createReport = 'content.report.create';
   static const String deleteComment = 'content.comment.delete';
   static const String deletePost = 'content.post.delete';
-  static const String favoritePost = 'content.post.favorite';
   static const String generateArticleSummary = 'content.article.summary';
   static const String getAppConfig = 'content.get.app.config';
   static const String getAuthorImpact = 'content.get.author.impact';
@@ -79,6 +77,7 @@ class ContentRequestPageIds {
   static const String getFeedIntersections = 'content.get.feed.intersections';
   static const String getHelperRead = 'content.get.helper.read';
   static const String getMediaAsset = 'content.media.get';
+  static const String getMyFootprint = 'content.footprint.list';
   static const String getMyIntersectionSummary = 'content.get.my.intersection.summary';
   static const String getObjectIntersections = 'content.get.object.intersections';
   static const String getPost = 'content.post.get';
@@ -109,7 +108,6 @@ class ContentRequestPageIds {
   static const String selectAutoVideoCover = 'content.media.cover.auto';
   static const String selectManualVideoCover = 'content.media.cover.manual';
   static const String sharePost = 'content.share.post';
-  static const String unfavoritePost = 'content.post.unfavorite';
   static const String unlikePost = 'content.post.unlike';
   static const String unsharePost = 'content.unshare.post';
   static const String updatePost = 'content.post.update';

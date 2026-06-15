@@ -24,48 +24,48 @@ var (
 // AppErrorFromConversationNotFound returns *AppError for CHAT.USER.conversation_not_found (user_message from errors.yaml).
 func AppErrorFromConversationNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConversationNotFound.Error()))
-	return rerrors.NewAppError(code, "会话不存在", debugMessage)
+	return rerrors.NewAppError(code, "会话不存在", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromUnauthorized returns *AppError for CHAT.USER.unauthorized (user_message from errors.yaml).
 func AppErrorFromUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录", debugMessage)
+	return rerrors.NewAppError(code, "请先登录", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromMessageTooLong returns *AppError for CHAT.USER.message_too_long (user_message from errors.yaml).
 func AppErrorFromMessageTooLong(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMessageTooLong.Error()))
-	return rerrors.NewAppError(code, "消息内容超出长度限制", debugMessage)
+	return rerrors.NewAppError(code, "消息内容超出长度限制", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromRateLimited returns *AppError for CHAT.USER.rate_limited (user_message from errors.yaml).
 func AppErrorFromRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRateLimited.Error()))
-	return rerrors.NewAppError(code, "发送太频繁，请稍后重试", debugMessage)
+	return rerrors.NewAppError(code, "发送太频繁，请稍后重试", debugMessage).WithRecovery("retry", 5)
 }
 
 // AppErrorFromNotMutual returns *AppError for CHAT.USER.not_mutual (user_message from errors.yaml).
 func AppErrorFromNotMutual(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrNotMutual.Error()))
-	return rerrors.NewAppError(code, "互相关注后可进入正式私信", debugMessage)
+	return rerrors.NewAppError(code, "互相关注后可进入正式私信", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromGreetingRequired returns *AppError for CHAT.USER.greeting_required (user_message from errors.yaml).
 func AppErrorFromGreetingRequired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingRequired.Error()))
-	return rerrors.NewAppError(code, "请先打招呼，等对方回复后再进入正式私信", debugMessage)
+	return rerrors.NewAppError(code, "请先打招呼，等对方回复后再进入正式私信", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromBlocked returns *AppError for CHAT.USER.blocked (user_message from errors.yaml).
 func AppErrorFromBlocked(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrBlocked.Error()))
-	return rerrors.NewAppError(code, "当前状态不能继续发送消息", debugMessage)
+	return rerrors.NewAppError(code, "当前状态不能继续发送消息", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for CHAT.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "消息服务异常，请稍后重试", debugMessage)
+	return rerrors.NewAppError(code, "消息服务异常，请稍后重试", debugMessage).WithRecovery("surface", 0)
 }
 

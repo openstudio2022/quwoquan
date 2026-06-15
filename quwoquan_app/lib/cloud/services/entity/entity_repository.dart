@@ -7,6 +7,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage_mutation_wires.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_section.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
@@ -18,9 +20,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/object_relation_edge
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
 
 part 'entity_object_page_bundle_mock.dart';
+part 'entity_introduction_repository.dart';
+part 'entity_repository_homepage_helpers.dart';
 
 abstract class HomepageRepository {
   Future<List<HomepageSummary>> searchHomepages({
@@ -32,6 +35,10 @@ abstract class HomepageRepository {
   });
 
   Future<HomepageDetail> getHomepageDetail(String homepageId);
+
+  Future<HomepageDetail> followHomepage(String homepageId);
+
+  Future<HomepageDetail> unfollowHomepage(String homepageId);
 
   Future<HomepageShellData> getHomepageShell(String homepageId);
 
@@ -109,7 +116,7 @@ class MockHomepageRepository implements HomepageRepository {
         .whereType<Map>()
         .map((item) {
           final map = item.cast<String, dynamic>();
-          return HomepageDetail.fromMap(<String, dynamic>{
+          final homepage = HomepageDetail.fromMap(<String, dynamic>{
             ...map,
             'id': map['id'] ?? map['homepageId'],
             'homepageType': map['homepageType'] ?? map['type'],
@@ -119,24 +126,57 @@ class MockHomepageRepository implements HomepageRepository {
             'categoryTags': map['categoryTags'] ?? const <String>['契约'],
             if (map['geo'] is Map) 'location': map['geo'],
           });
+          return _withContractShellDefaults(homepage, map);
         })
         .toList(growable: true);
   }
 
-  static List<HomepageDetail> _repositorySeedHomepages() {
-    final byId = <String, HomepageDetail>{};
-    void put(HomepageDetail homepage) {
-      byId[homepage.id] = homepage;
+  static HomepageDetail _withContractShellDefaults(
+    HomepageDetail homepage,
+    Map<String, dynamic> raw,
+  ) {
+    final intro = raw['introduction'];
+    final introMap = intro is Map ? intro.cast<String, dynamic>() : null;
+    final introRelated = introMap?['relatedObjects'];
+    final relatedGroups = homepage.relatedGroups.isNotEmpty
+        ? homepage.relatedGroups
+        : introRelated is List
+        ? introRelated
+              .whereType<Map>()
+              .map(
+                (item) => HomepageRelatedGroupSummary.fromMap(
+                  item.cast<String, dynamic>(),
+                ),
+              )
+              .toList(growable: false)
+        : _mockDefaultRelatedGroups(homepage);
+    final coverUrl =
+        homepage.coverUrl ?? introMap?['coverUrl']?.toString().trim();
+    if ((homepage.status ?? '').trim() != 'published') {
+      return homepage.copyWith(
+        coverUrl: coverUrl,
+        relatedGroups: relatedGroups,
+      );
     }
+    return homepage.copyWith(
+      coverUrl: coverUrl,
+      reviewSummary:
+          homepage.reviewSummary ?? _mockDefaultReviewSummary(homepage),
+      contentPreview: homepage.contentPreview.isNotEmpty
+          ? homepage.contentPreview
+          : _mockDefaultContentPreview(homepage),
+      questionPreview: homepage.questionPreview.isNotEmpty
+          ? homepage.questionPreview
+          : _mockDefaultQuestionPreview(homepage),
+      relatedGroups: relatedGroups,
+    );
+  }
 
-    for (final homepage
-        in _contractSeedHomepages() ?? const <HomepageDetail>[]) {
-      put(homepage);
-    }
-    for (final homepage in HomepageMockData.cloneHomepageSeeds()) {
-      put(homepage);
-    }
-    return byId.values.toList(growable: true);
+  static List<HomepageDetail> _repositorySeedHomepages() {
+    return List<HomepageDetail>.from(
+      _contractSeedHomepages() ?? const <HomepageDetail>[],
+      growable: true,
+    );
   }
 
   void _putHomepage(HomepageDetail next) {
@@ -198,6 +238,36 @@ class MockHomepageRepository implements HomepageRepository {
   @override
   Future<HomepageDetail> getHomepageDetail(String homepageId) async {
     return _requireHomepage(homepageId);
+  }
+
+  @override
+  Future<HomepageDetail> followHomepage(String homepageId) async {
+    final homepage = _requireHomepage(homepageId);
+    if (homepage.viewerFollowsHomepage) {
+      return homepage;
+    }
+    final next = homepage.copyWith(
+      viewerFollowsHomepage: true,
+      followerCount: homepage.followerCount + 1,
+    );
+    _putHomepage(next);
+    return next;
+  }
+
+  @override
+  Future<HomepageDetail> unfollowHomepage(String homepageId) async {
+    final homepage = _requireHomepage(homepageId);
+    if (!homepage.viewerFollowsHomepage) {
+      return homepage;
+    }
+    final next = homepage.copyWith(
+      viewerFollowsHomepage: false,
+      followerCount: homepage.followerCount > 0
+          ? homepage.followerCount - 1
+          : 0,
+    );
+    _putHomepage(next);
+    return next;
   }
 
   @override
@@ -431,10 +501,86 @@ class MockHomepageRepository implements HomepageRepository {
   }
 
   HomepageDetail _requireHomepage(String homepageId) {
-    return _homepages.firstWhere(
-      (h) => h.id == homepageId,
-      orElse: () => throw StateError('homepage not found: $homepageId'),
-    );
+    final resolved = _findHomepage(homepageId);
+    if (resolved != null) {
+      return resolved;
+    }
+    throw StateError('homepage not found: $homepageId');
+  }
+
+  HomepageDetail? _findHomepage(String rawId) {
+    final candidates = _homepageLookupCandidates(rawId);
+    for (final homepage in _homepages) {
+      final homepageCandidates = _homepageLookupCandidates(homepage.id);
+      homepageCandidates.addAll(
+        _homepageLookupCandidates(_canonicalEntityId(homepage)),
+      );
+      homepageCandidates.addAll(_homepageDataEntityRefs(homepage));
+      if (homepageCandidates.intersection(candidates).isNotEmpty) {
+        return homepage;
+      }
+    }
+    return null;
+  }
+
+  Set<String> _homepageLookupCandidates(String rawId) {
+    final normalized = _normalizeHomepageLookupId(rawId);
+    if (normalized.isEmpty) {
+      return <String>{};
+    }
+    final parts = normalized.split('/').where((p) => p.isNotEmpty).toList();
+    final last = parts.isEmpty ? null : parts.last;
+    return <String>{
+      normalized,
+      ?last,
+      if (normalized.startsWith('entity/homepage/'))
+        normalized.substring('entity/homepage/'.length),
+      if (normalized.startsWith('entity/'))
+        normalized.substring('entity/'.length),
+      if (normalized.startsWith('entities/'))
+        normalized.substring('entities/'.length),
+      if (normalized.startsWith('entity:') && normalized.contains(':homepage:'))
+        normalized.substring(
+          normalized.lastIndexOf(':homepage:') + ':homepage:'.length,
+        ),
+      if (normalized.startsWith('entity:') && normalized.contains(':'))
+        normalized.substring(normalized.lastIndexOf(':') + 1),
+      if (normalized.startsWith('entity:homepage:'))
+        normalized.substring('entity:homepage:'.length),
+    }.where((item) => item.trim().isNotEmpty).toSet();
+  }
+
+  String _normalizeHomepageLookupId(String rawId) {
+    return rawId
+        .trim()
+        .replaceAll('\\', '/')
+        .replaceFirst(RegExp(r'^/+'), '')
+        .replaceFirst(RegExp(r'^entity/'), 'Entity/')
+        .toLowerCase();
+  }
+
+  Set<String> _homepageDataEntityRefs(HomepageDetail homepage) {
+    final title = homepage.title.trim();
+    final type = homepage.homepageType.trim();
+    final domain = switch (type) {
+      'sight' || 'travel_photo' || 'hotel' || 'restaurant' => '旅行',
+      'university' => '校园',
+      _ => '通用',
+    };
+    final entityType = switch (type) {
+      'sight' => '景区',
+      'travel_photo' => '机位',
+      'hotel' => '住宿',
+      'restaurant' => '餐饮',
+      'university' => '学校',
+      _ => '主页',
+    };
+    return <String>{
+      if (title.isNotEmpty) 'entity/$domain/$entityType/$title',
+      if (title.isNotEmpty) 'entities/$domain/$entityType/$title',
+      if (title.isNotEmpty) '$domain/$entityType/$title',
+      if (title.isNotEmpty) title,
+    }.map(_normalizeHomepageLookupId).toSet();
   }
 
   HomepageDetail _createCandidateFromDraft(
@@ -459,102 +605,6 @@ class MockHomepageRepository implements HomepageRepository {
       updatedAt: now,
     );
   }
-}
-
-HomepageReviewSummaryData _mockDefaultReviewSummary(HomepageDetail homepage) {
-  return HomepageReviewSummaryData(
-    averageRating: homepage.averageRating ?? 4.6,
-    ratingCount: homepage.ratingCount != 0 ? homepage.ratingCount : 18,
-    highlightTags: homepage.categoryTags.isNotEmpty
-        ? List<String>.from(homepage.categoryTags)
-        : const <String>['体验稳定', '适合沉淀口碑'],
-    dimensionScores: <HomepageReviewDimensionScore>[
-      HomepageReviewDimensionScore(label: '环境', score: 4.6),
-      HomepageReviewDimensionScore(label: '体验', score: 4.5),
-      HomepageReviewDimensionScore(label: '推荐度', score: 4.7),
-    ],
-  );
-}
-
-List<HomepageContentPreview> _mockDefaultContentPreview(
-  HomepageDetail homepage,
-) {
-  final title = homepage.title;
-  return <HomepageContentPreview>[
-    HomepageContentPreview(
-      postId: '${homepage.id}_post_1',
-      title: '$title 的体验笔记',
-      summary: '从主页上下文进入内容挂载后的聚合。',
-      contentType: 'article',
-      coverUrl: homepage.coverUrl,
-    ),
-  ];
-}
-
-List<HomepageQuestionPreview> _mockDefaultQuestionPreview(
-  HomepageDetail homepage,
-) {
-  final title = homepage.title;
-  return <HomepageQuestionPreview>[
-    HomepageQuestionPreview(
-      postId: '${homepage.id}_question_1',
-      title: '$title 值得什么时候去？',
-      summary: '候选主页发布后也会得到基础问答壳层。',
-    ),
-  ];
-}
-
-List<HomepageRelatedGroupSummary> _mockDefaultRelatedGroups(
-  HomepageDetail homepage,
-) {
-  final title = homepage.title;
-  final id = homepage.id;
-  return <HomepageRelatedGroupSummary>[
-    HomepageRelatedGroupSummary(
-      circleId: '${id}_group_1',
-      name: '$title 讨论群',
-      memberCount: 12,
-      linkedHomepageId: id,
-      linkedHomepageTitle: title,
-    ),
-  ];
-}
-
-HomepageDetail _mergeBasicDraft(HomepageDetail h, HomepageBasicDraft d) {
-  final now = DateTime.now().toUtc();
-  return HomepageDetail(
-    id: h.id,
-    homepageType: h.homepageType,
-    title: d.title != null && d.title!.trim().isNotEmpty
-        ? d.title!.trim()
-        : h.title,
-    subtitle: d.subtitle != null
-        ? (d.subtitle!.trim().isEmpty ? null : d.subtitle!.trim())
-        : h.subtitle,
-    coverUrl: d.coverUrl != null && d.coverUrl!.trim().isNotEmpty
-        ? d.coverUrl!.trim()
-        : h.coverUrl,
-    status: h.status,
-    sourceType: h.sourceType,
-    claimStatus: h.claimStatus,
-    categoryTags: d.categoryTags ?? h.categoryTags,
-    address: d.address != null && d.address!.trim().isNotEmpty
-        ? d.address!.trim()
-        : h.address,
-    city: d.city != null && d.city!.trim().isNotEmpty ? d.city!.trim() : h.city,
-    location: d.location ?? h.location,
-    ownerUserId: h.ownerUserId,
-    averageRating: h.averageRating,
-    ratingCount: h.ratingCount,
-    reviewSummary: h.reviewSummary,
-    contentPreview: h.contentPreview,
-    questionPreview: h.questionPreview,
-    relatedGroups: h.relatedGroups,
-    createdAt: h.createdAt,
-    updatedAt: now,
-    publishedAt: h.publishedAt,
-    offlineAt: h.offlineAt,
-  );
 }
 
 class RemoteHomepageRepository implements HomepageRepository {
@@ -646,6 +696,49 @@ class RemoteHomepageRepository implements HomepageRepository {
         context: _contextForSurface(
           AppUiSurfaces.homepageDetail,
           operationId: EntityApiMetadata.getHomepageDetailOperation,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<HomepageDetail> followHomepage(String homepageId) async {
+    final decoded = await _httpClient.postJson(
+      _uri(EntityApiMetadata.followHomepagePath(homepageId: homepageId)),
+      headers: _headersForSurface(
+        AppUiSurfaces.homepageDetail,
+        operationId: EntityApiMetadata.followHomepageOperation,
+        clientPageId: EntityRequestPageIds.followHomepage,
+      ),
+      body: const <String, Object?>{},
+    );
+    return HomepageDetail.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: _contextForSurface(
+          AppUiSurfaces.homepageDetail,
+          operationId: EntityApiMetadata.followHomepageOperation,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<HomepageDetail> unfollowHomepage(String homepageId) async {
+    final decoded = await _httpClient.deleteJson(
+      _uri(EntityApiMetadata.unfollowHomepagePath(homepageId: homepageId)),
+      headers: _headersForSurface(
+        AppUiSurfaces.homepageDetail,
+        operationId: EntityApiMetadata.unfollowHomepageOperation,
+        clientPageId: EntityRequestPageIds.unfollowHomepage,
+      ),
+    );
+    return HomepageDetail.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: _contextForSurface(
+          AppUiSurfaces.homepageDetail,
+          operationId: EntityApiMetadata.unfollowHomepageOperation,
         ),
       ),
     );
@@ -998,5 +1091,3 @@ class RemoteHomepageRepository implements HomepageRepository {
     );
   }
 }
-
-String _normalize(String? value) => (value ?? '').trim().toLowerCase();

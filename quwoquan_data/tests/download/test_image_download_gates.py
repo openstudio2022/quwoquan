@@ -57,6 +57,16 @@ def test_relevance_generic_and_template_blocked():
     assert not is_generic_relevance("金顶日出云海，峨眉山徒步终点的标志景观", entity_id="峨眉山")
     assert relevance_issue("封面图", entity_id="峨眉山", asset_id="001") is not None
     assert relevance_issue("牛奶海高山湖泊实景", entity_id="稻城亚丁", asset_id="001") is None
+    assert relevance_issue(
+        "距墨石公园14公里的惠远寺，支撑互补藏文化游线",
+        entity_id="墨石公园",
+        asset_id="002",
+    ) is not None
+    assert relevance_issue(
+        "塔公草原实况，支撑墨石公园与塔公草原组合一日游",
+        entity_id="墨石公园",
+        asset_id="003",
+    ) is not None
 
 
 # ── Gate 2: 每实体最少图片数 ────────────────────────────────────────

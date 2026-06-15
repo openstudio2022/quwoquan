@@ -168,7 +168,12 @@
               "sizeBytes": 2570495,
               "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
             }
-          }
+          },
+          "identityTags": [
+            "lifestyle",
+            "coffee",
+            "parenting"
+          ]
         },
         {
           "userId": "fixture_user_photo",
@@ -318,7 +323,12 @@
               "sizeBytes": 1857474,
               "sourceHash": "sha256:bf14a1065a7e7777b5f691810e888d68d600c0b736f7535850e6d641f547f29c"
             }
-          }
+          },
+          "identityTags": [
+            "photography",
+            "travel",
+            "cityWalk"
+          ]
         },
         {
           "userId": "fixture_user_travel",
@@ -469,7 +479,12 @@
               "sizeBytes": 2522887,
               "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
             }
-          }
+          },
+          "identityTags": [
+            "travel",
+            "photography",
+            "outdoor"
+          ]
         },
         {
           "userId": "fixture_user_video",
@@ -626,7 +641,12 @@
               "sizeBytes": 2686629,
               "sourceHash": "sha256:ab5cbfa588ba3ba58864dfd6568dc0e31c7e5a7b0c4bf65a36b001d9f9a5d024"
             }
-          }
+          },
+          "identityTags": [
+            "cityWalk",
+            "photography",
+            "coffee"
+          ]
         },
         {
           "userId": "fixture_user_article",
@@ -725,7 +745,12 @@
               "sizeBytes": 1794125,
               "sourceHash": "sha256:68d9a9303e0a5b685f978f1c13681d23d159303304e1e09750fe7c4f55da35d5"
             }
-          }
+          },
+          "identityTags": [
+            "designWriting",
+            "tech",
+            "coffee"
+          ]
         },
         {
           "userId": "fixture_user_friend",
@@ -877,7 +902,12 @@
               "sizeBytes": 1117608,
               "sourceHash": "sha256:37dc09790fcc630ecfe492e0332a73575e571006a14b5836f03f5c82951a6bea"
             }
-          }
+          },
+          "identityTags": [
+            "coffee",
+            "food",
+            "designWriting"
+          ]
         },
         {
           "userId": "fixture_user_weekend_1",
@@ -1036,7 +1066,12 @@
               "sizeBytes": 2570495,
               "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
             }
-          }
+          },
+          "identityTags": [
+            "lifestyle",
+            "coffee",
+            "parenting"
+          ]
         },
         {
           "userId": "fixture_user_weekend_2",
@@ -1199,7 +1234,12 @@
               "sizeBytes": 2062449,
               "sourceHash": "sha256:bacfe716b92a789d7c398acd22465ba316a038490b4a242e3acd024c8f8db438"
             }
-          }
+          },
+          "identityTags": [
+            "food",
+            "coffee",
+            "lifestyle"
+          ]
         },
         {
           "userId": "fixture_user_owner",
@@ -1345,7 +1385,12 @@
               "sizeBytes": 1119236,
               "sourceHash": "sha256:42766ca9d90c1d9253d8194f40de15c5fc4bdd7b378bce1f9ea4378304544e8c"
             }
-          }
+          },
+          "identityTags": [
+            "photography",
+            "travel",
+            "cityWalk"
+          ]
         },
         {
           "userId": "fixture_user_travel_owner",
@@ -1492,7 +1537,12 @@
               "sizeBytes": 2136545,
               "sourceHash": "sha256:584102cd74b9d094b22edfed04691aab7813486fe76d9a7a9de20ca58a0bbca3"
             }
-          }
+          },
+          "identityTags": [
+            "travel",
+            "photography",
+            "outdoor"
+          ]
         },
         {
           "userId": "fixture_user_commenter",
@@ -1602,7 +1652,12 @@
               "sizeBytes": 1212244,
               "sourceHash": "sha256:f19e6de501ad9d1f01af8184e3490b19c6a44d47c17d51ad2edd1e6960e428b8"
             }
-          }
+          },
+          "identityTags": [
+            "designWriting",
+            "tech",
+            "coffee"
+          ]
         },
         {
           "userId": "fixture_user_travel_01",
@@ -1750,7 +1805,12 @@
               "sizeBytes": 2522887,
               "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
             }
-          }
+          },
+          "identityTags": [
+            "travel",
+            "photography",
+            "outdoor"
+          ]
         },
         {
           "userId": "fixture_user_citywalk_01",
@@ -1906,7 +1966,12 @@
               "sizeBytes": 2686629,
               "sourceHash": "sha256:1d315b3daadb2fc6362bdd17175fd67925981c4cd72936feaa4d6ba54463f522"
             }
-          }
+          },
+          "identityTags": [
+            "cityWalk",
+            "photography",
+            "coffee"
+          ]
         },
         {
           "userId": "fixture_user_outdoor_01",
@@ -2057,7 +2122,12 @@
               "sizeBytes": 2339108,
               "sourceHash": "sha256:8cddb1acab949e1a1ef0d77c48212e7b165c29a005eb90c7275ed9e2a400b70c"
             }
-          }
+          },
+          "identityTags": [
+            "outdoor",
+            "travel",
+            "fitness"
+          ]
         },
         {
           "userId": "fixture_user_tech_01",
@@ -2213,7 +2283,12 @@
               "sizeBytes": 2148230,
               "sourceHash": "sha256:368b1ddf81a2733ada0712b2c7169f183cad7ae7f067321bb877b9aa8a501319"
             }
-          }
+          },
+          "identityTags": [
+            "tech",
+            "designWriting",
+            "cityWalk"
+          ]
         }
       ]
     },

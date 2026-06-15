@@ -28,7 +28,12 @@ void main() {
   });
 
   test('switching app data source mode recreates delegate state', () {
-    final container = ProviderContainer();
+    // setMode 带环境守卫（alpha 强制 mock），用直通桩验证 mode 变化时 delegate 重建。
+    final container = ProviderContainer(
+      overrides: [
+        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
+      ],
+    );
     addTearDown(container.dispose);
 
     container
@@ -56,9 +61,7 @@ void main() {
   test('mode switch tears down active mock delegate before delayed push arrives', () async {
     final container = ProviderContainer(
       overrides: [
-        appDataSourceModeProvider.overrideWith(
-          () => _FixedModeNotifier(AppDataSourceMode.mock),
-        ),
+        appDataSourceModeProvider.overrideWith(_SwitchableModeNotifier.new),
       ],
     );
     addTearDown(container.dispose);
@@ -95,4 +98,15 @@ class _FixedModeNotifier extends AppDataSourceModeNotifier {
 
   @override
   AppDataSourceMode build() => mode;
+}
+
+/// 绕过 setMode 的环境守卫（alpha 强制 mock），用于验证 mode 切换行为本身。
+class _SwitchableModeNotifier extends AppDataSourceModeNotifier {
+  @override
+  AppDataSourceMode build() => AppDataSourceMode.mock;
+
+  @override
+  void setMode(AppDataSourceMode mode) {
+    state = mode;
+  }
 }

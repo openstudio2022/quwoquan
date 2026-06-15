@@ -165,6 +165,8 @@ def test_gallery_compose_brief_then_agent_draft_green():
         model="test-agent/contract",
         cited_source_paths=quality.get("sourcePaths") or [],
         covered_facts=[],
+        agent_run_id="run-gallery",
+        agent_id="agent-gallery",
     )
     review = review_route_draft(TASK, BATCH, REF, brief, quality)
     assert review["decision"] == "approved", review["issues"]

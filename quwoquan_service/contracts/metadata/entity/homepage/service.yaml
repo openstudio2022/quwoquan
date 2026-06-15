@@ -27,7 +27,7 @@ api_routes:
   - method: POST
     path: /v1/homepages/candidates/suggest
     operation: SuggestHomepageCandidate
-    description: 补充缺失共享主页
+    description: 补充缺失主页
     request_entity: Homepage
     writable_fields: [title, subtitle, homepageType, categoryTags, coverUrl, address, city, location]
     auth: required
@@ -44,11 +44,31 @@ api_routes:
     description: 获取共享主页详情
     response_entity: Homepage
 
+  - method: POST
+    path: /v1/homepages/{homepageId}/follow
+    operation: FollowHomepage
+    description: 关注共享主页
+    response_entity: Homepage
+    auth: required
+
+  - method: DELETE
+    path: /v1/homepages/{homepageId}/follow
+    operation: UnfollowHomepage
+    description: 取消关注共享主页
+    response_entity: Homepage
+    auth: required
+
   - method: GET
     path: /v1/homepages/{homepageId}/shell
     operation: GetHomepageShell
     description: 获取共享主页阅读壳层
     response_entity: HomepageShellView
+
+  - method: GET
+    path: /v1/homepages/{homepageId}/introduction
+    operation: GetHomepageIntroduction
+    description: 获取主页完整介绍页
+    response_entity: HomepageIntroduction
 
   - method: GET
     path: /v1/homepages/{homepageId}/object-page-bundle
@@ -108,7 +128,7 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [search, suggest, read_homepage, claim, maintain, report_status]
+    capabilities: [search, suggest, read_homepage, read_homepage_introduction, follow, claim, maintain, report_status]
   - name: platform-ops
     capabilities: [publish_candidate, review_claim, review_status_report]
   - name: content-service

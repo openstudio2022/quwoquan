@@ -26,8 +26,8 @@ def main() -> int:
     issues: list[str] = []
 
     help_result = run(["python3", str(STACKCTL), "--help"])
-    if help_result.returncode != 0 or "package" not in help_result.stdout or "deploy" not in help_result.stdout:
-        issues.append("stackctl --help must list package and deploy commands")
+    if help_result.returncode != 0 or "package" not in help_result.stdout or "deploy" not in help_result.stdout or "roll" not in help_result.stdout:
+        issues.append("stackctl --help must list package, roll and deploy commands")
 
     verify_help = run(["python3", str(STACKCTL), "verify", "--help"])
     if verify_help.returncode != 0 or "--kind" not in verify_help.stdout or "--tier" not in verify_help.stdout:
@@ -46,6 +46,14 @@ def main() -> int:
         issues.append("stackctl up --help must expose --env/--device-id")
     if "--gateway-base-url" in up_help.stdout:
         issues.append("stackctl up user surface must not expose gateway override flags")
+
+    roll_help = run(["python3", str(STACKCTL), "roll", "--help"])
+    if roll_help.returncode != 0 or "--mode" not in roll_help.stdout or "--target" not in roll_help.stdout:
+        issues.append("stackctl roll --help must expose --mode/--target")
+
+    deploy_help = run(["python3", str(STACKCTL), "deploy", "--help"])
+    if deploy_help.returncode != 0 or "--mode" not in deploy_help.stdout:
+        issues.append("stackctl deploy --help must expose --mode")
 
     profile_result = run(
         ["python3", str(PORT_PROFILE), "--profile", "beta-local", "--format", "json"]

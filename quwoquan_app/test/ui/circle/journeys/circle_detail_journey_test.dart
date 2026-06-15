@@ -40,9 +40,9 @@ Widget _scopedApp({CircleRepository? mock}) {
                 const Scaffold(body: Center(child: Text('Stats'))),
           ),
           GoRoute(
-            path: '/article/:id',
+            path: '/works/browser/:workId',
             builder: (_, _) =>
-                const Scaffold(body: Center(child: Text('Article'))),
+                const Scaffold(body: Center(child: Text('Work Browser'))),
           ),
           GoRoute(
             path: '/chat/:id',
@@ -106,7 +106,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleDetailPage), findsOneWidget);
@@ -114,11 +114,15 @@ void main() {
     });
 
     testWidgets('旅程 A2：圈子详情页包含 Tab 导航', (tester) async {
+      // 壳层内容较长，放大视口保证一级 Tab（内容/讨论/成员）完整内联展示。
+      tester.view.physicalSize = const Size(1080, 3600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);
@@ -130,7 +134,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleDetailPage), findsOneWidget);
@@ -165,7 +169,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 
       expect(find.byType(CircleDetailPage), findsOneWidget);
@@ -190,11 +194,11 @@ void main() {
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
 
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _pumpIgnoringTabPaintErrors(tester, frames: 2);
       router.go('/circles');
       await _pumpIgnoringTabPaintErrors(tester, frames: 2);
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _pumpIgnoringTabPaintErrors(tester, frames: 3);
 
       expect(find.byType(Scaffold), findsWidgets);
@@ -206,24 +210,28 @@ void main() {
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
 
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
       expect(find.byType(CircleDetailPage), findsOneWidget);
 
       router.go('/circles');
       await _settleIgnoringTabPaintErrors(tester);
 
-      router.push('/circle/circle_photo_02');
+      router.push('/circle/fixture_circle_photography_01');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
       expect(find.byType(CircleDetailPage), findsOneWidget);
     });
 
     testWidgets('旅程 C3：Tab 存在且反复 pump 不崩溃', (tester) async {
+      // 同 A2：放大视口保证一级 Tab 完整内联展示。
+      tester.view.physicalSize = const Size(1080, 3600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
       final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
-      router.push('/circle/circle_photo_01');
+      router.push('/circle/fixture_circle_photo');
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);
