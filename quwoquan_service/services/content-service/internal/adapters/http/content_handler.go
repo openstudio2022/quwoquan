@@ -79,6 +79,8 @@ func (h *ContentHandler) Routes() http.Handler {
 	mux.HandleFunc("/metrics/rec/prometheus", h.handlePrometheusMetrics)
 	mux.HandleFunc("/admin/import", h.handleBulkImport)
 	mux.HandleFunc("/admin/content/semantic-mentions:apply", h.handleApplySemanticMentionGovernanceEvent)
+	mux.HandleFunc("GET /v1/config/app", h.handleGetAppConfig)
+	mux.HandleFunc("GET /v1/content/sub-accounts/{subAccountId}/author-impact", h.handleGetAuthorImpact)
 	mux.HandleFunc("/v1/content/users/posts", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET"))

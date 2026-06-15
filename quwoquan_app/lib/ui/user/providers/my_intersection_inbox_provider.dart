@@ -45,12 +45,11 @@ class MyIntersectionSummaryNotifier
       final summary = await ref
           .read(intersectionRepositoryProvider)
           .getMyIntersectionSummary();
+      if (!ref.mounted) return;
       state = state.copyWith(summary: summary, isLoading: false);
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        rawError: () => e,
-      );
+      if (!ref.mounted) return;
+      state = state.copyWith(isLoading: false, rawError: () => e);
     }
   }
 }
@@ -103,16 +102,16 @@ class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
       final items = await repo.listMyIntersections(
         dimension: dimension.isEmpty ? null : dimension,
       );
+      if (!ref.mounted) return;
       state = state.copyWith(items: items, isLoading: false);
       await repo.markIntersectionsVisited(
         dimension: dimension.isEmpty ? null : dimension,
       );
+      if (!ref.mounted) return;
       ref.read(myIntersectionSummaryProvider.notifier).load();
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        rawError: () => e,
-      );
+      if (!ref.mounted) return;
+      state = state.copyWith(isLoading: false, rawError: () => e);
     }
   }
 }

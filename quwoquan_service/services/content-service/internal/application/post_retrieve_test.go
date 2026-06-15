@@ -7,6 +7,7 @@ import (
 
 	rtsearch "quwoquan_service/runtime/search"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 type fakePublishedReader struct {
@@ -108,5 +109,60 @@ func TestRetrievePostsTextRecallAndAuthorAnchor(t *testing.T) {
 	}
 	if len(resp.Hits) != 2 {
 		t.Fatalf("alice authored 2 articles, got %#v", resp.Hits)
+	}
+}
+
+func TestNormalizeSearchMatchedFieldPreservesContractFieldNames(t *testing.T) {
+	postWithoutSummary := postmodel.Post{
+		Summary: "",
+		Body:    "候选治理中的普通正文",
+	}
+	if got := normalizeSearchMatchedField("tags", postWithoutSummary); got != "tagRefs" {
+		t.Fatalf("expected tags -> tagRefs, got %q", got)
+	}
+	if got := normalizeSearchMatchedField("entities", postWithoutSummary); got != "entityRefs" {
+		t.Fatalf("expected entities -> entityRefs, got %q", got)
+	}
+	if got := normalizeSearchMatchedField("summary", postWithoutSummary); got != "body" {
+		t.Fatalf("expected summary fallback -> body, got %q", got)
+	}
+
+	postWithSummary := postmodel.Post{
+		Summary: "正文摘要",
+		Body:    "正文内容",
+	}
+	if got := normalizeSearchMatchedField("summary", postWithSummary); got != "summary" {
+		t.Fatalf("expected explicit summary to stay summary, got %q", got)
+	}
+}
+
+func TestGetAppConfigUsesGenericCanaryMatrixPayload(t *testing.T) {
+	service := NewPostService(
+		persistence.NewPostStore(nil),
+		WithStoryRuntimeConfig(StoryRuntimeConfig{
+			ExperimentBucket: "rollout_20",
+			CurrentStage:     "20%",
+			CanaryMatrix: []StoryCanaryStage{
+				{Stage: "5%", RolloutPercent: 5},
+				{Stage: "20%", RolloutPercent: 20},
+			},
+		}),
+	)
+
+	resp := service.GetAppConfig()
+	content, _ := resp["content"].(map[string]any)
+	if content == nil {
+		t.Fatalf("missing content config: %+v", resp)
+	}
+	grayRelease, _ := content["gray_release"].(map[string]any)
+	if grayRelease == nil {
+		t.Fatalf("missing gray release config: %+v", content)
+	}
+	canaryMatrix, ok := grayRelease["canary_matrix"].([]any)
+	if !ok {
+		t.Fatalf("canary_matrix should be []any for generic payload, got %T", grayRelease["canary_matrix"])
+	}
+	if len(canaryMatrix) != 2 {
+		t.Fatalf("expected 2 canary stages, got %d", len(canaryMatrix))
 	}
 }

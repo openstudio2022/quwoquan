@@ -91,6 +91,39 @@ func TestFeedAndPostEndpoints(t *testing.T) {
 	}
 }
 
+func TestAppConfigEndpointIsImplemented(t *testing.T) {
+	req := httptest.NewRequest("GET", "/v1/config/app", nil)
+	rec := httptest.NewRecorder()
+	newTestHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected app config status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode app config response: %v", err)
+	}
+	content, _ := body["content"].(map[string]any)
+	if content == nil {
+		t.Fatalf("missing content config: %+v", body)
+	}
+}
+
+func TestAuthorImpactEndpointIsImplemented(t *testing.T) {
+	req := httptest.NewRequest("GET", "/v1/content/sub-accounts/test_author/author-impact", nil)
+	rec := httptest.NewRecorder()
+	newTestHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected author impact status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode author impact response: %v", err)
+	}
+	if body["authorId"] != "" || body["total"] != float64(0) {
+		t.Fatalf("unexpected author impact fallback body: %+v", body)
+	}
+}
+
 func TestCreatePostBodyBindingRejectsUnknownField(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",

@@ -2831,7 +2831,7 @@ func (s *PostService) ListCommentsForPostAuthor(ctx context.Context, userID, cur
 
 func (s *PostService) GetAppConfig() map[string]any {
 	runtimeConfig := normalizeStoryRuntimeConfig(s.storyRuntime)
-	canaryMatrix := make([]map[string]any, 0, len(runtimeConfig.CanaryMatrix))
+	canaryMatrix := make([]any, 0, len(runtimeConfig.CanaryMatrix))
 	for _, stage := range runtimeConfig.CanaryMatrix {
 		canaryMatrix = append(canaryMatrix, map[string]any{
 			"stage":          stage.Stage,
@@ -3081,7 +3081,7 @@ func (s *PostService) SearchPosts(
 			SubCategory:       item.subCategory,
 			LikeCount:         post.LikeCount,
 			HighlightText:     hit.Snippet,
-			MatchedField:      hit.MatchedField,
+			MatchedField:      normalizeSearchMatchedField(hit.MatchedField, post),
 			PublishedAt:       post.PublishedAt,
 		})
 	}
@@ -3134,6 +3134,20 @@ func deriveSearchTopicCategories(tagRefs []string, fallbackCategory string, fall
 		subCategory = topics[1]
 	}
 	return category, subCategory
+}
+
+func normalizeSearchMatchedField(matchedField string, post postmodel.Post) string {
+	switch strings.TrimSpace(matchedField) {
+	case "tags":
+		return "tagRefs"
+	case "entities":
+		return "entityRefs"
+	case "summary":
+		if strings.TrimSpace(post.Summary) == "" && strings.TrimSpace(post.Body) != "" {
+			return "body"
+		}
+	}
+	return matchedField
 }
 
 func (s *PostService) GetHelperRead(ctx context.Context, postID string) (map[string]any, error) {

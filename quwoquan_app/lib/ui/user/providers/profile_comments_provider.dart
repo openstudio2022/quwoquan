@@ -49,16 +49,15 @@ class SentCommentsNotifier extends Notifier<ProfileCommentsState> {
     final repo = ref.read(contentRepositoryProvider);
     try {
       final page = await repo.listCommentsByAuthor();
+      if (!ref.mounted) return;
       state = state.copyWith(
         comments: page.items,
         nextCursor: () => page.nextCursor,
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        rawError: () => e,
-      );
+      if (!ref.mounted) return;
+      state = state.copyWith(isLoading: false, rawError: () => e);
     }
   }
 
@@ -68,12 +67,14 @@ class SentCommentsNotifier extends Notifier<ProfileCommentsState> {
     final repo = ref.read(contentRepositoryProvider);
     try {
       final page = await repo.listCommentsByAuthor(cursor: state.nextCursor);
+      if (!ref.mounted) return;
       state = state.copyWith(
         comments: [...state.comments, ...page.items],
         nextCursor: () => page.nextCursor,
         isLoadingMore: false,
       );
     } catch (_) {
+      if (!ref.mounted) return;
       state = state.copyWith(isLoadingMore: false);
     }
   }
@@ -89,16 +90,15 @@ class ReceivedCommentsNotifier extends Notifier<ProfileCommentsState> {
     final repo = ref.read(contentRepositoryProvider);
     try {
       final page = await repo.listCommentsForPostAuthor();
+      if (!ref.mounted) return;
       state = state.copyWith(
         comments: page.items,
         nextCursor: () => page.nextCursor,
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        rawError: () => e,
-      );
+      if (!ref.mounted) return;
+      state = state.copyWith(isLoading: false, rawError: () => e);
     }
   }
 
@@ -110,12 +110,14 @@ class ReceivedCommentsNotifier extends Notifier<ProfileCommentsState> {
       final page = await repo.listCommentsForPostAuthor(
         cursor: state.nextCursor,
       );
+      if (!ref.mounted) return;
       state = state.copyWith(
         comments: [...state.comments, ...page.items],
         nextCursor: () => page.nextCursor,
         isLoadingMore: false,
       );
     } catch (_) {
+      if (!ref.mounted) return;
       state = state.copyWith(isLoadingMore: false);
     }
   }
