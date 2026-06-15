@@ -2,9 +2,11 @@
 ARG PYTHON_BASE_IMAGE=python:3.11
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+ARG PIP_FALLBACK_INDEX_URL=https://pypi.org/simple
 FROM ${PYTHON_BASE_IMAGE}
 ARG PIP_INDEX_URL
 ARG PIP_TRUSTED_HOST
+ARG PIP_FALLBACK_INDEX_URL
 
 WORKDIR /app
 
@@ -18,18 +20,31 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_RETRIES=8 \
     PIP_PROGRESS_BAR=off \
     PIP_INDEX_URL=${PIP_INDEX_URL} \
-    PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST}
+    PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST} \
+    PIP_FALLBACK_INDEX_URL=${PIP_FALLBACK_INDEX_URL}
 
 COPY quwoquan_service/services/rec-model-service/requirements.txt .
-RUN if [ -n "${PIP_TRUSTED_HOST}" ]; then \
-      python -m pip install --no-cache-dir \
-        --index-url "${PIP_INDEX_URL}" \
-        --trusted-host "${PIP_TRUSTED_HOST}" \
-        -r requirements.txt; \
-    else \
-      python -m pip install --no-cache-dir \
-        --index-url "${PIP_INDEX_URL}" \
-        -r requirements.txt; \
+RUN set -e; \
+    install_from_index() { \
+      index_url="$1"; \
+      trusted_host="$2"; \
+      if [ -n "${trusted_host}" ]; then \
+        python -m pip install --no-cache-dir \
+          --index-url "${index_url}" \
+          --trusted-host "${trusted_host}" \
+          -r requirements.txt; \
+      else \
+        python -m pip install --no-cache-dir \
+          --index-url "${index_url}" \
+          -r requirements.txt; \
+      fi; \
+    }; \
+    if ! install_from_index "${PIP_INDEX_URL}" "${PIP_TRUSTED_HOST}"; then \
+      if [ "${PIP_INDEX_URL}" = "${PIP_FALLBACK_INDEX_URL}" ]; then \
+        exit 1; \
+      fi; \
+      echo "Primary Python index failed, retrying with fallback ${PIP_FALLBACK_INDEX_URL}" >&2; \
+      install_from_index "${PIP_FALLBACK_INDEX_URL}" ""; \
     fi
 
 COPY quwoquan_service/services/rec-model-service/generated/ ./generated/
