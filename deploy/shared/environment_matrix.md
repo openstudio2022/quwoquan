@@ -1,6 +1,6 @@
 # 部署环境矩阵（多环境拓扑 · 一套代码）
 
-> **总览**：正式环境语义统一为 **alpha → beta → gamma → prod**。当前冻结拓扑为 **`alpha-local / beta-local / gamma-hosted / prod-hosted`**。`alpha` 与 `beta` 都是开发期本地验证；`gamma` 是云侧类生产集成验证；`prod` 是全量生产（**灰度放量与回滚由云侧发布策略、观测与自动回滚在 prod 语义下完成，不单独拆分环境名**）。
+> **总览**：正式环境语义统一为 **alpha → beta → gamma → prod**。当前冻结拓扑为 **`alpha-local / beta-local / gamma-local / prod-hosted`**。`alpha` / `beta` / `gamma` 都是本地验证（`gamma` 仅本地快速集成 mirror，已无远端 gamma）；唯一远端/hosted 目标是 `prod-hosted`（backend SSH 托管，gray 与 full 因成本共享同一集群）。真实远端集成与 curated 媒体路由复验由 prod `gray-initial` rollout stage 承接。`prod` 是全量生产（**灰度放量与回滚由云侧发布策略、观测与自动回滚在 prod 语义下完成，不单独拆分环境名**）。
 >
 > **拓扑唯一源**：
 > - 领域/进程归属：[`process_domain_mapping.yaml`](process_domain_mapping.yaml)
@@ -13,7 +13,7 @@
 |------|----------|----------|-----------|------|--------------|
 | `alpha` | 单实例独立验证：端侧 App、云侧 service 各自独立跑通 | 开发机 / 模拟器 / 本机依赖 | `alpha` | 每个 domain 独立进程 | `APP_RUNTIME_ENV=alpha`；可用 `APP_DATA_SOURCE=mock` 或单服务网关 |
 | `beta` | 本地端云集成验证：本机网关 + 多服务协同 | 开发机 / 局域网 / 模拟器 | `beta` | 与 `gamma/prod` 一致 | `APP_RUNTIME_ENV=beta`、`APP_DATA_SOURCE=remote` |
-| `gamma` | 云侧类生产集成验证：ECS gamma pre + 本地 self-hosted 设备验证 | ECS / 公网入口 / 本地 Mac 设备 | `gamma` | 与 `beta/prod` 一致 | `APP_RUNTIME_ENV=gamma`、远端测试网关、测试 token |
+| `gamma` | 本地快速集成验证：local-gamma mirror + 本地 self-hosted 设备验证（仅本地，无远端 gamma） | 本机容器编排 / 本地 Mac 设备 | `gamma` | 与 `beta/prod` 一致 | `APP_RUNTIME_ENV=gamma`、本地 mirror 网关、测试 token |
 | `prod` | 全量生产（含按计划灰度与放量） | 生产集群 | `prod` | 全量生产拓扑 | `APP_RUNTIME_ENV=prod`、`APP_DATA_SOURCE=remote` |
 
 **配置约束**：服务公开 `APP_ENV` 只允许 `alpha|beta|gamma|prod`，运行时只读取同名配置目录。禁止通过 `local` / `integration` 目录做兼容映射。
@@ -26,17 +26,17 @@
 repo verify/package
   -> alpha-local
   -> beta-local
-  -> gamma-hosted
-  -> prod-hosted(initial)
-  -> prod-hosted(checks)
+  -> prod-hosted(gray-initial)
+  -> prod-hosted(carry-on/checks)
   -> prod-hosted(full)
 ```
 
 约束：
 
 - `alpha-local` 与 `beta-local` 保持本地 topology，不新增 hosted beta。
-- `gamma-hosted` 是 `main` blocking promotion 的 hosted 阶段；`gamma-local` 仅用于提交前 local-gamma mirror。
-- `prod-hosted(initial|checks|full)` 都属于同一个 `prod` 环境生命周期，不得抽象成 `prod-gray` 或额外环境名。
+- 远端/hosted 目标只有 `prod-hosted`；`gamma` 仅本地（`gamma-local` 用于提交前 local-gamma mirror），不存在远端 gamma-hosted 阶段。
+- 旧 `gamma-hosted` 阻断阶段已退役，其承担的真实远端集成与 curated 媒体路由复验下沉到 `prod-hosted(gray-initial)`。
+- `prod-hosted(gray-initial|carry-on|full)` 都属于同一个 `prod` 环境生命周期，不得抽象成 `prod-gray` 或额外环境名。
 - `mainline_auto_prod` blocking critical path 必须 `<= 900s`。
 
 ## 1.0 环境真相源与官方入口
@@ -55,7 +55,7 @@ repo verify/package
 |---|---|---|---|---|
 | `alpha` | `APP_RUNTIME_ENV=alpha`、`APP_DATA_SOURCE=mock` | 允许 fixture/mock boundary | 仅本机/模拟器 host | 允许 seed manifest，不允许 prod host |
 | `beta` | `APP_RUNTIME_ENV=beta`、`APP_DATA_SOURCE=remote` | 允许本地联调 fixture | 仅本机/模拟器 host | 不允许 prod host；允许 beta local artifact |
-| `gamma` | `APP_RUNTIME_ENV=gamma`、`APP_DATA_SOURCE=remote` | hosted / local-gamma 共用 gamma 语义 | 仅 `*.quwoquan-env.test` | 不允许 local/test host 落入 hosted artifact |
+| `gamma` | `APP_RUNTIME_ENV=gamma`、`APP_DATA_SOURCE=remote` | 仅 local-gamma mirror 使用 gamma 语义（无远端 gamma） | 本机/局域网 mirror host | 不允许 prod host 落入 gamma artifact |
 | `prod` | `APP_RUNTIME_ENV=prod`、`APP_DATA_SOURCE=remote` | 只读取 `prod` config / release snapshot | 仅正式生产域名 | 禁止 mock/seed/debug/local/test host 与跨环境 artifact 污染 |
 
 ## 1.1 多实例与单套服务口径
@@ -71,18 +71,18 @@ repo verify/package
 
 - 端侧“多实例”仅指多个 App 进程可在**不同模拟器**并行运行。
 - `beta` 服务端任意时刻只允许一套本地集成栈，新启动前必须停止旧栈并回收固定端口。
-- `gamma` 服务端任意时刻只允许一套 ECS gamma 或一套 local-gamma mirror；并行只允许多个端侧实例同时接入同一套 gamma。
+- `gamma` 服务端任意时刻只允许一套 local-gamma mirror（无远端 gamma）；并行只允许多个端侧实例同时接入同一套 local-gamma。
 - 不得因本地脚本便利性把 beta 或 gamma 扩展成多套长期并行环境。
 
 ## 1.1.1 主链 profile 分层
 
-`deploy/shared/gamma_validation_suites.json` 是多环境 promotion 期间 hosted / self-hosted 验证 profile 的唯一真相源：
+`deploy/shared/gamma_validation_suites.json` 是多环境 promotion 期间 local-gamma / self-hosted 验证 profile 的唯一真相源（已无远端 gamma profile；远端真实集成复验由 prod `gray-initial` 承接）：
 
 | Profile | 主要触发位置 | 作用 |
 |---|---|---|
 | `pr_light` | `04` / `05` PR 默认 | 轻量收敛，不承担 `main` 后自动 promotion |
-| `manual_full` | `08` | 手动完整 hosted gamma 复验 |
-| `nightly_full` | `09` | 每晚完整 hosted + self-hosted 全量验证 |
+| `manual_full` | 手动 | 手动完整 local-gamma 复验 |
+| `nightly_full` | `09` | 每晚完整 local-gamma + self-hosted 全量验证 |
 | `release_candidate` | 手动发布前 | 发布前高置信度回归 |
 | `mainline_auto_prod` | `07` | `main` 自动 promotion 的高信号阻断链 |
 
@@ -109,14 +109,14 @@ repo verify/package
 ## 2. 波次关系
 
 ```text
-alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-hosted evidence)
-                                                 → prod(initial → checks → full)
+alpha(本地单实例) → beta(本地端云集成) → gamma(local-gamma mirror + self-hosted evidence，仅本地)
+                                                 → prod(gray-initial → carry-on/checks → full)
 ```
 
 说明：
 
-- `alpha` 与 `beta` 可在自有阶段内尽量并行，但 `gamma -> prod` 必须严格串行。
-- `prod initial` 后必须完成 `health + inspect + doctor + integration probes + SLO gate`，才允许自动进入 `prod full`。
+- `alpha` 与 `beta` 可在自有阶段内尽量并行；`gamma` 仅本地左移，不在远端阻断链上，远端只有 `prod` 各 rollout stage 必须严格串行。
+- `prod gray-initial` 后必须完成 `health + inspect + doctor + integration probes + SLO gate`（含承接自旧 gamma-hosted 的远端集成与 curated 媒体路由复验），才允许自动进入 `prod full`。
 - `prod full` 失败时必须自动回滚到上一稳定 `image/config`。
 
 ### 2.1 local-gamma mirror（提交前本地预测试）
@@ -130,31 +130,27 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 
 #### 2.1.1 `make gate-local-gamma` 常见失败与缓解（Docker / 磁盘）
 
-- **Docker Hub 429（未认证限流）**：`quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh` 默认将基础镜像指向 `docker.m.daocloud.io/library`；ECS 侧对应变量为 `GAMMA_ECS_CONTAINER_REGISTRY_MIRROR`。
+- **Docker Hub 429（未认证限流）**：`quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh` 默认将基础镜像指向 `docker.m.daocloud.io/library`。
 - **Colima / Docker VM 磁盘满**：执行 `docker builder prune -af`；避免将本地 `**/.venv/` 打进构建上下文。
 - **本地 beta / local-gamma 端口冲突**：统一由 `local_env_port_manifest.yaml` 分配；当前 beta 使用 `18000/18010/18100`，local-gamma 使用 `19000/19010/19100`，禁止再手写旧常量规避冲突。
 
 ## 3. GitHub Actions Secrets / Variables（按工作流）
 
-| Secret / Variable | 04 Pre-Release | 05 App Env Matrix | 07 Deploy Prod Auto | 08 Deploy Gamma ECS | 说明 |
-|-------------------|:---:|:---:|:---:|:---:|------|
-| `GAMMA_TEST_AUTH_TOKEN` | 建议 | 建议 | — | **必** | gamma hosted/self-hosted 鉴权（04 pr_light 非强制） |
-| `GAMMA_ECS_PASSWORD` 或 `GAMMA_ECS_SSH_KEY` | — | — | — | **必其一** | ECS gamma SSH 认证（04 pr_light 不部署，无需此项） |
-| `vars.GAMMA_ECS_HOST` / `vars.GAMMA_ECS_PUBLIC_HOST` | 建议 | — | — | 建议 | ECS 主机与公网入口 |
-| `vars.GAMMA_BASE_URL` / `vars.GAMMA_PRODUCT_OPS_BASE_URL` | 可选 | 可选 | — | 可选 | 公网网关 / product ops 覆盖 |
-| `vars.MEDIA_AVATAR_CDN_BASE_URL` | 可选 | 可选 | — | 可选 | chat-avatar 对外媒体基址 |
-| `vars.GAMMA_ECS_MEDIA_ORIGIN_BASE_URL` | 可选 | — | — | 可选 | gamma-pre 临时本地公网回源地址；仅联调态使用 |
-| `vars.GAMMA_ECS_CONTAINER_REGISTRY_MIRROR` | 建议 | — | — | 建议 | 缓解远端拉镜像命中 Docker Hub 限流 |
-| `flutter devices --machine` 可见 Android 设备 | `04/05` **必** | **必** | — | `08` **必** | 主干 required checks 要求 Android 可见且全部通过 |
-| `flutter devices --machine` 可见 iOS 设备 | `04/05` **必** | **必** | — | `08` **必** | 主干 required checks 要求 iOS 可见且全部通过 |
-| Self-hosted Runner (`self-hosted` + `macOS`) | **必** | **必** | — | **必** | 统一运行在当前开发 Mac |
-| GitHub Environment `production` | — | — | **必**（Stage 2） | — | `deploy-prod-auto.yml` 中 `gray-carry-on` 使用 |
+> 远端/hosted 目标只有 `prod-hosted`，远端凭证统一为专用 PROD/OPS secret（`PROD_KUBECONFIG`、prod kubeconfig 同步所需的 ops SSH 凭据），不再使用任何 `GAMMA_ECS_*` secret/var。`gamma` 仅本地（local-gamma），本地 mirror 不需要远端 secret。
 
-**路由自检**：部署或调矩阵前运行  
-`python3 quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py --base-url "$GAMMA_BASE_URL"`。  
-若报 `route_not_found` 或 plain-text catch-all，说明入口指向错误端口，需要重新执行 ECS 部署或校验远端 Caddy/compose。
+| Secret / Variable | 04 Pre-Release | 05 App Env Matrix | 07 Deploy Prod Auto | 说明 |
+|-------------------|:---:|:---:|:---:|------|
+| `GAMMA_TEST_AUTH_TOKEN` | 建议 | 建议 | — | local-gamma / self-hosted 链路鉴权（04 pr_light 非强制） |
+| `vars.GAMMA_BASE_URL` / `vars.GAMMA_PRODUCT_OPS_BASE_URL` | 可选 | 可选 | — | local-gamma mirror 网关 / product ops 覆盖 |
+| `vars.MEDIA_AVATAR_CDN_BASE_URL` | 可选 | 可选 | — | chat-avatar 对外媒体基址 |
+| `secrets.PROD_KUBECONFIG` | — | — | **必** | prod-hosted 部署唯一远端凭证（base64 kubeconfig） |
+| prod kubeconfig 同步 ops SSH 凭据 | — | — | **必** | 专用 PROD/OPS secret（非 `GAMMA_ECS_*`），用于从 ops 同步 prod kubeconfig |
+| `flutter devices --machine` 可见 Android 设备 | `04/05` **必** | **必** | — | 主干 required checks 要求 Android 可见且全部通过 |
+| `flutter devices --machine` 可见 iOS 设备 | `04/05` **必** | **必** | — | 主干 required checks 要求 iOS 可见且全部通过 |
+| Self-hosted Runner (`self-hosted` + `macOS`) | **必** | **必** | — | 统一运行在当前开发 Mac |
+| GitHub Environment `production` | — | — | **必**（Stage 2） | `deploy-prod-auto.yml` 中 `gray-carry-on` 使用 |
 
-当前 gamma 默认走 ECS 本地 curated 媒体目录：部署前先生成 `deploy/shared/gamma_curated_media_bundle.json` 与 `state/local/gamma/media`，再单独同步到远端 `/srv/media`。`GAMMA_ECS_MEDIA_ORIGIN_BASE_URL` 只作为应急兜底，且需显式允许后才会生效；默认不会依赖本机公网回源。
+curated 媒体目录与公网路由复验已下沉到 prod `gray-initial` rollout stage：在 `prod-hosted(gray-initial)` 阶段对真实远端入口做集成与 curated 媒体路由检查；本地 local-gamma mirror 只在本机校验同构媒体路径，不依赖任何远端 gamma 入口。
 
 ## 4. 推荐验证命令
 
@@ -163,8 +159,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 | `alpha` | 单服务 `APP_ENV=alpha go test ./...`；端侧 `flutter test` | 单实例用例绿 |
 | `beta` | `python3 agent_ops/deploy/stackctl.py up --env beta`；App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 本地 Android/iOS 设备矩阵通过，且新启动前会 stop 旧 beta 栈 |
 | `gamma-local` | `python3 agent_ops/deploy/stackctl.py up --env gamma` | local-gamma mirror + App 达到 steady state，并生成 `artifacts/local-gamma/report.json` / `artifacts/stackctl/gamma/**` |
-| `gamma-hosted` | 首次或大改动用 `python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --mode cold-build --stage pre --image-version <version> --previous-image-version <prev>`；重复执行优先 `python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart|rollout --stage <pre|prod>`；只读复核用 `python3 agent_ops/deploy/stackctl.py health --target gamma-hosted --scope full` | `mainline_auto_prod` / `manual_full` / `nightly_full` 对应 hosted 证据全绿，且 `roll` / `deploy` 报告自带 `health + inspect + doctor` |
-| `prod-hosted` | `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>` | `prod initial -> checks -> full` 按 rollout stage 自动推进；失败自动回滚；关键路径不超过 900 秒 |
+| `prod-hosted`（唯一远端目标） | `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>` | `prod gray-initial -> carry-on/checks -> full` 按 rollout stage 自动推进；`gray-initial` 承接真实远端集成与 curated 媒体路由复验；失败自动回滚；关键路径不超过 900 秒 |
 
 ### 4.1 开发者一键启动
 
@@ -180,40 +175,31 @@ make dev-up ENV=<alpha|beta|gamma|prod-sim|prod> [DEVICE_ID=<flutter-device-id>]
 python3 agent_ops/deploy/stackctl.py up --env <alpha|beta|gamma|prod-sim|prod> [--device-id <id>]
 ```
 
-### 4.2 三模式预算（当前作用于 `gamma-hosted`）
+### 4.2 prod-hosted rollout stage（唯一远端发布路径）
 
-当前实现下，`restart / rollout / cold-build` 是 `gamma-hosted` 的重复执行模式；`prod-hosted` 仍走 `gray-initial / carry-on / full` rollout stage，不暴露三模式命令。
+旧 `gamma-hosted` 三模式（`restart / rollout / cold-build`）已随远端 gamma 退役而移除。当前唯一远端发布路径是 `prod-hosted`，走 `gray-initial / carry-on / full` rollout stage，不暴露三模式命令。
 
 统一约束：
 
-- `restart`：复用远端代码树、复用既有服务镜像、跳过镜像预拉，优先保留 Postgres volume；目标 `<= 5min`
-- `rollout`：复用远端代码树、复用既有服务镜像，但允许重新预拉基础镜像并执行更完整的远端 compose；目标 `<= 10min`
-- `cold-build`：完整上传仓库快照、远端重建镜像并走全量 clean recreate；这是最慢但最稳的兜底路径，目标窗口 `30-45min`
+- `gray-initial`：初始灰度，全自动 deploy → 健康/只读集成探针 → SLO gate；同时承接旧 gamma-hosted 的真实远端集成与 curated 媒体路由复验。
+- `carry-on`：在 `gray-initial` 通过后按审批推进到更大放量（含 checks）。
+- `full`：全量放量；失败自动回滚到上一稳定 `image/config`。
 
 推荐命令：
 
 ```bash
-python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart --stage prod
-python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode rollout --stage prod
-python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --mode cold-build --stage pre --image-version <version> --previous-image-version <prev>
+python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>
 ```
 
 说明：
 
-- `roll --target gamma-hosted` 在成功后会自动串联 `health --scope full`、`inspect --scope all`、`doctor`，适合 restart / rollout 的重复执行验收。
-- `deploy --target gamma-hosted` 适合 cold-build 或显式版本化部署；`stage=pre` 用于 gamma pre/夜间/发布前复验，`stage=prod` 用于 onebox prod 复验。
-- `08. Deploy Gamma ECS` 当前 prod onebox 复验走的是 `deploy --target gamma-hosted --mode restart --stage prod`，即“通过 deploy 入口显式带版本，但动作语义仍是 restart”。
-
-重复执行验收脚本：
-
-```bash
-bash agent_ops/deploy/gamma/verify_deploy_repeatable.sh
-```
+- `deploy --target prod-hosted` 成功后会自动串联 `health --scope full`、`inspect --scope all`、`doctor`，每个 rollout stage 留下机器可读证据。
+- prod-hosted 为 backend SSH 托管，gray 与 full 因成本共享同一集群；这是有意保留的 legacy 拓扑，不抽象成 `prod-gray` 第二环境。
 
 约束：
 
 - 用户面只允许选择 **环境** 与 **端侧设备**；gateway / media / seed / host 不作为一键启动独立参数暴露。
-- `gamma` 的一键启动默认指 `gamma-local` mirror；`gamma-hosted` 仍走 `stackctl roll/deploy/health`。
+- `gamma` 的一键启动指 `gamma-local` mirror（gamma 仅本地，无远端 gamma）；远端/hosted 只有 `prod-hosted`，走 `stackctl deploy --target prod-hosted`。
 - `prod` 的一键启动不在本地 `up` 服务栈，只做 `prod-hosted` edge health 检查后拉起本地 App/浏览器连接已部署云端。
 - `--target` 保留给 hosted 运维、CI / runbook / 高级调试；开发者本地联调优先使用 `--env`。
 

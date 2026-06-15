@@ -1,20 +1,17 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/object_page/evidence_group.dart';
-import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
-/// 对象页统一交集卡（V4 · 人脸抽屉列表）。
+/// 对象页统一交集卡（V4 · 纵向交集列表）。
 ///
 /// 三对象页共用同一结构与口径：
-/// - 用户主页：`你们的连接`
-/// - 地点和事物页 / 圈子页：`与你的连接`
+/// - 用户主页：`你们的交集`
+/// - 地点和事物页 / 圈子页：`与你的交集`
 ///
-/// 设计（专业设计师视角：精致 / 美观 / 事实清晰 / 简洁）：
-/// - 去火花图标；标题右侧总数为中性大字，非彩色；
-/// - 证据组以「抽屉列表行」呈现：头像簇 + 短句名词 + 计数 + 一个实例 + chevron；
-/// - 默认展示 [inlineExpandCount] 行，超出以「全部交集」就地/跳转展开（混合策略）；
+/// 设计：
+/// - 证据组以纵向列表行呈现：主结论 + 原因说明；
+/// - 默认展示 [inlineExpandCount] 行，第一次点击展开，第二次进入全部交集；
 /// - 文案、数字、实例全部来自云侧证据组，端不本地拼装事实（G2）。
 ///
 /// 口径（必读要求 2 事实清晰）：
@@ -107,501 +104,94 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final surface = AppColorsFunctional.getColor(
-          widget.isDark,
-          ColorType.backgroundSecondary,
-        );
-        final fgPrimary = AppColorsFunctional.getColor(
-          widget.isDark,
-          ColorType.foregroundPrimary,
-        );
-        final fgSecondary = AppColorsFunctional.getColor(
-          widget.isDark,
-          ColorType.foregroundSecondary,
-        );
-
-        final rows = <_IntersectionRow>[];
-        for (final reason in widget.reasons) {
-          for (final group in EvidenceGroup.fromReason(reason)) {
-            rows.add(_IntersectionRow(reason: reason, group: group));
-          }
-        }
-        final total = rows.fold<int>(0, (sum, r) => sum + r.group.count);
-        final inline = widget.inlineExpandCount <= 0
-            ? 3
-            : widget.inlineExpandCount;
-        // 旅程高亮（§7.3）：命中 highlightKind 时强制展开，确保该证据组可见。
-        final highlight = (widget.highlightKind ?? '').trim();
-        final highlightHidden =
-            highlight.isNotEmpty &&
-            rows.skip(inline).any((r) => r.group.kind == highlight);
-        final expanded = _expanded || highlightHidden;
-        final visible = expanded
-            ? rows
-            : rows.take(inline).toList(growable: false);
-        final primaryReason = rows.isEmpty ? null : rows.first.reason;
-        final hiddenCount = rows.length - visible.length;
-        final screenWidth = MediaQuery.sizeOf(context).width;
-        final layoutWidth =
-            constraints.hasBoundedWidth && constraints.maxWidth > 0
-            ? constraints.maxWidth
-            : screenWidth;
-        final isWideLayout =
-            screenWidth >= AppSpacing.webPcReadingMaxWidth &&
-            layoutWidth >= AppSpacing.webPcReadingMinWidth;
-        if (isWideLayout) {
-          return _buildWideCard(
-            context: context,
-            surface: surface,
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-            rows: rows,
-            total: total,
-            highlight: highlight,
-          );
-        }
-
-        return Container(
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-          ),
-          padding: EdgeInsets.all(AppSpacing.containerMd),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      widget.title,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
-                        color: fgPrimary,
-                      ),
-                    ),
-                  ),
-                  if (total > 0)
-                    Text(
-                      '$total',
-                      style: TextStyle(
-                        fontSize: AppTypography.iosTitle3,
-                        fontWeight: AppTypography.bold,
-                        color: fgPrimary,
-                        height: AppSpacing.textLineHeightSingle,
-                      ),
-                    ),
-                ],
-              ),
-              if ((widget.subtitle ?? '').trim().isNotEmpty) ...<Widget>[
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  widget.subtitle!.trim(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosFootnote,
-                    color: fgSecondary,
-                  ),
-                ),
-              ],
-              SizedBox(height: AppSpacing.intraGroupSm),
-              // §7.5 就地展开：280ms easeOutCubic 高度过渡。
-              AnimatedSize(
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    for (var i = 0; i < visible.length; i++) ...<Widget>[
-                      if (i > 0) _rowDivider(),
-                      _EvidenceRow(
-                        row: visible[i],
-                        isDark: widget.isDark,
-                        highlighted:
-                            highlight.isNotEmpty &&
-                            visible[i].group.kind == highlight,
-                        onTap: widget.onReasonTap == null
-                            ? null
-                            : () => widget.onReasonTap!(visible[i].reason),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (hiddenCount > 0 || (expanded && rows.length > inline))
-                _buildMore(
-                  context,
-                  hiddenCount: hiddenCount,
-                  expanded: expanded,
-                ),
-              if (primaryReason != null) ...<Widget>[
-                SizedBox(height: AppSpacing.intraGroupSm),
-                _IntersectionCta(
-                  reason: primaryReason,
-                  isDark: widget.isDark,
-                  onTap: widget.onReasonTap == null
-                      ? null
-                      : () => widget.onReasonTap!(primaryReason),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
+    final surface = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.backgroundSecondary,
     );
-  }
+    final fgPrimary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundSecondary,
+    );
 
-  Widget _buildWideCard({
-    required BuildContext context,
-    required Color surface,
-    required Color fgPrimary,
-    required Color fgSecondary,
-    required List<_IntersectionRow> rows,
-    required int total,
-    required String highlight,
-  }) {
-    final wideHighlightHidden =
+    final rows = <_IntersectionRow>[];
+    for (final reason in widget.reasons) {
+      for (final group in EvidenceGroup.fromReason(reason)) {
+        rows.add(_IntersectionRow(reason: reason, group: group));
+      }
+    }
+    final inline = widget.inlineExpandCount <= 0 ? 3 : widget.inlineExpandCount;
+    final highlight = (widget.highlightKind ?? '').trim();
+    final highlightHidden =
         highlight.isNotEmpty &&
-        rows.skip(1).any((r) => r.group.kind == highlight);
-    final wideExpanded = _expanded || wideHighlightHidden;
-    final primaryRow = rows.first;
-    final primaryReason = primaryRow.reason;
-    final kind = UnifiedObjectKind.resolve(
-      objectKind: primaryReason.objectKind,
-      relationKind: primaryReason.relationKind,
-    );
-    final coverName = primaryReason.displayName.trim().isNotEmpty
-        ? primaryReason.displayName.trim()
-        : primaryReason.label.trim();
-    final coverUrl = primaryReason.avatarUrl.trim();
-    final extraRows = rows.skip(1).toList(growable: false);
-    final remainingCount = extraRows.length;
-    final secondaryLabel = extraRows.isNotEmpty
-        ? (extraRows.first.group.label.trim().isNotEmpty
-              ? extraRows.first.group.label.trim()
-              : extraRows.first.group.sampleText.trim())
-        : primaryRow.group.sampleText.trim();
+        rows.skip(inline).any((row) => row.group.kind == highlight);
+    final expanded = _expanded || highlightHidden;
+    final visible = expanded ? rows : rows.take(inline).toList(growable: false);
+    final hiddenCount = rows.length - visible.length;
 
     return Container(
       decoration: BoxDecoration(
         color: surface,
-        borderRadius: BorderRadius.circular(
-          AppSpacing.contentPreviewCornerRadius,
-        ),
-        border: Border.all(
-          color: AppColors.iosSeparator(
-            context,
-          ).withValues(alpha: widget.isDark ? 0.18 : 0.08),
-          width: AppSpacing.hairline,
-        ),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerMd),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          widget.title,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosSubheadline,
-                            fontWeight: AppTypography.semiBold,
-                            color: fgPrimary,
-                          ),
-                        ),
-                      ),
-                      if (total > 0)
-                        Text(
-                          '$total',
-                          style: TextStyle(
-                            fontSize: AppTypography.iosTitle3,
-                            fontWeight: AppTypography.bold,
-                            color: fgPrimary,
-                            height: AppSpacing.textLineHeightSingle,
-                          ),
-                        ),
-                    ],
-                  ),
-                  SizedBox(height: AppSpacing.intraGroupSm),
-                  _buildWideCoverTile(
-                    context: context,
-                    kind: kind,
-                    coverUrl: coverUrl,
-                    primaryRow: primaryRow,
-                    secondaryLabel: secondaryLabel,
-                    remainingCount: remainingCount,
-                    recommended: primaryRow.group.isRecommended,
-                  ),
-                  SizedBox(height: AppSpacing.containerSm),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          coverName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosSubheadline,
-                            fontWeight: AppTypography.semiBold,
-                            color: fgPrimary,
-                            height: AppTypography.lineHeightTight,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if ((widget.subtitle ?? '').trim().isNotEmpty) ...<Widget>[
-                    SizedBox(height: AppSpacing.intraGroupXs),
-                    Text(
-                      widget.subtitle!.trim(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosFootnote,
-                        color: fgSecondary,
-                      ),
-                    ),
-                  ],
-                  if (remainingCount > 0) ...<Widget>[
-                    SizedBox(height: AppSpacing.intraGroupSm),
-                    _buildMore(
-                      context,
-                      hiddenCount: remainingCount,
-                      expanded: wideExpanded,
-                    ),
-                  ],
-                  if (wideExpanded && extraRows.isNotEmpty) ...<Widget>[
-                    SizedBox(height: AppSpacing.intraGroupSm),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 280),
-                      curve: Curves.easeOutCubic,
-                      alignment: Alignment.topCenter,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          for (
-                            var i = 0;
-                            i < extraRows.length;
-                            i++
-                          ) ...<Widget>[
-                            if (i > 0) _rowDivider(),
-                            _EvidenceRow(
-                              row: extraRows[i],
-                              isDark: widget.isDark,
-                              highlighted:
-                                  highlight.isNotEmpty &&
-                                  extraRows[i].group.kind == highlight,
-                              onTap: widget.onReasonTap == null
-                                  ? null
-                                  : () => widget.onReasonTap!(
-                                      extraRows[i].reason,
-                                    ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                  SizedBox(height: AppSpacing.intraGroupSm),
-                  _IntersectionCta(
-                    reason: primaryReason,
+      padding: EdgeInsets.all(AppSpacing.containerMd),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            widget.title,
+            style: TextStyle(
+              fontSize: AppTypography.iosSubheadline,
+              fontWeight: AppTypography.semiBold,
+              color: fgPrimary,
+            ),
+          ),
+          if ((widget.subtitle ?? '').trim().isNotEmpty) ...<Widget>[
+            SizedBox(height: AppSpacing.intraGroupXs),
+            Text(
+              widget.subtitle!.trim(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: fgSecondary,
+              ),
+            ),
+          ],
+          SizedBox(height: AppSpacing.intraGroupSm),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (var i = 0; i < visible.length; i++) ...<Widget>[
+                  if (i > 0) _rowDivider(),
+                  _EvidenceRow(
+                    row: visible[i],
                     isDark: widget.isDark,
+                    isPrimary: i == 0,
+                    highlighted:
+                        highlight.isNotEmpty &&
+                        visible[i].group.kind == highlight,
                     onTap: widget.onReasonTap == null
                         ? null
-                        : () => widget.onReasonTap!(primaryReason),
+                        : () => widget.onReasonTap!(visible[i].reason),
                   ),
                 ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWideCoverTile({
-    required BuildContext context,
-    required UnifiedObjectKind kind,
-    required String coverUrl,
-    required _IntersectionRow primaryRow,
-    required String secondaryLabel,
-    required int remainingCount,
-    required bool recommended,
-  }) {
-    final surface = AppColors.iosSystemBackground(context);
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: widget.isDark ? 0.22 : 0.1);
-    final fill = AppColors.iosFill(context);
-    final cover = kind == UnifiedObjectKind.person
-        ? _personCover(context, coverUrl, fill)
-        : _objectCover(coverUrl, fill);
-    final primary = primaryRow.group;
-    final primaryLabel = primary.label.trim();
-    return SizedBox(
-      height: AppSpacing.objectIntersectionCardWideCoverHeight,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(
-            AppSpacing.contentPreviewCornerRadius,
-          ),
-          border: Border.all(color: border, width: AppSpacing.hairline),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(
-            AppSpacing.contentPreviewCornerRadius,
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              cover,
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: <Color>[
-                        AppColors.black.withValues(alpha: 0.04),
-                        AppColors.black.withValues(alpha: 0.18),
-                        AppColors.black.withValues(alpha: 0.5),
-                      ],
-                      stops: const <double>[0.0, 0.58, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.all(AppSpacing.containerSm),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: <Widget>[
-                    if (primaryLabel.isNotEmpty)
-                      Text(
-                        primary.count > 0
-                            ? '$primaryLabel · ${primary.count}'
-                            : primaryLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosSubheadline,
-                          fontWeight: AppTypography.semiBold,
-                          color: AppColors.white,
-                          height: AppSpacing.textLineHeightSingle,
-                        ),
-                      ),
-                    if (secondaryLabel.isNotEmpty) ...<Widget>[
-                      SizedBox(height: AppSpacing.two),
-                      Text(
-                        secondaryLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosFootnote,
-                          color: AppColors.white.withValues(alpha: 0.88),
-                          height: AppSpacing.textLineHeightCompact,
-                        ),
-                      ),
-                    ] else if (remainingCount > 0) ...<Widget>[
-                      SizedBox(height: AppSpacing.two),
-                      Text(
-                        '还有 $remainingCount 项',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosFootnote,
-                          color: AppColors.white.withValues(alpha: 0.88),
-                          height: AppSpacing.textLineHeightCompact,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (recommended)
-                Positioned(
-                  top: AppSpacing.intraGroupXs,
-                  right: AppSpacing.intraGroupXs,
-                  child: _RecommendBadge(isDark: widget.isDark),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _personCover(BuildContext context, String url, Color fill) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            AppColors.iosAccent(context).withValues(alpha: 0.16),
-            fill,
-          ],
-        ),
-      ),
-      child: Center(
-        child: Container(
-          width: AppSpacing.avatarUserMd,
-          height: AppSpacing.avatarUserMd,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.iosSystemBackground(context),
-              width: AppSpacing.hairline * 2,
+              ],
             ),
           ),
-          child: ClipOval(
-            child: url.isEmpty
-                ? ColoredBox(
-                    color: fill,
-                    child: Icon(
-                      CupertinoIcons.person_crop_circle_fill,
-                      size: AppSpacing.iconMedium,
-                      color: AppColors.iosSecondaryLabel(context),
-                    ),
-                  )
-                : AppCachedNetworkImage(
-                    imageUrl: url,
-                    fit: BoxFit.cover,
-                    errorWidget: ColoredBox(color: fill),
-                  ),
-          ),
-        ),
+          if (hiddenCount > 0 || (expanded && rows.length > inline))
+            _buildMore(context, expanded: expanded),
+        ],
       ),
-    );
-  }
-
-  Widget _objectCover(String url, Color fill) {
-    if (url.isEmpty) {
-      return ColoredBox(color: fill);
-    }
-    return AppCachedNetworkImage(
-      imageUrl: url,
-      fit: BoxFit.cover,
-      errorWidget: ColoredBox(color: fill),
     );
   }
 
@@ -615,24 +205,20 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
     );
   }
 
-  Widget _buildMore(
-    BuildContext context, {
-    required int hiddenCount,
-    required bool expanded,
-  }) {
+  Widget _buildMore(BuildContext context, {required bool expanded}) {
     final accent = AppColors.iosAccent(context);
-    // 混合策略：有 onMoreTap（跳列表页）优先；否则就地展开/收起。
-    final goRoute = widget.moreLabel != null && widget.onMoreTap != null;
-    final label = goRoute
-        ? widget.moreLabel!
-        : (expanded
-              ? UITextConstants.intersectionCollapse
-              : '$hiddenCount ${UITextConstants.intersectionExpandMore}');
+    final canOpenAll = widget.moreLabel != null && widget.onMoreTap != null;
+    final label = expanded
+        ? (canOpenAll
+              ? widget.moreLabel!
+              : UITextConstants.intersectionCollapse)
+        : UITextConstants.intersectionExpandMore;
+    final opensAll = expanded && canOpenAll;
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.intraGroupSm),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: goRoute
+        onTap: opensAll
             ? widget.onMoreTap
             : () => setState(() => _expanded = !expanded),
         child: Row(
@@ -648,7 +234,7 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
             ),
             SizedBox(width: AppSpacing.intraGroupXs),
             Icon(
-              goRoute || !expanded
+              opensAll || !expanded
                   ? CupertinoIcons.chevron_forward
                   : CupertinoIcons.chevron_up,
               size: AppSpacing.fourteen,
@@ -667,119 +253,19 @@ class _IntersectionRow {
   final EvidenceGroup group;
 }
 
-class _IntersectionCta extends StatelessWidget {
-  const _IntersectionCta({
-    required this.reason,
-    required this.isDark,
-    this.onTap,
-  });
-
-  final IntersectionReason reason;
-  final bool isDark;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = _ctaLabelFor(reason);
-    final subtitle = _ctaSubtitleFor(reason);
-    final fg = AppColors.iosAccent(context);
-    return GestureDetector(
-      key: const ValueKey<String>('object-intersection-primary-cta'),
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: fg.withValues(alpha: isDark ? 0.18 : 0.10),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.containerSm,
-            vertical: AppSpacing.intraGroupSm,
-          ),
-          child: Row(
-            children: <Widget>[
-              Icon(
-                CupertinoIcons.arrow_right_circle,
-                size: AppSpacing.iconSmall,
-                color: fg,
-              ),
-              SizedBox(width: AppSpacing.intraGroupXs),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosFootnote,
-                        fontWeight: AppTypography.semiBold,
-                        color: fg,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty) ...<Widget>[
-                      SizedBox(height: AppSpacing.two),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosCaption2,
-                          color: AppColors.iosSecondaryLabel(context),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _ctaLabelFor(IntersectionReason reason) {
-  switch (reason.actionType.trim()) {
-    case 'follow_author':
-      return UITextConstants.objectIntersectionCtaFollowAuthor;
-    case 'join_circle':
-      return UITextConstants.objectIntersectionCtaJoinCircle;
-    case 'add_contact':
-      return UITextConstants.objectIntersectionCtaAddContact;
-    case 'ask_xiaoqu':
-      return UITextConstants.objectIntersectionCtaAskAssistant;
-    case 'view_object':
-    default:
-      return UITextConstants.objectIntersectionCtaView;
-  }
-}
-
-String _ctaSubtitleFor(IntersectionReason reason) {
-  final summary = reason.connectionSummary.trim();
-  if (summary.isNotEmpty) return summary;
-  final label = reason.label.trim();
-  if (label.isNotEmpty) return '因为 $label 推荐给你';
-  final displayName = reason.displayName.trim();
-  if (displayName.isNotEmpty) return '继续了解 $displayName';
-  return '';
-}
-
 /// 单行证据组：头像簇 + 短句 + 计数 + 实例 + chevron（≥44 命中区）。
 class _EvidenceRow extends StatelessWidget {
   const _EvidenceRow({
     required this.row,
     required this.isDark,
+    required this.isPrimary,
     this.onTap,
     this.highlighted = false,
   });
 
   final _IntersectionRow row;
   final bool isDark;
+  final bool isPrimary;
   final VoidCallback? onTap;
 
   /// 旅程高亮（§7.3）：从 post 徽标跳入命中的证据组行加弱底色强调。
@@ -788,7 +274,8 @@ class _EvidenceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final group = row.group;
-    final labelColor = AppColors.iosLabel(context);
+    final accent = AppColors.iosAccent(context);
+    final labelColor = isPrimary ? accent : AppColors.iosLabel(context);
     final secondary = AppColors.iosSecondaryLabel(context);
     final body = ConstrainedBox(
       constraints: BoxConstraints(minHeight: AppSpacing.minInteractiveSize),
@@ -797,61 +284,53 @@ class _EvidenceRow extends StatelessWidget {
         onTap: onTap,
         child: Row(
           children: <Widget>[
-            _AvatarCluster(
-              urls: group.sampleAvatarUrls,
+            _ConnectionLeadingIcon(
               fallbackKind: group.fallbackIconKind,
               isDark: isDark,
+              isPrimary: isPrimary,
             ),
             SizedBox(width: AppSpacing.intraGroupSm),
             Expanded(
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Flexible(
-                    child: Text(
-                      group.label,
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          group.count > 0
+                              ? '${group.label} ${group.count}'
+                              : group.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosSubheadline,
+                            fontWeight: AppTypography.medium,
+                            color: labelColor,
+                          ),
+                        ),
+                      ),
+                      if (group.isRecommended) ...<Widget>[
+                        SizedBox(width: AppSpacing.intraGroupSm),
+                        _RecommendBadge(isDark: isDark),
+                      ],
+                    ],
+                  ),
+                  if (group.sampleText.isNotEmpty) ...<Widget>[
+                    SizedBox(height: AppSpacing.two),
+                    Text(
+                      group.sampleText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.medium,
-                        color: labelColor,
+                        fontSize: AppTypography.iosFootnote,
+                        color: secondary,
                       ),
                     ),
-                  ),
-                  if (group.count > 0) ...<Widget>[
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    Text(
-                      '${group.count}',
-                      style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
-                        color: labelColor,
-                      ),
-                    ),
-                  ],
-                  if (group.isRecommended) ...<Widget>[
-                    SizedBox(width: AppSpacing.intraGroupSm),
-                    _RecommendBadge(isDark: isDark),
                   ],
                 ],
               ),
             ),
-            if (group.sampleText.isNotEmpty) ...<Widget>[
-              SizedBox(width: AppSpacing.intraGroupSm),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: AppSpacing.oneHundred),
-                child: Text(
-                  group.sampleText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosFootnote,
-                    color: secondary,
-                  ),
-                ),
-              ),
-            ],
             SizedBox(width: AppSpacing.intraGroupXs),
             Icon(
               CupertinoIcons.chevron_forward,
@@ -876,76 +355,37 @@ class _EvidenceRow extends StatelessWidget {
   }
 }
 
-/// 头像簇（≤3 叠压），真实的人/对象信号；无头像时按对象类型回落图标。
-class _AvatarCluster extends StatelessWidget {
-  const _AvatarCluster({
-    required this.urls,
+/// 连接行语义图标。主页交集模块统一用纵向列表，避免头像堆叠造成信息焦点偏移。
+class _ConnectionLeadingIcon extends StatelessWidget {
+  const _ConnectionLeadingIcon({
     required this.fallbackKind,
     required this.isDark,
+    required this.isPrimary,
   });
 
-  final List<String> urls;
   final String fallbackKind;
   final bool isDark;
+  final bool isPrimary;
 
   @override
   Widget build(BuildContext context) {
-    final size = AppSpacing.avatarUserSm;
-    final ringColor = AppColors.iosSystemBackground(context);
-    final shown = urls.take(3).toList(growable: false);
-    if (shown.isEmpty) {
-      return _avatarRing(
-        context,
-        size: size,
-        ringColor: ringColor,
-        child: ColoredBox(
-          color: AppColors.iosFill(context),
-          child: Icon(
-            _fallbackIcon(fallbackKind),
-            size: AppSpacing.iconSmall,
-            color: AppColors.iosSecondaryLabel(context),
-          ),
-        ),
-      );
-    }
-    final overlap = size * 0.62;
-    final width = size + (shown.length - 1) * overlap;
-    return SizedBox(
-      width: width,
-      height: size,
-      child: Stack(
-        children: <Widget>[
-          for (var i = 0; i < shown.length; i++)
-            Positioned(
-              left: i * overlap,
-              child: _avatarRing(
-                context,
-                size: size,
-                ringColor: ringColor,
-                child: AppCachedNetworkImage(
-                  imageUrl: shown[i],
-                  fit: BoxFit.cover,
-                  errorWidget: ColoredBox(color: AppColors.iosFill(context)),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _avatarRing(
-    BuildContext context, {
-    required double size,
-    required Color ringColor,
-    required Widget child,
-  }) {
+    final accent = AppColors.iosAccent(context);
+    final foreground = isPrimary
+        ? accent
+        : AppColors.iosSecondaryLabel(context);
+    final background = isPrimary
+        ? accent.withValues(alpha: isDark ? 0.22 : 0.12)
+        : AppColors.iosFill(context);
+    const size = AppSpacing.avatarUserSm;
     return Container(
       width: size,
       height: size,
-      padding: EdgeInsets.all(AppSpacing.hairline * 1.5),
-      decoration: BoxDecoration(color: ringColor, shape: BoxShape.circle),
-      child: ClipOval(child: child),
+      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+      child: Icon(
+        _fallbackIcon(fallbackKind),
+        size: AppSpacing.iconSmall,
+        color: foreground,
+      ),
     );
   }
 

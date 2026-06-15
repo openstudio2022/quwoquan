@@ -15,14 +15,18 @@ gwt_acceptance:
     title: config provider layering  environment process domain mapping GWT
     given:
     - 前置条件明确。
+    - APP_ENV 与 CONFIG_VERSION 均已绑定到环境、进程和 domain 映射。
     when:
     - 用户或系统动作发生。
     then:
     - 可观察结果符合预期。
     done_when:
     - 最小价值点闭环。
+    - APP_ENV 与 CONFIG_VERSION 能证明环境、进程和 domain 映射无漂移。
     edge_cases: []
-    contract_refs: []
+    contract_refs:
+    - APP_ENV
+    - CONFIG_VERSION
     performance_points: []
     evidence:
       primary:

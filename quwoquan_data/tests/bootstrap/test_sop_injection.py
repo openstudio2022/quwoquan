@@ -91,11 +91,29 @@ def test_render_prompt_without_sop_does_not_crash():
     assert "## 必须覆盖的事实" in prompt
 
 
-def test_render_prompt_uses_runtime_fidelity_range_and_draft_filename():
+def test_render_prompt_factual_reference_uses_independent_expression():
     pack = _build(
         {
             "titleHint": "峨眉山",
             "baseSourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.base/source.md",
+        },
+        ref="entity-factual-reference",
+    )
+    pack["baseDraftText"] = "# 底稿\n\n这是一段底稿正文。"
+    prompt = render_prompt_md(pack)
+    assert f"{int(FIDELITY_MIN * 100)}%~{int(FIDELITY_MAX * 100)}%" not in prompt
+    assert "授权底稿" not in prompt
+    assert "事实参考材料" in prompt
+    assert "独立表达" in prompt
+    assert "`draft.article.md`" in prompt
+
+
+def test_render_prompt_licensed_adaptation_uses_runtime_fidelity_range_and_draft_filename():
+    pack = _build(
+        {
+            "titleHint": "峨眉山",
+            "baseSourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.base/source.md",
+            "sourceUseMode": "licensed_adaptation",
         },
         ref="entity-fidelity",
     )

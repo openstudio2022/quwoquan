@@ -23,7 +23,7 @@ from _common.paths import batch_root, batch_shared_dir, relative_batch_ref
 from _common.source_unit import iter_source_units, resolve_entity_object_dir
 
 BASE_DRAFT_LEDGER = "base_draft_ledger.json"
-LEDGER_SCHEMA = "quwoquan_data.base_draft_ledger/1"
+LEDGER_SCHEMA = "quwoquan_data.base_draft_ledger"
 
 FIDELITY_MIN = 0.55
 FIDELITY_MAX = 0.97

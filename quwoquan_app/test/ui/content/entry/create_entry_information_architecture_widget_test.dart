@@ -34,19 +34,20 @@ void main() {
     expect(find.byKey(TestKeys.createActionContinueFromDraft), findsOneWidget);
     expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
 
-    expect(find.text('从相册选择'), findsOneWidget);
-    expect(find.text('写文字'), findsOneWidget);
-    expect(find.text('从草稿继续'), findsOneWidget);
-    expect(find.text('相机'), findsOneWidget);
-    expect(find.text('发起讨论'), findsOneWidget);
-    expect(find.text('添加联系人'), findsOneWidget);
+    expect(find.text('发布'), findsOneWidget);
+    expect(find.text('互动'), findsOneWidget);
+    expect(find.text('发图片'), findsOneWidget);
+    expect(find.text('发视频'), findsOneWidget);
+    expect(find.text('写长文'), findsOneWidget);
+    expect(find.text('续草稿'), findsOneWidget);
+    expect(find.text('加联系'), findsOneWidget);
+    expect(find.text('建群聊'), findsOneWidget);
     expect(find.text('创作'), findsNothing);
     expect(find.text('连接'), findsNothing);
     expect(find.text('取消'), findsOneWidget);
 
     expect(find.text('发微趣'), findsNothing);
     expect(find.text('发美图'), findsNothing);
-    expect(find.text('发视频'), findsNothing);
     expect(find.text('写文章'), findsNothing);
 
     await tester.tap(find.byKey(TestKeys.createActionCapture));

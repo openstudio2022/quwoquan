@@ -24,3 +24,7 @@ python3 quwoquan_data/scripts/verify/verify_tag_tree.py
 ```bash
 python3 quwoquan_data/scripts/verify/verify_tag_tree.py --min-total 2000 --min-non-geo 1600
 ```
+
+自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/data-tag-verify` 语义执行；执行前仍需按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

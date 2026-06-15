@@ -36,6 +36,10 @@ abstract class HomepageRepository {
 
   Future<HomepageDetail> getHomepageDetail(String homepageId);
 
+  Future<HomepageDetail> followHomepage(String homepageId);
+
+  Future<HomepageDetail> unfollowHomepage(String homepageId);
+
   Future<HomepageShellData> getHomepageShell(String homepageId);
 
   Future<ObjectPageBundle> getObjectPageBundle(
@@ -156,7 +160,8 @@ class MockHomepageRepository implements HomepageRepository {
     }
     return homepage.copyWith(
       coverUrl: coverUrl,
-      reviewSummary: homepage.reviewSummary ?? _mockDefaultReviewSummary(homepage),
+      reviewSummary:
+          homepage.reviewSummary ?? _mockDefaultReviewSummary(homepage),
       contentPreview: homepage.contentPreview.isNotEmpty
           ? homepage.contentPreview
           : _mockDefaultContentPreview(homepage),
@@ -233,6 +238,36 @@ class MockHomepageRepository implements HomepageRepository {
   @override
   Future<HomepageDetail> getHomepageDetail(String homepageId) async {
     return _requireHomepage(homepageId);
+  }
+
+  @override
+  Future<HomepageDetail> followHomepage(String homepageId) async {
+    final homepage = _requireHomepage(homepageId);
+    if (homepage.viewerFollowsHomepage) {
+      return homepage;
+    }
+    final next = homepage.copyWith(
+      viewerFollowsHomepage: true,
+      followerCount: homepage.followerCount + 1,
+    );
+    _putHomepage(next);
+    return next;
+  }
+
+  @override
+  Future<HomepageDetail> unfollowHomepage(String homepageId) async {
+    final homepage = _requireHomepage(homepageId);
+    if (!homepage.viewerFollowsHomepage) {
+      return homepage;
+    }
+    final next = homepage.copyWith(
+      viewerFollowsHomepage: false,
+      followerCount: homepage.followerCount > 0
+          ? homepage.followerCount - 1
+          : 0,
+    );
+    _putHomepage(next);
+    return next;
   }
 
   @override
@@ -505,7 +540,9 @@ class MockHomepageRepository implements HomepageRepository {
       if (normalized.startsWith('entities/'))
         normalized.substring('entities/'.length),
       if (normalized.startsWith('entity:') && normalized.contains(':homepage:'))
-        normalized.substring(normalized.lastIndexOf(':homepage:') + ':homepage:'.length),
+        normalized.substring(
+          normalized.lastIndexOf(':homepage:') + ':homepage:'.length,
+        ),
       if (normalized.startsWith('entity:') && normalized.contains(':'))
         normalized.substring(normalized.lastIndexOf(':') + 1),
       if (normalized.startsWith('entity:homepage:'))
@@ -659,6 +696,49 @@ class RemoteHomepageRepository implements HomepageRepository {
         context: _contextForSurface(
           AppUiSurfaces.homepageDetail,
           operationId: EntityApiMetadata.getHomepageDetailOperation,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<HomepageDetail> followHomepage(String homepageId) async {
+    final decoded = await _httpClient.postJson(
+      _uri(EntityApiMetadata.followHomepagePath(homepageId: homepageId)),
+      headers: _headersForSurface(
+        AppUiSurfaces.homepageDetail,
+        operationId: EntityApiMetadata.followHomepageOperation,
+        clientPageId: EntityRequestPageIds.followHomepage,
+      ),
+      body: const <String, Object?>{},
+    );
+    return HomepageDetail.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: _contextForSurface(
+          AppUiSurfaces.homepageDetail,
+          operationId: EntityApiMetadata.followHomepageOperation,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<HomepageDetail> unfollowHomepage(String homepageId) async {
+    final decoded = await _httpClient.deleteJson(
+      _uri(EntityApiMetadata.unfollowHomepagePath(homepageId: homepageId)),
+      headers: _headersForSurface(
+        AppUiSurfaces.homepageDetail,
+        operationId: EntityApiMetadata.unfollowHomepageOperation,
+        clientPageId: EntityRequestPageIds.unfollowHomepage,
+      ),
+    );
+    return HomepageDetail.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: _contextForSurface(
+          AppUiSurfaces.homepageDetail,
+          operationId: EntityApiMetadata.unfollowHomepageOperation,
         ),
       ),
     );

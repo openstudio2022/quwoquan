@@ -186,6 +186,9 @@ class HomepageDetail extends HomepageCanonicalReference {
     this.city,
     this.location,
     this.ownerUserId,
+    this.ownerSubAccountId,
+    this.viewerFollowsHomepage = false,
+    this.followerCount = 0,
     this.averageRating,
     this.ratingCount = 0,
     this.reviewSummary,
@@ -205,6 +208,9 @@ class HomepageDetail extends HomepageCanonicalReference {
   final String? city;
   final HomepageGeoPoint? location;
   final String? ownerUserId;
+  final String? ownerSubAccountId;
+  final bool viewerFollowsHomepage;
+  final int followerCount;
   final double? averageRating;
   final int ratingCount;
   final HomepageReviewSummaryData? reviewSummary;
@@ -241,20 +247,23 @@ class HomepageDetail extends HomepageCanonicalReference {
       location: () {
         final loc = map['location'];
         return loc is Map
-            ? HomepageGeoPoint.fromMap(
-                Map<String, dynamic>.from(loc),
-              )
+            ? HomepageGeoPoint.fromMap(Map<String, dynamic>.from(loc))
             : null;
       }(),
       ownerUserId: HomepageWireCodec.optionalTrimmedString(map['ownerUserId']),
+      ownerSubAccountId: HomepageWireCodec.optionalTrimmedString(
+        map['ownerSubAccountId'],
+      ),
+      viewerFollowsHomepage:
+          map['viewerFollowsHomepage'] == true ||
+          map['viewerFollowsHomepage']?.toString() == 'true',
+      followerCount: (map['followerCount'] as num?)?.toInt() ?? 0,
       averageRating: HomepageWireCodec.optionalDouble(map['averageRating']),
       ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
       reviewSummary: () {
         final rs = map['reviewSummary'];
         return rs is Map
-            ? HomepageReviewSummaryData.fromMap(
-                Map<String, dynamic>.from(rs),
-              )
+            ? HomepageReviewSummaryData.fromMap(Map<String, dynamic>.from(rs))
             : null;
       }(),
       contentPreview: HomepageWireCodec.mapList(
@@ -292,6 +301,9 @@ class HomepageDetail extends HomepageCanonicalReference {
     String? city,
     HomepageGeoPoint? location,
     String? ownerUserId,
+    String? ownerSubAccountId,
+    bool? viewerFollowsHomepage,
+    int? followerCount,
     double? averageRating,
     int? ratingCount,
     HomepageReviewSummaryData? reviewSummary,
@@ -318,6 +330,10 @@ class HomepageDetail extends HomepageCanonicalReference {
       city: city ?? this.city,
       location: location ?? this.location,
       ownerUserId: ownerUserId ?? this.ownerUserId,
+      ownerSubAccountId: ownerSubAccountId ?? this.ownerSubAccountId,
+      viewerFollowsHomepage:
+          viewerFollowsHomepage ?? this.viewerFollowsHomepage,
+      followerCount: followerCount ?? this.followerCount,
       averageRating: averageRating ?? this.averageRating,
       ratingCount: ratingCount ?? this.ratingCount,
       reviewSummary: reviewSummary ?? this.reviewSummary,
@@ -349,13 +365,13 @@ class HomepageShellData {
 
   factory HomepageShellData.fromMap(Map<String, dynamic> map) {
     return HomepageShellData(
-      homepage: HomepageDetail.fromMap(HomepageWireCodec.stringKeyMapOrEmpty(map['homepage'])),
+      homepage: HomepageDetail.fromMap(
+        HomepageWireCodec.stringKeyMapOrEmpty(map['homepage']),
+      ),
       reviewSummary: () {
         final rs = map['reviewSummary'];
         return rs is Map
-            ? HomepageReviewSummaryData.fromMap(
-                Map<String, dynamic>.from(rs),
-              )
+            ? HomepageReviewSummaryData.fromMap(Map<String, dynamic>.from(rs))
             : null;
       }(),
       contentPreview: HomepageWireCodec.mapList(

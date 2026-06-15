@@ -1,6 +1,6 @@
 ---
 name: environment-ops
-description: Use stackctl to package, start, verify, inspect, diagnose, repair, and deploy the alpha/beta/gamma/prod environment topology. Use when the user asks about 环境启动、打包、URL/路由、健康检查、巡检、stackctl、gamma hosted、prod rollout, or environment troubleshooting in this repository.
+description: Use stackctl to package, start, verify, inspect, diagnose, repair, and deploy the alpha/beta/gamma/prod environment topology. Use when the user asks about 环境启动、打包、URL/路由、健康检查、巡检、stackctl、gamma-local、prod gray rollout, or environment troubleshooting in this repository.
 ---
 # Environment Ops
 
@@ -16,8 +16,6 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 - `python3 agent_ops/deploy/stackctl.py inspect --target <target> --kind <logs|network|data|metrics|config|security|all>`
 - `python3 agent_ops/deploy/stackctl.py doctor --target <target>`
 - `python3 agent_ops/deploy/stackctl.py repair --target <target> --fix <rebuild-packages|restart-stack|reclaim-ports>`
-- `python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode <restart|rollout> --stage <pre|prod>`
-- `python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --mode cold-build --stage <pre|prod> --image-version <version> --previous-image-version <prev>`
 - `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>`
 
 ## Rules
@@ -27,7 +25,7 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 3. 不要手写 public topology；读取 `deploy/shared/environment_topology_manifest.yaml`。
 4. 需要环境打包、纯度、URL 契约或 artifact 隔离时，先跑 `stackctl package`，再跑 `stackctl verify --kind ...`；需要 T1~T4 证据时再显式追加 `--tier ...`。
 5. 需要诊断时，先 `health`，再 `inspect`，最后 `doctor`。只有白名单问题才执行 `repair`。
-6. `gamma-hosted` 重复执行优先走 `stackctl roll`，cold build 或显式版本化部署走 `stackctl deploy`；`prod-hosted` 只通过 `stackctl deploy --target prod-hosted` 驱动 rollout stage，不要跳回旧脚本，除非是在修 `stackctl` 本身。
+6. 远端/hosted 目标只有 `prod-hosted`（backend SSH 托管，gray 与 full 共享同一集群）；`gamma` 仅本地（`gamma-local`），不存在远端 gamma。`prod-hosted` 只通过 `stackctl deploy --target prod-hosted` 驱动 `gray-initial / carry-on / full` rollout stage，真实远端集成与 curated 媒体路由复验在 `gray-initial` 阶段完成；不要跳回旧脚本，除非是在修 `stackctl` 本身。
 
 ## Recommended Flows
 
@@ -51,19 +49,11 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 2. `prod` 使用 `stackctl up --env prod`，它会先对 `prod-hosted` 执行 edge health，再拉起本地 App/浏览器
 3. 不要为 prod attach 另写第二套 gateway/media 参数；public base 统一来自 topology
 
-### hosted gamma 三模式
-
-1. 先确认 `stackctl verify --kind all` 通过。
-2. `restart` 使用 `stackctl roll --target gamma-hosted --mode restart --stage <pre|prod>`，目标 `<= 5min`。
-3. `rollout` 使用 `stackctl roll --target gamma-hosted --mode rollout --stage <pre|prod>`，目标 `<= 10min`。
-4. `cold-build` 使用 `stackctl deploy --target gamma-hosted --mode cold-build --stage pre --image-version <version> --previous-image-version <prev>`，目标窗口 `30-45min`。
-5. `stackctl roll` / `stackctl deploy` 成功后会自动串联 `health --scope full`、`inspect --kind all`、`doctor`；人工只在需要复核证据时再次单独运行。
-
-### hosted prod rollout
+### hosted prod rollout（唯一远端目标）
 
 1. 先确认 `stackctl verify --env prod --kind all` 通过。
 2. 使用 `stackctl deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>`。
-3. `prod-hosted` 走 `gray-initial / carry-on / full` rollout stage，而不是 `restart|rollout|cold-build` 三模式。
+3. `prod-hosted` 走 `gray-initial / carry-on / full` rollout stage；真实远端集成与 curated 媒体路由复验在 `gray-initial` 阶段完成（不再有独立的远端 gamma-hosted 阶段）。
 4. 每步产物以 `artifacts/stackctl/prod/**` 和 `state/release/<service>.state` 为准。
 
 ## Stop Conditions
@@ -74,7 +64,6 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 - 缺少密钥、token、SSH 凭据或 hosted base URL
 - `prod-hosted` 缺少 `service / image / config / step / SLO` 任一必填输入
 - 计划对 `prod-hosted` 执行 restart / rollout / cold-build 三模式，但当前实现并未开放对应命令面
-- `gamma-hosted` 需要 `cold-build`，但 `image-version` / `previous-image-version` / `stage` 不明确
 - `repair` 需要超出白名单的破坏性动作
 - 发现环境配置、artifact 或 host 污染与用户当前目标矛盾
 

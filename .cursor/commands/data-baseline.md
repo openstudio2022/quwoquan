@@ -21,7 +21,7 @@ description: 应用数据生成工作流 · 数据规格基线阶段
 对应 CLI：
 
 ```bash
-python3 quwoquan_data/tools/cli.py data baseline \
+python3 quwoquan_data/scripts/cli.py data baseline \
   --spec-doc "<spec.md>" --design-doc "<design.md>" --acceptance-doc "<acceptance.yaml>" \
   --workflow-doc "<workflow.md>" --command-matrix-doc "<command-matrix.md>" \
   --catalog-config "<geo_catalog_config.yaml>" --naming-rules "<entity_naming_rules.yaml>" \
@@ -41,7 +41,11 @@ python3 quwoquan_data/tools/cli.py data baseline \
 
 baseline 是 explore 之后、build-entities-tags 之前的强制步骤，冻结规格和配置基线。
 
+自然语言等价触发：用户说“冻结数据规格”“数据专题基线”“数据配置先对齐”时，也按本命令语义执行。
+
 ## 门禁
 
 - 所有基线文件必须存在
 - catalog-config 与 geo-band-rules 路径一致性校验通过
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

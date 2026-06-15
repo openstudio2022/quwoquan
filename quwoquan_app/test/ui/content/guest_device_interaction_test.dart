@@ -33,6 +33,7 @@ class _GuestAuthStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
   @override
   Future<void> saveRefreshedTokens({
@@ -43,6 +44,9 @@ class _GuestAuthStore implements AuthSessionStore {
   Future<void> updateActiveSubAccount(String subAccountId) async {}
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> softLogout() async {}
   @override
   Future<void> markLaunchPromptDismissed() async {}
   @override

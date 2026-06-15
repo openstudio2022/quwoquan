@@ -59,6 +59,7 @@ type AppError struct {
 	DebugMessage string
 	Location     RuntimeErrorLocation
 	Context      RuntimeErrorContext
+	Recovery     RuntimeErrorRecovery
 }
 
 type ErrorResponse struct {
@@ -75,6 +76,18 @@ type ErrorResponse struct {
 	TraceID      string               `json:"traceId,omitempty"`
 	Location     RuntimeErrorLocation `json:"location"`
 	Context      RuntimeErrorContext  `json:"context"`
+	Recovery     RuntimeErrorRecovery `json:"recovery"`
+}
+
+// RuntimeErrorRecovery 是错误恢复指令，唯一真相源为 errors.yaml 的
+// recovery_action / recovery_after_seconds，由 codegen 注入到 AppError 后随响应下发。
+// Action ∈ {retry, surface, absorb, fallback, escalate, compensate}（对齐端侧
+// RuntimeRecoveryAction）；DisruptionLevel ∈ {silent, passiveIndicator, snackbar,
+// inlineCard, permissionCard}（对齐端侧 UserDisruptionLevel），本轮静态推导、不热配。
+type RuntimeErrorRecovery struct {
+	Action          string `json:"action"`
+	AfterSeconds    int    `json:"afterSeconds,omitempty"`
+	DisruptionLevel string `json:"disruptionLevel"`
 }
 
 type RuntimeErrorLocation struct {
@@ -97,13 +110,41 @@ type RuntimeErrorContextAttribute struct {
 type ResponseOptions struct {
 	RequestID    string
 	TraceID      string
+	Locale       string
 	IncludeDebug bool
 }
 
 type HTTPWriteOptions struct {
 	RequestID    string
 	TraceID      string
+	Locale       string
 	IncludeDebug bool
+}
+
+// UserMessageResolver 由运行时（control-plane sync loop）注入，按 code + locale 返回
+// 运营态覆盖文案。返回 ok=false 或空串时回退到 codegen 静态 baseline（fail-safe）。
+// runtime/errors 不依赖 control-plane，依赖反转由 SetUserMessageResolver 完成。
+type UserMessageResolver func(code string, locale string) (string, bool)
+
+//nolint:gochecknoglobals
+var userMessageResolver UserMessageResolver
+
+// SetUserMessageResolver 注册运营态文案 override 解析器。传 nil 可清空（恢复纯 baseline）。
+func SetUserMessageResolver(resolver UserMessageResolver) {
+	userMessageResolver = resolver
+}
+
+func resolveUserMessage(code ErrorCode, baseline string, locale string) string {
+	resolver := userMessageResolver
+	if resolver == nil {
+		return baseline
+	}
+	if override, ok := resolver(code.String(), locale); ok {
+		if trimmed := strings.TrimSpace(override); trimmed != "" {
+			return trimmed
+		}
+	}
+	return baseline
 }
 
 func HTTPWriteOptionsFromRequest(r *http.Request) HTTPWriteOptions {
@@ -118,7 +159,32 @@ func HTTPWriteOptionsFromRequest(r *http.Request) HTTPWriteOptions {
 	return HTTPWriteOptions{
 		RequestID: requestID,
 		TraceID:   traceID,
+		Locale:    localeFromRequest(r),
 	}
+}
+
+// localeFromRequest 解析客户端语言：优先 X-Client-Locale，回退 Accept-Language，默认 zh。
+// 仅取主语言子标签（如 zh-CN -> zh，en-US -> en）。
+func localeFromRequest(r *http.Request) string {
+	raw := strings.TrimSpace(r.Header.Get("X-Client-Locale"))
+	if raw == "" {
+		raw = strings.TrimSpace(r.Header.Get("Accept-Language"))
+	}
+	if raw == "" {
+		return "zh"
+	}
+	if idx := strings.IndexAny(raw, ",;"); idx >= 0 {
+		raw = raw[:idx]
+	}
+	raw = strings.TrimSpace(raw)
+	if idx := strings.IndexByte(raw, '-'); idx >= 0 {
+		raw = raw[:idx]
+	}
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	if raw == "" {
+		return "zh"
+	}
+	return raw
 }
 
 var reasonPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
@@ -228,6 +294,19 @@ func (e *AppError) WithLocation(location RuntimeErrorLocation) *AppError {
 	return e
 }
 
+// WithRecovery 注入错误恢复指令。codegen 工厂据 errors.yaml 调用；
+// 未调用时 ToResponseWithOptions 会按 kind/reason 静态推导默认恢复指令。
+func (e *AppError) WithRecovery(action string, afterSeconds int) *AppError {
+	if e == nil {
+		return e
+	}
+	e.Recovery.Action = strings.TrimSpace(action)
+	if afterSeconds > 0 {
+		e.Recovery.AfterSeconds = afterSeconds
+	}
+	return e
+}
+
 func (e *AppError) WithContextAttributes(attributes ...RuntimeErrorContextAttribute) *AppError {
 	if e == nil {
 		return e
@@ -268,7 +347,7 @@ func ToResponseWithOptions(err *AppError, opts ResponseOptions) ErrorResponse {
 		Code:         err.Code.String(),
 		Origin:       runtimeOriginFromCurrentKind(err.Code.Kind),
 		Nature:       runtimeNatureFromCurrentKind(err.Code.Kind, err.Code.Reason),
-		UserMessage:  err.UserMessage,
+		UserMessage:  resolveUserMessage(err.Code, err.UserMessage, opts.Locale),
 		DebugMessage: debugMessage,
 		Module:       string(err.Code.Module),
 		Kind:         runtimeKindFromCurrent(err.Code.Kind, err.Code.Reason),
@@ -278,6 +357,52 @@ func ToResponseWithOptions(err *AppError, opts ResponseOptions) ErrorResponse {
 		TraceID:      opts.TraceID,
 		Location:     normalizeRuntimeErrorLocation(err.Location),
 		Context:      normalizeRuntimeErrorContext(err.Context, err.Code),
+		Recovery:     resolveRuntimeRecovery(err.Recovery, err.Code.Kind, err.Code.Reason),
+	}
+}
+
+// resolveRuntimeRecovery 以 AppError 携带的恢复指令为准（来自 errors.yaml/codegen）；
+// 缺失时按 kind/reason 静态推导默认动作与提示强度，保证响应体始终携带可消费的 recovery。
+func resolveRuntimeRecovery(recovery RuntimeErrorRecovery, kind Kind, reason string) RuntimeErrorRecovery {
+	action := strings.TrimSpace(recovery.Action)
+	if action == "" {
+		action = defaultRecoveryAction(kind, reason)
+	}
+	disruption := strings.TrimSpace(recovery.DisruptionLevel)
+	if disruption == "" {
+		disruption = defaultDisruptionLevel(action, kind, reason)
+	}
+	afterSeconds := recovery.AfterSeconds
+	if afterSeconds < 0 {
+		afterSeconds = 0
+	}
+	return RuntimeErrorRecovery{
+		Action:          action,
+		AfterSeconds:    afterSeconds,
+		DisruptionLevel: disruption,
+	}
+}
+
+func defaultRecoveryAction(kind Kind, reason string) string {
+	switch runtimeNatureFromCurrentKind(kind, reason) {
+	case "transient":
+		return "retry"
+	default:
+		return "surface"
+	}
+}
+
+func defaultDisruptionLevel(action string, kind Kind, reason string) string {
+	if runtimeNatureFromCurrentKind(kind, reason) == "requiresPermission" {
+		return "permissionCard"
+	}
+	switch action {
+	case "absorb":
+		return "silent"
+	case "retry":
+		return "snackbar"
+	default:
+		return "inlineCard"
 	}
 }
 
@@ -495,6 +620,7 @@ func WriteHTTPError(w http.ResponseWriter, err error, opts HTTPWriteOptions) {
 	resp := ToResponseWithOptions(appErr, ResponseOptions{
 		RequestID:    opts.RequestID,
 		TraceID:      opts.TraceID,
+		Locale:       opts.Locale,
 		IncludeDebug: opts.IncludeDebug,
 	})
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

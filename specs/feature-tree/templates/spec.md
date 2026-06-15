@@ -2,7 +2,7 @@
 
 ## 定位
 
-`templates` 是特性树作者模板集合，不是面向终端用户的业务能力。它为应用根、领域服务、业务能力和 Story 提供标准化的 `spec`、`design` 与 `acceptance` 起草骨架。
+`templates` 是特性树作者模板集合，不是面向终端用户的业务能力。它为应用根、领域服务、业务能力提供标准化的 `spec`、`design` 与 `acceptance` 起草骨架；Story 只提供 `spec` 与 `acceptance` 骨架。
 
 ## 范围
 

@@ -10,10 +10,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
-import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
-import 'package:quwoquan_app/ui/entity/widgets/homepage_summary_card.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 
 /// 与 [circles_page_widget_test] 同源：避免单测里 [CircleCategoryTabsLoader.loadFromAsset] 走 rootBundle 失败或挂起。
@@ -81,77 +79,122 @@ Widget _buildAppWithSearchRepository({
 }
 
 void main() {
-  testWidgets('网络结果页按方案 B 默认综合并展示圈子频道分类', (tester) async {
-    await tester.pumpWidget(
-      _buildAppWithSearchRepository(
-        launchContext: const SearchLaunchContext(
-          entrySurfaceId: '/search',
-          prefilledQuery: '影',
-          initialNetworkTabId: 'all',
-        ),
-        repository: _FakeNetworkSearchRepository(),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.pump(const Duration(seconds: 1));
-
-    expect(find.text('小趣搜'), findsOneWidget);
-    expect(find.text('综合'), findsWidgets);
-    expect(
-      tester.getTopLeft(find.text('小趣搜')).dx,
-      lessThan(tester.getTopLeft(find.text('综合').first).dx),
-    );
-    expect(find.text('主页'), findsAtLeastNWidgets(1));
-    expect(find.text('消息'), findsWidgets);
-    expect(find.text('视频'), findsOneWidget);
-    expect(find.text('图片'), findsOneWidget);
-    expect(find.text('文章'), findsOneWidget);
-    expect(find.text('内容'), findsWidgets);
-    expect(find.text('推荐'), findsNothing);
-    expect(find.text('遇见'), findsNothing);
-    expect(find.text('位置'), findsNothing);
-    const businessLabels = <String>['校园', '旅行', '摄影', '科技', '车之家'];
-    final tabBar = tester.widget<SecondaryCapsuleTabBar>(
-      find.byType(SecondaryCapsuleTabBar),
-    );
-    expect(
-      tabBar.tabs.sublist(tabBar.tabs.length - businessLabels.length),
-      businessLabels,
-    );
-    for (final removed in <String>['人文', '生活', '运动', '美食', '车友']) {
-      expect(find.text(removed), findsNothing);
-    }
-    expect(find.textContaining('小趣正在整理'), findsNothing);
+  setUp(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
   });
 
-  testWidgets('切换频道后展示对应分类结果', (tester) async {
-    await tester.pumpWidget(
-      _buildAppWithSearchRepository(
-        launchContext: const SearchLaunchContext(
-          entrySurfaceId: '/search',
-          prefilledQuery: '影',
-          initialNetworkTabId: 'all',
-        ),
-        repository: _FakeNetworkSearchRepository(),
-      ),
-    );
-    await tester.pump();
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('摄影'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('摄影'), findsWidgets);
-    expect(find.text('街头摄影'), findsWidgets);
-  });
-
-  testWidgets('主页 tab 可展示共享主页结果', (tester) async {
-    // mock fixture 含多条「西湖」主页，放大视口避免目标卡被列表懒加载裁剪。
+  Future<void> pumpSearchResultsPage(WidgetTester tester, Widget widget) async {
     tester.view.physicalSize = const Size(1080, 3600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(
+    await tester.pumpWidget(widget);
+  }
+
+  testWidgets('网络结果页固定 Tab 并默认进入全部', (tester) async {
+    await pumpSearchResultsPage(
+      tester,
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '影',
+          initialNetworkTabId: 'all',
+        ),
+        repository: _FakeNetworkSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await _pumpUntil(
+      tester,
+      condition: () => find.textContaining('发现区').evaluate().isNotEmpty,
+    );
+
+    expect(find.text('小趣'), findsOneWidget);
+    expect(find.text('全部'), findsWidgets);
+    expect(
+      tester.getTopLeft(find.text('小趣')).dx,
+      lessThan(tester.getTopLeft(find.text('全部').first).dx),
+    );
+    expect(find.text('交集'), findsOneWidget);
+    expect(find.text('图片'), findsOneWidget);
+    expect(find.text('视频'), findsOneWidget);
+    expect(find.text('长文'), findsOneWidget);
+    expect(find.textContaining('已加入圈子'), findsWidgets);
+    expect(find.textContaining('发现区'), findsWidgets);
+    expect(find.text('推荐'), findsNothing);
+    expect(find.text('遇见'), findsNothing);
+    final tabBar = tester.widget<SecondaryCapsuleTabBar>(
+      find.byType(SecondaryCapsuleTabBar),
+    );
+    expect(tabBar.tabs, <String>['小趣', '全部', '交集', '图片', '视频', '长文']);
+    expect(find.textContaining('小趣正在整理'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('search_network_submit_button')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('结果页搜索按钮可按新关键词重新加载', (tester) async {
+    await pumpSearchResultsPage(
+      tester,
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '光影',
+          initialNetworkTabId: 'all',
+        ),
+        repository: _FakeNetworkSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('光影摄影社主群').evaluate().isNotEmpty,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('search_network_field')),
+      '西湖',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('search_network_submit_button')),
+    );
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('西湖摄影讨论').evaluate().isNotEmpty,
+    );
+
+    expect(find.text('西湖摄影讨论'), findsOneWidget);
+  });
+
+  testWidgets('切换交集后展示概览和交集发现流', (tester) async {
+    await pumpSearchResultsPage(
+      tester,
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '影',
+          initialNetworkTabId: 'all',
+        ),
+        repository: _FakeNetworkSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('交集'));
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('共同兴趣').evaluate().isNotEmpty,
+    );
+
+    expect(find.text('共同兴趣'), findsOneWidget);
+    expect(find.textContaining('感兴趣圈子'), findsWidgets);
+    expect(find.textContaining('交集发现流'), findsWidgets);
+  });
+
+  testWidgets('旧主页 tab 深链归一到全部', (tester) async {
+    await pumpSearchResultsPage(
+      tester,
       _buildApp(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
@@ -163,14 +206,15 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text('主页'), findsAtLeastNWidgets(1));
-    expect(find.text('西湖景区'), findsWidgets);
-    expect(find.textContaining('搜索主页并进入详情'), findsOneWidget);
-    expect(find.byType(HomepageSummaryCard), findsWidgets);
+    final tabBar = tester.widget<SecondaryCapsuleTabBar>(
+      find.byType(SecondaryCapsuleTabBar),
+    );
+    expect(tabBar.tabs[tabBar.activeIndex], '全部');
   });
 
-  testWidgets('综合 tab 汇总圈子与讨论结果', (tester) async {
-    await tester.pumpWidget(
+  testWidgets('全部 tab 汇总已连接区和发现区', (tester) async {
+    await pumpSearchResultsPage(
+      tester,
       _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
@@ -181,16 +225,20 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.pump(const Duration(seconds: 3));
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('光影摄影社主群').evaluate().isNotEmpty,
+    );
 
-    expect(find.text('综合'), findsWidgets);
+    expect(find.text('全部'), findsWidgets);
+    expect(find.textContaining('聊天记录'), findsWidgets);
     expect(find.text('光影摄影社主群'), findsWidgets);
-    expect(find.byType(PostPreviewListTile), findsWidgets);
+    expect(find.textContaining('发现区'), findsWidgets);
   });
 
-  testWidgets('消息 tab 可展示聊天搜索结果', (tester) async {
-    await tester.pumpWidget(
+  testWidgets('旧消息 tab 深链归一到全部并展示聊天结果', (tester) async {
+    await pumpSearchResultsPage(
+      tester,
       _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
@@ -201,15 +249,18 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.pump(const Duration(seconds: 1));
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('西湖摄影讨论').evaluate().isNotEmpty,
+    );
 
-    expect(find.text('消息'), findsWidgets);
+    expect(find.text('全部'), findsWidgets);
     expect(find.text('西湖摄影讨论'), findsWidgets);
   });
 
   testWidgets('小趣 tab 可作为初始 tab 打开', (tester) async {
-    await tester.pumpWidget(
+    await pumpSearchResultsPage(
+      tester,
       _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
@@ -222,12 +273,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('小趣搜'), findsWidgets);
+    expect(find.text('小趣'), findsWidgets);
     expect(find.textContaining('正在为你整理'), findsWidgets);
   });
 
   testWidgets('不存在的 locations tab 归一到综合避免空 tab 漂移', (tester) async {
-    await tester.pumpWidget(
+    await pumpSearchResultsPage(
+      tester,
       _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
@@ -243,16 +295,17 @@ void main() {
     final tabBar = tester.widget<SecondaryCapsuleTabBar>(
       find.byType(SecondaryCapsuleTabBar),
     );
-    expect(tabBar.tabs[tabBar.activeIndex], '综合');
+    expect(tabBar.tabs[tabBar.activeIndex], '全部');
   });
 
   testWidgets('degrade signal 可在结果页展示', (tester) async {
-    await tester.pumpWidget(
+    await pumpSearchResultsPage(
+      tester,
       _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
           prefilledQuery: '光影',
-          initialNetworkTabId: 'groups',
+          initialNetworkTabId: 'all',
         ),
         repository: _DegradedNetworkSearchRepository(),
       ),
@@ -264,7 +317,8 @@ void main() {
   });
 
   testWidgets('内容类型筛选可驱动网络结果页加载指定内容结果', (tester) async {
-    await tester.pumpWidget(
+    await pumpSearchResultsPage(
+      tester,
       _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
@@ -282,8 +336,24 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
+    expect(find.text('全部'), findsWidgets);
     expect(find.text('街头摄影'), findsWidgets);
   });
+}
+
+Future<void> _pumpUntil(
+  WidgetTester tester, {
+  required bool Function() condition,
+  Duration step = const Duration(milliseconds: 50),
+  int maxTicks = 80,
+}) async {
+  for (var i = 0; i < maxTicks; i++) {
+    await tester.pump(step);
+    if (condition()) {
+      return;
+    }
+  }
+  throw TestFailure('Timed out while waiting for condition.');
 }
 
 class _FakeNetworkSearchRepository implements SearchRepository {
@@ -291,10 +361,13 @@ class _FakeNetworkSearchRepository implements SearchRepository {
   Future<SearchResponse> search(SearchRequest request) async {
     final normalized = request.normalized();
     if (normalized.objectTypes.contains(SearchObjectType.contentPost)) {
+      final wantsArticle = normalized.contentTypes.contains(
+        SearchContentTypeFilter.article,
+      );
       final item = PostSearchItemView.fromMap(<String, dynamic>{
         'postId': 'fake_street_photo',
-        'contentType': 'image',
-        'contentIdentity': 'work',
+        'contentType': wantsArticle ? 'article' : 'image',
+        'contentIdentity': wantsArticle ? 'article' : 'work',
         'title': '街头摄影',
         'summary': '摄影频道结果',
         'coverUrl':
@@ -386,6 +459,95 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 payload: SearchHitPayloadWireMap(<String, dynamic>{
                   'conversationId': 'group_light_photo',
                   'messageId': 'msg_west_lake',
+                }),
+              ),
+            ],
+            resolvedFrom: SearchResolvedFrom.remote,
+          ),
+        ],
+      );
+    }
+    if (normalized.objectTypes.contains(
+      SearchObjectType.integrationLocationPoi,
+    )) {
+      return SearchResponse(
+        request: normalized,
+        sections: const <SearchSection>[
+          SearchSection(
+            id: 'locations',
+            title: '地点',
+            objectTypes: <SearchObjectType>[
+              SearchObjectType.integrationLocationPoi,
+            ],
+            hits: <SearchHit>[
+              SearchHit(
+                objectType: SearchObjectType.integrationLocationPoi,
+                objectId: 'poi_west_lake',
+                title: '西湖',
+                subtitle: '杭州',
+                snippet: '12个交集',
+                resolvedFrom: SearchResolvedFrom.remote,
+                payload: SearchHitPayloadWireMap(<String, dynamic>{
+                  'id': 'poi_west_lake',
+                  'name': '西湖',
+                  'address': '浙江省杭州市西湖区',
+                }),
+              ),
+            ],
+            resolvedFrom: SearchResolvedFrom.remote,
+          ),
+        ],
+      );
+    }
+    if (normalized.objectTypes.contains(SearchObjectType.userProfile)) {
+      return SearchResponse(
+        request: normalized,
+        sections: const <SearchSection>[
+          SearchSection(
+            id: 'users',
+            title: '人',
+            objectTypes: <SearchObjectType>[SearchObjectType.userProfile],
+            hits: <SearchHit>[
+              SearchHit(
+                objectType: SearchObjectType.userProfile,
+                objectId: 'user_photo_friend',
+                title: '林同学',
+                subtitle: '摄影爱好者',
+                snippet: '共同兴趣 3 个',
+                resolvedFrom: SearchResolvedFrom.remote,
+                payload: SearchHitPayloadWireMap(<String, dynamic>{
+                  'subAccountId': 'user_photo_friend',
+                  'username': 'user_photo_friend',
+                  'displayName': '林同学',
+                  'headline': '摄影爱好者',
+                  'chatAvailable': true,
+                  'relationshipCapability': <String, dynamic>{
+                    'relationState': 'mutual',
+                    'canFollow': false,
+                    'canUnfollow': true,
+                    'canOpenConversation': true,
+                  },
+                }),
+              ),
+              SearchHit(
+                objectType: SearchObjectType.userProfile,
+                objectId: 'user_new_photo',
+                title: '新摄影师',
+                subtitle: '同城影像',
+                snippet: '共同兴趣 1 个',
+                resolvedFrom: SearchResolvedFrom.remote,
+                payload: SearchHitPayloadWireMap(<String, dynamic>{
+                  'subAccountId': 'user_new_photo',
+                  'username': 'user_new_photo',
+                  'displayName': '新摄影师',
+                  'headline': '同城影像',
+                  'chatAvailable': false,
+                  'relationshipCapability': <String, dynamic>{
+                    'relationState': 'not_following',
+                    'canFollow': true,
+                    'canUnfollow': false,
+                    'canOpenConversation': false,
+                  },
                 }),
               ),
             ],

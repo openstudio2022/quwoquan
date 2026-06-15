@@ -5,14 +5,14 @@
 当前仓库已经具备多环境基础设施，但 promotion 链是割裂的：
 
 - `alpha-local / beta-local` 主要由本地脚本与 self-hosted 设备矩阵维护。
-- `gamma-hosted` 由 PR 轻量 preflight、手动 ECS deploy、nightly full validation 分散维护。
+- 远端 `gamma-hosted` 曾由 PR 轻量 preflight、手动 ECS deploy、nightly full validation 分散维护；现已退役，远端真实集成复验下沉到 prod `gray-initial`，`gamma` 仅保留本地 mirror。
 - `prod-hosted` 已有自动灰度 workflow，但仍保留人工 approval，且 post-deploy probe 置信度偏低。
 
 本设计的目标不是新增环境，而是在保持现有混合拓扑的前提下，把 `main` 入库后的自动主链收敛为一条可审计、可回滚、15 分钟内完成 blocking promotion 的流水线。
 
 ## 适用场景与约束
 
-- **适用**：`main` 后多环境自动推进、hosted gamma / prod 部署、prod 自动灰度与自动回滚。
+- **适用**：`main` 后多环境自动推进、prod 部署（唯一远端目标）、prod 自动灰度与自动回滚。
 - **约束**：
   - 继续依赖 `process_domain_mapping`、`environment_topology_manifest`、`local_env_port_manifest`、`gray_rollout_stages` 与 `config_release_*` 脚本。
   - 继续支持 `CLOUD_PROVIDER=aliyun|volcengine|huaweicloud` 的多云 prod overlay。
@@ -29,16 +29,15 @@
 repo verify/package
   -> alpha-local stage
   -> beta-local stage
-  -> gamma-hosted stage
-  -> prod initial
+  -> prod gray-initial
   -> prod checks
   -> prod full
 ```
 
 约束：
 
-- PR 仍由 `03/04/05` 收敛，但 `07` 负责真正的自动 promotion。
-- `08/09` 保留为手动复验与 nightly full validation，不再与 `07` 竞争“权威主链”角色。
+- PR 仍由 `03/04/05` 收敛，但 `07` 负责真正的自动 promotion，并在 `gray-initial` 承接真实远端集成复验。
+- `09` 保留为 local-gamma nightly full validation，不再与 `07` 竞争“权威主链”角色；远端 gamma 部署已退役。
 
 ### 2. stackctl 为唯一命令面
 
@@ -66,7 +65,7 @@ repo verify/package
 | `manual_full` | 手动完整 gamma 复验 | ECS deploy + T3 + hosted/high-signal smoke |
 | `nightly_full` | 夜间全量验证 | hosted full + Patrol + 全设备矩阵 |
 | `release_candidate` | 发布前回归 | 与 nightly_full 同级但更靠近发布 |
-| `mainline_auto_prod` | `main` 自动 promotion | beta matrix + gamma hosted 阻断链 + prod initial checks |
+| `mainline_auto_prod` | `main` 自动 promotion | beta matrix + prod gray-initial 阻断链（承接旧 gamma-hosted）+ prod initial checks |
 
 设计要求：
 
@@ -99,14 +98,14 @@ repo verify/package
 - `stackctl inspect --target beta-local --scope all`
 - self-hosted 设备矩阵复用 `05. App Env Device Matrix`，但使用 `mainline_auto_prod` profile 的环境默认值与 gate 文案。
 
-### 2. gamma hosted 阶段
+### 2. 远端集成复验阶段（prod gray-initial 承接，旧 gamma-hosted 退役）
 
-gamma 不再在 `07` 中手搓第三套部署逻辑，统一复用：
+旧 `gamma-hosted` 远端阶段已退役。真实远端集成复验不再单独成阶段，而是作为 prod `gray-initial` rollout stage 的一部分由 `07` 统一驱动：
 
-- `.github/workflows/gamma-ecs-pre-hosted-core.yml` 负责 deploy + readiness + API contract + assistant/chat-avatar probes。
-- 新增 `mainline_auto_prod` profile 后，`07` 可直接调用该 reusable workflow 或按同一 contract 消费其输出。
+- `07` 在 `gray-initial` 通过 `stackctl deploy --target prod-hosted` 完成 deploy + readiness + API contract + assistant/chat-avatar probes。
+- `mainline_auto_prod` profile 描述这一组阻断项，`07` 按同一 contract 消费其输出。
 
-gamma 阶段输出必须至少包含：
+`gray-initial` 远端复验输出必须至少包含：
 
 - deploy artifact
 - readiness report
@@ -241,7 +240,7 @@ gamma 阶段输出必须至少包含：
 
 ### 与现有 promotion 链 / 多云 overlay 的关系
 
-- 本形态不改 `alpha-local / beta-local / gamma-hosted / prod-hosted` 主链抽象，也不新增环境名。
+- 本形态不改 `alpha-local / beta-local / prod-hosted` 主链抽象（`gamma` 仅本地），也不新增环境名。
 - 复用 `deploy/cloud-providers/aliyun/`、`deploy/kustomization/aliyun-prod/` 与 `CLOUD_PROVIDER` 切换参数。
 - `stackctl` 仍是唯一命令面；prod rollout 仍走 `gray-initial / carry-on / full` stage，拆分后按域独立 rollout。
 
@@ -293,4 +292,4 @@ gamma 阶段输出必须至少包含：
 ## 未来演进
 
 - 若后续引入 GitOps，可把 `prod initial/prod full` 的 apply 动作迁移到 Argo CD，但 `stackctl` 与证据 contract 仍保持稳定。
-- 若后续新增 hosted beta，只允许通过扩展 topology manifest 与 `stackctl` target，不允许跳过当前 `alpha-local / beta-local / gamma-hosted / prod-hosted` 主线抽象。
+- 若后续新增 hosted beta，只允许通过扩展 topology manifest 与 `stackctl` target，不允许跳过当前 `alpha-local / beta-local / prod-hosted` 主线抽象（`gamma` 仅本地）。

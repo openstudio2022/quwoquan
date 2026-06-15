@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart' show setEquals;
 export 'package:quwoquan_app/core/models/search_hit_payload.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/content/post_search_item_view_dto.g.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
+export 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart';
@@ -431,9 +433,7 @@ class SocialRelationSearchItemView {
     Map<String, dynamic> row,
   ) {
     final subAccountId = w.subAccountId;
-    final displayName = w.displayName.isNotEmpty
-        ? w.displayName
-        : subAccountId;
+    final displayName = w.displayName.isNotEmpty ? w.displayName : subAccountId;
     final username = w.username.isNotEmpty ? w.username : subAccountId;
     final nested = w.relationshipCapability;
     final Map<String, dynamic> effectiveCap =
@@ -663,18 +663,20 @@ class RecentSearchEntryView {
 enum SearchViewMode { historyBrowse, historyManage, liveSuggestions }
 
 enum SearchSuggestionSectionKind {
-  mostUsed,
   contacts,
   chatRecords,
   circles,
+  locations,
+  followedPeople,
   network;
 
   String get title => switch (this) {
-    SearchSuggestionSectionKind.mostUsed => '最常使用',
     SearchSuggestionSectionKind.contacts => '联系人',
     SearchSuggestionSectionKind.chatRecords => '聊天记录',
-    SearchSuggestionSectionKind.circles => '讨论',
-    SearchSuggestionSectionKind.network => '搜索网络结果',
+    SearchSuggestionSectionKind.circles => '已加入圈子',
+    SearchSuggestionSectionKind.locations => '已关注地点',
+    SearchSuggestionSectionKind.followedPeople => '已关注的人',
+    SearchSuggestionSectionKind.network => '推荐搜索',
   };
 }
 
@@ -765,10 +767,11 @@ class NetworkSearchSuggestion {
 }
 
 enum SearchSuggestionEntryKind {
-  mostUsed,
   contact,
   chatRecord,
   circle,
+  location,
+  followedPerson,
   network,
 }
 
@@ -778,14 +781,16 @@ class SearchSuggestionEntry {
   final SearchSuggestionEntryKind kind;
   final Object payload;
 
-  const SearchSuggestionEntry.mostUsed(MostUsedSearchItem value)
-    : this._(kind: SearchSuggestionEntryKind.mostUsed, payload: value);
   const SearchSuggestionEntry.contact(ContactSearchSuggestion value)
     : this._(kind: SearchSuggestionEntryKind.contact, payload: value);
   const SearchSuggestionEntry.chatRecord(ChatRecordSearchSuggestion value)
     : this._(kind: SearchSuggestionEntryKind.chatRecord, payload: value);
   const SearchSuggestionEntry.circle(CircleSearchItemView value)
     : this._(kind: SearchSuggestionEntryKind.circle, payload: value);
+  const SearchSuggestionEntry.location(LocationPoiDto value)
+    : this._(kind: SearchSuggestionEntryKind.location, payload: value);
+  const SearchSuggestionEntry.followedPerson(SocialRelationSearchItemView value)
+    : this._(kind: SearchSuggestionEntryKind.followedPerson, payload: value);
   const SearchSuggestionEntry.network(NetworkSearchSuggestion value)
     : this._(kind: SearchSuggestionEntryKind.network, payload: value);
 
@@ -843,6 +848,88 @@ class SearchSuggestionSection {
   }
 }
 
+class SearchInspirationChipView {
+  const SearchInspirationChipView({
+    required this.title,
+    required this.subtitle,
+    this.query,
+  });
+
+  final String title;
+  final String subtitle;
+  final String? query;
+}
+
+class SearchInspirationCardView {
+  const SearchInspirationCardView({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    this.coverUrl,
+    this.query,
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
+  final String? coverUrl;
+  final String? query;
+}
+
+class SearchInspirationPersonView {
+  const SearchInspirationPersonView({
+    required this.id,
+    required this.displayName,
+    required this.headline,
+    required this.reason,
+    this.avatarUrl,
+  });
+
+  final String id;
+  final String displayName;
+  final String headline;
+  final String reason;
+  final String? avatarUrl;
+}
+
+class SearchInspirationState {
+  const SearchInspirationState({
+    this.todayIntersections = const <SearchInspirationChipView>[],
+    this.hotCircles = const <SearchInspirationCardView>[],
+    this.hotLocations = const <SearchInspirationCardView>[],
+    this.people = const <SearchInspirationPersonView>[],
+    this.isLoading = false,
+  });
+
+  final List<SearchInspirationChipView> todayIntersections;
+  final List<SearchInspirationCardView> hotCircles;
+  final List<SearchInspirationCardView> hotLocations;
+  final List<SearchInspirationPersonView> people;
+  final bool isLoading;
+
+  bool get isEmpty =>
+      todayIntersections.isEmpty &&
+      hotCircles.isEmpty &&
+      hotLocations.isEmpty &&
+      people.isEmpty;
+
+  SearchInspirationState copyWith({
+    List<SearchInspirationChipView>? todayIntersections,
+    List<SearchInspirationCardView>? hotCircles,
+    List<SearchInspirationCardView>? hotLocations,
+    List<SearchInspirationPersonView>? people,
+    bool? isLoading,
+  }) {
+    return SearchInspirationState(
+      todayIntersections: todayIntersections ?? this.todayIntersections,
+      hotCircles: hotCircles ?? this.hotCircles,
+      hotLocations: hotLocations ?? this.hotLocations,
+      people: people ?? this.people,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+}
+
 class SearchSessionState {
   const SearchSessionState({
     required this.launchContext,
@@ -851,6 +938,7 @@ class SearchSessionState {
     this.selection = const SearchObjectSelection(),
     this.suggestionSections = const <SearchSuggestionSection>[],
     this.recentSearches = const <RecentSearchEntryView>[],
+    this.inspiration = const SearchInspirationState(),
     this.isLoading = false,
     this.isHydratingHistory = false,
     this.isManagingHistory = false,
@@ -865,6 +953,7 @@ class SearchSessionState {
   final SearchObjectSelection selection;
   final List<SearchSuggestionSection> suggestionSections;
   final List<RecentSearchEntryView> recentSearches;
+  final SearchInspirationState inspiration;
   final bool isLoading;
   final bool isHydratingHistory;
   final bool isManagingHistory;
@@ -889,6 +978,7 @@ class SearchSessionState {
     SearchObjectSelection? selection,
     List<SearchSuggestionSection>? suggestionSections,
     List<RecentSearchEntryView>? recentSearches,
+    SearchInspirationState? inspiration,
     bool? isLoading,
     bool? isHydratingHistory,
     bool? isManagingHistory,
@@ -903,6 +993,7 @@ class SearchSessionState {
       selection: selection ?? this.selection,
       suggestionSections: suggestionSections ?? this.suggestionSections,
       recentSearches: recentSearches ?? this.recentSearches,
+      inspiration: inspiration ?? this.inspiration,
       isLoading: isLoading ?? this.isLoading,
       isHydratingHistory: isHydratingHistory ?? this.isHydratingHistory,
       isManagingHistory: isManagingHistory ?? this.isManagingHistory,

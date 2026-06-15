@@ -1,15 +1,6 @@
 part of 'circle_shell.dart';
 
 extension _CircleShellBuilders on _CircleShellState {
-  /// 圈子关注：游客显示「未关注」，点击先引导登录；已登录直接 toggle。
-  void _gatedCircleFollow(BuildContext context, CircleStateNotifier notifier) {
-    if (ref.read(authSessionControllerProvider).isAuthenticated) {
-      unawaited(notifier.toggleFollow());
-      return;
-    }
-    unawaited(requireLogin(ref, context, AuthGateReason.follow));
-  }
-
   /// 加入圈子：游客显示「未加入」，点击先登记续接再引导登录；登录成功后自动加入。
   void _gatedJoinCircle(BuildContext context, CircleStateNotifier notifier) {
     if (ref.read(authSessionControllerProvider).isAuthenticated) {
@@ -98,43 +89,12 @@ extension _CircleShellBuilders on _CircleShellState {
               },
             ),
             SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xs,
-              children: _metaChips(state)
-                  .map(
-                    (chip) => _CircleMetaChip(
-                      label: chip.label,
-                      icon: chip.icon,
-                      accent: chip.accent,
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-            SizedBox(height: AppSpacing.sm),
-            CircleStatsRow(
-              isDark: isDark,
-              stats: state.circleStats.forDetailRow(circle),
-            ),
-            SizedBox(height: AppSpacing.sm),
             CircleActionBar(
               isDark: isDark,
               role: state.role,
               joinStatus: state.joinStatus,
-              isFollowed: state.isFollowed,
               joinPolicy: circle?.joinPolicy ?? 'open',
               hasConversation: hasConversation,
-              onEditCircle: () => _openEditor(
-                context,
-                state: state,
-                initialTab: CircleEditSettingsTab.info,
-              ),
-              onManageCenter: () => _openEditor(
-                context,
-                state: state,
-                initialTab: CircleEditSettingsTab.settings,
-              ),
-              onFollow: () => _gatedCircleFollow(context, notifier),
               onJoinCircle:
                   _isMemberLike(state) || state.joinStatus == 'pending'
                   ? null
@@ -385,6 +345,7 @@ extension _CircleShellBuilders on _CircleShellState {
     required Color fg,
     required Color border,
     required String circleName,
+    required CircleState state,
     required String? avatarUrl,
     required double identityOpacity,
     required double backgroundOpacity,
@@ -530,6 +491,7 @@ extension _CircleShellBuilders on _CircleShellState {
                               onPressed: () => _showMoreOptions(
                                 context,
                                 circleName: circleName,
+                                state: state,
                               ),
                               backgroundColor: actionBackground,
                               foregroundColor: compactForeground,

@@ -23,7 +23,12 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 import numpy as np  # noqa: E402
 import cv2  # noqa: E402
 
-from produce.route_workflow import _check_image_gate, _check_carrier_consistency, _review_fallback_stage  # noqa: E402
+from produce.route_workflow import (  # noqa: E402
+    _check_image_gate,
+    _check_carrier_consistency,
+    _image_caption_from_article,
+    _review_fallback_stage,
+)
 
 FIXTURE_MEDIA = (
     Path(__file__).resolve().parents[3]
@@ -103,6 +108,34 @@ def test_face_requires_human_review():
     assert fallback == "review"
 
 
+def test_image_only_fallback_does_not_require_prose_checks():
+    fallback = _review_fallback_stage({
+        "generatorProvenance": {"passed": True},
+        "imageGate": {"passed": True},
+        "carrierConsistency": {"passed": True},
+    })
+
+    assert fallback == "review"
+
+
+def test_image_caption_extraction_ignores_structural_gallery_markup():
+    article = """# 毕棚沟龙王海与红石滩秋色
+
+这组图只看两件事：湖面倒影够不够稳，红石与彩林是不是在同一条秋色线上。
+
+:::figure
+asset://bipenggou_01
+caption: 龙王海
+:::
+
+授权归因：CC BY-SA 4.0 / Photographer
+"""
+
+    assert _image_caption_from_article(article) == (
+        "这组图只看两件事：湖面倒影够不够稳，红石与彩林是不是在同一条秋色线上。"
+    )
+
+
 def test_carrier_consistency_article_needs_sections():
     bad = _check_carrier_consistency({"carrier": "article", "articleMarkdown": "# t\n\n只有一段没有小节。\n"})
     assert bad["passed"] is False
@@ -123,12 +156,19 @@ def test_carrier_consistency_gallery_tracks_pack_assets():
         ':::',
     ])
     gate = _check_carrier_consistency(
-        {"carrier": "gallery", "articleMarkdown": article, "assets": [{"assetId": "a1"}, {"assetId": "a2"}]}
+        {
+            "carrier": "gallery",
+            "articleMarkdown": article,
+            "assets": [
+                {"assetId": "a1", "sourceCollectionId": "collection-a"},
+                {"assetId": "a2", "sourceCollectionId": "collection-a"},
+            ],
+        }
     )
     assert gate["passed"] is True, gate["issues"]
 
 
-def test_carrier_consistency_gallery_blocks_when_missing_required_figure():
+def test_carrier_consistency_gallery_blocks_mixed_source_collections():
     article = '\n'.join([
         '# 图集',
         '',
@@ -144,11 +184,15 @@ def test_carrier_consistency_gallery_blocks_when_missing_required_figure():
         {
             "carrier": "gallery",
             "articleMarkdown": article,
-            "assets": [{"assetId": "a1"}, {"assetId": "a2"}, {"assetId": "a3"}],
+            "assets": [
+                {"assetId": "a1", "sourceCollectionId": "collection-a"},
+                {"assetId": "a2", "sourceCollectionId": "collection-a"},
+                {"assetId": "a3", "sourceCollectionId": "collection-b"},
+            ],
         }
     )
     assert gate["passed"] is False
-    assert any("2 < 3" in issue for issue in gate["issues"]), gate["issues"]
+    assert any("one sourceCollectionId" in issue for issue in gate["issues"]), gate["issues"]
 
 
 def _run_all() -> None:

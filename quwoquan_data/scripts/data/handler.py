@@ -5,6 +5,7 @@ import argparse
 
 from data.baseline import register_parser as reg_baseline
 from download.handler import register_parser as reg_download
+from download.research_plan import register_parser as reg_research_plan
 from explore.handler import register_parser as reg_explore
 from build.handler import register_parser as reg_build
 from produce.handler import register_parser as reg_produce
@@ -20,6 +21,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub = p.add_subparsers(dest="data_command")
     reg_explore(sub)
     reg_baseline(sub)
+    reg_research_plan(sub)
     reg_download(sub)
     reg_build(sub)
     reg_produce(sub)

@@ -39,3 +39,7 @@ description: 数据工程 · 区域实体探索阶段
 
 ### validate
 results 非空，汇总写入 `catalog.ndjson`。每条记录含 `domain`/`type`/`name`/`geoTagRef`。
+
+自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/data-explore` 语义执行；执行前仍需按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

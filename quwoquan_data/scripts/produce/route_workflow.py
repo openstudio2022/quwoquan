@@ -43,6 +43,7 @@ from _common.draft_io import (
     write_prompt,
     write_writing_pack,
 )
+from _common.content_tags import resolved_content_tag_refs
 from _common.entity_extract import build_entities_sidecar, normalize_entity_refs
 from _common.entity_annotation import merge_entity_refs
 from _common.fact_coverage import fact_covered
@@ -80,16 +81,8 @@ DISLIKE_FEELING_MARKERS = ("怕", "劝退", "累", "疲惫", "拖", "后悔", "�
 DECISION_MARKERS = ("我会", "我更愿意", "建议把", "如果你", "可以跟团", "宁可", "就该", "值不值得", "优先看", "我不会")
 STANDALONE_TIPS_MARKERS = ("实用信息", "实用攻略信息", "来源平台", "信息卡", "小贴士：", "tips：", "贴士：")
 
-# 修辞/结构骨架门：仅出建议与降分，不阻断（底稿轻改范式：结构跟随底稿，不强套骨架）。
-# 硬门保留：真实性(generatorProvenance/factTraceability/baseDraftFidelity)、反抄袭/去版权
-# (provenanceRewrite)、反雷同(crossArticleSimilarity)、证据/图片/联系方式/语域/载体/路线覆盖。
-SOFT_CHECKS = {
-    "travelogueDensity",
-    "mechanicalHeading",
-    "proseStyle",
-    "narrativeContinuity",
-    "sectionShape",
-}
+# 生产 profile 不允许软失败绿灯放行；保留常量作为非生产 profile 的未来接线点。
+SOFT_CHECKS: set[str] = set()
 
 
 def aggregate_checks(
@@ -265,7 +258,7 @@ def build_route_writing_pack(
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
     assets = _build_route_assets(task_id, batch_id, ref, brief, evidence_bundle)
     carrier = resolve_carrier(brief, evidence_bundle, assets)
-    publish_layout = "gallery" if carrier == "gallery" else "travel"
+    publish_layout = "image" if carrier in ("image", "gallery") else "travel"
     byline = public_byline_label(str(brief.get("templateId") or ""), brief.get("creator") or {})
     pack = build_writing_pack(
         ref=ref,
@@ -353,14 +346,18 @@ def _compose_payload_from_pack(
         "articleMarkdown": article,
         "carrier": carrier,
         "entityRefs": merge_entity_refs(brief, draft_meta),
-        "tagRefs": list(brief.get("tagRefs") or []),
+        "tagRefs": resolved_content_tag_refs(brief, carrier),
         "sourceUrls": list(quality_payload.get("sourceUrls") or []),
         "sourcePaths": list(quality_payload.get("sourcePaths") or []),
         "template": template,
         "assets": list(pack.get("assets") or []),
-        "publishLayout": "gallery" if carrier == "gallery" else "travel",
+        "publishLayout": "image" if carrier in ("image", "gallery") else "travel",
         "publishAngle": _publish_angle(brief),
-        "publishTitle": require_title_hint(brief, ref=ref),
+        "publishTitle": (
+            str(brief.get("titleHint") or "")
+            if carrier in ("image", "gallery")
+            else require_title_hint(brief, ref=ref)
+        ),
         "publishSeq": 1,
         "conditionContext": brief.get("conditionContext"),
         "composeBriefRef": ref,
@@ -375,8 +372,9 @@ def _compose_payload_from_pack(
             "fontPreset": (brief.get("render") or {}).get("fontPreset", "clean"),
         },
     }
-    if carrier == "gallery":
-        payload["galleryMarkdown"] = article
+    if carrier in ("image", "gallery"):
+        payload["title"] = str(brief.get("titleHint") or "")
+        payload["caption"] = _image_caption_from_article(article)
     return payload
 
 
@@ -429,6 +427,7 @@ def review_route_draft(
     traceability = fact_traceability_issues(body, dict(brief), source_texts)
 
     compose_payload = _compose_payload_from_pack(ref, brief, quality_payload, pack, body, draft_meta)
+    carrier = str(compose_payload.get("carrier") or brief.get("carrier") or "article")
     write_stage_result(task_id, batch_id, "produce", "compose", ref, compose_payload)
 
     route_checks = _route_review_checks(
@@ -454,14 +453,17 @@ def review_route_draft(
     }
     from _common.base_draft import base_draft_fidelity_issues, base_source_use_mode, load_base_draft_text
 
-    base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
-    source_use_mode = base_source_use_mode(task_id, batch_id, brief.get("baseSourceRef"))
-    fidelity = base_draft_fidelity_issues(
-        body,
-        base_text,
-        carrier=str(compose_payload.get("carrier") or brief.get("carrier") or "article"),
-        source_use_mode=source_use_mode,
-    )
+    if carrier in ("image", "gallery"):
+        fidelity = []
+    else:
+        base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
+        source_use_mode = base_source_use_mode(task_id, batch_id, brief.get("baseSourceRef"))
+        fidelity = base_draft_fidelity_issues(
+            body,
+            base_text,
+            carrier=carrier,
+            source_use_mode=source_use_mode,
+        )
     route_checks["baseDraftFidelity"] = {
         "passed": not fidelity,
         "issues": fidelity,
@@ -469,7 +471,7 @@ def review_route_draft(
     }
     from _common import quality_gates as qg
 
-    wi_issues = qg.writing_intent_consistency_issues(body, brief.get("writingIntent"))
+    wi_issues = [] if carrier in ("image", "gallery") else qg.writing_intent_consistency_issues(body, brief.get("writingIntent"))
     route_checks["writingIntentConsistency"] = {
         "passed": not wi_issues,
         "issues": wi_issues,
@@ -660,7 +662,7 @@ def _route_review_checks(
     draft_meta: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     carrier = str(compose_payload.get("carrier") or "article")
-    if carrier == "gallery":
+    if carrier in ("image", "gallery"):
         # 画报载体以图为主、配小字：只校验体裁/图片/资源，不套长文叙事门。
         return {
             "carrierConsistency": _check_carrier_consistency(compose_payload),
@@ -743,21 +745,13 @@ def _check_gallery_caption(
     brief: Mapping[str, Any],
     quality_payload: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """画报小字门：每个 figure 配文不超长、无平台来源口吻、无整句搬运。"""
+    """Image-work caption is optional, separate from assets, and at most 300 chars."""
     issues: list[str] = []
-    caption_max = int((brief.get("imagePolicy") or {}).get("captionMaxChars") or 24)
-    # 配文 = figure 块内既非围栏、又非图片标记的正文行。
-    texts: list[str] = []
-    for block in re.findall(r"(?ms)^:::figure\n(.*?)\n:::", article):
-        for line in block.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith(("!", "#", ">", ":::")):
-                continue
-            texts.append(stripped)
-    for cap in texts:
-        compact = re.sub(r"\s+", "", cap)
-        if len(compact) > caption_max:
-            issues.append(f"caption too long ({len(compact)} > {caption_max}): {cap[:20]}")
+    compact = re.sub(r"\s+", "", article)
+    if len(compact) > 300:
+        issues.append(f"caption too long ({len(compact)} > 300)")
+    if len(str(brief.get("titleHint") or "")) > 80:
+        issues.append("title too long (>80)")
     if any(term in article for term in PROVENANCE_TERMS):
         issues.append("contains provenance/platform wording")
     source_texts = _load_source_texts(quality_payload.get("sourcePaths") or [])
@@ -771,17 +765,27 @@ def _check_gallery_caption(
 
 
 def _check_carrier_consistency(compose_payload: Mapping[str, Any]) -> dict[str, Any]:
-    """体裁一致性：article 必须像长文（多小节正文），gallery 必须像图集（多图块）。"""
+    """体裁一致性：article 是长文；image/gallery 是结构化图片集合 + 可选短配文。"""
     carrier = str(compose_payload.get("carrier") or "article")
     article = str(compose_payload.get("articleMarkdown") or "")
     issues: list[str] = []
-    if carrier == "gallery":
+    if carrier in ("image", "gallery"):
         assets = [a for a in (compose_payload.get("assets") or []) if a.get("assetId")]
-        required_figures = max(2, len(assets)) if assets else 2
-        if article.count(":::figure") < required_figures:
+        if not (1 <= len(assets) <= 20):
+            issues.append(f"image carrier needs 1..20 assets, got {len(assets)}")
+        collection_ids = {
+            str(asset.get("sourceCollectionId") or "")
+            for asset in assets
+            if str(asset.get("sourceCollectionId") or "")
+        }
+        if len(collection_ids) != 1:
             issues.append(
-                f"gallery carrier lacks figure blocks ({article.count(':::figure')} < {required_figures})"
+                f"image carrier must use one sourceCollectionId, got {sorted(collection_ids)}"
             )
+        if len(str(compose_payload.get("title") or "")) > 80:
+            issues.append("image title exceeds 80 characters")
+        if len(re.sub(r"\s+", "", str(compose_payload.get("caption") or article))) > 300:
+            issues.append("image caption exceeds 300 characters")
     else:
         if len(re.findall(r"(?m)^##\s", article)) < 3:
             issues.append("article carrier lacks prose sections (looks like a gallery)")
@@ -847,6 +851,7 @@ def _check_travelogue_density(
     无 styleFamily 时使用默认 allowedOpenings 规则。
     """
     issues: list[str] = []
+    observations: list[str] = []
     opening_required = bool((brief.get("openingTension") or {}).get("required", True))
     feelings = brief.get("explicitFeelings") or {"requireLike": True, "requireDislike": True}
     decision = brief.get("decisionPoints") or {"required": True, "minPoints": 2}
@@ -862,7 +867,7 @@ def _check_travelogue_density(
                 f"adopt one of {allowed} (现为套路化/千篇一律开头)"
             )
         elif opening_strategy and opening_strategy != detected:
-            issues.append(
+            observations.append(
                 f"declared openingStrategy '{opening_strategy}' not reflected in opening (detected '{detected}')"
             )
     if feelings.get("requireLike", True) and not any(m in article for m in LIKE_FEELING_MARKERS):
@@ -881,6 +886,7 @@ def _check_travelogue_density(
     return {
         "passed": not issues,
         "issues": issues,
+        "observations": observations,
         "suggestions": ["开篇换用所选体裁的真实钩子，正文写清喜欢与不喜欢，注意事项就地融入而非另起清单。"] if issues else [],
     }
 
@@ -1041,15 +1047,15 @@ def _check_evidence_quality(
 def _review_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks.get("generatorProvenance", {"passed": True})["passed"]:
         return "agent_compose"
-    if not checks["evidenceQuality"]["passed"]:
+    if not checks.get("evidenceQuality", {"passed": True})["passed"]:
         return "download"
     if not checks.get("factTraceability", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("baseDraftFidelity", {"passed": True})["passed"]:
         return "agent_compose"
-    if not checks["provenanceRewrite"]["passed"]:
+    if not checks.get("provenanceRewrite", {"passed": True})["passed"]:
         return "agent_compose"
-    if not checks["routeCoverage"]["passed"]:
+    if not checks.get("routeCoverage", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("travelogueDensity", {"passed": True})["passed"]:
         return "agent_compose"
@@ -1184,8 +1190,23 @@ def _make_asset(
         # 证据链：source 原图 + 原文（相对 batch 根；materialize 直接写入 manifest）。
         "sourceAssetRef": str(candidate.get("sourceAssetRef") or ""),
         "sourceRef": str(candidate.get("sourceRef") or ""),
+        "alignmentEvidence": str(candidate.get("relevance") or candidate.get("caption") or ""),
         "imageLayout": layout,
     }
+    for field in (
+        "researchLane",
+        "sourceCollectionId",
+        "creator",
+        "collectionPageUrl",
+        "license",
+        "termsUrl",
+        "licenseSnapshot",
+        "authorizationProof",
+        "usageScope",
+    ):
+        value = candidate.get(field)
+        if value not in (None, ""):
+            asset[field] = value
     if verdict is not None:
         asset["imageStatus"] = verdict.status
         asset["textAreaRatio"] = round(verdict.text_area_ratio, 4)
@@ -1222,6 +1243,80 @@ def _build_route_assets(
     assets: list[dict[str, Any]] = []
     chosen: list[Path] = []
 
+    declared_carrier = str(brief.get("carrier") or "").lower()
+    if declared_carrier in ("image", "gallery"):
+        collection_id = str(brief.get("sourceCollectionId") or "").strip()
+        declared_refs = {
+            str(ref).strip()
+            for ref in (brief.get("assetRefs") or [])
+            if str(ref).strip()
+        }
+        candidates = [
+            candidate
+            for rows in per_entity.values()
+            for candidate in rows
+            if str(candidate.get("researchLane") or "") == "image"
+            and (
+                not collection_id
+                or str(candidate.get("sourceCollectionId") or "") == collection_id
+            )
+            and (
+                not declared_refs
+                or str(candidate.get("sourceAssetRef") or "") in declared_refs
+            )
+        ]
+        candidates.sort(key=lambda row: str(row.get("sourceAssetRef") or row.get("path") or ""))
+        for position, candidate in enumerate(candidates[:20]):
+            verdict = assess_image(candidate["path"])
+            if verdict.status == STATUS_UNSAFE:
+                continue
+            chosen.append(candidate["path"])
+            assets.append(
+                _make_asset(
+                    ref,
+                    role="cover" if position == 0 else "node",
+                    candidate=candidate,
+                    layout="gallery",
+                    caption=str(candidate.get("caption") or ""),
+                    entity_name=entity_names[0],
+                    global_batch_seq=global_batch_seq,
+                    asset_registry=asset_registry,
+                    verdict=verdict,
+                )
+            )
+        if declared_refs and len(assets) != len(declared_refs):
+            raise RuntimeError(
+                f"{ref}: image assetRefs resolved {len(assets)}/{len(declared_refs)}"
+            )
+        if not assets:
+            raise RuntimeError(f"{ref}: no safe image assets for collection {collection_id!r}")
+        collection_ids = {
+            str(asset.get("sourceCollectionId") or "") for asset in assets
+        }
+        if len(collection_ids) != 1 or "" in collection_ids:
+            raise RuntimeError(f"{ref}: image work must resolve exactly one sourceCollectionId")
+        return assets
+    base_source_ref = str(brief.get("baseSourceRef") or "").strip()
+    per_entity = {
+        name: [
+            candidate
+            for candidate in rows
+            if str(candidate.get("researchLane") or "") != "image"
+            and (
+                not base_source_ref
+                or (
+                    str(candidate.get("sourceRef") or "") == base_source_ref
+                    and str(candidate.get("sourceAssetRef") or "").startswith(
+                        base_source_ref.rsplit("/", 1)[0] + "/assets/"
+                    )
+                )
+            )
+        ]
+        for name, rows in per_entity.items()
+    }
+    if base_source_ref and not any(per_entity.values()):
+        raise RuntimeError(f"{ref}: article base draft source has no usable source images")
+
     cover_layout = layouts[0] if layouts else "fullWidth"
     cover_pool = per_entity.get(entity_names[0]) or []
     cover = _pick_safe_image(cover_pool, chosen)
@@ -1233,7 +1328,7 @@ def _build_route_assets(
                 role="cover",
                 candidate=cover[0],
                 layout=cover_layout,
-                caption=entity_names[0],
+                caption=str(cover[0].get("caption") or cover[0].get("relevance") or entity_names[0]),
                 entity_name=entity_names[0],
                 global_batch_seq=global_batch_seq,
                 asset_registry=asset_registry,
@@ -1252,7 +1347,7 @@ def _build_route_assets(
                 role="node",
                 candidate=node_image[0],
                 layout=_node_layout(layouts, position),
-                caption=name,
+                caption=str(node_image[0].get("caption") or node_image[0].get("relevance") or name),
                 entity_name=name,
                 global_batch_seq=global_batch_seq,
                 asset_registry=asset_registry,
@@ -1270,7 +1365,7 @@ def _build_route_assets(
                 role="closing",
                 candidate=closing[0],
                 layout="fullWidth",
-                caption=f"{entity_names[-1]}·回望",
+                caption=str(closing[0].get("caption") or closing[0].get("relevance") or f"{entity_names[-1]}·回望"),
                 entity_name=entity_names[-1],
                 global_batch_seq=global_batch_seq,
                 asset_registry=asset_registry,
@@ -1296,25 +1391,47 @@ def _narrative_volume(evidence_bundle: Mapping[str, Any]) -> int:
 
 
 def resolve_carrier(brief: Mapping[str, Any], evidence_bundle: Mapping[str, Any], assets: Sequence[Mapping[str, Any]]) -> str:
-    """载体路由：图带交叠文字 -> article；显式 gallery 或图多文少 -> gallery；否则 article。"""
+    """Route explicit image works separately from prose articles."""
     if any(asset.get("isTextHeavy") for asset in assets):
         return "article"
     declared = str(brief.get("carrier") or "").lower()
-    if declared == "gallery":
-        return "gallery"
-    if declared and declared != "gallery":
+    if declared in ("image", "gallery"):
+        return "image"
+    if declared:
         return "article"
     policy = brief.get("imagePolicy") or {}
     min_images = int(policy.get("minImages") or GALLERY_MIN_IMAGES)
     safe_imgs = [a for a in assets if a.get("imageStatus", "safe") in ("safe", "text_heavy")]
     if len(safe_imgs) >= min_images and _narrative_volume(evidence_bundle) <= LOW_NARRATIVE_SIGNALS:
-        return "gallery"
+        return "image"
     return "article"
 
 
 def _build_summary(article: str) -> str:
     compact = re.sub(r"\s+", " ", article).strip()
     return compact[:160]
+
+
+def _image_caption_from_article(article: str) -> str:
+    """Extract user-facing image caption text from an image draft.
+
+    Image works store assets structurally.  The draft may include headings,
+    figure blocks, or attribution notes for the authoring checkpoint, but those
+    are not the public caption and must not be counted as caption prose.
+    """
+    text = re.sub(r"<!--[\s\S]*?-->", "", str(article or ""))
+    text = re.sub(r":::figure[\s\S]*?:::", "", text)
+    lines: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith(">"):
+            continue
+        if line.startswith("asset://"):
+            continue
+        if any(marker in line for marker in ("授权", "署名", "CC BY", "Creative Commons", "license")):
+            continue
+        lines.append(line)
+    return re.sub(r"\s+", " ", " ".join(lines)).strip()
 
 
 def _section_bodies(article: str) -> list[str]:

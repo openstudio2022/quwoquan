@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/governance/semantic_mention",
+  "title": "Semantic mention",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mentionId",
+    "kind",
+    "surface",
+    "location",
+    "rangeStart",
+    "rangeEnd",
+    "status"
+  ],
+  "properties": {
+    "mentionId": {
+      "type": "string",
+      "pattern": "^mention_[0-9a-f]{24}$"
+    },
+    "sourceRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targetRef": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["entity", "tag"]
+    },
+    "location": {
+      "type": "string",
+      "enum": ["title", "body", "article", "homepage_section"]
+    },
+    "surface": {
+      "type": "string",
+      "minLength": 1
+    },
+    "occurrence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "startUtf16": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "endUtf16": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "rangeStart": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rangeEnd": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["published", "pending_review", "rejected", "offline"]
+    },
+    "candidateId": {
+      "type": ["string", "null"],
+      "pattern": "^candidate_[0-9a-f]{24}$"
+    }
+  }
+}

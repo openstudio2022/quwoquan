@@ -33,7 +33,7 @@ func doRequest(t *testing.T, method, path string, body string, headers map[strin
 // requestOtpCode 发送一次 OTP 并返回非生产环境暴露的调试码，供手机号登录用例使用。
 func requestOtpCode(t *testing.T, phone string) string {
 	t.Helper()
-	rec := doRequest(t, "POST", "/v1/auth/otp/send", `{"phone":"`+phone+`"}`, nil)
+	rec := doRequest(t, "POST", "/v1/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
 	if rec.Code != 200 {
 		t.Fatalf("send otp: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}

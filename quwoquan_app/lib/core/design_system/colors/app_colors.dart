@@ -159,6 +159,89 @@ class AppColors {
   static const Color webPcLoginSurfaceShadow = Color(0x26000000);
   static const Color webPcToolbarShadow = Color(0x14000000);
 
+  /// 第三方登录品牌色（与 simple_icons 官方品牌色一致，作为语义 token 复用）
+  static const Color loginMethodWechatBrand = Color(0xFF07C160);
+  static const Color loginMethodQqBrand = Color(0xFF1EBAFC);
+  static const Color loginMethodAlipayBrand = Color(0xFF1677FF);
+
+  /// 「其他手机号」登录方式实心圆底：与微信/QQ/支付宝同为实心彩色圆 + 白色图标，
+  /// 取应用品牌蓝，保证图一/图二底部入口视觉权重一致（不再是浅灰近背景的隐形圆）。
+  static const Color loginMethodPhoneCircle = brandBlue600;
+
+  /// 登录页高保背景与控件语义色。
+  static const Color loginPageBackgroundLight = Color(0xFFF7F7FB);
+  static const Color loginPageBackgroundDark = iosGroupedBackgroundDark;
+  static const Color loginInputSurfaceLight = Color(0xFFFFFFFF);
+  static const Color loginInputSurfaceDark = iosGroupedSurfaceDark;
+  static const Color loginInputBorderLight = Color(0xFFD7D7DE);
+  static const Color loginInputBorderDark = iosPopupHairlineSeparatorDark;
+  static const Color loginInputFocusedBorderLight = brandBlue600;
+  static const Color loginInputFocusedBorderDark = brandBlue500;
+  static const Color loginPrimaryDisabledLight = Color(0xFFA9D3FF);
+  static const Color loginPrimaryDisabledDark = Color(0xFF295F9B);
+  static const Color loginOtherDividerLight = Color(0xFFDADAE0);
+  static const Color loginOtherDividerDark = iosPopupHairlineSeparatorDark;
+
+  static Color loginPageBackground(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginPageBackgroundLight,
+        darkColor: loginPageBackgroundDark,
+      ),
+      context,
+    );
+  }
+
+  static Color loginInputSurface(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginInputSurfaceLight,
+        darkColor: loginInputSurfaceDark,
+      ),
+      context,
+    );
+  }
+
+  static Color loginInputBorder(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginInputBorderLight,
+        darkColor: loginInputBorderDark,
+      ),
+      context,
+    );
+  }
+
+  static Color loginInputFocusedBorder(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginInputFocusedBorderLight,
+        darkColor: loginInputFocusedBorderDark,
+      ),
+      context,
+    );
+  }
+
+  static Color loginPrimaryDisabled(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginPrimaryDisabledLight,
+        darkColor: loginPrimaryDisabledDark,
+      ),
+      context,
+    );
+  }
+
+  static Color loginOtherDivider(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      const CupertinoDynamicColor.withBrightness(
+        color: loginOtherDividerLight,
+        darkColor: loginOtherDividerDark,
+      ),
+      context,
+    );
+  }
+
   static Color webPcToolbarSurface(BuildContext context) =>
       iosGroupedSurface(context).withValues(alpha: 0.96);
 

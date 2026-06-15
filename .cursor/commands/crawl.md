@@ -63,17 +63,17 @@ flowchart LR
 1. 对每个 spec 执行：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl instruction-build --spec <spec>
-python3 quwoquan_data/tools/cli.py crawl entities-by-tag --spec <spec>
-python3 quwoquan_data/tools/cli.py crawl authority-sync --spec <spec>
-python3 quwoquan_data/tools/cli.py crawl content-discover --spec <spec>
+python3 quwoquan_data/scripts/cli.py crawl instruction-build --spec <spec>
+python3 quwoquan_data/scripts/cli.py crawl entities-by-tag --spec <spec>
+python3 quwoquan_data/scripts/cli.py crawl authority-sync --spec <spec>
+python3 quwoquan_data/scripts/cli.py crawl content-discover --spec <spec>
 ```
 
 2. 若内容候选已具备真实 URL，继续执行：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl content-hydrate --spec <spec>
-python3 quwoquan_data/tools/cli.py crawl content-review --spec <spec>
+python3 quwoquan_data/scripts/cli.py crawl content-hydrate --spec <spec>
+python3 quwoquan_data/scripts/cli.py crawl content-review --spec <spec>
 ```
 
 3. 读取 `runtime/runs/{spec_id}/instruction_profile.json`、`entity catalog`、`authority/content pool`、`discovery.json` 与 `topic_tasks.ndjson`
@@ -87,13 +87,13 @@ python3 quwoquan_data/tools/cli.py crawl content-review --spec <spec>
 6. 对已有真实候选但缺失 `pages/*` 的 topic，可先执行：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl fetch-source --spec <spec> --topic <topic_id> --task-type <article|image> --source-id <source_id> --url <url>
+python3 quwoquan_data/scripts/cli.py crawl fetch-source --spec <spec> --topic <topic_id> --task-type <article|image> --source-id <source_id> --url <url>
 ```
 
 7. 对 `publishReady=true` 且真实性 gate 通过的 topic，先执行创作角色：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl compose-post --spec <spec> --topics <topic_id> --targets alpha,gamma
+python3 quwoquan_data/scripts/cli.py crawl compose-post --spec <spec> --topics <topic_id> --targets alpha,gamma
 ```
 
 8. `content-review` 会把通过审核的内容候选桥接回 topic `source_pool.ndjson`，从而保证：
@@ -102,10 +102,10 @@ python3 quwoquan_data/tools/cli.py crawl compose-post --spec <spec> --topics <to
 9. 生成完成后必须再执行审核与发布角色：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl review-generated --spec <spec> --topics <topic_id>
-python3 quwoquan_data/tools/cli.py crawl publish-approved --spec <spec> --topics <topic_id>
-python3 quwoquan_data/tools/cli.py crawl feedback-extract --spec <spec> --topics <topic_id>
-python3 quwoquan_data/tools/cli.py crawl feedback-verify --spec <spec>
+python3 quwoquan_data/scripts/cli.py crawl review-generated --spec <spec> --topics <topic_id>
+python3 quwoquan_data/scripts/cli.py crawl publish-approved --spec <spec> --topics <topic_id>
+python3 quwoquan_data/scripts/cli.py crawl feedback-extract --spec <spec> --topics <topic_id>
+python3 quwoquan_data/scripts/cli.py crawl feedback-verify --spec <spec>
 ```
 
 审核与反馈必须把以下结果落盘：
@@ -151,7 +151,7 @@ python3 quwoquan_data/scripts/cli.py verify --scope current
 - `runtime/runs/{spec_id}/discovery.json`
 - `runtime/runs/{spec_id}/topic_tasks.ndjson`
 - `runtime/publish/{topic_id}/posts.ndjson`
-- `python3 quwoquan_data/tools/cli.py crawl status --spec <spec>` 输出
+- `python3 quwoquan_data/scripts/cli.py crawl status --spec <spec>` 输出
 
 至少汇总：
 
@@ -214,3 +214,7 @@ python3 quwoquan_data/scripts/cli.py verify --scope current
 - `manifest.json.assets` 中不得出现 `publishEligibility != approved`
 - `manifest.compliance.overallStatus != approved` 时 package 必须失败
 - `needs_source_discovery` / `needs_more_evidence` 是正常诚实状态，不得再用 mock 产物凑数
+
+自然语言等价触发：用户说“跑数据抓取总控”“runtime crawl”“内容候选到发布闭环”时，也按本命令语义执行。所有调用统一经 `python3 quwoquan_data/scripts/cli.py`，并遵守 `quwoquan_data/AGENTS.md` 的七角色准出。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

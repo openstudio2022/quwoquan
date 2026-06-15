@@ -24,8 +24,9 @@ void main() {
         expect(writable, contains('primaryHomepageType'));
         expect(writable, contains('primaryHomepageSnapshot'));
         expect(writable, contains('summary'));
-        expect(writable, contains('tagRefs'));
-        expect(writable, contains('entityRefs'));
+        expect(writable, contains('semanticMentions'));
+        expect(writable, isNot(contains('tagRefs')));
+        expect(writable, isNot(contains('entityRefs')));
         expect(writable, contains('assistantUsePolicy'));
       },
     );
@@ -105,20 +106,18 @@ void main() {
       expect(payload['assistantUsePolicy'], 'allow_summary');
     });
 
-    test('CreatePostRequestWire refs 保持 List 语义，不字符串化', () {
+    test('CreatePostRequestWire semanticMentions 保持可写语义', () {
       final wire = CreatePostRequestWire.fromMap(<String, dynamic>{
         'type': 'article',
         'contentType': 'article',
         'summary': '摘要',
-        'tagRefs': <String>['Topic/旅行/城市漫步'],
-        'entityRefs': <String>['entity:sight:west_lake'],
+        'semanticMentions': 'Topic/旅行/城市漫步',
         'assistantUsePolicy': 'inherit',
       });
       final body = wire.toWire();
-      expect(body['tagRefs'], isA<List<String>>());
-      expect(body['entityRefs'], isA<List<String>>());
-      expect(body['tagRefs'], <String>['Topic/旅行/城市漫步']);
-      expect(body['entityRefs'], <String>['entity:sight:west_lake']);
+      expect(body['semanticMentions'], 'Topic/旅行/城市漫步');
+      expect(body.containsKey('tagRefs'), isFalse);
+      expect(body.containsKey('entityRefs'), isFalse);
     });
 
     test('payload 私密时 circleIds 必须为空', () {

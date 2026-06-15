@@ -283,6 +283,23 @@ modules:
     allowOnebox: false
     allowStandalonePackage: true
 
+  data.task_outbox_dispatcher:
+    domain: data
+    capabilities: [outbox_dispatch]
+    requiredStores: [data.mongodb, reliabletask.outbox]
+    requiredQueues: [reliabletask.data.content_supply]
+    planes: [platform-control-plane, product-control-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  data.content_supply_worker:
+    domain: data
+    capabilities: [task_worker]
+    requiredStores: [data.mongodb, reliabletask.task]
+    requiredQueues: [reliabletask.data.content_supply]
+    planes: [platform-control-plane, product-control-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
   recommendation.api:
     domain: recommendation
     capabilities: [api]
@@ -441,6 +458,38 @@ tasks:
     retentionPolicyRef: reliabletask.retention.standard.v1
     rateLimitPolicyRef: reliabletask.rate.projection.v1
     runtimeFailureModule: CONTENT.SEARCH_INDEX
+  data.content_object.execute:
+    ownerDomain: data
+    dispatcherModule: data.task_outbox_dispatcher
+    workerModule: data.content_supply_worker
+    queue: reliabletask.data.content_supply
+    partitionKey: partitionKey
+    payloadAllowlist:
+      - schemaVersion
+      - jobId
+      - taskId
+      - batchId
+      - ref
+      - stage
+      - partitionKey
+      - creatorProfileId
+      - creatorArchetype
+      - contentType
+      - tokenBudget
+      - costBudgetUsd
+      - resultEnvelopeRequired
+      - resultEnvelopeRef
+    mergePolicy:
+      delayFromNow: 0s
+      maxDelay: 0s
+      fields:
+        jobId: identity
+    retryPolicy:
+      maxAttempts: 3
+      backoff: exponential
+    retentionPolicyRef: reliabletask.retention.standard.v1
+    rateLimitPolicyRef: reliabletask.rate.data_content_supply.v1
+    runtimeFailureModule: DATA.CONTENT_OBJECT
   notification.patch.fanout:
     ownerDomain: notification
     dispatcherModule: notification.notification_outbox_dispatcher

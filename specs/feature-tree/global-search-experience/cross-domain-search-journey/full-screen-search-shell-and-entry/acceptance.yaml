@@ -7,30 +7,143 @@ node:
   parent_domain_service: global-search-experience
   parent_business_capability: cross-domain-search-journey
 scope:
-  summary: full screen search shell and entry 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: full screen search shell and entry 验收范围，覆盖默认搜索页、输入过程、正式结果页固定 Tab 与连接/未连接分组规则。
+  in_scope:
+  - 默认搜索页的最近搜索、今日交集、热门圈子、热门地点、同趣的人。
+  - 输入过程的联系人、聊天记录、已加入圈子、已关注地点、已关注的人、推荐搜索词。
+  - 正式结果页固定 Tab：小趣、全部、交集、图片、视频、长文。
+  - 全部 Tab 的已连接区前置与未连接发现区按比例成组混排。
+  - 指定类别 Tab 的纯内容消费流。
+  out_of_scope:
+  - 独立圈子、地点、人一级 Tab。
+  - 输入过程中展示未连接对象或正式内容结果。
+  - 维护第二套搜索接口或 UI 内业务假数据。
 gwt_acceptance:
   GWT1:
-    title: full screen search shell and entry GWT
+    title: 默认搜索页负责激发搜索而不是展示正式结果
     given:
-    - 前置条件明确。
+    - 用户打开全局搜索页。
+    - 搜索框为空。
     when:
-    - 用户或系统动作发生。
+    - 最近搜索与默认推荐数据加载完成。
     then:
-    - 可观察结果符合预期。
+    - 页面展示最近搜索、今日交集、热门圈子、热门地点、同趣的人。
+    - 最近搜索最多保留 15 条，默认最多 3 行；超过 3 行时右下角出现“查看更多”。
+    - 默认页不展示图片、视频、长文等正式结果流。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 用户无需输入即可看到继续搜索和产生兴趣的五类启发内容。
+    edge_cases:
+    - 最近搜索为空时隐藏最近搜索区，其他启发区仍可展示。
+    - 默认推荐某一组为空时隐藏该组，不留空白标题。
+    contract_refs:
+    - specs/feature-tree/global-search-experience/spec.md
+    performance_points:
+    - 搜索页打开后默认壳层即时可见，默认数据可异步补齐。
     evidence:
       primary:
       - T1_contract
       - T2_module_interaction
       supporting: []
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      recorded: []
+    status: pending
+  GWT2:
+    title: 输入过程只快速定位已连接或已关注对象
+    given:
+    - 用户在全局搜索页输入关键词。
+    when:
+    - suggest 模式 search(request) 返回联系人、聊天、圈子、地点、人和推荐词候选。
+    then:
+    - 页面按顺序展示联系人、聊天记录、已加入圈子、已关注地点、已关注的人、推荐搜索词。
+    - 无命中的分组隐藏。
+    - 不展示未关注圈子、未关注地点、未连接的人、图片、视频、长文正式结果。
+    - 点击搜索按钮进入正式结果页，默认 Tab 为全部。
+    done_when:
+    - 输入过程不再承担正式结果浏览，只承担已有对象快速定位。
+    edge_cases:
+    - 所有已连接对象无命中时，只保留推荐搜索词或空态。
+    - 联系人点击必须直达会话或按既有回退打开可用会话。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/search_contract.yaml
+    - quwoquan_service/contracts/metadata/_shared/search_objects.yaml
+    performance_points:
+    - 输入后首批可见分组 P95 在 1.5s 内出现。
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_contract
+    tests:
+      planned:
+      - quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      recorded: []
+    status: pending
+  GWT3:
+    title: 全部 Tab 先展示已连接区，再展示未连接发现区分组混排
+    given:
+    - 用户提交关键词进入正式搜索结果页。
+    - 结果池包含已连接结果和未连接结果。
+    when:
+    - 用户停留在默认全部 Tab。
+    then:
+    - 顶部 Tab 固定为“小趣｜全部｜交集｜图片｜视频｜长文”。
+    - 已连接区按聊天记录、联系人、已加入圈子、已关注地点、已关注的人、已互动内容顺序展示，每类最多一组。
+    - 未连接发现区按交集、圈子、地点、人、图片、视频、长文同类成组，并按匹配池数量与相关度比例混排。
+    - 发现区不展示“查看更多”，继续下滑加载下一批组。
+    done_when:
+    - 全部 Tab 同时满足“已连接优先”和“未连接按比例发现”的信息架构。
+    edge_cases:
+    - 某一类只有已连接结果时，不再在发现区重复出现。
+    - 某一类只有未连接结果时，只进入发现区。
+    - 单域失败必须用 degrade signal 展示，不阻塞其他分组。
+    contract_refs:
+    - specs/feature-tree/global-search-experience/spec.md
+    - quwoquan_service/contracts/metadata/_shared/search_contract.yaml
+    performance_points:
+    - 单次综合搜索 fan-out 不得让首屏分组超过 1.5s 目标。
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_contract
+    tests:
+      planned:
+      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - quwoquan_app/test/ui/search/search_repository_test.dart
+      recorded: []
+    status: pending
+  GWT4:
+    title: 指定类别 Tab 只展示该类别的消费流
+    given:
+    - 用户在正式结果页切换到交集、图片、视频或长文 Tab。
+    when:
+    - 对应结果池加载完成。
+    then:
+    - 交集 Tab 展示交集概览、交集推荐区和交集发现流，每张卡显示交集原因。
+    - 图片 Tab 只展示双列图片瀑布流，不展示图片组标题。
+    - 视频 Tab 只展示双列视频瀑布流，不展示视频组标题。
+    - 长文 Tab 只展示单列长文阅读流，不展示长文组标题。
+    - 小趣 Tab 单独展示总结、推荐方向、相关对象和可继续追问，不参与全部混排。
+    done_when:
+    - 每个指定类别 Tab 都与全部 Tab 的聚合视角区分清晰。
+    edge_cases:
+    - 指定类别无结果时展示对应空态，不回退展示其他类别结果。
+    - 已互动内容在指定类别 Tab 内靠前展示。
+    contract_refs:
+    - specs/feature-tree/global-search-experience/spec.md
+    - specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/acceptance.yaml
+    performance_points:
+    - 切换 Tab 后加载状态和结果状态稳定，无旧 Tab 内容闪回。
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting:
+      - T1_contract
+    tests:
+      planned:
+      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
       recorded: []
     status: pending
 execution:

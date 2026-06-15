@@ -40,6 +40,9 @@ func samplePosts() []PostDoc {
 	return []PostDoc{
 		{PostRef: "posts/article/体验/甲居藏寨体验/1", ContentType: "article", Title: "甲居藏寨体验", Angle: "体验", Seq: 1,
 			EntityRefs: []string{"地点/景区/甲居藏寨"}, NormalizedEntityRefs: []string{"entity:景区:甲居藏寨"}, TagRefs: []string{"Topic/旅行"}, Template: "journal",
+			AuthorID: "builtin_travel_blogger", CreatorProfileID: "qwq_creator_travel_blogger_001", CreatorArchetype: "travel_blogger",
+			CreatorProfileVersion: "1.0.0", CreatorDisclosure: map[string]any{"type": "platform_virtual_creator", "displayText": "平台虚拟创作者", "visible": true},
+			ExperienceClaimMode: "editorial_synthesis", AuthorQualitySignals: map[string]any{"qualityScore": 0.85, "fatigueScore": 0.2, "riskTier": "low"},
 			GeneratorModel: "agent/x", ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
 			ArticleAssetManifest: &ArticleAssetManifestDoc{
 				SchemaVersion:          1,
@@ -58,8 +61,8 @@ func samplePosts() []PostDoc {
 			PublishedAt:  time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)},
 		{PostRef: "posts/article/攻略/色达攻略/1", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
 			EntityRefs: []string{"地点/景区/色达"}, NormalizedEntityRefs: []string{"entity:景区:色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
-			CreatedAt: time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
-			UpdatedAt: time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
+			CreatedAt:   time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
+			UpdatedAt:   time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
 			PublishedAt: time.Date(2026, 4, 2, 8, 0, 0, 0, time.UTC)},
 	}
 }
@@ -96,21 +99,26 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 		t.Fatalf("want 2 docs, got %d", count)
 	}
 	var got struct {
-		ID                   string         `bson:"_id"`
-		Title                string         `bson:"title"`
-		Angle                string         `bson:"angle"`
-		EntityRefs           []string       `bson:"entityRefs"`
-		TagRefs              []string       `bson:"tagRefs"`
-		Body                 string         `bson:"body"`
-		Summary              string         `bson:"summary"`
-		ArticleMarkdown      string         `bson:"articleMarkdown"`
-		ArticleTemplate      string         `bson:"articleTemplate"`
+		ID                   string                   `bson:"_id"`
+		Title                string                   `bson:"title"`
+		Angle                string                   `bson:"angle"`
+		EntityRefs           []string                 `bson:"entityRefs"`
+		TagRefs              []string                 `bson:"tagRefs"`
+		Body                 string                   `bson:"body"`
+		Summary              string                   `bson:"summary"`
+		ArticleMarkdown      string                   `bson:"articleMarkdown"`
+		ArticleTemplate      string                   `bson:"articleTemplate"`
 		MarkdownDigest       string                   `bson:"articleMarkdownDigest"`
 		ArticleAssetManifest *ArticleAssetManifestDoc `bson:"articleAssetManifest"`
-		SourceTaskId         string         `bson:"sourceTaskId"`
-		CreatedAt            time.Time      `bson:"createdAt"`
-		UpdatedAt            time.Time      `bson:"updatedAt"`
-		PublishedAt          time.Time      `bson:"publishedAt"`
+		SourceTaskId         string                   `bson:"sourceTaskId"`
+		AuthorID             string                   `bson:"authorId"`
+		CreatorProfileID     string                   `bson:"creatorProfileId"`
+		CreatorArchetype     string                   `bson:"creatorArchetype"`
+		CreatorDisclosure    map[string]any           `bson:"creatorDisclosure"`
+		ExperienceClaimMode  string                   `bson:"experienceClaimMode"`
+		CreatedAt            time.Time                `bson:"createdAt"`
+		UpdatedAt            time.Time                `bson:"updatedAt"`
+		PublishedAt          time.Time                `bson:"publishedAt"`
 	}
 	if err := coll.FindOne(ctx, bson.M{"postRef": "posts/article/体验/甲居藏寨体验/1"}).Decode(&got); err != nil {
 		t.Fatal(err)
@@ -138,6 +146,12 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	}
 	if got.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
 		t.Fatalf("sourceTaskId not persisted: %q", got.SourceTaskId)
+	}
+	if got.AuthorID != "builtin_travel_blogger" || got.CreatorProfileID != "qwq_creator_travel_blogger_001" || got.CreatorArchetype != "travel_blogger" {
+		t.Fatalf("creator projection not persisted: %+v", got)
+	}
+	if got.CreatorDisclosure["visible"] != true || got.ExperienceClaimMode != "editorial_synthesis" {
+		t.Fatalf("creator boundary not persisted: %+v", got)
 	}
 	if got.ArticleAssetManifest == nil {
 		t.Fatalf("articleAssetManifest not persisted: %+v", got)
@@ -212,8 +226,8 @@ func TestMongoUpsertIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	var third struct {
-		CreatedAt time.Time `bson:"createdAt"`
-		UpdatedAt time.Time `bson:"updatedAt"`
+		CreatedAt   time.Time `bson:"createdAt"`
+		UpdatedAt   time.Time `bson:"updatedAt"`
 		PublishedAt time.Time `bson:"publishedAt"`
 	}
 	if err := coll.FindOne(ctx, filter).Decode(&third); err != nil {
@@ -461,6 +475,8 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 		Visibility       string         `bson:"visibility"`
 		TagRefs          []string       `bson:"tagRefs"`
 		SourceTaskId     string         `bson:"sourceTaskId"`
+		CreatorProfileID string         `bson:"creatorProfileId"`
+		CreatorArchetype string         `bson:"creatorArchetype"`
 		ConditionProfile map[string]any `bson:"conditionProfile"`
 		RecScore         float64        `bson:"recScore"`
 	}
@@ -472,6 +488,9 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	}
 	if item.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
 		t.Fatalf("feed sourceTaskId missing: %+v", item)
+	}
+	if item.CreatorProfileID != "qwq_creator_travel_blogger_001" || item.CreatorArchetype != "travel_blogger" {
+		t.Fatalf("feed creator projection missing: %+v", item)
 	}
 	if item.ConditionProfile == nil {
 		t.Fatalf("feed conditionProfile not joined from entity: %+v", item)

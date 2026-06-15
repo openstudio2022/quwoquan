@@ -7,29 +7,105 @@ node:
   parent_domain_service: runtime
   parent_business_capability: runtime-errors
 scope:
-  summary: runtime errors 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: runtime errors 端云一体化错误治理收口验收范围。
+  in_scope:
+    - errors.yaml -> Go AppErrorFrom* -> ErrorResponse -> Flutter CloudException/RuntimeFailure 的端云链路。
+    - userMessage control-plane 热配置、fail-safe baseline、override hit/miss 可观测。
+    - recovery_action/recovery_after_seconds 静态结构化下发与端侧消费。
+    - 客户端可见域错误码全集一致、全域 typed DomainErrorCode 消费与前向兼容。
+    - 异常遥测与行为上报失败的结构化可观测和本地队列保留。
+  out_of_scope:
+    - recovery 参数热配置。
+    - 新 MODULE 白名单 metadata 化。
+    - gateway/orchestrator 独立进程落地；本验收只登记后续需要补专属错误域。
 sit_acceptance:
   SIT1:
-    title: runtime errors 能力 SIT
+    title: runtime errors 端云错误治理闭环 SIT
     story_refs: []
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
-    performance_points: []
+    - 客户端可见域均通过 metadata/codegen 输出结构化错误；content 不再保留 sentinel-only 豁免。
+    - Flutter 端所有生成的 *ErrorCode 均被 CloudErrorMapper 或统一 registry 注册消费；未知 code 仍靠 userMessage + recovery 前向兼容。
+    - 行为上报、异常遥测与 UI 错误展示不保留自建异常或静默吞失败路径。
+    - override hit/miss、runtime error code/module/kind/recovery_action 指标和告警规格可复核。
+    performance_points:
+    - userMessage override 发布后在 control-plane poll 周期内热生效，不要求云服务重启。
+    - override miss/fallback 不影响 HTTP error response 可用性。
     evidence:
       primary:
+      - T1_static_contract
       - T2_module_interaction
       - T3_app_api_integration
       supporting:
-      - T1_static_contract
+      - T4_uat_journey
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py
+        layer: T1_static_contract
+        command: python3 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py
+        asserts:
+        - 云侧 errors.yaml code 集与客户端生成 *ErrorCode code 集完全一致。
+      - file: quwoquan_service/scripts/verify/verify_error_recovery_alignment.py
+        layer: T1_static_contract
+        command: python3 quwoquan_service/scripts/verify/verify_error_recovery_alignment.py
+        asserts:
+        - 客户端可见域 errors.yaml recovery_action/recovery_after_seconds 与生成 Go AppErrorFrom* .WithRecovery 精确对齐。
+        - content 不再出现在 sentinel 豁免列表。
+      - file: quwoquan_app/scripts/runtime/verify_domain_error_code_registry.py
+        layer: T1_static_contract
+        command: python3 quwoquan_app/scripts/runtime/verify_domain_error_code_registry.py
+        asserts:
+        - 每个生成的 *ErrorCode 文件均被统一 DomainErrorCode registry 注册。
+      - file: quwoquan_app/scripts/runtime/verify_behavior_error_stack_convergence.py
+        layer: T1_static_contract
+        command: python3 quwoquan_app/scripts/runtime/verify_behavior_error_stack_convergence.py
+        asserts:
+        - behavior_repository 不再包含 BehaviorReportException 或 _postWithRetry。
+      - file: packages/quwoquan_runtime_errors/test/runtime_failure_codec_test.dart
+        layer: T2_module_interaction
+        command: cd packages/quwoquan_runtime_errors && flutter test test/runtime_failure_codec_test.dart
+        asserts:
+        - RuntimeErrorResponse round-trip 保留 recovery。
+        - DefaultRuntimeRecoveryPolicy 优先消费下发 recovery。
+      - file: quwoquan_app/test/cloud/runtime/errors/cloud_error_mapper_runtime_failure_test.dart
+        layer: T2_module_interaction
+        command: cd quwoquan_app && flutter test test/cloud/runtime/errors/cloud_error_mapper_runtime_failure_test.dart
+        asserts:
+        - CloudErrorMapper 支持全域 typed mapping。
+        - 未知 code 仍展示下发 userMessage 并消费 recovery。
+      - file: quwoquan_app/test/cloud/services/behavior/behavior_repository_error_contract_test.dart
+        layer: T2_module_interaction
+        command: cd quwoquan_app && flutter test test/cloud/services/behavior/behavior_repository_error_contract_test.dart
+        asserts:
+        - 400/429/5xx/offline 均转为结构化 CloudException 或 enqueue 策略，不使用自建异常。
+      - file: quwoquan_app/test/assistant/observability/logging/app_exception_telemetry_service_test.dart
+        layer: T2_module_interaction
+        command: cd quwoquan_app && flutter test test/assistant/observability/logging/app_exception_telemetry_service_test.dart
+        asserts:
+        - 远端上报失败不静默，队列保留。
+        - 上报成功清理队列。
+        - 重复 fingerprint 限流。
+      - file: quwoquan_service/runtime/errors/errors_test.go
+        layer: T2_module_interaction
+        command: cd quwoquan_service && go test ./runtime/errors
+        asserts:
+        - ErrorResponse 包含 requestId/traceId/userMessage/recovery。
+      - file: quwoquan_service/runtime/controlplane/error_message_override_test.go
+        layer: T2_module_interaction
+        command: cd quwoquan_service && go test ./runtime/controlplane -run TestErrorMessageResolver
+        asserts:
+        - override hit/miss fail-safe 与 metrics 增量可验证。
+      - file: quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
+        layer: T3_app_api_integration
+        command: cd quwoquan_service && go test ./services/content-service/tests -run TestPostBehavior
+        asserts:
+        - content 端云行为上报错误响应含 code/userMessage/recovery/requestId/traceId。
       recorded: []
     status: pending
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
   - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - make verify-app-error-endcloud-parity
+  - make verify-service-error-recovery-alignment
   full_gate:
   - make gate

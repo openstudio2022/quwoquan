@@ -10,3 +10,7 @@
 动作：删除空节点、废弃验收、无引用 fixture 和无效 CR 引用；保留已发布行为的兼容记录。
 
 禁止：删除仍被 metadata、测试、路由、页面矩阵或发布批次引用的节点。
+
+自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/prune` 语义执行；执行前仍需按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

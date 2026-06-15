@@ -14,6 +14,9 @@ collections:
       - { name: idx_posts_node_published, keys: { nodeId: 1, publishedAt: -1 }, sparse: true }
       - { name: idx_posts_last_active, keys: { lastActiveAt: -1 }, sparse: true }
       - { name: idx_posts_tag_refs, keys: { tagRefs: 1 } }
+      - { name: idx_posts_entity_refs, keys: { entityRefs: 1 } }
+      - { name: idx_posts_semantic_candidate, keys: { "semanticMentions.candidateId": 1 }, sparse: true }
+      - { name: idx_posts_semantic_target, keys: { "semanticMentions.targetRef": 1 }, sparse: true }
       - { name: idx_posts_location, keys: { location: "2dsphere" }, sparse: true }
       - { name: idx_posts_moderation, keys: { moderationStatus: 1, createdAt: -1 } }
       - { name: idx_posts_source, keys: { sourceType: 1, sourcePostId: 1 }, sparse: true }
@@ -24,8 +27,8 @@ collections:
     search_indexes:
       - name: search_posts_text
         type: text
-        fields: [title, body, locationName, tagRefs, articleMarkdown]
-        weights: { title: 10, tagRefs: 5, locationName: 3, body: 1, articleMarkdown: 1 }
+        fields: [title, body, locationName, tagRefs, entityRefs, articleMarkdown]
+        weights: { title: 10, tagRefs: 5, entityRefs: 5, locationName: 3, body: 1, articleMarkdown: 1 }
     vector_indexes:
       - name: vector_posts_embedding
         field: embedding

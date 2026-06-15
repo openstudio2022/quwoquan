@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/settings/widgets/settings_account_commercial_section.dart';
 import 'package:quwoquan_app/ui/settings/widgets/settings_appearance_labels.dart';
 
@@ -131,8 +132,12 @@ class SettingsPage extends ConsumerWidget {
                       _SettingsRow(
                         icon: CupertinoIcons.person_crop_circle_badge_plus,
                         label: UITextConstants.switchAccount,
-                        onTap: () =>
-                            _handleLogout(context, ref, navigateToLogin: true),
+                        onTap: () => _handleLogout(
+                          context,
+                          ref,
+                          clearLocalCredential: false,
+                          navigateToLogin: true,
+                        ),
                       ),
                       SettingsInsetFormSectionDivider(isDark: isDark),
                       _SettingsRow(
@@ -260,48 +265,81 @@ class SettingsPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
   ) async {
-    final confirmed = await showCupertinoDialog<bool>(
+    // 默认软退出（保留本机登录信息，有效期内免验证码快速登录）；
+    // 第二项为彻底退出（清除本机登录信息，下次需重新验证）。默认不清除。
+    final choice = await showCupertinoModalPopup<_LogoutChoice>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text(UITextConstants.logoutConfirmTitle),
-        content: const Text(UITextConstants.logoutConfirmMessage),
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text(UITextConstants.logoutSheetTitle),
+        message: const Text(UITextConstants.logoutSheetMessage),
         actions: <Widget>[
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text(UITextConstants.logoutThinkAgain),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(ctx).pop(_LogoutChoice.soft),
+            child: const Text(UITextConstants.logoutSoftAction),
           ),
-          CupertinoDialogAction(
+          CupertinoActionSheetAction(
             isDestructiveAction: true,
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text(UITextConstants.logoutConfirm),
+            onPressed: () => Navigator.of(ctx).pop(_LogoutChoice.hard),
+            child: const Text(UITextConstants.logoutHardAction),
           ),
         ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text(UITextConstants.logoutCancel),
+        ),
       ),
     );
-    if (confirmed == true && context.mounted) {
-      await _handleLogout(context, ref, navigateToLogin: true);
+    if (choice == null || !context.mounted) {
+      return;
     }
+    await _handleLogout(
+      context,
+      ref,
+      clearLocalCredential: choice == _LogoutChoice.hard,
+      navigateToLogin: true,
+    );
   }
 
   static Future<void> _handleLogout(
     BuildContext context,
     WidgetRef ref, {
+    required bool clearLocalCredential,
     required bool navigateToLogin,
   }) async {
-    final session = ref.read(authSessionControllerProvider);
-    try {
-      await ref
-          .read(authRepositoryProvider)
-          .logout(
-            refreshToken: session.refreshToken,
-            deviceId: session.installId,
-          );
-    } catch (_) {
-      // 本地退出优先保障用户可控；远端吊销失败由下次 refresh 兜底。
+    final controller = ref.read(authSessionControllerProvider.notifier);
+    if (clearLocalCredential) {
+      // 彻底退出：向远端吊销 refresh token，并清除本机全部登录凭证。
+      final session = ref.read(authSessionControllerProvider);
+      try {
+        await ref
+            .read(authRepositoryProvider)
+            .logout(
+              refreshToken: session.refreshToken,
+              deviceId: session.installId,
+            );
+      } catch (_) {
+        // 本地退出优先保障用户可控；远端吊销失败由下次 refresh 兜底。
+      }
+      await controller.hardLogout();
+    } else {
+      // 软退出：不向远端吊销，保留快速登录凭证，仅失效本机活跃会话。
+      await controller.softLogout();
     }
-    await ref.read(authSessionControllerProvider.notifier).clearForLogout();
-    if (!context.mounted || !navigateToLogin) {
+    if (!context.mounted) {
+      return;
+    }
+    final days = (kDefaultSessionRememberTtlSeconds / 86400).round();
+    AppToast.show(
+      context,
+      clearLocalCredential
+          ? UITextConstants.loginHardLogoutToast
+          : UITextConstants.loginSoftLogoutToast.replaceFirst(
+              '{days}',
+              '$days',
+            ),
+    );
+    if (!navigateToLogin) {
       return;
     }
     // 退出登录是「强入口」：用 replace + 禁止 guest pop，关闭只安全回首页，
@@ -314,6 +352,8 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 }
+
+enum _LogoutChoice { soft, hard }
 
 class _AppearanceSettingsSheet extends ConsumerStatefulWidget {
   const _AppearanceSettingsSheet();

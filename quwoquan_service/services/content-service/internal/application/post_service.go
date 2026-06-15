@@ -24,6 +24,7 @@ import (
 	"quwoquan_service/runtime/repository"
 	rtsearch "quwoquan_service/runtime/search"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
 	"quwoquan_service/services/content-service/internal/generated"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
@@ -55,6 +56,17 @@ type ProjectionRebuildReport struct {
 	BackfilledAssistantUsePolicy int  `json:"backfilledAssistantUsePolicy"`
 	DiscoveryEligiblePosts       int  `json:"discoveryEligiblePosts"`
 	DiscoveryRevokedPosts        int  `json:"discoveryRevokedPosts"`
+	SemanticMentionPosts         int  `json:"semanticMentionPosts"`
+	ActiveReferenceChanges       int  `json:"activeReferenceChanges"`
+	InvalidPublishedMentions     int  `json:"invalidPublishedMentions"`
+}
+
+type SemanticMentionReprojectionReport struct {
+	CandidateID            string `json:"candidateId"`
+	Status                 string `json:"status"`
+	MatchedPosts           int    `json:"matchedPosts"`
+	UpdatedMentions        int    `json:"updatedMentions"`
+	ActiveReferenceChanges int    `json:"activeReferenceChanges"`
 }
 
 type StoryCanaryStage struct {
@@ -358,7 +370,50 @@ func normalizePostForRead(post *postmodel.Post) *postmodel.Post {
 		copy.AssistantUsePolicy = "inherit"
 	}
 	copy.Visibility = normalizeVisibility(copy.Visibility)
+	projectSemanticMentionRefs(&copy)
 	return &copy
+}
+
+func projectSemanticMentionRefs(post *postmodel.Post) postsemantic.Projection {
+	if post == nil || !postsemantic.Present(post.SemanticMentions) {
+		return postsemantic.Projection{}
+	}
+	projection := postsemantic.Project(post.SemanticMentions)
+	post.EntityRefs = append([]string(nil), projection.EntityRefs...)
+	post.TagRefs = append([]string(nil), projection.TagRefs...)
+	return projection
+}
+
+func applySemanticMentionPayload(post *postmodel.Post, payload map[string]any) error {
+	if post == nil {
+		return nil
+	}
+	if semanticMentions, exists := payload["semanticMentions"]; exists {
+		post.SemanticMentions = semanticMentions
+	}
+	if err := postsemantic.ValidateSuppliedRefs(
+		post.SemanticMentions,
+		asStringSlice(payload["entityRefs"]),
+		asStringSlice(payload["tagRefs"]),
+	); err != nil {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"活动实体或标签引用不合法",
+			err.Error(),
+		)
+	}
+	if postsemantic.Present(post.SemanticMentions) {
+		projectSemanticMentionRefs(post)
+		return nil
+	}
+	if err := postsemantic.RejectCandidateRefs(post.EntityRefs, post.TagRefs); err != nil {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"候选对象不能作为活动引用",
+			err.Error(),
+		)
+	}
+	return nil
 }
 
 func canViewPost(post *postmodel.Post, viewerID string, viewerCircleIDs []string) bool {
@@ -425,6 +480,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 		Body:                strings.TrimSpace(asString(payload["body"])),
 		TagRefs:             asStringSlice(payload["tagRefs"]),
 		EntityRefs:          asStringSlice(payload["entityRefs"]),
+		SemanticMentions:    payload["semanticMentions"],
 		MediaUrls:           asStringSlice(payload["mediaUrls"]),
 		CoverUrl:            strings.TrimSpace(asString(payload["coverUrl"])),
 		VideoUrl:            strings.TrimSpace(asString(payload["videoUrl"])),
@@ -455,6 +511,9 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 		UpdatedAt:            now,
 	}
 	normalizePostObjectAnchors(post, payload)
+	if err := applySemanticMentionPayload(post, payload); err != nil {
+		return nil, err
+	}
 	if post.AuthorId == "" {
 		return nil, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
@@ -525,6 +584,8 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (r
 				"circleIds":          asStringSlice(post.CircleIds),
 				"title":              post.Title,
 				"tagRefs":            post.TagRefs,
+				"entityRefs":         post.EntityRefs,
+				"semanticMentions":   post.SemanticMentions,
 				"coverUrl":           post.CoverUrl,
 			},
 			OccurredAt: now,
@@ -619,6 +680,9 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 		post.ArticleRenderProfile = asMap(articleRenderProfile)
 	}
 	normalizePostObjectAnchors(post, payload)
+	if err := applySemanticMentionPayload(post, payload); err != nil {
+		return nil, err
+	}
 	post.UpdatedAt = time.Now().UTC()
 	s.syncArticleMarkdownSnapshot(post)
 	if err := validateCreatePostPayload(post); err != nil {
@@ -698,6 +762,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
 				"tagRefs":            asStringSlice(post.TagRefs),
 				"entityRefs":         asStringSlice(post.EntityRefs),
+				"semanticMentions":   post.SemanticMentions,
 			},
 			OccurredAt: now.Format(time.RFC3339),
 		})
@@ -719,6 +784,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
 				"tagRefs":            asStringSlice(post.TagRefs),
 				"entityRefs":         asStringSlice(post.EntityRefs),
+				"semanticMentions":   post.SemanticMentions,
 			},
 			OccurredAt: now,
 		})
@@ -858,6 +924,9 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		post.ArticleRenderProfile = asMap(articleRenderProfile)
 	}
 	normalizePostObjectAnchors(post, payload)
+	if err := applySemanticMentionPayload(post, payload); err != nil {
+		return nil, err
+	}
 	if err := applyPostSettingsPayload(post, promoteSettingsPayload(payload)); err != nil {
 		return nil, err
 	}
@@ -885,6 +954,8 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
 		"tagRefs":            asStringSlice(post.TagRefs),
+		"entityRefs":         asStringSlice(post.EntityRefs),
+		"semanticMentions":   post.SemanticMentions,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 	}, now)
 	s.projectPostEvent(ctx, "PostPromotedToWork", post, map[string]any{
@@ -900,6 +971,8 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
 		"tagRefs":            asStringSlice(post.TagRefs),
+		"entityRefs":         asStringSlice(post.EntityRefs),
+		"semanticMentions":   post.SemanticMentions,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 	}, now)
 	return post, nil
@@ -3105,9 +3178,19 @@ func (s *PostService) RebuildProjectionDryRun(
 	for _, stored := range posts {
 		rawIdentity := strings.TrimSpace(strings.ToLower(stored.ContentIdentity))
 		rawAssistantUsePolicy := strings.TrimSpace(strings.ToLower(stored.AssistantUsePolicy))
+		rawEntityRefs := append([]string(nil), stored.EntityRefs...)
+		rawTagRefs := append([]string(nil), stored.TagRefs...)
 		post := normalizePostForRead(&stored)
 		if post == nil {
 			continue
+		}
+		if postsemantic.Present(stored.SemanticMentions) {
+			report.SemanticMentionPosts++
+			projection := postsemantic.Project(stored.SemanticMentions)
+			report.InvalidPublishedMentions += projection.InvalidPublishedCount
+			if !sameStringSet(rawEntityRefs, post.EntityRefs) || !sameStringSet(rawTagRefs, post.TagRefs) {
+				report.ActiveReferenceChanges++
+			}
 		}
 		report.TotalPosts++
 		switch strings.TrimSpace(strings.ToLower(post.Status)) {
@@ -3143,8 +3226,74 @@ func (s *PostService) RebuildProjectionDryRun(
 		if !apply {
 			continue
 		}
+		if postsemantic.Present(stored.SemanticMentions) &&
+			(!sameStringSet(rawEntityRefs, post.EntityRefs) || !sameStringSet(rawTagRefs, post.TagRefs)) {
+			post.UpdatedAt = now
+			if !s.store.Update(ctx, post.ID, post) {
+				return report, rterr.NewAppError(
+					rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
+					"语义引用回填失败",
+					"post disappeared while rebuilding semantic mention projection",
+				)
+			}
+		}
 		eventType := projectionEventTypeForPost(post)
 		s.projectPostEvent(ctx, eventType, post, projectionPayloadForPost(post), now)
+	}
+	return report, nil
+}
+
+func (s *PostService) ApplySemanticMentionGovernanceEvent(
+	ctx context.Context,
+	event postsemantic.GovernanceEvent,
+) (SemanticMentionReprojectionReport, error) {
+	report := SemanticMentionReprojectionReport{
+		CandidateID: strings.TrimSpace(event.CandidateID),
+		Status:      strings.ToLower(strings.TrimSpace(event.Status)),
+	}
+	if err := postsemantic.ValidateGovernanceEvent(event); err != nil {
+		return report, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"语义标注治理事件不合法",
+			err.Error(),
+		)
+	}
+
+	now := time.Now().UTC()
+	for _, stored := range s.store.ListAll(ctx) {
+		updatedMentions, updatedCount, err := postsemantic.ApplyGovernanceEvent(
+			stored.SemanticMentions,
+			event,
+		)
+		if err != nil {
+			return report, err
+		}
+		if updatedCount == 0 {
+			continue
+		}
+		report.MatchedPosts++
+		report.UpdatedMentions += updatedCount
+
+		post := stored
+		beforeEntityRefs := append([]string(nil), post.EntityRefs...)
+		beforeTagRefs := append([]string(nil), post.TagRefs...)
+		post.SemanticMentions = updatedMentions
+		projectSemanticMentionRefs(&post)
+		if !sameStringSet(beforeEntityRefs, post.EntityRefs) || !sameStringSet(beforeTagRefs, post.TagRefs) {
+			report.ActiveReferenceChanges++
+		}
+		post.UpdatedAt = now
+		if !s.store.Update(ctx, post.ID, &post) {
+			return report, rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
+				"语义标注回填失败",
+				"post disappeared while applying semantic mention governance event",
+			)
+		}
+
+		payload := projectionPayloadForPost(&post)
+		s.publishPostEvent(ctx, "PostUpdated", &post, payload, now)
+		s.projectPostEvent(ctx, projectionEventTypeForPost(&post), &post, payload, now)
 	}
 	return report, nil
 }
@@ -3245,6 +3394,7 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"title":              post.Title,
 		"summary":            post.Summary,
 		"coverUrl":           post.CoverUrl,
+		"semanticMentions":   post.SemanticMentions,
 		"tagRefs":            asStringSlice(post.TagRefs),
 		"entityRefs":         asStringSlice(post.EntityRefs),
 		"primaryHomepageId":  strings.TrimSpace(post.PrimaryHomepageId),
@@ -3398,6 +3548,24 @@ func containsString(items []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func sameStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	leftSet := make(map[string]int, len(left))
+	for _, item := range left {
+		leftSet[strings.TrimSpace(item)]++
+	}
+	for _, item := range right {
+		normalized := strings.TrimSpace(item)
+		if leftSet[normalized] == 0 {
+			return false
+		}
+		leftSet[normalized]--
+	}
+	return true
 }
 
 func normalizeContentIdentity(contentType, requested string) string {

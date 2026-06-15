@@ -86,6 +86,7 @@ enums:
   ExternalInteractionProvider: [mock_sms, aliyun_sms, tencent_sms, apns, fcm, vendor_push, webhook]
   SmsOtpDeliveryStatus: [queued, sent_unconfirmed, delivered, failed, pass_through]
   SmsOtpPassThroughMode: [disabled, enabled]
+  OneTapLoginHintState: [registered, new_phone, unavailable]
   PushProvider: [apns, fcm, vendor_push, mock_push]
   PushDeliveryStatus: [queued, sent_unconfirmed, delivered, failed, dead_letter]
   SearchScope: [all, content, social_relation, messages, circles]

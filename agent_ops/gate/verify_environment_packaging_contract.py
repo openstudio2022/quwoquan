@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import argparse
 import sys
 from pathlib import Path
 
@@ -27,11 +28,19 @@ def load_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--env", choices=ENVIRONMENTS, default="")
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
     manifest = load_environment_topology()
     issues: list[str] = []
+    envs = [args.env] if args.env else list(ENVIRONMENTS)
 
-    for env_name in ENVIRONMENTS:
+    for env_name in envs:
         app_dir = ROOT / "artifacts" / "app-env-packages" / env_name
         report_path = app_dir / "report.json"
         cfg_path = app_dir / "app_runtime.yaml"
@@ -52,7 +61,7 @@ def main() -> int:
 
     services = expected_services()
     for service in services:
-        for env_name in ENVIRONMENTS:
+        for env_name in envs:
             service_dir = (
                 ROOT / "artifacts" / "service-env-packages" / service / env_name
             )

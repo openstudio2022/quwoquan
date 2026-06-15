@@ -13,7 +13,6 @@ TARGETS = (
     "alpha-local",
     "beta-local",
     "gamma-local",
-    "gamma-hosted",
     "prod-sim",
     "prod-hosted",
 )
@@ -178,17 +177,17 @@ def validate_environment_topology(manifest: dict[str, Any]) -> list[str]:
                 if not value:
                     issues.append(f"{target_name}: publicBases.{field} is required")
         backend = str(target.get("backend", "")).strip()
-        if backend not in {"local", "ssh-hosted", "workflow"}:
+        if backend not in {"local", "ssh-hosted"}:
             issues.append(
-                f"{target_name}: backend must be local, ssh-hosted, or workflow"
+                f"{target_name}: backend must be local or ssh-hosted"
             )
         profile = target.get("portProfile")
         if backend == "local" and not profile:
             issues.append(f"{target_name}: local targets require portProfile")
         if target_name == "prod-hosted" and env_name != "prod":
             issues.append("prod-hosted target must map to prod environment")
-        if target_name == "gamma-hosted" and env_name != "gamma":
-            issues.append("gamma-hosted target must map to gamma environment")
+        if target_name == "prod-hosted" and backend != "ssh-hosted":
+            issues.append("prod-hosted target must use ssh-hosted backend")
 
     return issues
 

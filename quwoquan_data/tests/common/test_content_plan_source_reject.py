@@ -28,6 +28,32 @@ TASK = "旅行/地域/四川省/景区/景区精选"
 BATCH = "test_batch_reject"
 
 
+def _write_article_source_asset(source_dir: Path, *, label: str) -> None:
+    asset_dir = source_dir / "assets"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    asset_file = asset_dir / f"{label}.jpg"
+    asset_file.write_bytes(b"fake-image")
+    write_json(
+        asset_dir / "index.json",
+        {
+            "assets": [
+                {
+                    "fileName": asset_file.name,
+                    "sourceAssetId": f"asset_{label}",
+                    "sha256": f"sha256:{label}",
+                    "license": "CC-BY-4.0",
+                    "credit": "fixture",
+                    "sourceUrl": "https://example.com/image.jpg",
+                    "termsUrl": "https://example.com/terms",
+                    "usageScope": "commercial_editorial",
+                    "caption": "与正文底稿同源的配图",
+                    "relevance": "与景区正文段落同源相关",
+                }
+            ]
+        },
+    )
+
+
 def _seed():
     reject_dir = batch_results_dir(TASK, BATCH, "download", "source_screen")
     write_json(reject_dir / "reject1.json", {"sourceId": "reject1", "decision": "reject"})
@@ -62,8 +88,8 @@ def test_content_plan_blocks_rejected_source():
     assert any("cites rejected source" in i and "reject1" in i for i in issues), issues
 
 
-def test_content_plan_quotas_required_includes_gallery_posts():
-    spec = {"content": {"quotas": {"galleryPosts": 2}}}
+def test_content_plan_quotas_required_includes_image_works():
+    spec = {"content": {"modalityContract": "separated_research", "quotas": {"imageWorksPerTarget": 2}}}
     assert cp.content_plan_quotas_required(spec) is True
 
 
@@ -75,8 +101,8 @@ def test_content_plan_enforces_per_target_2_plus_2_distribution():
         [
             ("article", "planning_consultation"),
             ("article", "decision_experience"),
-            ("gallery", "decision_experience"),
-            ("gallery", "decision_experience"),
+            ("image", "decision_experience"),
+            ("image", "decision_experience"),
         ],
         start=1,
     ):
@@ -90,35 +116,62 @@ def test_content_plan_enforces_per_target_2_plus_2_distribution():
         source_dir.mkdir(parents=True, exist_ok=True)
         source_path = source_dir / "source.md"
         source_path.write_text(f"四姑娘山来源证据 {index}", encoding="utf-8")
+        if carrier != "image":
+            _write_article_source_asset(source_dir, label=f"article_{index}")
         write_json(
             source_dir / "meta.json",
-            {"sourceUseMode": "factual_reference_only"},
+            {"sourceUseMode": "factual_reference_only", "researchLane": "article"},
         )
         content_object.register_content_object(
             TASK,
             batch,
             ref,
-            content_type="image" if carrier == "gallery" else "article",
-            angle="画报" if carrier == "gallery" else "攻略",
+            content_type="image" if carrier == "image" else "article",
+            angle="画报" if carrier == "image" else "攻略",
             title=title,
         )
         brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
         write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": title})
         rel = source_path.relative_to(batch_root(TASK, batch)).as_posix()
-        items.append(
-            {
-                "ref": ref,
-                "kind": "entity",
-                "carrier": carrier,
-                "title": title,
-                "entityRefs": [f"/entity/地点/景区/{entity}"],
-                "evidenceRefs": [rel],
-                "rationale": f"证据驱动主题 {index}",
-                "writingIntent": intent,
-                "baseSourceRef": rel,
-                "sourceUseMode": "factual_reference_only",
-            }
-        )
+        item = {
+            "ref": ref,
+            "kind": "entity",
+            "carrier": carrier,
+            "title": title,
+            "entityRefs": [f"/entity/地点/景区/{entity}"],
+            "evidenceRefs": [rel],
+            "rationale": f"证据驱动主题 {index}",
+            "writingIntent": intent,
+            "baseSourceRef": rel,
+            "sourceUseMode": "factual_reference_only",
+            "researchLane": "article",
+        }
+        if carrier == "image":
+            asset_dir = batch_root(TASK, batch) / "entities/地点/景区/四姑娘山/1.download/sources" / f"image_{index}" / "assets"
+            asset_dir.mkdir(parents=True, exist_ok=True)
+            asset_file = asset_dir / f"asset_{index}.jpg"
+            asset_file.write_bytes(b"fake-image")
+            write_json(
+                asset_dir / "index.json",
+                {
+                    "assets": [
+                        {
+                            "fileName": asset_file.name,
+                            "sourceCollectionId": f"collection_{index}",
+                        }
+                    ]
+                },
+            )
+            item.update(
+                {
+                    "researchLane": "image",
+                    "sourceCollectionId": f"collection_{index}",
+                    "assetRefs": [asset_file.relative_to(batch_root(TASK, batch)).as_posix()],
+                    "baseSourceRef": "",
+                    "sourceUseMode": "",
+                }
+            )
+        items.append(item)
     write_json(
         batch_content_plan_packet_path(TASK, batch),
         {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items},
@@ -130,19 +183,146 @@ def test_content_plan_enforces_per_target_2_plus_2_distribution():
         "content": {
             "quotas": {
                 "entityArticlesPerTarget": 2,
-                "galleryPostsPerTarget": 2,
+                "imageWorksPerTarget": 2,
                 "entityHomepagesPerTarget": 1,
                 "routeArticles": 0,
-            }
+            },
+            "modalityContract": "separated_research",
         },
     }
     assert cp.validate_content_plan(TASK, batch, spec) == []
     write_json(
         batch_content_plan_packet_path(TASK, batch),
+        {"schemaVersion": "quwoquan_data.content_plan_packet/1", "items": items},
+    )
+    schema_issues = cp.validate_content_plan(TASK, batch, spec)
+    assert any("content_plan_packet.schemaVersion" in issue for issue in schema_issues), schema_issues
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
         {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items[:-1]},
     )
     issues = cp.validate_content_plan(TASK, batch, spec)
-    assert any("galleryPostsPerTarget quota 2" in issue for issue in issues), issues
+    assert any("imageWorksPerTarget quota 2" in issue for issue in issues), issues
+
+
+def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
+    batch = "per_target_4_plus_1"
+    entity = "九寨沟"
+    article_intents = [
+        "planning_consultation",
+        "decision_experience",
+        "route_transport",
+        "seasonal_timing",
+    ]
+    items = []
+    for index, intent in enumerate(article_intents, start=1):
+        ref = f"jiuzhaigou_{intent}"
+        title = f"九寨沟{intent}"
+        source_dir = (
+            batch_root(TASK, batch)
+            / "entities/地点/景区/九寨沟/1.download/sources"
+            / f"{index:02d}.{intent}"
+        )
+        source_dir.mkdir(parents=True, exist_ok=True)
+        source_path = source_dir / "source.md"
+        source_path.write_text(f"九寨沟 {intent} 来源证据，含图文混合底稿 {index}", encoding="utf-8")
+        _write_article_source_asset(source_dir, label=f"jiuzhaigou_{index}")
+        write_json(
+            source_dir / "meta.json",
+            {"sourceUseMode": "factual_reference_only", "researchLane": "article"},
+        )
+        content_object.register_content_object(
+            TASK,
+            batch,
+            ref,
+            content_type="article",
+            angle="攻略",
+            title=title,
+        )
+        brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
+        write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": title, "writingIntent": intent})
+        rel = source_path.relative_to(batch_root(TASK, batch)).as_posix()
+        items.append(
+            {
+                "ref": ref,
+                "kind": "entity",
+                "carrier": "article",
+                "researchLane": "article",
+                "title": title,
+                "entityRefs": [f"/entity/地点/景区/{entity}"],
+                "evidenceRefs": [rel],
+                "rationale": f"{intent} 主线证据",
+                "writingIntent": intent,
+                "baseSourceRef": rel,
+                "sourceUseMode": "factual_reference_only",
+            }
+        )
+
+    image_source = (
+        batch_root(TASK, batch)
+        / "entities/地点/景区/九寨沟/1.download/sources/05.image_collection"
+    )
+    asset_dir = image_source / "assets"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    source_path = image_source / "source.md"
+    source_path.write_text("九寨沟同一摄影集合，图片底稿。", encoding="utf-8")
+    asset_file = asset_dir / "asset_1.jpg"
+    asset_file.write_bytes(b"fake-image")
+    write_json(
+        asset_dir / "index.json",
+        {"assets": [{"fileName": asset_file.name, "sourceCollectionId": "jiuzhaigou:image:one"}]},
+    )
+    ref = "jiuzhaigou_image"
+    content_object.register_content_object(
+        TASK,
+        batch,
+        ref,
+        content_type="image",
+        angle="画报",
+        title="九寨沟图片作品",
+    )
+    brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
+    write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": "九寨沟图片作品"})
+    items.append(
+        {
+            "ref": ref,
+            "kind": "entity",
+            "carrier": "image",
+            "researchLane": "image",
+            "title": "九寨沟图片作品",
+            "entityRefs": [f"/entity/地点/景区/{entity}"],
+            "evidenceRefs": [source_path.relative_to(batch_root(TASK, batch)).as_posix()],
+            "rationale": "同一图片集合证据",
+            "sourceCollectionId": "jiuzhaigou:image:one",
+            "assetRefs": [asset_file.relative_to(batch_root(TASK, batch)).as_posix()],
+        }
+    )
+    spec = {
+        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
+        "content": {
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 4,
+                "imageWorksPerTarget": 1,
+                "entityHomepagesPerTarget": 1,
+                "routeArticles": 0,
+            },
+        },
+        "acceptance": {
+            "requiredAngles": [*article_intents, "image"],
+        },
+    }
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items},
+    )
+    assert cp.validate_content_plan(TASK, batch, spec) == []
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items[:2] + [items[-1]]},
+    )
+    issues = cp.validate_content_plan(TASK, batch, spec)
+    assert any("acceptance.requiredAngles" in issue for issue in issues), issues
 
 
 def test_base_draft_candidates_exclude_reject_sources():

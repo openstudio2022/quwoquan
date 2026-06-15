@@ -64,24 +64,3 @@ profile_tabs:
     direction_filter:
       mine: [received, sent]
       other: [received]
-
-  - id: lifestyle
-    label_key: profile_tab_lifestyle
-    order: 3
-    sub_tabs:
-      - id: footprint
-        label_key: lifestyle_sub_footprint
-        life_category: footprint
-        order: 0
-      - id: soul
-        label_key: lifestyle_sub_soul
-        life_category: soul
-        order: 1
-      - id: taste
-        label_key: lifestyle_sub_taste
-        life_category: taste
-        order: 2
-      - id: private
-        label_key: lifestyle_sub_private
-        life_category: private
-        order: 3

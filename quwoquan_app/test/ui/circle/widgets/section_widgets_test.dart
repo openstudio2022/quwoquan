@@ -67,12 +67,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(SectionCreations), findsOneWidget);
-      expect(find.text('点滴'), findsAtLeastNWidgets(1));
-      expect(find.text('作品'), findsWidgets);
-
-      await tester.tap(find.text('作品').first);
-      await tester.pumpAndSettle();
-      expect(find.text('文章'), findsOneWidget);
+      expect(find.text('全部'), findsAtLeastNWidgets(1));
+      expect(find.text('图片'), findsWidgets);
+      expect(find.text('视频'), findsWidgets);
+      expect(find.text('文字'), findsWidgets);
     });
 
     testWidgets('空数据安全渲染', (tester) async {
@@ -206,9 +204,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('作品').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('文章'));
+      await tester.tap(find.text('文字').first);
       await tester.pumpAndSettle();
 
       expect(

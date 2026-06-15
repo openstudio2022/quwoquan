@@ -5,7 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
-    show SubAccountProfileViewData, UserLifeItem, UserWorkItem;
+    show SubAccountProfileViewData, UserWorkItem;
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
@@ -19,10 +19,8 @@ class ProfileState {
     this.activeVisibility = CreationVisibility.all,
     this.interactionSubTab = InteractionSubTab.likes,
     this.interactionDirection = InteractionDirection.received,
-    this.lifestyleSubTab = 'footprint',
     this.creations = const [],
     this.circles = const [],
-    this.lifeItems = const [],
     this.works = const [],
     this.isLoading = false,
     this.isFollowing = false,
@@ -38,12 +36,8 @@ class ProfileState {
   final InteractionSubTab interactionSubTab;
   final InteractionDirection interactionDirection;
 
-  /// 生活 Tab 当前子页 = LifeItemCategory 枚举值（footprint/soul/taste/private）。
-  /// 子页清单与默认值由 codegen `UserProfileUIConfig.lifestyleSubTabs` 驱动。
-  final String lifestyleSubTab;
   final List<PostBaseDto> creations;
   final List<CircleDto> circles;
-  final List<UserLifeItem> lifeItems;
   final List<UserWorkItem> works;
   final bool isLoading;
   final bool isFollowing;
@@ -68,10 +62,8 @@ class ProfileState {
     CreationVisibility? activeVisibility,
     InteractionSubTab? interactionSubTab,
     InteractionDirection? interactionDirection,
-    String? lifestyleSubTab,
     List<PostBaseDto>? creations,
     List<CircleDto>? circles,
-    List<UserLifeItem>? lifeItems,
     List<UserWorkItem>? works,
     bool? isLoading,
     bool? isFollowing,
@@ -88,10 +80,8 @@ class ProfileState {
       activeVisibility: activeVisibility ?? this.activeVisibility,
       interactionSubTab: interactionSubTab ?? this.interactionSubTab,
       interactionDirection: interactionDirection ?? this.interactionDirection,
-      lifestyleSubTab: lifestyleSubTab ?? this.lifestyleSubTab,
       creations: creations ?? this.creations,
       circles: circles ?? this.circles,
-      lifeItems: lifeItems ?? this.lifeItems,
       works: works ?? this.works,
       isLoading: isLoading ?? this.isLoading,
       isFollowing: isFollowing ?? this.isFollowing,
@@ -133,7 +123,6 @@ class ProfileNotifier extends Notifier<ProfileState> {
       final profile = await repo.getSubAccountProfile(_userId);
       final posts = await repo.listUserPosts(_userId);
       final works = await repo.listUserWorks(_userId);
-      final lifeItems = await repo.listUserLifeItems(_userId);
       final circles = await repo.listProfileCircles(_userId);
       ref
           .read(postInteractionStateProvider.notifier)
@@ -172,7 +161,6 @@ class ProfileNotifier extends Notifier<ProfileState> {
         profile: profile,
         creations: posts,
         works: works,
-        lifeItems: lifeItems,
         circles: circles,
         isLoading: false,
         isFollowing: seededFollowing,
@@ -268,10 +256,6 @@ class ProfileNotifier extends Notifier<ProfileState> {
     state = state.copyWith(interactionDirection: d);
   }
 
-  void setLifestyleSubTab(String lifeCategory) {
-    state = state.copyWith(lifestyleSubTab: lifeCategory);
-  }
-
   Future<void> toggleFollow() async {
     final subAccountId = state.profile?.subAccountId.isNotEmpty == true
         ? state.profile!.subAccountId
@@ -340,9 +324,9 @@ class ProfileNotifier extends Notifier<ProfileState> {
   Future<GreetingReplyResultDto> replyGreetingIntoConversation(
     String requestId,
   ) async {
-    final result = await ref.read(greetingRepositoryProvider).replyGreeting(
-          requestId,
-        );
+    final result = await ref
+        .read(greetingRepositoryProvider)
+        .replyGreeting(requestId);
     _promoteFormalConversation(result.conversationId);
     return result;
   }

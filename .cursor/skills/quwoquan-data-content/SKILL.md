@@ -24,6 +24,9 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 | `annotate` | Human-in-loop 标注：发布前对账本图片/事实/文章下人判定、打分、置发布态、记再加工 |
 | `ship` | 一键发布：promote→重建索引→按环境确定性采样写 sample bundle→(可选)调用服务侧 importer 灌库 |
 | `verify` | 收紧范围校验 post package（schema + 语义 + 图片 + 三道门） |
+| `verify scale-readiness` | 商用放量证据门：来源充分率、workflow 状态、队列后端、TokenLedger、release/import、吞吐和首轮通过率 |
+| `env ready` | 一键准备 data venv，并检查 `cursor_sdk`、CV/OCR 依赖、`CURSOR_API_KEY` 和网络可达性 |
+| `env preflight` | 只做运行前环境验收，不安装依赖 |
 | `template lint` | 模板蓝图门禁（含 route 叙事契约 / gallery imagePolicy） |
 
 ## 正文创作只能由会话模型完成（禁止脚本拼正文）
@@ -119,6 +122,9 @@ bash quwoquan_service/scripts/content/run_content_import_mongo_test.sh
 ## 关键命令示例
 
 ```bash
+# 托管/真实 Agent 工作流启动前必须先过环境门；其它助手也统一使用这条入口
+python3 quwoquan_data/scripts/cli.py env ready
+
 # 1) 准备写作契约（不产出正文）
 python3 quwoquan_data/scripts/cli.py produce --task <task> --batch <batch> --content-type article --stage compose-brief
 
@@ -137,6 +143,7 @@ python3 quwoquan_data/scripts/cli.py verify --scope current   # 门禁默认：�
 python3 quwoquan_data/scripts/cli.py verify --scope all       # 全部 release（含旧 schema）
 python3 quwoquan_data/scripts/cli.py verify --task <task> --batch <batch>  # 显式校验某中间批次（仍严格）
 python3 quwoquan_data/scripts/cli.py verify --release <release_id>
+python3 quwoquan_data/scripts/cli.py verify scale-readiness --task <task> --batch <batch> --daily-target 10000
 ```
 
 ## 硬约束（违反即门禁拦截）
@@ -146,7 +153,7 @@ python3 quwoquan_data/scripts/cli.py verify --release <release_id>
 3. **真相源**：路径/错误码/字段/叙事契约/imagePolicy 先改 metadata/blueprint/schema，再 `template lint` / 业务逻辑；codegen 与 schema 不手绕。
 4. **三道真实性门**：generator 出处门 + 模板指纹门 + 事实可回溯门，review 与 verify 交付面强制；非 agent / 命中指纹 / 数值不可回溯一律阻断。
 5. **图片治理**：发布图必须过 `media check-images`；unsafe→改稿，needs_review(人脸/后端缺失)→人工复核，近重复→去重。
-6. **载体路由**：图多文少→gallery（配小字、禁大空白）；图带交叠文字→article（避免大空白）。
+6. **载体路由按底稿形态判定**：图片集合为主、只有标题或少量配文的底稿 → `image` 图片作品；图文混合编排且源图随正文共同构成底稿 → `article`；Wiki/百科/官方/政府/文旅等介绍实体本身的底稿 → entity homepage。不能只按目标内容类型混用来源；文章源图也是底稿的一部分，必须和 `baseSourceRef` 同源且一稿一用。
 7. **修辞/结构骨架=软门（仅建议+降分，不阻断）**：开篇钩子、显式喜欢/不喜欢、取舍判断、口语化标题、章节镜像、分节形态等不再硬阻断忠实轻改稿；硬门保留真实性/反抄袭/反雷同/数值可回溯/图片/联系方式/语域/载体/路线覆盖/底稿贴合度。
 8. **Mock/来源隔离**：不泄露平台名/作者名/用户名/水印；来源痕迹必须改写。
 9. **证据后置篇目（content_plan）**：只冻结实体与 `content.quotas`；ref/title 在 download+build 后由 `content_plan_packet` 定义，禁止 download 前预置营销 ref。B 组线路须有来源联游互证。

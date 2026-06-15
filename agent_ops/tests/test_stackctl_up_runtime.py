@@ -192,7 +192,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 return_value=({}, "", []),
             ) as run_probe,
         ):
-            stackctl._run_environment_integration_probe(topology, "gamma-hosted", Path("/tmp/report"))
+            stackctl._run_environment_integration_probe(topology, "gamma-local", Path("/tmp/report"))
 
         kwargs = run_probe.call_args.kwargs
         self.assertNotIn("--test-auth-token", kwargs["argv"])

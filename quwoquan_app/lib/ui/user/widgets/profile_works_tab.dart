@@ -216,11 +216,6 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
 
   bool _matchesCreationFilter(PostBaseDto post, CreationSubTab tab) {
     switch (tab) {
-      case CreationSubTab.moment:
-      case CreationSubTab.micro:
-        return post.identity == 'moment';
-      case CreationSubTab.work:
-        return post.identity == 'work';
       case CreationSubTab.image:
         return post.displayFormat == 'image';
       case CreationSubTab.video:
@@ -235,19 +230,22 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
   String _emptyStateTitle(CreationSubTab filter) {
     final isMine = widget.mode == ProfileMode.mine;
     switch (filter) {
-      case CreationSubTab.moment:
-      case CreationSubTab.micro:
-        return isMine ? '还没有点滴' : 'Ta 还没有点滴';
-      case CreationSubTab.work:
-        return isMine ? '还没有作品' : 'Ta 还没有作品';
       case CreationSubTab.image:
-        return isMine ? '还没有图片内容' : 'Ta 还没有图片内容';
+        return isMine
+            ? UITextConstants.profileCreationEmptyImageMine
+            : UITextConstants.profileCreationEmptyImageOther;
       case CreationSubTab.video:
-        return isMine ? '还没有视频内容' : 'Ta 还没有视频内容';
+        return isMine
+            ? UITextConstants.profileCreationEmptyVideoMine
+            : UITextConstants.profileCreationEmptyVideoOther;
       case CreationSubTab.article:
-        return isMine ? '还没有文字内容' : 'Ta 还没有文字内容';
+        return isMine
+            ? UITextConstants.profileCreationEmptyTextMine
+            : UITextConstants.profileCreationEmptyTextOther;
       case CreationSubTab.all:
-        return isMine ? '还没有创作内容' : 'Ta 还没有创作内容';
+        return isMine
+            ? UITextConstants.profileCreationEmptyAllMine
+            : UITextConstants.profileCreationEmptyAllOther;
     }
   }
 
@@ -338,7 +336,7 @@ class _WorksPostCard extends ConsumerWidget {
     final body = post.normalizedBody;
     if (title.isNotEmpty) return title;
     if (body.isNotEmpty) return body;
-    return post.identity == 'moment' ? '点滴' : '作品';
+    return UITextConstants.profileTabCreations;
   }
 
   String get _supportingText {

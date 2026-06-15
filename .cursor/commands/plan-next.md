@@ -39,6 +39,12 @@ description: 任务后多角色自检功能与计划的完成情况，按商用�
 - 触发范围门禁绿；无新增技术债（过往兼容/死代码/弱类型/空 catch/硬编码/超大文件）。
 - 端云一致：Dart DTO ↔ Go struct ↔ metadata YAML 字段对齐。
 
+## 执行
+
+- 读取 `docs/agent_context_contract.md`，先完成 `Exit Review`，再讨论下一轮。
+- 对照 `docs/agent_command_simulation_matrix.md`，确认本轮命令阶段的出口证据是否齐全。
+- 未完成项必须回填证据或登记为阻断，不能被下一轮计划覆盖。
+
 ---
 
 ## 3) 生成新规划
@@ -49,6 +55,12 @@ description: 任务后多角色自检功能与计划的完成情况，按商用�
 2. **规格**：`spec.md` 增量或新建 Story（含 UX、权限异常语义、并发可靠性、SLO/灰度/回滚/观测）。
 3. **任务清单**：可执行、职责归位、每项含测试与验收，标注触发门禁。
 4. **验收标准**：UAT/SIT/GWT/contract + T1~T4，绑定磁盘测试路径。
+
+## 出口
+
+- 输出本轮完成度、证据缺口、阻断项和下一轮计划。
+- 下一轮计划必须重新具备目标、规格、任务清单和验收标准。
+- 若本轮仍有 `GATE_BLOCK`，不得宣称进入下一轮开发。
 
 ---
 
@@ -68,3 +80,7 @@ description: 任务后多角色自检功能与计划的完成情况，按商用�
 | `/audit` | 周期/任意 | 代码库级健康度扫描；`/plan-next` 面向「特性/计划完成度 + 下一轮规划」 |
 | `/plan-review` | 执行前 | 面向「执行前刷新已有规划」；`/plan-next` 面向「执行后再规划」 |
 | `/baseline` | 冻结 | 新规划收敛后可用 `/baseline` 冻结进入下一轮 `/dev` |
+
+自然语言等价触发：用户说“生成下一轮计划”“这一轮后面做什么”“完成后再规划”时，也按 `/plan-next` 语义执行。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

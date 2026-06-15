@@ -106,6 +106,98 @@ void main() {
     expect(state.promptReason, isNull);
     expect(state.errorMessage, isNotNull);
   });
+
+  test('softLogout 置 guest+manualLoggedOut，保留 refreshToken 与 remembered 摘要', () async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final store = _MemoryAuthSessionStore(
+      stored: StoredAuthSession(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        ownerId: 'owner-1',
+        activeSubAccountId: 'sub-1',
+        accountState: 'active',
+        identityOrigin: 'phone',
+        installId: 'install-id',
+        lastRefreshAtEpochMs: nowMs,
+        lastForegroundAuthCheckAtEpochMs: nowMs,
+        rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
+        rememberedLoginMaskedIdentifier: '138****0001',
+        rememberedDisplayName: '趣友A',
+        manualLoggedOut: false,
+        launchPromptDismissed: true,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        authSessionRefreshExecutorProvider.overrideWithValue(
+          (_) async => AuthLoginResultDto(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final notifier = container.read(authSessionControllerProvider.notifier);
+    await notifier.softLogout();
+
+    final state = container.read(authSessionControllerProvider);
+    expect(state.isAuthenticated, isFalse);
+    expect(state.status, AuthSessionStatus.guest);
+    expect(state.promptReason, AuthPromptReason.manualLoggedOut);
+    expect(state.rememberedLoginMethod, AuthRememberedLoginMethod.phoneOtp);
+
+    final stored = await store.read();
+    expect(stored.accessToken, isEmpty);
+    expect(stored.refreshToken, 'refresh-token');
+    expect(stored.manualLoggedOut, isTrue);
+    expect(stored.hasValidQuickLoginCredential, isTrue);
+  });
+
+  test('hardLogout 清除 refreshToken，下次登录无可用快速登录凭证', () async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final store = _MemoryAuthSessionStore(
+      stored: StoredAuthSession(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        ownerId: 'owner-1',
+        activeSubAccountId: 'sub-1',
+        accountState: 'active',
+        identityOrigin: 'phone',
+        installId: 'install-id',
+        lastRefreshAtEpochMs: nowMs,
+        lastForegroundAuthCheckAtEpochMs: nowMs,
+        manualLoggedOut: false,
+        launchPromptDismissed: true,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        authSessionRefreshExecutorProvider.overrideWithValue(
+          (_) async => AuthLoginResultDto(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final notifier = container.read(authSessionControllerProvider.notifier);
+    await notifier.hardLogout();
+
+    final state = container.read(authSessionControllerProvider);
+    expect(state.isAuthenticated, isFalse);
+    expect(state.status, AuthSessionStatus.guest);
+    expect(state.promptReason, AuthPromptReason.manualLoggedOut);
+
+    final stored = await store.read();
+    expect(stored.refreshToken, isEmpty);
+    expect(stored.hasValidQuickLoginCredential, isFalse);
+  });
 }
 
 final class _MockRemoteMode extends AppDataSourceModeNotifier {
@@ -145,6 +237,7 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
 
   @override
@@ -197,6 +290,32 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
       lastRefreshAtEpochMs: 0,
       lastForegroundAuthCheckAtEpochMs: 0,
       manualLoggedOut: manualLogout,
+      launchPromptDismissed: false,
+    );
+  }
+
+  @override
+  Future<void> softLogout() async {
+    final expiresAtMs =
+        DateTime.now().millisecondsSinceEpoch +
+        kDefaultSessionRememberTtlSeconds * 1000;
+    stored = StoredAuthSession(
+      accessToken: '',
+      refreshToken: stored.refreshToken,
+      ownerId: stored.ownerId,
+      activeSubAccountId: stored.activeSubAccountId,
+      accountState: stored.accountState,
+      identityOrigin: stored.identityOrigin,
+      installId: stored.installId,
+      lastRefreshAtEpochMs: stored.lastRefreshAtEpochMs,
+      lastForegroundAuthCheckAtEpochMs: stored.lastForegroundAuthCheckAtEpochMs,
+      rememberedLoginMethod: stored.rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
+      rememberedDisplayName: stored.rememberedDisplayName,
+      rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      quickLoginExpiresAtEpochMs: expiresAtMs,
+      sessionRememberTtlSeconds: stored.sessionRememberTtlSeconds,
+      manualLoggedOut: true,
       launchPromptDismissed: false,
     );
   }

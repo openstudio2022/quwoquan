@@ -5,6 +5,7 @@ import html as html_lib
 import hashlib
 import http.client
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -19,6 +20,8 @@ from vertical.source_registry import resolve_travel_source_runtime
 _USER_AGENT = (
     "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@quwoquan.example)"
 )
+DOWNLOAD_TEXT_TIMEOUT_SECONDS = max(5, int(os.environ.get("QWQ_DOWNLOAD_TEXT_TIMEOUT_SECONDS", "20")))
+DOWNLOAD_BYTES_TIMEOUT_SECONDS = max(5, int(os.environ.get("QWQ_DOWNLOAD_BYTES_TIMEOUT_SECONDS", "20")))
 
 # 图片魔数 → 扩展名（仅放行真实图片二进制，拒绝 HTML 错误页伪装）。
 _IMAGE_MAGIC: tuple[tuple[bytes, str], ...] = (
@@ -40,7 +43,7 @@ SUPPORTED_TEXT_EXTRACTORS: frozenset[str] = frozenset(
 )
 
 
-def _curl_get_text(url: str, *, timeout: int = 90) -> str:
+def _curl_get_text(url: str, *, timeout: int = DOWNLOAD_TEXT_TIMEOUT_SECONDS) -> str:
     proc = subprocess.run(
         ["curl", "-sS", "-A", _USER_AGENT, "--max-time", str(timeout), url],
         capture_output=True,
@@ -54,7 +57,8 @@ def _curl_get_text(url: str, *, timeout: int = 90) -> str:
 
 def _wikipedia_api_plaintext(url: str) -> str:
     parsed = urllib.parse.urlparse(url)
-    if "wikipedia.org" not in (parsed.hostname or ""):
+    host = parsed.hostname or ""
+    if not any(host.endswith(domain) for domain in ("wikipedia.org", "wikivoyage.org")):
         return ""
     if "/wiki/" not in parsed.path:
         return ""
@@ -281,6 +285,60 @@ def sniff_image_ext(body: bytes, content_type: str = "") -> str | None:
     return None
 
 
+def candidate_image_urls(url: str) -> list[str]:
+    """Return deterministic same-source high-resolution candidates.
+
+    The candidates stay on the same host/path family and are only used for
+    fetch attempts. Rights, relevance, source-unit ownership and pixel gates
+    still run after bytes are downloaded.
+    """
+    raw = str(url or "").strip()
+    if not raw:
+        return []
+    candidates: list[str] = []
+
+    def _add(item: str) -> None:
+        if item and item not in candidates:
+            candidates.append(item)
+
+    _add(raw)
+    parsed = urllib.parse.urlparse(raw)
+    if parsed.query:
+        _add(urllib.parse.urlunparse(parsed._replace(query="", fragment="")))
+
+    # Qunar-style compressed variants:
+    #   foo.jpg_r_720x480x95_hash.jpg -> foo.jpg
+    #   foo.jpg_r_600x600x95_hash.jpg -> foo.jpg
+    stripped = re.sub(
+        r"(?i)(\.(?:jpe?g|png|webp))_r_\d+x\d+(?:x\d+)?_[A-Za-z0-9]+(?:\.(?:jpe?g|png|webp))$",
+        r"\1",
+        urllib.parse.urlunparse(parsed._replace(query="", fragment="")),
+    )
+    _add(stripped)
+
+    # Some CDNs append a post-extension rendition marker.
+    stripped_bang = re.sub(
+        r"(?i)(\.(?:jpe?g|png|webp))(?:![^/?#]+)$",
+        r"\1",
+        urllib.parse.urlunparse(parsed._replace(query="", fragment="")),
+    )
+    _add(stripped_bang)
+
+    # Wikimedia thumb URLs keep the original file path before the final
+    # size-prefixed segment.
+    path_parts = parsed.path.split("/")
+    if "/wikipedia/commons/thumb/" in parsed.path and len(path_parts) > 4:
+        try:
+            thumb_index = path_parts.index("thumb")
+            original_parts = path_parts[:thumb_index] + path_parts[thumb_index + 1:-1]
+            original_path = "/".join(original_parts)
+            _add(urllib.parse.urlunparse(parsed._replace(path=original_path, query="", fragment="")))
+        except ValueError:
+            pass
+
+    return candidates
+
+
 def fetch_source(url: str, output_dir: Path) -> dict:
     """Fetch a URL and extract text content. Returns metadata dict."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -353,7 +411,7 @@ def _parse_retry_after(raw: str | None, *, attempt: int) -> float:
     return float(min(2 ** (attempt + 1), 30))
 
 
-def _curl_get_bytes(url: str, *, timeout: int = 60) -> tuple[int, bytes, str]:
+def _curl_get_bytes(url: str, *, timeout: int = DOWNLOAD_BYTES_TIMEOUT_SECONDS) -> tuple[int, bytes, str]:
     """curl 回退：本机 http.client 对 Wikimedia CDN 偶发 SSL EOF 时仍可下图。"""
     with tempfile.NamedTemporaryFile() as body_file:
         proc = subprocess.run(
@@ -390,6 +448,9 @@ def _http_get_bytes(
     跟随有限次重定向（图片 CDN 常 301/302）；对 429/503 限流按 Retry-After 或指数
     退避重试（公共源批量抓取常见），避免单次限流即放弃下载。
     """
+    if os.environ.get("QWQ_DOWNLOAD_USE_HTTP_CLIENT", "0") != "1":
+        return _curl_get_bytes(url, timeout=timeout)
+
     current = url
     status, body, content_type = 0, b"", ""
     redirects = 0
@@ -427,15 +488,10 @@ def _http_get_bytes(
             return status, body, content_type
     except Exception:
         pass
-    return _curl_get_bytes(url, timeout=max(timeout, 60))
+    return _curl_get_bytes(url, timeout=timeout)
 
 
-def fetch_image_payload(url: str, *, min_bytes: int = 3000) -> dict | None:
-    """下载单张图片但不落盘，返回 {url, ext, bytes, contentType, sha256}。
-
-    供来源单元写入器（write_source_unit）把图片直接落进来源 assets/，
-    避免对象级散落 images/。非 200 / 过小 / 非图片 / 网络异常一律返回 None。
-    """
+def _fetch_image_payload_once(url: str, *, min_bytes: int = 3000) -> dict | None:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme == "file":
         try:
@@ -473,6 +529,21 @@ def fetch_image_payload(url: str, *, min_bytes: int = 3000) -> dict | None:
     }
 
 
+def fetch_image_payload(url: str, *, min_bytes: int = 3000) -> dict | None:
+    """下载单张图片但不落盘，返回 {url, ext, bytes, contentType, sha256}。
+
+    供来源单元写入器（write_source_unit）把图片直接落进来源 assets/，
+    避免对象级散落 images/。非 200 / 过小 / 非图片 / 网络异常一律返回 None。
+    """
+    for candidate in candidate_image_urls(url):
+        payload = _fetch_image_payload_once(candidate, min_bytes=min_bytes)
+        if payload is not None:
+            payload["requestedUrl"] = url
+            payload["normalizedFromUrl"] = url if candidate != url else ""
+            return payload
+    return None
+
+
 def fetch_image(url: str, images_dir: Path, *, index: int, min_bytes: int = 3000) -> dict | None:
     """下载单张图片到 images_dir/img_<index>.<ext>。
 
@@ -480,22 +551,21 @@ def fetch_image(url: str, images_dir: Path, *, index: int, min_bytes: int = 3000
     一律返回 None（不抛），由调用方决定是否记账或重试。
     """
     images_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        status, body, content_type = _http_get_bytes(url)
-    except Exception:
+    payload = fetch_image_payload(url, min_bytes=min_bytes)
+    if payload is None:
         return None
-    if status != 200 or len(body) < min_bytes:
-        return None
-    ext = sniff_image_ext(body, content_type)
-    if ext is None:
-        return None
+    body = payload["bytes"]
+    content_type = payload.get("contentType") or ""
+    ext = payload["ext"]
+    status = 200
     file_name = f"img_{index:02d}{ext}"
     (images_dir / file_name).write_bytes(body)
     return {
-        "url": url,
+        "url": payload.get("url") or url,
+        "requestedUrl": payload.get("requestedUrl") or url,
         "fileName": file_name,
         "statusCode": status,
         "contentType": content_type,
         "bytes": len(body),
-        "sha256": hashlib.sha256(body).hexdigest(),
+        "sha256": payload.get("sha256") or hashlib.sha256(body).hexdigest(),
     }

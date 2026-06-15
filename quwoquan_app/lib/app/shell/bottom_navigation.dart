@@ -30,7 +30,7 @@ class BottomNavigationWidget extends ConsumerWidget {
         : SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final activeColor = forceDark
         ? CupertinoColors.white
-        : AppColors.iosLabel(context);
+        : AppColors.primaryColor;
     final inactiveColor = forceDark
         ? CupertinoColors.systemGrey
         : AppColors.iosSecondaryLabel(context);
@@ -38,11 +38,12 @@ class BottomNavigationWidget extends ConsumerWidget {
       _BottomDestination(
         label: AppConceptConstants.discovery,
         icon: FluentIcons.home_24_regular,
-        selectedIcon: FluentIcons.home_24_filled,
+        selectedIcon: FluentIcons.home_24_regular,
       ),
       _BottomDestination(
         label: AppConceptConstants.premium,
-        customIcon: _BottomCustomIcon.premium,
+        iconBuilder: (color, selected, size) =>
+            AppOpenWindowIcon(size: size, color: color, filled: selected),
       ),
       _BottomDestination(
         label: '',
@@ -52,14 +53,15 @@ class BottomNavigationWidget extends ConsumerWidget {
         isPrimaryAction: true,
       ),
       _BottomDestination(
-        label: AppConceptConstants.chat,
-        customIcon: _BottomCustomIcon.messages,
+        label: UITextConstants.chatPrimaryContacts,
+        iconBuilder: (color, selected, size) =>
+            AppContactsIcon(size: size, color: color, filled: selected),
       ),
       _BottomDestination(
         label: profileLabel,
         semanticLabel: profileLabel,
-        icon: FluentIcons.person_circle_24_regular,
-        selectedIcon: FluentIcons.person_circle_24_filled,
+        iconBuilder: (color, selected, size) =>
+            AppProfilePersonIcon(size: size, color: color, filled: selected),
       ),
     ];
 
@@ -74,31 +76,32 @@ class BottomNavigationWidget extends ConsumerWidget {
         padding: EdgeInsets.symmetric(horizontal: sideInset),
         child: SizedBox(
           height: navHeight + bottomInset,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: List<Widget>.generate(destinations.length, (index) {
-              final selected = (currentIndex < 0 ? 0 : currentIndex) == index;
-              final destination = destinations[index];
-              return Expanded(
-                child: CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  onPressed: () {
-                    if (selected) return;
-                    HapticFeedback.selectionClick();
-                    onTap(index);
-                  },
-                  child: _BottomNavItem(
-                    destination: destination,
-                    selected: selected,
-                    activeColor: activeColor,
-                    inactiveColor: inactiveColor,
-                    backgroundColor: navBackground,
-                    contentHeight: navHeight + bottomInset,
+          child: Padding(
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: List<Widget>.generate(destinations.length, (index) {
+                final selected = (currentIndex < 0 ? 0 : currentIndex) == index;
+                final destination = destinations[index];
+                return Expanded(
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    onPressed: () {
+                      if (selected) return;
+                      HapticFeedback.selectionClick();
+                      onTap(index);
+                    },
+                    child: _BottomNavItem(
+                      destination: destination,
+                      selected: selected,
+                      activeColor: activeColor,
+                      inactiveColor: inactiveColor,
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ),
       ),
@@ -106,25 +109,26 @@ class BottomNavigationWidget extends ConsumerWidget {
   }
 }
 
+typedef _BottomIconBuilder =
+    Widget Function(Color color, bool selected, double size);
+
 class _BottomDestination {
   const _BottomDestination({
     required this.label,
     this.icon,
     this.selectedIcon,
+    this.iconBuilder,
     this.semanticLabel,
-    this.customIcon,
     this.isPrimaryAction = false,
   });
 
   final String label;
   final IconData? icon;
   final IconData? selectedIcon;
+  final _BottomIconBuilder? iconBuilder;
   final String? semanticLabel;
-  final _BottomCustomIcon? customIcon;
   final bool isPrimaryAction;
 }
-
-enum _BottomCustomIcon { premium, messages }
 
 class _BottomNavItem extends StatelessWidget {
   const _BottomNavItem({
@@ -132,19 +136,16 @@ class _BottomNavItem extends StatelessWidget {
     required this.selected,
     required this.activeColor,
     required this.inactiveColor,
-    required this.backgroundColor,
-    required this.contentHeight,
   });
 
   final _BottomDestination destination;
   final bool selected;
   final Color activeColor;
   final Color inactiveColor;
-  final Color backgroundColor;
-  final double contentHeight;
 
   @override
   Widget build(BuildContext context) {
+    final iconSize = AppSpacing.bottomNavBarItemIconSize(context);
     final labelStyle = TextStyle(
       fontSize: AppTypography.iosCaption2,
       fontWeight: AppTypography.bottomNavLabelWeight,
@@ -162,11 +163,11 @@ class _BottomNavItem extends StatelessWidget {
         children: [
           if (destination.isPrimaryAction)
             Container(
-              width: AppSpacing.primaryActionCircleSize,
-              height: AppSpacing.primaryActionCircleSize,
+              width: AppSpacing.primaryActionPillWidth,
+              height: AppSpacing.primaryActionPillHeight,
               decoration: BoxDecoration(
                 color: AppColors.primaryColor,
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
                 boxShadow: [
                   BoxShadow(
                     color: AppColors.primaryColor.withValues(alpha: 0.28),
@@ -185,7 +186,18 @@ class _BottomNavItem extends StatelessWidget {
               ),
             )
           else ...[
-            _buildIcon(selected ? activeColor : inactiveColor),
+            if (destination.iconBuilder != null)
+              destination.iconBuilder!(
+                selected ? activeColor : inactiveColor,
+                selected,
+                iconSize,
+              )
+            else
+              Icon(
+                selected ? destination.selectedIcon : destination.icon,
+                size: iconSize,
+                color: selected ? activeColor : inactiveColor,
+              ),
             SizedBox(height: AppSpacing.bottomNavIconLabelGap),
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 180),
@@ -201,27 +213,5 @@ class _BottomNavItem extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Widget _buildIcon(Color color) {
-    final size = AppSpacing.bottomNavItemIconSize;
-    return switch (destination.customIcon) {
-      _BottomCustomIcon.premium => AppPremiumMarkIcon(
-        size: size,
-        color: color,
-        filled: selected,
-      ),
-      _BottomCustomIcon.messages => AppMessagesIcon(
-        size: size,
-        color: color,
-        backgroundColor: backgroundColor,
-        filled: selected,
-      ),
-      null => Icon(
-        selected ? destination.selectedIcon : destination.icon,
-        size: size,
-        color: color,
-      ),
-    };
   }
 }

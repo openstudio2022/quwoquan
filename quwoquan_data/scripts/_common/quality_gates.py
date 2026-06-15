@@ -19,7 +19,9 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 
 # ---------------------------------------------------------------------------
-# 写作主线（writingIntent）契约：三类顶层主线，垂类题材在 SOP 层细分。
+# 写作主线（writingIntent）契约：顶层主线只描述读者任务，不描述具体实体。
+# 垂类题材在 SOP 层细分，但规模化供给需要能表达“交通路线”和“季节时机”
+# 这类常见决策主线，避免把 4 篇文章硬塞进 2 个 intent 造成模板化。
 # ---------------------------------------------------------------------------
 WRITING_INTENTS: dict[str, dict[str, Any]] = {
     "planning_consultation": {
@@ -56,6 +58,30 @@ WRITING_INTENTS: dict[str, dict[str, Any]] = {
         },
         "requireBuckets": 3,
     },
+    "route_transport": {
+        "label": "路线交通/到达方式",
+        "desc": "用户决定怎么去、怎么串联节点：交通方式、换乘、自驾、步行动线与时间成本。",
+        "buckets": {
+            "origin": ["从", "出发", "抵达", "到达", "进出", "往返", "接驳"],
+            "transport": ["交通", "自驾", "高铁", "机场", "班车", "公交", "包车", "停车", "换乘", "索道"],
+            "sequence": ["先", "再", "然后", "顺路", "绕行", "动线", "路线", "节点", "入口", "出口"],
+            "duration": ["小时", "分钟", "车程", "用时", "耗时", "排队", "停留"],
+            "tradeoff": ["建议", "不建议", "如果你", "取舍", "避开", "更适合"],
+        },
+        "requireBuckets": 3,
+    },
+    "seasonal_timing": {
+        "label": "季节时机/什么时候去",
+        "desc": "用户决定何时去：季节、天气、花期/雪期/彩林、淡旺季、开放窗口与风险。",
+        "buckets": {
+            "season": ["春", "夏", "秋", "冬", "季节", "月份", "淡季", "旺季", "黄金周"],
+            "phenology": ["花", "雪", "彩林", "云海", "日出", "日落", "冰川", "瀑布", "草甸", "湖水"],
+            "weather": ["天气", "气温", "降雨", "降雪", "高反", "紫外线", "能见度", "封闭"],
+            "timing": ["早上", "上午", "中午", "下午", "傍晚", "时间", "开放", "闭园", "窗口"],
+            "tradeoff": ["建议", "不建议", "如果你", "取舍", "避开", "更适合"],
+        },
+        "requireBuckets": 3,
+    },
 }
 
 # 模板骨架相似度阈值（跨篇）：标题序列 + 结尾段 + 段落 n-gram。
@@ -84,7 +110,7 @@ def normalize_writing_intent(value: Any) -> str | None:
 def writing_intent_issues(value: Any) -> list[str]:
     """校验 writingIntent 字段本身是否合法（契约门，content_plan/brief 用）。"""
     if not value:
-        return ["writingIntent missing (must be one of planning_consultation|decision_experience|post_trip_journal)"]
+        return [f"writingIntent missing (must be one of {'|'.join(sorted(WRITING_INTENTS))})"]
     if normalize_writing_intent(value) is None:
         return [f"writingIntent invalid: {value!r}; allowed={sorted(WRITING_INTENTS)}"]
     return []

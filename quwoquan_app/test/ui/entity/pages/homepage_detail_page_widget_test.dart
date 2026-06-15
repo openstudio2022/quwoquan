@@ -51,8 +51,9 @@ void main() {
 
     expect(find.text('西湖景区'), findsWidgets);
     expect(find.text(UITextConstants.objectConnectionWithYou), findsOneWidget);
-    expect(find.text('从主页发内容'), findsOneWidget);
-    expect(find.text('与你相关'), findsOneWidget);
+    expect(find.text('认领主页'), findsNothing);
+    expect(find.text(UITextConstants.follow), findsWidgets);
+    expect(find.text(UITextConstants.profileDirectMessage), findsWidgets);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -520));
     await tester.pumpAndSettle();
     expect(find.text('内容'), findsWidgets);
@@ -61,8 +62,14 @@ void main() {
     expect(find.text('认识西湖景区'), findsOneWidget);
     expect(find.text('实体介绍'), findsNothing);
     expect(find.text(UITextConstants.objectIntroMoreLabel), findsOneWidget);
-    expect(find.text('认领主页'), findsWidgets);
     expect(find.text('治理入口'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('homepage-detail-more-button')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('认领主页'), findsWidgets);
   });
 
   testWidgets('选择模式显示 attach 按钮', (tester) async {
@@ -124,7 +131,9 @@ void main() {
     expect(repository.lastRecommendationTraceId, 'trace-1');
     expect(repository.lastExperimentBucket, 'A');
     expect(repository.lastRolloutCohort, 'city-hz');
-    expect(find.text('从主页发内容'), findsOneWidget);
+    expect(find.text('认领主页'), findsNothing);
+    expect(find.text(UITextConstants.follow), findsOneWidget);
+    expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
   });
 
   testWidgets('认识摘要卡使用 introduction summary 并跳转介绍页', (tester) async {

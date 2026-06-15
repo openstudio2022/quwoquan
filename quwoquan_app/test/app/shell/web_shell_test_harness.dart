@@ -125,6 +125,10 @@ class _UnavailableOneTapLoginClient implements OneTapLoginClient {
   Future<bool> isAvailable() async => false;
 
   @override
+  Future<OneTapLoginProbe> probe() async =>
+      const OneTapLoginProbe(isAvailable: false);
+
+  @override
   Future<OneTapLoginResult> requestLoginToken() {
     throw UnimplementedError('one tap login is unavailable in web shell tests');
   }
@@ -158,6 +162,7 @@ class _TestAuthSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
 
   @override
@@ -171,6 +176,9 @@ class _TestAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> softLogout() async {}
 
   @override
   Future<void> markLaunchPromptDismissed() async {}

@@ -13,6 +13,17 @@
           "ref": { "type": "string" },
           "kind": { "type": "string", "enum": ["entity", "route"] },
           "title": { "type": "string" },
+          "caption": { "type": "string", "maxLength": 300 },
+          "carrier": { "type": "string", "enum": ["article", "image", "gallery"] },
+          "researchLane": { "type": "string", "enum": ["article", "image"] },
+          "sourceCollectionId": { "type": "string" },
+          "assetRefs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": { "type": "string" }
+          },
           "entityRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
           "evidenceRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
           "rationale": { "type": "string" },
@@ -31,7 +42,28 @@
             "description": "主来源使用模式；blocked 来源不得进入 content_plan"
           }
         },
-        "required": ["ref", "kind", "title", "entityRefs", "evidenceRefs", "rationale", "writingIntent"]
+        "required": ["ref", "kind", "entityRefs", "evidenceRefs", "rationale"],
+        "allOf": [
+          {
+            "if": {
+              "properties": { "carrier": { "const": "image" } },
+              "required": ["carrier"]
+            },
+            "then": {
+              "required": ["researchLane", "sourceCollectionId", "assetRefs"],
+              "properties": {
+                "title": { "type": "string", "maxLength": 80 },
+                "researchLane": { "const": "image" }
+              }
+            },
+            "else": {
+              "required": ["title", "writingIntent"],
+              "properties": {
+                "researchLane": { "enum": ["article"] }
+              }
+            }
+          }
+        ]
       }
     }
   },

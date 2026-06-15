@@ -13,11 +13,13 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
 )
 
 var (
-	sha256Pattern        = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-	casObjectKeyPattern  = regexp.MustCompile(`^media/objects/sha256/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}\.[A-Za-z0-9]+$`)
+	sha256Pattern       = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	casObjectKeyPattern = regexp.MustCompile(`^media/objects/sha256/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}\.[A-Za-z0-9]+$`)
 )
 
 type AssetManifestItem struct {
@@ -28,16 +30,21 @@ type AssetManifestItem struct {
 	Sha256               string `json:"sha256" bson:"sha256"`
 	MimeType             string `json:"mimeType,omitempty" bson:"mimeType,omitempty"`
 	SourceOriginalSha256 string `json:"sourceOriginalSha256,omitempty" bson:"sourceOriginalSha256,omitempty"`
+	Caption              string `json:"caption,omitempty" bson:"caption,omitempty"`
+	Role                 string `json:"role,omitempty" bson:"role,omitempty"`
+	Width                int64  `json:"width,omitempty" bson:"width,omitempty"`
+	Height               int64  `json:"height,omitempty" bson:"height,omitempty"`
+	SourceCollectionID   string `json:"sourceCollectionId,omitempty" bson:"sourceCollectionId,omitempty"`
 }
 
 type ArticleAssetManifestDoc struct {
-	SchemaVersion         int                 `json:"schemaVersion" bson:"schemaVersion"`
-	ArticleMarkdownVersion string             `json:"articleMarkdownVersion,omitempty" bson:"articleMarkdownVersion,omitempty"`
-	ArticleMarkdownDigest string              `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
-	DocumentSha256        string              `json:"documentSha256" bson:"documentSha256"`
-	AssetManifestSha256   string              `json:"assetManifestSha256" bson:"assetManifestSha256"`
-	DocumentVersionSha256 string              `json:"documentVersionSha256" bson:"documentVersionSha256"`
-	Assets                []AssetManifestItem `json:"assets" bson:"assets"`
+	SchemaVersion          int                 `json:"schemaVersion" bson:"schemaVersion"`
+	ArticleMarkdownVersion string              `json:"articleMarkdownVersion,omitempty" bson:"articleMarkdownVersion,omitempty"`
+	ArticleMarkdownDigest  string              `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
+	DocumentSha256         string              `json:"documentSha256" bson:"documentSha256"`
+	AssetManifestSha256    string              `json:"assetManifestSha256" bson:"assetManifestSha256"`
+	DocumentVersionSha256  string              `json:"documentVersionSha256" bson:"documentVersionSha256"`
+	Assets                 []AssetManifestItem `json:"assets" bson:"assets"`
 }
 
 type EntityAssetManifestDoc struct {
@@ -46,23 +53,38 @@ type EntityAssetManifestDoc struct {
 
 // PostDoc 是灌入运行库的文章文档（与 publish post manifest + article.md 对齐）。
 type PostDoc struct {
-	PostRef              string                   `json:"postRef" bson:"postRef"`
-	ContentType          string                   `json:"contentType" bson:"contentType"`
-	Title                string                   `json:"title" bson:"title"`
-	Angle                string                   `json:"angle" bson:"angle"`
-	Seq                  int                      `json:"seq" bson:"seq"`
-	EntityRefs           []string                 `json:"entityRefs" bson:"entityRefs"`
-	NormalizedEntityRefs []string                 `json:"normalizedEntityRefs" bson:"normalizedEntityRefs"`
-	TagRefs              []string                 `json:"tagRefs" bson:"tagRefs"`
-	Template             string                   `json:"template" bson:"template"`
-	GeneratorModel       string                   `json:"generatorModel" bson:"generatorModel"`
-	ArticleMarkdown      string                   `json:"articleMarkdown" bson:"articleMarkdown"`
-	ArticleDigest        string                   `json:"articleDigest" bson:"articleDigest"`
-	ArticleAssetManifest *ArticleAssetManifestDoc `json:"articleAssetManifest" bson:"articleAssetManifest"`
-	SourceTaskId         string                   `json:"sourceTaskId" bson:"sourceTaskId"`
-	CreatedAt            time.Time                `json:"createdAt" bson:"createdAt"`
-	UpdatedAt            time.Time                `json:"updatedAt" bson:"updatedAt"`
-	PublishedAt          time.Time                `json:"publishedAt" bson:"publishedAt"`
+	PostRef               string                   `json:"postRef" bson:"postRef"`
+	ContentType           string                   `json:"contentType" bson:"contentType"`
+	Title                 string                   `json:"title" bson:"title"`
+	Body                  string                   `json:"body" bson:"body"`
+	Angle                 string                   `json:"angle" bson:"angle"`
+	Seq                   int                      `json:"seq" bson:"seq"`
+	EntityRefs            []string                 `json:"entityRefs" bson:"entityRefs"`
+	NormalizedEntityRefs  []string                 `json:"normalizedEntityRefs" bson:"normalizedEntityRefs"`
+	TagRefs               []string                 `json:"tagRefs" bson:"tagRefs"`
+	SemanticMentions      any                      `json:"semanticMentions" bson:"semanticMentions"`
+	AuthorID              string                   `json:"authorId" bson:"authorId"`
+	CreatorProfileID      string                   `json:"creatorProfileId" bson:"creatorProfileId"`
+	CreatorArchetype      string                   `json:"creatorArchetype" bson:"creatorArchetype"`
+	CreatorProfileVersion string                   `json:"creatorProfileVersion" bson:"creatorProfileVersion"`
+	CreatorDisclosure     map[string]any           `json:"creatorDisclosure" bson:"creatorDisclosure"`
+	ExperienceClaimMode   string                   `json:"experienceClaimMode" bson:"experienceClaimMode"`
+	AuthorQualitySignals  map[string]any           `json:"authorQualitySignals" bson:"authorQualitySignals"`
+	Assets                []AssetManifestItem      `json:"assets" bson:"assets"`
+	SourceCollectionID    string                   `json:"sourceCollectionId" bson:"sourceCollectionId"`
+	SourcePlatform        string                   `json:"sourcePlatform" bson:"sourcePlatform"`
+	Creator               any                      `json:"creator" bson:"creator"`
+	Page                  any                      `json:"page" bson:"page"`
+	LicenseProof          any                      `json:"licenseProof" bson:"licenseProof"`
+	Template              string                   `json:"template" bson:"template"`
+	GeneratorModel        string                   `json:"generatorModel" bson:"generatorModel"`
+	ArticleMarkdown       string                   `json:"articleMarkdown" bson:"articleMarkdown"`
+	ArticleDigest         string                   `json:"articleDigest" bson:"articleDigest"`
+	ArticleAssetManifest  *ArticleAssetManifestDoc `json:"articleAssetManifest" bson:"articleAssetManifest"`
+	SourceTaskId          string                   `json:"sourceTaskId" bson:"sourceTaskId"`
+	CreatedAt             time.Time                `json:"createdAt" bson:"createdAt"`
+	UpdatedAt             time.Time                `json:"updatedAt" bson:"updatedAt"`
+	PublishedAt           time.Time                `json:"publishedAt" bson:"publishedAt"`
 }
 
 // EntityDoc 是灌入运行库的实体文档（与 publish entity _entity.json + page.md 对齐）。
@@ -112,21 +134,42 @@ func toSet(items []string) map[string]bool {
 }
 
 type postManifest struct {
-	ContentType          string                   `json:"contentType"`
-	EntityRefs           []string                 `json:"entityRefs"`
-	NormalizedEntityRefs []string                 `json:"normalizedEntityRefs"`
-	TagRefs              []string                 `json:"tagRefs"`
-	Template             string                   `json:"template"`
-	GeneratorModel       string                   `json:"generatorModel"`
-	ArticleDigest        string                   `json:"articleMarkdownDigest"`
-	PublishTitle         string                   `json:"publishTitle"`
-	PublishAngle         string                   `json:"publishAngle"`
-	PublishSeq           int                      `json:"publishSeq"`
-	SourceTaskId         string                   `json:"sourceTaskId"`
-	ArticleAssetManifest *ArticleAssetManifestDoc `json:"articleAssetManifest"`
-	CreatedAt            string                   `json:"createdAt"`
-	UpdatedAt            string                   `json:"updatedAt"`
-	PublishedAt          string                   `json:"publishedAt"`
+	ContentType           string                   `json:"contentType"`
+	Title                 string                   `json:"title"`
+	Caption               string                   `json:"caption"`
+	DisplayTitle          string                   `json:"displayTitle"`
+	Body                  string                   `json:"body"`
+	EntityRefs            []string                 `json:"entityRefs"`
+	NormalizedEntityRefs  []string                 `json:"normalizedEntityRefs"`
+	TagRefs               []string                 `json:"tagRefs"`
+	SemanticMentions      any                      `json:"semanticMentions"`
+	AuthorID              string                   `json:"authorId"`
+	CreatorProfileID      string                   `json:"creatorProfileId"`
+	CreatorArchetype      string                   `json:"creatorArchetype"`
+	CreatorProfileVersion string                   `json:"creatorProfileVersion"`
+	CreatorDisclosure     map[string]any           `json:"creatorDisclosure"`
+	ExperienceClaimMode   string                   `json:"experienceClaimMode"`
+	AuthorQualitySignals  map[string]any           `json:"authorQualitySignals"`
+	Assets                []AssetManifestItem      `json:"assets"`
+	SourceCollectionID    string                   `json:"sourceCollectionId"`
+	SourcePlatform        string                   `json:"sourcePlatform"`
+	Creator               any                      `json:"creator"`
+	Page                  any                      `json:"page"`
+	LicenseProof          any                      `json:"licenseProof"`
+	SourceCreator         string                   `json:"sourceCreator"`
+	SourceCollectionURL   string                   `json:"sourceCollectionUrl"`
+	LicenseProofRef       string                   `json:"licenseProofRef"`
+	Template              string                   `json:"template"`
+	GeneratorModel        string                   `json:"generatorModel"`
+	ArticleDigest         string                   `json:"articleMarkdownDigest"`
+	PublishTitle          string                   `json:"publishTitle"`
+	PublishAngle          string                   `json:"publishAngle"`
+	PublishSeq            int                      `json:"publishSeq"`
+	SourceTaskId          string                   `json:"sourceTaskId"`
+	ArticleAssetManifest  *ArticleAssetManifestDoc `json:"articleAssetManifest"`
+	CreatedAt             string                   `json:"createdAt"`
+	UpdatedAt             string                   `json:"updatedAt"`
+	PublishedAt           string                   `json:"publishedAt"`
 }
 
 func parseManifestTime(ref string, field string, raw string) (time.Time, error) {
@@ -139,6 +182,13 @@ func parseManifestTime(ref string, field string, raw string) (time.Time, error) 
 		return time.Time{}, fmt.Errorf("%s: invalid %s %q: %w", ref, field, value, err)
 	}
 	return parsed.UTC(), nil
+}
+
+func parseOptionalManifestTime(ref string, field string, raw string, fallback time.Time) (time.Time, error) {
+	if strings.TrimSpace(raw) == "" {
+		return fallback, nil
+	}
+	return parseManifestTime(ref, field, raw)
 }
 
 func validateAssetItem(asset AssetManifestItem, ref string) error {
@@ -177,6 +227,48 @@ func validateArticleAssetManifest(manifest *ArticleAssetManifestDoc, ref string)
 		if err := validateAssetItem(asset, ref); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func systemAuthorManifest(m postManifest) bool {
+	authorID := strings.TrimSpace(m.AuthorID)
+	creatorProfileID := strings.TrimSpace(m.CreatorProfileID)
+	return strings.HasPrefix(authorID, "agent_author_") || strings.HasPrefix(authorID, "builtin_") ||
+		strings.HasPrefix(creatorProfileID, "agent_creator_") ||
+		strings.HasPrefix(creatorProfileID, "qwq_creator_")
+}
+
+func validateCreatorProjection(m postManifest, ref string) error {
+	if !systemAuthorManifest(m) {
+		return nil
+	}
+	if strings.TrimSpace(m.AuthorID) == "" {
+		return fmt.Errorf("%s: system creator manifest missing authorId", ref)
+	}
+	if strings.TrimSpace(m.CreatorProfileID) == "" {
+		return fmt.Errorf("%s: system creator manifest missing creatorProfileId", ref)
+	}
+	if strings.TrimSpace(m.CreatorArchetype) == "" {
+		return fmt.Errorf("%s: system creator manifest missing creatorArchetype", ref)
+	}
+	if strings.TrimSpace(m.CreatorProfileVersion) == "" {
+		return fmt.Errorf("%s: system creator manifest missing creatorProfileVersion", ref)
+	}
+	if strings.TrimSpace(m.ExperienceClaimMode) == "" {
+		return fmt.Errorf("%s: system creator manifest missing experienceClaimMode", ref)
+	}
+	if m.CreatorDisclosure == nil {
+		return fmt.Errorf("%s: system creator manifest missing creatorDisclosure", ref)
+	}
+	if m.CreatorDisclosure["type"] != "platform_virtual_creator" {
+		return fmt.Errorf("%s: creatorDisclosure.type must be platform_virtual_creator", ref)
+	}
+	if m.CreatorDisclosure["visible"] != true {
+		return fmt.Errorf("%s: creatorDisclosure.visible must be true", ref)
+	}
+	if strings.TrimSpace(fmt.Sprint(m.CreatorDisclosure["displayText"])) == "" {
+		return fmt.Errorf("%s: creatorDisclosure.displayText is required", ref)
 	}
 	return nil
 }
@@ -220,8 +312,39 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		if jerr := json.Unmarshal(raw, &m); jerr != nil {
 			return jerr
 		}
+		if err := validateCreatorProjection(m, postRef); err != nil {
+			return err
+		}
 		if err := validateArticleAssetManifest(m.ArticleAssetManifest, postRef); err != nil {
 			return err
+		}
+		if strings.EqualFold(strings.TrimSpace(m.ContentType), "image") {
+			if len(m.Assets) == 0 || len(m.Assets) > 20 {
+				return fmt.Errorf("%s: image manifest assets must contain 1..20 items", postRef)
+			}
+			if strings.TrimSpace(m.SourceCollectionID) == "" {
+				return fmt.Errorf("%s: image manifest missing sourceCollectionId", postRef)
+			}
+			if !sourceFactPresent(firstSourceFact(m.Creator, m.SourceCreator)) ||
+				!sourceFactPresent(firstSourceFact(m.Page, m.SourceCollectionURL)) ||
+				!sourceFactPresent(firstSourceFact(m.LicenseProof, m.LicenseProofRef)) {
+				return fmt.Errorf("%s: image manifest missing creator/source page/license proof", postRef)
+			}
+			for _, asset := range m.Assets {
+				if err := validateAssetItem(asset, postRef); err != nil {
+					return err
+				}
+				if asset.SourceCollectionID != "" && asset.SourceCollectionID != m.SourceCollectionID {
+					return fmt.Errorf("%s: image asset sourceCollectionId does not match work manifest", postRef)
+				}
+			}
+		}
+		if err := postsemantic.ValidateSuppliedRefs(
+			m.SemanticMentions,
+			firstNonEmptyRefs(m.NormalizedEntityRefs, m.EntityRefs),
+			m.TagRefs,
+		); err != nil {
+			return fmt.Errorf("%s: %w", postRef, err)
 		}
 		article := ""
 		if a, aerr := os.ReadFile(filepath.Join(filepath.Dir(path), "article.md")); aerr == nil {
@@ -229,44 +352,81 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		}
 		segs := strings.Split(postRef, "/")
 		title, angle := m.PublishTitle, m.PublishAngle
+		if strings.EqualFold(strings.TrimSpace(m.ContentType), "image") {
+			title = m.Title
+			if title == "" && m.DisplayTitle != "" {
+				title = m.DisplayTitle
+			}
+		}
 		if len(segs) >= 4 {
 			if angle == "" {
 				angle = segs[2]
 			}
-			if title == "" {
+			if title == "" && !strings.EqualFold(strings.TrimSpace(m.ContentType), "image") {
 				title = segs[3]
 			}
-		}
-		createdAt, err := parseManifestTime(postRef, "createdAt", m.CreatedAt)
-		if err != nil {
-			return err
-		}
-		updatedAt, err := parseManifestTime(postRef, "updatedAt", m.UpdatedAt)
-		if err != nil {
-			return err
 		}
 		publishedAt, err := parseManifestTime(postRef, "publishedAt", m.PublishedAt)
 		if err != nil {
 			return err
 		}
+		createdAt, err := parseOptionalManifestTime(postRef, "createdAt", m.CreatedAt, publishedAt)
+		if err != nil {
+			return err
+		}
+		updatedAt, err := parseOptionalManifestTime(postRef, "updatedAt", m.UpdatedAt, publishedAt)
+		if err != nil {
+			return err
+		}
+		rawEntityRefs := append([]string(nil), m.EntityRefs...)
+		activeEntityRefs := firstNonEmptyRefs(m.NormalizedEntityRefs, m.EntityRefs)
+		activeTagRefs := append([]string(nil), m.TagRefs...)
+		if postsemantic.Present(m.SemanticMentions) {
+			projection := postsemantic.Project(m.SemanticMentions)
+			rawEntityRefs = projection.EntityRefs
+			activeEntityRefs = projection.EntityRefs
+			activeTagRefs = projection.TagRefs
+		}
+		body := m.Body
+		if strings.EqualFold(strings.TrimSpace(m.ContentType), "image") {
+			body = m.Caption
+			if body == "" {
+				body = m.Body
+			}
+		}
 		docs = append(docs, PostDoc{
-			PostRef:              postRef,
-			ContentType:          m.ContentType,
-			Title:                title,
-			Angle:                angle,
-			Seq:                  m.PublishSeq,
-			EntityRefs:           m.EntityRefs,
-			NormalizedEntityRefs: m.NormalizedEntityRefs,
-			TagRefs:              m.TagRefs,
-			Template:             m.Template,
-			GeneratorModel:       m.GeneratorModel,
-			ArticleMarkdown:      article,
-			ArticleDigest:        m.ArticleDigest,
-			ArticleAssetManifest: m.ArticleAssetManifest,
-			SourceTaskId:         m.SourceTaskId,
-			CreatedAt:            createdAt,
-			UpdatedAt:            updatedAt,
-			PublishedAt:          publishedAt,
+			PostRef:               postRef,
+			ContentType:           m.ContentType,
+			Title:                 title,
+			Body:                  body,
+			Angle:                 angle,
+			Seq:                   m.PublishSeq,
+			EntityRefs:            rawEntityRefs,
+			NormalizedEntityRefs:  activeEntityRefs,
+			TagRefs:               activeTagRefs,
+			SemanticMentions:      m.SemanticMentions,
+			AuthorID:              m.AuthorID,
+			CreatorProfileID:      m.CreatorProfileID,
+			CreatorArchetype:      m.CreatorArchetype,
+			CreatorProfileVersion: m.CreatorProfileVersion,
+			CreatorDisclosure:     m.CreatorDisclosure,
+			ExperienceClaimMode:   m.ExperienceClaimMode,
+			AuthorQualitySignals:  m.AuthorQualitySignals,
+			Assets:                m.Assets,
+			SourceCollectionID:    m.SourceCollectionID,
+			SourcePlatform:        m.SourcePlatform,
+			Creator:               firstSourceFact(m.Creator, m.SourceCreator),
+			Page:                  firstSourceFact(m.Page, m.SourceCollectionURL),
+			LicenseProof:          firstSourceFact(m.LicenseProof, m.LicenseProofRef),
+			Template:              m.Template,
+			GeneratorModel:        m.GeneratorModel,
+			ArticleMarkdown:       article,
+			ArticleDigest:         m.ArticleDigest,
+			ArticleAssetManifest:  m.ArticleAssetManifest,
+			SourceTaskId:          m.SourceTaskId,
+			CreatedAt:             createdAt,
+			UpdatedAt:             updatedAt,
+			PublishedAt:           publishedAt,
 		})
 		return nil
 	})
@@ -274,6 +434,35 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		return docs, err
 	}
 	return docs, nil
+}
+
+func firstSourceFact(values ...any) any {
+	for _, value := range values {
+		if sourceFactPresent(value) {
+			return value
+		}
+	}
+	return nil
+}
+
+func sourceFactPresent(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return false
+	case string:
+		return strings.TrimSpace(typed) != ""
+	case map[string]any:
+		return len(typed) > 0
+	default:
+		return true
+	}
+}
+
+func firstNonEmptyRefs(preferred, fallback []string) []string {
+	if len(preferred) > 0 {
+		return append([]string(nil), preferred...)
+	}
+	return append([]string(nil), fallback...)
 }
 
 type entityFile struct {

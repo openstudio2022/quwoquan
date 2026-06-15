@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
@@ -15,7 +16,7 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -302,6 +303,7 @@ class _TestAuthSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
 
   @override
@@ -315,6 +317,9 @@ class _TestAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> softLogout() async {}
 
   @override
   Future<void> markLaunchPromptDismissed() async {}
@@ -349,6 +354,7 @@ class _MutableAuthSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {
     authenticated = true;
   }
@@ -366,6 +372,11 @@ class _MutableAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {
+    authenticated = false;
+  }
+
+  @override
+  Future<void> softLogout() async {
     authenticated = false;
   }
 
@@ -408,9 +419,22 @@ void main() {
 
       expect(find.text('首页'), findsWidgets);
       expect(find.text('精品'), findsWidgets);
-      expect(find.text('消息'), findsWidgets);
       expect(find.text('我'), findsWidgets);
       expect(find.text(UITextConstants.bottomNavGuestProfile), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text(UITextConstants.chatPrimaryContacts),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text(AppConceptConstants.chat),
+        ),
+        findsNothing,
+      );
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
@@ -495,8 +519,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text(UITextConstants.createActionWrite), findsOneWidget);
-      expect(find.text(UITextConstants.createActionGallery), findsOneWidget);
+      expect(find.text('发布'), findsOneWidget);
+      expect(find.text('互动'), findsOneWidget);
+      expect(find.text('写长文'), findsOneWidget);
+      expect(find.text('发图片'), findsOneWidget);
     });
 
     testWidgets('游客点加号先开动作面板（不弹登录），后置到具体动作再拦截', (tester) async {
@@ -515,11 +541,11 @@ void main() {
 
       // 加号后置登录：先出现动作面板，不弹登录页。
       expect(find.byType(LoginPage), findsNothing);
-      expect(find.text(UITextConstants.createActionWrite), findsOneWidget);
-      expect(find.text(UITextConstants.addContactSheetTitle), findsOneWidget);
+      expect(find.text('写长文'), findsOneWidget);
+      expect(find.text('加联系'), findsOneWidget);
 
       // 选「添加联系人」这一账号态动作时才触发登录。
-      await tester.tap(find.text(UITextConstants.addContactSheetTitle));
+      await tester.tap(find.text('加联系'));
       await tester.pumpAndSettle();
 
       expect(find.byType(LoginPage), findsOneWidget);
@@ -634,7 +660,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.byIcon(FluentIcons.person_circle_24_regular),
+          matching: find.byType(AppProfilePersonIcon),
         ),
       );
       await tester.pumpAndSettle();
@@ -649,6 +675,36 @@ void main() {
       expect(find.byType(HomePage), findsOneWidget);
       expect(find.text('Page Not Found'), findsNothing);
 
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('游客点底栏「联系」仍走现有聊天登录门，关闭回首页且不回环', (tester) async {
+      AuthGate.resetDebounce();
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildShellRouter(authenticated: false));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text(UITextConstants.chatPrimaryContacts),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsOneWidget);
+      expect(find.text('CHAT_PAGE'), findsNothing);
+
+      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsNothing);
+      expect(find.byType(MainAppShell), findsOneWidget);
+      expect(find.byType(HomePage), findsOneWidget);
+      expect(find.text('Page Not Found'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(LoginPage), findsNothing);
       await tester.pump(const Duration(seconds: 3));
     });
 
@@ -738,6 +794,8 @@ void main() {
       final bottomInset =
           tester.view.viewPadding.bottom / tester.view.devicePixelRatio;
       final navHeight = AppSpacing.bottomNavBarHeight(navElement);
+      final expectedIconSize = AppSpacing.bottomNavBarItemIconSize(navElement);
+      final inactiveColor = AppColors.iosSecondaryLabel(navElement);
       final expectedHeight = navHeight + bottomInset;
       final homeIcon = find.descendant(
         of: navFinder,
@@ -745,21 +803,45 @@ void main() {
       );
       final premiumIcon = find.descendant(
         of: navFinder,
-        matching: find.byType(AppPremiumMarkIcon),
+        matching: find.byType(AppOpenWindowIcon),
       );
-      final messageIcon = find.descendant(
+      final contactsIcon = find.descendant(
         of: navFinder,
-        matching: find.byType(AppMessagesIcon),
+        matching: find.byType(AppContactsIcon),
       );
       final profileIcon = find.descendant(
         of: navFinder,
-        matching: find.byIcon(FluentIcons.person_circle_24_regular),
+        matching: find.byType(AppProfilePersonIcon),
       );
       final navTop = tester.getTopLeft(navFinder).dy;
       final iconTop = tester.getTopLeft(homeIcon).dy;
       final iconCenterY = tester.getCenter(homeIcon).dy;
 
       expect(navSize.height, closeTo(expectedHeight, 0.5));
+      expect(
+        tester.widget<AppOpenWindowIcon>(premiumIcon).size,
+        expectedIconSize,
+      );
+      expect(tester.widget<AppOpenWindowIcon>(premiumIcon).filled, isFalse);
+      expect(
+        tester.widget<AppOpenWindowIcon>(premiumIcon).color,
+        inactiveColor,
+      );
+      expect(
+        tester.widget<AppContactsIcon>(contactsIcon).size,
+        expectedIconSize,
+      );
+      expect(tester.widget<AppContactsIcon>(contactsIcon).filled, isFalse);
+      expect(tester.widget<AppContactsIcon>(contactsIcon).color, inactiveColor);
+      expect(
+        tester.widget<AppProfilePersonIcon>(profileIcon).size,
+        expectedIconSize,
+      );
+      expect(tester.widget<AppProfilePersonIcon>(profileIcon).filled, isFalse);
+      expect(
+        tester.widget<AppProfilePersonIcon>(profileIcon).color,
+        inactiveColor,
+      );
       final iconToTop = iconTop - navTop;
       expect(iconToTop, greaterThanOrEqualTo(0));
       expect(iconToTop, lessThan(navHeight / 2));
@@ -768,13 +850,107 @@ void main() {
         lessThan(1),
       );
       expect(
-        (tester.getCenter(messageIcon).dy - iconCenterY).abs(),
+        (tester.getCenter(contactsIcon).dy - iconCenterY).abs(),
         lessThan(1),
       );
       expect(
         (tester.getCenter(profileIcon).dy - iconCenterY).abs(),
         lessThan(1),
       );
+    });
+
+    testWidgets('底部导航图标尺寸按手机、平板、Web 高保规格响应式适配', (tester) async {
+      _suppressExpectedErrors();
+
+      Future<double> iconSizeForLogicalWidth(double width) async {
+        tester.view.physicalSize = Size(width * 3, 2556);
+        tester.view.devicePixelRatio = 3.0;
+        late double resolvedSize;
+        await tester.pumpWidget(
+          MediaQuery(
+            data: MediaQueryData(size: Size(width, 852)),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Builder(
+                builder: (context) {
+                  resolvedSize = AppSpacing.bottomNavBarItemIconSize(context);
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        return resolvedSize;
+      }
+
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      expect(await iconSizeForLogicalWidth(390), 28.0);
+      expect(await iconSizeForLogicalWidth(820), 32.0);
+      expect(await iconSizeForLogicalWidth(1200), 40.0);
+    });
+
+    testWidgets('底部导航自绘图标选中态使用主蓝并保持语义形态', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildShell(AppRoutePaths.chat));
+      await tester.pumpAndSettle();
+
+      final navFinder = find.byType(BottomNavigationWidget);
+      final navElement = tester.element(navFinder);
+      final expectedIconSize = AppSpacing.bottomNavBarItemIconSize(navElement);
+      final inactiveColor = AppColors.iosSecondaryLabel(navElement);
+      final premiumIcon = find.descendant(
+        of: navFinder,
+        matching: find.byType(AppOpenWindowIcon),
+      );
+      final contactsIcon = find.descendant(
+        of: navFinder,
+        matching: find.byType(AppContactsIcon),
+      );
+      final profileIcon = find.descendant(
+        of: navFinder,
+        matching: find.byType(AppProfilePersonIcon),
+      );
+
+      final premium = tester.widget<AppOpenWindowIcon>(premiumIcon);
+      final contacts = tester.widget<AppContactsIcon>(contactsIcon);
+      final profile = tester.widget<AppProfilePersonIcon>(profileIcon);
+
+      expect(premium.size, expectedIconSize);
+      expect(contacts.size, expectedIconSize);
+      expect(profile.size, expectedIconSize);
+      expect(premium.filled, isFalse);
+      expect(contacts.filled, isTrue);
+      expect(profile.filled, isFalse);
+      expect(premium.color, inactiveColor);
+      expect(contacts.color, AppColors.primaryColor);
+      expect(profile.color, inactiveColor);
+      expect(
+        (tester.getCenter(premiumIcon).dy - tester.getCenter(contactsIcon).dy)
+            .abs(),
+        lessThan(1),
+      );
+      expect(
+        (tester.getCenter(profileIcon).dy - tester.getCenter(contactsIcon).dy)
+            .abs(),
+        lessThan(1),
+      );
+
+      await tester.pumpWidget(_buildShell(AppRoutePaths.profile));
+      await tester.pumpAndSettle();
+
+      final profileNavFinder = find.byType(BottomNavigationWidget);
+      final selectedProfile = tester.widget<AppProfilePersonIcon>(
+        find.descendant(
+          of: profileNavFinder,
+          matching: find.byType(AppProfilePersonIcon),
+        ),
+      );
+
+      expect(selectedProfile.filled, isTrue);
+      expect(selectedProfile.color, AppColors.primaryColor);
     });
 
     testWidgets('底部导航背景与 post 表面色一致', (tester) async {
@@ -979,7 +1155,10 @@ void main() {
       expect(find.text(UITextConstants.workFormatFilterAll), findsWidgets);
       expect(find.text(UITextConstants.workFormatFilterVideo), findsWidgets);
       expect(find.text(UITextConstants.workFormatFilterImage), findsOneWidget);
-      expect(find.text(UITextConstants.workFormatFilterArticle), findsOneWidget);
+      expect(
+        find.text(UITextConstants.workFormatFilterArticle),
+        findsOneWidget,
+      );
       expect(
         find.text(UITextConstants.webPcSearchHintFeatured),
         findsOneWidget,

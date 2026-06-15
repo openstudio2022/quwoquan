@@ -118,7 +118,11 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 			writeRuntimeNotFound(w, r)
 			return
 		}
-		homepage, err := h.service.GetHomepage(r.Context(), homepageID)
+		homepage, err := h.service.GetHomepageForViewer(
+			r.Context(),
+			homepageID,
+			resolveViewerID(r),
+		)
 		if err != nil {
 			writeError(w, r, err)
 			return
@@ -128,6 +132,29 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch segments[1] {
+	case "follow":
+		if len(segments) != 2 {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		var (
+			homepage *application.Homepage
+			err      error
+		)
+		switch r.Method {
+		case http.MethodPost:
+			homepage, err = h.service.FollowHomepage(r.Context(), homepageID, resolveViewerID(r))
+		case http.MethodDelete:
+			homepage, err = h.service.UnfollowHomepage(r.Context(), homepageID, resolveViewerID(r))
+		default:
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, homepage)
 	case "shell":
 		if r.Method != http.MethodGet || len(segments) != 2 {
 			writeRuntimeNotFound(w, r)

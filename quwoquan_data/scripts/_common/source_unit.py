@@ -108,6 +108,7 @@ def write_source_unit(
     platform: str = "",
     source_category: str = "",
     source_use_mode: str = "",
+    research_lane: str = "",
     license_value: str = "",
     url: str = "",
     title: str = "",
@@ -173,6 +174,8 @@ def write_source_unit(
             "sourceAssetId": f"{ordinal:03d}_{k:03d}",
             "fileName": file_name,
             "url": str(img.get("url") or ""),
+            "requestedUrl": str(img.get("requestedUrl") or img.get("url") or ""),
+            "normalizedFromUrl": str(img.get("normalizedFromUrl") or ""),
             "sourceUrl": str(img.get("sourceUrl") or img.get("url") or ""),
             "contentType": str(img.get("contentType") or ""),
             "width": int(width) if width else 0,
@@ -188,6 +191,10 @@ def write_source_unit(
             "generationPromptHash": str(img.get("generationPromptHash") or ""),
             "generatedAt": str(img.get("generatedAt") or ""),
             "syntheticDisclosure": str(img.get("syntheticDisclosure") or ""),
+            "sourceCollectionId": str(img.get("sourceCollectionId") or ""),
+            "creator": str(img.get("creator") or img.get("credit") or ""),
+            "collectionPageUrl": str(img.get("collectionPageUrl") or img.get("sourceUrl") or ""),
+            "authorizationProof": str(img.get("authorizationProof") or ""),
             "caption": str(img.get("caption") or ""),
             "relevance": str(img.get("relevance") or relevance or ""),
             "variants": variants_meta,
@@ -204,6 +211,7 @@ def write_source_unit(
         "sourceKind": source_category or platform or "web",
         "platform": platform or "web",
         "sourceUseMode": source_use_mode,
+        "researchLane": research_lane,
         "license": license_value,
         "url": url,
         "title": title,
@@ -286,6 +294,8 @@ def object_image_candidates(
     """
     out: list[dict[str, Any]] = []
     for unit in iter_source_units(object_dir):
+        unit_meta_path = unit / SOURCE_UNIT_MANIFEST
+        unit_meta = read_json(unit_meta_path) if unit_meta_path.is_file() else {}
         index = {}
         idx_path = unit / SOURCE_UNIT_ASSET_INDEX
         if idx_path.is_file():
@@ -307,6 +317,15 @@ def object_image_candidates(
                     "sourceAssetRef": relative_batch_ref(asset, task_id, batch_id),
                     "caption": meta.get("caption", ""),
                     "relevance": meta.get("relevance", ""),
+                    "researchLane": unit_meta.get("researchLane") or "",
+                    "sourceCollectionId": meta.get("sourceCollectionId") or "",
+                    "creator": meta.get("creator") or meta.get("credit") or "",
+                    "collectionPageUrl": meta.get("collectionPageUrl") or meta.get("sourceUrl") or "",
+                    "license": meta.get("license") or "",
+                    "termsUrl": meta.get("termsUrl") or "",
+                    "licenseSnapshot": meta.get("licenseSnapshot") or "",
+                    "authorizationProof": meta.get("authorizationProof") or "",
+                    "usageScope": meta.get("usageScope") or "",
                 }
             )
     return out

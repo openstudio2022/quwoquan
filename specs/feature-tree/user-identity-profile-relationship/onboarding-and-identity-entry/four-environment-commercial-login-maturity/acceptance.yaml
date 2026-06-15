@@ -1,0 +1,241 @@
+version: 2
+node:
+  id: four-environment-commercial-login-maturity
+  level: L3_story
+  path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity
+  title: four environment commercial login maturity
+  parent_domain_service: user-identity-profile-relationship
+  parent_business_capability: onboarding-and-identity-entry
+scope:
+  summary: 四环境（alpha/beta/gamma/prod）× 三类外部依赖（短信OTP/运营商一键/社交OAuth）注入矩阵、gamma 受控放通、社交三方票据置换与首登资料同步、凭证唯一性与生产纯净。
+  in_scope:
+    - 三类外部依赖防腐接口与分环境注入（mock/sandbox/real）
+    - gamma SandboxAllowlist 受控放通（sms_otp/social/one_tap）
+    - LoginWithSocialProvider 微信/支付宝/QQ 票据置换与首登资料同步
+    - LoginWithAlipay / LoginWithQq metadata 契约与 codegen
+    - 凭证全局唯一与 owner 内每类型唯一
+    - 端侧 NativeAuthBridge sandbox 注入与 LoginPage 三方登录无死循环
+    - shouldRevealOtpDebugCode 扩展 gamma 受控放通
+    - verify_sms_otp_pass_through_gate 允许 gamma 受控放通、强制 prod 严格
+  out_of_scope:
+    - Apple / Passkey 正式 SDK 登录
+    - 支付宝/QQ prod 真实 OAuth 凭证与签名置换（登记技术债）
+    - 第三方头像转存自有 CDN
+gwt_acceptance:
+  GWT1:
+    title: 四环境矩阵冻结且 gamma 受控放通合法、prod 严格
+    given:
+      - alpha/beta 全局放通已登记技术债；gamma 配置 sandbox_allowlist；prod 无任何放通与白名单。
+    when:
+      - 运行登录受控放通门禁。
+    then:
+      - gamma sandbox_allowlist 开启时必须登记 debt_id/owner/expires_at 且名单非空。
+      - prod 任何 sandbox_allowlist 开启或全局放通都被阻断。
+      - 门禁通过表示四环境矩阵一致。
+    done_when:
+      - 四环境登录依赖矩阵在配置与门禁中同源表达。
+      - gamma 只允许登记完整的受控放通，prod 严格阻断任何放通。
+    contract_refs:
+      - quwoquan_service/services/user-service/configs/gamma/config.yaml
+      - quwoquan_service/services/user-service/configs/prod/config.yaml
+      - quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
+    performance_points:
+      - 受控放通门禁必须可在本地和 CI 中确定性执行，不依赖真实上游。
+    evidence:
+      primary: [T1_static_contract]
+      supporting: [T3_app_api_integration]
+    tests:
+      planned:
+        - quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
+      recorded:
+        - python3 quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
+    status: completed
+  GWT2:
+    title: gamma 短信 OTP 受控放通仅命中白名单回填验证码
+    given:
+      - user-service 注入 gamma SandboxAllowlist，白名单含某测试号段。
+    when:
+      - 白名单号码与非白名单号码分别请求 SendOtp。
+    then:
+      - 白名单号码 deliveryStatus=sandbox 且回填可被严格校验的真实验证码。
+      - 非白名单号码不回填、不进入 sandbox 状态，走真实下发严格校验。
+    done_when:
+      - gamma 白名单与非白名单 OTP 行为被同一套 application 测试覆盖。
+      - 非白名单号码无法通过 sandbox 路径拿到 debugCode。
+    contract_refs:
+      - quwoquan_service/services/user-service/internal/application/sandbox_allowlist_test.go
+      - quwoquan_service/services/user-service/configs/gamma/config.yaml
+    performance_points:
+      - OTP sandbox 判定必须是本地配置查表，不引入额外网络调用。
+    evidence:
+      primary: [T2_module_interaction]
+      supporting: [T1_static_contract]
+    tests:
+      planned:
+        - quwoquan_service/services/user-service/internal/application/sandbox_allowlist_test.go
+      recorded:
+        - cd quwoquan_service && go test ./services/user-service/internal/application/ -run 'TestSandboxAllowlist|TestSendOtpSandboxAllowlist'
+    status: completed
+  GWT3:
+    title: 社交三方票据置换分环境实现且 prod 不伪造成功
+    given:
+      - mock（alpha/beta）、sandbox（gamma）、http（prod）三类 ExternalAuthProviderClient。
+    when:
+      - 分别用相同/不同 authCode、白名单/非白名单 token、未配置 provider 进行 Exchange。
+    then:
+      - mock 对同一 authCode 返回确定性身份、不同 authCode 返回不同身份。
+      - sandbox 命中白名单返回沙箱身份，未命中委托真实实现。
+      - http 未配置 app 凭证时返回结构化 unavailable，不伪造成功。
+    done_when:
+      - mock、sandbox、http 三类 ExternalAuthProviderClient 均有确定性测试。
+      - prod 未配置支付宝/QQ 凭证时只返回结构化 unavailable，不产生成功身份。
+    contract_refs:
+      - quwoquan_service/services/user-service/internal/infrastructure/integration/external_auth_provider_client_test.go
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+      - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
+    performance_points:
+      - sandbox 命中白名单时应本地返回；未命中真实上游时必须保留超时与结构化失败语义。
+    evidence:
+      primary: [T2_module_interaction]
+      supporting: [T1_static_contract]
+    tests:
+      planned:
+        - quwoquan_service/services/user-service/internal/infrastructure/integration/external_auth_provider_client_test.go
+      recorded:
+        - cd quwoquan_service && go test ./services/user-service/internal/infrastructure/integration/ -run TestMockExternalAuthProvider -run TestSandboxExternalAuthProvider -run TestHTTPExternalAuthProvider
+    status: completed
+  GWT4:
+    title: 社交首登创建账号并同步昵称头像
+    given:
+      - 某社交身份首次登录，App 上传短期 authCode。
+    when:
+      - 服务端 LoginWithSocialProvider 置换身份并首登。
+    then:
+      - 创建 owner + primary persona + credential，credentialKey 由 unionId/appOpenId 生成。
+      - 用厂商资料初始化昵称（去重）与头像。
+      - 二次同一身份登录命中既有 credential，不重复创建。
+    done_when:
+      - 社交首登和二次登录都被 auth contract 测试覆盖。
+      - owner、primary persona、credential 与昵称头像初始化结果可在真实存储验证。
+    contract_refs:
+      - quwoquan_service/contracts/metadata/user/user_profile/fields.yaml
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+      - quwoquan_service/services/user-service/tests/auth_contract_test.go
+    performance_points:
+      - 社交票据置换 P95 <= 1500ms；首登资料同步 P95 <= 1000ms，资料同步失败不阻断登录。
+    evidence:
+      primary: [T3_app_api_integration]
+      supporting: [T2_module_interaction]
+    tests:
+      planned:
+        - quwoquan_service/services/user-service/tests/auth_contract_test.go
+      recorded: []
+    status: pending
+  GWT5:
+    title: 端侧社交登录命中 metadata 且失败不回环
+    given:
+      - 端侧注入 SandboxNativeAuthBridge，RemoteAuthRepository 指向 gateway。
+    when:
+      - 用户点击微信/支付宝/QQ 登录，或第三方授权取消/不可用。
+    then:
+      - loginAlipay/loginQq 命中 metadata path 与 pageId 并透传 authCode。
+      - 失败/取消只就近提示并保持登录页可重试，关闭回安全态不二次弹登录。
+    done_when:
+      - App 端社交登录 Repository、NativeAuthBridge 和 LoginPage 状态均有 T2 覆盖。
+      - 授权取消、provider 不可用和服务错误不会触发登录回环。
+    contract_refs:
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+      - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
+      - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    performance_points:
+      - 登录页错误恢复必须就近完成，不造成页面重建死循环或重复弹窗。
+    evidence:
+      primary: [T2_module_interaction]
+      supporting: [T1_static_contract]
+    tests:
+      planned:
+        - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+        - quwoquan_app/test/ui/user/login_page_widget_test.dart
+      recorded:
+        - cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart test/ui/user/login_page_widget_test.dart
+        - cd quwoquan_app && make verify-app-login-entry-loop-contract
+    status: completed
+  GWT6:
+    title: 调试码仅 gamma 受控放通回填，生产永不回填
+    given:
+      - shouldRevealOtpDebugCode 输入不同 runtimeEnv 与 deliveryStatus。
+    when:
+      - 计算是否回填调试码。
+    then:
+      - gamma 仅 deliveryStatus=sandbox 才回填。
+      - prod 即使收到 sandbox 也不回填。
+    done_when:
+      - shouldRevealOtpDebugCode 覆盖 alpha/beta/gamma/prod 与 sandbox/non-sandbox 组合。
+      - prod 在任何输入下都不会回填 debugCode。
+    contract_refs:
+      - quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - quwoquan_service/services/user-service/configs/prod/config.yaml
+    performance_points:
+      - 调试码显示判定必须为端侧纯函数或等价本地状态判断，不依赖网络。
+    evidence:
+      primary: [T2_module_interaction]
+    tests:
+      planned:
+        - quwoquan_app/test/ui/user/login_page_widget_test.dart
+      recorded:
+        - cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+    status: completed
+contract_acceptance:
+  CONTRACT1:
+    title: 社交 metadata/codegen/错误码契约一致
+    done_when:
+      - LoginWithAlipay / LoginWithQq 为 public operation 且 request/response 由 metadata 生成。
+      - CredentialType 枚举包含 alipay/qq。
+      - USER.AUTH 社交错误码生成 Dart/Go 常量。
+      - 端侧 RemoteAuthRepository 消费生成的 path/pageId，不硬编码。
+    evidence:
+      primary: [T1_static_contract]
+      supporting: [T3_app_api_integration]
+    tests:
+      planned:
+        - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+      recorded:
+        - cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart
+    status: completed
+  CONTRACT2:
+    title: 凭证唯一性约束契约
+    done_when:
+      - 全局 credential_type+credential_key 唯一。
+      - owner 内 owner_id+credential_type 唯一。
+    evidence:
+      primary: [T3_app_api_integration]
+      supporting: [T1_static_contract]
+    tests:
+      planned:
+        - quwoquan_service/services/user-service/tests/auth_contract_test.go
+      recorded: []
+    status: pending
+uat_acceptance:
+  UAT1:
+    title: 四环境端到端与商用纯净证据
+    done_when:
+      - alpha/beta mock 链路六类登录可走通。
+      - gamma 沙箱白名单走通真实链路，普通号严格。
+      - prod 无放通、无 debugCode、无 mock 数据源。
+      - 社交首登资料同步真机可见。
+      - 受控放通技术债登记且有过期治理。
+    evidence:
+      primary: [T4_e2e_journey]
+      supporting: [T2_module_interaction, T3_app_api_integration]
+    tests:
+      planned:
+        - manual four-env login smoke evidence
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+    - python3 quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
+    - make verify-app-login-entry-loop-contract
+  full_gate:
+    - make gate

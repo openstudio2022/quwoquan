@@ -21,12 +21,16 @@ const (
 	originCodeAnonymousDevice = "ad"
 	originCodePhone           = "ph"
 	originCodeWechat          = "wx"
+	originCodeAlipay          = "al"
+	originCodeQq              = "qq"
 	originCodeApple           = "ap"
 	originCodeMigratedSeed    = "mg"
 
 	identityOriginAnonymousDevice = "anonymous_device"
 	identityOriginPhone           = "phone"
 	identityOriginWechat          = "wechat"
+	identityOriginAlipay          = "alipay"
+	identityOriginQq              = "qq"
 	identityOriginApple           = "apple"
 	identityOriginMigratedSeed    = "migrated_seed"
 
@@ -99,10 +103,14 @@ func identityOriginForCredentialType(credType string) (identityOrigin string, or
 	switch strings.TrimSpace(credType) {
 	case credentialAnonymousDevice:
 		return identityOriginAnonymousDevice, originCodeAnonymousDevice
-	case credentialPhone:
+	case credentialPhone, credentialCarrierPhone:
 		return identityOriginPhone, originCodePhone
 	case credentialWechat:
 		return identityOriginWechat, originCodeWechat
+	case credentialAlipay:
+		return identityOriginAlipay, originCodeAlipay
+	case credentialQq:
+		return identityOriginQq, originCodeQq
 	case credentialApple:
 		return identityOriginApple, originCodeApple
 	default:

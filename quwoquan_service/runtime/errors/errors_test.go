@@ -46,6 +46,91 @@ func TestWriteHTTPErrorPropagatesIDs(t *testing.T) {
 	}
 }
 
+func TestRecoveryFromAppErrorDownlinked(t *testing.T) {
+	err := NewAppError(NewCode(ModuleUser, KindUser, "otp_rate_limited"), "发送过于频繁", "throttled").
+		WithRecovery("retry", 42)
+
+	body := ToResponse(err, "req-1", "trace-1")
+
+	if body.Recovery.Action != "retry" {
+		t.Fatalf("expected recovery action retry, got %q", body.Recovery.Action)
+	}
+	if body.Recovery.AfterSeconds != 42 {
+		t.Fatalf("expected afterSeconds 42, got %d", body.Recovery.AfterSeconds)
+	}
+	if body.Recovery.DisruptionLevel != "snackbar" {
+		t.Fatalf("expected snackbar disruption, got %q", body.Recovery.DisruptionLevel)
+	}
+}
+
+func TestRecoveryDefaultsWhenAbsent(t *testing.T) {
+	transient := ToResponse(NewUnavailable(ModuleGateway, "上游不可用", "down"), "req", "trace")
+	if transient.Recovery.Action != "retry" || transient.Recovery.DisruptionLevel != "snackbar" {
+		t.Fatalf("transient should default retry/snackbar, got %+v", transient.Recovery)
+	}
+
+	validation := ToResponse(NewInvalidArgument(ModuleUser, "参数错误", "bad"), "req", "trace")
+	if validation.Recovery.Action != "surface" || validation.Recovery.DisruptionLevel != "inlineCard" {
+		t.Fatalf("validation should default surface/inlineCard, got %+v", validation.Recovery)
+	}
+}
+
+func TestUserMessageOverrideFailSafe(t *testing.T) {
+	t.Cleanup(func() { SetUserMessageResolver(nil) })
+
+	code := NewCode(ModuleUser, KindUser, "otp_mismatch")
+	baseline := NewAppError(code, "验证码不正确", "mismatch")
+
+	// 命中 override：返回运营态文案。
+	SetUserMessageResolver(func(c string, locale string) (string, bool) {
+		if c == "USER.USER.otp_mismatch" && locale == "zh" {
+			return "验证码错误，请重新输入", true
+		}
+		return "", false
+	})
+	got := ToResponseWithOptions(baseline, ResponseOptions{Locale: "zh"})
+	if got.UserMessage != "验证码错误，请重新输入" {
+		t.Fatalf("expected override message, got %q", got.UserMessage)
+	}
+
+	// 未命中 locale：回退 codegen baseline（fail-safe）。
+	fallback := ToResponseWithOptions(NewAppError(code, "验证码不正确", "mismatch"), ResponseOptions{Locale: "en"})
+	if fallback.UserMessage != "验证码不正确" {
+		t.Fatalf("expected baseline fallback, got %q", fallback.UserMessage)
+	}
+
+	// resolver 返回空串：同样回退 baseline。
+	SetUserMessageResolver(func(string, string) (string, bool) { return "  ", true })
+	empty := ToResponseWithOptions(NewAppError(code, "验证码不正确", "mismatch"), ResponseOptions{Locale: "zh"})
+	if empty.UserMessage != "验证码不正确" {
+		t.Fatalf("empty override should fall back to baseline, got %q", empty.UserMessage)
+	}
+}
+
+func TestLocaleFromRequest(t *testing.T) {
+	cases := map[string]string{
+		"":               "zh",
+		"zh-CN":          "zh",
+		"en-US,en;q=0.9": "en",
+		"  en  ":         "en",
+	}
+	for header, want := range cases {
+		req := httptest.NewRequest(http.MethodGet, "/v1/x", nil)
+		if header != "" {
+			req.Header.Set("Accept-Language", header)
+		}
+		if got := localeFromRequest(req); got != want {
+			t.Fatalf("locale for %q: want %q got %q", header, want, got)
+		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "/v1/x", nil)
+	req.Header.Set("X-Client-Locale", "en")
+	req.Header.Set("Accept-Language", "zh-CN")
+	if got := localeFromRequest(req); got != "en" {
+		t.Fatalf("X-Client-Locale should win, got %q", got)
+	}
+}
+
 func TestRouteNotFoundMapsToHTTPNotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
 	WriteHTTPError(

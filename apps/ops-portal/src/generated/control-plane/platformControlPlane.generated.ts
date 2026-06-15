@@ -500,6 +500,25 @@ export const platformControlPlane = {
           "approval_mode": "dual"
         }
       ]
+    },
+    {
+      "object_kind": "snapshot",
+      "object_type": "prod_plane_access_isolation",
+      "label": "Prod 平面访问隔离映射",
+      "source_entity": "ProdPlaneAccessIsolation",
+      "view_model": "ProdPlaneAccessIsolation",
+      "risk_level": "high",
+      "deployment_profile": "audit_heavy",
+      "operations": [
+        {
+          "operation": "ListProdPlaneAccessIsolation",
+          "method": "GET",
+          "path": "/v1/control-plane/platform/topology/prod-plane-access-isolation",
+          "scopes": [
+            "ops.platform.dependency.read"
+          ]
+        }
+      ]
     }
   ]
 } as const;

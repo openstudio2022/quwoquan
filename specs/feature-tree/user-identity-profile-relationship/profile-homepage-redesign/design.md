@@ -406,7 +406,7 @@ lib/ui/user/
 
 ## Story 与测试层映射
 
-本 L2 特性按以下 L4 Story 分解（design 阶段确定 story 边界，树内任务文档 细化工程步骤）：
+本 L2 特性按以下 L3 Story 分解（design 阶段确定 story 边界，实施步骤回收到 Story 的 `spec.md` / `acceptance.yaml` 与会话计划，不写入正式特性树任务文档）：
 
 | Story | 范围 | 主要验收项 | 测试层 |
 |-------|------|-----------|--------|

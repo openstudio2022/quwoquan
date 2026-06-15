@@ -319,6 +319,9 @@ String pageNameFromRouteLocation(String location) {
   if (path == AppRoutePaths.myIntersectionsPathTemplate) {
     return 'my_intersections';
   }
+  if (path == AppRoutePaths.objectIntersectionsPathTemplate) {
+    return 'object_intersections';
+  }
   if (path == AppRoutePaths.myFootprintPathTemplate) return 'my_footprint';
   if (path.startsWith('/rtc/outgoing/')) return 'rtc_outgoing';
   if (path.startsWith('/rtc/incoming/')) return 'rtc_incoming';

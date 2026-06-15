@@ -297,12 +297,13 @@ def build_gamma_manifest() -> dict[str, Any]:
     seed_refs: list[dict[str, Any]] = []
     for entry in manifest.get("seedRefs", []):
         fixture_path = str(entry.get("fixturePath") or "").strip()
-        curated_refs = CURATED_REFS.get(fixture_path)
+        source_fixture_path = fixture_path.replace(".gamma-curated.json", ".json")
+        curated_refs = CURATED_REFS.get(source_fixture_path)
         if curated_refs is None:
             seed_refs.append(dict(entry))
             continue
         next_entry = dict(entry)
-        next_entry["fixturePath"] = fixture_path.replace(".json", ".gamma-curated.json")
+        next_entry["fixturePath"] = source_fixture_path.replace(".json", ".gamma-curated.json")
         next_entry["refs"] = curated_refs
         seed_refs.append(next_entry)
     next_manifest = dict(manifest)

@@ -13,7 +13,7 @@
 | 已有脚本 | `config_release_gray_rollout.sh`（步进状态）、`config_release_slo_gate.sh`（SLO 决策）、`config_release_rollback.sh`（回滚）、`config_release_apply_stage.sh`（步进 + SLO + 自动回滚） |
 | 灰度步进 | STEP ∈ {5, 25, 50, 100}，顺序不可逆；脚本已支持 |
 | SLO 决策 | continue(0) / pause(10) / rollback(20)；rollback 时脚本内会调用 `config_release_rollback.sh` |
-| 实际部署 | 当前 runbook 未绑定「谁执行 kubectl apply 到 prod」；设计里假定由 workflow 或下游系统根据 state/版本执行 apply |
+| 实际部署 | 远端唯一托管目标 `prod-hosted`（ssh-hosted）；由 `deploy_to_prod.sh` 按四平面账号 `prod-<plane>-svc` SSH 自登录 prod ECS 执行 `podman compose` apply + rollout + 回滚（已退役 kubectl/`PROD_KUBECONFIG`） |
 | 包纯度 | prod 只读取 `prod` env package / service env package；禁止任何 alpha/mock/seed/debug/local/test host 进入 prod artifact |
 
 ### 1.0 GitHub Environment `production`（`07. Deploy To Prod (Auto)`）
@@ -117,17 +117,21 @@ stages:
 | `redis_error_rate` | string | 是（SLO） | Redis 错误率 |
 | `dry_run` | boolean | 否 | true 仅校验 + 写 state，不执行 prod apply |
 
-**Secrets**：
+**Secrets**（按平面 SSH，去 root；已退役单一 `PROD_KUBECONFIG`）：
 
-- `PROD_KUBECONFIG`：生产集群 kubeconfig（base64），用于 `kubectl apply`。
+- `PROD_SSH_HOST`：prod ECS SSH 主机（缺省可由 topology `prod-hosted.publicBases.api` 解析）。
+- `PROD_EDGE_SSH_KEY` / `PROD_MEDIA_SSH_KEY` / `PROD_SERVICE_SSH_KEY`：四平面读写账号 `prod-<plane>-svc` 的 SSH 私钥。
+- `PROD_DATA_SSH_KEY`（只读审计） / `PROD_OPS_SSH_KEY`（一次性 bootstrap 中转）。
+- 访问隔离映射唯一真相源：`deploy/shared/prod_plane_access_isolation.yaml`。
 
 **Job 顺序**（单步）：
 
 1. **validate**：校验 `step` 与 `state/release/<service>.state` 中上一步是否衔接；校验 `releases/config/<service>/<to_config>.yaml` 存在。
 2. **deploy-prod-step**（可选，dry_run=false 时执行）：
-   - 使用 `to_image` / `to_config` 构建 `deploy/kustomization/<cloud_provider>-prod`（通过 env 或 kustomize replacements 注入版本）。
-   - `kubectl apply -f -` 到 prod 集群（使用 PROD_KUBECONFIG）。
-   - 等待 rollout：`kubectl rollout status deployment/... -n seed-box-prod --timeout=5m`。
+   - 真实发布前先 `validate_prod_plane_credentials.py --stage <gray-initial|full>` 硬校验本 stage 适用平面凭据。
+   - `deploy_to_prod.sh` 按平面账号 `prod-<plane>-svc` 自登录 prod ECS，`podman compose -p quwoquan-<plane>-<instance>` 拉起本平面 governedWorkloads。
+   - rollout 等待以 compose healthcheck 为真相源；失败按 `PREVIOUS_IMAGE_VERSION` 回滚本平面。
+   - `gray-initial` 走灰度实例命名空间（`-gray`），`full` 走正式实例（`-prod`）。
 3. **gray-rollout-state**：执行 `make config-gray-rollout SERVICE=... FROM_IMAGE=... TO_IMAGE=... FROM_CONFIG=... TO_CONFIG=... STEP=...`，更新 `state/release`。
 4. **slo-gate**：执行 `make config-slo-gate ERROR_RATE=... P95_MS=... REDIS_ERROR_RATE=...`。
    - continue：job 成功，输出「本步通过，可进行下一步」。
@@ -233,7 +237,7 @@ v*-rc* tag push / main merge
 
 ## 5. 实施顺序建议
 
-1. **先上半自动**：新增手动触发的半自动生产灰度 workflow（`workflow_dispatch`），实现单步灰度 + 手填 SLO + 可选 prod apply；补齐 `PROD_KUBECONFIG` 与 prod 构建/apply 脚本；当前 step 为 50（初始）→ 100（全量）。
+1. **先上半自动**：新增手动触发的半自动生产灰度 workflow（`workflow_dispatch`），实现单步灰度 + 手填 SLO + 可选 prod apply；prod apply 走按平面 SSH 凭据（`PROD_<PLANE>_SSH_KEY`）+ `deploy_to_prod.sh`，当前 step 为 50（初始）→ 100（全量）。
 2. **再上全自动**：新增 `deploy-prod-auto.yml` 或 pre-release-gate 内 deploy-prod 链：**初始灰度**（1 pod，可配置）全自动 deploy + SLO；**Carry-on 100%** 使用 Protected Environment approval 或 workflow_dispatch 续跑。
 3. **配置扩展**：引入 `deploy/shared/gray_rollout_stages.yaml`（或等效），声明 `stages: [{replicas, auto}]`；workflow 按配置计算 STEP、决定各阶段是否审批；副本增加时仅改配置即可增加滚动阶段。
 

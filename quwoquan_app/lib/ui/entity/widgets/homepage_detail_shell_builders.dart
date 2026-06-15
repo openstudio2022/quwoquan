@@ -22,17 +22,6 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     return const SizedBox.shrink();
   }
 
-  Widget _buildRelationRibbon(bool isDark) {
-    final edges = widget.objectPageBundle?.relationEdges;
-    if (edges == null || edges.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: EdgeInsets.only(top: AppSpacing.containerSm),
-      child: ObjectRelationRibbon(edges: edges, isDark: isDark),
-    );
-  }
-
   Widget _buildIdentityMedia(BuildContext context, String? coverUrl) {
     final source = (coverUrl ?? '').trim();
     if (source.isEmpty) {
@@ -208,19 +197,12 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           .isNotEmpty)
         (detail?.address ?? widget.initialSummary?.address ?? '').trim(),
     ].join(' · ');
-    final stats = _HomepageSummaryStats(
-      averageRating:
-          _reviewSummary?.averageRating ??
-          detail?.averageRating ??
-          widget.initialSummary?.averageRating,
-      ratingCount:
-          _reviewSummary?.ratingCount ??
-          detail?.ratingCount ??
-          widget.initialSummary?.ratingCount ??
-          0,
-      contentCount: _contentPreview.length + _questionPreview.length,
-      relatedCount: _relatedGroups.length,
-    );
+    final typeLabel = _typeLabel(reference?.homepageType ?? '');
+    final identitySubtitle = <String>[
+      if (typeLabel.trim().isNotEmpty) typeLabel.trim(),
+      if (locationLine.trim().isNotEmpty) locationLine.trim(),
+    ].join(' · ');
+    final identityMetaLine = (reference?.subtitle ?? '').trim();
 
     return Container(
       decoration: BoxDecoration(
@@ -249,9 +231,11 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           children: <Widget>[
             ObjectIdentityHeader(
               kind: ObjectIdentityKind.entity,
-              title: reference?.title ?? '主页',
-              subtitle: (reference?.subtitle ?? '').trim(),
-              metaLine: locationLine,
+              title:
+                  reference?.title ??
+                  UITextConstants.objectHomepageDefaultTitle,
+              subtitle: identitySubtitle,
+              metaLine: identityMetaLine,
               media: _buildIdentityMedia(context, reference?.coverUrl),
               trailing: _hasMoreActions
                   ? ProfileIosIconButton(
@@ -265,36 +249,17 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                   : null,
             ),
             SizedBox(height: AppSpacing.containerSm),
-            Wrap(
-              spacing: AppSpacing.intraGroupXs,
-              runSpacing: AppSpacing.intraGroupXs,
-              children: _summaryChips()
-                  .map(
-                    (chip) => _HomepageSummaryChipWidget(
-                      label: chip.label,
-                      accent: chip.accent,
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
             if (!widget.selectionMode) ...<Widget>[
               SizedBox(height: AppSpacing.containerSm),
               _HomepageActionBar(
-                canCreate: _canCreateFromHomepage,
-                canClaim: _canClaim,
-                isClaimPending: _isClaimPending,
-                isOwnerLike: _isOwnerLike,
-                onClaim: widget.onClaim,
-                onMaintain: widget.onMaintain,
-                onCreateContent: _handlePrimaryAction,
+                isFollowing: widget.detail?.viewerFollowsHomepage ?? false,
+                onToggleFollow: widget.onToggleFollow,
+                onMessageOwner: widget.onMessageOwner,
               ),
             ],
             SizedBox(height: AppSpacing.containerSm),
             _buildIntersectionCard(isDark),
             _buildEntityIntroCard(context),
-            _buildRelationRibbon(isDark),
-            SizedBox(height: AppSpacing.containerSm),
-            _HomepageStatsRow(stats: stats),
           ],
         ),
       ),

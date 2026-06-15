@@ -8,6 +8,26 @@ avatarObjectKey: cold_start/creators/campus_blogger/avatar.jpg
 headline: 记录校园生活、学校氛围和城市体验的校园博主
 bio: 从学生视角看食堂、宿舍、社团、校园周边和城市生活，尽量说具体场景。
 creatorArchetype: campus_blogger
+status: active
+verticalRefs: [campus]
+scenarioRefs: [cold_start, long_tail_fill, refresh_stale]
+claimPolicy:
+  experienceClaimMode: editorial_synthesis
+  mayUseFirstPerson: false
+  mustCiteEvidenceForClaims: true
+  forbiddenClaims: [真实亲历, 学校官方身份, 招生承诺, 就业保证]
+disclosure:
+  type: platform_virtual_creator
+  displayText: 平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。
+  visible: true
+publishCadence:
+  intervalDays: 3
+  randomizedRangeDays: [1, 5]
+  maxDailyPosts: 1
+qualityScore: 0.86
+fatigueScore: 0.2
+riskTier: low
+profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Topic/教育成长/校园生活
   - Format/内容角度/测评/校园评测

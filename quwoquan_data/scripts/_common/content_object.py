@@ -51,8 +51,8 @@ def load_index(task_id: str, batch_id: str) -> dict[str, dict[str, Any]]:
 
 
 def content_type_from_brief(brief: Mapping[str, Any]) -> str:
-    """brief.carrier=gallery → image，否则 article（与 posts/{type}/ 布局一致）。"""
-    return "image" if str(brief.get("carrier") or "") == "gallery" else "article"
+    """Image/gallery carriers live under posts/image; prose lives under article."""
+    return "image" if str(brief.get("carrier") or "") in ("image", "gallery") else "article"
 
 
 def require_title_hint(brief: Mapping[str, Any], *, ref: str = "") -> str:
@@ -60,6 +60,10 @@ def require_title_hint(brief: Mapping[str, Any], *, ref: str = "") -> str:
     title = str(brief.get("titleHint") or "").strip()
     if title:
         return title
+    if str(brief.get("carrier") or "") in ("image", "gallery") and ref:
+        # Image titles are optional publicly; the ref is only a stable routing
+        # coordinate and must not be copied into publishTitle.
+        return ref
     suffix = f" for ref={ref!r}" if ref else ""
     raise ValueError(f"titleHint missing or empty{suffix}; publish title must be decided before content object routing")
 

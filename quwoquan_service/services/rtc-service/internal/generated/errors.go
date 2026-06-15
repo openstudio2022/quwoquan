@@ -32,96 +32,96 @@ var (
 // AppErrorFromCallNotFound returns *AppError for RTC.USER.call_not_found (user_message from errors.yaml).
 func AppErrorFromCallNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCallNotFound.Error()))
-	return rerrors.NewAppError(code, "通话不存在", debugMessage)
+	return rerrors.NewAppError(code, "通话不存在", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromUnauthorized returns *AppError for RTC.USER.unauthorized (user_message from errors.yaml).
 func AppErrorFromUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录", debugMessage)
+	return rerrors.NewAppError(code, "请先登录", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromAlreadyInCall returns *AppError for RTC.USER.already_in_call (user_message from errors.yaml).
 func AppErrorFromAlreadyInCall(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAlreadyInCall.Error()))
-	return rerrors.NewAppError(code, "你正在通话中，请先结束当前通话", debugMessage)
+	return rerrors.NewAppError(code, "你正在通话中，请先结束当前通话", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCallFull returns *AppError for RTC.USER.call_full (user_message from errors.yaml).
 func AppErrorFromCallFull(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCallFull.Error()))
-	return rerrors.NewAppError(code, "通话人数已达上限", debugMessage)
+	return rerrors.NewAppError(code, "通话人数已达上限", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCallEnded returns *AppError for RTC.USER.call_ended (user_message from errors.yaml).
 func AppErrorFromCallEnded(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCallEnded.Error()))
-	return rerrors.NewAppError(code, "通话已结束", debugMessage)
+	return rerrors.NewAppError(code, "通话已结束", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromNotParticipant returns *AppError for RTC.USER.not_participant (user_message from errors.yaml).
 func AppErrorFromNotParticipant(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrNotParticipant.Error()))
-	return rerrors.NewAppError(code, "你不是该通话的参与者", debugMessage)
+	return rerrors.NewAppError(code, "你不是该通话的参与者", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromNotMutual returns *AppError for RTC.USER.not_mutual (user_message from errors.yaml).
 func AppErrorFromNotMutual(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrNotMutual.Error()))
-	return rerrors.NewAppError(code, "互相关注后可发起 1 对 1 实时通话", debugMessage)
+	return rerrors.NewAppError(code, "互相关注后可发起 1 对 1 实时通话", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromBlocked returns *AppError for RTC.USER.blocked (user_message from errors.yaml).
 func AppErrorFromBlocked(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrBlocked.Error()))
-	return rerrors.NewAppError(code, "当前关系不允许发起通话", debugMessage)
+	return rerrors.NewAppError(code, "当前关系不允许发起通话", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCannotAnswer returns *AppError for RTC.USER.cannot_answer (user_message from errors.yaml).
 func AppErrorFromCannotAnswer(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCannotAnswer.Error()))
-	return rerrors.NewAppError(code, "无法接听，通话状态异常", debugMessage)
+	return rerrors.NewAppError(code, "无法接听，通话状态异常", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInvalidCallAction returns *AppError for RTC.USER.invalid_call_action (user_message from errors.yaml).
 func AppErrorFromInvalidCallAction(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidCallAction.Error()))
-	return rerrors.NewAppError(code, "当前通话状态无法执行该操作", debugMessage)
+	return rerrors.NewAppError(code, "当前通话状态无法执行该操作", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromScreenShareConflict returns *AppError for RTC.USER.screen_share_conflict (user_message from errors.yaml).
 func AppErrorFromScreenShareConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrScreenShareConflict.Error()))
-	return rerrors.NewAppError(code, "已有参与者正在共享屏幕", debugMessage)
+	return rerrors.NewAppError(code, "已有参与者正在共享屏幕", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromRecordingNotAllowed returns *AppError for RTC.USER.recording_not_allowed (user_message from errors.yaml).
 func AppErrorFromRecordingNotAllowed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRecordingNotAllowed.Error()))
-	return rerrors.NewAppError(code, "你没有录制权限", debugMessage)
+	return rerrors.NewAppError(code, "你没有录制权限", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromRateLimited returns *AppError for RTC.USER.rate_limited (user_message from errors.yaml).
 func AppErrorFromRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRateLimited.Error()))
-	return rerrors.NewAppError(code, "操作太频繁，请稍后重试", debugMessage)
+	return rerrors.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithRecovery("retry", 5)
 }
 
 // AppErrorFromLivekitUnavailable returns *AppError for RTC.SYSTEM.livekit_unavailable (user_message from errors.yaml).
 func AppErrorFromLivekitUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLivekitUnavailable.Error()))
-	return rerrors.NewAppError(code, "通话服务暂时不可用，请稍后重试", debugMessage)
+	return rerrors.NewAppError(code, "通话服务暂时不可用，请稍后重试", debugMessage).WithRecovery("retry", 3)
 }
 
 // AppErrorFromInternalError returns *AppError for RTC.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "通话服务异常，请稍后重试", debugMessage)
+	return rerrors.NewAppError(code, "通话服务异常，请稍后重试", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromTokenGenerationFailed returns *AppError for RTC.SYSTEM.token_generation_failed (user_message from errors.yaml).
 func AppErrorFromTokenGenerationFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrTokenGenerationFailed.Error()))
-	return rerrors.NewAppError(code, "连接通话服务失败，请重试", debugMessage)
+	return rerrors.NewAppError(code, "连接通话服务失败，请重试", debugMessage).WithRecovery("retry", 2)
 }
 

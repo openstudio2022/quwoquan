@@ -19,6 +19,21 @@ configs:
     risk_level: high
     ui_editable: true
 
+  # 运营态错误提示语 override 命名空间（reload: hot，无需重启即生效）。
+  # 完整 key 形如 sys.error_message.<MODULE.KIND.reason>.<locale>，
+  # 例如 sys.error_message.USER.AUTH.otp_mismatch.zh；值为字符串文案。
+  # 命中即覆盖 codegen 静态 baseline，未命中回退 baseline（fail-safe）。
+  # 实际值经 config 层下发，无需在此枚举每个错误码；本条仅登记治理/reload 语义。
+  - key: sys.error_message
+    key_namespace: true
+    type: string
+    owner: platform-ops
+    scope: environment
+    reload: hot
+    rollout: progressive
+    risk_level: high
+    ui_editable: true
+
   - key: sys.gateway.rate_limit.per_user_rps
     type: int
     owner: platform-ops

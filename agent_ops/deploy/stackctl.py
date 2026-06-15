@@ -155,7 +155,7 @@ def build_parser() -> argparse.ArgumentParser:
     roll_parser = subparsers.add_parser("roll")
     roll_parser.add_argument(
         "--target",
-        choices=("alpha-local", "beta-local", "gamma-local", "gamma-hosted"),
+        choices=("alpha-local", "beta-local", "gamma-local"),
         required=True,
     )
     roll_parser.add_argument("--mode", choices=("restart", "rollout"), default="restart")
@@ -172,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     roll_parser.add_argument("--registry-password", default="")
 
     deploy_parser = subparsers.add_parser("deploy")
-    deploy_parser.add_argument("--target", choices=("gamma-hosted", "prod-hosted"), required=True)
+    deploy_parser.add_argument("--target", choices=("prod-hosted",), required=True)
     deploy_parser.add_argument("--mode", choices=("restart", "rollout", "cold-build"), default="")
     deploy_parser.add_argument("--stage", default="")
     deploy_parser.add_argument("--image-version", default="")
@@ -719,22 +719,6 @@ def _selected_tier_commands(env_name: str, target_name: str, tier: str) -> list[
                     "argv": ["python3", "quwoquan_app/scripts/gamma/run_local_gamma_t3.py"],
                 }
             )
-        if target_name == "gamma-hosted":
-            target = get_target(load_environment_topology(), target_name)
-            public_bases = target.get("publicBases") or {}
-            commands.append(
-                {
-                    "name": "gamma-hosted-readiness",
-                    "argv": [
-                        "python3",
-                        "quwoquan_service/scripts/gamma/verify_gamma_environment_ready.py",
-                        "--base-url",
-                        str(public_bases["api"]),
-                        "--product-ops-base-url",
-                        str(public_bases["productOps"]),
-                    ],
-                }
-            )
         if target_name == "prod-hosted":
             target = get_target(load_environment_topology(), target_name)
             public_bases = target.get("publicBases") or {}
@@ -909,17 +893,6 @@ def _run_environment_integration_probe(
                 "3",
             ]
         )
-    elif target_name == "gamma-hosted":
-        argv.extend(
-            [
-                "--request-timeout-seconds",
-                "20",
-                "--retry-attempts",
-                "4",
-                "--retry-sleep-seconds",
-                "2",
-            ]
-        )
     product_ops = str(public_bases.get("productOps") or "").strip()
     if product_ops:
         argv.extend(["--product-ops-base-url", product_ops])
@@ -942,78 +915,6 @@ def _run_environment_integration_probe(
     )
 
 
-def _run_gamma_readiness_probe(
-    topology: dict[str, Any],
-    target_name: str,
-    report_dir: Path,
-) -> tuple[dict[str, Any], str, list[str]]:
-    target = get_target(topology, target_name)
-    public_bases = target.get("publicBases") or {}
-    report_file = report_dir / "gamma-readiness-report.json"
-    argv = [
-        "python3",
-        "quwoquan_service/scripts/gamma/verify_gamma_environment_ready.py",
-        "--base-url",
-        str(public_bases["api"]),
-        "--product-ops-base-url",
-        str(public_bases["productOps"]),
-        "--report",
-        str(report_file),
-        "--wait-seconds",
-        "120",
-        "--request-timeout-seconds",
-        "10",
-        "--retry-attempts",
-        "3",
-        "--retry-sleep-seconds",
-        "2",
-        "--route-timeout-seconds",
-        "10",
-        "--route-retry-attempts",
-        "3",
-        "--route-retry-sleep-seconds",
-        "2",
-    ]
-    return _run_script_probe(
-        name="gamma-readiness",
-        scope="full",
-        argv=argv,
-        report_file=report_file,
-    )
-
-
-def _run_gamma_media_route_probe(
-    topology: dict[str, Any],
-    target_name: str,
-    report_dir: Path,
-) -> tuple[dict[str, Any], str, list[str]]:
-    target = get_target(topology, target_name)
-    public_bases = target.get("publicBases") or {}
-    report_file = report_dir / "gamma-media-route-report.json"
-    argv = [
-        "python3",
-        "quwoquan_service/scripts/media/verify_gamma_curated_media_routes.py",
-        "--base-url",
-        str(public_bases["mediaImage"]),
-        "--report",
-        str(report_file),
-        "--request-timeout-seconds",
-        "10",
-        "--retry-attempts",
-        "3",
-        "--retry-sleep-seconds",
-        "2",
-        "--max-workers",
-        "4",
-    ]
-    return _run_script_probe(
-        name="gamma-media-routes",
-        scope="media",
-        argv=argv,
-        report_file=report_file,
-    )
-
-
 def _script_probe_plan_for_target(
     topology: dict[str, Any],
     target_name: str,
@@ -1023,12 +924,6 @@ def _script_probe_plan_for_target(
         return [{"name": "integration-readonly", "kind": "readonly-http"}]
     if target_name == "beta-local":
         return [{"name": "integration-readonly", "kind": "readonly-http"}]
-    if target_name == "gamma-hosted":
-        return [
-            {"name": "gamma-readiness", "kind": "hosted-readiness"},
-            {"name": "gamma-media-routes", "kind": "curated-media"},
-            {"name": "integration-readonly", "kind": "readonly-http"},
-        ]
     if target_name == "prod-hosted":
         return [
             {"name": "integration-readonly", "kind": "readonly-http"},
@@ -1045,15 +940,7 @@ def _health_request_policy(target_name: str, scope: str) -> dict[str, float | in
         "retryAttempts": 2,
         "retrySleepSeconds": 2.0,
     }
-    if target_name == "gamma-hosted":
-        policy.update(
-            {
-                "timeoutSeconds": 15.0 if scope == "edge" else 20.0,
-                "retryAttempts": 4,
-                "retrySleepSeconds": 2.0,
-            }
-        )
-    elif target_name == "prod-hosted":
+    if target_name == "prod-hosted":
         policy.update(
             {
                 "timeoutSeconds": 15.0 if scope == "edge" else 20.0,
@@ -1075,18 +962,6 @@ def _script_probes_for_target(
     statuses: list[dict[str, Any]] = []
     stdout_sections: list[tuple[str, str]] = []
     findings: list[str] = []
-
-    if target_name == "gamma-hosted":
-        for runner in (
-            _run_gamma_readiness_probe,
-            _run_gamma_media_route_probe,
-            _run_environment_integration_probe,
-        ):
-            status, output, probe_findings = runner(topology, target_name, report_dir)
-            statuses.append(status)
-            stdout_sections.append((status["name"], output))
-            findings.extend(probe_findings)
-        return statuses, stdout_sections, findings
 
     if target_name in {"alpha-local", "beta-local", "gamma-local", "prod-hosted"}:
         status, output, probe_findings = _run_environment_integration_probe(
@@ -2218,11 +2093,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             "releaseState": (
                 _load_release_state("seed-box")
                 if args.target == "prod-hosted"
-                else (
-                    _read_json_payload(ROOT / "artifacts" / "ecs-onebox" / "deploy-report.json")
-                    if args.target == "gamma-hosted"
-                    else {}
-                )
+                else {}
             ),
         }
     if "logs" in scopes:
@@ -2279,7 +2150,7 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         closed = [item["name"] for item in network["ports"] if not item["open"]]
         if closed:
             findings.append(f"ports not listening: {', '.join(closed)}")
-    elif args.target in {"gamma-hosted", "prod-hosted"}:
+    elif args.target == "prod-hosted":
         public_bases = target.get("publicBases") or {}
         if not public_bases.get("api"):
             findings.append("public api base url is missing")
@@ -2429,35 +2300,7 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
     rollback_state: dict[str, str] | None = None
     rollout_decision = "continue"
     dry_run_requested = str(getattr(args, "dry_run", "false")).strip().lower() == "true"
-    if args.target == "gamma-hosted":
-        if not args.stage or not args.image_version or not args.previous_image_version:
-            timing = _finish_timing(started_monotonic, started_at)
-            return {
-                "exitCode": 2,
-                "summary": "stackctl deploy gamma-hosted requires --stage --image-version --previous-image-version",
-                "details": [],
-                **timing,
-            }
-        cmd = [
-            "bash",
-            "agent_ops/deploy/gamma/deploy_gamma_ecs.sh",
-        ]
-        env = _gamma_mode_env(
-            mode=args.mode or "cold-build",
-            stage=args.stage,
-            image_version=args.image_version,
-            previous_image_version=args.previous_image_version,
-            base_url=args.base_url,
-            product_ops_base_url=args.product_ops_base_url,
-            media_base_url=args.media_base_url,
-            media_origin_base_url=args.media_origin_base_url,
-            image_repository_root=args.image_repository_root,
-            image_registry=args.image_registry,
-            registry_username=args.registry_username,
-            registry_password=args.registry_password,
-        )
-        result = run(cmd, env=env)
-    else:
+    if args.target == "prod-hosted":
         required = [
             args.service,
             args.from_image,
@@ -2500,12 +2343,15 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
             args.redis_error_rate,
         ]
         replicas = str(_replicas_for_step(args.step))
+        # 灰度 stage 映射：未到 100% 走 gray-initial 灰度实例（承接原远端 gamma 验证），100% 放量 full。
+        rollout_stage = "full" if str(args.step).strip() == "100" else "gray-initial"
         deploy_result = run(
             ["bash", "agent_ops/deploy/prod/deploy_to_prod.sh"],
             env={
                 "CLOUD_PROVIDER": args.cloud_provider,
                 "IMAGE_VERSION": args.to_image,
                 "CONFIG_VERSION": args.to_config,
+                "ROLLOUT_STAGE": rollout_stage,
                 "REPLICAS": replicas,
                 "DRY_RUN": args.dry_run,
                 "SEED_BOX_IMAGE_REPOSITORY": os.environ.get(
@@ -2585,38 +2431,8 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
         ):
             nested_dir = report_dir / nested_command
             if nested_command == "health":
-                if args.target == "gamma-hosted":
-                    health_attempts: list[dict[str, Any]] = []
-                    final_health: dict[str, Any] | None = None
-                    for attempt in range(1, 4):
-                        attempt_dir = nested_dir / f"attempt-{attempt}"
-                        nested_args = _deploy_health_args(args.target, nested_scope, attempt_dir)
-                        health_result = command_health(nested_args)
-                        health_attempts.append(health_result)
-                        final_health = health_result
-                        if int(health_result.get("exitCode", 0) or 0) == 0:
-                            break
-                        if attempt < 3:
-                            time.sleep(10.0 * attempt)
-                    assert final_health is not None
-                    if len(health_attempts) > 1:
-                        final_health = {
-                            **final_health,
-                            "attempts": health_attempts,
-                            "summary": (
-                                f"{final_health['summary']} after {len(health_attempts)} attempts"
-                                if int(final_health.get("exitCode", 0) or 0) == 0
-                                else final_health["summary"]
-                            ),
-                            "details": (
-                                [f"stabilization attempts: {len(health_attempts)}"]
-                                + list(final_health.get("details", []))
-                            ),
-                        }
-                    post_deploy_checks.append(final_health)
-                else:
-                    nested_args = _deploy_health_args(args.target, nested_scope, nested_dir)
-                    post_deploy_checks.append(command_health(nested_args))
+                nested_args = _deploy_health_args(args.target, nested_scope, nested_dir)
+                post_deploy_checks.append(command_health(nested_args))
             elif nested_command == "inspect":
                 nested_args = argparse.Namespace(
                     command="inspect",
@@ -2662,6 +2478,8 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
                 "CLOUD_PROVIDER": args.cloud_provider,
                 "IMAGE_VERSION": args.from_image,
                 "CONFIG_VERSION": args.from_config,
+                "PREVIOUS_IMAGE_VERSION": args.to_image,
+                "ROLLOUT_STAGE": "full",
                 "REPLICAS": str(_replicas_for_step("100")),
                 "DRY_RUN": "false",
                 "SEED_BOX_IMAGE_REPOSITORY": os.environ.get(
@@ -2787,70 +2605,6 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def _gamma_mode_env(
-    *,
-    mode: str,
-    stage: str,
-    image_version: str,
-    previous_image_version: str,
-    base_url: str,
-    product_ops_base_url: str,
-    media_base_url: str,
-    media_origin_base_url: str,
-    image_repository_root: str,
-    image_registry: str,
-    registry_username: str,
-    registry_password: str,
-) -> dict[str, str]:
-    env: dict[str, str] = {}
-    for key, value in {
-        "GAMMA_ECS_STAGE": stage,
-        "GAMMA_DEPLOY_IMAGE_VERSION": image_version,
-        "GAMMA_PREVIOUS_IMAGE_VERSION": previous_image_version,
-        "GAMMA_BASE_URL": base_url,
-        "GAMMA_PRODUCT_OPS_BASE_URL": product_ops_base_url,
-        "MEDIA_AVATAR_CDN_BASE_URL": media_base_url,
-        "GAMMA_ECS_MEDIA_ORIGIN_BASE_URL": media_origin_base_url,
-        "GAMMA_ECS_IMAGE_REPOSITORY_ROOT": image_repository_root,
-        "GAMMA_ECS_IMAGE_REGISTRY": image_registry,
-        "GAMMA_ECS_REGISTRY_USERNAME": registry_username,
-        "GAMMA_ECS_REGISTRY_PASSWORD": registry_password,
-    }.items():
-        if value:
-            env[key] = value
-
-    if mode == "restart":
-        env.update(
-            {
-                "GAMMA_ECS_SKIP_UPLOAD": "1",
-                "GAMMA_ECS_SKIP_IMAGE_REBUILD": "1",
-                "GAMMA_ECS_SKIP_IMAGE_PREPULL": "1",
-                "LOCAL_GAMMA_FORCE_CLEAN_RECREATE": "0",
-                "LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME": "1",
-            }
-        )
-    elif mode == "rollout":
-        env.update(
-            {
-                "GAMMA_ECS_SKIP_UPLOAD": "0",
-                "GAMMA_ECS_SKIP_IMAGE_REBUILD": "1",
-                "GAMMA_ECS_SKIP_IMAGE_PREPULL": "1",
-                "LOCAL_GAMMA_FORCE_CLEAN_RECREATE": "0",
-                "LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME": "1",
-            }
-        )
-    elif mode == "cold-build":
-        env.update(
-            {
-                "GAMMA_ECS_SKIP_UPLOAD": "0",
-                "GAMMA_ECS_SKIP_IMAGE_REBUILD": "0",
-            }
-        )
-    else:
-        raise ValueError(f"unsupported gamma deploy mode: {mode}")
-    return env
-
-
 def command_roll(args: argparse.Namespace) -> dict[str, Any]:
     started_monotonic, started_at = _start_timing()
 
@@ -2872,99 +2626,11 @@ def command_roll(args: argparse.Namespace) -> dict[str, Any]:
         payload["summary"] = f"stackctl roll {args.mode} completed for {args.target}"
         return payload
 
-    report_dir = resolve_report_dir(args, "gamma", args.target)
-    env = _gamma_mode_env(
-        mode=args.mode,
-        stage=args.stage or "prod",
-        image_version=args.image_version,
-        previous_image_version=args.previous_image_version,
-        base_url=args.base_url,
-        product_ops_base_url=args.product_ops_base_url,
-        media_base_url=args.media_base_url,
-        media_origin_base_url=args.media_origin_base_url,
-        image_repository_root=args.image_repository_root,
-        image_registry=args.image_registry,
-        registry_username=args.registry_username,
-        registry_password=args.registry_password,
-    )
-    result = run(["bash", "agent_ops/deploy/gamma/deploy_gamma_ecs.sh"], env=env)
     timing = _finish_timing(started_monotonic, started_at)
-    summary = f"stackctl roll {'completed' if result.returncode == 0 else 'failed'} for {args.target}"
-    write_json(
-        report_dir / "report.json",
-        {
-            "command": "roll",
-            "target": args.target,
-            "mode": args.mode,
-            "argv": ["bash", "agent_ops/deploy/gamma/deploy_gamma_ecs.sh"],
-            "exitCode": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            **timing,
-        },
-    )
-    _write_summary_bundle(
-        report_dir,
-        command="roll",
-        target=args.target,
-        status="ok" if result.returncode == 0 else "failed",
-        summary=summary,
-        details=[f"mode: {args.mode}"] + _command_details(result),
-        extra={"mode": args.mode},
-        timing=timing,
-    )
-    _write_stdout_markdown(
-        report_dir,
-        [("roll", "\n".join(filter(None, [result.stdout, result.stderr])))],
-    )
-    if result.returncode != 0:
-        return {
-            "exitCode": result.returncode,
-            "summary": summary,
-            "details": [f"mode: {args.mode}"] + _command_details(result),
-            "reportDir": relpath(report_dir),
-            **timing,
-        }
-
-    post_deploy_checks: list[dict[str, Any]] = []
-    for nested_command, nested_scope in (("health", "full"), ("inspect", "all"), ("doctor", "")):
-        nested_dir = report_dir / nested_command
-        if nested_command == "health":
-            nested_args = argparse.Namespace(
-                command="health",
-                target=args.target,
-                scope=nested_scope,
-                output_format="json",
-                report_dir=str(nested_dir),
-            )
-            post_deploy_checks.append(command_health(nested_args))
-        elif nested_command == "inspect":
-            nested_args = argparse.Namespace(
-                command="inspect",
-                target=args.target,
-                scope=nested_scope,
-                output_format="json",
-                report_dir=str(nested_dir),
-            )
-            post_deploy_checks.append(command_inspect(nested_args))
-        else:
-            nested_args = argparse.Namespace(
-                command="doctor",
-                target=args.target,
-                output_format="json",
-                report_dir=str(nested_dir),
-            )
-            post_deploy_checks.append(command_doctor(nested_args))
-    failures = [item["summary"] for item in post_deploy_checks if int(item.get("exitCode", 0) or 0) != 0]
     return {
-        "exitCode": 1 if failures else 0,
-        "summary": (
-            f"stackctl roll completed with post-deploy failures for {args.target}"
-            if failures
-            else summary
-        ),
-        "details": [f"mode: {args.mode}"] + _command_details(result) + failures,
-        "reportDir": relpath(report_dir),
+        "exitCode": 2,
+        "summary": f"stackctl roll does not support target {args.target}",
+        "details": [],
         **timing,
     }
 
@@ -3301,8 +2967,6 @@ def _local_log_report(target_name: str) -> dict[str, Any]:
         if path.exists():
             hits.append({"name": name, "path": relpath(path)})
     extra: dict[str, Any] = {}
-    if target_name == "gamma-hosted":
-        extra["gammaDeployState"] = _read_json_payload(ROOT / "artifacts" / "ecs-onebox" / "deploy-report.json") or {}
     if target_name == "prod-hosted":
         extra["prodReleaseState"] = _load_release_state("seed-box")
     return {"paths": hits, **extra}

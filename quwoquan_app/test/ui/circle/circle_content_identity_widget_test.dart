@@ -37,7 +37,7 @@ Widget _buildApp(Widget child, {CircleRepository? repository}) {
 }
 
 void main() {
-  testWidgets('圈子创作容器先展示全部/点滴/作品，再进入作品格式筛选', (tester) async {
+  testWidgets('圈子作品二级筛选仅展示全部/图片/视频/文字', (tester) async {
     await tester.pumpWidget(
       _buildApp(
         const SizedBox(
@@ -53,20 +53,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('全部'), findsOneWidget);
-    expect(find.text('点滴'), findsOneWidget);
-    expect(find.text('作品'), findsAtLeastNWidgets(1));
-    expect(find.text('微趣'), findsNothing);
-    expect(find.text('文章'), findsNothing);
-
-    await tester.tap(find.text('作品').first);
-    await tester.pumpAndSettle();
-
     expect(find.text('图片'), findsAtLeastNWidgets(1));
     expect(find.text('视频'), findsAtLeastNWidgets(1));
-    expect(find.text('文章'), findsAtLeastNWidgets(1));
+    expect(find.text('文字'), findsAtLeastNWidgets(1));
+    expect(find.text('点滴'), findsNothing);
+    expect(find.text('微趣'), findsNothing);
+    expect(find.text('文章'), findsNothing);
   });
 
-  testWidgets('圈子作品切到文章后，列表标签与筛选口径保持一致', (tester) async {
+  testWidgets('圈子作品切到文字后，列表标签与筛选口径保持一致', (tester) async {
     final repository = _ArticleFixtureCircleRepository();
     await tester.pumpWidget(
       _buildApp(
@@ -83,17 +78,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('作品').first);
-    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('列表视图'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('文章').first);
+    await tester.tap(find.text('文字').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('文章'), findsAtLeastNWidgets(1));
+    expect(find.text('文字'), findsAtLeastNWidgets(1));
     expect(
       find.byKey(
-        const ValueKey<String>('circle-article-list-fixture_article_with_cover'),
+        const ValueKey<String>(
+          'circle-article-list-fixture_article_with_cover',
+        ),
       ),
       findsOneWidget,
     );

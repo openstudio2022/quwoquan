@@ -27,7 +27,9 @@ void main() {
               builder: (context) {
                 return CustomPaint(
                   painter: WelcomeAppIconPainter(
-                    appearance: WelcomeAppearance.of(context),
+                    // 与登录页 hero 同一套鲜艳花瓣真相源（蓝底由浅色渐变 getter 提供，
+                    // 花瓣由 vivid 分支渲染），保证启动图标与登录页观感一致。
+                    appearance: WelcomeAppearance.brandMark(),
                     flowerDiameterRatio: 0.75,
                   ),
                 );

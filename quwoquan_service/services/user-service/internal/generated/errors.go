@@ -36,13 +36,26 @@ var (
 	ErrInternalError = errors.New("USER.SYSTEM.internal_error")
 	ErrOtpExpired = errors.New("USER.AUTH.otp_expired")
 	ErrOtpMismatch = errors.New("USER.AUTH.otp_mismatch")
+	ErrOtpRateLimited = errors.New("USER.AUTH.otp_rate_limited")
+	ErrOtpProviderFailed = errors.New("USER.AUTH.otp_provider_failed")
 	ErrCredentialConflict = errors.New("USER.AUTH.credential_conflict")
 	ErrLastCredential = errors.New("USER.AUTH.last_credential")
 	ErrLoginLocked = errors.New("USER.AUTH.login_locked")
 	ErrWechatAuthFailed = errors.New("USER.AUTH.wechat_auth_failed")
+	ErrAlipayAuthFailed = errors.New("USER.AUTH.alipay_auth_failed")
+	ErrQqAuthFailed = errors.New("USER.AUTH.qq_auth_failed")
+	ErrSocialProviderCancelled = errors.New("USER.AUTH.social_provider_cancelled")
+	ErrSocialProviderUnavailable = errors.New("USER.AUTH.social_provider_unavailable")
 	ErrAppleAuthFailed = errors.New("USER.AUTH.apple_auth_failed")
 	ErrPasskeyAuthFailed = errors.New("USER.AUTH.passkey_auth_failed")
 	ErrTokenExpired = errors.New("USER.AUTH.token_expired")
+	ErrCarrierUnavailable = errors.New("USER.AUTH.carrier_unavailable")
+	ErrCarrierTokenInvalid = errors.New("USER.AUTH.carrier_token_invalid")
+	ErrCarrierProviderTimeout = errors.New("USER.AUTH.carrier_provider_timeout")
+	ErrCarrierPhoneMismatch = errors.New("USER.AUTH.carrier_phone_mismatch")
+	ErrConsentRequired = errors.New("USER.AUTH.consent_required")
+	ErrAccountSuspended = errors.New("USER.AUTH.account_suspended")
+	ErrAccountDeleted = errors.New("USER.AUTH.account_deleted")
 	ErrSubAccountNotFound = errors.New("USER.SUB_ACCOUNT.not_found")
 	ErrLastSubAccount = errors.New("USER.SUB_ACCOUNT.last_sub_account")
 	ErrSubAccountStrictIsolation = errors.New("USER.SUB_ACCOUNT.strict_isolation")
@@ -58,252 +71,330 @@ var (
 // AppErrorFromContactDiscoveryRateLimited returns *AppError for USER.CONTACT.rate_limited (user_message from errors.yaml).
 func AppErrorFromContactDiscoveryRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrContactDiscoveryRateLimited.Error()))
-	return rerrors.NewAppError(code, "今日通讯录发现次数已达上限，请明日再试", debugMessage)
+	return rerrors.NewAppError(code, "今日通讯录发现次数已达上限，请明日再试", debugMessage).WithRecovery("retry", 86400)
 }
 
 // AppErrorFromTooManyContacts returns *AppError for USER.CONTACT.too_many_contacts (user_message from errors.yaml).
 func AppErrorFromTooManyContacts(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrTooManyContacts.Error()))
-	return rerrors.NewAppError(code, "通讯录条目过多，单次最多支持 5000 条", debugMessage)
+	return rerrors.NewAppError(code, "通讯录条目过多，单次最多支持 5000 条", debugMessage).WithRecovery("retry", 0)
 }
 
 // AppErrorFromContactDiscoveryNotFound returns *AppError for USER.CONTACT.not_found (user_message from errors.yaml).
 func AppErrorFromContactDiscoveryNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrContactDiscoveryNotFound.Error()))
-	return rerrors.NewAppError(code, "发现记录不存在或已过期", debugMessage)
+	return rerrors.NewAppError(code, "发现记录不存在或已过期", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromGreetingTargetBlockedSender returns *AppError for USER.GREETING.target_blocked_sender (user_message from errors.yaml).
 func AppErrorFromGreetingTargetBlockedSender(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingTargetBlockedSender.Error()))
-	return rerrors.NewAppError(code, "发送失败，对方不接收你的打招呼", debugMessage)
+	return rerrors.NewAppError(code, "发送失败，对方不接收你的打招呼", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromGreetingDuplicatePending returns *AppError for USER.GREETING.duplicate_pending (user_message from errors.yaml).
 func AppErrorFromGreetingDuplicatePending(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingDuplicatePending.Error()))
-	return rerrors.NewAppError(code, "已发送过打招呼，请等待对方回复", debugMessage)
+	return rerrors.NewAppError(code, "已发送过打招呼，请等待对方回复", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromGreetingRateLimited returns *AppError for USER.GREETING.rate_limited (user_message from errors.yaml).
 func AppErrorFromGreetingRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingRateLimited.Error()))
-	return rerrors.NewAppError(code, "打招呼发送频率超限，请稍后再试", debugMessage)
+	return rerrors.NewAppError(code, "打招呼发送频率超限，请稍后再试", debugMessage).WithRecovery("retry", 86400)
 }
 
 // AppErrorFromGreetingAlreadyContact returns *AppError for USER.GREETING.already_contact (user_message from errors.yaml).
 func AppErrorFromGreetingAlreadyContact(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingAlreadyContact.Error()))
-	return rerrors.NewAppError(code, "已互相关注，可直接进入正式私信", debugMessage)
+	return rerrors.NewAppError(code, "已互相关注，可直接进入正式私信", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromGreetingNotFound returns *AppError for USER.GREETING.not_found (user_message from errors.yaml).
 func AppErrorFromGreetingNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingNotFound.Error()))
-	return rerrors.NewAppError(code, "打招呼请求不存在", debugMessage)
+	return rerrors.NewAppError(code, "打招呼请求不存在", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromGreetingInvalidStatusTransition returns *AppError for USER.GREETING.invalid_status_transition (user_message from errors.yaml).
 func AppErrorFromGreetingInvalidStatusTransition(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingInvalidStatusTransition.Error()))
-	return rerrors.NewAppError(code, "操作不可用，请求状态已变更", debugMessage)
+	return rerrors.NewAppError(code, "操作不可用，请求状态已变更", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInviteExpired returns *AppError for USER.INVITE.expired (user_message from errors.yaml).
 func AppErrorFromInviteExpired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInviteExpired.Error()))
-	return rerrors.NewAppError(code, "邀请已过期", debugMessage)
+	return rerrors.NewAppError(code, "邀请已过期", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInviteAlreadyAccepted returns *AppError for USER.INVITE.already_accepted (user_message from errors.yaml).
 func AppErrorFromInviteAlreadyAccepted(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInviteAlreadyAccepted.Error()))
-	return rerrors.NewAppError(code, "邀请已被接受", debugMessage)
+	return rerrors.NewAppError(code, "邀请已被接受", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInviteNotFound returns *AppError for USER.INVITE.not_found (user_message from errors.yaml).
 func AppErrorFromInviteNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInviteNotFound.Error()))
-	return rerrors.NewAppError(code, "邀请不存在或已失效", debugMessage)
+	return rerrors.NewAppError(code, "邀请不存在或已失效", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInviteDailyLimitExceeded returns *AppError for USER.INVITE.daily_limit_exceeded (user_message from errors.yaml).
 func AppErrorFromInviteDailyLimitExceeded(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInviteDailyLimitExceeded.Error()))
-	return rerrors.NewAppError(code, "今日邀请次数已达上限", debugMessage)
+	return rerrors.NewAppError(code, "今日邀请次数已达上限", debugMessage).WithRecovery("retry", 86400)
 }
 
 // AppErrorFromInviteInvalidCode returns *AppError for USER.INVITE.invalid_code (user_message from errors.yaml).
 func AppErrorFromInviteInvalidCode(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInviteInvalidCode.Error()))
-	return rerrors.NewAppError(code, "邀请码无效", debugMessage)
+	return rerrors.NewAppError(code, "邀请码无效", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromUserNotFound returns *AppError for USER.USER.not_found (user_message from errors.yaml).
 func AppErrorFromUserNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUserNotFound.Error()))
-	return rerrors.NewAppError(code, "用户不存在", debugMessage)
+	return rerrors.NewAppError(code, "用户不存在", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromUnauthorized returns *AppError for USER.USER.unauthorized (user_message from errors.yaml).
 func AppErrorFromUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录", debugMessage)
+	return rerrors.NewAppError(code, "请先登录", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromForbidden returns *AppError for USER.USER.forbidden (user_message from errors.yaml).
 func AppErrorFromForbidden(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrForbidden.Error()))
-	return rerrors.NewAppError(code, "无权访问该资源", debugMessage)
+	return rerrors.NewAppError(code, "无权访问该资源", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromNicknameTaken returns *AppError for USER.USER.nickname_taken (user_message from errors.yaml).
 func AppErrorFromNicknameTaken(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrNicknameTaken.Error()))
-	return rerrors.NewAppError(code, "该昵称已被使用，请换一个", debugMessage)
+	return rerrors.NewAppError(code, "该昵称已被使用，请换一个", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInvalidArgument returns *AppError for USER.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "请求参数有误", debugMessage)
+	return rerrors.NewAppError(code, "请求参数有误", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromRateLimited returns *AppError for USER.USER.rate_limited (user_message from errors.yaml).
 func AppErrorFromRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRateLimited.Error()))
-	return rerrors.NewAppError(code, "操作太频繁，请稍后重试", debugMessage)
+	return rerrors.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithRecovery("retry", 60)
 }
 
 // AppErrorFromInvalidCallRingtone returns *AppError for USER.SETTING.invalid_call_ringtone (user_message from errors.yaml).
 func AppErrorFromInvalidCallRingtone(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidCallRingtone.Error()))
-	return rerrors.NewAppError(code, "所选铃声不可用，请从官方铃声库中重新选择", debugMessage)
+	return rerrors.NewAppError(code, "所选铃声不可用，请从官方铃声库中重新选择", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInvalidAppearanceScope returns *AppError for USER.SETTING.invalid_appearance_scope (user_message from errors.yaml).
 func AppErrorFromInvalidAppearanceScope(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidAppearanceScope.Error()))
-	return rerrors.NewAppError(code, "外观设置作用范围无效，请重试", debugMessage)
+	return rerrors.NewAppError(code, "外观设置作用范围无效，请重试", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for USER.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "服务异常，请稍后重试", debugMessage)
+	return rerrors.NewAppError(code, "服务异常，请稍后重试", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromOtpExpired returns *AppError for USER.AUTH.otp_expired (user_message from errors.yaml).
 func AppErrorFromOtpExpired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrOtpExpired.Error()))
-	return rerrors.NewAppError(code, "验证码已过期，请重新获取", debugMessage)
+	return rerrors.NewAppError(code, "验证码已过期，请重新获取", debugMessage).WithRecovery("retry", 0)
 }
 
 // AppErrorFromOtpMismatch returns *AppError for USER.AUTH.otp_mismatch (user_message from errors.yaml).
 func AppErrorFromOtpMismatch(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrOtpMismatch.Error()))
-	return rerrors.NewAppError(code, "验证码错误，请重新输入", debugMessage)
+	return rerrors.NewAppError(code, "验证码错误，请重新输入", debugMessage).WithRecovery("retry", 0)
+}
+
+// AppErrorFromOtpRateLimited returns *AppError for USER.AUTH.otp_rate_limited (user_message from errors.yaml).
+func AppErrorFromOtpRateLimited(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrOtpRateLimited.Error()))
+	return rerrors.NewAppError(code, "发送过于频繁，请稍后再试", debugMessage).WithRecovery("retry", 60)
+}
+
+// AppErrorFromOtpProviderFailed returns *AppError for USER.AUTH.otp_provider_failed (user_message from errors.yaml).
+func AppErrorFromOtpProviderFailed(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrOtpProviderFailed.Error()))
+	return rerrors.NewAppError(code, "验证码发送失败，请重试或换其它方式", debugMessage).WithRecovery("retry", 0)
 }
 
 // AppErrorFromCredentialConflict returns *AppError for USER.AUTH.credential_conflict (user_message from errors.yaml).
 func AppErrorFromCredentialConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCredentialConflict.Error()))
-	return rerrors.NewAppError(code, "该账号已被其他用户绑定", debugMessage)
+	return rerrors.NewAppError(code, "该账号已被其他用户绑定", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromLastCredential returns *AppError for USER.AUTH.last_credential (user_message from errors.yaml).
 func AppErrorFromLastCredential(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLastCredential.Error()))
-	return rerrors.NewAppError(code, "无法解绑，这是您唯一的登录方式", debugMessage)
+	return rerrors.NewAppError(code, "无法解绑，这是您唯一的登录方式", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromLoginLocked returns *AppError for USER.AUTH.login_locked (user_message from errors.yaml).
 func AppErrorFromLoginLocked(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLoginLocked.Error()))
-	return rerrors.NewAppError(code, "账号因多次失败已暂时锁定，请30分钟后重试", debugMessage)
+	return rerrors.NewAppError(code, "账号因多次失败已暂时锁定，请30分钟后重试", debugMessage).WithRecovery("retry", 1800)
 }
 
 // AppErrorFromWechatAuthFailed returns *AppError for USER.AUTH.wechat_auth_failed (user_message from errors.yaml).
 func AppErrorFromWechatAuthFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrWechatAuthFailed.Error()))
-	return rerrors.NewAppError(code, "微信授权失败，请重试", debugMessage)
+	return rerrors.NewAppError(code, "微信授权失败，请重试", debugMessage).WithRecovery("retry", 0)
+}
+
+// AppErrorFromAlipayAuthFailed returns *AppError for USER.AUTH.alipay_auth_failed (user_message from errors.yaml).
+func AppErrorFromAlipayAuthFailed(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrAlipayAuthFailed.Error()))
+	return rerrors.NewAppError(code, "支付宝授权失败，请重试", debugMessage).WithRecovery("retry", 0)
+}
+
+// AppErrorFromQqAuthFailed returns *AppError for USER.AUTH.qq_auth_failed (user_message from errors.yaml).
+func AppErrorFromQqAuthFailed(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrQqAuthFailed.Error()))
+	return rerrors.NewAppError(code, "QQ 授权失败，请重试", debugMessage).WithRecovery("retry", 0)
+}
+
+// AppErrorFromSocialProviderCancelled returns *AppError for USER.AUTH.social_provider_cancelled (user_message from errors.yaml).
+func AppErrorFromSocialProviderCancelled(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrSocialProviderCancelled.Error()))
+	return rerrors.NewAppError(code, "已取消第三方授权", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromSocialProviderUnavailable returns *AppError for USER.AUTH.social_provider_unavailable (user_message from errors.yaml).
+func AppErrorFromSocialProviderUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrSocialProviderUnavailable.Error()))
+	return rerrors.NewAppError(code, "第三方登录暂不可用，请改用其他方式", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromAppleAuthFailed returns *AppError for USER.AUTH.apple_auth_failed (user_message from errors.yaml).
 func AppErrorFromAppleAuthFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAppleAuthFailed.Error()))
-	return rerrors.NewAppError(code, "Apple 登录失败，请重试", debugMessage)
+	return rerrors.NewAppError(code, "Apple 登录失败，请重试", debugMessage).WithRecovery("retry", 0)
 }
 
 // AppErrorFromPasskeyAuthFailed returns *AppError for USER.AUTH.passkey_auth_failed (user_message from errors.yaml).
 func AppErrorFromPasskeyAuthFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPasskeyAuthFailed.Error()))
-	return rerrors.NewAppError(code, "Passkey 登录失败，请重试或改用其他方式", debugMessage)
+	return rerrors.NewAppError(code, "Passkey 登录失败，请重试或改用其他方式", debugMessage).WithRecovery("retry", 0)
 }
 
 // AppErrorFromTokenExpired returns *AppError for USER.AUTH.token_expired (user_message from errors.yaml).
 func AppErrorFromTokenExpired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrTokenExpired.Error()))
-	return rerrors.NewAppError(code, "登录已过期，请重新登录", debugMessage)
+	return rerrors.NewAppError(code, "登录已过期，请重新登录", debugMessage).WithRecovery("retry", 0)
+}
+
+// AppErrorFromCarrierUnavailable returns *AppError for USER.AUTH.carrier_unavailable (user_message from errors.yaml).
+func AppErrorFromCarrierUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrCarrierUnavailable.Error()))
+	return rerrors.NewAppError(code, "本机号码一键登录暂不可用，请改用其他方式", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromCarrierTokenInvalid returns *AppError for USER.AUTH.carrier_token_invalid (user_message from errors.yaml).
+func AppErrorFromCarrierTokenInvalid(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrCarrierTokenInvalid.Error()))
+	return rerrors.NewAppError(code, "本机号码授权已失效，请重试", debugMessage).WithRecovery("retry", 0)
+}
+
+// AppErrorFromCarrierProviderTimeout returns *AppError for USER.AUTH.carrier_provider_timeout (user_message from errors.yaml).
+func AppErrorFromCarrierProviderTimeout(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrCarrierProviderTimeout.Error()))
+	return rerrors.NewAppError(code, "本机号码校验超时，请稍后重试或改用其他方式", debugMessage).WithRecovery("retry", 0)
+}
+
+// AppErrorFromCarrierPhoneMismatch returns *AppError for USER.AUTH.carrier_phone_mismatch (user_message from errors.yaml).
+func AppErrorFromCarrierPhoneMismatch(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrCarrierPhoneMismatch.Error()))
+	return rerrors.NewAppError(code, "本机号码与上次账号不一致，请选择其他登录方式", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromConsentRequired returns *AppError for USER.AUTH.consent_required (user_message from errors.yaml).
+func AppErrorFromConsentRequired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrConsentRequired.Error()))
+	return rerrors.NewAppError(code, "请先阅读并同意用户协议与隐私政策", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromAccountSuspended returns *AppError for USER.AUTH.account_suspended (user_message from errors.yaml).
+func AppErrorFromAccountSuspended(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrAccountSuspended.Error()))
+	return rerrors.NewAppError(code, "账号已被限制登录，请按页面提示处理", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromAccountDeleted returns *AppError for USER.AUTH.account_deleted (user_message from errors.yaml).
+func AppErrorFromAccountDeleted(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrAccountDeleted.Error()))
+	return rerrors.NewAppError(code, "账号已注销或进入删除流程，无法直接登录", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromSubAccountNotFound returns *AppError for USER.SUB_ACCOUNT.not_found (user_message from errors.yaml).
 func AppErrorFromSubAccountNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSubAccountNotFound.Error()))
-	return rerrors.NewAppError(code, "子账号不存在", debugMessage)
+	return rerrors.NewAppError(code, "子账号不存在", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromLastSubAccount returns *AppError for USER.SUB_ACCOUNT.last_sub_account (user_message from errors.yaml).
 func AppErrorFromLastSubAccount(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLastSubAccount.Error()))
-	return rerrors.NewAppError(code, "无法删除，这是您的最后一个账号", debugMessage)
+	return rerrors.NewAppError(code, "无法删除，这是您的最后一个账号", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromSubAccountStrictIsolation returns *AppError for USER.SUB_ACCOUNT.strict_isolation (user_message from errors.yaml).
 func AppErrorFromSubAccountStrictIsolation(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSubAccountStrictIsolation.Error()))
-	return rerrors.NewAppError(code, "该用户不存在", debugMessage)
+	return rerrors.NewAppError(code, "该用户不存在", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromSubAccountQuotaReached returns *AppError for USER.SUB_ACCOUNT.quota_reached (user_message from errors.yaml).
 func AppErrorFromSubAccountQuotaReached(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSubAccountQuotaReached.Error()))
-	return rerrors.NewAppError(code, "分身数量已达上限，请先整理现有分身", debugMessage)
+	return rerrors.NewAppError(code, "分身数量已达上限，请先整理现有分身", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromPrimarySubAccountGuard returns *AppError for USER.SUB_ACCOUNT.primary_guard (user_message from errors.yaml).
 func AppErrorFromPrimarySubAccountGuard(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPrimarySubAccountGuard.Error()))
-	return rerrors.NewAppError(code, "主分身不能直接删除或退役", debugMessage)
+	return rerrors.NewAppError(code, "主分身不能直接删除或退役", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromActiveSubAccountGuard returns *AppError for USER.SUB_ACCOUNT.active_guard (user_message from errors.yaml).
 func AppErrorFromActiveSubAccountGuard(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrActiveSubAccountGuard.Error()))
-	return rerrors.NewAppError(code, "请先切换到其他分身后再继续", debugMessage)
+	return rerrors.NewAppError(code, "请先切换到其他分身后再继续", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromSubAccountRetireRequired returns *AppError for USER.SUB_ACCOUNT.retire_required (user_message from errors.yaml).
 func AppErrorFromSubAccountRetireRequired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSubAccountRetireRequired.Error()))
-	return rerrors.NewAppError(code, "该分身已有记录数据，请使用退役而不是删除", debugMessage)
+	return rerrors.NewAppError(code, "该分身已有记录数据，请使用退役而不是删除", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromRetiredSubAccountGuard returns *AppError for USER.SUB_ACCOUNT.retired_guard (user_message from errors.yaml).
 func AppErrorFromRetiredSubAccountGuard(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRetiredSubAccountGuard.Error()))
-	return rerrors.NewAppError(code, "该分身已退役，当前操作不可继续", debugMessage)
+	return rerrors.NewAppError(code, "该分身已退役，当前操作不可继续", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromDeleteEmptySubAccountOnly returns *AppError for USER.SUB_ACCOUNT.delete_empty_only (user_message from errors.yaml).
 func AppErrorFromDeleteEmptySubAccountOnly(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDeleteEmptySubAccountOnly.Error()))
-	return rerrors.NewAppError(code, "空白分身请直接删除，无需退役", debugMessage)
+	return rerrors.NewAppError(code, "空白分身请直接删除，无需退役", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromSubAccountHandleTaken returns *AppError for USER.SUB_ACCOUNT.handle_taken (user_message from errors.yaml).
 func AppErrorFromSubAccountHandleTaken(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSubAccountHandleTaken.Error()))
-	return rerrors.NewAppError(code, "该分身号已被占用，请换一个", debugMessage)
+	return rerrors.NewAppError(code, "该分身号已被占用，请换一个", debugMessage).WithRecovery("surface", 0)
 }
 

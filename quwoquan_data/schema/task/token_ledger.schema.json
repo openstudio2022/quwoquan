@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Token and cost ledger entry scoped by supply task, batch, job, creator and content type.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "supplyTaskId",
+    "batchId",
+    "jobId",
+    "creatorProfileId",
+    "contentType",
+    "budgetTokens",
+    "usedTokens",
+    "costUsd",
+    "cacheHits",
+    "budgetExceeded"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "quwoquan.token_ledger" },
+    "supplyTaskId": { "type": "string", "minLength": 1 },
+    "batchId": { "type": "string", "minLength": 1 },
+    "jobId": { "type": "string", "minLength": 1 },
+    "creatorProfileId": { "type": "string", "minLength": 1 },
+    "contentType": { "type": "string", "minLength": 1 },
+    "budgetTokens": { "type": "integer", "minimum": 0 },
+    "usedTokens": { "type": "integer", "minimum": 0 },
+    "costUsd": { "type": "number", "minimum": 0 },
+    "cacheHits": { "type": "object", "additionalProperties": { "type": "boolean" } },
+    "budgetExceeded": { "type": "boolean" },
+    "unitPassedCostUsd": { "type": ["number", "null"], "minimum": 0 }
+  }
+}

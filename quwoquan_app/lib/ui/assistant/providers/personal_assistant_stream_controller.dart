@@ -12,6 +12,7 @@ import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_ans
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
+import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
@@ -1452,14 +1453,9 @@ String _failureMessageForEvent(AssistantStreamEventWire event) {
 }
 
 String _runtimeFailureMessage(RuntimeFailureWire failure) {
-  final code = failure.code.trim();
-  if (code.isEmpty) {
-    return '找私助暂时不可用，请稍后再试。';
-  }
-  if (code == 'ASSISTANT.MIDDLEWARE.tool_unavailable') {
-    return '找私助暂时无法完成检索，我会保留当前问题，请稍后重试。';
-  }
-  return '找私助执行遇到问题，请稍后重试。';
+  // 文案唯一真相源：assistant errors.yaml -> 生成的 AssistantErrorCode.defaultMessage，
+  // 禁止在端侧硬编码错误码字符串或文案（军规 R06/§3.3）。未知码统一回退 unknown 文案。
+  return AssistantErrorCode.fromCode(failure.code.trim()).defaultMessage;
 }
 
 final personalAssistantStreamControllerProvider =

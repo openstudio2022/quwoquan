@@ -11,7 +11,9 @@ void main() {
     late ImageEditorFilterConfig config;
 
     setUpAll(() {
-      final source = File('assets/filters/filter_presets.json').readAsStringSync();
+      final source = File(
+        'assets/filters/filter_presets.json',
+      ).readAsStringSync();
       config = ImageEditorFilterConfig.fromJson(
         json.decode(source) as Map<String, dynamic>,
       );
@@ -23,10 +25,11 @@ void main() {
       expect(config.presets, isNotEmpty);
     });
 
-    test('contains recommended category and all consumer categories', () {
+    test('contains bundled consumer categories', () {
       final categoryIds = config.categories.map((entry) => entry.id).toSet();
-      expect(categoryIds.contains('recommended'), isTrue);
-      expect(categoryIds.length, greaterThanOrEqualTo(19));
+      expect(categoryIds.contains('recommended'), isFalse);
+      expect(categoryIds.contains('common'), isFalse);
+      expect(categoryIds.length, greaterThanOrEqualTo(9));
     });
 
     test('each non-recommended category has at least three presets', () {

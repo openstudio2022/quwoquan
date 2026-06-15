@@ -18,7 +18,7 @@ tables:
       - { name: avatar_asset_id, type: VARCHAR(64) }
       - { name: avatar_version, type: INTEGER, constraints: [NOT_NULL], default: 0 }
       - { name: bio, type: VARCHAR(500) }
-      - { name: identity_tags, type: "TEXT[]" }
+      - { name: identity_tags, type: TEXT }
       - { name: gender, type: VARCHAR(16) }
       - { name: birth_date, type: DATE }
       - { name: region, type: VARCHAR(128) }
@@ -156,6 +156,23 @@ tables:
       - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
     unique_constraints:
       - { name: uq_user_devices_user_device, columns: [user_id, device_id] }
+
+  consent_records:
+    entity: ConsentRecord
+    pk: id
+    fk: { column: owner_id, references: user_profiles.user_id, on_delete: CASCADE }
+    columns:
+      - { name: id, type: VARCHAR(64), constraints: [PK] }
+      - { name: owner_id, type: VARCHAR(96), constraints: [NOT_NULL] }
+      - { name: agreement_version, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: privacy_version, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: accepted_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: device_id, type: VARCHAR(128) }
+      - { name: platform, type: VARCHAR(32) }
+      - { name: source_operation, type: VARCHAR(64), constraints: [NOT_NULL] }
+    indexes:
+      - { name: idx_consent_records_owner_id, columns: [owner_id] }
+      - { name: idx_consent_records_source_operation, columns: [source_operation] }
 
   user_settings:
     entity: UserSetting

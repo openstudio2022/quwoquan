@@ -21,10 +21,35 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp()
 
 from _common.paths import batch_entity_object_dir, batch_root, ensure_task_layout  # noqa: E402
+from _common.io import write_json  # noqa: E402
 from _common.source_unit import write_source_unit  # noqa: E402
 from download.gate import gate_download  # noqa: E402
 
 TASK = "旅行/地域/四川省/景区/景区全覆盖"
+
+
+def _attach_image(unit_dir: Path, name: str) -> None:
+    assets = unit_dir / "assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    image = assets / f"{name}.jpg"
+    image.write_bytes(b"fake-image")
+    write_json(
+        assets / "index.json",
+        {
+            "assets": [
+                {
+                    "fileName": image.name,
+                    "sourceAssetId": name,
+                    "sha256": f"sha256:{name}",
+                    "license": "CC-BY-4.0",
+                    "credit": "fixture",
+                    "sourceUrl": "https://example.com/image.jpg",
+                    "termsUrl": "https://example.com/terms",
+                    "usageScope": "commercial_editorial",
+                }
+            ]
+        },
+    )
 
 
 def test_gate_download_passes_object_first_sources():
@@ -43,6 +68,7 @@ def test_gate_download_passes_object_first_sources():
         title="峨眉山（百科）",
         target_ref="/entity/地点/景区/峨眉山",
     )
+    _attach_image(entity_dir / "1.download/sources/01.overview_baike", "emei_1")
     write_source_unit(
         entity_dir,
         ordinal=2,
@@ -55,6 +81,7 @@ def test_gate_download_passes_object_first_sources():
         title="峨眉山（游记）",
         target_ref="/entity/地点/景区/峨眉山",
     )
+    _attach_image(entity_dir / "1.download/sources/02.travel_notes", "emei_2")
     issues = gate_download(TASK, batch)
     assert issues == [], issues
     assert (batch_root(TASK, batch) / "entities").is_dir()

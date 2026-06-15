@@ -45,6 +45,48 @@ _GIF = b"GIF89a" + b"\x00" * 4000
 _WEBP = b"RIFF" + b"\x00\x00\x00\x00" + b"WEBP" + b"\x00" * 4000
 
 
+def _write_lane_plans(batch: str, sources: list[dict], images: list[dict]) -> None:
+    obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区") / STAGE_DOWNLOAD
+    obj.mkdir(parents=True, exist_ok=True)
+    write_json(
+        obj / "article_source_plan.json",
+        {
+            "payload": {
+                "sources": [
+                    {
+                        **source,
+                        "sourceUseMode": source.get("sourceUseMode") or "factual_reference_only",
+                    }
+                    for source in sources
+                ]
+            }
+        },
+    )
+    write_json(
+        obj / "image_source_plan.json",
+        {
+            "payload": {
+                "collections": [
+                    {
+                        "sourceCollectionId": image.get("sourceCollectionId") or f"fixture:{index}",
+                        "creator": image.get("credit") or image.get("creator") or f"Fixture {index}",
+                        "credit": image.get("credit") or image.get("creator") or f"Fixture {index}",
+                        "collectionPageUrl": image.get("collectionPageUrl") or image.get("sourceUrl") or image["url"],
+                        "platform": image.get("platform") or "Wikimedia Commons",
+                        "license": image.get("license") or "CC-BY-SA 4.0",
+                        "termsUrl": image.get("termsUrl") or "https://creativecommons.org/licenses/by-sa/4.0/",
+                        "licenseSnapshot": image.get("licenseSnapshot") or "test fixture",
+                        "authorizationProof": image.get("authorizationProof") or "test fixture authorization",
+                        "usageScope": image.get("usageScope") or "app_publish",
+                        "images": [image],
+                    }
+                    for index, image in enumerate(images, start=1)
+                ]
+            }
+        },
+    )
+
+
 def _real_jpeg(seed: int, *, size=(800, 600)) -> bytes:
     """生成可被 PIL 解析、达到像素门、且彼此视觉不同（避开感知去重）的真实 JPEG。"""
     import io as _io
@@ -118,6 +160,42 @@ def test_fetch_image_writes_and_rejects_non_image():
         fetch_mod._http_get_bytes = orig
 
 
+def test_fetch_image_payload_tries_same_source_high_res_candidates():
+    compressed = "https://img1.qunarzz.com/travel/d1/1509/f3/foo.jpg_r_720x480x95_abcd1234.jpg"
+    original = "https://img1.qunarzz.com/travel/d1/1509/f3/foo.jpg"
+    assert original in fetch_mod.candidate_image_urls(compressed)
+
+    calls: list[str] = []
+    orig = fetch_mod._http_get_bytes
+    try:
+        def _fake_get(url, **_kw):
+            calls.append(url)
+            if url == compressed:
+                return (404, b"", "text/html")
+            if url == original:
+                return (200, _real_jpeg(25), "image/jpeg")
+            return (404, b"", "text/html")
+
+        fetch_mod._http_get_bytes = _fake_get
+        payload = fetch_mod.fetch_image_payload(compressed)
+    finally:
+        fetch_mod._http_get_bytes = orig
+    assert payload is not None
+    assert payload["url"] == original
+    assert payload["requestedUrl"] == compressed
+    assert payload["normalizedFromUrl"] == compressed
+    assert calls[:2] == [compressed, original]
+
+
+def test_candidate_image_urls_restores_wikimedia_thumb_original():
+    thumb = (
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/"
+        "Example_photo.jpg/640px-Example_photo.jpg"
+    )
+    original = "https://upload.wikimedia.org/wikipedia/commons/a/ab/Example_photo.jpg"
+    assert original in fetch_mod.candidate_image_urls(thumb)
+
+
 def test_fetch_image_payload_reads_only_data_root_file_urls():
     local = fetch_mod.DATA_ROOT / "generated" / "asset.jpg"
     local.parent.mkdir(parents=True, exist_ok=True)
@@ -130,6 +208,43 @@ def test_fetch_image_payload_reads_only_data_root_file_urls():
     assert fetch_mod.fetch_image_payload(outside.resolve().as_uri()) is None
 
 
+def test_repeated_fetch_preserves_better_same_url_source_unit():
+    from _common.paths import source_unit_dir
+
+    object_dir = resolve_entity_object_dir(
+        _TASK, "b_source_cache", _EID, etype_hint="景区"
+    )
+    unit = source_unit_dir(object_dir, 1, "stable_source")
+    unit.mkdir(parents=True, exist_ok=True)
+    write_json(unit / "meta.json", {"url": "https://example.test/source"})
+    write_json(
+        unit / "source.quality.json",
+        {
+            "quality": "B-fact",
+            "score": 82,
+            "statusCode": 200,
+        },
+    )
+    (unit / "source.md").write_text("previous retained source", encoding="utf-8")
+
+    cached = handler_mod._cached_source_quality_if_better(
+        object_dir,
+        ordinal=1,
+        source_id="stable_source",
+        url="https://example.test/source",
+        candidate_quality={"quality": "Reject", "score": 5},
+    )
+    assert cached and cached["quality"] == "B-fact"
+
+    assert handler_mod._cached_source_quality_if_better(
+        object_dir,
+        ordinal=1,
+        source_id="stable_source",
+        url="https://example.test/replacement",
+        candidate_quality={"quality": "Reject", "score": 5},
+    ) is None
+
+
 def test_handle_download_fetches_images_into_source_unit():
     """新布局：图片落到首个来源单元 assets/，写 assets/index.json，无对象级散 images/。"""
     from _common.source_unit import iter_source_units, resolve_entity_object_dir
@@ -139,40 +254,39 @@ def test_handle_download_fetches_images_into_source_unit():
     # 两张视觉不同、达到像素门、带真实相关性的图（满足 min count≥2 + relevance + pixels）。
     img_a = _real_jpeg(11)
     img_b = _real_jpeg(97)
-    doc = {
-        "sources": [
+    images = [
+        {
+            "url": "https://img.invalid/a.jpg",
+            "platform": "景区官网",
+            "license": "CC-BY-SA 4.0",
+            "credit": "Ann",
+            "sourceUrl": "https://img.invalid/a.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "usageScope": "app_publish",
+            "caption": "稻城亚丁仙乃日雪山主峰",
+            "relevance": "直接呈现稻城亚丁仙乃日核心徒步段落的雪山实景",
+        },
+        {
+            "url": "https://img.invalid/b.jpg",
+            "platform": "景区官网",
+            "license": "CC-BY-SA 4.0",
+            "credit": "Bob",
+            "sourceUrl": "https://img.invalid/b.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "usageScope": "app_publish",
+            "caption": "牛奶海与五色海高山湖泊",
+            "relevance": "直接呈现稻城亚丁牛奶海与五色海高山湖泊体验段落的实景细节",
+        },
+    ]
+    _write_lane_plans(
+        batch,
+        [
             {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/g", "body": "正文兜底"},
             {"source_id": "s2", "platform": "mafengwo", "url": "https://x.invalid/h", "body": "游记兜底"},
             {"source_id": "s3", "platform": "官网", "url": "https://x.invalid/i", "body": "官方兜底"},
         ],
-        "imageUrls": [
-            {
-                "url": "https://img.invalid/a.jpg",
-                "platform": "景区官网",
-                "license": "CC-BY-SA 4.0",
-                "credit": "Ann",
-                "sourceUrl": "https://img.invalid/a.jpg",
-                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                "usageScope": "app_publish",
-                "caption": "稻城亚丁仙乃日雪山主峰",
-                "relevance": "支撑仙乃日核心徒步段落的雪山实景",
-            },
-            {
-                "url": "https://img.invalid/b.jpg",
-                "platform": "景区官网",
-                "license": "CC-BY-SA 4.0",
-                "credit": "Bob",
-                "sourceUrl": "https://img.invalid/b.jpg",
-                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                "usageScope": "app_publish",
-                "caption": "牛奶海与五色海高山湖泊",
-                "relevance": "对应高山湖泊体验段落的实景细节",
-            },
-        ],
-    }
-    # 对象优先：source_plan 落实体对象 1.download/source_plan.json（prepare 见已存在则不覆盖）。
-    obj_plan = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区") / "1.download" / "source_plan.json"
-    write_json(obj_plan, doc)
+        images,
+    )
 
     _by_url = {"https://img.invalid/a.jpg": img_a, "https://img.invalid/b.jpg": img_b}
 
@@ -214,13 +328,17 @@ def test_handle_download_fetches_images_into_source_unit():
     obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
     units = iter_source_units(obj)
     assert units, f"no source unit under {obj}"
-    assert [unit.name for unit in units] == ["01.s1", "02.s2", "03.s3"], units
-    unit = units[0]
-    index_file = unit / "assets" / "index.json"
-    assert index_file.is_file(), f"missing {index_file}"
-    data = read_json(index_file)
-    assert len(data["assets"]) == 2, data
-    first = data["assets"][0]
+    names = [unit.name for unit in units]
+    assert names[:3] == ["01.s1", "02.s2", "03.s3"], names
+    asset_units = [unit for unit in units if (unit / "assets" / "index.json").is_file()]
+    assert len(asset_units) == 2, asset_units
+    all_assets = []
+    for unit in asset_units:
+        data = read_json(unit / "assets" / "index.json")
+        for asset in data["assets"]:
+            all_assets.append((unit, asset))
+    assert len(all_assets) == 2, all_assets
+    unit, first = all_assets[0]
     assert (unit / "assets" / first["fileName"]).is_file()
     # 新增持久化字段：尺寸 + contentType + 完整版权 + 相关性 + 多变体。
     assert first["width"] >= 640 and first["height"] >= 426, first
@@ -231,8 +349,8 @@ def test_handle_download_fetches_images_into_source_unit():
     assert {"thumbnail", "display"}.issubset(variant_profiles), variant_profiles
     for v in first["variants"]:
         assert (unit / "assets" / v["fileName"]).is_file(), v
-    assert data["assets"][1]["license"] == "CC-BY-SA 4.0"
-    assert data["assets"][1]["credit"] == "Bob"
+    assert all_assets[1][1]["license"] == "CC-BY-SA 4.0"
+    assert all_assets[1][1]["credit"] == "Bob"
     # 不再有对象级散落 images/
     assert not (obj / "images").exists()
 
@@ -242,12 +360,13 @@ def test_handle_download_blocks_unsafe_images_before_persist():
 
     batch = "b_img_handler_unsafe"
     ensure_batch_layout(_TASK, batch, "download")
-    doc = {
-        "sources": [
+    _write_lane_plans(
+        batch,
+        [
             {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/g", "body": "正文兜底"},
             {"source_id": "s2", "platform": "官网", "url": "https://x.invalid/h", "body": "官方兜底"},
         ],
-        "imageUrls": [
+        [
             {
                 "url": "https://img.invalid/a.jpg",
                 "platform": "景区官网",
@@ -257,7 +376,7 @@ def test_handle_download_blocks_unsafe_images_before_persist():
                 "termsUrl": "https://img.invalid/terms",
                 "usageScope": "app_publish",
                 "caption": "稻城亚丁主峰",
-                "relevance": "支撑稻城亚丁主峰段落",
+                "relevance": "直接呈现稻城亚丁主峰",
             },
             {
                 "url": "https://img.invalid/b.jpg",
@@ -268,12 +387,10 @@ def test_handle_download_blocks_unsafe_images_before_persist():
                 "termsUrl": "https://img.invalid/terms",
                 "usageScope": "app_publish",
                 "caption": "牛奶海",
-                "relevance": "支撑牛奶海段落",
+                "relevance": "直接呈现稻城亚丁牛奶海",
             },
         ],
-    }
-    obj_plan = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区") / "1.download" / "source_plan.json"
-    write_json(obj_plan, doc)
+    )
 
     img_a = _real_jpeg(21)
     img_b = _real_jpeg(22)

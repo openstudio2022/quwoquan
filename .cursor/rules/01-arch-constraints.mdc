@@ -324,7 +324,7 @@ lib/ui/content/entry/               # 创作入口，归属 content 域
 | `internal/domain/{entity}.go` struct | `cloud/models/{entity}_dto.dart` | `fields.yaml` |
 | `internal/domain/{entity}_events.go` | `cloud/events/{entity}_events.dart` | `events.yaml` |
 | `internal/adapters/http/{entity}_handler.go` routes | `cloud/services/{domain}/{domain}_repository.dart` Abstract 方法 | `service.yaml` |
-| `runtime/errors` 错误码 | `cloud/runtime/error_codes.dart` | `contracts/error_codes.md` |
+| `runtime/errors` 错误码 | App 端 codegen 错误枚举 / runtime mapper | `contracts/metadata/{domain}/{entity}/errors.yaml` |
 | `runtime/interceptor` 字段策略 | `cloud/runtime/field_policy.dart` | `fields.yaml` |
 
 ### 3.2 metadata↔代码同步

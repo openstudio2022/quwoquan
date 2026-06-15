@@ -19,7 +19,7 @@ G5c 灰度到生产：在 pre-release-gate 通过后，将构建物按**可配�
 - **适用**：首次上线、2 副本；随用户增长可扩展为 4、8 副本等多阶段
 - **约束**：STEP 与脚本沿用 5/25/50/100；`STEP = (目标 replicas / total_replicas) * 100`
 - **不适用**：非 K8s 部署、非滚动发布场景
-- **前置**：`03/04/05` required checks 已通过（`04` 完成 ECS gamma hosted pre + gamma self-hosted 旅程）
+- **前置**：`03/04/05` required checks 已通过（`04` 完成 local-gamma preflight + gamma self-hosted 旅程；真实远端复验由本能力的 `gray-initial` rollout stage 承接）
 - **前置**：prod env package / service env package purity、artifact isolation、host allowlist 校验通过
 
 ## 与父/子节点关系

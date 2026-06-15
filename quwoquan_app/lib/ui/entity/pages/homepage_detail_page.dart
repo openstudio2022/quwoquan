@@ -85,6 +85,8 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       onClaim: _openClaim,
       onMaintain: _openMaintenance,
       onReport: _openStatusReport,
+      onToggleFollow: _toggleHomepageFollow,
+      onMessageOwner: _openOwnerMessage,
       onCreateContent: _openCreateContent,
       onOpenIntroduction: _openIntroduction,
       onAttach: (reference) => context.pop(reference),
@@ -121,8 +123,8 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     final target = VisitTarget.page('homepage_detail_${widget.homepageId}');
     final entityId =
         _objectPageBundle?.canonicalEntityId.trim().isNotEmpty == true
-            ? _objectPageBundle!.canonicalEntityId.trim()
-            : (_detail?.canonicalEntityId?.trim() ?? widget.homepageId);
+        ? _objectPageBundle!.canonicalEntityId.trim()
+        : (_detail?.canonicalEntityId?.trim() ?? widget.homepageId);
     final openContext = AssistantOpenContext(
       source: AssistantSource.profile,
       tab: 'object_intersection',
@@ -268,6 +270,87 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     );
     if (changed == true && mounted) {
       await _load();
+    }
+  }
+
+  Future<void> _toggleHomepageFollow() async {
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      await requireLogin(ref, context, AuthGateReason.follow);
+      if (!mounted ||
+          !ref.read(authSessionControllerProvider).isAuthenticated) {
+        return;
+      }
+    }
+    final detail = _detail;
+    if (detail == null) {
+      return;
+    }
+    try {
+      final repository = ref.read(homepageRepositoryProvider);
+      final next = detail.viewerFollowsHomepage
+          ? await repository.unfollowHomepage(widget.homepageId)
+          : await repository.followHomepage(widget.homepageId);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _detail = next);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      await AppActionErrorFeedback.show(context, semantic: resolved);
+    }
+  }
+
+  Future<void> _openOwnerMessage() async {
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      await requireLogin(
+        ref,
+        context,
+        AuthGateReason.sendMessage,
+        dismissFallback: AppRoutePaths.home,
+      );
+      if (!mounted ||
+          !ref.read(authSessionControllerProvider).isAuthenticated) {
+        return;
+      }
+    }
+    final ownerSubAccountId =
+        (_detail?.ownerSubAccountId?.trim().isNotEmpty == true
+                ? _detail!.ownerSubAccountId
+                : _detail?.ownerUserId)
+            ?.trim();
+    if (ownerSubAccountId == null || ownerSubAccountId.isEmpty) {
+      return;
+    }
+    try {
+      final created = await ref
+          .read(chatRepositoryProvider)
+          .createConversation(
+            type: 'direct',
+            initialMemberIds: <String>[ownerSubAccountId],
+          );
+      if (!mounted || created.conversationId.isEmpty) {
+        return;
+      }
+      context.push(AppRoutePaths.chatDetail(id: created.conversationId));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      await AppActionErrorFeedback.show(context, semantic: resolved);
     }
   }
 

@@ -42,6 +42,7 @@ class _AuthedSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
 
   @override
@@ -55,6 +56,9 @@ class _AuthedSessionStore implements AuthSessionStore {
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> softLogout() async {}
 
   @override
   Future<void> markLaunchPromptDismissed() async {}
@@ -77,7 +81,10 @@ Widget _scopedApp({CircleRepository? mock, VoidCallback? onBack}) {
           GoRoute(
             path: '/',
             builder: (_, _) => Scaffold(
-              body: CircleShell(circleId: 'fixture_circle_photo', onBack: onBack),
+              body: CircleShell(
+                circleId: 'fixture_circle_photo',
+                onBack: onBack,
+              ),
             ),
           ),
           GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
@@ -284,7 +291,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(CircleActionBar),
-          matching: find.text(UITextConstants.followedCircle),
+          matching: find.text(UITextConstants.profileDirectMessage),
         ),
         findsOneWidget,
       );

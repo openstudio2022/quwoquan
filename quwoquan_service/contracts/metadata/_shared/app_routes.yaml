@@ -85,6 +85,9 @@ routes:
   - id: myIntersections
     path: /profile/intersections
     query_params: [dimension]
+  - id: objectIntersections
+    path: /object/intersections
+    query_params: [objectId, objectType, title]
   - id: myFootprint
     path: /profile/footprint
     query_params: [type]

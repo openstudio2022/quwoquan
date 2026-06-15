@@ -36,6 +36,8 @@ description: 实施阶段增量扩展（在已有基线上新增字段/事件/�
 
 **若不满足**：输出补全列表，不执行。若基线不存在 → 引导先执行 `/baseline`，或标准链路 `/prd` + `/design`。
 
+执行前还必须读取 `docs/agent_context_contract.md`，完成 `Spec Entry` 与 `Pre-work Reflection`。若扩展涉及错误码、API path、surface、operation、DTO、seed 或环境配置，必须先确认 metadata 真相源。
+
 ---
 
 ## 使用方式
@@ -238,6 +240,14 @@ description: 实施阶段增量扩展（在已有基线上新增字段/事件/�
 
 任何步骤失败 → 停止并输出错误 + 修复建议。
 
+## 出口
+
+- 输出 metadata 变更、verify/codegen 状态、生成产物和手写补充清单。
+- 明确后续应进入 `/dev` 还是返回 `/prd` / `/design`。
+- 若触发端云链路，说明 App/Service/Data/Ops 哪些区域还需同步。
+
+自然语言等价触发：用户说“加字段”“加错误码”“新增 endpoint”“补 UI 配置”“扩一个契约”时，也按 `/extend` 语义执行。
+
 ---
 
 ## 与 /baseline /design 的职责边界
@@ -250,3 +260,5 @@ description: 实施阶段增量扩展（在已有基线上新增字段/事件/�
 
 **原则**：`/baseline` 与 `/design` 都会调用 `/extend` 的逻辑（内部分发到对应场景），用户在基线化时不需要直接调用 `/extend`。
 `/extend` 是实施阶段的增量工具，当你在写业务逻辑时发现「哦，需要多一个字段」，用它。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

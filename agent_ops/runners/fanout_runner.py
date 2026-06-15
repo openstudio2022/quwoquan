@@ -82,6 +82,7 @@ class RunOutcome:
     retryable: bool = False
     agent_id: str | None = None
     run_id: str | None = None
+    envelope_path: str | None = None
 
 
 AgentRunner = Callable[[Mapping[str, Any]], RunOutcome]
@@ -201,6 +202,30 @@ def _build_agent_options(
     )
 
 
+def _discover_result_envelope(packet: Mapping[str, Any]) -> str | None:
+    """Find the canonical AgentResultEnvelope written by a local Agent run."""
+    if not bool(packet.get("resultEnvelopeRequired")):
+        return None
+    try:
+        root = batch_root(str(packet["taskId"]), str(packet["batchId"]))
+    except Exception:  # noqa: BLE001
+        return None
+    job_id = str(packet.get("jobId") or "").strip()
+    candidates = []
+    if job_id:
+        candidates.extend(
+            [
+                root / "_shared" / "envelopes" / f"{job_id}.json",
+                root / "_shared" / "agent_result_envelopes" / f"{job_id}.json",
+            ]
+        )
+    candidates.append(root / "_shared" / "agent_result_envelope.json")
+    for path in candidates:
+        if path.is_file():
+            return str(path)
+    return None
+
+
 def default_agent_runner(
     packet: Mapping[str, Any],
     *,
@@ -242,6 +267,7 @@ def default_agent_runner(
         passed=status == "finished",
         agent_id=getattr(result, "agent_id", None),
         run_id=getattr(result, "id", None),
+        envelope_path=_discover_result_envelope(packet),
         error=None if status == "finished" else f"run status={status}",
     )
 
@@ -615,7 +641,38 @@ def _process_job(
         return
 
     if outcome.status == "finished" and outcome.passed:
-        oq.complete_job(task_id, batch_id, job_id, lease)
+        if outcome.envelope_path:
+            completed_job = oq.complete_job_with_envelope(
+                task_id,
+                batch_id,
+                job_id,
+                lease,
+                envelope_path=outcome.envelope_path,
+                workspace_root=batch_root(task_id, batch_id),
+            )
+            record["resultEnvelopeRef"] = completed_job.get("resultEnvelopeRef")
+        elif packet.get("resultEnvelopeRequired"):
+            completed_job = oq.fail_job(
+                task_id,
+                batch_id,
+                job_id,
+                lease,
+                error="missing result envelope",
+                fingerprint=oq.issues_fingerprint(["missing result envelope"]),
+                same_run_retryable=True,
+            )
+        else:
+            completed_job = oq.complete_job(task_id, batch_id, job_id, lease)
+        if completed_job.get("state") != oq.STATE_SUCCEEDED:
+            stats.attempt_failures += 1
+            stats.failed += 1
+            stats.refs_failed.append(ref)
+            record["status"] = str(completed_job.get("state") or "failed")
+            record["error"] = str(completed_job.get("lastError") or "result envelope rejected")
+            record["fingerprint"] = (completed_job.get("failureFingerprints") or [None])[-1]
+            stats.run_records.append(record)
+            _upsert_ref_run_record(plan_id, ref=ref, record=record)
+            return
         stats.completed += 1
         stats.refs_completed.append(ref)
         meta = _backfill_draft_meta_run_context(task_id, batch_id, ref, outcome=outcome) or {}

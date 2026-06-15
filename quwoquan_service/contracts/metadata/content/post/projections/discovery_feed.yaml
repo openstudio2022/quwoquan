@@ -28,6 +28,12 @@ fields:
   - { name: contentType, type: enum }
   - { name: contentIdentity, type: enum, description: "内容身份层。moment/work，用于跨面统一过滤" }
   - { name: authorId, type: string }
+  - { name: creatorProfileId, type: string, description: "系统/平台创作者画像 ID" }
+  - { name: creatorArchetype, type: string, description: "创作者类型，用于推荐多样性与作者分布控制" }
+  - { name: creatorProfileVersion, type: string, description: "内容写入时绑定的作者画像版本" }
+  - { name: creatorDisclosure, type: object, description: "用户可见的虚拟创作者披露" }
+  - { name: experienceClaimMode, type: string, description: "经验声明模式，禁止伪真实亲历" }
+  - { name: authorQualitySignals, type: object, description: "作者质量/疲劳/风险调度信号" }
   - { name: title, type: string }
   - { name: tagRefs, type: "[]string" }
   - { name: entityRefs, type: "[]string", description: "实体引用（POI/主页等），承载交集实体维度与推荐实体亲和" }

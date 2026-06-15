@@ -244,11 +244,32 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 		if len(runtimeEntityRefs) == 0 {
 			runtimeEntityRefs = p.EntityRefs
 		}
+		mediaURLs, mediaItems, coverURL := importedMediaFields(p.Assets)
+		body := p.ArticleMarkdown
+		summary := p.ArticleDigest
+		if p.ContentType == "image" {
+			body = p.Body
+			summary = p.Body
+		}
 		doc := bson.M{
 			"postRef": p.PostRef, "contentType": p.ContentType, "title": p.Title,
 			"angle": p.Angle, "seq": p.Seq, "entityRefs": runtimeEntityRefs, "tagRefs": p.TagRefs,
-			"template": p.Template, "generatorModel": p.GeneratorModel, "articleTemplate": p.Template,
-			"body": p.ArticleMarkdown, "summary": p.ArticleDigest,
+			"semanticMentions":      p.SemanticMentions,
+			"authorId":              p.AuthorID,
+			"creatorProfileId":      p.CreatorProfileID,
+			"creatorArchetype":      p.CreatorArchetype,
+			"creatorProfileVersion": p.CreatorProfileVersion,
+			"creatorDisclosure":     p.CreatorDisclosure,
+			"experienceClaimMode":   p.ExperienceClaimMode,
+			"authorQualitySignals":  p.AuthorQualitySignals,
+			"sourceCollectionId":    p.SourceCollectionID,
+			"sourcePlatform":        p.SourcePlatform,
+			"creator":               p.Creator,
+			"page":                  p.Page,
+			"licenseProof":          p.LicenseProof,
+			"template":              p.Template, "generatorModel": p.GeneratorModel, "articleTemplate": p.Template,
+			"body": body, "summary": summary,
+			"mediaUrls": mediaURLs, "mediaItems": mediaItems, "coverUrl": coverURL,
 			"articleMarkdown": p.ArticleMarkdown, "articleDigest": p.ArticleDigest, "articleMarkdownDigest": p.ArticleDigest,
 			"articleAssetManifest": p.ArticleAssetManifest,
 			"sourceTaskId":         p.SourceTaskId,
@@ -383,6 +404,41 @@ func conditionProfileIndex(entities []EntityDoc) map[string]map[string]any {
 	return idx
 }
 
+func importedMediaFields(assets []AssetManifestItem) ([]string, []bson.M, string) {
+	urls := make([]string, 0, len(assets))
+	items := make([]bson.M, 0, len(assets))
+	coverURL := ""
+	for _, asset := range assets {
+		url := asset.CDNURL
+		if url == "" {
+			continue
+		}
+		if coverURL == "" {
+			coverURL = url
+		}
+		urls = append(urls, url)
+		item := bson.M{
+			"assetId": asset.AssetID,
+			"kind":    asset.Kind,
+			"url":     url,
+		}
+		if asset.Caption != "" {
+			item["caption"] = asset.Caption
+		}
+		if asset.Role != "" {
+			item["role"] = asset.Role
+		}
+		if asset.Width > 0 {
+			item["width"] = asset.Width
+		}
+		if asset.Height > 0 {
+			item["height"] = asset.Height
+		}
+		items = append(items, item)
+	}
+	return urls, items, coverURL
+}
+
 // UpsertDiscoveryFeed 把发布主线内容同写发现流 ReadModel（rm_discovery_feed）。
 // postId 用稳定 postRef；conditionProfile 取首个命中实体的画像冗余。
 // status/visibility 固定 published/public（冷启动内容均为公开发布），保证召回可见。
@@ -408,21 +464,40 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 		}
 		newHash := sourceHash(p)
 		set := bson.M{
-			"postId":               p.PostRef,
-			"title":                p.Title,
-			"contentType":          p.ContentType,
-			"contentIdentity":      "work",
-			"tagRefs":              p.TagRefs,
-			"entityRefs":           runtimeEntityRefs,
-			"articleAssetManifest": p.ArticleAssetManifest,
-			"sourceTaskId":         p.SourceTaskId,
-			"conditionProfile":     cond,
-			"status":               "published",
-			"visibility":           "public",
-			"sourceHash":           newHash,
-			"createdAt":            p.CreatedAt,
-			"updatedAt":            p.UpdatedAt,
-			"publishedAt":          p.PublishedAt,
+			"postId":                p.PostRef,
+			"title":                 p.Title,
+			"contentType":           p.ContentType,
+			"contentIdentity":       "work",
+			"authorId":              p.AuthorID,
+			"creatorProfileId":      p.CreatorProfileID,
+			"creatorArchetype":      p.CreatorArchetype,
+			"creatorProfileVersion": p.CreatorProfileVersion,
+			"creatorDisclosure":     p.CreatorDisclosure,
+			"experienceClaimMode":   p.ExperienceClaimMode,
+			"authorQualitySignals":  p.AuthorQualitySignals,
+			"tagRefs":               p.TagRefs,
+			"entityRefs":            runtimeEntityRefs,
+			"semanticMentions":      p.SemanticMentions,
+			"sourceCollectionId":    p.SourceCollectionID,
+			"sourcePlatform":        p.SourcePlatform,
+			"creator":               p.Creator,
+			"page":                  p.Page,
+			"licenseProof":          p.LicenseProof,
+			"articleAssetManifest":  p.ArticleAssetManifest,
+			"sourceTaskId":          p.SourceTaskId,
+			"conditionProfile":      cond,
+			"status":                "published",
+			"visibility":            "public",
+			"sourceHash":            newHash,
+			"createdAt":             p.CreatedAt,
+			"updatedAt":             p.UpdatedAt,
+			"publishedAt":           p.PublishedAt,
+		}
+		mediaURLs, mediaItems, coverURL := importedMediaFields(p.Assets)
+		if len(mediaURLs) > 0 {
+			set["mediaUrls"] = mediaURLs
+			set["mediaItems"] = mediaItems
+			set["coverUrl"] = coverURL
 		}
 		for k, v := range releaseFields(opts, now, "active") {
 			set[k] = v

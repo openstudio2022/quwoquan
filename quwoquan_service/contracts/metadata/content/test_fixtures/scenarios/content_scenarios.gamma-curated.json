@@ -1638,41 +1638,6 @@
           ]
         }
       }
-    },
-    "footprint_core": {
-      "description": "我的足迹只读 seed：postRef 指向 content_discovery_core.posts（single-source，不复制第二套内容）；type/action 映射由云侧唯一定义，此处为云端响应镜像。",
-      "items": [
-        {
-          "postRef": "fixture_photo_001",
-          "action": "click",
-          "type": "viewed",
-          "occurredAgoHours": 2
-        },
-        {
-          "postRef": "fixture_article_001",
-          "action": "content_depth",
-          "type": "viewed",
-          "occurredAgoHours": 8
-        },
-        {
-          "postRef": "fixture_photo_001",
-          "action": "like",
-          "type": "liked",
-          "occurredAgoHours": 26
-        },
-        {
-          "postRef": "fixture_article_001",
-          "action": "comment",
-          "type": "commented",
-          "occurredAgoHours": 50
-        },
-        {
-          "postRef": "fixture_photo_001",
-          "action": "share",
-          "type": "shared",
-          "occurredAgoHours": 96
-        }
-      ]
     }
   },
   "scenarios": [

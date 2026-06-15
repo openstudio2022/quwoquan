@@ -11,6 +11,8 @@ class AuthLoginResultDto {
   final String anonymousRetentionPolicy;
   final Map<String, dynamic>? activeSub;
   final int subAccountCount;
+  final int sessionRememberTtlSeconds;
+  final Map<String, dynamic>? accountHint;
 
   AuthLoginResultDto({
     this.accessToken = '',
@@ -22,6 +24,8 @@ class AuthLoginResultDto {
     this.anonymousRetentionPolicy = '',
     this.activeSub,
     this.subAccountCount = 0,
+    this.sessionRememberTtlSeconds = 0,
+    this.accountHint,
   });
 
   factory AuthLoginResultDto.fromMap(Map<String, dynamic> m) {
@@ -35,6 +39,8 @@ class AuthLoginResultDto {
       anonymousRetentionPolicy: m['anonymousRetentionPolicy']?.toString() ?? '',
       activeSub: _parseStringKeyMap(m['activeSub']) ?? null,
       subAccountCount: (m['subAccountCount'] as num?)?.toInt() ?? 0,
+      sessionRememberTtlSeconds: (m['sessionRememberTtlSeconds'] as num?)?.toInt() ?? (m['rememberTtlSeconds'] as num?)?.toInt() ?? 0,
+      accountHint: _parseStringKeyMap(m['accountHint']) ?? null,
     );
   }
 
@@ -49,6 +55,8 @@ class AuthLoginResultDto {
       'anonymousRetentionPolicy': anonymousRetentionPolicy,
       'activeSub': activeSub,
       'subAccountCount': subAccountCount,
+      'sessionRememberTtlSeconds': sessionRememberTtlSeconds,
+      'accountHint': accountHint,
     };
   }
 
@@ -62,6 +70,8 @@ class AuthLoginResultDto {
     String? anonymousRetentionPolicy,
     Map<String, dynamic>? activeSub,
     int? subAccountCount,
+    int? sessionRememberTtlSeconds,
+    Map<String, dynamic>? accountHint,
   }) {
     return AuthLoginResultDto(
       accessToken: accessToken ?? this.accessToken,
@@ -73,6 +83,8 @@ class AuthLoginResultDto {
       anonymousRetentionPolicy: anonymousRetentionPolicy ?? this.anonymousRetentionPolicy,
       activeSub: activeSub ?? this.activeSub,
       subAccountCount: subAccountCount ?? this.subAccountCount,
+      sessionRememberTtlSeconds: sessionRememberTtlSeconds ?? this.sessionRememberTtlSeconds,
+      accountHint: accountHint ?? this.accountHint,
     );
   }
 }

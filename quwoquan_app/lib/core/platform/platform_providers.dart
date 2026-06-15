@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
@@ -43,7 +44,18 @@ final assistantLocalContextBridgeProvider =
 });
 
 /// Native auth bridge for provider-backed social/system credential entrypoints.
+///
+/// Environment-injected (mirrors the server's mock/sandbox/real split):
+///   - alpha/beta/gamma: [SandboxNativeAuthBridge] returns release-safe sandbox
+///     tickets (no vendor SDK / no network), so social login is end-to-end
+///     testable without production credentials;
+///   - prod: real [MethodChannelNativeAuthBridge] on mobile; web/ohos/desktop
+///     degrade to the structured "unavailable" bridge.
 final nativeAuthBridgeProvider = Provider<NativeAuthBridge>((ref) {
+  final env = CloudRuntimeConfig.appRuntimeEnv;
+  if (env == 'alpha' || env == 'beta' || env == 'gamma') {
+    return SandboxNativeAuthBridge();
+  }
   final platform = ref.watch(platformTargetProvider);
   switch (platform) {
     case AppPlatform.android:

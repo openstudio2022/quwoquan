@@ -12,27 +12,37 @@ scope:
   out_of_scope: []
 gwt_acceptance:
   GWT1:
-    title: homepage overview and module shell GWT
+    title: 地点和事物主页首屏统一结构
     given:
-    - 前置条件明确。
+    - 用户进入一个已发布的地点和事物主页。
     when:
-    - 用户或系统动作发生。
+    - 页面首屏完成渲染。
     then:
-    - 可观察结果符合预期。
+    - 用户 5 秒内能看懂这是什么、我与它有什么关系、围绕它正在发生什么。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 首屏顺序为身份区、关注/私信、与你的交集、认识对象、内容/讨论/兴趣圈。
+    - 用户可见文案不出现实体，兜底使用对象名、具体类型或这个主页。
+    - 与你的交集使用纵向列表，默认 3 条，展开更多后再进入全部交集页。
+    - 紫色主视觉替换为品牌蓝；管理、认领、状态上报在更多菜单中。
+    edge_cases:
+    - 无介绍摘要时认识对象卡不阻塞首屏。
+    - 无交集时交集模块收起，不制造假交集。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/app_routes.yaml#objectIntersections
+    performance_points:
+    - 首屏关键摘要可见时间 p95 < 1.2s
     evidence:
       primary:
       - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T4_journey
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      - quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+    status: passing
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

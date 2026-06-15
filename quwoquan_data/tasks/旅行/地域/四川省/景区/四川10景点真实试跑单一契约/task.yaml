@@ -1,0 +1,68 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/景区/四川10景点真实试跑单一契约
+title: 四川10景点真实试跑单一契约
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 四姑娘山
+  - entityType: 地点/景区
+    name: 毕棚沟
+  - entityType: 地点/景区
+    name: 稻城亚丁
+  - entityType: 地点/景区
+    name: 海螺沟
+  - entityType: 地点/景区
+    name: 墨石公园
+  - entityType: 地点/景区
+    name: 都江堰
+  - entityType: 地点/景区
+    name: 九寨沟
+  - entityType: 地点/景区
+    name: 乐山大佛
+  - entityType: 地点/景区
+    name: 碧峰峡
+  - entityType: 地点/景区
+    name: 蜀南竹海
+provenance:
+  createdAt: '2026-06-14T04:24:18.998464+00:00'
+  createdBy: codex-real-trial
+content:
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    - article
+    - image
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+      article: 3
+      image: 4
+    allowAiImages: false
+  carriers:
+  - article
+  - image
+  quotas:
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 1
+    entityHomepagesPerTarget: 1
+    routeArticles: 0
+acceptance:
+  minEntities: 10
+  minPostsPerEntity: 5
+  requiredAngles:
+  - planning_consultation
+  - decision_experience
+  - route_transport
+  - seasonal_timing
+  - image

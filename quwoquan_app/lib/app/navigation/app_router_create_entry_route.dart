@@ -28,6 +28,15 @@ class _CreateEntryRoutePage extends ConsumerWidget {
           }
         });
       },
+      onCreateCircle: () {
+        context.pop();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) {
+            return;
+          }
+          GlobalQuickActionSheet.openCreateCircle(context);
+        });
+      },
     );
   }
 }

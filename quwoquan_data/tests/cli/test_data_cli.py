@@ -45,11 +45,13 @@ from _common.paths import (  # noqa: E402
     batch_audit_markdown_path,
     batch_audit_summary_path,
     batch_entity_object_dir,
+    batch_workflow_state_path,
     ensure_batch_layout,
     ensure_task_layout,
     committed_task_spec,
     committed_task_progress,
     fanout_plan_path,
+    fanout_run_matrix_path,
     task_baseline_freeze_packet_path,
     task_catalog,
     task_explore_packet_path,
@@ -62,6 +64,7 @@ from _common.source_unit import write_source_unit  # noqa: E402
 from task import run as run_mod  # noqa: E402
 from task import handler as task_handler_mod  # noqa: E402
 from task import store  # noqa: E402
+from _common import python_runtime  # noqa: E402
 
 CLI = SCRIPTS_ROOT / "cli.py"
 
@@ -155,6 +158,136 @@ def test_cli_has_data_root_and_no_flat_explore():
     )
     assert task_help.returncode == 0, task_help.stderr
     assert "scaled-e2e" in task_help.stdout
+
+    env_help = subprocess.run(
+        [sys.executable, str(CLI), "env", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert env_help.returncode == 0, env_help.stderr
+    for name in ("doctor", "prepare", "preflight", "ready"):
+        assert name in env_help.stdout
+
+
+def test_python_runtime_prefers_data_venv_when_current_lacks_cursor_sdk():
+    original_candidates = python_runtime.candidate_pythons
+    original_has_modules = python_runtime.python_has_modules
+    current = Path("/usr/bin/python3")
+    data_python = python_runtime.DATA_VENV_PYTHON
+    try:
+        python_runtime.candidate_pythons = lambda include_current=True: [current, data_python]
+
+        def _fake_has_modules(python, modules):
+            if Path(python) == data_python:
+                return True, []
+            return False, ["cursor_sdk: No module named 'cursor_sdk'"]
+
+        python_runtime.python_has_modules = _fake_has_modules
+        assert python_runtime.resolve_data_agent_python(include_current=True) == data_python
+    finally:
+        python_runtime.candidate_pythons = original_candidates
+        python_runtime.python_has_modules = original_has_modules
+
+
+def test_environment_preflight_gates_key_runtime_and_network():
+    original_runtime_report = python_runtime.runtime_report
+    original_network = python_runtime.check_network_endpoints
+    old_key = os.environ.pop("CURSOR_API_KEY", None)
+    try:
+        python_runtime.runtime_report = lambda: {
+            "schemaVersion": "quwoquan_data.python_runtime",
+            "currentPython": "/usr/bin/python3",
+            "resolvedPython": str(python_runtime.DATA_VENV_PYTHON),
+            "ready": True,
+            "candidates": [],
+        }
+        missing_key = python_runtime.environment_preflight(check_network=True)
+        assert missing_key["ready"] is False
+        assert "CURSOR_API_KEY missing" in missing_key["issues"]
+        assert missing_key["network"]["skipped"] is True
+
+        os.environ["CURSOR_API_KEY"] = "not-a-cursor-key"
+        bad_key = python_runtime.environment_preflight(check_network=True)
+        assert bad_key["ready"] is False
+        assert "CURSOR_API_KEY format invalid" in bad_key["issues"]
+        assert bad_key["network"]["skipped"] is True
+
+        os.environ["CURSOR_API_KEY"] = "crsr_" + ("x" * 32)
+        python_runtime.check_network_endpoints = lambda **_kwargs: {
+            "checked": True,
+            "skipped": False,
+            "ready": True,
+            "endpoints": [],
+            "issues": [],
+        }
+        ready = python_runtime.environment_preflight(check_network=True)
+        assert ready["ready"] is True
+        assert ready["network"]["checked"] is True
+    finally:
+        python_runtime.runtime_report = original_runtime_report
+        python_runtime.check_network_endpoints = original_network
+        if old_key is None:
+            os.environ.pop("CURSOR_API_KEY", None)
+        else:
+            os.environ["CURSOR_API_KEY"] = old_key
+
+
+def test_network_probe_falls_back_to_get_when_head_fails():
+    original_urlopen = python_runtime.urlrequest.urlopen
+    calls: list[str] = []
+
+    class _FakeResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    def _fake_urlopen(request, timeout):  # noqa: ARG001
+        calls.append(request.get_method())
+        if request.get_method() == "HEAD":
+            raise OSError("EOF occurred in violation of protocol")
+        return _FakeResponse()
+
+    try:
+        python_runtime.urlrequest.urlopen = _fake_urlopen
+        row = python_runtime._probe_endpoint("https://api2.cursor.sh/", timeout_seconds=1)
+    finally:
+        python_runtime.urlrequest.urlopen = original_urlopen
+
+    assert calls == ["HEAD", "GET"]
+    assert row["reachable"] is True
+    assert row["method"] == "GET"
+
+
+def test_network_probe_falls_back_to_curl_when_urllib_fails():
+    original_urlopen = python_runtime.urlrequest.urlopen
+    original_which = python_runtime.shutil.which
+    original_run = python_runtime.subprocess.run
+
+    class _FakeProc:
+        returncode = 0
+        stdout = "200"
+        stderr = ""
+
+    try:
+        python_runtime.urlrequest.urlopen = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            OSError("EOF occurred in violation of protocol")
+        )
+        python_runtime.shutil.which = lambda name: "/usr/bin/curl" if name == "curl" else None
+        python_runtime.subprocess.run = lambda *_args, **_kwargs: _FakeProc()
+        row = python_runtime._probe_endpoint("https://api2.cursor.sh/", timeout_seconds=1)
+    finally:
+        python_runtime.urlrequest.urlopen = original_urlopen
+        python_runtime.shutil.which = original_which
+        python_runtime.subprocess.run = original_run
+
+    assert row["reachable"] is True
+    assert row["method"] == "curl"
+    assert row["status"] == 200
 
 
 def test_explore_writes_catalog_and_packet():
@@ -357,7 +490,7 @@ def test_task_scaled_e2e_verify_delegates_to_gate_verify():
             called["task"] = task
             called["batch"] = batch
             called["scope"] = scope
-            return (["/tmp/root"], [])
+            return ([Path("/tmp/root")], [])
 
         task_handler_mod.gate_verify = _fake_gate_verify
         task_handler_mod.handle_scaled_e2e(
@@ -382,7 +515,7 @@ def test_task_scaled_e2e_verify_plan_aggregates_units():
     try:
         def _fake_gate_verify(*, task=None, batch=None, release=None, scope="current"):
             called.append((task, batch))
-            return (["/tmp/root"], [])
+            return ([Path("/tmp/root")], [])
 
         drift_called: list[tuple[str, str, float]] = []
         golden_called = {"count": 0}
@@ -397,6 +530,30 @@ def test_task_scaled_e2e_verify_plan_aggregates_units():
         verify_handler_mod.handle_sample_drift = _fake_sample_drift
         verify_handler_mod.handle_goldenset = _fake_goldenset
         _seed_frozen_plan("plan_verify")
+        task_id = "旅行/地域/四川省/plan_verify_task"
+        batch_id = "fanout_plan_verify"
+        write_json(
+            fanout_run_matrix_path("plan_verify"),
+            {
+                "schemaVersion": "quwoquan_data.fanout_run_matrix/1",
+                "planId": "plan_verify",
+                "orchestrators": [{"worker": "part::四川省", "reached": True, "missing": [], "error": None}],
+                "workers": [],
+                "summary": {"orchestrated": 1, "completed": 1, "failed": 0, "attemptFailures": 0, "startupFailures": 0, "orchestrationFailed": 0},
+            },
+        )
+        write_json(
+            batch_workflow_state_path(task_id, batch_id),
+            {
+                "schemaVersion": "quwoquan.task.workflow_state",
+                "taskId": task_id,
+                "batchId": batch_id,
+                "completed": ["download_plan", "build_homepage", "content_plan", "produce_compose", "produce_author", "review", "release"],
+                "waitingCheckpoint": None,
+                "status": "succeeded",
+                "failedObjects": [],
+            },
+        )
         task_handler_mod.handle_scaled_e2e(
             argparse.Namespace(
                 scaled_e2e_command="verify",
@@ -412,6 +569,43 @@ def test_task_scaled_e2e_verify_plan_aggregates_units():
     assert called == [("旅行/地域/四川省/plan_verify_task", "fanout_plan_verify")], called
     assert drift_called == [("旅行/地域/四川省/plan_verify_task", "fanout_plan_verify", 1.0)]
     assert golden_called["count"] == 1
+
+
+def test_task_scaled_e2e_verify_plan_rejects_empty_run():
+    import contextlib
+    import io
+    import verify.handler as verify_handler_mod
+
+    original = task_handler_mod.gate_verify
+    original_sample = verify_handler_mod.handle_sample_drift
+    original_golden = verify_handler_mod.handle_goldenset
+    stderr = io.StringIO()
+    try:
+        task_handler_mod.gate_verify = lambda **_: ([], [])
+        verify_handler_mod.handle_sample_drift = lambda args: None
+        verify_handler_mod.handle_goldenset = lambda args: None
+        _seed_frozen_plan("plan_empty_verify")
+        with contextlib.redirect_stderr(stderr):
+            try:
+                task_handler_mod.handle_scaled_e2e(
+                    argparse.Namespace(
+                        scaled_e2e_command="verify",
+                        task=None,
+                        batch=None,
+                        plan="plan_empty_verify",
+                    )
+                )
+            except SystemExit as exc:
+                assert int(exc.code) == 1
+            else:
+                raise AssertionError("empty scaled E2E run should fail")
+    finally:
+        task_handler_mod.gate_verify = original
+        verify_handler_mod.handle_sample_drift = original_sample
+        verify_handler_mod.handle_goldenset = original_golden
+    captured = stderr.getvalue()
+    assert "missing run_matrix.json" in captured
+    assert "no current artifacts found" in captured
 
 
 def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> None:
@@ -835,6 +1029,28 @@ def test_task_scaled_e2e_verify_plan_writes_partition_audit_summary():
         )
         _seed_entity_object_for_audit(task_id, batch_id, name="都江堰")
         _seed_verified_post_for_audit(task_id, batch_id, ref="都江堰_攻略", title="都江堰一日游怎么玩", name="都江堰")
+        write_json(
+            fanout_run_matrix_path("plan_audit"),
+            {
+                "schemaVersion": "quwoquan_data.fanout_run_matrix/1",
+                "planId": "plan_audit",
+                "orchestrators": [{"worker": "part::成都平原", "reached": True, "missing": [], "error": None}],
+                "workers": [],
+                "summary": {"orchestrated": 1, "completed": 1, "failed": 0, "attemptFailures": 0, "startupFailures": 0, "orchestrationFailed": 0},
+            },
+        )
+        write_json(
+            batch_workflow_state_path(task_id, batch_id),
+            {
+                "schemaVersion": "quwoquan.task.workflow_state",
+                "taskId": task_id,
+                "batchId": batch_id,
+                "completed": ["download_plan", "build_homepage", "content_plan", "produce_compose", "produce_author", "review", "release"],
+                "waitingCheckpoint": None,
+                "status": "succeeded",
+                "failedObjects": [],
+            },
+        )
 
         task_handler_mod.handle_scaled_e2e(
             argparse.Namespace(

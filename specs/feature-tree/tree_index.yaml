@@ -2967,6 +2967,20 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: four-environment-commercial-login-maturity
+              name: four-environment-commercial-login-maturity
+              level: L3_story
+              path: user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity
+              domain: ""
+              status: specified
+              tags: []
+            - id: two-state-one-tap-login--commercial-login-entry
+              name: two-state-one-tap-login--commercial-login-entry
+              level: L3_story
+              path: user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry
+              domain: ""
+              status: specified
+              tags: []
             - id: welcome-entry-routing
               name: welcome-entry-routing
               level: L3_story

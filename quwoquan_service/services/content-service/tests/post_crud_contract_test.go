@@ -22,7 +22,7 @@ import (
 func TestCreatePostAggregate(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	body := `{"title":"sunset over the lake","body":"golden hour photography","contentType":"image","tagRefs":["photo","nature"],"mediaUrls":["https://example.com/sunset.jpg"]}`
+	body := `{"title":"sunset over the lake","body":"golden hour photography","contentType":"image","mediaUrls":["https://example.com/sunset.jpg"]}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_test_001")

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/governance/candidate",
+  "title": "Governed candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "candidateId",
+    "kind",
+    "naturalKey",
+    "status",
+    "payload",
+    "sourceRefs",
+    "mentionIds",
+    "createdAt",
+    "updatedAt",
+    "version"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "quwoquan_data.governance_candidate/1"
+    },
+    "candidateId": {
+      "type": "string",
+      "pattern": "^candidate_[0-9a-f]{24}$"
+    },
+    "kind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "naturalKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["published", "pending_review", "rejected", "offline"]
+    },
+    "payload": {
+      "type": "object"
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "mentionIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^mention_[0-9a-f]{24}$"
+      },
+      "uniqueItems": true
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "lastReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decisionId", "reviewer", "reviewedAt"],
+      "properties": {
+        "decisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

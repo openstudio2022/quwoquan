@@ -60,6 +60,9 @@ type Homepage struct {
 	City               string           `json:"city,omitempty"`
 	Location           *GeoPoint        `json:"location,omitempty"`
 	OwnerUserID        string           `json:"ownerUserId,omitempty"`
+	OwnerSubAccountID  string           `json:"ownerSubAccountId,omitempty"`
+	ViewerFollows      bool             `json:"viewerFollowsHomepage"`
+	FollowerCount      int              `json:"followerCount"`
 	AverageRating      *float64         `json:"averageRating,omitempty"`
 	RatingCount        int              `json:"ratingCount"`
 	ReviewSummary      map[string]any   `json:"reviewSummary,omitempty"`
@@ -210,6 +213,7 @@ type HomepageService struct {
 	mu            sync.RWMutex
 	store         HomepageStateStore
 	homepages     map[string]*Homepage
+	followers     map[string]map[string]bool
 	claimRequests map[string]*HomepageClaimRequest
 	statusReports map[string]*HomepageStatusReport
 	sequence      uint64
@@ -222,6 +226,7 @@ type HomepageStateStore interface {
 
 type HomepageStateSnapshot struct {
 	Homepages     []Homepage             `json:"homepages" bson:"homepages"`
+	Followers     map[string][]string    `json:"followers" bson:"followers"`
 	ClaimRequests []HomepageClaimRequest `json:"claimRequests" bson:"claimRequests"`
 	StatusReports []HomepageStatusReport `json:"statusReports" bson:"statusReports"`
 	Sequence      uint64                 `json:"sequence" bson:"sequence"`
@@ -236,6 +241,7 @@ func NewHomepageServiceWithStore(ctx context.Context, store HomepageStateStore) 
 	svc := &HomepageService{
 		store:         store,
 		homepages:     map[string]*Homepage{},
+		followers:     map[string]map[string]bool{},
 		claimRequests: map[string]*HomepageClaimRequest{},
 		statusReports: map[string]*HomepageStatusReport{},
 	}
@@ -419,6 +425,14 @@ func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepage
 }
 
 func (s *HomepageService) GetHomepage(ctx context.Context, homepageID string) (*Homepage, error) {
+	return s.GetHomepageForViewer(ctx, homepageID, "")
+}
+
+func (s *HomepageService) GetHomepageForViewer(
+	ctx context.Context,
+	homepageID string,
+	viewerID string,
+) (*Homepage, error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.GetHomepage",
 		attribute.String("homepage.id", homepageID))
 	var err error
@@ -432,6 +446,81 @@ func (s *HomepageService) GetHomepage(ctx context.Context, homepageID string) (*
 		return nil, err
 	}
 	out := cloneHomepage(homepage)
+	s.applyViewerFollowStateLocked(&out, viewerID)
+	return &out, nil
+}
+
+func (s *HomepageService) FollowHomepage(
+	ctx context.Context,
+	homepageID string,
+	viewerID string,
+) (*Homepage, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.FollowHomepage",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	viewerID = strings.TrimSpace(viewerID)
+	if viewerID == "" {
+		err = newAppError(403, codePermissionDenied, "请先登录后再关注", "missing viewer id")
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	homepage, ok := s.resolveHomepageLocked(homepageID)
+	if !ok {
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
+	}
+	if homepage.Status == "offline" {
+		err = newAppError(410, codeHomepageOffline, "主页已下线，仅保留记录信息", "homepage offline")
+		return nil, err
+	}
+	if s.followers[homepage.ID] == nil {
+		s.followers[homepage.ID] = map[string]bool{}
+	}
+	s.followers[homepage.ID][viewerID] = true
+	if err = s.persistLocked(ctx); err != nil {
+		return nil, err
+	}
+	out := cloneHomepage(homepage)
+	s.applyViewerFollowStateLocked(&out, viewerID)
+	return &out, nil
+}
+
+func (s *HomepageService) UnfollowHomepage(
+	ctx context.Context,
+	homepageID string,
+	viewerID string,
+) (*Homepage, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.UnfollowHomepage",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	viewerID = strings.TrimSpace(viewerID)
+	if viewerID == "" {
+		err = newAppError(403, codePermissionDenied, "请先登录后再取消关注", "missing viewer id")
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	homepage, ok := s.resolveHomepageLocked(homepageID)
+	if !ok {
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
+	}
+	if followers := s.followers[homepage.ID]; followers != nil {
+		delete(followers, viewerID)
+		if len(followers) == 0 {
+			delete(s.followers, homepage.ID)
+		}
+	}
+	if err = s.persistLocked(ctx); err != nil {
+		return nil, err
+	}
+	out := cloneHomepage(homepage)
+	s.applyViewerFollowStateLocked(&out, viewerID)
 	return &out, nil
 }
 
@@ -604,6 +693,7 @@ func (s *HomepageService) ReviewHomepageClaimRequest(
 		request.Status = "approved"
 		homepage.ClaimStatus = "claimed"
 		homepage.OwnerUserID = request.RequesterUserID
+		homepage.OwnerSubAccountID = request.RequesterUserID
 	case "rejected":
 		request.Status = "rejected"
 		homepage.ClaimStatus = "rejected"
@@ -1440,6 +1530,16 @@ func cloneHomepage(in *Homepage) Homepage {
 	return out
 }
 
+func (s *HomepageService) applyViewerFollowStateLocked(homepage *Homepage, viewerID string) {
+	if homepage == nil {
+		return
+	}
+	followers := s.followers[homepage.ID]
+	homepage.FollowerCount = len(followers)
+	viewerID = strings.TrimSpace(viewerID)
+	homepage.ViewerFollows = viewerID != "" && followers != nil && followers[viewerID]
+}
+
 func cloneStrings(values []string) []string {
 	if len(values) == 0 {
 		return nil
@@ -1487,6 +1587,21 @@ func (s *HomepageService) applySnapshot(snapshot *HomepageStateSnapshot) {
 		homepage := cloneHomepage(&snapshot.Homepages[i])
 		s.homepages[homepage.ID] = &homepage
 	}
+	for homepageID, followers := range snapshot.Followers {
+		homepageID = strings.TrimSpace(homepageID)
+		if homepageID == "" {
+			continue
+		}
+		if s.followers[homepageID] == nil {
+			s.followers[homepageID] = map[string]bool{}
+		}
+		for _, viewerID := range followers {
+			viewerID = strings.TrimSpace(viewerID)
+			if viewerID != "" {
+				s.followers[homepageID][viewerID] = true
+			}
+		}
+	}
 	for i := range snapshot.ClaimRequests {
 		request := snapshot.ClaimRequests[i]
 		s.claimRequests[request.ID] = &request
@@ -1507,6 +1622,19 @@ func (s *HomepageService) snapshotLocked() HomepageStateSnapshot {
 	sort.Slice(homepages, func(i, j int) bool {
 		return homepages[i].ID < homepages[j].ID
 	})
+
+	followers := make(map[string][]string, len(s.followers))
+	for homepageID, set := range s.followers {
+		if len(set) == 0 {
+			continue
+		}
+		viewerIDs := make([]string, 0, len(set))
+		for viewerID := range set {
+			viewerIDs = append(viewerIDs, viewerID)
+		}
+		sort.Strings(viewerIDs)
+		followers[homepageID] = viewerIDs
+	}
 
 	claimRequests := make([]HomepageClaimRequest, 0, len(s.claimRequests))
 	for _, request := range s.claimRequests {
@@ -1530,6 +1658,7 @@ func (s *HomepageService) snapshotLocked() HomepageStateSnapshot {
 
 	return HomepageStateSnapshot{
 		Homepages:     homepages,
+		Followers:     followers,
 		ClaimRequests: claimRequests,
 		StatusReports: statusReports,
 		Sequence:      atomic.LoadUint64(&s.sequence),

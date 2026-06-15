@@ -17,6 +17,11 @@ void main() {
           RuntimeContextAttribute(key: 'downstreamStatus', value: '504'),
         ],
       ),
+      recovery: RuntimeRecoveryDirective(
+        action: 'retry',
+        afterSeconds: 5,
+        disruptionLevel: 'snackbar',
+      ),
     );
     const response = RuntimeErrorResponse(
       failure: failure,
@@ -29,6 +34,9 @@ void main() {
     expect(parsed.failure.code, failure.code);
     expect(parsed.failure.location.businessObject, 'assistant_turn');
     expect(parsed.failure.context.attributes.single.value, '504');
+    expect(parsed.failure.recovery.action, 'retry');
+    expect(parsed.failure.recovery.afterSeconds, 5);
+    expect(parsed.failure.recovery.disruptionLevel, 'snackbar');
   });
 
   test('missing context defaults to empty attributes', () {
@@ -46,19 +54,58 @@ void main() {
     expect(response.failure.context.attributes, isEmpty);
   });
 
-  test('current response normalizes details-free runtime failure', () {
-    final response = RuntimeErrorResponse.fromCurrentJson(<String, dynamic>{
-      'code': 'ASSISTANT.MIDDLEWARE.llm_timeout',
-      'kind': 'MIDDLEWARE',
-      'module': 'ASSISTANT',
-      'reason': 'llm_timeout',
-      'requestId': 'request-1',
-      'traceId': 'trace-1',
+  test('downlinked recovery directive is parsed from response body', () {
+    final response = RuntimeErrorResponse.fromJson(<String, dynamic>{
+      'code': 'USER.AUTH.otp_rate_limited',
+      'origin': 'user',
+      'kind': 'rateLimited',
+      'nature': 'permanent',
+      'userMessage': '发送过于频繁，请稍后再试',
+      'recovery': <String, dynamic>{
+        'action': 'retry',
+        'afterSeconds': 42,
+        'disruptionLevel': 'snackbar',
+      },
     });
 
-    expect(response.failure.origin, RuntimeFailureOrigin.remoteDependency);
-    expect(response.failure.kind, RuntimeFailureKind.timeout);
-    expect(response.failure.context.attributes, hasLength(2));
+    expect(response.failure.recovery.isPresent, isTrue);
+    expect(response.failure.recovery.action, 'retry');
+    expect(response.failure.recovery.afterSeconds, 42);
+    expect(response.failure.recovery.disruptionLevel, 'snackbar');
+  });
+
+  test('policy consumes downlinked recovery over nature derivation', () {
+    const policy = DefaultRuntimeRecoveryPolicy();
+    final decision = policy.decide(
+      const RuntimeFailure(
+        code: 'USER.AUTH.otp_rate_limited',
+        origin: RuntimeFailureOrigin.user,
+        kind: RuntimeFailureKind.rateLimited,
+        nature: RuntimeFailureNature.permanent,
+        location: RuntimeFailureLocation(
+          businessObject: 'cloud_request',
+          functionModule: 'auth',
+        ),
+        context: RuntimeFailureContext(),
+        recovery: RuntimeRecoveryDirective(
+          action: 'retry',
+          afterSeconds: 60,
+          disruptionLevel: 'snackbar',
+        ),
+      ),
+      const EntryContext(
+        kind: 'appPage',
+        entryId: 'login',
+        actorType: 'user',
+        actorId: 'user-1',
+        surfaceId: 'user.login',
+      ),
+      const BoundaryContext(boundary: 'http', remainingBudget: 0),
+    );
+
+    expect(decision.action, RuntimeRecoveryAction.retry);
+    expect(decision.disruptionLevel, UserDisruptionLevel.snackbar);
+    expect(decision.policyId, 'downlink.recovery');
   });
 
   test('default recovery retries transient failures with remaining budget', () {

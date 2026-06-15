@@ -27,15 +27,30 @@ from _common import fanout_plan as fp  # noqa: E402
 from _common import content_object  # noqa: E402
 from _common.draft_io import read_draft_meta, write_agent_draft, write_placeholder_draft, write_prompt, write_writing_pack  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
-from _common.paths import fanout_run_matrix_path  # noqa: E402
+from _common.paths import batch_root, fanout_run_matrix_path  # noqa: E402
 from task import fanout_dispatch as fd  # noqa: E402
 from task import object_queue as oq  # noqa: E402
+from task import production_contracts as pc  # noqa: E402
 from task import store  # noqa: E402
 from agent_ops.runners import fanout_runner as fr  # noqa: E402
 
 
 def _frozen(plan_id: str, names: list[str]) -> dict:
     plan = fp.new_plan(plan_id, "四川景点主页", "travel", defaults={"entityType": "地点/景区"})
+    fp.add_partition(plan, "四川省")
+    fp.add_leaves(plan, ["四川省"], [{"name": n} for n in names])
+    fp.freeze_plan(plan, confirmed=True)
+    fp.save_plan(plan)
+    return plan
+
+
+def _frozen_prod(plan_id: str, names: list[str]) -> dict:
+    plan = fp.new_plan(
+        plan_id,
+        "四川景点主页",
+        "travel",
+        defaults={"entityType": "地点/景区", "queueBackend": "reliabletask", "budget": {"maxAttempts": 1}},
+    )
     fp.add_partition(plan, "四川省")
     fp.add_leaves(plan, ["四川省"], [{"name": n} for n in names])
     fp.freeze_plan(plan, confirmed=True)
@@ -129,6 +144,78 @@ def test_all_pass_completes_all():
     assert summary["byState"].get("succeeded") == ["地点_景区__九寨沟", "地点_景区__稻城亚丁"]
 
 
+def _write_envelope_from_packet(packet: dict) -> str:
+    root = batch_root(str(packet["taskId"]), str(packet["batchId"]))
+    output = root / "posts/article/envelope-demo.md"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text("# envelope demo\n\n正文与证据。", encoding="utf-8")
+    digest = pc.sha256_file(output)
+    envelope = pc.build_agent_result_envelope(
+        job=packet,
+        files=[{"path": "posts/article/envelope-demo.md", "sha256": digest, "role": "draft"}],
+        gates=[pc.build_gate_verdict(gate_id="review", decision="passed", input_hash=digest, output_hash=digest)],
+        agent_id="agent-envelope",
+        run_id="run-envelope",
+    )
+    envelope_path = root / "_shared" / "envelopes" / f"{packet['jobId']}.json"
+    write_json(envelope_path, envelope)
+    return str(envelope_path)
+
+
+def test_reliabletask_job_completes_only_with_result_envelope():
+    _frozen_prod("r_envelope_ok", ["九寨沟"])
+    fd.dispatch(fp.load_plan("r_envelope_ok"), strategy="flat-pool", concurrency=1)
+
+    def runner(packet):
+        return fr.RunOutcome(
+            started=True,
+            status="finished",
+            passed=True,
+            envelope_path=_write_envelope_from_packet(dict(packet)),
+            run_id="run-envelope",
+            agent_id="agent-envelope",
+        )
+
+    report = fr.run_fanout("r_envelope_ok", agent_runner=runner, strategy="flat-pool", concurrency=1)
+    sc = "旅行/地域/四川省/四川景点主页"
+    summary = oq.queue_summary(sc, "fanout_r_envelope_ok")
+    assert report["completed"] == 1
+    assert report["failed"] == 0
+    assert summary["byState"].get("succeeded") == ["地点_景区__九寨沟"]
+    job = read_json(oq._job_path(sc, "fanout_r_envelope_ok", oq.stable_job_id(sc, "fanout_r_envelope_ok", "地点_景区__九寨沟", "author")))
+    assert job["queueBackend"] == "reliabletask"
+    assert job["resultEnvelopeRef"].endswith(".json")
+
+
+def test_default_runner_envelope_discovery_uses_canonical_job_path():
+    task = "旅行/地域/四川省/景区/信封发现"
+    batch = "fanout_envelope_discovery"
+    job = oq.enqueue_ref_job(task, batch, "refEnvelope", "author", queue_backend="reliabletask")
+    packet = oq.build_lease_packet({**job, "lease": "w:1"})
+    root = batch_root(task, batch)
+    envelope_path = root / "_shared" / "envelopes" / f"{job['jobId']}.json"
+    envelope_path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(envelope_path, {"schemaVersion": pc.AGENT_RESULT_ENVELOPE_SCHEMA})
+    assert fr._discover_result_envelope(packet) == str(envelope_path)
+
+
+def test_reliabletask_job_missing_envelope_does_not_complete():
+    _frozen_prod("r_envelope_missing", ["九寨沟"])
+    fd.dispatch(fp.load_plan("r_envelope_missing"), strategy="flat-pool", concurrency=1)
+
+    def runner(_packet):
+        return fr.RunOutcome(started=True, status="finished", passed=True)
+
+    report = fr.run_fanout("r_envelope_missing", agent_runner=runner, strategy="flat-pool", concurrency=1)
+    sc = "旅行/地域/四川省/四川景点主页"
+    summary = oq.queue_summary(sc, "fanout_r_envelope_missing")
+    assert report["completed"] == 0
+    assert report["failed"] == 1
+    assert "succeeded" not in summary["byState"]
+    job = read_json(oq._job_path(sc, "fanout_r_envelope_missing", oq.stable_job_id(sc, "fanout_r_envelope_missing", "地点_景区__九寨沟", "author")))
+    assert "missing result envelope" in (job["lastError"] or "")
+
+
 def test_run_failure_marks_failed_or_dead():
     plan = _frozen("r_fail", ["九寨沟"])
     fd.dispatch(plan, strategy="by-leaf", concurrency=1)
@@ -137,7 +224,12 @@ def test_run_failure_marks_failed_or_dead():
         return fr.RunOutcome(started=True, status="error", passed=False, error="gate not approved",
                              fingerprint="fp1")
 
-    report = fr.run_fanout("r_fail", agent_runner=runner, strategy="by-leaf", concurrency=1)
+    original_backoff = oq._backoff_seconds
+    try:
+        oq._backoff_seconds = lambda attempt: 0.05
+        report = fr.run_fanout("r_fail", agent_runner=runner, strategy="by-leaf", concurrency=1)
+    finally:
+        oq._backoff_seconds = original_backoff
     assert report["failed"] >= 1
     sc = "旅行/地域/四川省/四川景点主页"
     # maxAttempts 默认 2：单次失败后应为 failed（退避）或 dead，不应 succeeded
@@ -208,11 +300,14 @@ def test_retryable_startup_failure_retried_within_same_run():
         return fr.RunOutcome(started=True, status="finished", passed=True)
 
     original_base = fr.STARTUP_BACKOFF_BASE
+    original_backoff = oq._backoff_seconds
     try:
         fr.STARTUP_BACKOFF_BASE = 0
+        oq._backoff_seconds = lambda attempt: 0.05
         report = fr.run_fanout("r_startup_retry", agent_runner=runner, strategy="by-leaf", concurrency=1)
     finally:
         fr.STARTUP_BACKOFF_BASE = original_base
+        oq._backoff_seconds = original_backoff
     sc = "旅行/地域/四川省/四川景点主页"
     summary = oq.queue_summary(sc, "fanout_r_startup_retry")
     assert attempts == [1, 2], attempts
@@ -237,13 +332,16 @@ def test_retryable_startup_failure_stops_after_retry_budget():
 
     original_base = fr.STARTUP_BACKOFF_BASE
     original_budget = fr.MAX_STARTUP_RETRIES
+    original_backoff = oq._backoff_seconds
     try:
         fr.STARTUP_BACKOFF_BASE = 0
         fr.MAX_STARTUP_RETRIES = 2
+        oq._backoff_seconds = lambda attempt: 0.05
         report = fr.run_fanout("r_startup_retry_budget", agent_runner=runner, strategy="by-leaf", concurrency=1)
     finally:
         fr.STARTUP_BACKOFF_BASE = original_base
         fr.MAX_STARTUP_RETRIES = original_budget
+        oq._backoff_seconds = original_backoff
     sc = "旅行/地域/四川省/四川景点主页"
     snapshot = oq.queue_runtime_snapshot(sc, "fanout_r_startup_retry_budget", stage="author")
     assert attempts == [1, 2], attempts

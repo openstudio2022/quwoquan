@@ -197,6 +197,7 @@ final class _BlockingAuthSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
 
   @override
@@ -210,6 +211,9 @@ final class _BlockingAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> softLogout() async {}
 
   @override
   Future<void> markLaunchPromptDismissed() async {}
@@ -234,6 +238,7 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
     AuthRememberedLoginMethod rememberedLoginMethod =
         AuthRememberedLoginMethod.unknown,
     String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
   }) async {}
 
   @override
@@ -288,6 +293,23 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
       lastRefreshAtEpochMs: 0,
       lastForegroundAuthCheckAtEpochMs: 0,
       manualLoggedOut: manualLogout,
+      launchPromptDismissed: false,
+    );
+  }
+
+  @override
+  Future<void> softLogout() async {
+    stored = StoredAuthSession(
+      accessToken: '',
+      refreshToken: stored.refreshToken,
+      ownerId: stored.ownerId,
+      activeSubAccountId: stored.activeSubAccountId,
+      accountState: stored.accountState,
+      identityOrigin: stored.identityOrigin,
+      installId: stored.installId,
+      lastRefreshAtEpochMs: stored.lastRefreshAtEpochMs,
+      lastForegroundAuthCheckAtEpochMs: stored.lastForegroundAuthCheckAtEpochMs,
+      manualLoggedOut: true,
       launchPromptDismissed: false,
     );
   }

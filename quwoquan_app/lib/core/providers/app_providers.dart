@@ -2048,6 +2048,7 @@ final searchRepositoryProvider = Provider<SearchRepository>((ref) {
     contentRepository: ref.watch(contentRepositoryProvider),
     homepageRepository: ref.watch(homepageRepositoryProvider),
     integrationRepository: ref.watch(integrationRepositoryProvider),
+    userProfileRepository: ref.watch(userProfileRepositoryProvider),
     localChatSearchStore: ref.watch(localChatSearchStoreProvider),
     localChatSearchSyncService: ref.watch(localChatSearchSyncProvider),
     localCircleGroupSnapshotStore: ref.watch(

@@ -27,21 +27,21 @@ description: 应用数据生成工作流 · 实体/标签构建与归一化全�
 
 ```bash
 # 全量构建（catalog + entity-tag）
-python3 quwoquan_data/tools/cli.py data build-entities-tags \
+python3 quwoquan_data/scripts/cli.py data build-entities-tags \
   --catalog-config "<config.yaml>" --catalog-output "<catalog.ndjson>"
 
 # 准备归一化任务清单
-python3 quwoquan_data/tools/cli.py data build-entities-tags \
+python3 quwoquan_data/scripts/cli.py data build-entities-tags \
   --phase normalize-prepare --spec "<spec.yaml>" --batch-label "<batch>"
 
 # 验证编程助手结果（单阶段）
-python3 quwoquan_data/tools/cli.py data build-entities-tags \
+python3 quwoquan_data/scripts/cli.py data build-entities-tags \
   --phase normalize-validate --batch-label "<batch>" --stage extract
 
 # 编译 + 物化
-python3 quwoquan_data/tools/cli.py data build-entities-tags \
+python3 quwoquan_data/scripts/cli.py data build-entities-tags \
   --phase compile --batch-label "<batch>"
-python3 quwoquan_data/tools/cli.py data build-entities-tags \
+python3 quwoquan_data/scripts/cli.py data build-entities-tags \
   --phase materialize --batch-label "<batch>" --catalog "<catalog.ndjson>"
 ```
 
@@ -58,3 +58,7 @@ python3 quwoquan_data/tools/cli.py data build-entities-tags \
 - `tagRefs` 可解析
 - `quwoquan_data/scripts/verify/verify_geo_catalog_quality.py` 通过
 - `quwoquan_data/scripts/verify/verify_catalog_entity_consistency.py` 通过
+
+自然语言等价触发：用户说“构建实体标签”“归一化实体/标签”“准备归一化任务”时，也按本命令语义执行，并遵守 `quwoquan_data/AGENTS.md` 的七角色准出。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

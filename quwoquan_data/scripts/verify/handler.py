@@ -34,6 +34,46 @@ def handle_verify(args: argparse.Namespace) -> None:
     if cmd == "promote-golden":
         handle_promote_golden(args)
         return
+    if cmd == "data-role-gate":
+        from verify.verify_data_role_gate_inventory import main as role_gate_main
+
+        raise SystemExit(role_gate_main())
+    if cmd == "single-contract-source":
+        from verify.verify_single_contract_source import main as single_contract_source_main
+
+        raise SystemExit(single_contract_source_main())
+    if cmd == "content-supply-production":
+        from verify.verify_content_supply_production import main as content_supply_gate_main
+
+        content_supply_gate_main()
+        return
+    if cmd == "release-integrity":
+        from _common.release_integrity import scan_release_integrity
+
+        report = scan_release_integrity(args.release)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if not report.get("passed"):
+            raise SystemExit(1)
+        return
+    if cmd == "scale-readiness":
+        from verify.scale_readiness import build_scale_readiness_report, write_scale_readiness_report
+
+        if not args.task or not args.batch:
+            print("[verify scale-readiness] --task and --batch are required", file=sys.stderr)
+            raise SystemExit(2)
+        report = build_scale_readiness_report(
+            args.task,
+            args.batch,
+            daily_target=int(args.daily_target),
+            release_id=getattr(args, "release", None),
+            require_import=not bool(getattr(args, "allow_missing_import", False)),
+        )
+        if getattr(args, "report_out", None):
+            write_scale_readiness_report(Path(args.report_out), report)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if not report.get("passed"):
+            raise SystemExit(1)
+        return
     if getattr(args, "data_release_file", None):
         report = scan_release_file(
             Path(args.data_release_file),
@@ -246,5 +286,18 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pp.add_argument("--meta", help="JSON meta（carrier/writingIntent/assets/bannedRegisterTerms）")
     pp.add_argument("--expect-gates", help="逗号分隔的期望触发门")
     pp.add_argument("--confirm", action="store_true", help="人工确认（必须显式传入才入集）")
+
+    sub.add_parser("data-role-gate", help="校验数据工程七角色准出清单与文档/门禁接线")
+    sub.add_parser("single-contract-source", help="校验内容供给生产契约只有一个无版本真源")
+    sub.add_parser("content-supply-production", help="校验生产级内容供给 current 契约与队列/envelope/账本闭环")
+    pri = sub.add_parser("release-integrity", help="校验 release 级证据链、一稿一用和跨作品资产独占")
+    pri.add_argument("--release", required=True, help="Release ID under release/")
+    psr = sub.add_parser("scale-readiness", help="校验批次是否具备日产万级/商用放量证据")
+    psr.add_argument("--task", required=True, help="Task ID")
+    psr.add_argument("--batch", required=True, help="Batch ID")
+    psr.add_argument("--daily-target", type=int, default=10000, help="目标日产内容对象数，默认 10000")
+    psr.add_argument("--release", help="可选 isolated release ID，用于证明 release verify 入口存在")
+    psr.add_argument("--allow-missing-import", action="store_true", help="仅本地试跑时允许缺少 staging/gamma import 证据")
+    psr.add_argument("--report-out", help="可选：写出 readiness JSON 报告")
 
     p.set_defaults(handler=handle_verify)

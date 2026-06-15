@@ -23,48 +23,6 @@ extension _ProfileShellBuilders on _ProfileShellState {
     );
   }
 
-  /// 「我的足迹」入口行（仅 mine）：私有只读消费轨迹，进入足迹列表页。
-  Widget _buildMyFootprintEntry(BuildContext context, bool isDark) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: () => context.push(AppRoutePaths.myFootprint()),
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm + AppSpacing.xs,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.iosGroupedSurface(context),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-        ),
-        child: Row(
-          children: <Widget>[
-            Icon(
-              CupertinoIcons.clock,
-              size: AppSpacing.iconSmall,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-            SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                UITextConstants.myFootprintTitle,
-                style: TextStyle(
-                  fontSize: AppTypography.iosSubheadline,
-                  color: AppColors.iosLabel(context),
-                ),
-              ),
-            ),
-            Icon(
-              CupertinoIcons.chevron_forward,
-              size: AppSpacing.iconXSmall,
-              color: AppColors.iosTertiaryLabel(context),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   /// 影响力摘要模块（他人主页 / 我的主页双视角）。
   ///
   /// async 三态：loading / error 不占位；data 由 [AuthorImpactCard] 决定
@@ -82,41 +40,6 @@ extension _ProfileShellBuilders on _ProfileShellState {
       ),
       loading: () => const SizedBox.shrink(),
       error: (_, _) => const SizedBox.shrink(),
-    );
-  }
-
-  Future<void> _gatedSendGreeting(
-    BuildContext context,
-    ProfileNotifier notifier,
-  ) async {
-    if (ref.read(authSessionControllerProvider).isAuthenticated) {
-      try {
-        await notifier.sendGreeting();
-        if (context.mounted) {
-          AppToast.show(context, UITextConstants.chatGreetingSent);
-        }
-      } catch (error) {
-        if (!context.mounted) {
-          return;
-        }
-        final resolved = runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.submit,
-          scope: UiErrorScope.global,
-        );
-        await AppActionErrorFeedback.show(context, semantic: resolved);
-      }
-      return;
-    }
-    ref
-        .read(authContinuationProvider.notifier)
-        .set(GreetProfileContinuation(subAccountId: widget.userId));
-    await requireLogin(
-      ref,
-      context,
-      AuthGateReason.greet,
-      dismissFallback: AppRoutePaths.home,
     );
   }
 
@@ -188,7 +111,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
     }
   }
 
-  void maybeResumeRelationshipContinuations(
+  void maybeResumeDirectMessageContinuation(
     BuildContext context,
     ProfileNotifier notifier,
   ) {
@@ -202,23 +125,11 @@ extension _ProfileShellBuilders on _ProfileShellState {
         unawaited(_gatedOpenMessage(context, notifier));
       }
     }
-
-    final greet = ref
-        .read(authContinuationProvider.notifier)
-        .take<GreetProfileContinuation>();
-    if (greet != null) {
-      if (greet.subAccountId != widget.userId) {
-        ref.read(authContinuationProvider.notifier).set(greet);
-      } else {
-        unawaited(_gatedSendGreeting(context, notifier));
-      }
-    }
   }
 
   Widget _buildSummarySection(
     BuildContext context, {
     required bool isDark,
-    required bool personaManagementEnabled,
     required String? avatarUrl,
     required String displayName,
     required String? bio,
@@ -266,44 +177,26 @@ extension _ProfileShellBuilders on _ProfileShellState {
               identityTags: state.profile?.identityTags ?? const <String>[],
             ),
             SizedBox(height: AppSpacing.md),
-            if (widget.mode == ProfileMode.other &&
-                displayCapability == null) ...[
-              SizedBox(height: AppSpacing.xl + AppSpacing.md),
-            ] else ...[
-              ProfileActionBar(
-                mode: widget.mode,
-                isDark: isDark,
-                capability: displayCapability,
-                onEditProfile: () => context.push(AppRoutePaths.profileEdit),
-                onManagePersonas: personaManagementEnabled
-                    ? () => context.push(AppRoutePaths.profilePersonas)
-                    : null,
-                onFollow: () => _gatedToggleFollow(context, notifier),
-                onMessage: () =>
-                    unawaited(_gatedOpenMessage(context, notifier)),
-                onGreet: () => unawaited(_gatedSendGreeting(context, notifier)),
-                onVoiceCall: () => _startCall(context, 'voice'),
-                onVideoCall: () => _startCall(context, 'video'),
-              ),
-            ],
+            ProfileActionBar(
+              mode: widget.mode,
+              isDark: isDark,
+              isFollowing:
+                  displayCapability?.viewerFollowsTarget ?? state.isFollowing,
+              capability: displayCapability,
+              onEditProfile: () => context.push(AppRoutePaths.profileEdit),
+              onShareProfile: () =>
+                  AppToast.show(context, UITextConstants.shareComingSoon),
+              onFollow: () => _gatedToggleFollow(context, notifier),
+              onMessage: () => unawaited(_gatedOpenMessage(context, notifier)),
+            ),
             SizedBox(height: AppSpacing.md),
             if (widget.mode == ProfileMode.mine) ...[
               MyIntersectionInboxCard(isDark: isDark),
-              SizedBox(height: AppSpacing.md),
-              _buildMyFootprintEntry(context, isDark),
               SizedBox(height: AppSpacing.md),
             ] else ...[
               _buildIntersectionCard(isDark),
             ],
             _buildAuthorImpactCard(isDark),
-            SizedBox(height: AppSpacing.md),
-            ProfileStatsRow(
-              isDark: isDark,
-              profile: state.profile,
-              onStatTap: (type) => context.push(
-                '${AppRoutePaths.profileStats(type: type)}&userId=${Uri.encodeComponent(widget.userId)}',
-              ),
-            ),
           ],
         ),
       ),
@@ -619,12 +512,6 @@ extension _ProfileShellBuilders on _ProfileShellState {
         inlineScroll: true,
         secondaryTabBarKey: _interactionSecondaryTabKey,
         onSecondaryHorizontalDragEnd: _handleTabSwipeDragEnd,
-      ),
-      'lifestyle' => ProfileLifestyleTab(
-        mode: widget.mode,
-        userId: widget.userId,
-        isDark: isDark,
-        inlineScroll: true,
       ),
       _ => ProfileWorksTab(
         mode: widget.mode,

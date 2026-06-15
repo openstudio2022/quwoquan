@@ -33,7 +33,7 @@ _INDIRECT_TARGET_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?:互补|同日|组合).{0,12}(?:游线|环线|一日游)"),
     re.compile(r"(?:邻近|周边).{0,12}(?:景点|景区|文化|游线)"),
     re.compile(r"(?:所属县域|县城景观|藏居客厅|民居内景)"),
-    re.compile(r"支撑.{0,20}(?:环线|组合产品|组合一日游|区位段落|交通段落)"),
+    re.compile(r"支撑.{0,20}(?:环线|组合产品|组合一日游|交通段落)"),
 )
 
 
@@ -68,6 +68,13 @@ def relevance_issue(relevance: str, *, entity_id: str, asset_id: str) -> str | N
             f"imageRelevance: {asset_id} 缺少与『{entity_id}』的真实相关性说明"
             f"（当前: {relevance!r}，禁止通用模板串）"
         )
+    text = str(relevance or "").strip()
+    if (
+        entity_id
+        and entity_id in text
+        and any(marker in text for marker in ("直接呈现", "摄于", "目标景区", "核心景区"))
+    ):
+        return None
     if is_indirect_target_relevance(relevance):
         return (
             f"imageRelevance: {asset_id} 仅为『{entity_id}』邻近景点/环线/县域语境，"

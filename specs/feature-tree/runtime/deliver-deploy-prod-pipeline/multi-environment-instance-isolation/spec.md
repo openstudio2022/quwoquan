@@ -30,7 +30,7 @@
 - 约束：
   - 端侧每次启动必须显式绑定 `device-id` 或等价唯一设备选择结果。
   - beta 固定端口组 `18080 / 18087 / 18088` 在任意时刻只归属于一套 beta 栈。
-  - gamma 入口始终只指向一套 ECS gamma 或一套 local-gamma mirror。
+  - gamma 入口始终只指向一套 local-gamma mirror（远端 gamma 已退役，远端复验下沉到 prod gray-initial）。
   - 端侧实例记录只用于诊断与 stop/list，不得演化为服务端多套编排。
 
 ## 与父/子节点关系

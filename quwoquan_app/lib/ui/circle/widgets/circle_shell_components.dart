@@ -1,6 +1,6 @@
 part of 'circle_shell.dart';
 
-enum _CircleMoreAction { submitPost, share, copyLink, report }
+enum _CircleMoreAction { edit, manage, submitPost, share, copyLink, report }
 
 class _CircleToolbarButton extends StatelessWidget {
   const _CircleToolbarButton({
@@ -41,65 +41,6 @@ class _CircleToolbarButton extends StatelessWidget {
   }
 }
 
-class _CircleMetaChipData {
-  const _CircleMetaChipData({
-    required this.label,
-    required this.icon,
-    this.accent = false,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool accent;
-}
-
-class _CircleMetaChip extends StatelessWidget {
-  const _CircleMetaChip({
-    required this.label,
-    required this.icon,
-    this.accent = false,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = accent
-        ? AppColors.primaryColor
-        : AppColors.iosSecondaryLabel(context);
-    final background = accent
-        ? AppColors.primaryColor.withValues(alpha: 0.08)
-        : AppColors.iosGroupedSurface(context);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.intraGroupXs,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: AppSpacing.iconSmall, color: foreground),
-          SizedBox(width: AppSpacing.intraGroupXs),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: AppTypography.xs,
-              fontWeight: AppTypography.semiBold,
-              color: foreground,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SectionSurface extends StatelessWidget {
   const _SectionSurface({required this.isDark, required this.child});
 
@@ -114,7 +55,7 @@ class _SectionSurface extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
         border: Border.all(color: border.withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(

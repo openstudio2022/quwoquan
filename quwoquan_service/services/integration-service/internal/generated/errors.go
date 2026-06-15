@@ -23,31 +23,31 @@ var (
 // AppErrorFromLocationUnavailable returns *AppError for INTEGRATION.USER.location_unavailable (user_message from errors.yaml).
 func AppErrorFromLocationUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLocationUnavailable.Error()))
-	return rerrors.NewAppError(code, "暂时无法获取当前位置，请稍后重试", debugMessage)
+	return rerrors.NewAppError(code, "暂时无法获取当前位置，请稍后重试", debugMessage).WithRecovery("retry", 3)
 }
 
 // AppErrorFromInvalidArgument returns *AppError for INTEGRATION.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "搜索关键词不能为空", debugMessage)
+	return rerrors.NewAppError(code, "搜索关键词不能为空", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromLocationPermissionRequired returns *AppError for INTEGRATION.USER.location_permission_required (user_message from errors.yaml).
 func AppErrorFromLocationPermissionRequired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLocationPermissionRequired.Error()))
-	return rerrors.NewAppError(code, "请开启定位权限后重试", debugMessage)
+	return rerrors.NewAppError(code, "请开启定位权限后重试", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromUpstreamTimeout returns *AppError for INTEGRATION.MIDDLEWARE.upstream_timeout (user_message from errors.yaml).
 func AppErrorFromUpstreamTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUpstreamTimeout.Error()))
-	return rerrors.NewAppError(code, "位置服务响应超时，请稍后重试", debugMessage)
+	return rerrors.NewAppError(code, "位置服务响应超时，请稍后重试", debugMessage).WithRecovery("retry", 5)
 }
 
 // AppErrorFromInternalError returns *AppError for INTEGRATION.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "位置服务异常，请稍后重试", debugMessage)
+	return rerrors.NewAppError(code, "位置服务异常，请稍后重试", debugMessage).WithRecovery("retry", 5)
 }
 
 // IsTimeout returns true if err is context.DeadlineExceeded or contains upstream timeout semantics.

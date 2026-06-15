@@ -150,6 +150,18 @@ void main() {
       expect(emptyGroups, isEmpty);
     });
 
+    test('followHomepage / unfollowHomepage 更新关注态与计数', () async {
+      const id = 'homepage_sight_west_lake';
+      final before = await repo.getHomepageDetail(id);
+      final followed = await repo.followHomepage(id);
+      expect(followed.viewerFollowsHomepage, isTrue);
+      expect(followed.followerCount, before.followerCount + 1);
+
+      final unfollowed = await repo.unfollowHomepage(id);
+      expect(unfollowed.viewerFollowsHomepage, isFalse);
+      expect(unfollowed.followerCount, before.followerCount);
+    });
+
     test(
       'contract seed includes campus and travel photography homepage templates',
       () async {
@@ -369,6 +381,43 @@ void main() {
       expect(detail.id, 'h-min');
       expect(detail.homepageType, 'sight');
       expect(detail.title, 'Minimal');
+    });
+
+    test('followHomepage / unfollowHomepage 使用 metadata 路径并解析关注态', () async {
+      final methods = <String>[];
+      final paths = <String>[];
+      final client = MockClient((request) async {
+        methods.add(request.method);
+        paths.add(request.url.path);
+        return http.Response(
+          json.encode({
+            'homepageId': 'h-follow',
+            'homepageType': 'sight',
+            'title': 'Followable',
+            'viewerFollowsHomepage': request.method == 'POST',
+            'followerCount': request.method == 'POST' ? 12 : 11,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final repo = RemoteHomepageRepository(
+        httpClient: CloudHttpClient(client: client),
+        baseUrl: 'https://gw.test',
+      );
+
+      final followed = await repo.followHomepage('h-follow');
+      final unfollowed = await repo.unfollowHomepage('h-follow');
+
+      expect(methods, <String>['POST', 'DELETE']);
+      expect(paths, <String>[
+        EntityApiMetadata.followHomepagePath(homepageId: 'h-follow'),
+        EntityApiMetadata.unfollowHomepagePath(homepageId: 'h-follow'),
+      ]);
+      expect(followed.viewerFollowsHomepage, isTrue);
+      expect(followed.followerCount, 12);
+      expect(unfollowed.viewerFollowsHomepage, isFalse);
+      expect(unfollowed.followerCount, 11);
     });
 
     test('getObjectPageBundle 解析 query 上下文和嵌套 projection', () async {

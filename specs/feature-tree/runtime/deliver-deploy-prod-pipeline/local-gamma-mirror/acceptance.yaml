@@ -7,7 +7,7 @@ node:
   parent_domain_service: runtime
   parent_business_capability: deliver-deploy-prod-pipeline
 scope:
-  summary: gamma-local 作为开发与提交前左移主验证链；gamma-hosted 仅云侧手动/夜间/发布前复验。
+  summary: gamma-local 作为开发与提交前左移主验证链（gamma 仅本地，无远端 gamma）；真实远端复验由 prod gray-initial rollout stage 承接。
   in_scope:
   - 本地 gamma 语义镜像栈（DB/Redis/核心服务/media/TLS 反代）启停与健康前置检查
   - 本地 T1->T4 左移：真实 HTTP API、存储副作用、错误码、RemoteRepository 解码与模拟器/真机 Patrol 核心旅程
@@ -65,23 +65,23 @@ gwt_acceptance:
       recorded: []
     status: pending
   GWT2:
-    title: gamma-hosted 仅作云侧复验定位
+    title: 远端复验下沉到 prod gray-initial（gamma-hosted 退役）
     given:
-    - gamma-local 已作为提交前主验证链。
+    - gamma-local 已作为提交前主验证链，gamma 仅本地、无远端 gamma。
     when:
-    - 需要云侧手动复验、nightly 或发布前高置信度回归时触发 gamma-hosted。
+    - 需要云侧手动复验、nightly 或发布前高置信度回归时，统一在 prod gray-initial rollout stage 执行。
     then:
-    - gamma-hosted 执行 hosted deploy、readiness、T3 API contract、assistant/chat-avatar probe。
-    - gamma-hosted 不承担提交前左移职责，也不与 gamma-local 重复维护第二套验证逻辑。
+    - prod gray-initial 执行 hosted deploy、readiness、T3 API contract、assistant/chat-avatar probe。
+    - 远端复验不承担提交前左移职责，也不与 gamma-local 重复维护第二套验证逻辑。
     done_when:
-    - gamma-hosted 仅保留为云侧手动/夜间/发布前复验，定位与 gamma-local 不重叠。
+    - 旧 gamma-hosted 阶段已退役；真实远端复验仅保留在 prod gray-initial，定位与 gamma-local 不重叠。
     edge_cases:
-    - gamma-hosted 不可见设备/平台时不得默认通过，但已发现平台必须全部成功。
+    - prod gray-initial 不可见设备/平台时不得默认通过，但已发现平台必须全部成功。
     contract_refs:
     - deploy/shared/gamma_validation_suites.json
     - deploy/shared/environment_topology_manifest.yaml
     performance_points:
-    - gamma-hosted 复验置信度优先，不计入提交前左移时延预算。
+    - prod gray-initial 远端复验置信度优先，不计入提交前左移时延预算。
     evidence:
       primary:
       - T3_app_api_integration
@@ -89,7 +89,7 @@ gwt_acceptance:
       - T4_end_to_end_journey
     tests:
       planned:
-      - gamma-ecs-pre-hosted-core.yml 复用为云侧复验链路。
+      - prod gray-initial rollout stage 承接真实远端集成与 curated 媒体路由复验链路。
       recorded: []
     status: pending
 execution:

@@ -109,6 +109,12 @@ type MediaAsset struct {
 type Post struct {
 	ID                        string         `json:"_id" bson:"_id"`
 	AuthorId                  string         `json:"authorId" bson:"authorId"`
+	CreatorProfileId          string         `json:"creatorProfileId" bson:"creatorProfileId"`
+	CreatorArchetype          string         `json:"creatorArchetype" bson:"creatorArchetype"`
+	CreatorProfileVersion     string         `json:"creatorProfileVersion" bson:"creatorProfileVersion"`
+	CreatorDisclosure         map[string]any `json:"creatorDisclosure" bson:"creatorDisclosure"`
+	ExperienceClaimMode       string         `json:"experienceClaimMode" bson:"experienceClaimMode"`
+	AuthorQualitySignals      map[string]any `json:"authorQualitySignals" bson:"authorQualitySignals"`
 	AuthorDisplayNameSnapshot string         `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
 	AuthorAvatarUrlSnapshot   string         `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
 	PersonaContextVersion     int64          `json:"personaContextVersion" bson:"personaContextVersion"`
@@ -118,6 +124,7 @@ type Post struct {
 	Body                      string         `json:"body" bson:"body"`
 	TagRefs                   []string       `json:"tagRefs" bson:"tagRefs"`
 	EntityRefs                []string       `json:"entityRefs" bson:"entityRefs"`
+	SemanticMentions          any            `json:"semanticMentions" bson:"semanticMentions"`
 	Rating                    int64          `json:"rating" bson:"rating"`
 	ReviewAspects             any            `json:"reviewAspects" bson:"reviewAspects"`
 	MediaUrls                 []string       `json:"mediaUrls" bson:"mediaUrls"`

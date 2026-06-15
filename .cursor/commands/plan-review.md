@@ -40,6 +40,18 @@ description: 规划前多角色交叉检视规格、任务清单与验收标准�
 3. **刷新任务清单**：可执行、职责归位（按 DDD 与目录约束）、每项含测试与验收，标注触发门禁。
 4. **不符合项台账**：每项给出处置——`本轮补齐` / `转 specs/changelog/CR-*.yaml` / `显式列入 Out of Scope`，不允许悬空。
 
+## 执行
+
+- 读取 `docs/agent_context_contract.md`，对当前计划补齐 `Spec Entry` 和 `Pre-work Reflection`。
+- 对照 `docs/agent_command_simulation_matrix.md`，确认后续阶段和出口证据可执行。
+- 只刷新规格、验收、任务清单或规划文档；不写业务实现。
+
+## 出口
+
+- 给出通过/阻断结论。
+- 每个阻断项必须绑定具体 spec、acceptance 或任务条目。
+- 通过时明确下一步进入 `/baseline`、`/extend` 或 `/dev`。
+
 ---
 
 ## 阻断（返回 `GATE_BLOCK`）
@@ -59,3 +71,7 @@ description: 规划前多角色交叉检视规格、任务清单与验收标准�
 | `/prd` `/design` | 冻结规格/设计 | 产出单层文档；`/plan-review` 跨角色横向检视完备性 |
 | `/baseline` | 冻结 | `/plan-review` 通过后再 `/baseline` |
 | `/plan-next` | 任务后 | 本命令面向「执行前刷新」，`/plan-next` 面向「执行后再规划」 |
+
+自然语言等价触发：用户说“开发前再审一遍”“规划是否完整”“从多角色看有没有遗漏”时，也按 `/plan-review` 语义执行。
+
+协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。

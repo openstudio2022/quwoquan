@@ -61,16 +61,40 @@
       "properties": {
         "angles": { "type": "array", "items": { "type": "string" }, "description": "内容角度/意图，如 行前指南/路线推荐/探店。多数 task 继承垂类默认，仅实体类别特化时 override" },
         "audiences": { "type": "array", "items": { "type": "string" }, "description": "受众人格 id（默认继承垂类）" },
-        "carriers": { "type": "array", "items": { "type": "string" }, "description": "载体：article/gallery/review/video（默认继承全局 [article]）" },
+        "carriers": { "type": "array", "items": { "type": "string", "enum": ["article", "image", "review", "video"] }, "description": "载体：article/image/review/video；image 为 manifest/assets-only 图片作品" },
+        "modalityContract": {
+          "type": "string",
+          "enum": ["separated_research"],
+          "description": "separated_research 强制主页/文章/图片独立检索，图片作品为 manifest/assets-only"
+        },
+        "research": {
+          "type": "object",
+          "properties": {
+            "lanes": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["homepage", "article", "image"] },
+              "uniqueItems": true
+            },
+            "maxConcurrency": { "type": "integer", "minimum": 1, "maximum": 10 },
+            "laneConcurrency": {
+              "type": "object",
+              "properties": {
+                "homepage": { "type": "integer", "minimum": 1 },
+                "article": { "type": "integer", "minimum": 1 },
+                "image": { "type": "integer", "minimum": 1 }
+              }
+            },
+            "allowAiImages": { "type": "boolean" }
+          }
+        },
         "emphasis": { "type": "array", "items": { "type": "string" }, "description": "可选 override：内容强调点/选题侧重（如 古镇=人文叙事/古建筑、博物馆=文物/科普）；与继承的 angles 正交，按实体类别声明" },
         "quotas": {
           "type": "object",
           "properties": {
             "entityArticles": { "type": "integer", "minimum": 0 },
             "routeArticles": { "type": "integer", "minimum": 0 },
-            "galleryPosts": { "type": "integer", "minimum": 0 },
             "entityArticlesPerTarget": { "type": "integer", "minimum": 0 },
-            "galleryPostsPerTarget": { "type": "integer", "minimum": 0 },
+            "imageWorksPerTarget": { "type": "integer", "minimum": 0 },
             "entityHomepagesPerTarget": { "type": "integer", "minimum": 0 }
           }
         },

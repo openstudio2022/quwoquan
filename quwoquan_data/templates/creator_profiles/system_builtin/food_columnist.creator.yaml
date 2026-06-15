@@ -8,6 +8,26 @@ avatarObjectKey: cold_start/creators/food_columnist/avatar.jpg
 headline: 写在地物产、时令食材和饮食文化的风物美食专栏作者
 bio: 从产地、时令和做法讲清一地的味道，重证据和来源，不做商业推广。
 creatorArchetype: food_columnist
+status: active
+verticalRefs: [travel]
+scenarioRefs: [cold_start, long_tail_fill, refresh_stale]
+claimPolicy:
+  experienceClaimMode: editorial_synthesis
+  mayUseFirstPerson: false
+  mustCiteEvidenceForClaims: true
+  forbiddenClaims: [真实亲历, 餐厅商业合作, 米其林评级, 官方认证]
+disclosure:
+  type: platform_virtual_creator
+  displayText: 平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。
+  visible: true
+publishCadence:
+  intervalDays: 3
+  randomizedRangeDays: [1, 5]
+  maxDailyPosts: 1
+qualityScore: 0.88
+fatigueScore: 0.2
+riskTier: low
+profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Topic/美食餐饮/菜系/中国菜系
   - Topic/美食餐饮/特色食材/应季食材

@@ -280,20 +280,6 @@
         "mediaOrigin": "http://127.0.0.1:19110"
       }
     },
-    "gamma-hosted": {
-      "env": "gamma",
-      "backend": "ssh-hosted",
-      "portProfile": null,
-      "publicBases": {
-        "api": "http://118.31.239.122:19000",
-        "realtime": "ws://118.31.239.122:19000",
-        "productOps": "http://118.31.239.122:19010",
-        "mediaAvatar": "http://118.31.239.122:19100",
-        "mediaImage": "http://118.31.239.122:19100",
-        "mediaVideo": "http://118.31.239.122:19100",
-        "mediaUpload": "http://118.31.239.122:19100"
-      }
-    },
     "prod-sim": {
       "env": "prod",
       "backend": "local",
@@ -313,8 +299,9 @@
     },
     "prod-hosted": {
       "env": "prod",
-      "backend": "workflow",
+      "backend": "ssh-hosted",
       "portProfile": null,
+      "sharedClusterLegacy": "gray-initial and full share the same physical cluster as a cost-driven legacy; gamma is local-only and has no remote target",
       "publicBases": {
         "api": "http://118.31.239.122:19000",
         "realtime": "ws://118.31.239.122:19000",

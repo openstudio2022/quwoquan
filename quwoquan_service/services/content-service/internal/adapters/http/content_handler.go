@@ -15,6 +15,7 @@ import (
 	rthealth "quwoquan_service/runtime/health"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/services/content-service/internal/application"
+	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
@@ -77,6 +78,7 @@ func (h *ContentHandler) Routes() http.Handler {
 	mux.HandleFunc("/metrics/rec/engagement", h.handleEngagementMetrics)
 	mux.HandleFunc("/metrics/rec/prometheus", h.handlePrometheusMetrics)
 	mux.HandleFunc("/admin/import", h.handleBulkImport)
+	mux.HandleFunc("/admin/content/semantic-mentions:apply", h.handleApplySemanticMentionGovernanceEvent)
 	mux.HandleFunc("/v1/content/users/posts", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET"))
@@ -109,6 +111,28 @@ func (h *ContentHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/content/posts/search", h.handleSearchPosts)
 	RegisterGeneratedRoutes(mux, h)
 	return mux
+}
+
+func (h *ContentHandler) handleApplySemanticMentionGovernanceEvent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only POST"))
+		return
+	}
+	var event postsemantic.GovernanceEvent
+	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"治理事件解析失败",
+			err.Error(),
+		))
+		return
+	}
+	report, err := h.postService.ApplySemanticMentionGovernanceEvent(r.Context(), event)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (h *ContentHandler) handleHealthz(w http.ResponseWriter, r *http.Request) {

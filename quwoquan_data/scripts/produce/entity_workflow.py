@@ -25,6 +25,7 @@ from _common.draft_io import (
     write_prompt,
     write_writing_pack,
 )
+from _common.content_tags import resolved_content_tag_refs
 from _common.stage_reports import write_gate_report, write_repair_report, write_stage_result
 from _common.template_fingerprints import template_fingerprint_issues
 from _common.writing_pack import build_writing_pack, render_prompt_md
@@ -43,6 +44,7 @@ from produce.route_workflow import (
     _check_prose_style,
     _check_provenance_rewrite,
     _check_travelogue_density,
+    _image_caption_from_article,
     _jaccard,
     _load_source_texts,
     _persisted_review_payload,
@@ -137,7 +139,7 @@ def build_entity_writing_pack(
     name = _entity_name(evidence_bundle, brief)
     assets = _build_route_assets(task_id, batch_id, ref, brief, evidence_bundle)
     carrier = resolve_carrier(brief, evidence_bundle, assets)
-    publish_layout = "gallery" if carrier == "gallery" else "entity"
+    publish_layout = "image" if carrier in ("image", "gallery") else "entity"
     byline = public_byline_label(str(brief.get("templateId") or ""), brief.get("creator") or {})
     pack = build_writing_pack(
         ref=ref,
@@ -215,14 +217,18 @@ def _compose_payload_from_pack(
         "articleMarkdown": article,
         "carrier": carrier,
         "entityRefs": merge_entity_refs(brief, draft_meta),
-        "tagRefs": list(brief.get("tagRefs") or []),
+        "tagRefs": resolved_content_tag_refs(brief, carrier),
         "sourceUrls": list(quality_payload.get("sourceUrls") or []),
         "sourcePaths": list(quality_payload.get("sourcePaths") or []),
         "template": template,
         "assets": list(pack.get("assets") or []),
-        "publishLayout": "gallery" if carrier == "gallery" else "entity",
+        "publishLayout": "image" if carrier in ("image", "gallery") else "entity",
         "publishAngle": _publish_angle(brief),
-        "publishTitle": require_title_hint(brief, ref=ref),
+        "publishTitle": (
+            str(brief.get("titleHint") or "")
+            if carrier in ("image", "gallery")
+            else require_title_hint(brief, ref=ref)
+        ),
         "publishSeq": 1,
         "conditionContext": brief.get("conditionContext"),
         "composeBriefRef": ref,
@@ -237,8 +243,9 @@ def _compose_payload_from_pack(
             "fontPreset": (brief.get("render") or {}).get("fontPreset", "clean"),
         },
     }
-    if carrier == "gallery":
-        payload["galleryMarkdown"] = article
+    if carrier in ("image", "gallery"):
+        payload["title"] = str(brief.get("titleHint") or "")
+        payload["caption"] = _image_caption_from_article(article)
     return payload
 
 
@@ -265,6 +272,7 @@ def review_entity_draft(
     traceability = fact_traceability_issues(body, dict(brief), source_texts)
 
     compose_payload = _compose_payload_from_pack(ref, brief, quality_payload, pack, body, draft_meta)
+    carrier = str(compose_payload.get("carrier") or brief.get("carrier") or "article")
     write_stage_result(task_id, batch_id, "produce", "compose", ref, compose_payload)
 
     checks = _entity_review_checks(
@@ -290,14 +298,17 @@ def review_entity_draft(
     }
     from _common.base_draft import base_draft_fidelity_issues, base_source_use_mode, load_base_draft_text
 
-    base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
-    source_use_mode = base_source_use_mode(task_id, batch_id, brief.get("baseSourceRef"))
-    fidelity = base_draft_fidelity_issues(
-        body,
-        base_text,
-        carrier=str(compose_payload.get("carrier") or brief.get("carrier") or "article"),
-        source_use_mode=source_use_mode,
-    )
+    if carrier in ("image", "gallery"):
+        fidelity = []
+    else:
+        base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
+        source_use_mode = base_source_use_mode(task_id, batch_id, brief.get("baseSourceRef"))
+        fidelity = base_draft_fidelity_issues(
+            body,
+            base_text,
+            carrier=carrier,
+            source_use_mode=source_use_mode,
+        )
     checks["baseDraftFidelity"] = {
         "passed": not fidelity,
         "issues": fidelity,
@@ -305,8 +316,7 @@ def review_entity_draft(
     }
     from _common import quality_gates as qg
 
-    carrier = str(compose_payload.get("carrier") or brief.get("carrier") or "article")
-    if carrier == "gallery":
+    if carrier in ("image", "gallery"):
         checks["writingIntentConsistency"] = {"passed": True, "issues": [], "suggestions": []}
     else:
         wi_issues = qg.writing_intent_consistency_issues(body, brief.get("writingIntent"))
@@ -402,6 +412,11 @@ def _entity_review_checks(
     ref: str = "",
     draft_meta: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
+    if str(compose_payload.get("carrier") or "article") in ("image", "gallery"):
+        return {
+            "carrierConsistency": _check_carrier_consistency(compose_payload),
+            "imageGate": _check_image_gate(compose_payload),
+        }
     checks = {
         "entityCoverage": _check_entity_coverage(article, brief, evidence_bundle),
         "provenanceRewrite": _check_provenance_rewrite(article, brief, quality_payload),
@@ -410,7 +425,7 @@ def _entity_review_checks(
         "proseStyle": _check_prose_style(article),
         "imageGate": _check_image_gate(compose_payload),
     }
-    if str(compose_payload.get("carrier") or "article") != "gallery":
+    if str(compose_payload.get("carrier") or "article") not in ("image", "gallery"):
         style_family, opening_strategy = _resolve_style_opening(brief, draft_meta)
         checks["travelogueDensity"] = _check_travelogue_density(
             article, brief, style_family=style_family, opening_strategy=opening_strategy
@@ -455,15 +470,15 @@ def _check_section_shape(article: str) -> dict[str, Any]:
 def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks.get("generatorProvenance", {"passed": True})["passed"]:
         return "agent_compose"
-    if not checks["evidenceQuality"]["passed"]:
+    if not checks.get("evidenceQuality", {"passed": True})["passed"]:
         return "download"
     if not checks.get("factTraceability", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("baseDraftFidelity", {"passed": True})["passed"]:
         return "agent_compose"
-    if not checks["provenanceRewrite"]["passed"]:
+    if not checks.get("provenanceRewrite", {"passed": True})["passed"]:
         return "agent_compose"
-    if not checks["entityCoverage"]["passed"]:
+    if not checks.get("entityCoverage", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("travelogueDensity", {"passed": True})["passed"]:
         return "agent_compose"

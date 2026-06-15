@@ -16,9 +16,7 @@
 | **pre-release-gate.yml** | `pull_request(main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
 | **app-env-device-matrix-self-hosted.yml** | `pull_request(main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
 | **deploy-prod.yml** | 手动 | 半自动 prod 发布 | G5c |
-| **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 占位链路 | G5c |
-| **deploy-gamma-ecs.yml** | 手动 | gamma / onebox 手动发布与复验 | G5a→G5b |
-| **ecs-onebox-rollback.yml** | 手动 | ECS onebox 备份回滚 | 运维 |
+| **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 主链，并在 `gray-initial` 承接真实远端集成复验 | G5c |
 
 ---
 
@@ -112,64 +110,41 @@
 
 ---
 
-## 七、Gamma ECS Deploy（deploy-gamma-ecs.yml）
+## 七、远端 Gamma（已退役）
 
-### 认证（二选一）
+远端 ECS gamma onebox 部署已退役，所有 `GAMMA_ECS_*` secret/var（`GAMMA_ECS_SSH_KEY`、`GAMMA_ECS_PASSWORD`、`GAMMA_ECS_HOST`、`GAMMA_ECS_REMOTE_DIR`、`GAMMA_ECS_CONTAINER_REGISTRY_MIRROR`、`GAMMA_ECS_*_TIMEOUT_SECONDS` 等）均不再使用。
 
-| Secret | 用途 |
-|--------|------|
-| **GAMMA_ECS_SSH_KEY** | ECS SSH 私钥全文（推荐） |
-| **GAMMA_ECS_PASSWORD** | ECS SSH 密码（与 `sshpass`；可与密钥互斥） |
-
-### 必须配置
-
-| Secret / Variable | 用途 |
-|--------|------|
-| **GAMMA_TEST_AUTH_TOKEN** | gamma T3 / 远端脚本 `run_local_gamma_t3` 验证 Token |
-
-### 可选配置
-
-| Secret / Variable | 用途 | 默认值 |
-|--------|------|------|
-| GAMMA_ECS_HOST | ECS 公网地址 | `118.31.239.122` |
-| GAMMA_ECS_USER | SSH 用户名 | `root` |
-| GAMMA_ECS_PORT | SSH 端口 | `22` |
-| GAMMA_ECS_REMOTE_DIR | ECS 部署目录 | `/opt/quwoquan/gamma` |
-| GAMMA_BASE_URL | gamma 内容 API 公网基址（gamma-proxy edge） | `http://<GAMMA_ECS_HOST>:18000` |
-| GAMMA_PRODUCT_OPS_BASE_URL | gamma Product Ops API 公网基址（product-ops edge） | `http://<GAMMA_ECS_HOST>:19010` |
-| **GAMMA_ECS_CONTAINER_REGISTRY_MIRROR** | ECS 侧 Podman 的 `docker.io` 镜像加速主机名（大路访问 Docker Hub 慢/超时时强烈推荐） | 留空=直连 Docker Hub |
-| GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS | 远端预拉镜像单镜像超时（秒） | 脚本默认 `600` |
-| GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS | 远端 compose build+up 外层超时（秒） | 脚本默认 `5400` |
-
-### 说明
-
-- **hosted**：`make gate` → **打包 tarball artifact**。
-- **ECS pre**：`agent_ops/deploy/gamma/deploy_gamma_ecs.sh`（`GAMMA_ECS_STAGE=pre`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>`），上传 bundle；远端写 `.gamma_deploy_state.json`，并在 `../gamma-backups/` 保留备份 tarball。
-- **T3**：`make test-api-contract`（gamma）。
-- **self-hosted**：调用 `app-env-device-matrix-self-hosted.yml`（alpha/beta/gamma）；统一在本机 macOS runner 上动态发现并逐台执行当前可见移动设备。
-- **ECS prod**：同一 ECS **就地升级**（`GAMMA_ECS_STAGE=prod`，`GAMMA_ECS_SKIP_UPLOAD=1`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>-prod`），然后再跑 T3 与 **gamma-only** self-hosted 烟测。
-- ECS 上使用 Podman 兼容层拉取镜像时，`GAMMA_ECS_CONTAINER_REGISTRY_MIRROR` 未配置则可能长时间直连 `docker.io`，在大陆网络下易超时；建议配置可用的镜像加速或使用自有镜像仓库前置基础镜像。
-- **Deploy ECS — pre/prod** 单 Job 超时为 **120** 分钟（含首次镜像 build）；请勿在流水线中途手动 Cancel，否则会向 SSH 子进程发送 SIGTERM（常见于 exit 143）。
-- **回滚**：手动触发 **08c `ecs-onebox-rollback.yml`** 或本地执行 `agent_ops/deploy/gamma/rollback_gamma_ecs.sh`（恢复最近一次 `backup-*.tgz`）。
-- 结构化部署报告：`artifacts/ecs-onebox/deploy-report.json`（成功/失败阶段会上传为 artifact）。
-- ECS 安全组需放行 SSH、`18000`、`19010`（或同步修改 health 探测 URL）。
+- `gamma` 仅本地（local-gamma mirror），本地 left-shift 验证不需要任何远端 secret。
+- 真实远端发布、就地升级与集成 / curated 媒体路由复验统一由 prod `gray-initial` rollout stage 承接（见第八节 `deploy-prod-auto.yml`）。
+- prod 远端访问统一走**按平面 SSH 凭据**（见第八节），不得复用任何 `GAMMA_ECS_*` 命名，亦不再使用单一全权 `PROD_KUBECONFIG`。
 
 ---
 
 ## 八、Prod Hosted Deploy（deploy-prod-gray.yml / deploy-prod-auto.yml）
 
+> 远端唯一托管目标为 `prod-hosted`（backend=ssh-hosted，与原 gamma 同台 ECS，rootless podman compose）。
+> 已**退役** `PROD_KUBECONFIG` 单一全权凭据，改为按 `edge / media / service / data` 四平面去 root 隔离的 SSH 凭据。
+> 访问隔离单一真相源：`deploy/shared/prod_plane_access_isolation.yaml`。
+
 ### 必须配置
 
 | Secret | 用途 |
 |--------|------|
-| **PROD_KUBECONFIG** | **base64 编码后的生产集群 kubeconfig 全文**；`stackctl deploy prod-hosted` 会真实执行 `kubectl apply`、`kubectl rollout status` 与 post-deploy 健康检查，缺失或格式错误都会直接失败 |
+| **PROD_SSH_HOST** | prod ECS 的 SSH 主机（缺省可由 `environment_topology_manifest.yaml` 的 `prod-hosted.publicBases.api` 解析） |
+| **PROD_EDGE_SSH_KEY** | `edge` 平面账号 `prod-edge-svc` 的 SSH 私钥（realtime-gateway / rtc-service） |
+| **PROD_MEDIA_SSH_KEY** | `media` 平面账号 `prod-media-svc` 的 SSH 私钥（livekit-sfu / coturn） |
+| **PROD_SERVICE_SSH_KEY** | `service` 平面账号 `prod-service-svc` 的 SSH 私钥（seed-box 及同集群独立 workload） |
+| **PROD_DATA_SSH_KEY** | `data` 平面账号 `prod-data-svc`（只读审计，不参与 deploy） |
+| **PROD_OPS_SSH_KEY** | 非 root 中转账号 `prod-ops`（仅一次性 bootstrap / 凭据分发使用） |
 
 ### 说明
 
-- `PROD_KUBECONFIG` 必须是 **base64 编码后的 kubeconfig 内容**，不是文件路径，也不是 context 名称。
-- `deploy-prod-gray.yml` 与 `deploy-prod-auto.yml` 现在都会先显式校验 `secrets.PROD_KUBECONFIG` 是否存在且能解码成 kubeconfig 结构。
-- `agent_ops/deploy/prod/deploy_to_prod.sh` 在 `DRY_RUN=false` 时会真实校验集群连通性；**不再允许** `PROD_KUBECONFIG` 缺失时以 warning 形式跳过 apply 并返回成功。
-- 如果需要真实 prod apply，但 workflow 日志出现 `PROD_KUBECONFIG not set` 或 `must be base64 kubeconfig content`，应先修复 Secret，再重跑 workflow；禁止把这类失败当成功放通。
+- 每个平面 SSH 私钥都是 **OpenSSH/PEM 私钥原文**（含 `BEGIN ... PRIVATE KEY`），不是文件路径。
+- `deploy-prod-gray.yml` 与 `deploy-prod-auto.yml` 在真实发布（`dry_run != true`）前会调用 `agent_ops/deploy/prod/validate_prod_plane_credentials.py` 按 rollout stage 硬校验对应平面凭据；缺失/非法即硬失败。
+- `agent_ops/deploy/prod/deploy_to_prod.sh` 按平面账号 `prod-<plane>-svc` 自登录，`podman compose` 拉起本平面 governedWorkloads + rollout 等待 + 失败回滚；**不再允许**凭据缺失时以 warning 形式跳过并返回成功。
+- `PROD_KUBECONFIG` 已退役：一旦检测到该变量被注入，`deploy_to_prod.sh` 与凭据校验脚本都会直接硬失败，禁止 kube 路径复活。
+- 账号一次性创建见 `agent_ops/deploy/prod/bootstrap_prod_plane_accounts.sh`（去 root、rootless podman、独立 home/compose 根/credentials）。
+- 灰度（`gray-initial`）取同集群一个实例验证（承接原远端 gamma 验证职责），通过后放量 `full`；二者共享同一物理 ECS 为成本驱动遗留。
 
 ---
 
@@ -184,9 +159,8 @@
     ├── service_pipeline.yml
     ├── app_pipeline.yml
     ├── pre-release-gate.yml
-    ├── deploy-gamma-ecs.yml
-    ├── app-env-device-matrix-self-hosted.yml
-    └── ecs-onebox-rollback.yml
+    ├── deploy-prod-auto.yml
+    └── app-env-device-matrix-self-hosted.yml
 ```
 
 ---

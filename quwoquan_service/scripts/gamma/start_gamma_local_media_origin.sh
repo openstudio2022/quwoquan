@@ -21,9 +21,8 @@ Options:
   --report <path>           Write runtime report JSON.
   -h, --help                Show this help.
 
-This starts the local media origin for gamma-pre联调。若已通过 tunnel / 公网域名
-暴露到外网，请把同一个公网地址通过 GAMMA_ECS_MEDIA_ORIGIN_BASE_URL 传给
-agent_ops/deploy/gamma/deploy_gamma_ecs.sh，让 ECS gamma-proxy 回源到此本机服务。
+This starts the local media origin for the local gamma mirror (gamma-local)。
+远端 gamma 已退役，仅保留本地 gamma；远端联调请走 prod-hosted 的 gray-initial 灰度实例。
 EOF
 }
 

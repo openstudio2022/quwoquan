@@ -28,11 +28,17 @@ DAG（stage 序）：
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
+from contextlib import contextmanager
 import json
 import os
+import re
 import shutil
+import signal
+import subprocess
 import sys
 import time
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -80,6 +86,16 @@ FALLBACK_DAG_STAGE = {
 }
 MAX_REACT_REWINDS = 2  # 单 stage 自动回退次数上限，超出转人工，防无限自省
 MAX_MANAGED_INFRA_RETRIES = 3
+MANAGED_LANE_LIMITS = {"homepage": 3, "article": 3, "image": 4}
+MANAGED_AGENT_TIMEOUT_SECONDS = max(
+    60, int(os.environ.get("QWQ_MANAGED_AGENT_TIMEOUT_SECONDS", "900"))
+)
+_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS = max(
+    0.0, float(os.environ.get("QWQ_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS", "2.0"))
+)
+MANAGED_LOCAL_CURSOR_MAX_WORKERS = max(
+    1, int(os.environ.get("QWQ_MANAGED_LOCAL_CURSOR_MAX_WORKERS", "1"))
+)
 
 
 @dataclass
@@ -94,7 +110,7 @@ class PipelineContext:
     completed: list[str] = field(default_factory=list)
     managed: bool = False
     runtime: str = "local"
-    max_workers: int = 3
+    max_workers: int = 10
     model: str = "composer-2.5"
     release_only: bool = False
     agent_runner: Callable[[str], dict[str, Any]] | None = None
@@ -249,8 +265,311 @@ def _coverage_entity_type(spec: dict) -> str:
     return types[0]
 
 
+def _declared_pixel_issue(image: dict, *, asset_id: str) -> str | None:
+    """Validate declared dimensions exactly as provided by the research plan."""
+    from _common.image_rules import pixel_size_issue
+
+    raw_width = str(image.get("width") or "").strip()
+    raw_height = str(image.get("height") or "").strip()
+    if not raw_width and not raw_height:
+        return None
+    try:
+        width = int(float(raw_width or "0"))
+        height = int(float(raw_height or "0"))
+    except ValueError:
+        return f"imagePixels: {asset_id} 像素尺寸字段不可解析 width={raw_width!r} height={raw_height!r}"
+    return pixel_size_issue(width, height, asset_id=asset_id)
+
+
+def _planned_pixel_issue(image: dict, *, asset_id: str) -> str | None:
+    """Validate declared dimensions when the research plan provides them."""
+    issue = _declared_pixel_issue(image, asset_id=asset_id)
+    if issue:
+        try:
+            from download.fetch import candidate_image_urls
+
+            if len(candidate_image_urls(str(image.get("url") or ""))) > 1:
+                return None
+        except Exception:  # noqa: BLE001
+            pass
+    return issue
+
+
+def _image_repair_hint(
+    image: dict,
+    *,
+    lane: str,
+    entity_id: str,
+    asset_id: str,
+    source_id: str = "",
+    image_index: int = 0,
+) -> dict[str, Any] | None:
+    issue = _declared_pixel_issue(image, asset_id=asset_id)
+    if not issue:
+        return None
+    try:
+        from download.fetch import candidate_image_urls
+
+        candidates = candidate_image_urls(str(image.get("url") or ""))
+    except Exception:  # noqa: BLE001
+        candidates = [str(image.get("url") or "")]
+    high_res_candidate = candidates[1] if len(candidates) > 1 else ""
+    return {
+        "lane": lane,
+        "entityId": entity_id,
+        "sourceId": source_id,
+        "imageIndex": image_index,
+        "assetId": asset_id,
+        "url": str(image.get("url") or ""),
+        "width": image.get("width") or "",
+        "height": image.get("height") or "",
+        "issue": issue,
+        "sameSourceHighResCandidate": high_res_candidate,
+        "candidateUrls": candidates[:3],
+        "action": (
+            "retry_with_same_source_high_resolution_url"
+            if high_res_candidate
+            else "replace_image_or_source_unit"
+        ),
+    }
+
+
+def _image_rights_repair_hint(
+    image: dict[str, Any],
+    issues: list[str],
+    *,
+    lane: str,
+    entity_id: str,
+    asset_id: str,
+    source_id: str = "",
+    image_index: int = 0,
+) -> dict[str, Any] | None:
+    if not issues:
+        return None
+    issue_text = "; ".join(str(issue) for issue in issues)
+    license_value = str(image.get("license") or "").strip()
+    action = "replace_image_or_source_unit_with_explicit_publishable_image_rights"
+    if license_value in {"factual_reference_only", "licensed_adaptation", "blocked"}:
+        action = "replace_image_or_source_unit_do_not_use_sourceUseMode_as_image_license"
+    return {
+        "lane": lane,
+        "entityId": entity_id,
+        "sourceId": source_id,
+        "imageIndex": image_index,
+        "assetId": asset_id,
+        "url": str(image.get("url") or ""),
+        "width": image.get("width") or "",
+        "height": image.get("height") or "",
+        "issue": issue_text,
+        "sameSourceHighResCandidate": "",
+        "candidateUrls": [str(image.get("url") or "")] if str(image.get("url") or "") else [],
+        "action": action,
+    }
+
+
+def _research_image_repair_hints(
+    ctx: PipelineContext,
+    entity_id: str,
+    etype: str,
+) -> list[dict[str, Any]]:
+    """Return actionable image-resolution repair hints for the research lanes."""
+    from download.source_inputs import curated_images_for_entity, curated_sources_for_entity
+    from vertical.license import validate_image_rights
+
+    hints: list[dict[str, Any]] = []
+    for lane in ("homepage", "article"):
+        for source in curated_sources_for_entity(
+            ctx.task_id,
+            ctx.batch_id,
+            entity_id,
+            etype,
+            research_lane=lane,
+        ):
+            source_id = str(source.get("source_id") or "")
+            for index, image in enumerate(source.get("imageUrls") or [], start=1):
+                rights_hint = _image_rights_repair_hint(
+                    image,
+                    validate_image_rights(
+                        image,
+                        vertical=str(ctx.spec.get("vertical") or "travel"),
+                    ),
+                    lane=lane,
+                    entity_id=entity_id,
+                    source_id=source_id,
+                    image_index=index,
+                    asset_id=f"{entity_id}/{source_id}#{index}",
+                )
+                if rights_hint:
+                    hints.append(rights_hint)
+                hint = _image_repair_hint(
+                    image,
+                    lane=lane,
+                    entity_id=entity_id,
+                    source_id=source_id,
+                    image_index=index,
+                    asset_id=f"{entity_id}/{source_id}#{index}",
+                )
+                if hint:
+                    hints.append(hint)
+    for index, image in enumerate(
+        [
+            item
+            for item in curated_images_for_entity(ctx.task_id, ctx.batch_id, entity_id, etype)
+            if str(item.get("researchLane") or "image") == "image"
+        ],
+        start=1,
+    ):
+        rights_hint = _image_rights_repair_hint(
+            image,
+            validate_image_rights(
+                image,
+                vertical=str(ctx.spec.get("vertical") or "travel"),
+            ),
+            lane="image",
+            entity_id=entity_id,
+            source_id=str(image.get("sourceCollectionId") or ""),
+            image_index=index,
+            asset_id=f"{entity_id}/image#{index}",
+        )
+        if rights_hint:
+            hints.append(rights_hint)
+        hint = _image_repair_hint(
+            image,
+            lane="image",
+            entity_id=entity_id,
+            source_id=str(image.get("sourceCollectionId") or ""),
+            image_index=index,
+            asset_id=f"{entity_id}/image#{index}",
+        )
+        if hint:
+            hints.append(hint)
+    return hints
+
+
+def _download_diagnostic_image_repair_hints(
+    diagnostics: dict[str, Any],
+    *,
+    entity_id: str,
+) -> list[dict[str, Any]]:
+    hints: list[dict[str, Any]] = []
+    for index, raw in enumerate(diagnostics.get("sampleRejected") or [], start=1):
+        text = str(raw or "")
+        if not text:
+            continue
+        source_id = ""
+        url = ""
+        source_match = re.search(r"sourceImage:([^:\s]+):", text)
+        if source_match:
+            source_id = source_match.group(1)
+        url_match = re.search(r"\((https?://[^)]+)\)", text)
+        if url_match:
+            url = url_match.group(1)
+        lane = "article" if source_id.startswith("article") or "article" in text else "homepage"
+        action = "replace_image_or_source_unit"
+        if "imageSafety" in text or "watermark" in text:
+            action = "replace_unsafe_or_watermarked_image"
+        elif "imageFetch" in text or "non-image" in text or "too small" in text:
+            action = "replace_unfetchable_or_low_quality_image"
+        hints.append(
+            {
+                "lane": lane,
+                "entityId": entity_id,
+                "sourceId": source_id,
+                "imageIndex": index,
+                "assetId": f"{entity_id}/{source_id or 'rejected'}#{index}",
+                "url": url,
+                "width": "",
+                "height": "",
+                "issue": text,
+                "sameSourceHighResCandidate": "",
+                "candidateUrls": [url] if url else [],
+                "action": action,
+            }
+        )
+    return hints
+
+
+def _download_issue_repair_hints(
+    issues: list[str],
+    *,
+    entity_id: str,
+) -> list[dict[str, Any]]:
+    hints: list[dict[str, Any]] = []
+    for index, raw in enumerate(issues, start=1):
+        text = str(raw or "")
+        if not text:
+            continue
+        lane = ""
+        action = ""
+        if "article source unit(s) with images" in text or "文章" in text:
+            lane = "article"
+            action = "add_or_replace_article_source_units_with_fetchable_rights_cleared_images"
+        elif (
+            "unique publishable image" in text
+            or "source collection" in text
+            or "image gates failed" in text
+            or "image_fetch_gate" in text
+            or "image_rights_gate" in text
+            or "图片作品" in text
+        ):
+            lane = "image"
+            action = "add_or_replace_image_source_collections_with_complete_rights"
+        elif "homepage" in text or "主页" in text:
+            lane = "homepage"
+            action = "add_or_replace_homepage_source_images_with_complete_rights"
+        if not lane:
+            continue
+        hints.append(
+            {
+                "lane": lane,
+                "entityId": entity_id,
+                "sourceId": "",
+                "imageIndex": index,
+                "assetId": f"{entity_id}/download_repair#{index}",
+                "url": "",
+                "width": "",
+                "height": "",
+                "issue": text,
+                "sameSourceHighResCandidate": "",
+                "candidateUrls": [],
+                "action": action,
+            }
+        )
+    return hints
+
+
+def _download_repair_lanes(repair: dict[str, Any]) -> set[str]:
+    issue_text = " ".join(str(item) for item in (repair.get("issues") or []))
+    lanes: set[str] = set()
+    if "article" in issue_text or "文章" in issue_text or "source unit(s) with images" in issue_text:
+        lanes.add("article")
+    if "homepage" in issue_text or "主页" in issue_text:
+        lanes.add("homepage")
+    if (
+        "image research" in issue_text
+        or "sourceCollection" in issue_text
+        or "image gates failed" in issue_text
+        or "image_fetch_gate" in issue_text
+        or "image_rights_gate" in issue_text
+        or "图片作品" in issue_text
+    ):
+        lanes.add("image")
+    research_issues = repair.get("researchLaneIssues") or {}
+    if isinstance(research_issues, dict):
+        lanes.update(
+            lane for lane, lane_issues in research_issues.items()
+            if lane in {"homepage", "article", "image"} and lane_issues
+        )
+    if lanes:
+        return lanes
+    for hint in repair.get("imageRepairHints") or []:
+        if isinstance(hint, dict) and str(hint.get("lane") or "") in {"homepage", "article", "image"}:
+            lanes.add(str(hint.get("lane")))
+    return lanes
+
+
 def _source_plan_filled(ctx: PipelineContext) -> tuple[bool, list[str]]:
-    """download_plan checkpoint：来源数量、权利模式和图片计划均满足任务规模。"""
+    """Research checkpoint: validate three isolated modality plans."""
     from download.gate import download_requirements
     from download.source_inputs import (
         curated_images_for_entity,
@@ -261,9 +580,186 @@ def _source_plan_filled(ctx: PipelineContext) -> tuple[bool, list[str]]:
     from vertical.license import validate_image_rights
 
     etype = _coverage_entity_type(ctx.spec)
+    from _common.source_catalog import platform_category
+    from _common.source_unit import resolve_entity_object_dir
+
     requirements = download_requirements(ctx.task_id)
+    separated_research = str((ctx.spec.get("content") or {}).get("modalityContract") or "") == "separated_research"
     missing: list[str] = []
     for eid in ctx.entity_ids:
+        obj = resolve_entity_object_dir(ctx.task_id, ctx.batch_id, eid, etype_hint=etype)
+        lane_files = {
+            lane: obj / "1.download" / f"{lane}_source_plan.json"
+            for lane in ("homepage", "article", "image")
+        }
+        legacy_plan = obj / "1.download" / "source_plan.json"
+        has_lane_contract = separated_research or (
+            any(path.is_file() for path in lane_files.values())
+            and not legacy_plan.is_file()
+        )
+        if has_lane_contract:
+            lane_issues: list[str] = []
+            homepage_sources = curated_sources_for_entity(
+                ctx.task_id, ctx.batch_id, eid, etype, research_lane="homepage"
+            )
+            article_sources = curated_sources_for_entity(
+                ctx.task_id, ctx.batch_id, eid, etype, research_lane="article"
+            )
+            images = curated_images_for_entity(ctx.task_id, ctx.batch_id, eid, etype)
+            homepage_images = [
+                image for image in images
+                if str(image.get("researchLane") or "") == "homepage"
+            ]
+            work_images = [
+                image for image in images
+                if str(image.get("researchLane") or "image") == "image"
+            ]
+            if len(homepage_sources) < 2:
+                lane_issues.append(f"homepage sources={len(homepage_sources)} need>=2")
+            homepage_categories = {
+                platform_category(str(source.get("platform") or ""))
+                for source in homepage_sources
+            }
+            if not ({"encyclopedia", "official"} & homepage_categories):
+                lane_issues.append("homepage research needs encyclopedia or official evidence")
+            if not homepage_images:
+                lane_issues.append("homepage research needs >=1 rights-cleared source image")
+            if len(article_sources) < requirements["minSources"]:
+                lane_issues.append(
+                    f"article sources={len(article_sources)} need>={requirements['minSources']}"
+                )
+            quotas = ((ctx.spec.get("content") or {}).get("quotas") or {})
+            required_article_image_sources = int(quotas.get("entityArticlesPerTarget") or 0)
+            article_sources_with_images = [
+                source for source in article_sources
+                if isinstance(source.get("imageUrls"), list) and source.get("imageUrls")
+            ]
+            if (
+                required_article_image_sources
+                and len(article_sources_with_images) < required_article_image_sources
+            ):
+                lane_issues.append(
+                    f"article research needs >= {required_article_image_sources} "
+                    "text+source-image base sources"
+                )
+            for source in article_sources:
+                for img_index, image in enumerate(source.get("imageUrls") or [], start=1):
+                    lane_issues.extend(
+                        f"article source {source.get('source_id')} image[{img_index}]: {issue}"
+                        for issue in validate_image_rights(
+                            image, vertical=str(ctx.spec.get("vertical") or "travel")
+                        )
+                    )
+                    relevance = str(image.get("relevance") or image.get("caption") or "")
+                    rel_issue = relevance_issue(
+                        relevance,
+                        entity_id=eid,
+                        asset_id=f"{eid}#{source.get('source_id')}#{img_index}",
+                    )
+                    if rel_issue:
+                        lane_issues.append(
+                            f"article source {source.get('source_id')} image[{img_index}]: {rel_issue}"
+                        )
+                    px_issue = _planned_pixel_issue(
+                        image,
+                        asset_id=f"{eid}/{source.get('source_id')}#{img_index}",
+                    )
+                    if px_issue:
+                        lane_issues.append(
+                            f"article source {source.get('source_id')} image[{img_index}]: {px_issue}"
+                        )
+            article_categories = {
+                platform_category(str(source.get("platform") or ""))
+                for source in article_sources
+            }
+            for source in article_sources:
+                lane_issues.extend(
+                    _article_source_identity_issues(
+                        source,
+                        platform_category(str(source.get("platform") or "")),
+                    )
+                )
+            if len({category for category in article_categories if category}) < 3:
+                lane_issues.append("article research needs >=3 source categories")
+            duplicate_urls = {
+                str(source.get("url") or "")
+                for source in homepage_sources
+            } & {
+                str(source.get("url") or "")
+                for source in article_sources
+            }
+            duplicate_urls.discard("")
+            collections: dict[str, list[dict[str, Any]]] = {}
+            for image in work_images:
+                collection_id = str(image.get("sourceCollectionId") or "").strip()
+                if collection_id:
+                    collections.setdefault(collection_id, []).append(image)
+                missing_fields = [
+                    field
+                    for field in (
+                        "sourceCollectionId",
+                        "creator",
+                        "collectionPageUrl",
+                        "license",
+                        "termsUrl",
+                        "authorizationProof",
+                    )
+                    if not str(image.get(field) or "").strip()
+                ]
+                if missing_fields:
+                    lane_issues.append(
+                        f"image {image.get('url') or '?'} missing collection rights {missing_fields}"
+                    )
+                if str(image.get("generationModel") or "").strip():
+                    lane_issues.append(f"image {image.get('url') or '?'} is AI-generated")
+                platform = str(image.get("platform") or "").lower()
+                if "pinterest" in platform or "小红书" in platform:
+                    lane_issues.append(
+                        f"image {image.get('url') or '?'} uses discovery-only platform {platform}"
+                    )
+            required_image_works = max(1, int(quotas.get("imageWorksPerTarget") or 0))
+            # One source collection can form one image work. A multi-image
+            # post may use 1..20 images from that collection, but the same
+            # collection must not be counted as multiple works by default.
+            work_capacity = sum(1 for rows in collections.values() if rows)
+            if work_capacity < required_image_works:
+                lane_issues.append(
+                    "image research needs enough rights-cleared source collections "
+                    f"for {required_image_works} image work(s)"
+                )
+            for lane in ("homepage", "article"):
+                lane_issues.extend(
+                    f"{lane}: {issue}"
+                    for issue in source_plan_rights_issues(
+                        ctx.task_id,
+                        ctx.batch_id,
+                        eid,
+                        etype,
+                        require_explicit=True,
+                        research_lane=lane,
+                    )
+                )
+            for index, image in enumerate(images, start=1):
+                lane_issues.extend(
+                    f"image[{index}]: {issue}"
+                    for issue in validate_image_rights(
+                        image, vertical=str(ctx.spec.get("vertical") or "travel")
+                    )
+                )
+                relevance = str(image.get("relevance") or image.get("caption") or "")
+                rel_issue = relevance_issue(
+                    relevance,
+                    entity_id=eid,
+                    asset_id=f"{eid}#{index}",
+                )
+                if rel_issue:
+                    lane_issues.append(f"image[{index}]: {rel_issue}")
+                px_issue = _planned_pixel_issue(image, asset_id=f"{eid}#image#{index}")
+                if px_issue:
+                    lane_issues.append(f"image[{index}]: {px_issue}")
+            if lane_issues:
+                missing.append(f"{eid}: " + "; ".join(lane_issues[:12]))
+            continue
         sources = curated_sources_for_entity(ctx.task_id, ctx.batch_id, eid, etype)
         images = curated_images_for_entity(ctx.task_id, ctx.batch_id, eid, etype)
         issues = source_plan_rights_issues(
@@ -292,7 +788,407 @@ def _source_plan_filled(ctx: PipelineContext) -> tuple[bool, list[str]]:
             issues.append(f"imageUrls={len(images)} need>={requirements['minImages']}")
         if issues:
             missing.append(f"{eid}: " + "; ".join(issues[:8]))
+    repair_path = batch_root(ctx.task_id, ctx.batch_id) / "_shared" / "download_repair.json"
+    if repair_path.is_file():
+        from download.gate import gate_download
+
+        if not gate_download(ctx.task_id, ctx.batch_id):
+            repair_path.unlink()
+        else:
+            repair = read_json(repair_path)
+            pending_repairs: list[str] = []
+            for entity in repair.get("entities") or []:
+                eid = str(entity.get("entityId") or "")
+                if not eid:
+                    continue
+                if _download_repair_entry_pending(entity):
+                    details = "; ".join(str(item) for item in (entity.get("issues") or [])[:4])
+                    pending_repairs.append(f"{eid}: download_repair required: {details}")
+            if pending_repairs:
+                missing.extend(pending_repairs)
     return (not missing), missing
+
+
+def _download_research_lane_issues(
+    ctx: PipelineContext,
+    eid: str,
+    etype: str,
+    lane: str,
+) -> list[str]:
+    """Validate one separated-current research lane for targeted managed repair."""
+    from download.gate import download_requirements
+    from download.source_inputs import (
+        curated_images_for_entity,
+        curated_sources_for_entity,
+        source_plan_rights_issues,
+    )
+    from _common.image_rules import relevance_issue
+    from _common.source_catalog import platform_category
+    from vertical.license import validate_image_rights
+
+    requirements = download_requirements(ctx.task_id)
+    issues: list[str] = []
+    if lane == "homepage":
+        sources = curated_sources_for_entity(
+            ctx.task_id, ctx.batch_id, eid, etype, research_lane="homepage"
+        )
+        images = [
+            image for image in curated_images_for_entity(ctx.task_id, ctx.batch_id, eid, etype)
+            if str(image.get("researchLane") or "") == "homepage"
+        ]
+        if len(sources) < 2:
+            issues.append(f"homepage sources={len(sources)} need>=2")
+        categories = {platform_category(str(source.get("platform") or "")) for source in sources}
+        if not ({"encyclopedia", "official"} & categories):
+            issues.append("homepage research needs encyclopedia or official evidence")
+        if not images:
+            issues.append("homepage research needs >=1 rights-cleared source image")
+        issues.extend(
+            f"homepage: {issue}"
+            for issue in source_plan_rights_issues(
+                ctx.task_id,
+                ctx.batch_id,
+                eid,
+                etype,
+                require_explicit=True,
+                research_lane="homepage",
+            )
+        )
+        for index, image in enumerate(images, start=1):
+            issues.extend(
+                f"homepage image[{index}]: {issue}"
+                for issue in validate_image_rights(
+                    image, vertical=str(ctx.spec.get("vertical") or "travel")
+                )
+            )
+            relevance = str(image.get("relevance") or image.get("caption") or "")
+            rel_issue = relevance_issue(
+                relevance,
+                entity_id=eid,
+                asset_id=f"{eid}#homepage#{index}",
+            )
+            if rel_issue:
+                issues.append(f"homepage image[{index}]: {rel_issue}")
+            px_issue = _planned_pixel_issue(image, asset_id=f"{eid}#homepage#{index}")
+            if px_issue:
+                issues.append(f"homepage image[{index}]: {px_issue}")
+        return issues
+
+    if lane == "article":
+        sources = curated_sources_for_entity(
+            ctx.task_id, ctx.batch_id, eid, etype, research_lane="article"
+        )
+        if len(sources) < requirements["minSources"]:
+            issues.append(f"article sources={len(sources)} need>={requirements['minSources']}")
+        quotas = ((ctx.spec.get("content") or {}).get("quotas") or {})
+        required_article_image_sources = int(quotas.get("entityArticlesPerTarget") or 0)
+        article_sources_with_images = [
+            source for source in sources
+            if isinstance(source.get("imageUrls"), list) and source.get("imageUrls")
+        ]
+        if required_article_image_sources and len(article_sources_with_images) < required_article_image_sources:
+            issues.append(
+                f"article research needs >= {required_article_image_sources} "
+                "text+source-image base sources"
+            )
+        for source in sources:
+            for img_index, image in enumerate(source.get("imageUrls") or [], start=1):
+                issues.extend(
+                    f"article source {source.get('source_id')} image[{img_index}]: {issue}"
+                    for issue in validate_image_rights(
+                        image, vertical=str(ctx.spec.get("vertical") or "travel")
+                    )
+                )
+                relevance = str(image.get("relevance") or image.get("caption") or "")
+                rel_issue = relevance_issue(
+                    relevance,
+                    entity_id=eid,
+                    asset_id=f"{eid}#{source.get('source_id')}#{img_index}",
+                )
+                if rel_issue:
+                    issues.append(
+                        f"article source {source.get('source_id')} image[{img_index}]: {rel_issue}"
+                    )
+                px_issue = _planned_pixel_issue(
+                    image,
+                    asset_id=f"{eid}/{source.get('source_id')}#{img_index}",
+                )
+                if px_issue:
+                    issues.append(
+                        f"article source {source.get('source_id')} image[{img_index}]: {px_issue}"
+                    )
+        categories = {platform_category(str(source.get("platform") or "")) for source in sources}
+        for source in sources:
+            issues.extend(
+                _article_source_identity_issues(
+                    source,
+                    platform_category(str(source.get("platform") or "")),
+                )
+            )
+        if len({category for category in categories if category}) < 3:
+            issues.append("article research needs >=3 source categories")
+        homepage_urls = {
+            str(source.get("url") or "")
+            for source in curated_sources_for_entity(
+                ctx.task_id, ctx.batch_id, eid, etype, research_lane="homepage"
+            )
+        }
+        article_urls = {str(source.get("url") or "") for source in sources}
+        duplicate_urls = homepage_urls & article_urls
+        duplicate_urls.discard("")
+        issues.extend(
+            f"article: {issue}"
+            for issue in source_plan_rights_issues(
+                ctx.task_id,
+                ctx.batch_id,
+                eid,
+                etype,
+                require_explicit=True,
+                research_lane="article",
+            )
+        )
+        return issues
+
+    if lane == "image":
+        images = [
+            image for image in curated_images_for_entity(ctx.task_id, ctx.batch_id, eid, etype)
+            if str(image.get("researchLane") or "image") == "image"
+        ]
+        collections: dict[str, list[dict[str, Any]]] = {}
+        for image in images:
+            collection_id = str(image.get("sourceCollectionId") or "").strip()
+            if collection_id:
+                collections.setdefault(collection_id, []).append(image)
+            missing_fields = [
+                field
+                for field in (
+                    "sourceCollectionId",
+                    "creator",
+                    "collectionPageUrl",
+                    "license",
+                    "termsUrl",
+                    "authorizationProof",
+                )
+                if not str(image.get(field) or "").strip()
+            ]
+            if missing_fields:
+                issues.append(
+                    f"image {image.get('url') or '?'} missing collection rights {missing_fields}"
+                )
+            if str(image.get("generationModel") or "").strip():
+                issues.append(f"image {image.get('url') or '?'} is AI-generated")
+            platform = str(image.get("platform") or "").lower()
+            if "pinterest" in platform or "小红书" in platform:
+                issues.append(f"image {image.get('url') or '?'} uses discovery-only platform {platform}")
+        quotas = ((ctx.spec.get("content") or {}).get("quotas") or {})
+        required_image_works = max(1, int(quotas.get("imageWorksPerTarget") or 0))
+        work_capacity = sum(1 for rows in collections.values() if rows)
+        if work_capacity < required_image_works:
+            issues.append(
+                "image research needs enough rights-cleared source collections "
+                f"for {required_image_works} image work(s)"
+            )
+        for index, image in enumerate(images, start=1):
+            issues.extend(
+                f"image[{index}]: {issue}"
+                for issue in validate_image_rights(
+                    image, vertical=str(ctx.spec.get("vertical") or "travel")
+                )
+            )
+            relevance = str(image.get("relevance") or image.get("caption") or "")
+            rel_issue = relevance_issue(relevance, entity_id=eid, asset_id=f"{eid}#{index}")
+            if rel_issue:
+                issues.append(f"image[{index}]: {rel_issue}")
+            px_issue = _planned_pixel_issue(image, asset_id=f"{eid}#image#{index}")
+            if px_issue:
+                issues.append(f"image[{index}]: {px_issue}")
+        return issues
+
+    return [f"unknown research lane: {lane}"]
+
+
+def _article_source_identity_issues(source: dict[str, Any], category: str | None) -> list[str]:
+    source_id = str(source.get("source_id") or "").strip().lower()
+    platform = str(source.get("platform") or "").strip()
+    issues: list[str] = []
+    if "official" in source_id and category != "official":
+        issues.append(
+            f"article source {source.get('source_id')}: source_id implies official, "
+            f"but platform {platform!r} maps to {category or 'unknown'}"
+        )
+    if (
+        ("wiki" in source_id or "baike" in source_id or "百科" in source_id)
+        and "wikivoyage" not in source_id
+        and category != "encyclopedia"
+    ):
+        issues.append(
+            f"article source {source.get('source_id')}: source_id implies encyclopedia, "
+            f"but platform {platform!r} maps to {category or 'unknown'}"
+        )
+    return issues
+
+
+def _download_repair_path(ctx: PipelineContext) -> Path:
+    return batch_root(ctx.task_id, ctx.batch_id) / "_shared" / "download_repair.json"
+
+
+def _download_repair_entry_pending(repair: dict[str, Any]) -> bool:
+    if not _download_repair_entry_actionable(repair):
+        return False
+    plan_paths = [
+        Path(str(path))
+        for path in (repair.get("sourcePlanPaths") or [])
+        if str(path).strip()
+    ]
+    if not plan_paths and str(repair.get("sourcePlanPath") or "").strip():
+        plan_paths = [Path(str(repair.get("sourcePlanPath")))]
+    failed_mtime = int(repair.get("sourcePlanMtimeNs") or 0)
+    current_mtime = max((_source_plan_mtime_ns(path) for path in plan_paths), default=0)
+    return current_mtime <= failed_mtime
+
+
+def _download_repair_entry_actionable(repair: dict[str, Any]) -> bool:
+    research_issues = repair.get("researchLaneIssues") or {}
+    if isinstance(research_issues, dict) and any(research_issues.values()):
+        return True
+    return any(isinstance(hint, dict) for hint in (repair.get("imageRepairHints") or []))
+
+
+def _source_plan_mtime_ns(path: Path) -> int:
+    if path.is_file():
+        return path.stat().st_mtime_ns
+    if path.is_dir():
+        return max(
+            (child.stat().st_mtime_ns for child in path.glob("*_source_plan.json") if child.is_file()),
+            default=0,
+        )
+    return 0
+
+
+def _download_retry_entity_ids(ctx: PipelineContext) -> list[str]:
+    """Return failed entities for an object-scoped download repair.
+
+    The repair packet is retained until the next successful fetch. For an
+    interrupted older run, derive scope from the current persisted final gate;
+    stale per-stage red reports must never widen the repair.
+    """
+    selected: set[str] = set()
+    repair_path = _download_repair_path(ctx)
+    if repair_path.is_file():
+        from download.gate import gate_download
+
+        if not gate_download(ctx.task_id, ctx.batch_id):
+            repair_path.unlink()
+            return []
+        try:
+            repair = read_json(repair_path)
+        except (OSError, ValueError, TypeError):
+            repair = {}
+        selected.update(
+            str(entity.get("entityId") or "")
+            for entity in repair.get("entities") or []
+            if isinstance(entity, dict)
+        )
+    if not selected:
+        from download.gate import gate_download
+
+        issues = gate_download(ctx.task_id, ctx.batch_id)
+        selected.update(
+            entity_id
+            for entity_id in ctx.entity_ids
+            if any(entity_id in str(issue) for issue in issues)
+        )
+        if issues and not selected:
+            return list(ctx.entity_ids)
+    return [entity_id for entity_id in ctx.entity_ids if entity_id in selected]
+
+
+def _record_download_repair(ctx: PipelineContext, issues: list[str]) -> Path:
+    """把真实抓取门失败转成下一轮 Agent 可消费的对象级 repair packet。"""
+    from _common.download_diagnostics import entity_download_diagnostics
+    from _common.source_unit import resolve_entity_object_dir
+
+    etype = _coverage_entity_type(ctx.spec)
+    entities: list[dict[str, Any]] = []
+    root = batch_root(ctx.task_id, ctx.batch_id)
+    result_root = root / "task_download" / "results"
+    general_issues = [
+        str(issue)
+        for issue in issues
+        if not any(entity_id in str(issue) for entity_id in ctx.entity_ids)
+    ]
+    for entity_id in ctx.entity_ids:
+        entity_issues = [
+            str(issue) for issue in issues if entity_id in str(issue)
+        ] + general_issues
+        if not entity_issues:
+            continue
+        plan_dir = (
+            resolve_entity_object_dir(
+                ctx.task_id,
+                ctx.batch_id,
+                entity_id,
+                etype_hint=etype,
+            )
+            / "1.download"
+        )
+        lane_paths = [
+            plan_dir / name
+            for name in (
+                "homepage_source_plan.json",
+                "article_source_plan.json",
+                "image_source_plan.json",
+            )
+        ]
+        existing_lane_paths = [path for path in lane_paths if path.is_file()]
+        legacy_path = plan_dir / "source_plan.json"
+        plan_paths = existing_lane_paths or ([legacy_path] if legacy_path.is_file() else lane_paths)
+        research_lane_issues = {
+            lane: _download_research_lane_issues(ctx, entity_id, etype, lane)
+            for lane in ("homepage", "article", "image")
+        }
+        diagnostics = entity_download_diagnostics(root, entity_id)
+        image_repair_hints = _download_issue_repair_hints(entity_issues, entity_id=entity_id)
+        image_repair_hints.extend(_research_image_repair_hints(ctx, entity_id, etype))
+        image_repair_hints.extend(
+            _download_diagnostic_image_repair_hints(diagnostics, entity_id=entity_id)
+        )
+        entities.append(
+            {
+                "entityId": entity_id,
+                "issues": entity_issues,
+                "sourcePlanPath": str(plan_paths[0]),
+                "sourcePlanPaths": [str(path) for path in plan_paths],
+                "sourcePlanMtimeNs": max(
+                    (_source_plan_mtime_ns(path) for path in plan_paths),
+                    default=0,
+                ),
+                "reportPaths": [
+                    str(result_root / "entity_source_bundle_gate" / f"{entity_id}.json"),
+                    str(result_root / "image_fetch_gate" / f"{entity_id}.json"),
+                    str(result_root / "image_rights_gate" / f"{entity_id}.json"),
+                ],
+                "downloadDiagnostics": diagnostics,
+                "researchLaneIssues": {
+                    lane: lane_issues
+                    for lane, lane_issues in research_lane_issues.items()
+                    if lane_issues
+                },
+                "imageRepairHints": image_repair_hints,
+            }
+        )
+    path = _download_repair_path(ctx)
+    write_json(
+        path,
+        {
+            "schemaVersion": "quwoquan.download_repair",
+            "taskId": ctx.task_id,
+            "batchId": ctx.batch_id,
+            "createdAt": store.now_iso(),
+            "entities": entities,
+        },
+    )
+    return path
 
 
 def _homepages_done(ctx: PipelineContext) -> tuple[bool, list[str]]:
@@ -342,18 +1238,51 @@ def _content_issue_matchers(ctx: PipelineContext) -> dict[str, set[str]]:
 
 
 def _produce_review_retry_refs(ctx: PipelineContext, issues: list[str]) -> tuple[list[str], dict[str, list[str]]]:
-    """把 produce_review 的批次级问题尽量映射回受影响 ref；无法精确定位时保守回退全批。"""
+    """Map review failures to refs without invalidating current green objects."""
     from _common import content_object
-    from _common.stage_reports import iter_stage_envelopes
 
     matchers = _content_issue_matchers(ctx)
     affected: set[str] = set()
-    for ref, env in iter_stage_envelopes(ctx.task_id, ctx.batch_id, "produce", "review_gate"):
-        payload = env.get("payload") or {}
+    issue_map: dict[str, list[str]] = {}
+    saw_object_gate = False
+    for ref in content_object.iter_content_refs(ctx.task_id, ctx.batch_id):
+        try:
+            gate_path = (
+                content_object.content_object_dir(ctx.task_id, ctx.batch_id, ref)
+                / "5.review"
+                / "review_gate.json"
+            )
+        except KeyError:
+            continue
+        if not gate_path.is_file():
+            continue
+        saw_object_gate = True
+        envelope = read_json(gate_path)
+        payload = envelope.get("payload") or envelope
         if payload.get("passed") is False:
             affected.add(ref)
+            issue_map[ref] = [str(item) for item in (payload.get("issues") or [])]
 
-    issue_map: dict[str, list[str]] = {}
+    # Object gates are the latest and most precise verdict. Batch/release issues
+    # often mention every object path and must not widen a two-ref repair to all.
+    if saw_object_gate and affected:
+        return sorted(affected), issue_map
+    if saw_object_gate:
+        reducer_path = batch_root(ctx.task_id, ctx.batch_id) / "_shared" / "batch_reducer_gate.json"
+        if reducer_path.is_file():
+            reducer = read_json(reducer_path)
+            reducer_refs = [
+                str(ref)
+                for ref in (reducer.get("affectedRefs") or [])
+                if str(ref) in matchers
+            ]
+            if reducer_refs:
+                reducer_issues = [str(item) for item in (reducer.get("issues") or issues or [])]
+                return sorted(set(reducer_refs)), {
+                    ref: list(reducer_issues) for ref in reducer_refs
+                }
+        return [], {}
+
     unmatched: list[str] = []
     for raw_issue in issues or []:
         issue = str(raw_issue)
@@ -464,17 +1393,27 @@ def _write_retry_reports_for_refs(
         )
 
 
-def _prepare_produce_review_retry(ctx: PipelineContext, result: StageResult, target_stage: str) -> None:
+def _prepare_produce_review_retry(ctx: PipelineContext, result: StageResult, target_stage: str) -> bool:
     from task import object_queue as oq
     from _common.draft_io import read_writing_pack
 
     refs, issue_map = _produce_review_retry_refs(ctx, result.issues)
     if not refs:
-        return
+        return False
     _write_retry_reports_for_refs(ctx, refs=refs, issue_map=issue_map, target_stage=target_stage)
     if target_stage == "download_plan":
         _purge_author_queue_for_stale_workflow(ctx, reason="produce_review->download_plan")
-        return
+        return True
+    total_refs = max(1, len(_content_issue_matchers(ctx)))
+    bulk_limit = max(5, int(total_refs * 0.2))
+    if len(refs) > bulk_limit:
+        print(
+            "[task run] produce_review bulk failure; "
+            f"{len(refs)}/{total_refs} refs exceed retry limit {bulk_limit}. "
+            "Keeping drafts intact and requiring gate/prompt diagnosis.",
+            file=sys.stderr,
+        )
+        return False
     _purge_author_queue_for_stale_workflow(ctx, refs=refs, reason="produce_review->produce_compose")
     reset = [ref for ref in refs if _invalidate_ref_for_retry(ctx, ref)]
     requeued = oq.requeue_refs(ctx.task_id, ctx.batch_id, reset, "author", reason="produce_review_retry") if reset else []
@@ -494,15 +1433,29 @@ def _prepare_produce_review_retry(ctx: PipelineContext, result: StageResult, tar
             + ", ".join(reset[:12])
             + (" ..." if len(reset) > 12 else "")
         )
+    return bool(reset)
 
 
 # ─── 确定性 stage 执行（复用既有 handler）─────────────────────────────
 def _run_download_fetch(ctx: PipelineContext) -> StageResult:
     from download.handler import handle_download
     from download.gate import gate_download
+    target_entity_ids = _download_retry_entity_ids(ctx)
+    if not target_entity_ids:
+        return StageResult(
+            "download_fetch",
+            AUTO,
+            "done",
+            "current persisted download gate already passes",
+        )
+    if target_entity_ids != ctx.entity_ids:
+        print(
+            "[task run] download object repair: "
+            + ", ".join(target_entity_ids)
+        )
     ns = argparse.Namespace(
         task=ctx.task_id, batch=ctx.batch_id,
-        entity_ids=",".join(ctx.entity_ids),
+        entity_ids=",".join(target_entity_ids),
         entity_type=(ctx.spec.get("scope") or {}).get("entityTypes", [""])[0]
         if (ctx.spec.get("scope") or {}).get("entityTypes") else "",
     )
@@ -512,6 +1465,7 @@ def _run_download_fetch(ctx: PipelineContext) -> StageResult:
         code = int(getattr(exc, "code", 1) or 0)
         if code not in (0,):
             issues = gate_download(ctx.task_id, ctx.batch_id)
+            _record_download_repair(ctx, issues)
             message = f"download gate failed with exit code {code}"
             if issues:
                 message += ": " + "; ".join(issues[:5])
@@ -524,6 +1478,7 @@ def _run_download_fetch(ctx: PipelineContext) -> StageResult:
                 issues=issues,
             )
     except Exception as exc:  # noqa: BLE001
+        _record_download_repair(ctx, [str(exc)])
         return StageResult(
             "download_fetch",
             AUTO,
@@ -535,6 +1490,7 @@ def _run_download_fetch(ctx: PipelineContext) -> StageResult:
 
     issues = gate_download(ctx.task_id, ctx.batch_id)
     if issues:
+        _record_download_repair(ctx, issues)
         return StageResult(
             "download_fetch",
             AUTO,
@@ -543,7 +1499,15 @@ def _run_download_fetch(ctx: PipelineContext) -> StageResult:
             fallback_stage="download_plan",
             issues=issues,
         )
-    return StageResult("download_fetch", AUTO, "done", "fetched sources for coverage entities")
+    repair_path = _download_repair_path(ctx)
+    if repair_path.is_file():
+        repair_path.unlink()
+    return StageResult(
+        "download_fetch",
+        AUTO,
+        "done",
+        "fetched sources for " + ", ".join(target_entity_ids),
+    )
 
 
 def _run_build_prepare(ctx: PipelineContext) -> StageResult:
@@ -638,15 +1602,137 @@ def _run_produce_plan(ctx: PipelineContext) -> StageResult:
                        f"解析 {len(written)} 个实体 compose brief(intent={intent}) -> posts/.../3.compose/brief.json")
 
 
+def _clear_compose_base_draft_assignments(
+    ledger: dict[str, Any],
+    selected_refs: list[str],
+    overrides: Mapping[str, Mapping[str, Any]],
+) -> tuple[dict[str, Any], list[str], bool]:
+    """Clear stale base-draft assignments for refs/sources that will be recomposed.
+
+    Re-runs must be driven by the current content plan, not by half-written state
+    from an earlier attempt.  The source-side clear matters when an old ref used
+    to occupy the source that the current content plan now assigns to another ref.
+    """
+    selected = set(selected_refs)
+    selected_sources: dict[str, str] = {}
+    duplicate_sources: list[str] = []
+    for ref in selected_refs:
+        override = overrides.get(ref) or {}
+        source_ref = str(override.get("baseSourceRef") or "").strip()
+        if not source_ref:
+            continue
+        previous = selected_sources.get(source_ref)
+        if previous and previous != ref:
+            duplicate_sources.append(f"{source_ref} -> {previous}, {ref}")
+        selected_sources[source_ref] = ref
+
+    current = dict(ledger.get("assignments") or {})
+    assignments = {
+        source_ref: post_ref
+        for source_ref, post_ref in current.items()
+        if post_ref not in selected and source_ref not in selected_sources
+    }
+    changed = assignments != current
+    cleaned = dict(ledger)
+    cleaned["assignments"] = assignments
+    return cleaned, duplicate_sources, changed
+
+
 def _run_produce_compose(ctx: PipelineContext) -> StageResult:
     from produce.handler import handle_produce
+    from _common.content_object import BRIEF_FILE, content_object_stage_dir, iter_content_refs
+    from _common.content_plan import load_writing_intent_overrides
+    from _common.draft_io import (
+        draft_article_path,
+        is_placeholder,
+        prompt_path,
+        writing_pack_path,
+    )
+    from _common.io import read_json
+    from _common.paths import STAGE_COMPOSE
+
+    overrides = load_writing_intent_overrides(ctx.task_id, ctx.batch_id)
+    expected_refs = list(iter_content_refs(ctx.task_id, ctx.batch_id))
+    pending_refs: list[str] = []
+    for ref in expected_refs:
+        needs_prepare = False
+        wp = writing_pack_path(ctx.task_id, ctx.batch_id, ref)
+        prompt = prompt_path(ctx.task_id, ctx.batch_id, ref)
+        draft = draft_article_path(ctx.task_id, ctx.batch_id, ref)
+        if not wp.is_file() or not prompt.is_file() or not draft.is_file():
+            needs_prepare = True
+        else:
+            try:
+                if is_placeholder(draft.read_text(encoding="utf-8")):
+                    needs_prepare = True
+            except OSError:
+                needs_prepare = True
+        override = overrides.get(ref) or {}
+        if override:
+            brief_path = (
+                content_object_stage_dir(ctx.task_id, ctx.batch_id, ref, STAGE_COMPOSE)
+                / BRIEF_FILE
+            )
+            try:
+                brief = read_json(brief_path) if brief_path.is_file() else {}
+            except (OSError, ValueError, TypeError):
+                brief = {}
+            for field in (
+                "writingIntent",
+                "baseSourceRef",
+                "carrier",
+                "sourceCollectionId",
+                "assetRefs",
+            ):
+                if field in override and override.get(field) not in (None, ""):
+                    if brief.get(field) != override.get(field):
+                        needs_prepare = True
+                        break
+        if needs_prepare:
+            pending_refs.append(ref)
+    if expected_refs and not pending_refs:
+        return StageResult(
+            "produce_compose",
+            AUTO,
+            "done",
+            "all writing packs and authored drafts already present",
+        )
+    selected_refs = pending_refs
+    if selected_refs:
+        print(
+            "[task run] compose object repair: "
+            + ", ".join(selected_refs)
+        )
+        from _common.base_draft import load_base_draft_ledger, save_base_draft_ledger
+
+        ledger = load_base_draft_ledger(ctx.task_id, ctx.batch_id)
+        ledger, duplicate_sources, ledger_changed = _clear_compose_base_draft_assignments(
+            ledger, selected_refs, overrides
+        )
+        if duplicate_sources:
+            return StageResult(
+                "produce_compose",
+                AUTO,
+                "failed",
+                "content_plan declares duplicate baseSourceRef: "
+                + "; ".join(duplicate_sources[:5]),
+                fallback_stage="content_plan",
+            )
+        if ledger_changed:
+            save_base_draft_ledger(ctx.task_id, ctx.batch_id, ledger)
     ns = argparse.Namespace(
         task=ctx.task_id, batch=ctx.batch_id, type="article",
-        stage="compose-brief", refs="", batch_size=1,
+        stage="compose-brief", refs=",".join(selected_refs), batch_size=1,
         allow_partial=False, materialize=False,
     )
     handle_produce(ns)
-    return StageResult("produce_compose", AUTO, "done", "compose-brief 写出 writing_pack + prompt")
+    return StageResult(
+        "produce_compose",
+        AUTO,
+        "done",
+        "compose-brief 写出 writing_pack + prompt"
+        + (f" ({len(selected_refs)} repaired refs)" if selected_refs else ""),
+    )
 
 
 def _run_produce_annotate(ctx: PipelineContext) -> StageResult:
@@ -663,19 +1749,37 @@ def _run_produce_annotate(ctx: PipelineContext) -> StageResult:
 def _aggregate_review_fallback(ctx: PipelineContext) -> str | None:
     """聚合 produce review gate reports 的 fallbackStage（ReAct 回退指针）。
 
-    优先返回 download(证据不足)，否则 compose(质量/重组)；都没有则 None。
+    只有来源文件确实缺失/不可读时才回 download。事实表达、必含事实、
+    文体或载体失败都属于单作品 compose 修复，不能让整批回退重抓来源。
     """
     from _common.stage_reports import iter_stage_envelopes
-    fallbacks: set[str] = set()
+    saw_failure = False
+    download_issue_markers = (
+        "source file missing",
+        "source path missing",
+        "sourcepath missing",
+        "source bundle missing",
+        "evidence file missing",
+        "evidenceref missing",
+        "unreadable source",
+        "cannot read source",
+        "来源文件缺失",
+        "来源不可读",
+        "证据文件缺失",
+    )
     for _ref, rep in iter_stage_envelopes(ctx.task_id, ctx.batch_id, "produce", "review_gate"):
-        fb = (rep.get("payload") or rep).get("fallbackStage")
-        if fb:
-            fallbacks.add(str(fb))
-    if "download" in fallbacks:
-        return "download"
-    if fallbacks:
-        return sorted(fallbacks)[0]
-    return None
+        payload = rep.get("payload") or rep
+        if payload.get("passed") is True:
+            continue
+        issues = [str(issue) for issue in payload.get("issues") or []]
+        fallback = str(payload.get("fallbackStage") or "")
+        if not issues and not fallback:
+            continue
+        saw_failure = True
+        issue_text = "\n".join(issues).lower()
+        if fallback == "download" and any(marker in issue_text for marker in download_issue_markers):
+            return "download"
+    return "compose" if saw_failure else None
 
 
 def _run_produce_review(ctx: PipelineContext) -> StageResult:
@@ -684,6 +1788,28 @@ def _run_produce_review(ctx: PipelineContext) -> StageResult:
     from _common import content_object
     from _common.draft_io import read_draft_article, read_writing_pack
     from _common.handoff import build_batch_reducer_gate, write_batch_reducer_gate
+    refs = content_object.iter_content_refs(ctx.task_id, ctx.batch_id)
+    all_green = bool(refs)
+    for ref in refs:
+        gate_path = (
+            content_object.content_object_dir(ctx.task_id, ctx.batch_id, ref)
+            / "5.review"
+            / "review_gate.json"
+        )
+        if not gate_path.is_file():
+            all_green = False
+            break
+        envelope = read_json(gate_path)
+        if (envelope.get("payload") or envelope).get("passed") is not True:
+            all_green = False
+            break
+    if all_green and not gate_produce(ctx.task_id, ctx.batch_id, "article"):
+        return StageResult(
+            "produce_review",
+            AUTO,
+            "done",
+            "existing review + materialized packages still pass current gates",
+        )
     ns = argparse.Namespace(
         task=ctx.task_id, batch=ctx.batch_id, type="article",
         stage="review", refs="", batch_size=1,
@@ -729,21 +1855,54 @@ def _run_produce_review(ctx: PipelineContext) -> StageResult:
 def _checkpoint_download_plan(ctx: PipelineContext) -> StageResult:
     ok, missing = _source_plan_filled(ctx)
     if ok:
-        return StageResult("download_plan", CHECKPOINT, "done", "source_plan 已就绪")
-    # 预置对象优先 source_plan 骨架（entities/{d}/{t}/{name}/1.download/source_plan.json），Agent 填 URL+body
+        return StageResult("download_plan", CHECKPOINT, "done", "三路 research plan 已就绪")
+    # 预置 homepage/article/image 三路计划骨架，由独立 Agent 填充。
     from download.prepare import prepare_source_plan
     etype = _coverage_entity_type(ctx.spec)
     entities = [{"entityId": e, "canonicalName": e, "entityType": etype} for e in ctx.entity_ids]
     prepare_source_plan(ctx.task_id, ctx.batch_id, entities)
+    if os.environ.get("QWQ_DOWNLOAD_AUTO_RESEARCH", "1") != "0":
+        try:
+            from download.research_plan import write_auto_research_plans
+
+            auto_report = write_auto_research_plans(
+                ctx.task_id,
+                ctx.batch_id,
+                ctx.entity_ids,
+                entity_type=etype,
+                force=False,
+            )
+            write_json(
+                batch_root(ctx.task_id, ctx.batch_id) / "_shared" / "auto_research_plan.json",
+                auto_report,
+            )
+        except Exception as exc:  # noqa: BLE001
+            write_json(
+                batch_root(ctx.task_id, ctx.batch_id) / "_shared" / "auto_research_plan.json",
+                {
+                    "schemaVersion": "quwoquan.download.auto_research_plan",
+                    "taskId": ctx.task_id,
+                    "batchId": ctx.batch_id,
+                    "error": f"{type(exc).__name__}: {exc}",
+                },
+            )
+        else:
+            ok_after_auto, missing_after_auto = _source_plan_filled(ctx)
+            if ok_after_auto:
+                return StageResult("download_plan", CHECKPOINT, "done", "三路 research plan 已由 CLI 自动检索就绪")
+            missing = missing_after_auto
+    quotas = ((ctx.spec.get("content") or {}).get("quotas") or {})
+    image_works = max(1, int(quotas.get("imageWorksPerTarget") or 0))
     hint = (
-        f"[CHECKPOINT download_plan] Agent 检索真实素材，为以下实体写满足规模化门的 source_plan：\n"
+        f"[CHECKPOINT download_plan] 三类独立 Agent 检索真实素材，为以下实体写满足规模化门的 research plan：\n"
         f"  待补实体: {missing}\n"
-        f"  写入: entities/<domain>/<type>/<entityId>/1.download/source_plan.json\n"
-        f"  每实体至少 4 个真实可抓取来源、10 张不重复可发布图片；来源须写 sourceUseMode，"
-        f"图片须写 license/credit/sourceUrl/termsUrl/usageScope/relevance。\n"
+        f"  写入: entities/<domain>/<type>/<entityId>/1.download/"
+        "{homepage,article,image}_source_plan.json\n"
+        f"  homepage/article/image 三路互不共用计划；图片按 sourceCollectionId 组织，"
+        f"每组授权链完整，足够形成 {image_works} 个各含 1..20 张图的作品。\n"
         f"  完成后: qwq-data data workflow run --task {ctx.task_id} --batch {ctx.batch_id} --resume"
     )
-    return StageResult("download_plan", CHECKPOINT, "waiting", "等待 Agent 写 source_plan", hint)
+    return StageResult("download_plan", CHECKPOINT, "waiting", "等待三路 research Agent", hint)
 
 
 def _checkpoint_content_plan(ctx: PipelineContext) -> StageResult:
@@ -753,26 +1912,28 @@ def _checkpoint_content_plan(ctx: PipelineContext) -> StageResult:
     from _common.content_plan import content_plan_quotas_required
 
     quotas = (ctx.spec.get("content") or {}).get("quotas") or {}
+    acceptance = ctx.spec.get("acceptance") or {}
+    required_angles = [str(a) for a in (acceptance.get("requiredAngles") or []) if str(a)]
     per_target_entity = int(quotas.get("entityArticlesPerTarget") or 0)
-    per_target_gallery = int(quotas.get("galleryPostsPerTarget") or 0)
+    per_target_image = int(quotas.get("imageWorksPerTarget") or 0)
     entity_q = (
         per_target_entity * len(ctx.entity_ids)
         if per_target_entity
         else int(quotas.get("entityArticles") or 0)
     ) if content_plan_quotas_required(ctx.spec) else 0
     route_q = int(quotas.get("routeArticles") or 0) if content_plan_quotas_required(ctx.spec) else 0
-    gallery_q = (
-        per_target_gallery * len(ctx.entity_ids)
-        if per_target_gallery
-        else int(quotas.get("galleryPosts") or 0)
+    image_q = (
+        per_target_image * len(ctx.entity_ids)
+        if per_target_image
+        else 0
     ) if content_plan_quotas_required(ctx.spec) else 0
     hint = (
         f"[CHECKPOINT content_plan] Agent 通读已下载来源，证据驱动规划 "
-        f"{entity_q} 篇文章 + {gallery_q} 个画报 + {route_q} 篇线路：\n"
+        f"{entity_q} 篇文章 + {image_q} 个图片作品 + {route_q} 篇线路：\n"
         f"  产出: batches/{ctx.batch_id}/_shared/content_plan_packet.json\n"
         f"  每条: ref, kind(entity|route), title, entityRefs, evidenceRefs(相对batch路径), rationale, mustIncludeFacts,\n"
-        f"        writingIntent(planning_consultation|decision_experience|post_trip_journal 三选一，单篇唯一主线),\n"
-        f"        baseSourceRef(主底稿来源 ref，作为风格与事实锚点；其它来源只能补事实)\n"
+        f"        writingIntent(按 acceptance.requiredAngles，单篇唯一主线: {required_angles}),\n"
+        f"        article 写 baseSourceRef；image 写 sourceCollectionId/assetRefs，可选 title/caption\n"
         f"  并 register_content_object + 写 posts/.../3.compose/brief.json（禁止预置营销 ref；brief 写入 writingIntent/baseSourceRef）\n"
         f"  未过项:\n    - " + "\n    - ".join(issues[:12]) + "\n"
         f"  完成后: qwq-data data workflow run --task {ctx.task_id} --batch {ctx.batch_id} --resume"
@@ -934,7 +2095,14 @@ def _react_rewind(ctx: PipelineContext, state: dict, completed: set[str],
         rerun_chain=STAGE_NAMES[STAGE_NAMES.index(target):STAGE_NAMES.index(result.stage) + 1],
     )
     if result.stage == "produce_review":
-        _prepare_produce_review_retry(ctx, result, target)
+        prepared = _prepare_produce_review_retry(ctx, result, target)
+        if target == "produce_compose" and not prepared:
+            print(
+                "[task run] produce_review failed only at batch/release packaging; "
+                "no content object will be invalidated",
+                file=sys.stderr,
+            )
+            return completed, False
     new_completed = _rewind_to(completed, target)
     state["reactRewinds"] = rewinds
     state["completed"] = sorted(new_completed)
@@ -942,6 +2110,18 @@ def _react_rewind(ctx: PipelineContext, state: dict, completed: set[str],
     print(f"[task run] ⟲ ReAct 回退 {result.stage} → {target} (第{used + 1}/{MAX_REACT_REWINDS}次)\n"
           f"           归因: {result.message.splitlines()[0]}")
     return new_completed, True
+
+
+def _stage_exception_fallback(stage_name: str) -> str | None:
+    if stage_name == "produce_compose":
+        return "content_plan"
+    if stage_name == "produce_author":
+        return "produce_compose"
+    if stage_name == "build_validate":
+        return "build_homepage"
+    if stage_name == "produce_review":
+        return "produce_compose"
+    return None
 
 
 def run_pipeline(ctx: PipelineContext) -> int:
@@ -975,7 +2155,17 @@ def run_pipeline(ctx: PipelineContext) -> int:
             if stage_name in completed:
                 continue
             next_stage = STAGE_NAMES[stage_index + 1] if stage_index + 1 < len(STAGE_NAMES) else None
-            result = runner(ctx)
+            try:
+                result = runner(ctx)
+            except Exception as exc:  # noqa: BLE001
+                result = StageResult(
+                    stage_name,
+                    kind,
+                    "failed",
+                    f"{stage_name} raised {type(exc).__name__}: {exc}",
+                    issues=[f"{type(exc).__name__}: {exc}"],
+                    fallback_stage=_stage_exception_fallback(stage_name),
+                )
             if result.status == "waiting":
                 state["completed"] = sorted(completed)
                 state["waitingCheckpoint"] = stage_name
@@ -1033,6 +2223,9 @@ def run_pipeline(ctx: PipelineContext) -> int:
             infrastructure_retries = state.setdefault("infrastructureRetryCounts", {})
             infrastructure_retries.pop(stage_name, None)
             state["infrastructureRetryCounts"] = infrastructure_retries
+            react_rewinds = state.setdefault("reactRewinds", {})
+            react_rewinds.pop(stage_name, None)
+            state["reactRewinds"] = react_rewinds
             save_workflow_state(state)
             _write_workflow_packet(
                 ctx,
@@ -1049,6 +2242,22 @@ def run_pipeline(ctx: PipelineContext) -> int:
                 return 0
         else:
             # DAG 全遍历无 break → 全部 stage 完成
+            completion_issues = _workflow_completion_issues(ctx, state)
+            if completion_issues:
+                state["completed"] = sorted(completed)
+                state["waitingCheckpoint"] = None
+                state["status"] = "manual_required"
+                state["failedObjects"] = completion_issues
+                state["nextAction"] = "workflow completion gate failed"
+                state["heartbeatAt"] = store.now_iso()
+                save_workflow_state(state)
+                print(
+                    f"[task run] FAILED completion gate — {ctx.task_id} / {ctx.batch_id}",
+                    file=sys.stderr,
+                )
+                for issue in completion_issues[:50]:
+                    print(f"  - {issue}", file=sys.stderr)
+                return 1
             print(f"[task run] WORKFLOW COMPLETE — {ctx.task_id} / {ctx.batch_id}")
             state["status"] = "succeeded"
             state["heartbeatAt"] = store.now_iso()
@@ -1059,6 +2268,45 @@ def run_pipeline(ctx: PipelineContext) -> int:
             break
     print(f"[task run] FAILED: ReAct 回退耗尽未收敛 — {ctx.task_id} / {ctx.batch_id}", file=sys.stderr)
     return 1
+
+
+def _workflow_completion_issues(ctx: PipelineContext, state: dict[str, Any]) -> list[str]:
+    issues: list[str] = []
+    if state.get("waitingCheckpoint"):
+        issues.append(f"workflow still waiting at {state.get('waitingCheckpoint')}")
+    failed_objects = state.get("failedObjects") or []
+    if failed_objects:
+        issues.append(f"workflow has failedObjects={len(failed_objects)}")
+    last_agent = state.get("lastAgentRun") or {}
+    if isinstance(last_agent, dict) and last_agent:
+        job_count = int(last_agent.get("jobCount") or 0)
+        started = int(last_agent.get("startedCount") or 0)
+        finished = int(last_agent.get("finishedCount") or 0)
+        infra = int(last_agent.get("infrastructureFailures") or 0)
+        if infra:
+            issues.append(f"lastAgentRun.infrastructureFailures={infra}")
+        if job_count and started <= 0:
+            issues.append("lastAgentRun has jobs but no started workers")
+        if job_count and finished < job_count:
+            issues.append(f"lastAgentRun finishedCount={finished} < jobCount={job_count}")
+    if ctx.managed:
+        try:
+            from task.target_selection import audit_managed_batch
+
+            audit = audit_managed_batch(ctx.task_id, ctx.batch_id)
+        except Exception as exc:  # noqa: BLE001
+            issues.append(f"managed batch audit unavailable: {exc}")
+        else:
+            failed_lane_count = int(audit.get("failedLaneCount") or 0)
+            if failed_lane_count:
+                issues.append(f"managed batch audit failedLaneCount={failed_lane_count}")
+            lane_passed = audit.get("lanePassed") or {}
+            target_count = int(audit.get("targetCount") or 0)
+            for lane in ("homepage", "article", "image"):
+                passed = int(lane_passed.get(lane) or 0)
+                if target_count and passed != target_count:
+                    issues.append(f"managed lane {lane} passed {passed}/{target_count}")
+    return issues
 
 
 def _managed_preflight(task_id: str, batch_id: str, spec: dict, args: argparse.Namespace) -> list[str]:
@@ -1072,62 +2320,236 @@ def _managed_preflight(task_id: str, batch_id: str, spec: dict, args: argparse.N
     quotas = ((spec.get("content") or {}).get("quotas") or {})
     for field, expected_min in (
         ("entityArticlesPerTarget", 1),
-        ("galleryPostsPerTarget", 1),
         ("entityHomepagesPerTarget", 1),
     ):
         if int(quotas.get(field) or 0) < expected_min:
             issues.append(f"content.quotas.{field} must be >= {expected_min}")
+    if int(quotas.get("galleryPostsPerTarget") or 0) or int(quotas.get("galleryPosts") or 0):
+        issues.append(
+            "galleryPosts/galleryPostsPerTarget are retired for --managed; "
+            "use content.quotas.imageWorksPerTarget"
+        )
+    image_quota = int(quotas.get("imageWorksPerTarget") or 0)
+    if image_quota < 1:
+        issues.append("content.quotas.imageWorksPerTarget must be >= 1")
+    content = spec.get("content") or {}
+    if str(content.get("modalityContract") or "") != "separated_research":
+        issues.append("content.modalityContract must be separated_research for --managed")
+    research = content.get("research") or {}
+    if set(research.get("lanes") or []) != {"homepage", "article", "image"}:
+        issues.append("content.research.lanes must contain homepage, article and image")
+    if bool(research.get("allowAiImages", True)):
+        issues.append("content.research.allowAiImages must be false")
     if str(getattr(args, "runtime", "local")) != "local":
         issues.append("--managed production runs require --runtime local")
-    if not os.environ.get("CURSOR_API_KEY"):
-        issues.append("CURSOR_API_KEY missing")
     try:
-        import cursor_sdk  # type: ignore  # noqa: F401
+        from _common.python_runtime import environment_preflight
+
+        env_report = environment_preflight(require_cursor_key=True, check_network=True)
     except Exception as exc:  # noqa: BLE001
-        issues.append(f"cursor_sdk unavailable in current Python: {exc}")
-    for module in ("PIL", "cv2", "numpy"):
-        try:
-            __import__(module)
-        except Exception as exc:  # noqa: BLE001
-            issues.append(f"required test/runtime dependency {module} unavailable: {exc}")
+        issues.append(f"environment preflight unavailable: {exc}")
+    else:
+        issues.extend([str(item) for item in (env_report.get("issues") or [])])
     if not task_baseline_freeze_packet_path(task_id).is_file() and not getattr(args, "baseline_packet", None):
         issues.append("baseline freeze packet missing")
     return issues
 
 
+def _cursor_bridge_error_is_retryable(
+    message: str,
+    *,
+    code: str | None = None,
+    explicit_retryable: bool = False,
+) -> bool:
+    """Classify Cursor bridge startup/discovery failures as infra retryable."""
+    lowered = str(message or "").casefold()
+    code_lower = str(code or "").casefold()
+    retry_markers = (
+        "connection refused",
+        "connecterror",
+        "connection reset",
+        "bridge request failed",
+        "exited before discovery",
+        "failed before discovery",
+        "cursor-sdk-bridge failed",
+        "tool-callback-auth-token",
+        "internal error",
+    )
+    return (
+        bool(explicit_retryable)
+        or code_lower == "internal"
+        or any(marker in lowered for marker in retry_markers)
+    )
+
+
+@contextmanager
+def _cursor_bridge_launch_guard():
+    """Serialize Cursor bridge discovery across isolated worker processes."""
+    lock_path = Path(
+        os.environ.get(
+            "QWQ_CURSOR_BRIDGE_LAUNCH_LOCK",
+            str(Path(tempfile.gettempdir()) / "qwq-cursor-bridge-launch.lock"),
+        )
+    )
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import fcntl  # type: ignore
+    except Exception:  # noqa: BLE001
+        yield
+        return
+    with lock_path.open("a", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+            if _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS:
+                time.sleep(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS)
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _terminate_workspace_cursor_bridges(workspace: Path) -> None:
+    """Best-effort cleanup for half-started Cursor SDK bridges in this workspace."""
+    try:
+        proc = subprocess.run(
+            ["ps", "-ax", "-o", "pid=,command="],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except Exception:  # noqa: BLE001
+        return
+    workspace_text = str(workspace)
+    current_pid = os.getpid()
+    for line in proc.stdout.splitlines():
+        if "cursor-sdk-bridge" not in line or workspace_text not in line:
+            continue
+        parts = line.strip().split(maxsplit=1)
+        if not parts:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        if pid <= 0 or pid == current_pid:
+            continue
+        _terminate_pid_if_alive(pid)
+
+
 def _default_managed_agent_runner(ctx: PipelineContext, prompt: str) -> dict[str, Any]:
     """在当前 workspace 启动一个本地 Cursor Agent；只返回终态，推进由父进程校验。"""
     try:
-        from cursor_sdk import Agent, AgentOptions, CursorAgentError, LocalAgentOptions  # type: ignore
+        from cursor_sdk import (  # type: ignore
+            Agent,
+            AgentOptions,
+            Client,
+            CursorAgentError,
+            LocalAgentOptions,
+        )
     except Exception as exc:  # noqa: BLE001
         return {"started": False, "status": "error", "error": f"cursor_sdk unavailable: {exc}"}
     key = os.environ.get("CURSOR_API_KEY")
     if not key:
         return {"started": False, "status": "error", "error": "CURSOR_API_KEY missing"}
-    try:
-        result = Agent.prompt(
-            prompt,
-            AgentOptions(
-                api_key=key,
-                model=ctx.model,
-                local=LocalAgentOptions(cwd=str(Path.cwd())),
-            ),
-        )
-    except CursorAgentError as exc:
-        return {
+    result = None
+    last_error: dict[str, Any] | None = None
+    workspace = Path.cwd()
+    for attempt in range(3):
+        client = None
+        bridge_pids: list[int] = []
+        try:
+            if attempt > 0 and str(ctx.runtime) == "local" and MANAGED_LOCAL_CURSOR_MAX_WORKERS == 1:
+                _terminate_workspace_cursor_bridges(workspace)
+            with _cursor_bridge_launch_guard():
+                client = Client.launch_bridge(
+                    workspace=str(workspace),
+                    max_retries=3,
+                    allow_api_key_env_fallback=True,
+                )
+            owned_bridge = getattr(client, "_owned_bridge", None)
+            endpoint = getattr(owned_bridge, "endpoint", None)
+            process = getattr(owned_bridge, "process", None)
+            for pid in (
+                getattr(process, "pid", None),
+                getattr(endpoint, "pid", None),
+            ):
+                if isinstance(pid, int) and pid > 0 and pid not in bridge_pids:
+                    bridge_pids.append(pid)
+            result = Agent.prompt(
+                prompt,
+                AgentOptions(
+                    api_key=key,
+                    model=ctx.model,
+                    local=LocalAgentOptions(cwd=str(Path.cwd())),
+                ),
+                client=client,
+            )
+            break
+        except CursorAgentError as exc:
+            message = getattr(exc, "message", str(exc))
+            retryable_bridge = _cursor_bridge_error_is_retryable(
+                message,
+                code=str(getattr(exc, "code", "") or ""),
+                explicit_retryable=bool(getattr(exc, "is_retryable", False)),
+            )
+            last_error = {
+                "started": False,
+                "status": "error",
+                "error": message,
+                "retryable": retryable_bridge,
+                "errorCode": getattr(exc, "code", None),
+                "requestId": getattr(exc, "request_id", None),
+                    "attempts": attempt + 1,
+                }
+            if attempt < 2 and retryable_bridge:
+                if str(ctx.runtime) == "local" and MANAGED_LOCAL_CURSOR_MAX_WORKERS == 1:
+                    _terminate_workspace_cursor_bridges(workspace)
+                time.sleep(max(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, 2.0) + 0.5 * (attempt + 1))
+                continue
+            return last_error
+        except RuntimeError as exc:
+            message = f"{type(exc).__name__}: {exc}"
+            lowered = message.casefold()
+            retryable_bridge = (
+                "client has been closed" in lowered
+                or _cursor_bridge_error_is_retryable(message)
+            )
+            last_error = {
+                "started": False,
+                "status": "error",
+                "error": message,
+                "retryable": retryable_bridge,
+                "attempts": attempt + 1,
+            }
+            if attempt < 2 and retryable_bridge:
+                if str(ctx.runtime) == "local" and MANAGED_LOCAL_CURSOR_MAX_WORKERS == 1:
+                    _terminate_workspace_cursor_bridges(workspace)
+                time.sleep(max(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, 2.0) + 0.5 * (attempt + 1))
+                continue
+            return last_error
+        except Exception as exc:  # noqa: BLE001
+            last_error = {
+                "started": False,
+                "status": "error",
+                "error": f"{type(exc).__name__}: {exc}",
+                "retryable": False,
+                "attempts": attempt + 1,
+            }
+            return last_error
+        finally:
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:  # noqa: BLE001
+                    pass
+            for pid in bridge_pids:
+                _terminate_pid_if_alive(pid)
+    if result is None:
+        return last_error or {
             "started": False,
             "status": "error",
-            "error": getattr(exc, "message", str(exc)),
-            "retryable": bool(getattr(exc, "is_retryable", False)),
-            "errorCode": getattr(exc, "code", None),
-            "requestId": getattr(exc, "request_id", None),
-        }
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "started": False,
-            "status": "error",
-            "error": f"{type(exc).__name__}: {exc}",
-            "retryable": False,
+            "error": "Cursor isolated bridge retry exhausted without a run result",
+            "retryable": True,
         }
     status = str(getattr(result, "status", "error"))
     result_text = str(getattr(result, "result", "") or "").strip()
@@ -1144,6 +2566,162 @@ def _default_managed_agent_runner(ctx: PipelineContext, prompt: str) -> dict[str
     }
 
 
+def _redact_managed_secret(text: str) -> str:
+    text = re.sub(r"crsr_[A-Za-z0-9]+", "<redacted-cursor-key>", str(text or ""))
+    text = re.sub(
+        r"(--tool-callback-auth-token\s+)[^\s]+",
+        r"\1<redacted-token>",
+        text,
+    )
+    return text
+
+
+def _managed_agent_worker_main() -> None:
+    """Subprocess entrypoint for one real Cursor job.
+
+    Parent orchestration cannot cancel a thread blocked inside Agent.prompt, so
+    production managed runs execute each SDK call in a short-lived subprocess.
+    Fake test runners still bypass this path through ctx.agent_runner.
+    """
+    input_path = Path(sys.argv[1])
+    output_path = Path(sys.argv[2])
+    payload = json.loads(input_path.read_text(encoding="utf-8"))
+    ctx_payload = payload.get("ctx") or {}
+    ctx = PipelineContext(
+        task_id=str(ctx_payload.get("taskId") or ""),
+        batch_id=str(ctx_payload.get("batchId") or ""),
+        entity_ids=[str(item) for item in (ctx_payload.get("entityIds") or [])],
+        spec=ctx_payload.get("spec") or {},
+        managed=True,
+        runtime=str(ctx_payload.get("runtime") or "local"),
+        max_workers=int(ctx_payload.get("maxWorkers") or 1),
+        model=str(ctx_payload.get("model") or "composer-2.5"),
+        release_only=bool(ctx_payload.get("releaseOnly")),
+    )
+    outcome = _default_managed_agent_runner(ctx, str(payload.get("prompt") or ""))
+    output_path.write_text(json.dumps(outcome, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _default_managed_agent_runner_isolated(ctx: PipelineContext, prompt: str) -> dict[str, Any]:
+    """Run the real Cursor SDK worker in a killable subprocess with a hard deadline."""
+    with tempfile.TemporaryDirectory(prefix="qwq-managed-agent-") as tmp:
+        tmp_path = Path(tmp)
+        input_path = tmp_path / "input.json"
+        output_path = tmp_path / "output.json"
+        input_path.write_text(
+            json.dumps(
+                {
+                    "ctx": {
+                        "taskId": ctx.task_id,
+                        "batchId": ctx.batch_id,
+                        "entityIds": ctx.entity_ids,
+                        "spec": ctx.spec,
+                        "runtime": ctx.runtime,
+                        "maxWorkers": ctx.max_workers,
+                        "model": ctx.model,
+                        "releaseOnly": ctx.release_only,
+                    },
+                    "prompt": prompt,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        scripts_dir = str(Path(__file__).resolve().parents[1])
+        env = os.environ.copy()
+        env["PYTHONPATH"] = (
+            scripts_dir
+            if not env.get("PYTHONPATH")
+            else scripts_dir + os.pathsep + str(env.get("PYTHONPATH"))
+        )
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from task.run import _managed_agent_worker_main; "
+                    "_managed_agent_worker_main()"
+                ),
+                str(input_path),
+                str(output_path),
+            ],
+            cwd=str(Path.cwd()),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=MANAGED_AGENT_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except OSError:
+                pass
+            try:
+                stdout, stderr = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except OSError:
+                    pass
+                stdout, stderr = proc.communicate()
+            return {
+                "started": False,
+                "status": "error",
+                "error": f"agent subprocess timed out after {MANAGED_AGENT_TIMEOUT_SECONDS}s",
+                "retryable": True,
+                "errorType": "timeout",
+                "stdoutTail": _redact_managed_secret(stdout)[-1200:],
+                "stderrTail": _redact_managed_secret(stderr)[-1200:],
+            }
+        if output_path.is_file():
+            try:
+                outcome = json.loads(output_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError, TypeError) as exc:
+                return {
+                    "started": False,
+                    "status": "error",
+                    "error": f"agent subprocess wrote unreadable output: {exc}",
+                    "retryable": True,
+                }
+            if isinstance(outcome, dict):
+                if outcome.get("error"):
+                    outcome["error"] = _redact_managed_secret(str(outcome.get("error") or ""))
+                return outcome
+        return {
+            "started": False,
+            "status": "error",
+            "error": (
+                f"agent subprocess exited {proc.returncode} without outcome; "
+                f"stderr={_redact_managed_secret(stderr)[-1200:]}"
+            ),
+            "retryable": proc.returncode not in (0,),
+            "stdoutTail": _redact_managed_secret(stdout)[-1200:],
+        }
+
+
+def _terminate_pid_if_alive(pid: int) -> None:
+    """Best-effort cleanup for Cursor bridge node children orphaned by the shell wrapper."""
+    if pid <= 0:
+        return
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.kill(pid, sig)
+        except OSError:
+            return
+        time.sleep(0.2)
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return
+
+
 def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
     """把 checkpoint 拆为可并发且写集互斥的 Agent 任务。"""
     base = (
@@ -1155,34 +2733,166 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
         from _common.source_unit import resolve_entity_object_dir
 
         etype = _coverage_entity_type(ctx.spec)
+        quotas = ((ctx.spec.get("content") or {}).get("quotas") or {})
+        per_target_articles = max(1, int(quotas.get("entityArticlesPerTarget") or 0))
+        per_target_image_works = max(1, int(quotas.get("imageWorksPerTarget") or 0))
+        acceptance = ctx.spec.get("acceptance") or {}
+        required_angles = [
+            str(angle).strip()
+            for angle in (acceptance.get("requiredAngles") or [])
+            if str(angle).strip()
+        ]
+        article_intents = [
+            angle for angle in required_angles
+            if angle not in {"image", "imagePost", "gallery"}
+        ] or ["planning_consultation", "decision_experience"]
         done, issues = _source_plan_filled(ctx)
         if done:
             return []
-        pending_entities = {
-            entity
-            for entity in ctx.entity_ids
-            if any(issue.startswith(f"{entity}:") for issue in issues)
-        }
+        pending_lanes_by_entity: dict[str, dict[str, list[str]]] = {}
+        for entity in ctx.entity_ids:
+            lane_issues = {
+                lane: found
+                for lane in ("homepage", "article", "image")
+                if (found := _download_research_lane_issues(ctx, entity, etype, lane))
+            }
+            if lane_issues:
+                pending_lanes_by_entity[entity] = lane_issues
+        repair_by_entity: dict[str, dict[str, Any]] = {}
+        repair_path = _download_repair_path(ctx)
+        if repair_path.is_file():
+            repair_packet = read_json(repair_path)
+            repair_by_entity = {
+                str(item.get("entityId") or ""): item
+                for item in (repair_packet.get("entities") or [])
+                if isinstance(item, dict)
+            }
         prompts = []
         for entity in ctx.entity_ids:
-            if entity not in pending_entities:
+            repair = repair_by_entity.get(entity) or {}
+            repair_pending = bool(repair) and _download_repair_entry_pending(repair)
+            missing_lanes = dict(pending_lanes_by_entity.get(entity) or {})
+            for lane in sorted(_download_repair_lanes(repair) if repair_pending else set()):
+                repair_lane_issues = (
+                    ((repair.get("researchLaneIssues") or {}).get(lane) or [])
+                    if isinstance(repair.get("researchLaneIssues"), dict)
+                    else []
+                )
+                if not repair_lane_issues:
+                    repair_lane_issues = repair.get("issues") or ["download_repair required"]
+                missing_lanes.setdefault(lane, [str(item) for item in repair_lane_issues])
+            if not missing_lanes:
                 continue
-            path = resolve_entity_object_dir(
+            object_dir = resolve_entity_object_dir(
                 ctx.task_id, ctx.batch_id, entity, etype_hint=etype
-            ) / "1.download" / "source_plan.json"
-            prompts.append(
-                base
-                + f"\n对象: {entity}\n写入: {path}\n"
-                "真实联网检索并填写 source_plan。至少 4 个可抓取且类别多样的来源，每个来源必须含 "
-                "source_id/platform/url/sourceUseMode；普通官网、百科、攻略和游记用 "
-                "factual_reference_only。仅有明确 CC、公版或书面授权证据时用 licensed_adaptation，"
-                "并写 license/termsUrl/licenseSnapshot/credit。blocked 来源不得写入可消费列表。"
-                "\n至少 10 张互不重复的可发布图片，每张写 url/license/credit/sourceUrl/termsUrl/"
-                "usageScope/relevance，且画面必须直接呈现该景区自身或景区内部景点。禁止用邻近景点、"
-                "同日环线、所在县城、交通沿线或泛川西图片凑数；禁止发现页、缩略图、社媒水印图和"
-                "权利不明图片。若不足 10 张，明确保留不足状态，不得伪造达标。"
-                "\n完成后自行重新读取 JSON，确认 URL、权利字段和数量真实完整。"
             )
+            if repair and not repair_pending:
+                repair = {}
+            repair_hint = ""
+            lane_hint = "\n当前缺口：\n- " + "\n- ".join(
+                f"{lane}: {'; '.join(items[:4])}" for lane, items in missing_lanes.items()
+            )
+            if repair:
+                diagnostics = repair.get("downloadDiagnostics") or {}
+                rejected_by_category = diagnostics.get("rejectedByCategory") if isinstance(diagnostics, dict) else {}
+                diagnostic_hint = ""
+                if rejected_by_category:
+                    non_zero = [
+                        f"{key}={value}"
+                        for key, value in rejected_by_category.items()
+                        if int(value or 0)
+                    ]
+                    if non_zero:
+                        diagnostic_hint = "\n下载失败分类：" + ", ".join(non_zero)
+                image_hint_rows: list[str] = []
+                for hint in repair.get("imageRepairHints") or []:
+                    if not isinstance(hint, dict):
+                        continue
+                    if str(hint.get("lane") or "") not in missing_lanes:
+                        continue
+                    candidate = str(hint.get("sameSourceHighResCandidate") or "").strip()
+                    candidate_text = f"，同源高清候选: {candidate}" if candidate else ""
+                    image_hint_rows.append(
+                        f"{hint.get('lane')}/{hint.get('sourceId')}#{hint.get('imageIndex')}: "
+                        f"{hint.get('action')}，{hint.get('issue')}{candidate_text}"
+                    )
+                    if len(image_hint_rows) >= 8:
+                        break
+                image_repair_hint = (
+                    "\n源图修复指令：\n- " + "\n- ".join(image_hint_rows)
+                    if image_hint_rows
+                    else ""
+                )
+                repair_hint = (
+                    "\n这是 download_repair，不是首次规划。先读取以下真实 gate 报告并逐项修复：\n- "
+                    + "\n- ".join(str(item) for item in (repair.get("reportPaths") or []))
+                    + "\n当前失败摘要："
+                    + "; ".join(str(item) for item in (repair.get("issues") or []))
+                    + diagnostic_hint
+                    + image_repair_hint
+                    + "\n替换抓取失败、正文为空、探针页、误相关或图片不足的条目；"
+                    "不要只改描述字段。完成后必须让 source_plan 文件 mtime 更新。"
+                )
+            repair_hint += lane_hint
+            homepage_path = object_dir / "1.download" / "homepage_source_plan.json"
+            article_path = object_dir / "1.download" / "article_source_plan.json"
+            image_path = object_dir / "1.download" / "image_source_plan.json"
+            if "homepage" in missing_lanes:
+                prompts.append(
+                    "[AGENT_LANE:homepage]\n"
+                    + base
+                    + f"\n对象: {entity}\n写入: {homepage_path}\n"
+                    + repair_hint
+                    + "只做实体主页检索。检索 Wikipedia、百度/搜狗/字节百科、官方网站、政府和文旅来源，"
+                    "至少保留 2 个真实可抓取来源，填写 primaryEvidenceRef。普通网页一律 "
+                    "factual_reference_only；只有明确许可才能 licensed_adaptation。"
+                    "主页图片必须来自这些主页来源自身的 imageUrls，逐图填写许可、署名、条款、授权快照、"
+                    "usageScope、width、height 和具体相关性；实际图片必须可下载，宽≥640、高≥426、长边≥800，"
+                    "不要使用缩略图/压缩图/探针图。不得读取或修改 article/image 计划。",
+                )
+            if "article" in missing_lanes:
+                prompts.append(
+                    "[AGENT_LANE:article]\n"
+                    + base
+                    + f"\n对象: {entity}\n写入: {article_path}\n"
+                    + repair_hint
+                    + "只做文章检索。独立检索官方资料、攻略、游记、地图、路线、交通、住宿和点评，"
+                    f"至少 {max(4, per_target_articles)} 个可抓取来源且覆盖至少 3 类；"
+                    "必须至少包含 official/文旅政务或景区官网、travelogue/攻略游记、encyclopedia/百科或等价第三类，"
+                    "不能用去哪儿/携程/马蜂窝等社区游记替代 article_official*；"
+                    "source_id 必须与 platform 类别一致，official_planning 若图片失败，必须换另一个官方/文旅/政务/景区官网图文来源，"
+                    "不得改成 travelogue 平台来冒充官方规划源；"
+                    f"为 {article_intents[:per_target_articles]} 主线准备互不复用的主证据。每条写 "
+                    "source_id/platform/url/sourceUseMode 和权利字段；每个可作为文章底稿的 source "
+                    "必须带该页面自身可发布的 imageUrls（含 license/credit/termsUrl/licenseSnapshot/"
+                    "authorizationProof/usageScope/width/height/relevance），源图是文章底稿的一部分；"
+                    "sourceUseMode 是文字来源权利模式，不是图片许可；imageUrls[].license 严禁填写 "
+                    "factual_reference_only/licensed_adaptation/blocked，必须是明确图片许可或授权类型 "
+                    "（如 CC BY-SA 4.0、CC BY 4.0、Public domain、photographer_authorized、"
+                    "scenic_official_authorized 等），否则替换整条 source unit 或换同源可授权图片；"
+                    "实际图片必须可下载，宽≥640、高≥426、长边≥800，禁止使用 r_720x480、600x600、缩略图、"
+                    "平台压缩图或无独立授权证明的图片。不得复用 homepage 计划 URL，"
+                    "不得读取或修改 image 计划。",
+                )
+            if "image" in missing_lanes:
+                prompts.append(
+                    "[AGENT_LANE:image]\n"
+                    + base
+                    + f"\n对象: {entity}\n写入: {image_path}\n"
+                    + repair_hint
+                    + "只做图片作品检索。覆盖摄影师网站、图虫授权、500px、Flickr、官方图库、旅游平台、"
+                    "旅行社区、Wikimedia/Openverse/Unsplash/Pexels/Pixabay 及授权商业图库。"
+                    "Pinterest、小红书和权利不明页面只能做视觉发现，不得进入 collections。"
+                    "输出 collections；每组必须有 sourceCollectionId、creator、collectionPageUrl、"
+                    "license、termsUrl、licenseSnapshot、authorizationProof、usageScope 和 images。"
+                    "license 必须是明确图片许可或授权类型，严禁使用 factual_reference_only/"
+                    "licensed_adaptation/blocked 这类 sourceUseMode 名称冒充图片许可。"
+                    "每张图必须填写 width/height，实际可下载，宽≥640、高≥426、长边≥800，"
+                    "并直接呈现该景区；本批禁止 AI 图。"
+                    f"至少形成 {per_target_image_works} 个图片作品的容量，"
+                    "每个作品可选同一集合内 1..20 张，禁止跨作者/页面/专辑/授权凭证混图。"
+                    "不得读取或修改 homepage/article 计划。",
+                )
         return prompts
     if stage == "build_homepage":
         from _common.source_unit import resolve_entity_object_dir
@@ -1202,13 +2912,28 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
         return prompts
     if stage == "content_plan":
         quotas = ((ctx.spec.get("content") or {}).get("quotas") or {})
+        acceptance = ctx.spec.get("acceptance") or {}
+        required_angles = [
+            str(angle).strip()
+            for angle in (acceptance.get("requiredAngles") or [])
+            if str(angle).strip()
+        ]
+        content = ctx.spec.get("content") or {}
         return [
             base
             + "\n为全部 coverageTargets 完成证据驱动 content_plan。"
-            f"\n配额: {json.dumps(quotas, ensure_ascii=False)}"
-            "\n每景区恰好 2 篇文章（planning_consultation 与 decision_experience 各一）和 2 个 gallery，"
-            "每个作品使用独立 baseSourceRef，gallery 标题/画面主题不同且图片集合不得相同。"
-            "写 _shared/content_plan_packet.json，注册 content_object，并写每项 3.compose/brief.json。"
+            f"\n这是 workflow effective spec，不是只读 task.yaml；必须以这里为准: {json.dumps({'content': content, 'acceptance': acceptance}, ensure_ascii=False)}"
+            f"\n精确配额: {json.dumps(quotas, ensure_ascii=False)}；requiredAngles={required_angles}。"
+            "\n每个 coverageTarget 必须恰好满足 entityArticlesPerTarget 篇文章和 imageWorksPerTarget 个 image work，"
+            "不得沿用旧 2+2 示例。若现有 content_plan_packet 与配额冲突，直接重写。"
+            "\n类型按底稿形态路由："
+            "实体主页底稿来自 Wiki/百科/官方/政府/文旅等实体介绍源；"
+            "文章底稿是 article_research 的图文混合来源，源图也是底稿的一部分，article 写 baseSourceRef 且一稿一用；"
+            "图片作品底稿是 image_research 的图片集合，carrier=image，只写 sourceCollectionId/assetRefs，"
+            "同一作品只能使用同一作者/页面/专辑/授权凭证下 1..20 张图，标题<=80字且可空，配文<=300字且可空。"
+            "\n文章只能引用 article_research；图片只能引用 image_research；homepage 来源不得拿来当文章/图片底稿。"
+            "写 _shared/content_plan_packet.json（schemaVersion=quwoquan_data.content_plan_packet），"
+            "注册 content_object，并写每项 3.compose/brief.json。"
             "ref/title 必须由证据归纳；evidenceRefs 必须存在，blocked/reject 来源不可引用。"
             "\n完成后运行 content_plan validator 并修复到无问题。"
         ]
@@ -1217,17 +2942,27 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
             draft_article_path,
             draft_meta_path,
             prompt_path,
+            read_writing_pack,
             writing_pack_path,
         )
 
         _ok, pending = _drafts_authored(ctx)
         return [
             base
+            + (
+                "\n[AGENT_LANE:image]"
+                if str((read_writing_pack(ctx.task_id, ctx.batch_id, ref) or {}).get("carrier") or "") in ("image", "gallery")
+                else "\n[AGENT_LANE:article]"
+            )
             + f"\n内容 ref: {ref}\n读取: {prompt_path(ctx.task_id, ctx.batch_id, ref)}"
             + f"\n读取: {writing_pack_path(ctx.task_id, ctx.batch_id, ref)}"
             + f"\n写入: {draft_article_path(ctx.task_id, ctx.batch_id, ref)}"
             + f"\n写入: {draft_meta_path(ctx.task_id, ctx.batch_id, ref)}"
             + "\n严格依据证据独立创作；普通网页只取事实，不复现原句/原结构；授权来源按许可改编并保留归因。"
+            "若对象 5.review/repair_report.json 存在，必须先逐项修复其中问题。逐条覆盖 writing_pack 的 "
+            "mustIncludeFacts；article 载体必须有连贯散文段落和至少三个结构层次；image 载体只生成"
+            "可选标题/整组配文和结构化选图，不得创作长文。"
+            "除非 writing_pack 明确证明为允许公开的官方号码，否则正文不得写电话号码。"
             "只引用 writing_pack 中的 assetId 和 sourcePath。draft_meta 必须 generator=agent，记录 model、"
             "citedSourcePaths、coveredFacts、styleFamily、openingStrategy。完成后做自检，但不要运行批次发布。"
             for ref in pending
@@ -1246,6 +2981,102 @@ def _checkpoint_is_done(ctx: PipelineContext, stage: str) -> tuple[bool, list[st
     return checker(ctx) if checker else (False, [f"unsupported managed checkpoint {stage}"])
 
 
+def _managed_author_ref(prompt: str) -> str:
+    for line in prompt.splitlines():
+        prefix = "内容 ref:"
+        if line.startswith(prefix):
+            return line[len(prefix):].strip()
+    return ""
+
+
+def _managed_prompt_entity(prompt: str) -> str:
+    for line in prompt.splitlines():
+        prefix = "对象:"
+        if line.startswith(prefix):
+            return line[len(prefix):].strip()
+    return ""
+
+
+def _managed_prompt_lane(prompt: str) -> str:
+    match = re.search(r"\[AGENT_LANE:(homepage|article|image)\]", prompt)
+    return match.group(1) if match else "default"
+
+
+def _managed_checkpoint_job_issues(
+    ctx: PipelineContext,
+    *,
+    stage: str,
+    prompt: str,
+) -> list[str]:
+    if stage == "download_plan":
+        lane = _managed_prompt_lane(prompt)
+        entity = _managed_prompt_entity(prompt)
+        if lane not in {"homepage", "article", "image"} or not entity:
+            return [f"download_plan prompt missing target lane/entity: lane={lane!r}, entity={entity!r}"]
+        etype = _coverage_entity_type(ctx.spec)
+        return _download_research_lane_issues(ctx, entity, etype, lane)
+    return []
+
+
+def _finalize_managed_author_outputs(
+    ctx: PipelineContext,
+    prompts: list[str],
+    outcomes: list[dict[str, Any]],
+) -> None:
+    """用确定性 helper 补齐 Agent 草稿的 run ID 和四类 provenance hash。"""
+    from _common.draft_io import (
+        compute_draft_provenance_facts,
+        draft_article_path,
+        draft_meta_path,
+        is_placeholder,
+        read_draft_meta,
+        read_writing_pack,
+    )
+
+    for outcome in outcomes:
+        if str(outcome.get("status")) != "finished":
+            continue
+        job_index = int(outcome.get("jobIndex", -1))
+        if job_index < 0 or job_index >= len(prompts):
+            continue
+        ref = _managed_author_ref(prompts[job_index])
+        if not ref:
+            continue
+        article_path = draft_article_path(ctx.task_id, ctx.batch_id, ref)
+        if not article_path.is_file():
+            continue
+        article = article_path.read_text(encoding="utf-8")
+        if is_placeholder(article):
+            continue
+        meta = read_draft_meta(ctx.task_id, ctx.batch_id, ref) or {}
+        pack = read_writing_pack(ctx.task_id, ctx.batch_id, ref) or {}
+        cited_paths = meta.get("citedSourcePaths") or pack.get("sourcePaths") or []
+        facts = compute_draft_provenance_facts(
+            ctx.task_id,
+            ctx.batch_id,
+            ref,
+            article_markdown=article,
+            cited_source_paths=[str(item) for item in cited_paths],
+        )
+        enriched_meta = dict(meta)
+        enriched_meta.update(
+            {
+                "ref": ref,
+                "generator": meta.get("generator") or "agent",
+                "model": meta.get("model") or ctx.model,
+                "agentRunId": outcome.get("runId") or meta.get("agentRunId"),
+                "agentId": outcome.get("agentId") or meta.get("agentId"),
+                "citedSourcePaths": [str(item) for item in cited_paths],
+                "promptSha256": facts.get("promptSha256"),
+                "writingPackSha256": facts.get("writingPackSha256"),
+                "sourceBundleSha256": facts.get("sourceBundleSha256"),
+                "draftSha256": facts.get("draftSha256"),
+                "updatedAt": store.now_iso(),
+            }
+        )
+        write_json(draft_meta_path(ctx.task_id, ctx.batch_id, ref), enriched_meta)
+
+
 def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
     prompts = _checkpoint_prompts(ctx, stage)
     if not prompts:
@@ -1255,15 +3086,56 @@ def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
     state["owner"] = f"managed-local:{stage}"
     state["heartbeatAt"] = store.now_iso()
     state["nextAction"] = f"running {len(prompts)} agent job(s) for {stage}"
+    state["failedObjects"] = []
+    state.pop("lastAgentRun", None)
     save_workflow_state(state)
-    runner = ctx.agent_runner or (lambda prompt: _default_managed_agent_runner(ctx, prompt))
-    with ThreadPoolExecutor(max_workers=max(1, min(ctx.max_workers, len(prompts)))) as pool:
-        futures = [pool.submit(runner, prompt) for prompt in prompts]
-        pending = set(futures)
-        outcomes: list[dict[str, Any]] = []
-        while pending:
-            done, pending = wait(pending, timeout=10)
+    runner = ctx.agent_runner or (lambda prompt: _default_managed_agent_runner_isolated(ctx, prompt))
+    worker_count = _managed_checkpoint_worker_count(ctx, len(prompts))
+    queued = list(range(len(prompts)))
+    futures: dict[Any, tuple[int, str]] = {}
+    active_by_lane: dict[str, int] = defaultdict(int)
+    outcomes: list[dict[str, Any]] = []
+    pool = ThreadPoolExecutor(max_workers=worker_count)
+    interrupted = False
+    try:
+        while queued or futures:
+            submitted = True
+            while queued and len(futures) < worker_count and submitted:
+                submitted = False
+                for position, index in enumerate(queued):
+                    lane = _managed_prompt_lane(prompts[index])
+                    cap = MANAGED_LANE_LIMITS.get(lane, worker_count)
+                    if active_by_lane[lane] >= cap:
+                        continue
+                    future = pool.submit(runner, prompts[index])
+                    futures[future] = (index, lane)
+                    active_by_lane[lane] += 1
+                    queued.pop(position)
+                    submitted = True
+                    break
+                if submitted:
+                    continue
+                # Borrow a lane's idle quota only after that lane has no queued
+                # work and fewer active jobs than its reservation.
+                queued_lanes = {_managed_prompt_lane(prompts[index]) for index in queued}
+                idle_slots = sum(
+                    max(0, cap - active_by_lane.get(lane, 0))
+                    for lane, cap in MANAGED_LANE_LIMITS.items()
+                    if lane not in queued_lanes
+                )
+                if idle_slots and queued:
+                    index = queued.pop(0)
+                    lane = _managed_prompt_lane(prompts[index])
+                    future = pool.submit(runner, prompts[index])
+                    futures[future] = (index, lane)
+                    active_by_lane[lane] += 1
+                    submitted = True
+            if not futures:
+                break
+            done, _pending = wait(set(futures), timeout=10)
             for future in done:
+                index, lane = futures.pop(future)
+                active_by_lane[lane] = max(0, active_by_lane[lane] - 1)
                 try:
                     outcome = future.result()
                 except Exception as exc:  # noqa: BLE001
@@ -1273,11 +3145,48 @@ def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
                         "error": f"{type(exc).__name__}: {exc}",
                         "retryable": False,
                     }
+                outcome["jobIndex"] = index
+                if str(outcome.get("status")) == "finished":
+                    gate_issues = _managed_checkpoint_job_issues(
+                        ctx,
+                        stage=stage,
+                        prompt=prompts[index],
+                    )
+                    if gate_issues:
+                        outcome["status"] = "error"
+                        outcome["error"] = (
+                            "agent finished but checkpoint lane gate still fails: "
+                            + "; ".join(str(item) for item in gate_issues[:8])
+                        )
+                        outcome["retryable"] = True
+                        outcome["gateIssues"] = [str(item) for item in gate_issues[:20]]
                 outcomes.append(outcome)
+            if any(str(out.get("status")) != "finished" for out in outcomes):
+                queued.clear()
             state = load_workflow_state(ctx.task_id, ctx.batch_id)
             state["heartbeatAt"] = store.now_iso()
-            state["nextAction"] = f"{stage}: {len(outcomes)}/{len(prompts)} agent job(s) finished"
+            state["nextAction"] = (
+                f"{stage}: {len(outcomes)}/{len(prompts)} agent job(s) finished; "
+                f"active={dict(active_by_lane)}"
+            )
             save_workflow_state(state)
+    except KeyboardInterrupt:
+        interrupted = True
+        queued.clear()
+        for future in futures:
+            future.cancel()
+        state = load_workflow_state(ctx.task_id, ctx.batch_id)
+        state["status"] = "manual_required"
+        state["failedObjects"] = [f"{stage}: interrupted; cancelled queued managed agent jobs"]
+        state["nextAction"] = f"{stage}: interrupted"
+        state["heartbeatAt"] = store.now_iso()
+        save_workflow_state(state)
+        raise
+    finally:
+        pool.shutdown(wait=not interrupted, cancel_futures=True)
+    outcomes.sort(key=lambda item: int(item.get("jobIndex", 0)))
+    if stage == "produce_author":
+        _finalize_managed_author_outputs(ctx, prompts, outcomes)
     started_count = sum(bool(out.get("started")) for out in outcomes)
     finished_count = sum(str(out.get("status")) == "finished" for out in outcomes)
     infrastructure_failures = sum(not bool(out.get("started")) for out in outcomes)
@@ -1310,6 +3219,13 @@ def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
     return ok
 
 
+def _managed_checkpoint_worker_count(ctx: PipelineContext, prompt_count: int) -> int:
+    worker_count = max(1, min(ctx.max_workers, prompt_count))
+    if ctx.agent_runner is None and str(ctx.runtime) == "local":
+        worker_count = min(worker_count, MANAGED_LOCAL_CURSOR_MAX_WORKERS)
+    return worker_count
+
+
 def run_managed_pipeline(ctx: PipelineContext) -> int:
     """父进程消费全部 Agent checkpoint，直到 release verify 通过或转人工。"""
     while True:
@@ -1323,8 +3239,13 @@ def run_managed_pipeline(ctx: PipelineContext) -> int:
         retries = state.setdefault("retryCounts", {})
         used = int(retries.get(stage, 0))
         if used >= MAX_REACT_REWINDS:
+            _ok, issues = _checkpoint_is_done(ctx, stage)
             state["status"] = "manual_required"
-            state["nextAction"] = f"{stage} failed validation after {used} managed attempts"
+            state["failedObjects"] = list(issues)
+            state["nextAction"] = (
+                f"{stage} failed validation after {used} managed attempts"
+                + (f"; unresolved={len(issues)}" if issues else "")
+            )
             save_workflow_state(state)
             return 1
         state["status"] = "repairing" if used else "waiting_agent"
@@ -1358,7 +3279,7 @@ def run_managed_pipeline(ctx: PipelineContext) -> int:
                 f"{infra_used + 1}/{MAX_MANAGED_INFRA_RETRIES}"
             )
             save_workflow_state(state)
-            time.sleep(min(2 ** (infra_used - 1), 5))
+            time.sleep(min(30, 5 * infra_used))
             continue
 
         retries = state.setdefault("retryCounts", {})
@@ -1417,9 +3338,10 @@ def _handle_run_fanout(args: argparse.Namespace) -> None:
     print(
         "[task run --mode fanout] 叶子已入队。外部并行执行（by-partition 默认先跑分区 orchestrator "
         "推进 download_plan/build_homepage/content_plan 三个 checkpoint，再分发叶子 author）："
-        f"\n  本机多 agent: python3 agent_ops/runners/fanout_runner.py --plan {report['planId']} --strategy {report['strategy']} --runtime local --max-workers {report['concurrency']}"
-        f"\n  云端 VM:     python3 agent_ops/runners/fanout_runner.py --plan {report['planId']} --strategy {report['strategy']} --runtime cloud --max-workers {report['concurrency']}"
-        "\n  （两者都需 export CURSOR_API_KEY；或会话内逐分区 qwq-data data workflow run --task <taskId> --batch <batchId> 解 checkpoint）"
+        f"\n  本机多 agent: python3 quwoquan_data/scripts/cli.py task scaled-e2e author-runner --plan {report['planId']} --strategy {report['strategy']} --runtime local --max-workers {report['concurrency']} --orchestrate"
+        f"\n  云端 VM:     python3 quwoquan_data/scripts/cli.py task scaled-e2e author-runner --plan {report['planId']} --strategy {report['strategy']} --runtime cloud --max-workers {report['concurrency']} --orchestrate"
+        "\n  首次运行先执行: python3 quwoquan_data/scripts/cli.py env ready"
+        "\n  （两者都需 export CURSOR_API_KEY；或会话内逐分区 qwq-data data workflow run --task <taskId> --batch <batchId> --managed 解 checkpoint）"
         " + qwq-data object-queue lease-next --task <taskId> --batch <batchId> --worker <id>（叶子）"
     )
 
@@ -1523,7 +3445,7 @@ def register_run_parser(sub: argparse._SubParsersAction) -> None:
     pr.add_argument("--until", help=f"跑到指定 stage 即停: {STAGE_NAMES}")
     pr.add_argument("--managed", action="store_true", help="自动消费全部 Agent checkpoint 并续跑")
     pr.add_argument("--runtime", choices=["local", "cloud"], default="local")
-    pr.add_argument("--max-workers", dest="max_workers", type=int, default=3)
+    pr.add_argument("--max-workers", dest="max_workers", type=int, default=10)
     pr.add_argument("--model", default="composer-2.5")
     pr.add_argument(
         "--release-only",

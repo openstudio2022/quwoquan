@@ -44,7 +44,9 @@ from _common.paths import (  # noqa: E402
 from _common.source_unit import iter_source_units, resolve_entity_object_dir  # noqa: E402
 import download.handler as handler_mod  # noqa: E402
 from download.handler import handle_download  # noqa: E402
+from download.gate import download_requirements  # noqa: E402
 from download.source_inputs import curated_sources_for_entity  # noqa: E402
+from task import store  # noqa: E402
 
 _TASK = "旅行/地域/四川省/景区/景区全覆盖"
 _BATCH = "test_batch"
@@ -140,6 +142,48 @@ def test_curated_ignores_legacy_layout_only():
     assert got == []
 
 
+def test_download_requirements_follow_separated_image_and_homepage_quota():
+    one_work = store.scaffold_spec(
+        vertical="travel",
+        organize_by="地域",
+        key="四川省",
+        name="一图一主页",
+        category="景区",
+        scope={"region": "四川省", "entityTypes": ["地点/景区"], "coverageTargets": []},
+        content={
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 4,
+                "imageWorksPerTarget": 1,
+                "entityHomepagesPerTarget": 1,
+            },
+        },
+        created_by="test",
+    )
+    two_works = store.scaffold_spec(
+        vertical="travel",
+        organize_by="地域",
+        key="四川省",
+        name="两图一主页",
+        category="景区",
+        scope={"region": "四川省", "entityTypes": ["地点/景区"], "coverageTargets": []},
+        content={
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 2,
+                "imageWorksPerTarget": 2,
+                "entityHomepagesPerTarget": 1,
+            },
+        },
+        created_by="test",
+    )
+    store.save_spec(one_work)
+    store.save_spec(two_works)
+
+    assert download_requirements(one_work["taskId"])["minImages"] == 2
+    assert download_requirements(two_works["taskId"])["minImages"] == 3
+
+
 def test_handle_download_produces_source_unit_from_preset_plan():
     # 对象同构新布局：来源写成 entities/{domain}/{type}/{name}/1.download/sources/01.s1/。
     _seed_object_plan(top_level=True, source_count=3)
@@ -184,7 +228,9 @@ def test_handle_download_produces_source_unit_from_preset_plan():
     obj = resolve_entity_object_dir(_TASK, _BATCH, _EID, etype_hint="景区")
     units = iter_source_units(obj)
     assert units, f"no source unit under {obj}"
-    assert [unit.name for unit in units] == ["01.s1", "02.s2", "03.s3"], units
+    assert [unit.name for unit in units[:3]] == ["01.s1", "02.s2", "03.s3"], units
+    assert len(units) == 4 and units[3].name.startswith("04.image_"), units
+    assert (units[3] / "assets" / "index.json").is_file()
     src_md = units[0] / "source.md"
     clean_md = units[0] / "source.clean.md"
     assert src_md.is_file(), f"missing {src_md}"

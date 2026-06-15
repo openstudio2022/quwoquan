@@ -23,6 +23,63 @@ entities:
         recommend_feature: true
         description: 作者稳定公开主体 ID（subAccountId）
 
+      - name: creatorProfileId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: 平台创作者画像 ID；系统作者内容必须存在，不写入标签或实体主树
+
+      - name: creatorArchetype
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: 作者类型，如 travel_blogger / landscape_photographer / campus_blogger
+
+      - name: creatorProfileVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 写入内容时绑定的作者画像版本
+
+      - name: creatorDisclosure
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 用户可见的虚拟创作者披露信息
+
+      - name: experienceClaimMode
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 经验声明模式，默认 editorial_synthesis，禁止伪真实亲历
+
+      - name: authorQualitySignals
+        type: object
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+        recommend_feature: true
+        description: 作者质量、疲劳度、风险等级等推荐与调度信号
+
       - name: authorDisplayNameSnapshot
         type: string
         constraints: [NULLABLE]
@@ -95,21 +152,33 @@ entities:
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read_write
+        api_exposure: read
         ops_exposure: read
         recommend_feature: true
         tag_ref: true
-        description: 路径制 tagRef 列表；唯一真相源为数据工程 publish/v1/tags（四分组路径 id）
+        description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 tag mention 派生。旧数据无 semanticMentions 时兼容既有值
 
       - name: entityRefs
         type: "[]string"
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read_write
+        api_exposure: read
         ops_exposure: read
         recommend_feature: true
-        description: 实体引用列表（POI/主页/景区等 entity 实例引用）；与 tagRefs 正交，承载交集实体维度归因与推荐实体亲和
+        description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 entity mention 派生。旧数据无 semanticMentions 时兼容既有值
+
+      - name: semanticMentions
+        type: "[]object"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: |
+          标题/正文/文章中的语义标注事实：
+          [{mentionId,kind,surface,location,rangeStart,rangeEnd,status,candidateId,targetRef}]。
+          status 支持 published/pending_review/rejected/offline；只有 published 且 targetRef 合法的项进入活动 entityRefs/tagRefs。
 
       - name: rating
         type: int

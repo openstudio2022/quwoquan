@@ -46,15 +46,3 @@ content:
   carriers:
   - article
   - gallery
-  conditionAxes:
-    regions:
-    - 高原
-    - 雪山
-    - 山地森林
-    - 平原都市
-    - 乡村田园
-    seasons:
-    - 春
-    - 夏
-    - 秋
-    - 冬

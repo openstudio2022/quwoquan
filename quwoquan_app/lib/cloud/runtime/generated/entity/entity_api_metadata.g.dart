@@ -14,6 +14,7 @@ class EntityApiMetadata {
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'CreateHomepageClaimRequest': '/v1/homepages/{homepageId}/claim-requests',
     'CreateHomepageStatusReport': '/v1/homepages/{homepageId}/status-reports',
+    'FollowHomepage': '/v1/homepages/{homepageId}/follow',
     'GetHomepageDetail': '/v1/homepages/{homepageId}',
     'GetHomepageIntroduction': '/v1/homepages/{homepageId}/introduction',
     'GetHomepageRelatedGroups': '/v1/homepages/{homepageId}/related-groups',
@@ -26,12 +27,14 @@ class EntityApiMetadata {
     'ReviewHomepageStatusReport': '/v1/homepages/{homepageId}/status-reports/{reportId}:review',
     'SearchHomepages': '/v1/homepages/search',
     'SuggestHomepageCandidate': '/v1/homepages/candidates/suggest',
+    'UnfollowHomepage': '/v1/homepages/{homepageId}/follow',
     'UpdateClaimedHomepageBasics': '/v1/homepages/{homepageId}/claimed-basics',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'CreateHomepageClaimRequest': 'POST',
     'CreateHomepageStatusReport': 'POST',
+    'FollowHomepage': 'POST',
     'GetHomepageDetail': 'GET',
     'GetHomepageIntroduction': 'GET',
     'GetHomepageRelatedGroups': 'GET',
@@ -44,6 +47,7 @@ class EntityApiMetadata {
     'ReviewHomepageStatusReport': 'POST',
     'SearchHomepages': 'GET',
     'SuggestHomepageCandidate': 'POST',
+    'UnfollowHomepage': 'DELETE',
     'UpdateClaimedHomepageBasics': 'PATCH',
   };
 
@@ -51,6 +55,7 @@ class EntityApiMetadata {
   static const Map<String, String> operationToAuthMode = <String, String>{
     'CreateHomepageClaimRequest': 'required',
     'CreateHomepageStatusReport': 'required',
+    'FollowHomepage': 'required',
     'GetHomepageDetail': 'public',
     'GetHomepageIntroduction': 'public',
     'GetHomepageRelatedGroups': 'public',
@@ -63,11 +68,13 @@ class EntityApiMetadata {
     'ReviewHomepageStatusReport': 'required',
     'SearchHomepages': 'required',
     'SuggestHomepageCandidate': 'required',
+    'UnfollowHomepage': 'required',
     'UpdateClaimedHomepageBasics': 'required',
   };
 
   static const String createHomepageClaimRequestOperation = 'CreateHomepageClaimRequest';
   static const String createHomepageStatusReportOperation = 'CreateHomepageStatusReport';
+  static const String followHomepageOperation = 'FollowHomepage';
   static const String getHomepageDetailOperation = 'GetHomepageDetail';
   static const String getHomepageIntroductionOperation = 'GetHomepageIntroduction';
   static const String getHomepageRelatedGroupsOperation = 'GetHomepageRelatedGroups';
@@ -80,6 +87,7 @@ class EntityApiMetadata {
   static const String reviewHomepageStatusReportOperation = 'ReviewHomepageStatusReport';
   static const String searchHomepagesOperation = 'SearchHomepages';
   static const String suggestHomepageCandidateOperation = 'SuggestHomepageCandidate';
+  static const String unfollowHomepageOperation = 'UnfollowHomepage';
   static const String updateClaimedHomepageBasicsOperation = 'UpdateClaimedHomepageBasics';
 
   static const String createHomepageClaimRequestPathTemplate = '/v1/homepages/{homepageId}/claim-requests';
@@ -91,6 +99,12 @@ class EntityApiMetadata {
   static const String createHomepageStatusReportPathTemplate = '/v1/homepages/{homepageId}/status-reports';
   static String createHomepageStatusReportPath({required String homepageId}) {
     return _fillPath(createHomepageStatusReportPathTemplate, <String, String>{
+      'homepageId': homepageId,
+    });
+  }
+  static const String followHomepagePathTemplate = '/v1/homepages/{homepageId}/follow';
+  static String followHomepagePath({required String homepageId}) {
+    return _fillPath(followHomepagePathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }
@@ -153,6 +167,12 @@ class EntityApiMetadata {
   }
   static const String searchHomepagesPath = '/v1/homepages/search';
   static const String suggestHomepageCandidatePath = '/v1/homepages/candidates/suggest';
+  static const String unfollowHomepagePathTemplate = '/v1/homepages/{homepageId}/follow';
+  static String unfollowHomepagePath({required String homepageId}) {
+    return _fillPath(unfollowHomepagePathTemplate, <String, String>{
+      'homepageId': homepageId,
+    });
+  }
   static const String updateClaimedHomepageBasicsPathTemplate = '/v1/homepages/{homepageId}/claimed-basics';
   static String updateClaimedHomepageBasicsPath({required String homepageId}) {
     return _fillPath(updateClaimedHomepageBasicsPathTemplate, <String, String>{

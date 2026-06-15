@@ -2,10 +2,10 @@ import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart'
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 /// 一级 Tab — 与 user_profile/ui_config.yaml profile_tabs 对齐
-enum ProfileTab { creations, circles, interaction, lifestyle }
+enum ProfileTab { creations, circles, interaction }
 
-/// 创作二级 identity filter。
-enum CreationSubTab { all, moment, work, micro, image, video, article }
+/// 作品二级内容形式筛选：全部 / 图片 / 视频 / 文字。
+enum CreationSubTab { all, image, video, article }
 
 /// 创作内容格式过滤。
 enum CreationWorkFormat { all, image, video, note }
@@ -24,16 +24,12 @@ extension ProfileTabMetadata on ProfileTab {
     ProfileTab.creations => 'creations',
     ProfileTab.circles => 'circles',
     ProfileTab.interaction => 'interaction',
-    ProfileTab.lifestyle => 'lifestyle',
   };
 }
 
 extension CreationSubTabMetadata on CreationSubTab {
   String get id => switch (this) {
     CreationSubTab.all => 'all',
-    CreationSubTab.moment => 'moment',
-    CreationSubTab.work => 'work',
-    CreationSubTab.micro => 'micro',
     CreationSubTab.image => 'image',
     CreationSubTab.video => 'video',
     CreationSubTab.article => 'article',
@@ -53,16 +49,12 @@ ProfileTab? profileTabFromId(String id) {
     'creations' => ProfileTab.creations,
     'circles' => ProfileTab.circles,
     'interaction' => ProfileTab.interaction,
-    'lifestyle' => ProfileTab.lifestyle,
     _ => null,
   };
 }
 
 CreationSubTab creationSubTabFromId(String id) {
   return switch (id) {
-    'moment' => CreationSubTab.moment,
-    'work' => CreationSubTab.work,
-    'micro' => CreationSubTab.micro,
     'image' => CreationSubTab.image,
     'video' => CreationSubTab.video,
     'article' => CreationSubTab.article,

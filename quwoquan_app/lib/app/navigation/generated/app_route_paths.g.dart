@@ -223,6 +223,17 @@ class AppRoutePaths {
   }
   static const String myIntersectionsSegment = 'intersections';
 
+  static const String objectIntersectionsPathTemplate = '/object/intersections';
+  static String objectIntersections({String? objectId, String? objectType, String? title}) {
+    return _buildPath(objectIntersectionsPathTemplate, <String, String>{
+    }, <String, String?>{
+      'objectId': objectId,
+      'objectType': objectType,
+      'title': title,
+    });
+  }
+  static const String objectIntersectionsSegment = 'intersections';
+
   static const String myFootprintPathTemplate = '/profile/footprint';
   static String myFootprint({String? type}) {
     return _buildPath(myFootprintPathTemplate, <String, String>{

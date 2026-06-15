@@ -72,8 +72,7 @@
         "user_profile_core",
         "persona_core",
         "profile_feed_core",
-        "relationship_core",
-        "following_subject_core"
+        "relationship_core"
       ],
       "resetScope": "fixture_user_*",
       "targetStore": "user-service:gamma_test_namespace",

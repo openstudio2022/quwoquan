@@ -15,6 +15,7 @@ import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource, ReferralSourceExt;
 import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
@@ -49,6 +50,7 @@ import 'package:quwoquan_app/ui/entity/pages/homepage_maintenance_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_status_report_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/suggest_homepage_page.dart';
+import 'package:quwoquan_app/ui/intersection/pages/object_intersection_list_page.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
 import 'package:quwoquan_app/ui/user/pages/legal_document_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
@@ -750,6 +752,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           state: state,
           child: MyIntersectionInboxPage(
             dimension: state.uri.queryParameters['dimension'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.objectIntersectionsPathTemplate,
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: ObjectIntersectionListPage(
+            objectId: state.uri.queryParameters['objectId'] ?? '',
+            objectType: state.uri.queryParameters['objectType'] ?? '',
+            title: state.uri.queryParameters['title'] ?? '',
           ),
         ),
       ),

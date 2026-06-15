@@ -179,7 +179,7 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/v1/auth/login/phone",
-		`{"phone":"+8618013813909","otpCode":"`+otpCode+`","deviceId":"ios-1","platform":"ios"}`,
+		`{"phone":"+8618013813909","otpCode":"`+otpCode+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
 	if login.Code != http.StatusOK {
@@ -246,11 +246,29 @@ func TestAuth_RefreshToken_RotatesAndLogoutRevokes(t *testing.T) {
 func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
+	hint := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/one-tap/hint",
+		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0"}`,
+		nil,
+	)
+	if hint.Code != http.StatusOK {
+		t.Fatalf("one tap hint: expected 200, got %d: %s", hint.Code, hint.Body.String())
+	}
+	hintBody := parseJSON(t, hint)
+	if hintBody["registered"] != false {
+		t.Fatalf("expected unregistered hint before login, got %#v", hintBody)
+	}
+	if hintBody["maskedPhone"] != "180****3901" {
+		t.Fatalf("expected masked phone hint, got %#v", hintBody["maskedPhone"])
+	}
+
 	rec := doRequest(
 		t,
 		http.MethodPost,
 		"/v1/auth/login/one-tap",
-		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","agreementVersion":"2026-05","privacyVersion":"2026-05"}`,
+		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-05","privacyVersion":"2026-05"}`,
 		nil,
 	)
 	if rec.Code != http.StatusOK {
@@ -273,6 +291,68 @@ func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
 	if phone != "+8618013813901" {
 		t.Fatalf("expected server resolved phone, got %q", phone)
 	}
+
+	accountHint, _ := body["accountHint"].(map[string]any)
+	if accountHint["maskedPhone"] != "180****3901" {
+		t.Fatalf("expected accountHint masked phone, got %#v", accountHint)
+	}
+
+	var deviceCount int
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT count(*) FROM user_devices WHERE user_id = $1 AND device_id = 'ios-1'`,
+		ownerID,
+	).Scan(&deviceCount); err != nil {
+		t.Fatalf("query user device: %v", err)
+	}
+	if deviceCount != 1 {
+		t.Fatalf("expected login device side effect, got %d", deviceCount)
+	}
+
+	var consentCount int
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT count(*) FROM consent_records WHERE owner_id = $1 AND agreement_version = '2026-05' AND privacy_version = '2026-05'`,
+		ownerID,
+	).Scan(&consentCount); err != nil {
+		t.Fatalf("query consent record: %v", err)
+	}
+	if consentCount != 1 {
+		t.Fatalf("expected consent record side effect, got %d", consentCount)
+	}
+
+	hintAfterLogin := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/one-tap/hint",
+		`{"vendor":"test","carrierToken":"carrier_token_new","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0"}`,
+		nil,
+	)
+	if hintAfterLogin.Code != http.StatusOK {
+		t.Fatalf("one tap hint after login: expected 200, got %d: %s", hintAfterLogin.Code, hintAfterLogin.Body.String())
+	}
+	registeredBody := parseJSON(t, hintAfterLogin)
+	if registeredBody["registered"] != true {
+		t.Fatalf("expected registered hint after login, got %#v", registeredBody)
+	}
+	if _, ok := registeredBody["accountHint"].(map[string]any); !ok {
+		t.Fatalf("expected accountHint for registered phone, got %#v", registeredBody)
+	}
+}
+
+func TestAuth_LegacyGenericLoginRoute_Removed(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	rec := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login",
+		`{"credentialType":"phone","credentialKey":"+8618013813909"}`,
+		nil,
+	)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("legacy generic login route should not be available")
+	}
 }
 
 func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
@@ -285,7 +365,7 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/v1/auth/login/phone",
-		`{"phone":"`+phone+`","otpCode":"123456","deviceId":"ios-1","platform":"ios"}`,
+		`{"phone":"`+phone+`","otpCode":"123456","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
 	if noCode.Code == http.StatusOK {
@@ -294,6 +374,21 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 
 	// 发码后用错误验证码：应被拒绝。
 	code := requestOtpCode(t, phone)
+	missingConsent := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/phone",
+		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0"}`,
+		nil,
+	)
+	if missingConsent.Code == http.StatusOK {
+		t.Fatalf("phone login without consent versions: expected failure, got 200: %s", missingConsent.Body.String())
+	}
+	missingConsentBody := parseJSON(t, missingConsent)
+	if missingConsentBody["code"] != "USER.AUTH.consent_required" {
+		t.Fatalf("expected consent_required, got %#v", missingConsentBody)
+	}
+
 	wrong := "000000"
 	if wrong == code {
 		wrong = "111111"
@@ -302,7 +397,7 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/v1/auth/login/phone",
-		`{"phone":"`+phone+`","otpCode":"`+wrong+`","deviceId":"ios-1","platform":"ios"}`,
+		`{"phone":"`+phone+`","otpCode":"`+wrong+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
 	if mismatch.Code == http.StatusOK {
@@ -314,7 +409,7 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/v1/auth/login/phone",
-		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios"}`,
+		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
 	if login.Code != http.StatusOK {
@@ -324,13 +419,36 @@ func TestAuth_PhoneLogin_RequiresValidOtp(t *testing.T) {
 	if accessToken, _ := loginBody["accessToken"].(string); accessToken == "" {
 		t.Fatalf("expected accessToken on phone login, got %#v", loginBody)
 	}
+	ownerID, _ := loginBody["ownerId"].(string)
+	var deviceCount int
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT count(*) FROM user_devices WHERE user_id = $1 AND device_id = 'ios-1'`,
+		ownerID,
+	).Scan(&deviceCount); err != nil {
+		t.Fatalf("query phone login device: %v", err)
+	}
+	if deviceCount != 1 {
+		t.Fatalf("expected phone login device side effect, got %d", deviceCount)
+	}
+	var consentCount int
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT count(*) FROM consent_records WHERE owner_id = $1 AND agreement_version = '2026-06' AND privacy_version = '2026-06' AND source_operation = 'LoginWithPhone'`,
+		ownerID,
+	).Scan(&consentCount); err != nil {
+		t.Fatalf("query phone login consent: %v", err)
+	}
+	if consentCount != 1 {
+		t.Fatalf("expected phone login consent record, got %d", consentCount)
+	}
 
 	// 验证码一次性：相同验证码不可复用。
 	reuse := doRequest(
 		t,
 		http.MethodPost,
 		"/v1/auth/login/phone",
-		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios"}`,
+		`{"phone":"`+phone+`","otpCode":"`+code+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
 	if reuse.Code == http.StatusOK {
@@ -347,7 +465,7 @@ func TestAuth_AccessToken_IsJWTAndDrivesIdentity(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/v1/auth/login/phone",
-		`{"phone":"`+phone+`","otpCode":"`+otpCode+`","deviceId":"ios-1","platform":"ios"}`,
+		`{"phone":"`+phone+`","otpCode":"`+otpCode+`","deviceId":"ios-1","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
 		nil,
 	)
 	if login.Code != http.StatusOK {
@@ -401,13 +519,27 @@ func TestAuth_SendOtp_ThrottlesResend(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	const phone = "+8618013813921"
-	first := doRequest(t, http.MethodPost, "/v1/auth/otp/send", `{"phone":"`+phone+`"}`, nil)
+	first := doRequest(t, http.MethodPost, "/v1/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
 	if first.Code != http.StatusOK {
 		t.Fatalf("first send otp: expected 200, got %d: %s", first.Code, first.Body.String())
 	}
+	firstBody := parseJSON(t, first)
+	if firstBody["maskedPhone"] != "180****3921" {
+		t.Fatalf("expected maskedPhone in send otp response, got %#v", firstBody["maskedPhone"])
+	}
+	if firstBody["requestId"] == "" || firstBody["challengeId"] == "" {
+		t.Fatalf("expected requestId/challengeId in send otp response, got %#v", firstBody)
+	}
+	if firstBody["deliveryStatus"] == "" {
+		t.Fatalf("expected deliveryStatus in send otp response, got %#v", firstBody)
+	}
 	// 冷却窗口内立即重发应被限频拒绝。
-	second := doRequest(t, http.MethodPost, "/v1/auth/otp/send", `{"phone":"`+phone+`"}`, nil)
+	second := doRequest(t, http.MethodPost, "/v1/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
 	if second.Code == http.StatusOK {
 		t.Fatalf("immediate resend: expected throttled failure, got 200: %s", second.Body.String())
+	}
+	secondBody := parseJSON(t, second)
+	if secondBody["code"] != "USER.AUTH.otp_rate_limited" {
+		t.Fatalf("expected otp_rate_limited, got %#v", secondBody)
 	}
 }

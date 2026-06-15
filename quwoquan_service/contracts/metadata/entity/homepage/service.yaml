@@ -44,6 +44,20 @@ api_routes:
     description: 获取共享主页详情
     response_entity: Homepage
 
+  - method: POST
+    path: /v1/homepages/{homepageId}/follow
+    operation: FollowHomepage
+    description: 关注共享主页
+    response_entity: Homepage
+    auth: required
+
+  - method: DELETE
+    path: /v1/homepages/{homepageId}/follow
+    operation: UnfollowHomepage
+    description: 取消关注共享主页
+    response_entity: Homepage
+    auth: required
+
   - method: GET
     path: /v1/homepages/{homepageId}/shell
     operation: GetHomepageShell
@@ -114,7 +128,7 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [search, suggest, read_homepage, read_homepage_introduction, claim, maintain, report_status]
+    capabilities: [search, suggest, read_homepage, read_homepage_introduction, follow, claim, maintain, report_status]
   - name: platform-ops
     capabilities: [publish_candidate, review_claim, review_status_report]
   - name: content-service

@@ -69,7 +69,6 @@ class UserProfileUIConfig {
     UserProfileTabConfig(id: "creations", labelKey: "profile_tab_creations", isDefault: true),
     UserProfileTabConfig(id: "circles", labelKey: "profile_tab_circles", isDefault: false),
     UserProfileTabConfig(id: "interaction", labelKey: "profile_tab_interaction", isDefault: false),
-    UserProfileTabConfig(id: "lifestyle", labelKey: "profile_tab_lifestyle", isDefault: false),
   ];
 
   static const List<UserProfileSubTabConfig> creationSubTabs = <UserProfileSubTabConfig>[
@@ -96,10 +95,6 @@ class UserProfileUIConfig {
   };
 
   static const List<UserProfileSubTabConfig> lifestyleSubTabs = <UserProfileSubTabConfig>[
-    UserProfileSubTabConfig(id: "footprint", labelKey: "lifestyle_sub_footprint", contentType: null, lifeCategory: "footprint"),
-    UserProfileSubTabConfig(id: "soul", labelKey: "lifestyle_sub_soul", contentType: null, lifeCategory: "soul"),
-    UserProfileSubTabConfig(id: "taste", labelKey: "lifestyle_sub_taste", contentType: null, lifeCategory: "taste"),
-    UserProfileSubTabConfig(id: "private", labelKey: "lifestyle_sub_private", contentType: null, lifeCategory: "private"),
   ];
 
 }

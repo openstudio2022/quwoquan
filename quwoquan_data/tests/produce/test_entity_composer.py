@@ -291,12 +291,15 @@ def test_compose_brief_persists_reassigned_base_source_ref():
         TASK,
         BATCH,
         {
-            "schemaVersion": "quwoquan_data.base_draft_ledger/1",
+            "schemaVersion": "quwoquan_data.base_draft_ledger",
             "assignments": {initial_ref: "三星堆博物馆_图集"},
         },
     )
 
     obj = resolve_entity_object_dir(TASK, BATCH, ENTITY, etype_hint="博物馆")
+    image_root = Path(tempfile.mkdtemp(prefix="entity_composer_reassign_sources_"))
+    image_path = image_root / f"{ENTITY}_reassigned.jpg"
+    _clean_image(image_path, seed=8)
     write_source_unit(
         obj,
         ordinal=2,
@@ -309,6 +312,13 @@ def test_compose_brief_persists_reassigned_base_source_ref():
         url="https://example.com/story",
         title="museum story",
         target_ref=f"/entity/地点/博物馆/{ENTITY}",
+        images=[
+            {
+                "sourcePath": str(image_path),
+                "caption": f"{ENTITY} 展厅图",
+                "relevance": f"{ENTITY} 展厅图来自重分配底稿来源",
+            }
+        ],
     )
 
     handle_produce(

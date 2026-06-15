@@ -2,7 +2,7 @@
 
 覆盖：
 - 套路化开头（评审痛点原句）在所选体裁下判 revision；落地体裁允许的开篇策略则放行。
-- draft_meta 声明的 openingStrategy 与正文开篇不符时判 revision（诚信校验）。
+- draft_meta 声明的 openingStrategy 与正文开篇不符时记录 observation，不触发重写。
 - 同批多篇开篇雷同（换实体名不换句式）被跨篇相似度门拦截；切换角度则放行。
 
 可直接运行：python3 quwoquan_data/tests/produce/test_style_gates.py
@@ -65,14 +65,14 @@ def test_scene_immersion_passes_for_journal_family():
     assert res["passed"], res["issues"]
 
 
-def test_declared_opening_strategy_must_match_body():
-    # 声明 scene_immersion，实际开篇是 conclusion_first → 诚信门拦截。
+def test_declared_opening_strategy_mismatch_is_observation_not_revision():
+    # 声明 scene_immersion，实际开篇是 conclusion_first；记录审计观察，不为元数据分类差异重写正文。
     article = "先说结论：值得专门来一趟。\n\n## 正文\n后续。"
     res = _check_travelogue_density(
         article, DENSITY_BRIEF, style_family="实用攻略风", opening_strategy="scene_immersion"
     )
-    assert not res["passed"], res
-    assert any("not reflected" in i for i in res["issues"]), res["issues"]
+    assert res["passed"], res
+    assert any("not reflected" in i for i in res["observations"]), res
 
 
 _TASK = "风格门_gwt"

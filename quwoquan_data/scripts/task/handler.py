@@ -39,7 +39,9 @@ from task import ops
 from task import queue
 from task import run as run_mod
 from task import store
+from task.cleanup_generated import build_cleanup_manifest, execute_cleanup, write_manifest
 from task.decompose import register_decompose_parser
+from task.content_supply import register_content_supply_parsers
 from task.run import register_run_parser
 from verify.gate import gate_verify
 from verify.audit_summary import write_batch_audit_summary
@@ -53,12 +55,72 @@ def _fanout_runner_python() -> str | None:
     module = sys.modules.get("agent_ops.runners.fanout_runner")
     if module is not None and not getattr(module, "__file__", None):
         return None
-    try:
-        __import__("cursor_sdk")
+    from _common.python_runtime import resolve_data_agent_python
+
+    runner_python = resolve_data_agent_python(include_current=True)
+    if runner_python is None:
         return None
-    except Exception:
-        candidate = REPO_ROOT / ".venv-fanout" / "bin" / "python"
-        return str(candidate) if candidate.is_file() else None
+    if Path(runner_python) == Path(sys.executable):
+        return None
+    return str(runner_python)
+
+
+def _scaled_e2e_plan_runtime_issues(plan: dict, roots_by_unit: dict[tuple[str, str], list[str]]) -> list[str]:
+    """Plan-level hard gates for scaled E2E verification.
+
+    `gate_verify` only checks existing artifacts. The scaled E2E gate must also
+    prove the fanout controller actually ran and every partition batch reached
+    a terminal workflow state with at least one auditable output root.
+    """
+    from _common import fanout_strategies as fs
+    from _common.paths import batch_workflow_state_path, fanout_run_matrix_path
+    from task.run import load_workflow_state
+
+    issues: list[str] = []
+    plan_id = str(plan.get("planId") or "")
+    matrix_path = fanout_run_matrix_path(plan_id)
+    if not matrix_path.is_file():
+        issues.append(f"{plan_id}: missing run_matrix.json")
+    else:
+        matrix = read_json(matrix_path)
+        summary = matrix.get("summary") or {}
+        for key in ("failed", "attemptFailures", "startupFailures", "orchestrationFailed"):
+            count = int(summary.get(key) or 0)
+            if count:
+                issues.append(f"{plan_id}: run_matrix summary {key}={count}")
+        if int(summary.get("orchestrated") or 0) == 0 and int(summary.get("completed") or 0) == 0:
+            issues.append(f"{plan_id}: run_matrix has no completed or orchestrated work")
+        for idx, item in enumerate(matrix.get("orchestrators") or []):
+            if not item.get("reached"):
+                worker = str(item.get("worker") or item.get("partition") or f"orchestrator[{idx}]")
+                missing = ",".join(str(x) for x in (item.get("missing") or []))
+                error = str(item.get("error") or "")
+                detail = f" missing={missing}" if missing else ""
+                if error:
+                    detail += f" error={error}"
+                issues.append(f"{plan_id}: {worker} did not reach required checkpoints{detail}")
+
+    for unit in fs.expand_units(plan):
+        task_id = str(unit["taskId"])
+        batch_id = str(unit["batchId"])
+        key = (task_id, batch_id)
+        state_path = batch_workflow_state_path(task_id, batch_id)
+        if not state_path.is_file():
+            issues.append(f"{task_id}/{batch_id}: missing task_workflow_state.json")
+        else:
+            state = load_workflow_state(task_id, batch_id)
+            status = str(state.get("status") or "")
+            waiting = str(state.get("waitingCheckpoint") or "")
+            if waiting:
+                issues.append(f"{task_id}/{batch_id}: stuck at checkpoint {waiting}")
+            if status not in {"succeeded", "completed", "done"}:
+                issues.append(f"{task_id}/{batch_id}: workflow status is {status or 'unknown'}")
+            failed_objects = state.get("failedObjects") or []
+            if failed_objects:
+                issues.append(f"{task_id}/{batch_id}: failedObjects={len(failed_objects)}")
+        if not roots_by_unit.get(key):
+            issues.append(f"{task_id}/{batch_id}: no current artifacts found for verification")
+    return issues
 
 
 def _prepare_author_jobs_for_paused_targets(plan: dict, paused_targets: list[tuple[str, str]]) -> None:
@@ -277,6 +339,77 @@ def handle_cleanup_runtime(args: argparse.Namespace) -> None:
     ops.cleanup_runtime(args.task_id)
 
 
+def handle_cleanup_generated(args: argparse.Namespace) -> None:
+    manifest = build_cleanup_manifest(
+        task_id=getattr(args, "task", None),
+        batch_id=getattr(args, "batch", None),
+        release_id=getattr(args, "release", None),
+        all_runtime=bool(getattr(args, "all_runtime", False)),
+        all_releases=bool(getattr(args, "all_releases", False)),
+    )
+    if getattr(args, "manifest_out", None):
+        write_manifest(Path(args.manifest_out), manifest)
+        print(f"[task cleanup-generated] wrote manifest: {args.manifest_out}")
+    print(json.dumps(manifest, ensure_ascii=False, indent=2))
+    if manifest.get("issues"):
+        raise SystemExit(1)
+    if not getattr(args, "confirm", False):
+        print("[task cleanup-generated] dry-run only; pass --confirm to delete")
+        return
+    result = execute_cleanup(manifest)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if getattr(args, "prepare_task", None):
+        _prepare_generated_run_inputs(
+            str(args.prepare_task),
+            regions=getattr(args, "prepare_regions", None),
+            entity_types=getattr(args, "prepare_entity_types", None),
+        )
+
+
+def _prepare_generated_run_inputs(
+    task_id: str,
+    *,
+    regions: str | None = None,
+    entity_types: str | None = None,
+) -> None:
+    """Rebuild task catalog and baseline after a generated-runtime cleanup."""
+    from data.baseline import handle_baseline
+    from explore.handler import handle_explore
+
+    spec = store.load_spec(task_id)
+    scope = spec.get("scope") or {}
+    region_value = str(regions or scope.get("region") or "").strip()
+    entity_type_value = str(
+        entity_types
+        or ",".join(str(item) for item in (scope.get("entityTypes") or []) if str(item))
+    ).strip()
+    print(f"[task cleanup-generated] prepare task inputs: {task_id}")
+    handle_explore(
+        argparse.Namespace(
+            task=task_id,
+            regions=region_value,
+            entity_types=entity_type_value,
+        )
+    )
+    handle_baseline(
+        argparse.Namespace(
+            task=task_id,
+            catalog=None,
+            spec_doc=None,
+            design_doc=None,
+            acceptance_doc=None,
+            workflow_doc=None,
+            command_matrix_doc=None,
+            catalog_config=None,
+            naming_rules=None,
+            geo_band_rules=None,
+            schema_files=[],
+            config_files=[],
+            output=None,
+        )
+    )
+
+
 def handle_rollup(args: argparse.Namespace) -> None:
     from task import fanout_rollup
     from _common.paths import fanout_summary_path
@@ -292,6 +425,18 @@ def handle_rollup(args: argparse.Namespace) -> None:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return
     print(json.dumps({"rollup": report, "summary": summary}, ensure_ascii=False, indent=2))
+
+
+def handle_select_targets(args: argparse.Namespace) -> None:
+    from task.target_selection import handle_select_targets as _handle
+
+    _handle(args)
+
+
+def handle_audit_batch(args: argparse.Namespace) -> None:
+    from task.target_selection import handle_audit_batch as _handle
+
+    _handle(args)
 
 
 def handle_scaled_e2e(args: argparse.Namespace) -> None:
@@ -516,11 +661,13 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
                 print(f"[task scaled-e2e verify] plan not found: {args.plan}", file=sys.stderr)
                 raise SystemExit(2)
             roots: list[str] = []
+            roots_by_unit: dict[tuple[str, str], list[str]] = {}
             issues: list[str] = []
             for unit in fs.expand_units(plan):
                 task_id = str(unit["taskId"])
                 batch_id = str(unit["batchId"])
                 unit_roots, unit_issues = gate_verify(task=task_id, batch=batch_id, scope="current")
+                roots_by_unit[(task_id, batch_id)] = [str(r) for r in unit_roots]
                 roots.extend([str(r) for r in unit_roots])
                 issues.extend(unit_issues)
                 write_batch_audit_summary(task_id, batch_id, roots=unit_roots, issues=unit_issues)
@@ -543,6 +690,7 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
             except SystemExit as exc:
                 if int(getattr(exc, "code", 1) or 0) != 0:
                     issues.append("goldenset regression gate failed")
+            issues.extend(_scaled_e2e_plan_runtime_issues(plan, roots_by_unit))
         else:
             roots, issues = gate_verify(task=args.task, batch=args.batch, scope="current")
         if roots:
@@ -671,9 +819,64 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pcr.add_argument("task_id")
     pcr.set_defaults(handler=handle_cleanup_runtime)
 
+    pcg = sub.add_parser(
+        "cleanup-generated",
+        help="清理生成型 runtime/release 产物；默认 dry-run，保留 committed task、publish、tag/entity 真源",
+    )
+    pcg.add_argument("--task", help="runtime taskId")
+    pcg.add_argument("--batch", help="runtime batchId；与 --task 搭配只清指定 batch")
+    pcg.add_argument("--release", help="releaseId；只清指定 isolated release")
+    pcg.add_argument("--all-runtime", action="store_true", help="清空 runtime/ 下全部生成产物")
+    pcg.add_argument("--all-releases", action="store_true", help="清空 release/ 下全部 isolated release")
+    pcg.add_argument("--manifest-out", help="写出清理清单 JSON")
+    pcg.add_argument("--confirm", action="store_true", help="确认执行删除；缺省只 dry-run")
+    pcg.add_argument(
+        "--prepare-task",
+        help="删除确认后重建该 task 的 catalog.ndjson 与 baseline_freeze_packet.json",
+    )
+    pcg.add_argument("--prepare-regions", help="prepare-task 的 explore regions；默认取 task scope.region")
+    pcg.add_argument(
+        "--prepare-entity-types",
+        help="prepare-task 的 explore entity types；默认取 task scope.entityTypes",
+    )
+    pcg.set_defaults(handler=handle_cleanup_generated)
+
     prl = sub.add_parser("rollup", help="fanout 归并治理：分区 reducer + 全局进度/SLO + dead/spillover 巡检")
     prl.add_argument("--plan", required=True, help="冻结计划 planId")
     prl.set_defaults(handler=handle_rollup)
+
+    pstg = sub.add_parser(
+        "select-targets",
+        help="从 discovery 分区确定性选择多模态 coverageTargets，支持按历史不可行对象排除",
+    )
+    pstg.add_argument("--source-task", dest="source_task", default="旅行/地域/四川省/景区/景区精选")
+    pstg.add_argument("--discovery", help="discovery JSON 路径；默认取 source task 的 discovery_sichuan_100e.json")
+    pstg.add_argument("--limit", type=int, default=50)
+    pstg.add_argument("--mandatory", help="必须保留实体，逗号分隔；默认川西五景")
+    pstg.add_argument("--exclude", help="显式排除实体，逗号分隔")
+    pstg.add_argument("--exclude-from-task", dest="exclude_from_task", help="从历史 managed batch failedObjects 读取不可行实体")
+    pstg.add_argument("--exclude-from-batch", dest="exclude_from_batch", help="与 --exclude-from-task 配套的 batchId")
+    pstg.add_argument(
+        "--exclude-from-run",
+        dest="exclude_from_run",
+        action="append",
+        help="追加排除历史批次不可行实体，格式 TASK_ID::BATCH_ID；可重复",
+    )
+    pstg.add_argument("--region", default="四川省")
+    pstg.add_argument("--category", default="景区")
+    pstg.add_argument("--name", required=True, help="新任务名")
+    pstg.add_argument("--title", help="新任务标题；默认同 name")
+    pstg.add_argument("--owner", help="createdBy")
+    pstg.add_argument("--write", action="store_true", help="写入 committed task；默认只打印 selection report")
+    pstg.add_argument("--force", action="store_true", help="覆盖同名任务")
+    pstg.set_defaults(handler=handle_select_targets)
+
+    pab = sub.add_parser("audit-batch", help="审计 managed separated_research 批次 lane 通过率和图片容量")
+    pab.add_argument("--task", required=True)
+    pab.add_argument("--batch", required=True)
+    pab.add_argument("--json", action="store_true")
+    pab.add_argument("--write", action="store_true", help="写入 batch/_shared/managed_batch_audit.json")
+    pab.set_defaults(handler=handle_audit_batch)
 
     pse = sub.add_parser("scaled-e2e", help="放大规模 E2E 薄壳：只编排现有 CLI/fanout 主线，不产正文")
     sesub = pse.add_subparsers(dest="scaled_e2e_command")
@@ -733,6 +936,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     register_run_parser(sub)
     register_decompose_parser(sub)
+    register_content_supply_parsers(sub)
     queue.register_queue_parser(sub)
 
     def _dispatch(args: argparse.Namespace) -> None:

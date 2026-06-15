@@ -81,7 +81,7 @@
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/ui/circle/pages/home_circles_hub_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`CircleHubFeedPostEntry` presentation + dto/raw 同步；viewer `immersive`+wire；频道管理改为五垂类阶段隐藏；2026-05-21 首页垂类固定为校园/旅行/摄影/科技/车之家，群组瀑布流恢复默认双列自适应，旅行/摄影图片使用页内轮播，P7/P8 分列保持 ✓ |
 | `lib/ui/circle/pages/circles_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `List<CircleDto>`；`AppScaffold`；P4 MainAppShell |
-| `lib/ui/circle/pages/circle_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`section_creations` DTO+`PostReadSurfaceId.circleWorks`；壳 `CircleDto` 已合规；对象页网络 IA 收敛为 `首页/内容/群或组织/成员`，首屏接 `ObjectPageContext` 小趣行动 dock |
+| `lib/ui/circle/pages/circle_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`section_creations` DTO+`PostReadSurfaceId.circleWorks`；壳 `CircleDto` 已合规；2026-06-14 首屏 IA 收敛为身份区、加入/私信、与你的交集、圈子影响力、内容/讨论/成员；管理/编辑/分享等操作进入更多菜单；内容二级筛选为全部/图片/视频/文字 |
 | `lib/ui/circle/pages/circle_edit_settings_page.dart` | T5 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `CircleEditSubmitPayload` |
 | `lib/ui/circle/pages/circle_stats_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `CircleStats*RowViewData`；`AppScaffold` |
 | `lib/ui/circle/pages/circles_hub_page.dart` | T0 | — | — | — | — | — | — | — | — | 仅 `export` `home_circles_hub_page`，不单独验收 |
@@ -118,8 +118,16 @@
 | `lib/ui/entity/pages/homepage_claim_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageClaimRequestDraft` |
 | `lib/ui/entity/pages/homepage_maintenance_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageBasicDraft` |
 | `lib/ui/entity/pages/homepage_status_report_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageStatusReportDraft` |
-| `lib/ui/entity/pages/homepage_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageDetail`/`HomepageShellData`/`ObjectPageBundle`；对象页网络 IA 为 `首页/内容/口碑/关联`，首屏消费 `IntersectionReason`/`ObjectRelationEdge`/`ObjectPageContext`；2026-05-19 overlay 顶栏 safeTop/按钮节奏接入资料页 appChrome token |
+| `lib/ui/entity/pages/homepage_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageDetail`/`HomepageShellData`/`ObjectPageBundle`；2026-06-14 地点和事物主页 IA 收敛为身份区、关注/私信、与你的交集、认识对象、内容/讨论/兴趣圈；用户可见文案不用“实体”；认领/维护/状态上报进入更多菜单；主视觉使用品牌蓝 |
 | `lib/ui/entity/pages/homepage_introduction_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `HomepageIntroduction`/`HomepageIntroductionSection`；完整介绍页，P5 非设置/半屏表单 |
+
+---
+
+## intersection
+
+| 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
+|------|------|----|----|----|----|----|----|----|----|------|
+| `lib/ui/intersection/pages/object_intersection_list_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：全部交集页，消费 `IntersectionReason` + `ObjectIntersectionQuery(limit: 50)`；路由 `objectIntersections` 由 metadata codegen 生成；纵向列表复用 `ObjectIntersectionCard`，无交集/错误独立降级 |
 
 ---
 
@@ -157,10 +165,10 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：对象页网络 Tab 显示口径收敛为 `看点/作品/圈子/互动`（底层仍由 codegen `UserProfileUIConfig.profileTabs` 驱动）；创作/生活强类型 DTO 不变；首屏接 `ObjectPageContext` 小趣行动 dock。**V5 埋点**：进入曝光 + dispose 停留（`contentBehaviorTracker`，contentType=user，referralSource=authorProfile）；other 模式交集卡 `onReasonTap` → `BehaviorEvent.intersectionDimension/intersectionTagRefs` 归因 |
+| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：2026-06-14 我的主页首屏固定为身份区、编辑资料/分享主页、我的新交集、我的影响力、作品/圈子/互动、双列内容流；作品二级筛选仅全部/图片/视频/文字；进入曝光 + dispose 停留（`contentBehaviorTracker`） |
 | `lib/ui/user/pages/login_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap/loginWechat/loginApple/loginPasskey` + `AuthLoginResultDto`；P3 Mock/Remote 由 `authRepositoryProvider` 切换；微信 / Apple / Credential Manager / passkey 入口由 `PlatformCapabilities + NativeAuthBridge` 预留并降级，协议勾选前不调用原生登录 SDK |
 | `lib/ui/user/pages/legal_document_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 远端 WebView 展示用户协议/隐私政策；P2/P3 —，内容来自配置 URL；禁用 JS，保留返回与失败重试 |
-| `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：同 my_profile；other 模式展示真实交集卡 |
+| `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：2026-06-14 用户主页首屏固定为身份区、关注/私信、你们的交集、TA的影响力、作品/圈子/互动、双列内容流；交集卡 `onReasonTap` → `BehaviorEvent.intersectionDimension/intersectionTagRefs` 归因 |
 | `lib/ui/user/pages/my_intersection_inbox_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：我的交集分维度列表，消费 `GET /v1/content/intersections`（list）+ `POST /v1/content/intersections/visit`（打开即推进已读水位清零）；强类型 `IntersectionReason`；统一原子 `IntersectionEntity`（头像+名字+维度chip，概率标「推荐」）；P3 Mock/Remote 经 `intersectionRepositoryProvider` 切换；空/错误兜底；点条目带 `relationKind` 进对象页 |
 | `lib/ui/user/pages/my_footprint_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：我的足迹私有只读列表，消费 `GET /v1/content/footprint`（type 过滤 + cursor 分页）；强类型 `FootprintEntry`；P3 Mock/Remote 经 `footprintRepositoryProvider` 切换；type 枚举由云侧定义、端侧只透传；空/错误/分页兜底；点条目按 R21 带 referralSource 进作品浏览器 |
 | `lib/ui/user/pages/edit_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ProfileEditUpdatePayload |
@@ -186,16 +194,16 @@
 
 | 类别 | 数量 |
 |------|------|
-| `ui/**/pages/*_page.dart`（含 T0 一行） | 58 |
+| `ui/**/pages/*_page.dart`（含 T0 一行） | 59 |
 | `welcome_screen.dart`（额外入口） | 1 |
 | `components/**/*_page.dart` | 5 |
 | `app/shell/*.dart`（主壳 + 底栏 + Web 安装提示 + PC Web 宽屏壳） | 4 |
-| **矩阵数据行（含 T0 + shell）** | **67** |
-| **需验收的独立页面行（排除 T0）** | **63** |
-| **P6 = ✓（full）** | **54** |
+| **矩阵数据行（含 T0 + shell）** | **68** |
+| **需验收的独立页面行（排除 T0）** | **64** |
+| **P6 = ✓（full）** | **55** |
 | **P6 = ○（partial，待收敛 S6）** | **8** |
 | **P6 = —（exempt 或整行 —）** | **3**（`circles_hub` T0 全列 — + `unified_media_viewer` + `one_tap_movie_preview`） |
-| **P2 = ✓（compliant）** | **52**（含帖子全链路 17 页/面，2026-04-11 收口） |
+| **P2 = ✓（compliant）** | **53**（含帖子全链路 17 页/面，2026-04-11 收口） |
 | **P2 = ○（partial，待 metadata/UI 收敛）** | **0**（帖子管线已 ✓；后续非帖子 P2 另开项） |
 | **当前横向列** | **P1–P8**（可扩展至 P9…） |
 

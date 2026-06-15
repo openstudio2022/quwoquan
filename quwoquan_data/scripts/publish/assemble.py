@@ -6,7 +6,7 @@ from pathlib import Path
 
 from _common.entity_object import collect_task_entity_objects
 from _common.paths import release_root, task_root
-from _common.io import write_json
+from _common.io import read_json, write_json
 
 _REVIEW_SIDECARS = {
     "review.json",
@@ -45,14 +45,18 @@ def assemble_release(task_id: str, release_id: str, *, batch_id: str = "") -> Pa
             src = batch_dir / "posts"
             if not src.is_dir():
                 continue
-            for manifest in sorted(src.rglob("manifest.json")):
-                leaf = manifest.parent
-                if not ((leaf / "article.md").exists() or (leaf / "gallery.md").exists()):
+            for manifest_path in sorted(src.rglob("manifest.json")):
+                leaf = manifest_path.parent
+                manifest = read_json(manifest_path)
+                if not isinstance(manifest, dict):
+                    continue
+                is_image = _is_image_manifest(manifest)
+                if not is_image and not (leaf / "article.md").exists():
                     continue
                 dst_leaf = posts_dst / leaf.relative_to(src)
                 if dst_leaf.exists():
                     shutil.rmtree(dst_leaf)
-                _copy_post_surface(leaf, dst_leaf)
+                _copy_post_surface(leaf, dst_leaf, manifest=manifest)
 
     # Release manifest
     write_json(root / "release_manifest.json", {
@@ -92,15 +96,27 @@ def _copy_review_sidecars(src: Path, dst: Path) -> None:
         shutil.copy2(path, dst / name)
 
 
-def _copy_post_surface(src: Path, dst: Path) -> None:
+def _is_image_manifest(manifest: dict) -> bool:
+    return str(manifest.get("contentType") or "") == "image" or str(
+        manifest.get("carrier") or ""
+    ) in ("image", "gallery")
+
+
+def _copy_post_surface(src: Path, dst: Path, *, manifest: dict) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists():
         shutil.rmtree(dst)
     dst.mkdir(parents=True, exist_ok=True)
-    for name in ("article.md", "gallery.md", "manifest.json"):
-        path = src / name
-        if path.is_file():
-            shutil.copy2(path, dst / name)
+    is_image = _is_image_manifest(manifest)
+    release_manifest = dict(manifest)
+    if is_image:
+        # Legacy gallery packages are upgraded to the structured image surface.
+        release_manifest["contentType"] = "image"
+    else:
+        article = src / "article.md"
+        if article.is_file():
+            shutil.copy2(article, dst / "article.md")
+    write_json(dst / "manifest.json", release_manifest)
     assets = src / "assets"
     if assets.is_dir():
         shutil.copytree(assets, dst / "assets")

@@ -500,6 +500,25 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "risk_level": "high",
       "source_entity": "GateRule",
       "view_model": "GateRule"
+    },
+    {
+      "deployment_profile": "audit_heavy",
+      "label": "Prod 平面访问隔离映射",
+      "object_kind": "snapshot",
+      "object_type": "prod_plane_access_isolation",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListProdPlaneAccessIsolation",
+          "path": "/v1/control-plane/platform/topology/prod-plane-access-isolation",
+          "scopes": [
+            "ops.platform.dependency.read"
+          ]
+        }
+      ],
+      "risk_level": "high",
+      "source_entity": "ProdPlaneAccessIsolation",
+      "view_model": "ProdPlaneAccessIsolation"
     }
   ],
   "plane": "platform-control-plane",

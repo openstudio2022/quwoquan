@@ -8,6 +8,26 @@ avatarObjectKey: cold_start/creators/geo_editor/avatar.jpg
 headline: 以地理深读、地貌科普和专题报道为主的编辑型作者
 bio: 关注地貌、气候、交通与人的关系，用证据和图注支撑旅行地的深度叙事。
 creatorArchetype: geo_editor
+status: active
+verticalRefs: [travel, photography]
+scenarioRefs: [cold_start, long_tail_fill, refresh_stale]
+claimPolicy:
+  experienceClaimMode: editorial_synthesis
+  mayUseFirstPerson: false
+  mustCiteEvidenceForClaims: true
+  forbiddenClaims: [真实亲历, 学术机构背书, 官方调查, 独家资料]
+disclosure:
+  type: platform_virtual_creator
+  displayText: 平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。
+  visible: true
+publishCadence:
+  intervalDays: 3
+  randomizedRangeDays: [1, 5]
+  maxDailyPosts: 1
+qualityScore: 0.9
+fatigueScore: 0.2
+riskTier: low
+profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Format/内容角度/资讯/深度报道
   - Format/内容角度/科普/知识科普

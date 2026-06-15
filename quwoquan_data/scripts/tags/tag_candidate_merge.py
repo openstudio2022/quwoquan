@@ -1,152 +1,322 @@
-"""将标签候选去重/归并后写入正式标签树
-
-读取 tag_runtime/candidates.ndjson，
-过滤已存在/重复/低频候选，将通过审核的候选写入 publish/tags。
-
-输出:
-  - 新增的 _definition.json 文件
-  - tag_runtime/merge_log.ndjson（合入记录）
-
-用法:
-  python3 tag_candidate_merge.py
-  python3 tag_candidate_merge.py --dry-run
-  python3 tag_candidate_merge.py --min-freq 5    # 关键词最低频率
-"""
+"""Intake tag candidates and merge only candidates approved by a human review."""
 from __future__ import annotations
 
-
-import sys
+import argparse
+from datetime import datetime, timezone
+import json
 from pathlib import Path
+import sys
+from typing import Any, Mapping, Sequence
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
-TESTS_ROOT = DATA_ROOT / "tests"
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
-for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
 
-import argparse
-import json
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common.paths import PUBLISH_ROOT, RUNTIME_ROOT, NOW_ISO
+from _common.paths import PUBLISH_ROOT, RUNTIME_ROOT  # noqa: E402
+from _common.semantic_mentions import DEFAULT_MAX_CANDIDATES  # noqa: E402
+from governance.candidate_store import CandidateRepository, candidate_id_for  # noqa: E402
+from governance.state_machine import STATUS_PENDING_REVIEW, STATUS_PUBLISHED  # noqa: E402
 
 TAGS_ROOT = PUBLISH_ROOT / "tags"
 RUNTIME_TAG_DIR = RUNTIME_ROOT / "tag_runtime"
 CANDIDATES_FILE = RUNTIME_TAG_DIR / "candidates.ndjson"
 MERGE_LOG = RUNTIME_TAG_DIR / "merge_log.ndjson"
+GOVERNANCE_ROOT = RUNTIME_ROOT / "governance"
 
 
-def all_existing_tags() -> set[str]:
-    tags: set[str] = set()
-    for f in TAGS_ROOT.rglob("_definition.json"):
-        rel = str(f.parent.relative_to(TAGS_ROOT))
-        tags.add(rel)
-    return tags
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
-def all_existing_labels() -> set[str]:
+def _normalized_tag_ref(value: str) -> str:
+    raw = str(value).strip().strip("/")
+    parts = raw.split("/")
+    if not raw or any(part in {"", ".", ".."} or "\x00" in part for part in parts):
+        raise ValueError(f"invalid tag ref: {value!r}")
+    return "/".join(parts)
+
+
+def all_existing_tags(tags_root: Path = TAGS_ROOT) -> set[str]:
+    return {str(path.parent.relative_to(tags_root)) for path in tags_root.rglob("_definition.json")}
+
+
+def all_existing_labels(tags_root: Path = TAGS_ROOT) -> set[str]:
     labels: set[str] = set()
-    for f in TAGS_ROOT.rglob("_definition.json"):
+    for path in tags_root.rglob("_definition.json"):
         try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-            labels.add(data.get("label", ""))
-        except Exception:
-            pass
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        label = str(data.get("label") or "").strip()
+        if label:
+            labels.add(label)
     return labels
 
 
-def merge_tag(tag_ref: str, label: str, label_en: str, desc: str) -> bool:
-    p = TAGS_ROOT / tag_ref / "_definition.json"
-    if p.exists():
+def merge_tag(
+    tag_ref: str,
+    label: str,
+    label_en: str,
+    description: str,
+    *,
+    candidate_id: str,
+    tags_root: Path = TAGS_ROOT,
+    now: str | None = None,
+) -> bool:
+    tag_ref = _normalized_tag_ref(tag_ref)
+    path = tags_root / tag_ref / "_definition.json"
+    if path.exists():
         return False
-    p.parent.mkdir(parents=True, exist_ok=True)
-    data = {
+    timestamp = now or _now_iso()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
         "label": label,
         "labelEn": label_en,
-        "description": desc,
-        "sourceRefs": ["auto:reverse_discover"],
-        "createdAt": NOW_ISO,
-        "updatedAt": NOW_ISO,
+        "description": description,
+        "sourceRefs": [f"governance:{candidate_id}"],
+        "createdAt": timestamp,
+        "updatedAt": timestamp,
     }
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return True
 
 
-def main():
-    parser = argparse.ArgumentParser(description="候选标签归并")
+def _read_ndjson(path: Path) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    with open(path, encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            value = json.loads(line)
+            if not isinstance(value, dict):
+                raise ValueError(f"{path}:{line_number}: expected object")
+            output.append(value)
+    return output
+
+
+def _load_reviews(path: Path | None) -> list[dict[str, Any]]:
+    if path is None:
+        return []
+    if not path.is_file():
+        raise FileNotFoundError(f"review file not found: {path}")
+    if path.suffix.lower() == ".json":
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        rows = payload if isinstance(payload, list) else payload.get("reviews")
+        if not isinstance(rows, list):
+            raise ValueError(f"{path}: expected a JSON list or {{\"reviews\": [...]}}")
+        return [dict(row) for row in rows]
+    return _read_ndjson(path)
+
+
+def _candidate_descriptor(
+    raw: Mapping[str, Any],
+    *,
+    min_freq: int,
+) -> dict[str, Any] | None:
+    reason = str(raw.get("reason") or "")
+    if reason in {"dead_ref", "dead_geo_ref"}:
+        tag_ref = _normalized_tag_ref(str(raw.get("tagRef") or ""))
+        if not tag_ref:
+            return None
+        label = tag_ref.rsplit("/", 1)[-1]
+        description = f"由死引用发现，待人工确认: {raw.get('source', '')}"
+    elif reason == "content_keyword":
+        if int(raw.get("frequency") or 0) < min_freq:
+            return None
+        label = str(raw.get("label") or "").strip()
+        if not label:
+            return None
+        group = str(raw.get("suggestedGroup") or "Topic").strip().strip("/")
+        tag_ref = _normalized_tag_ref(f"{group}/主题/{label}")
+        description = f"由正文高频词发现，待人工确认（频率 {int(raw.get('frequency') or 0)}）"
+    else:
+        return None
+    return {
+        "kind": "tag",
+        "naturalKey": tag_ref,
+        "payload": {
+            "tagRef": tag_ref,
+            "label": label,
+            "labelEn": str(raw.get("labelEn") or label),
+            "description": description,
+            "discoveryReason": reason,
+            "rawCandidate": dict(raw),
+        },
+        "sourceRefs": [str(raw.get("source") or "")],
+    }
+
+
+def _apply_reviews(
+    repository: CandidateRepository,
+    reviews: Sequence[Mapping[str, Any]],
+) -> int:
+    applied = 0
+    for row in reviews:
+        actor_type = str(row.get("actorType") or "human").strip()
+        if actor_type != "human":
+            raise ValueError("tag candidate reviews must have actorType=human")
+        candidate_id = str(row.get("candidateId") or "").strip()
+        if not candidate_id:
+            kind = str(row.get("kind") or "tag").strip()
+            natural_key = str(row.get("naturalKey") or "").strip()
+            candidate_id = candidate_id_for(kind, natural_key)
+        repository.review(
+            candidate_id,
+            decision=str(row.get("decision") or "").strip(),
+            reviewer=str(row.get("reviewer") or "").strip(),
+            decision_id=str(row.get("decisionId") or "").strip(),
+            reason=str(row.get("reason") or ""),
+            reviewed_at=str(row.get("reviewedAt") or "").strip() or None,
+        )
+        applied += 1
+    return applied
+
+
+def run_merge(
+    *,
+    candidates_file: Path = CANDIDATES_FILE,
+    reviews_file: Path | None = None,
+    tags_root: Path = TAGS_ROOT,
+    governance_root: Path = GOVERNANCE_ROOT,
+    merge_log: Path = MERGE_LOG,
+    min_freq: int = 3,
+    dry_run: bool = False,
+) -> dict[str, int]:
+    if not candidates_file.is_file():
+        return {"eligible": 0, "merged": 0, "skipped": 0, "pending": 0, "reviewsApplied": 0}
+
+    raw_candidates = _read_ndjson(candidates_file)
+    existing_tags = all_existing_tags(tags_root)
+    existing_labels = all_existing_labels(tags_root)
+    descriptors: list[dict[str, Any]] = []
+    descriptor_keys: set[str] = set()
+    skipped = 0
+    for raw in raw_candidates:
+        descriptor = _candidate_descriptor(raw, min_freq=min_freq)
+        if descriptor is None:
+            skipped += 1
+            continue
+        payload = descriptor["payload"]
+        if payload["tagRef"] in existing_tags or payload["label"] in existing_labels:
+            skipped += 1
+            continue
+        if descriptor["naturalKey"] in descriptor_keys:
+            skipped += 1
+            continue
+        if len(descriptors) >= DEFAULT_MAX_CANDIDATES:
+            skipped += 1
+            continue
+        descriptor_keys.add(descriptor["naturalKey"])
+        descriptors.append(descriptor)
+
+    repository = CandidateRepository(governance_root)
+    if dry_run:
+        pending = sum(
+            1
+            for descriptor in descriptors
+            if (
+                repository.find(descriptor["kind"], descriptor["naturalKey"]) or {}
+            ).get("status", STATUS_PENDING_REVIEW)
+            == STATUS_PENDING_REVIEW
+        )
+        return {
+            "eligible": len(descriptors),
+            "merged": 0,
+            "skipped": skipped,
+            "pending": pending,
+            "reviewsApplied": 0,
+        }
+
+    governed: list[dict[str, Any]] = []
+    for descriptor in descriptors:
+        governed.append(
+            repository.intake(
+                kind=descriptor["kind"],
+                natural_key=descriptor["naturalKey"],
+                payload=descriptor["payload"],
+                source_refs=descriptor["sourceRefs"],
+                actor="tags.tag_candidate_merge",
+            )
+        )
+
+    reviews_applied = _apply_reviews(repository, _load_reviews(reviews_file))
+    merged = 0
+    pending = 0
+    log_entries: list[dict[str, Any]] = []
+    for original in governed:
+        candidate = repository.get(str(original["candidateId"])) or original
+        status = str(candidate.get("status") or STATUS_PENDING_REVIEW)
+        if status == STATUS_PENDING_REVIEW:
+            pending += 1
+            continue
+        if status != STATUS_PUBLISHED:
+            skipped += 1
+            continue
+        payload = candidate.get("payload") or {}
+        timestamp = _now_iso()
+        if merge_tag(
+            str(payload.get("tagRef") or ""),
+            str(payload.get("label") or ""),
+            str(payload.get("labelEn") or payload.get("label") or ""),
+            str(payload.get("description") or ""),
+            candidate_id=str(candidate["candidateId"]),
+            tags_root=tags_root,
+            now=timestamp,
+        ):
+            merged += 1
+            log_entries.append(
+                {
+                    "action": "merge",
+                    "candidateId": candidate["candidateId"],
+                    "tagRef": payload.get("tagRef"),
+                    "mergedAt": timestamp,
+                }
+            )
+        else:
+            skipped += 1
+
+    if log_entries:
+        merge_log.parent.mkdir(parents=True, exist_ok=True)
+        with open(merge_log, "a", encoding="utf-8") as handle:
+            for entry in log_entries:
+                handle.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+    return {
+        "eligible": len(descriptors),
+        "merged": merged,
+        "skipped": skipped,
+        "pending": pending,
+        "reviewsApplied": reviews_applied,
+    }
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="候选标签治理与人工审核后归并")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--min-freq", type=int, default=3)
-    args = parser.parse_args()
-
-    if not CANDIDATES_FILE.exists():
-        print(f"无候选文件: {CANDIDATES_FILE}")
-        sys.exit(0)
-
-    candidates = []
-    with open(CANDIDATES_FILE, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                candidates.append(json.loads(line))
-
-    existing_tags = all_existing_tags()
-    existing_labels = all_existing_labels()
-    merged = 0
-    skipped = 0
-    log_entries: list[dict] = []
-
-    for c in candidates:
-        reason = c.get("reason", "")
-
-        if reason == "dead_ref":
-            tag_ref = c["tagRef"]
-            if tag_ref in existing_tags:
-                skipped += 1
-                continue
-            label = tag_ref.rsplit("/", 1)[-1]
-            if not args.dry_run:
-                ok = merge_tag(tag_ref, label, label, f"由死引用自动发现: {c.get('source', '')}")
-                if ok:
-                    merged += 1
-                    log_entries.append({"action": "merge", "tagRef": tag_ref, "mergedAt": NOW_ISO})
-                else:
-                    skipped += 1
-            else:
-                merged += 1
-
-        elif reason == "content_keyword":
-            if c.get("frequency", 0) < args.min_freq:
-                skipped += 1
-                continue
-            label = c["label"]
-            if label in existing_labels:
-                skipped += 1
-                continue
-            group = c.get("suggestedGroup", "Topic")
-            tag_ref = f"{group}/主题/{label}"
-            if not args.dry_run:
-                ok = merge_tag(tag_ref, label, label, f"由正文高频词发现 (频率{c['frequency']})")
-                if ok:
-                    merged += 1
-                    log_entries.append({"action": "merge", "tagRef": tag_ref, "mergedAt": NOW_ISO})
-                else:
-                    skipped += 1
-            else:
-                merged += 1
-
-    if not args.dry_run and log_entries:
-        RUNTIME_TAG_DIR.mkdir(parents=True, exist_ok=True)
-        with open(MERGE_LOG, "a", encoding="utf-8") as f:
-            for entry in log_entries:
-                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-    print(f"候选归并完成: {merged} 合入, {skipped} 跳过")
+    parser.add_argument(
+        "--reviews",
+        type=Path,
+        help="人工审核 JSON/NDJSON；每项必须含 decisionId/reviewer/decision",
+    )
+    args = parser.parse_args(argv)
+    summary = run_merge(
+        reviews_file=args.reviews,
+        min_freq=args.min_freq,
+        dry_run=args.dry_run,
+    )
+    print(
+        "候选治理完成: "
+        f"{summary['merged']} 合入, {summary['pending']} 待人审, "
+        f"{summary['skipped']} 跳过, {summary['reviewsApplied']} 条审核记录"
+    )
     if args.dry_run:
         print("[dry-run 模式]")
+    if summary["pending"]:
+        print("[CHECKPOINT human_review] 未审核候选禁止写入正式标签树", file=sys.stderr)
+        return 2
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -39,6 +39,7 @@ AUTH_PUBLIC_OPERATIONS = {
     "LoginWithApple",
     "LoginWithPasskey",
     "LoginOneTap",
+    "ResolveOneTapLoginHint",
     "LoginAnonymous",
     "RefreshToken",
     "SendOtp",

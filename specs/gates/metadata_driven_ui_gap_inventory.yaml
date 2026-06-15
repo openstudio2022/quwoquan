@@ -228,7 +228,7 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
         status: compliant
-        note: section_creations 主路径 postBaseDtoFromMap + PostReadSurfaceId.circleWorks + 沉浸 wire；对象页网络 IA 为 首页/内容/群或组织/成员，首屏 ObjectPageContext 小趣 dock；见 post_projection_spec
+        note: 2026-06-14 首屏固定为加入/私信、与你的交集、圈子影响力、内容/讨论/成员；管理入口进入更多菜单；section_creations 使用全部/图片/视频/文字筛选并消费 PostReadSurfaceId.circleWorks
         target_dto: CircleDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
@@ -273,13 +273,13 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/user/pages/other_profile_page.dart
         status: compliant
-        note: profile_works_tab / profile_moments_tab 显式 profileWorks|profileMoments + readPresentation；对象页网络 Tab 显示为 看点/作品/圈子/互动，首屏 ObjectPageContext 小趣 dock
+        note: 2026-06-14 首屏固定为关注/私信、你们的交集、TA的影响力、作品/圈子/互动；作品二级为全部/图片/视频/文字；ProfileWorksTab 显式 profileWorks + readPresentation
         target_dto: UserProfileDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/my_profile_page.dart
         status: compliant
-        note: 同 other_profile_page（本人态）；未登录态登录 CTA 消费 AuthSessionState；对象页网络 Tab 显示为 看点/作品/圈子/互动
+        note: 2026-06-14 首屏固定为编辑资料/分享主页、我的新交集、我的影响力、作品/圈子/互动；未登录态登录 CTA 消费 AuthSessionState
         target_dto: UserProfileDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
@@ -346,7 +346,7 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/entity/pages/homepage_detail_page.dart
         status: compliant
-        note: HomepageDetail/HomepageShellData/ObjectPageBundle；首屏 IntersectionReason + ObjectRelationEdge + ObjectPageContext；ActivePersonaContextViewData 无 dynamic
+        note: HomepageDetail/HomepageShellData/ObjectPageBundle；2026-06-14 首屏为关注/私信、与你的交集、认识对象、内容/讨论/兴趣圈；用户可见文案不用“实体”；治理动作进更多菜单
         target_dto: ObjectPageBundle
       - path: quwoquan_app/lib/ui/entity/pages/homepage_introduction_page.dart
         status: compliant
@@ -372,6 +372,21 @@ domains:
         status: compliant
         note: HomepageStatusReportDraft/Record
         target_dto: HomepageStatusReportDraft
+
+  - id: intersection
+    metadata_hint: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
+    repository: IntersectionRepository + objectSharedReasonsProvider
+    codegen_examples:
+      - lib/cloud/runtime/generated/recommendation/intersection_reason.g.dart
+      - lib/cloud/runtime/generated/recommendation/intersection_point.g.dart
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/ui/intersection/pages/object_intersection_list_page.dart
+        status: compliant
+        note: "全部交集页；路由 objectIntersections 由 _shared/app_routes.yaml codegen；消费 ObjectIntersectionQuery(limit: 50) 与 IntersectionReason，纵向列表复用 ObjectIntersectionCard"
+        target_dto: IntersectionReason
+        target_read_projection: IntersectionPoint
+        target_edit_draft: N/A
 
   - id: search
     metadata_hint: quwoquan_service/contracts/metadata/_shared/search_contract.yaml + search_registry

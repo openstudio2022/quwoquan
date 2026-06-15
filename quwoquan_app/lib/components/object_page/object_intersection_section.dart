@@ -2,11 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card_skeleton.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 /// 对象页交集区块（V4 · 商用完整态 · 三主页统一）。
@@ -44,7 +47,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
       loading: () => ObjectIntersectionCardSkeleton(isDark: isDark),
       // error 时收起：交集是增强位，不以错误噪声打断对象页主体验。
       error: (_, _) => const SizedBox.shrink(),
-      data: (reasons) => _buildCard(ref, reasons),
+      data: (reasons) => _buildCard(context, ref, reasons),
     );
     if (body is SizedBox) return body;
     return Padding(
@@ -54,10 +57,13 @@ class ObjectIntersectionSection extends ConsumerWidget {
     );
   }
 
-  Widget _buildCard(WidgetRef ref, List<IntersectionReason> reasons) {
+  Widget _buildCard(
+    BuildContext context,
+    WidgetRef ref,
+    List<IntersectionReason> reasons,
+  ) {
     final intent = ref.watch(intersectionHighlightIntentProvider);
-    final highlightKind =
-        (intent != null && intent.objectId == query.objectBId)
+    final highlightKind = (intent != null && intent.objectId == query.objectBId)
         ? intent.kind
         : null;
     // 一次性消费：命中后首帧展开高亮，随即清空意图（再进同页不重复强展开）。
@@ -76,7 +82,15 @@ class ObjectIntersectionSection extends ConsumerWidget {
       inlineExpandCount: ref
           .watch(intersectionDisplayConfigProvider)
           .inlineExpandCount,
+      moreLabel: UITextConstants.intersectionMoreLabel,
       highlightKind: highlightKind,
+      onMoreTap: () => context.push(
+        AppRoutePaths.objectIntersections(
+          objectId: query.objectBId,
+          objectType: query.objectBType,
+          title: title,
+        ),
+      ),
       onReasonTap: (reason) {
         // 统一交集证据组点击归因（R20 漏斗 · 三主页一致）：
         // 触发维度 + 路径制 tagRefs 回流推荐管线（B3）。仓库内部失败入队。

@@ -28,6 +28,17 @@ sites:
     licensePolicy: factual_citation_only
     qualityTier: A
     notes: 中文百科正文真相源，允许抽取 facts/sections，不得整段搬运。
+  - siteId: wikivoyage_zh
+    platform: 维基导游
+    category: travelogue
+    domains: [zh.wikivoyage.org]
+    urlPatterns:
+      - https://zh.wikivoyage.org/wiki/*
+    fetchable: true
+    extractor: wikipedia_api
+    licensePolicy: factual_citation_only
+    qualityTier: B
+    notes: 中文维基导游旅行指南，可抓取目的地攻略/交通/游览分区；仅作事实与决策参考，不复现原文。
   - siteId: baidu_baike
     platform: 百度百科
     category: encyclopedia

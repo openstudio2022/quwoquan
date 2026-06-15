@@ -46,6 +46,10 @@ CONTENT_TYPES = ("article", "image", "video")
 STAGES = ("compose-brief", "annotate-entities", "review")
 
 
+def _is_image_carrier(brief) -> bool:
+    return str(brief.get("carrier") or "").lower() in ("image", "gallery")
+
+
 def _collect_briefs(task_id: str, batch_id: str, refs):
     routes = iter_route_briefs(task_id, batch_id, refs)
     entities = iter_entity_briefs(task_id, batch_id, refs)
@@ -57,17 +61,49 @@ def _apply_writing_intent_override(brief, override):
     if not override:
         return brief
     merged = dict(brief)
-    if override.get("writingIntent"):
-        merged["writingIntent"] = override["writingIntent"]
-    if override.get("baseSourceRef") and not merged.get("baseSourceRef"):
-        merged["baseSourceRef"] = override["baseSourceRef"]
+    for field in (
+        "writingIntent",
+        "baseSourceRef",
+        "carrier",
+        "sourceCollectionId",
+        "assetRefs",
+    ):
+        if field in override and override.get(field) not in (None, ""):
+            merged[field] = override[field]
+    if _is_image_carrier(merged) and not override.get("baseSourceRef"):
+        merged.pop("baseSourceRef", None)
+        merged.pop("_contentPlanBaseSourceLocked", None)
+    if override.get("baseSourceRef"):
+        merged["_contentPlanBaseSourceLocked"] = True
     return merged
 
 
 def _assign_base_draft(task_id: str, batch_id: str, ref: str, brief):
     """认领唯一底稿（baseSourceRef 永远非空目标）；返回(brief, 缺底稿告警)。"""
-    from _common.base_draft import assign_base_draft
+    from _common.base_draft import (
+        assign_base_draft,
+        load_base_draft_ledger,
+        occupied_source_refs,
+        save_base_draft_ledger,
+    )
 
+    declared = str(brief.get("baseSourceRef") or "").strip()
+    if brief.get("_contentPlanBaseSourceLocked") and declared:
+        ledger = load_base_draft_ledger(task_id, batch_id)
+        taken = occupied_source_refs(ledger, exclude_post=ref)
+        if declared in taken:
+            raise RuntimeError(
+                f"{ref}: content_plan baseSourceRef already assigned to another ref: {declared}"
+            )
+        assignments = {
+            source: post
+            for source, post in dict(ledger.get("assignments") or {}).items()
+            if post != ref
+        }
+        assignments[declared] = ref
+        ledger["assignments"] = assignments
+        save_base_draft_ledger(task_id, batch_id, ledger)
+        return brief, None
     chosen = assign_base_draft(task_id, batch_id, ref, brief)
     if chosen and chosen != brief.get("baseSourceRef"):
         merged = dict(brief)
@@ -88,7 +124,9 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
     base_draft_warnings: list[str] = []
     for ref, brief in routes:
         brief = _apply_writing_intent_override(brief, overrides.get(ref))
-        brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        warn = None
+        if not _is_image_carrier(brief):
+            brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
         write_brief_object(task_id, batch_id, ref, brief, content_type=content_type_from_brief(brief))
         if warn:
             base_draft_warnings.append(warn)
@@ -101,7 +139,9 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
         prepared_refs.append(ref)
     for ref, brief in entities:
         brief = _apply_writing_intent_override(brief, overrides.get(ref))
-        brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
+        warn = None
+        if not _is_image_carrier(brief):
+            brief, warn = _assign_base_draft(task_id, batch_id, ref, brief)
         write_brief_object(task_id, batch_id, ref, brief, content_type=content_type_from_brief(brief))
         if warn:
             base_draft_warnings.append(warn)

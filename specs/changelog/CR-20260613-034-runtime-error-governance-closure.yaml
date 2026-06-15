@@ -1,0 +1,50 @@
+id: CR-20260613-034-runtime-error-governance-closure
+title: 端云错误码治理闭环与用户提示语热配置收口
+slug: runtime-error-governance-closure
+revision: 1
+status: specified
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-errors
+  - specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics
+  - specs/feature-tree/platform-ops-governance/observability-and-alerting
+
+entries:
+  - timestamp: "2026-06-13T15:42:00+08:00"
+    summary: |
+      基于错误码端云治理完成后自检，冻结下一轮商用收口范围：清理 content sentinel 错误生成、behavior 自建异常栈、
+      异常遥测静默失败、DomainErrorCode 仅 content typed 消费、RuntimeErrorResponse recovery 回写断点，以及
+      userMessage override 观测告警缺失。
+    reason: |
+      当前主链路已具备 ErrorResponse.recovery、control-plane userMessage override、端侧 recovery 消费和端云错误码
+      parity 门禁，但仍不能声明“无断点无技术债”。本 CR 明确不保留兼容：历史 sentinel、BehaviorReportException、
+      baseline 豁免和静默 catch 必须统一迁移到 runtime error 新契约。
+    change_type:
+      - refine
+      - governance
+      - breaking_cleanup
+    changed_documents:
+      - path: specs/feature-tree/runtime/runtime-errors/spec.md
+        sections:
+          - 功能说明
+          - 约束
+          - 验收标准
+      - path: specs/feature-tree/runtime/runtime-errors/acceptance.yaml
+        sections:
+          - scope
+          - SIT1
+          - execution
+    impact:
+      replan_required: true
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - content-service 客户端可见错误必须迁移为 AppErrorFrom* + WithRecovery，不再允许 sentinel-only 豁免。
+      - 端侧 CloudException 需要从 ContentErrorCode? 升级为全域 DomainErrorCode 消费模型。
+      - userMessage override 需要补 dashboard/alert/SLO 与回滚验收，避免只有指标无运营闭环。

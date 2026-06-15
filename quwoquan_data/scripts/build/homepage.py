@@ -52,6 +52,21 @@ _INTRODUCTION_KIND_BY_TITLE = (
     ("gallery", ("图片", "图集", "相册")),
     ("map", ("位置", "交通", "地图")),
 )
+_HOMEPAGE_PRIMARY_KIND_BONUS = (
+    ("维基百科", 120),
+    ("wikipedia", 120),
+    ("百度百科", 110),
+    ("搜狗百科", 105),
+    ("字节百科", 100),
+    ("百科", 95),
+    ("景区官网", 90),
+    ("官网", 85),
+    ("官方", 85),
+    ("政府", 80),
+    ("文旅", 80),
+    ("政务", 80),
+)
+_HOMEPAGE_GUIDE_PENALTY = ("攻略", "游记", "评论", "点评", "小红书", "图虫", "摄影")
 
 
 def _safe_ref(domain: str, etype: str, name: str) -> str:
@@ -89,18 +104,51 @@ def season_keys() -> list[str]:
 
 
 def _entity_base_draft(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> dict[str, Any]:
-    """取该实体最完整的来源单元 source.md 作为主页底稿（百科优先，质量分→长度排序）。"""
+    """Select the strongest homepage-lane evidence as the primary reference."""
     from _common.base_draft import base_draft_candidates, load_base_draft_text
 
     brief = {"entityRefs": [entity_ref(domain, etype, name)]}
     candidates = base_draft_candidates(task_id, batch_id, brief)
     if not candidates:
         return {}
+    homepage_candidates = []
+    for candidate in candidates:
+        meta_path = Path(candidate["unitDir"]) / "meta.json"
+        meta = read_json(meta_path) if meta_path.is_file() else {}
+        if str(meta.get("researchLane") or "") in ("homepage", "legacy", ""):
+            source_kind = str(meta.get("sourceKind") or meta.get("platform") or "")
+            lowered = source_kind.casefold()
+            bonus = 0
+            for marker, score in _HOMEPAGE_PRIMARY_KIND_BONUS:
+                if marker.casefold() in lowered:
+                    bonus = max(bonus, score)
+            if any(marker in source_kind for marker in _HOMEPAGE_GUIDE_PENALTY):
+                bonus -= 120
+            homepage_candidates.append({**candidate, "_homepagePriority": bonus, "_sourceKind": source_kind})
+    if homepage_candidates:
+        homepage_candidates.sort(
+            key=lambda row: (
+                int(row.get("_homepagePriority") or 0),
+                float(row.get("score") or 0),
+                int(row.get("length") or 0),
+            ),
+            reverse=True,
+        )
+        candidates = homepage_candidates
+        if int(candidates[0].get("_homepagePriority") or 0) <= 0:
+            return {}
     best = candidates[0]
     text = load_base_draft_text(task_id, batch_id, best["sourceRef"]).strip()
     if not text:
         return {}
-    return {"sourceRef": best["sourceRef"], "text": text[:4000]}
+    meta_path = Path(best["unitDir"]) / "meta.json"
+    meta = read_json(meta_path) if meta_path.is_file() else {}
+    return {
+        "sourceRef": best["sourceRef"],
+        "primaryEvidenceRef": best["sourceRef"],
+        "sourceUseMode": str(meta.get("sourceUseMode") or "factual_reference_only"),
+        "text": text[:4000],
+    }
 
 
 def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> tuple[Path, list[str]]:
@@ -138,12 +186,13 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
                 "seasonMenu": season_keys(),
                 "baseDraft": base_draft,
                 "editingInstruction": (
-                    "以上方百科底稿为基础做适度加工（轻改）：参考百度百科写法、按真实信息归类章节，"
-                    "只做去语病/纠错别字/理顺语句/补证据/去版权与平台痕迹；"
+                    "把 primaryEvidenceRef 作为事实与主题锚点，并综合 homepage_research 的其它来源。"
+                    "若 sourceUseMode=factual_reference_only，只抽取可核验事实并独立组织、独立表达，"
+                    "禁止沿用原文句式、段落顺序或章节结构；只有 licensed_adaptation 才能在许可范围内改编。"
                     "结构尊重底稿真实内容——SOP 模板里的章节只是『规范化参考』（用于章节命名与归类对齐），"
                     "不是必须逐节填满的清单：仅『概况』必备，其余章节有真实内容才写、无内容直接省略、禁止硬凑，"
                     "也允许按底稿增减或合并章节；章节语义须正确（如『历史沿革』必须是真实历史，否则省略）；"
-                    "不要从零总结，也不要硬套固定章节模板。"
+                    "按章节混排来自同一主页研究链且权利合格的图片，不得借用文章或图片作品的来源计划。"
                 ),
                 "imageRequirement": (
                     "实体主页须配 ≥1 张真实 CC 图片：在 page.md 用 asset:// 引用并在 manifest.json 登记，"

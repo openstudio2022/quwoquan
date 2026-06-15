@@ -15,6 +15,7 @@ if [ -d "$ROOT/scripts" ]; then
 fi
 
 bash agent_ops/scaffold/verify_global_increment_constraints.sh
+python3 agent_ops/gate/verify_agent_context_contract.py
 
 run_service() {
   echo "[gate] quwoquan_service"
@@ -24,6 +25,7 @@ run_service() {
   python3 agent_ops/gate/verify_environment_topology_manifest.py
   python3 agent_ops/gate/verify_local_env_port_manifest.py
   python3 agent_ops/gate/verify_prod_rollout_stackctl_contract.py
+  python3 agent_ops/gate/verify_prod_plane_access_isolation.py
   bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
   python3 quwoquan_service/scripts/contract/verify_tag_ref_source_of_truth.py
   bash agent_ops/scaffold/verify_acceptance_standard.sh
@@ -51,6 +53,7 @@ run_service() {
   bash quwoquan_service/scripts/runtime/verify_service_env_contract.sh
   python3 quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
   python3 quwoquan_service/scripts/verify/verify_relationship_error_code_gate.py
+  python3 quwoquan_service/scripts/verify/verify_error_recovery_alignment.py
   python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
   bash quwoquan_service/scripts/deploy/verify_config_release_version_mapping.sh
   bash quwoquan_service/scripts/deploy/verify_config_image_compat.sh
@@ -83,6 +86,9 @@ run_app() {
     python3 quwoquan_app/scripts/settings/verify_settings_canonical.py || exit 1
     python3 quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_error_code_semantic.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_domain_error_code_registry.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_behavior_error_stack_convergence.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_cloud_services_semantic.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_route_and_context_semantic.py || exit 1

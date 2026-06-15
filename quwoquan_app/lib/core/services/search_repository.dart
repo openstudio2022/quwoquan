@@ -3,7 +3,7 @@ import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
@@ -205,6 +205,7 @@ SearchRepository buildAppSearchRepository({
   required ContentRepository contentRepository,
   required HomepageRepository homepageRepository,
   required IntegrationRepository integrationRepository,
+  required UserProfileRepository userProfileRepository,
   required LocalChatSearchStore localChatSearchStore,
   required LocalChatSearchSyncService localChatSearchSyncService,
   required LocalCircleGroupSnapshotStore localCircleGroupSnapshotStore,
@@ -215,6 +216,7 @@ SearchRepository buildAppSearchRepository({
     contentRepository: contentRepository,
     homepageRepository: homepageRepository,
     integrationRepository: integrationRepository,
+    userProfileRepository: userProfileRepository,
     localChatSearchStore: localChatSearchStore,
     localChatSearchSyncService: localChatSearchSyncService,
     localCircleGroupSnapshotStore: localCircleGroupSnapshotStore,
@@ -228,6 +230,7 @@ class AppSearchRepository implements SearchRepository {
     required ContentRepository contentRepository,
     required HomepageRepository homepageRepository,
     required IntegrationRepository integrationRepository,
+    required UserProfileRepository userProfileRepository,
     required LocalChatSearchStore localChatSearchStore,
     required LocalChatSearchSyncService localChatSearchSyncService,
     required LocalCircleGroupSnapshotStore localCircleGroupSnapshotStore,
@@ -236,6 +239,7 @@ class AppSearchRepository implements SearchRepository {
        _contentRepository = contentRepository,
        _homepageRepository = homepageRepository,
        _integrationRepository = integrationRepository,
+       _userProfileRepository = userProfileRepository,
        _localChatSearchStore = localChatSearchStore,
        _localChatSearchSyncService = localChatSearchSyncService,
        _localCircleGroupSnapshotStore = localCircleGroupSnapshotStore,
@@ -245,6 +249,7 @@ class AppSearchRepository implements SearchRepository {
   final ContentRepository _contentRepository;
   final HomepageRepository _homepageRepository;
   final IntegrationRepository _integrationRepository;
+  final UserProfileRepository _userProfileRepository;
   final LocalChatSearchStore _localChatSearchStore;
   final LocalChatSearchSyncService _localChatSearchSyncService;
   final LocalCircleGroupSnapshotStore _localCircleGroupSnapshotStore;
@@ -341,6 +346,8 @@ class AppSearchRepository implements SearchRepository {
                 namespace: localNamespace,
                 objectTypes: effectiveObjectTypes,
               ),
+            if (effectiveObjectTypes.contains(SearchObjectType.userProfile))
+              _buildUserProfileSection(normalized),
             if (effectiveObjectTypes.contains(
               SearchObjectType.integrationLocationPoi,
             ))
@@ -399,12 +406,15 @@ class AppSearchRepository implements SearchRepository {
         SearchObjectType.chatMessage,
         SearchObjectType.circleGroup,
         SearchObjectType.circleCircle,
+        SearchObjectType.integrationLocationPoi,
+        SearchObjectType.userProfile,
       },
       SearchMode.result => <SearchObjectType>{
         SearchObjectType.contentPost,
         SearchObjectType.circleCircle,
         SearchObjectType.entityHomepage,
         SearchObjectType.circleGroup,
+        SearchObjectType.userProfile,
         SearchObjectType.integrationLocationPoi,
       },
     };
@@ -969,6 +979,81 @@ class AppSearchRepository implements SearchRepository {
             code: 'location_remote_failed',
             message: '位置搜索远端请求失败，当前已 fail-closed。',
             objectType: SearchObjectType.integrationLocationPoi,
+          ),
+        ],
+      );
+    }
+  }
+
+  Future<_SectionBuildResult?> _buildUserProfileSection(
+    SearchRequest request,
+  ) async {
+    try {
+      final items = await _userProfileRepository.searchSocialRelations(
+        query: request.query,
+        limit: request.limit,
+      );
+      final hits = items
+          .map(
+            (item) => SearchHit(
+              objectType: SearchObjectType.userProfile,
+              objectId: item.subAccountId,
+              title: item.displayName,
+              subtitle: item.headline,
+              snippet: item.relationshipCapability.canOpenConversation
+                  ? '已连接'
+                  : '共同兴趣相关',
+              resolvedFrom: SearchResolvedFrom.remote,
+              matchedField: 'displayName',
+              payload: SearchHitPayloadWireMap(<String, dynamic>{
+                'subAccountId': item.subAccountId,
+                'username': item.username,
+                'displayName': item.displayName,
+                'avatarUrl': item.avatarUrl,
+                'headline': item.headline,
+                'chatAvailable': item.chatAvailable,
+                'relationshipCapability': <String, dynamic>{
+                  'relationState': item.relationshipCapability.relationState,
+                  'canFollow': item.relationshipCapability.canFollow,
+                  'canUnfollow': item.relationshipCapability.canUnfollow,
+                  'canOpenConversation':
+                      item.relationshipCapability.canOpenConversation,
+                  'canStartVoiceCall':
+                      item.relationshipCapability.canStartVoiceCall,
+                  'canStartVideoCall':
+                      item.relationshipCapability.canStartVideoCall,
+                },
+              }),
+            ),
+          )
+          .where((item) => item.objectId.isNotEmpty && item.title.isNotEmpty)
+          .toList(growable: false);
+      if (hits.isEmpty) {
+        return null;
+      }
+      return _SectionBuildResult(
+        section: SearchSection(
+          id: 'users',
+          title: _sectionTitle('users', '人'),
+          objectTypes: const <SearchObjectType>[SearchObjectType.userProfile],
+          hits: hits,
+          resolvedFrom: SearchResolvedFrom.remote,
+        ),
+      );
+    } catch (_) {
+      return _SectionBuildResult(
+        section: SearchSection(
+          id: 'users',
+          title: _sectionTitle('users', '人'),
+          objectTypes: const <SearchObjectType>[SearchObjectType.userProfile],
+          hits: const <SearchHit>[],
+          resolvedFrom: SearchResolvedFrom.remote,
+        ),
+        degradeSignals: const <SearchDegradeSignal>[
+          SearchDegradeSignal(
+            code: 'user_profile_remote_failed',
+            message: '用户搜索远端请求失败，当前已 fail-closed。',
+            objectType: SearchObjectType.userProfile,
           ),
         ],
       );

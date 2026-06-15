@@ -78,7 +78,22 @@ def _compact_condition_context(brief: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _compact_assets(assets: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    keep = ("assetId", "fileName", "caption", "kind", "role", "entityName", "sourcePath", "imageLayout")
+    keep = (
+        "assetId",
+        "fileName",
+        "caption",
+        "kind",
+        "role",
+        "entityName",
+        "sourcePath",
+        "imageLayout",
+        "sourceCollectionId",
+        "creator",
+        "collectionPageUrl",
+        "license",
+        "termsUrl",
+        "authorizationProof",
+    )
     rows: list[dict[str, Any]] = []
     for asset in assets:
         row = {key: asset.get(key) for key in keep if asset.get(key)}
@@ -179,7 +194,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     base = pack.get("baseSourceRef")
     base_text = str(pack.get("baseDraftText") or "")
     source_use_mode = str(pack.get("sourceUseMode") or "factual_reference_only")
-    has_authorized_base = source_use_mode == "licensed_adaptation" or bool(base_text)
+    has_authorized_base = source_use_mode == "licensed_adaptation"
     if base:
         if has_authorized_base:
             lines.append(
@@ -195,8 +210,11 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     if banned:
         lines.append(f"- **禁用语域**：本主体禁止出现 {', '.join(banned)} 等错配语域词。")
     lines.append("")
-    if carrier == "gallery":
-        lines.append("- 载体=画报：以图为主、每图配一句自然小字说明；避免大空白；正文简短但仍要有真实感受。")
+    if carrier in ("image", "gallery"):
+        lines.append(
+            "- 载体=image：只提交同一来源集合的 1..20 张图片。标题可空且不超过 80 字；"
+            "整组配文可空且不超过 300 字。配文独立显示在图片浏览器底部，不得写成长文或与图片混排。"
+        )
     else:
         og = pack.get("openingGuidance") or opening_guidance(str(pack.get("styleFamily") or ""))
         opening_opts = og.get("openingStrategies") or []
@@ -205,6 +223,11 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
             for opt in opening_opts:
                 lines.append(f"  - `{opt.get('id')}`（{opt.get('label')}）：{opt.get('hint')}")
             lines.append("  按原文体裁与证据择一；若该默认体裁与原文体裁不符，可改选下方候选体裁，并在 draft_meta 写明最终 styleFamily 与 openingStrategy。")
+            lines.append(
+                "  首段必须直接体现所选策略：结论先行就用「先说结论/直接说/一句话」开头；"
+                "设问悬念就提出一个真实问题；场景沉浸就用具体时间、天气、动作或身体位置进入现场；"
+                "对比并置就明确写出两种选择/两类人/两个时刻。禁止使用「我在屏幕上看了无数遍/总怕亲眼一看不过如此」这类旧套路。"
+            )
         elif nc.get("requireMotivation"):
             lines.append("- 开篇写出**出发动机/心情铺垫**（为什么想去、出发前的犹豫或期待），不要一上来就罗列行程。")
         if nc.get("requireLike"):
@@ -252,7 +275,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         lines.append("")
     og = pack.get("openingGuidance") or opening_guidance(str(pack.get("styleFamily") or ""))
     candidates = og.get("styleFamilyCandidates") or []
-    if candidates and carrier != "gallery":
+    if candidates and carrier not in ("image", "gallery"):
         lines.append("## 体裁候选（默认已按路由选定；仅当原文体裁明显更贴合另一种时改选，并在 draft_meta 写明）")
         lines.append("")
         for c in candidates:

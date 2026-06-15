@@ -42,22 +42,6 @@ content:
   - gallery
   angles:
   - 攻略
-  audiences:
-  - leisureTraveler
-  - familyTraveler
-  - selfDriveTraveler
-  conditionAxes:
-    seasons:
-    - 春
-    - 夏
-    - 秋
-    - 冬
-    regions:
-    - 高原
-    - 雪山
-    - 山地森林
-    - 平原都市
-    - 乡村田园
   quotas:
     entityArticles: 20
     galleryPosts: 20

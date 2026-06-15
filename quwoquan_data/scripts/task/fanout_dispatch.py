@@ -243,6 +243,7 @@ def enqueue_partition_leaves(plan: Mapping[str, Any], unit: Mapping[str, Any]) -
     defaults = plan.get("defaults") or {}
     stage = str(defaults.get("stage") or "author")
     budget = defaults.get("budget") or {}
+    queue_backend = defaults.get("queueBackend")
     jobs: list[dict[str, Any]] = []
     for leaf in unit.get("leaves") or []:
         ref = str(leaf.get("ref") or "").strip()
@@ -260,6 +261,7 @@ def enqueue_partition_leaves(plan: Mapping[str, Any], unit: Mapping[str, Any]) -
                 stuck_threshold=int(budget.get("stuckThreshold") or oq.DEFAULT_STUCK_THRESHOLD),
                 token_budget=int(budget.get("tokenBudget") or 0),
                 cost_budget_usd=float(budget.get("costBudgetUsd") or 0.0),
+                queue_backend=str(queue_backend) if queue_backend else None,
                 meta={
                     "planId": plan.get("planId"),
                     "partitionPath": list(unit.get("partitionPath") or []),
@@ -288,6 +290,7 @@ def sync_content_author_jobs(
     batch_id = str(target["batchId"])
     defaults = plan.get("defaults") or {}
     budget = defaults.get("budget") or {}
+    queue_backend = defaults.get("queueBackend")
     stage_name = str(defaults.get("stage") or "author")
     prepared_refs: list[str] = []
     skipped_authored_refs: list[str] = []
@@ -340,6 +343,7 @@ def sync_content_author_jobs(
             stuck_threshold=int(budget.get("stuckThreshold") or oq.DEFAULT_STUCK_THRESHOLD),
             token_budget=int(budget.get("tokenBudget") or 0),
             cost_budget_usd=float(budget.get("costBudgetUsd") or 0.0),
+            queue_backend=str(queue_backend) if queue_backend else None,
             meta=job_meta,
         )
         if authored and ref not in force_ref_filter:
@@ -360,6 +364,7 @@ def sync_content_author_jobs(
                 stuck_threshold=int(budget.get("stuckThreshold") or oq.DEFAULT_STUCK_THRESHOLD),
                 token_budget=int(budget.get("tokenBudget") or 0),
                 cost_budget_usd=float(budget.get("costBudgetUsd") or 0.0),
+                queue_backend=str(queue_backend) if queue_backend else None,
                 meta=job_meta,
             ) or {})
             continue
@@ -376,6 +381,7 @@ def sync_content_author_jobs(
                 stuck_threshold=int(budget.get("stuckThreshold") or oq.DEFAULT_STUCK_THRESHOLD),
                 token_budget=int(budget.get("tokenBudget") or 0),
                 cost_budget_usd=float(budget.get("costBudgetUsd") or 0.0),
+                queue_backend=str(queue_backend) if queue_backend else None,
                 meta=job_meta,
             )
         )

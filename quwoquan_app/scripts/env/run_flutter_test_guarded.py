@@ -22,6 +22,14 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[2]
 LOCK_FILE = APP_ROOT / ".dart_tool" / "flutter_test.lock"
+RETRY_MARKERS = (
+  "Waiting for another flutter command to release the startup lock",
+  "Building native assets failed",
+  "Connection closed while receiving data",
+  "HttpException",
+  "release-assets.githubusercontent.com",
+  "PathNotFoundException",
+)
 WARMUP_TEMPLATE = """import 'package:sqlite3/sqlite3.dart';
 
 void main() {
@@ -35,6 +43,40 @@ void main() {
 
 def _run_checked(cmd: list[str], *, cwd: Path = APP_ROOT) -> int:
   return subprocess.run(cmd, cwd=str(cwd)).returncode
+
+
+def _run_flutter_test_with_retries(
+  cmd: list[str],
+  *,
+  cwd: Path = APP_ROOT,
+  max_attempts: int = 3,
+) -> int:
+  for attempt in range(1, max_attempts + 1):
+    result = subprocess.run(
+      cmd,
+      cwd=str(cwd),
+      stdout=subprocess.PIPE,
+      stderr=subprocess.STDOUT,
+      text=True,
+      errors="replace",
+    )
+    output = result.stdout or ""
+    if output:
+      print(output, end="" if output.endswith("\n") else "\n")
+    if result.returncode == 0:
+      return 0
+    if attempt >= max_attempts:
+      return result.returncode
+    matched_markers = [marker for marker in RETRY_MARKERS if marker in output]
+    if not matched_markers:
+      return result.returncode
+    wait_seconds = attempt * 5
+    print(
+      f"[flutter-test-guard] transient flutter failure, retry {attempt}/{max_attempts - 1} "
+      f"after {wait_seconds}s: {', '.join(matched_markers)}",
+    )
+    time.sleep(wait_seconds)
+  return 1
 
 
 def _ensure_flutter_pub_get() -> None:
@@ -96,7 +138,7 @@ def main(argv: list[str]) -> int:
     flutter_args = [arg for arg in args if arg != "--no-pub"]
     cmd = ["flutter", "test", "--no-pub", *flutter_args]
     print(f"[flutter-test-guard] {' '.join(cmd)}")
-    return _run_checked(cmd)
+    return _run_flutter_test_with_retries(cmd)
 
 
 if __name__ == "__main__":

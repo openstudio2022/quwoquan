@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import random
 import time
 from pathlib import Path
@@ -28,6 +29,7 @@ from typing import Any, Iterable, Mapping
 from _common.io import read_json, write_json
 from _common.paths import batch_root
 from task import store
+from task import production_contracts as pc
 
 STATE_QUEUED = "queued"
 STATE_LEASED = "leased"
@@ -57,6 +59,54 @@ DEFAULT_TOOL_PERMISSIONS: tuple[str, ...] = (
 # token/cost 预算（0 = 不限，>0 = SDK runner 侧硬上限，超出强制 dead）。
 DEFAULT_TOKEN_BUDGET = 0
 DEFAULT_COST_BUDGET_USD = 0.0
+
+OBJECT_JOB_SCHEMA = pc.OBJECT_JOB_SCHEMA
+QUEUE_BACKEND_LOCAL = "local_file"
+QUEUE_BACKEND_RELIABLETASK = "reliabletask"
+SUPPORTED_QUEUE_BACKENDS = (QUEUE_BACKEND_LOCAL, QUEUE_BACKEND_RELIABLETASK)
+RELIABLETASK_QUEUE = "reliabletask.data.content_supply"
+RELIABLETASK_TASK_TYPE = "data.content_object.execute"
+
+
+def _backend_name(backend: str | None = None) -> str:
+    value = str(backend or "").strip() or str(os.environ.get("QWQ_OBJECT_QUEUE_BACKEND") or QUEUE_BACKEND_LOCAL)
+    if value not in SUPPORTED_QUEUE_BACKENDS:
+        raise ValueError(f"unsupported object queue backend: {value}")
+    return value
+
+
+def _reliabletask_ref(
+    *,
+    task_id: str,
+    batch_id: str,
+    job_id: str,
+    ref: str,
+    stage: str,
+    partition_key: str,
+) -> dict[str, Any]:
+    """Declarative bridge payload for quwoquan_service/runtime/reliabletask.
+
+    The data repo keeps local files as the small-batch truth source, but a
+    production job now carries the reliabletask routing contract so a service
+    adapter can dispatch it through MongoStore + RedisReadyIndex without
+    changing job IDs or queue semantics.
+    """
+    return {
+        "taskType": RELIABLETASK_TASK_TYPE,
+        "queue": RELIABLETASK_QUEUE,
+        "dedupeKey": f"{task_id}|{batch_id}|{job_id}",
+        "partitionKey": partition_key,
+        "payloadAllowlist": "object_job",
+        "payload": {
+            "schemaVersion": OBJECT_JOB_SCHEMA,
+            "jobId": job_id,
+            "taskId": task_id,
+            "batchId": batch_id,
+            "ref": ref,
+            "stage": stage,
+            "partitionKey": partition_key,
+        },
+    }
 
 
 def _backoff_seconds(attempt: int) -> float:
@@ -127,6 +177,7 @@ def enqueue_ref_job(
     token_budget: int = DEFAULT_TOKEN_BUDGET,
     cost_budget_usd: float = DEFAULT_COST_BUDGET_USD,
     meta: Mapping[str, Any] | None = None,
+    queue_backend: str | None = None,
 ) -> dict[str, Any]:
     """入队一个 ref+stage job（幂等）。已存在的非终态 job 直接返回，不重置 attempt。"""
     job_id = stable_job_id(task_id, batch_id, ref, stage)
@@ -135,13 +186,37 @@ def enqueue_ref_job(
         existing = read_json(path)
         if existing.get("state") not in (STATE_SUCCEEDED,):
             return existing
+    backend = _backend_name(queue_backend or (meta or {}).get("queueBackend"))
+    partition_key = str((meta or {}).get("partitionKey") or mutex_key or ref)
+    reliable_ref = (
+        _reliabletask_ref(
+            task_id=task_id,
+            batch_id=batch_id,
+            job_id=job_id,
+            ref=ref,
+            stage=stage,
+            partition_key=partition_key,
+        )
+        if backend == QUEUE_BACKEND_RELIABLETASK
+        else None
+    )
     payload = {
-        "schemaVersion": "quwoquan_data.object_job/1",
+        "schemaVersion": OBJECT_JOB_SCHEMA,
         "jobId": job_id,
         "taskId": task_id,
         "batchId": batch_id,
         "ref": ref,
         "stage": stage,
+        "queueBackend": backend,
+        "partitionKey": partition_key,
+        "reliableTaskRef": reliable_ref,
+        "resultEnvelopeRequired": backend == QUEUE_BACKEND_RELIABLETASK or bool((meta or {}).get("resultEnvelopeRequired")),
+        "resultEnvelopeRef": None,
+        "gateVerdicts": [],
+        "tokenLedger": [],
+        "creatorProfileId": (meta or {}).get("creatorProfileId"),
+        "creatorArchetype": (meta or {}).get("creatorArchetype"),
+        "contentType": (meta or {}).get("contentType"),
         "state": STATE_QUEUED,
         "attempt": 0,
         "maxAttempts": int(max_attempts),
@@ -180,6 +255,7 @@ def enqueue_ref_jobs(
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     max_startup_failures: int = DEFAULT_MAX_STARTUP_FAILURES,
     max_wall_clock_seconds: int = DEFAULT_MAX_WALL_CLOCK_SECONDS,
+    queue_backend: str | None = None,
 ) -> list[dict[str, Any]]:
     """批量入队。items 每条至少含 ref，可选 baseSourceRef/fallbackStage/meta。"""
     jobs: list[dict[str, Any]] = []
@@ -198,6 +274,7 @@ def enqueue_ref_jobs(
                 max_attempts=max_attempts,
                 max_startup_failures=max_startup_failures,
                 max_wall_clock_seconds=max_wall_clock_seconds,
+                queue_backend=queue_backend or (item.get("meta") or {}).get("queueBackend"),
                 meta=item.get("meta"),
             )
         )
@@ -287,6 +364,8 @@ def renew_lease(task_id: str, batch_id: str, job_id: str, lease: str, *, ttl_sec
 
 def complete_job(task_id: str, batch_id: str, job_id: str, lease: str) -> dict[str, Any]:
     job = _load_owned(task_id, batch_id, job_id, lease)
+    if bool(job.get("resultEnvelopeRequired")) and not job.get("resultEnvelopeRef"):
+        raise RuntimeError(f"result envelope required before completing job {job_id}")
     job["state"] = STATE_SUCCEEDED
     job["lease"] = None
     job["leaseExpiresEpoch"] = 0
@@ -298,6 +377,66 @@ def complete_job(task_id: str, batch_id: str, job_id: str, lease: str) -> dict[s
     job["updatedAt"] = store.now_iso()
     write_json(_job_path(task_id, batch_id, job_id), job)
     return job
+
+
+def _stored_envelope_ref(envelope_path: Path, *, root: Path) -> str:
+    try:
+        return str(envelope_path.resolve().relative_to(root.resolve()))
+    except ValueError:
+        return str(envelope_path)
+
+
+def complete_job_with_envelope(
+    task_id: str,
+    batch_id: str,
+    job_id: str,
+    lease: str,
+    *,
+    envelope_path: str | Path,
+    workspace_root: str | Path | None = None,
+) -> dict[str, Any]:
+    """Complete a job only after validating an AgentResultEnvelope.
+
+    This is the production admission path: files must exist, hashes must match,
+    and every gate must have exactly one passing final verdict.
+    """
+    job = _load_owned(task_id, batch_id, job_id, lease)
+    root = Path(workspace_root) if workspace_root is not None else batch_root(task_id, batch_id)
+    path = Path(envelope_path)
+    if not path.is_absolute():
+        path = root / path
+    try:
+        envelope = read_json(path)
+    except Exception as exc:  # noqa: BLE001
+        issues = [f"result envelope unreadable: {exc}"]
+        return fail_job(
+            task_id,
+            batch_id,
+            job_id,
+            lease,
+            error="; ".join(issues),
+            fingerprint=pc.stable_failure_fingerprint(issues),
+            same_run_retryable=True,
+        )
+    issues = pc.validate_agent_result_envelope(envelope, workspace_root=root)
+    issues.extend(pc.assert_envelope_matches_job(envelope, job))
+    if issues:
+        return fail_job(
+            task_id,
+            batch_id,
+            job_id,
+            lease,
+            error="; ".join(issues),
+            fingerprint=pc.stable_failure_fingerprint(issues),
+            same_run_retryable=True,
+        )
+
+    job["resultEnvelopeRef"] = _stored_envelope_ref(path, root=root)
+    job["gateVerdicts"] = list(envelope.get("gates") or [])
+    job.setdefault("timings", []).append({"event": "envelope_accepted", "at": store.now_iso(), "envelope": job["resultEnvelopeRef"]})
+    job["updatedAt"] = store.now_iso()
+    write_json(_job_path(task_id, batch_id, job_id), job)
+    return complete_job(task_id, batch_id, job_id, lease)
 
 
 def reconcile_completed_refs(
@@ -507,6 +646,18 @@ def record_usage(
     usage["tokens"] = int(usage.get("tokens", 0)) + int(tokens)
     usage["costUsd"] = float(usage.get("costUsd", 0.0)) + float(cost_usd)
     job["usage"] = usage
+    job.setdefault("tokenLedger", []).append(
+        pc.build_token_ledger_entry(
+            supply_task_id=str((job.get("meta") or {}).get("supplyTaskId") or job.get("taskId") or ""),
+            batch_id=batch_id,
+            job_id=job_id,
+            creator_profile_id=str(job.get("creatorProfileId") or (job.get("meta") or {}).get("creatorProfileId") or "unknown"),
+            content_type=str(job.get("contentType") or (job.get("meta") or {}).get("contentType") or job.get("stage") or "unknown"),
+            budget_tokens=int(job.get("tokenBudget") or 0),
+            used_tokens=int(usage.get("tokens") or 0),
+            cost_usd=float(usage.get("costUsd") or 0.0),
+        )
+    )
     token_budget = int(job.get("tokenBudget") or 0)
     cost_budget = float(job.get("costBudgetUsd") or 0.0)
     over_token = token_budget > 0 and usage["tokens"] > token_budget
@@ -616,6 +767,22 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
         "batchId": job.get("batchId"),
         "ref": job.get("ref"),
         "stage": job.get("stage"),
+        "queueBackend": job.get("queueBackend") or QUEUE_BACKEND_LOCAL,
+        "partitionKey": job.get("partitionKey") or job.get("mutexKey") or job.get("ref"),
+        "creatorProfileId": job.get("creatorProfileId") or meta.get("creatorProfileId"),
+        "creatorArchetype": job.get("creatorArchetype") or meta.get("creatorArchetype"),
+        "contentType": job.get("contentType") or meta.get("contentType"),
+        "resultEnvelopeRequired": bool(job.get("resultEnvelopeRequired")),
+        "resultEnvelopeContract": {
+            "schemaVersion": pc.AGENT_RESULT_ENVELOPE_SCHEMA,
+            "required": bool(job.get("resultEnvelopeRequired")),
+            "completionCommand": "qwq-data object-queue complete-envelope --task <task> --batch <batch> --job <jobId> --lease <lease> --envelope <path>",
+            "rules": [
+                "AgentResultEnvelope.files[].path 必须是 batch root 下相对路径",
+                "AgentResultEnvelope.files[].sha256 必须与真实文件一致",
+                "AgentResultEnvelope.gates[] 必须是唯一 final verdict 且全部 passed/approved",
+            ],
+        },
         "lease": job.get("lease"),
         "mutexKey": job.get("mutexKey"),
         "attempt": job.get("attempt"),
@@ -732,6 +899,7 @@ def refresh_job_definition(
     token_budget: int = DEFAULT_TOKEN_BUDGET,
     cost_budget_usd: float = DEFAULT_COST_BUDGET_USD,
     meta: Mapping[str, Any] | None = None,
+    queue_backend: str | None = None,
 ) -> dict[str, Any] | None:
     """刷新现有 job 的配置定义，但不重置运行态/尝试历史。"""
     job_id = stable_job_id(task_id, batch_id, ref, stage)
@@ -749,6 +917,23 @@ def refresh_job_definition(
     job["tokenBudget"] = int(token_budget)
     job["costBudgetUsd"] = float(cost_budget_usd)
     job["meta"] = dict(meta or {})
+    if queue_backend is not None:
+        backend = _backend_name(queue_backend)
+        partition_key = str(job.get("partitionKey") or mutex_key or ref)
+        job["queueBackend"] = backend
+        job["resultEnvelopeRequired"] = backend == QUEUE_BACKEND_RELIABLETASK or bool((meta or {}).get("resultEnvelopeRequired"))
+        job["reliableTaskRef"] = (
+            _reliabletask_ref(
+                task_id=task_id,
+                batch_id=batch_id,
+                job_id=job_id,
+                ref=ref,
+                stage=stage,
+                partition_key=partition_key,
+            )
+            if backend == QUEUE_BACKEND_RELIABLETASK
+            else None
+        )
     job["updatedAt"] = store.now_iso()
     write_json(path, job)
     return job
@@ -786,11 +971,15 @@ def purge_jobs(
 def queue_summary(task_id: str, batch_id: str) -> dict[str, Any]:
     jobs = _load_jobs(task_id, batch_id)
     by_state: dict[str, list[str]] = {}
+    by_backend: dict[str, int] = {}
     for job in jobs:
         by_state.setdefault(str(job.get("state")), []).append(str(job.get("ref")))
+        backend = str(job.get("queueBackend") or QUEUE_BACKEND_LOCAL)
+        by_backend[backend] = by_backend.get(backend, 0) + 1
     return {
         "total": len(jobs),
         "byState": {k: sorted(v) for k, v in sorted(by_state.items())},
+        "byBackend": dict(sorted(by_backend.items())),
     }
 
 
@@ -877,13 +1066,23 @@ def register_object_queue_parser(subparsers: argparse._SubParsersAction) -> None
     pe.add_argument("--stage", default="author")
     pe.add_argument("--max-attempts", type=int, default=DEFAULT_MAX_ATTEMPTS)
     pe.add_argument("--max-wall-clock", type=int, default=DEFAULT_MAX_WALL_CLOCK_SECONDS, help="逐 job 墙钟硬上限（秒，默认 1200=20min）")
+    pe.add_argument("--backend", choices=SUPPORTED_QUEUE_BACKENDS, default=None, help="队列后端：local_file 小批；reliabletask 生产桥")
 
     def _do_enqueue(args: argparse.Namespace) -> None:
         from _common.content_plan import load_content_plan_packet
 
         packet = load_content_plan_packet(args.task, args.batch) or {}
         items = [
-            {"ref": i.get("ref"), "baseSourceRef": i.get("baseSourceRef"), "meta": {"writingIntent": i.get("writingIntent")}}
+            {
+                "ref": i.get("ref"),
+                "baseSourceRef": i.get("baseSourceRef"),
+                "meta": {
+                    "writingIntent": i.get("writingIntent"),
+                    "contentType": i.get("contentType") or i.get("carrier"),
+                    "creatorProfileId": i.get("creatorProfileId"),
+                    "creatorArchetype": i.get("creatorArchetype"),
+                },
+            }
             for i in (packet.get("items") or [])
             if i.get("ref")
         ]
@@ -892,6 +1091,7 @@ def register_object_queue_parser(subparsers: argparse._SubParsersAction) -> None
             max_attempts=args.max_attempts,
             max_startup_failures=DEFAULT_MAX_STARTUP_FAILURES,
             max_wall_clock_seconds=args.max_wall_clock,
+            queue_backend=args.backend,
         )
         _emit({"enqueued": len(jobs), "summary": queue_summary(args.task, args.batch)})
 
@@ -925,6 +1125,26 @@ def register_object_queue_parser(subparsers: argparse._SubParsersAction) -> None
     pc.add_argument("--job", required=True)
     pc.add_argument("--lease", required=True)
     pc.set_defaults(handler=lambda a: _emit(complete_job(a.task, a.batch, a.job, a.lease)))
+
+    pce = sub.add_parser("complete-envelope", help="校验 AgentResultEnvelope 后标记 job 成功（生产路径）")
+    pce.add_argument("--task", required=True)
+    pce.add_argument("--batch", required=True)
+    pce.add_argument("--job", required=True)
+    pce.add_argument("--lease", required=True)
+    pce.add_argument("--envelope", required=True, help="AgentResultEnvelope JSON；相对 batch root 或绝对路径")
+    pce.add_argument("--workspace-root", default=None, help="校验文件 hash 的根目录；默认 batch root")
+    pce.set_defaults(
+        handler=lambda a: _emit(
+            complete_job_with_envelope(
+                a.task,
+                a.batch,
+                a.job,
+                a.lease,
+                envelope_path=a.envelope,
+                workspace_root=a.workspace_root,
+            )
+        )
+    )
 
     pf = sub.add_parser("fail", help="标记 job 失败（未超 maxAttempts 退避重取，超出/卡死转 dead）")
     pf.add_argument("--task", required=True)

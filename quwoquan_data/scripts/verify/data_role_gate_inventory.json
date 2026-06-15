@@ -1,0 +1,39 @@
+{
+  "roles": [
+    {
+      "id": "senior_software_engineer",
+      "label": "资深软件工程",
+      "required_keywords": ["CLI-first", "无孤立脚本", "失败可恢复"]
+    },
+    {
+      "id": "senior_data_engineer",
+      "label": "资深数据工程师",
+      "required_keywords": ["DAG", "stage result", "importer 幂等"]
+    },
+    {
+      "id": "data_quality_qa",
+      "label": "数据质量 QA",
+      "required_keywords": ["schema", "事实回溯", "golden set"]
+    },
+    {
+      "id": "legal_compliance_expert",
+      "label": "法务法律专家",
+      "required_keywords": ["来源权利", "反抄袭", "商用风险"]
+    },
+    {
+      "id": "consumer_perspective",
+      "label": "消费者视角",
+      "required_keywords": ["标题兑现", "信息密度", "可读性"]
+    },
+    {
+      "id": "content_ops_expert",
+      "label": "内容运营专家",
+      "required_keywords": ["SLO/KPI", "人审 SLA", "内容供给优化闭环"]
+    },
+    {
+      "id": "unattended_automation",
+      "label": "无人值守自动化",
+      "required_keywords": ["object queue", "repair report", "失败回退"]
+    }
+  ]
+}
