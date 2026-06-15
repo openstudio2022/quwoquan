@@ -64,6 +64,9 @@ jobs:
           github.event.workflow_run.head_branch == 'main'
         )
       }}
+    env:
+      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+      PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
     outputs:
       initial_step: ${{ steps.stages.outputs.initial_step }}
       full_step: ${{ steps.stages.outputs.full_step }}
@@ -220,11 +223,14 @@ jobs:
           STATE="state/release/seed-box.state"
           if [[ -z "$FROM_IMG" || -z "$FROM_CFG" ]]; then
             if [[ ! -f "$STATE" ]]; then
-              echo "::error::Missing state/release/seed-box.state; provide from_image/from_config explicitly"
-              exit 1
+              eval "$(python3 agent_ops/deploy/prod/resolve_prod_release_state.py --output-format shell)"
+              if [[ -z "$FROM_IMG" ]]; then FROM_IMG="$RESOLVED_FROM_IMAGE"; fi
+              if [[ -z "$FROM_CFG" ]]; then FROM_CFG="$RESOLVED_FROM_CONFIG"; fi
+              ARTIFACT_NOTE="${ARTIFACT_NOTE}; current prod resolved via ${RESOLVED_FROM_SOURCE_ACCOUNT}@${RESOLVED_FROM_SOURCE_HOST}"
+            else
+              if [[ -z "$FROM_IMG" ]]; then FROM_IMG=$(awk -F= '/^to_image=/{print $2; exit}' "$STATE"); fi
+              if [[ -z "$FROM_CFG" ]]; then FROM_CFG=$(awk -F= '/^to_config=/{print $2; exit}' "$STATE"); fi
             fi
-            if [[ -z "$FROM_IMG" ]]; then FROM_IMG=$(awk -F= '/^to_image=/{print $2; exit}' "$STATE"); fi
-            if [[ -z "$FROM_CFG" ]]; then FROM_CFG=$(awk -F= '/^to_config=/{print $2; exit}' "$STATE"); fi
           fi
           echo "from_image=$FROM_IMG" >> $GITHUB_OUTPUT
           echo "from_config=$FROM_CFG" >> $GITHUB_OUTPUT
