@@ -3136,20 +3136,6 @@ func deriveSearchTopicCategories(tagRefs []string, fallbackCategory string, fall
 	return category, subCategory
 }
 
-func normalizeSearchMatchedField(matchedField string, post postmodel.Post) string {
-	switch strings.TrimSpace(matchedField) {
-	case "tags":
-		return "tagRefs"
-	case "entities":
-		return "entityRefs"
-	case "summary":
-		if strings.TrimSpace(post.Summary) == "" && strings.TrimSpace(post.Body) != "" {
-			return "body"
-		}
-	}
-	return matchedField
-}
-
 func (s *PostService) GetHelperRead(ctx context.Context, postID string) (map[string]any, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
